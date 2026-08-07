@@ -48,19 +48,24 @@ final class AsyncBizAdapters
      */
     public function dispatch(callable $callback): mixed
     {
-        $startedAt = \microtime(true);
+        $startedAt = self::monotonicSeconds();
         try {
             // The scheduler already owns entry into the request Fiber. Yielding
             // again at this framework boundary would suspend a cold request
             // before its callback and can enqueue the response path twice.
             return $callback();
         } finally {
-            $elapsedMs = (\microtime(true) - $startedAt) * 1000;
+            $elapsedMs = (self::monotonicSeconds() - $startedAt) * 1000;
             if ($elapsedMs >= 500) {
                 \Weline\Server\Log\WlsLogger::warning_(
                     'AsyncBizAdapters dispatch slow path elapsed_ms=' . \round($elapsedMs, 2)
                 );
             }
         }
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

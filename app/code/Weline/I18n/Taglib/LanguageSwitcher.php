@@ -247,7 +247,7 @@ class LanguageSwitcher implements TaglibInterface
                 \array_keys($welineLanguages)
             ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
                 . '|navigation=' . $navigation
-                . '|markup=v2-lang-default-currency-omit-1';
+                . '|markup=v2-lang-native-path-nav-4';
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
                 return self::$htmlCache[$htmlCacheKey]['html'];
@@ -428,14 +428,22 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = 'var href=opt.getAttribute("href")||"";var i18n=window.WelineI18n;';
             $html[] = 'closeMenu("language-selected");';
             $html[] = 'if(navigation==="emit"){';
-            $html[] = 'event.preventDefault();event.stopPropagation();';
+            // Preview/canvas emit mode has no real navigation target — cancel the
+            // anchor and broadcast the locale to the parent workbench.
+            $html[] = 'event.preventDefault();';
+            $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
             $html[] = 'root.querySelectorAll("[data-language-option]").forEach(function(node){var active=(node.getAttribute("data-lang")||"")===code;if(active){node.classList.add("active");}else{node.classList.remove("active");}node.setAttribute("aria-checked",active?"true":"false");});';
             $html[] = 'var currentEl=root.querySelector(".current-language");if(currentEl){var parts=String(code).split("_");var short=parts.length>=2?(parts[0].toUpperCase()==="ZH"?(String(parts[1]).toUpperCase()==="HANT"?"TW":"ZH"):parts[0].substring(0,2).toUpperCase()):String(code).substring(0,2).toUpperCase();currentEl.textContent=short;}';
             $html[] = 'try{root.dispatchEvent(new CustomEvent("weline:i18n:locale-change",{bubbles:true,detail:{locale:code}}));}catch(err){}';
             $html[] = 'return;}';
-            $html[] = 'if(!i18n||typeof i18n.switchLang!=="function"){return;}';
-            $html[] = 'event.preventDefault();';
-            $html[] = 'i18n.switchLang(code,href);';
+            // Path/LIVE mode: write the language cookie then let the browser follow
+            // the authoritative <a href>. preventDefault + location.assign races
+            // into an empty document in Chromium/Electron (200 + decodedBodySize 0).
+            $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
+            $html[] = 'if(i18n&&typeof i18n.writeLanguagePreference==="function"){i18n.writeLanguagePreference(code);}';
+            $html[] = 'try{var target=new URL(href||"#",window.location.origin);var samePath=target.pathname===(window.location.pathname||"/")&&target.search===(window.location.search||"")&&target.hash===(window.location.hash||"");if(samePath){event.preventDefault();if(i18n&&typeof i18n.switchLang==="function"){i18n.switchLang(code,href);}else{window.location.reload();}return;}}catch(err){}';
+            $html[] = 'if(!href||href==="#"){event.preventDefault();if(i18n&&typeof i18n.switchLang==="function"){i18n.switchLang(code,href);}return;}';
+            // Native navigation — do not preventDefault.
             $html[] = '});';
             $html[] = '});';
             $html[] = 'filter();';

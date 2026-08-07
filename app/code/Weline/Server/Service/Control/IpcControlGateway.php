@@ -874,8 +874,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 continue;
             }
 
-            $written = @\fwrite($conn, $command);
-            if ($written === false || $written === 0) {
+            if (!$this->writeCommandFully($conn, $command, $readTimeout)) {
                 @\fclose($conn);
                 $results[$instance] = [
                     'success' => false,
@@ -885,14 +884,13 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 continue;
             }
 
-            \stream_set_blocking($conn, false);
             $connections[$instance] = $conn;
             $buffers[$instance] = '';
         }
 
-        $deadline = \microtime(true) + $readTimeout;
+        $deadline = ControlMessage::monotonicSeconds() + $readTimeout;
         while ($connections !== []) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - ControlMessage::monotonicSeconds();
             if ($remaining <= 0) {
                 break;
             }
@@ -1084,9 +1082,9 @@ class IpcControlGateway implements IpcControlGatewayInterface
         \stream_set_blocking($conn, false);
 
         $buffer = '';
-        $deadline = \microtime(true) + $timeout;
-        while (\microtime(true) < $deadline) {
-            $remaining = $deadline - \microtime(true);
+        $deadline = ControlMessage::monotonicSeconds() + $timeout;
+        while (ControlMessage::monotonicSeconds() < $deadline) {
+            $remaining = $deadline - ControlMessage::monotonicSeconds();
             if ($remaining <= 0) {
                 break;
             }
@@ -1233,10 +1231,10 @@ class IpcControlGateway implements IpcControlGatewayInterface
         if (!@\stream_set_blocking($connection, false)) {
             return false;
         }
-        $deadline = \microtime(true) + \max(0.05, $timeout);
+        $deadline = ControlMessage::monotonicSeconds() + \max(0.05, $timeout);
         $offset = 0;
         while ($offset < $length) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - ControlMessage::monotonicSeconds();
             if ($remaining <= 0.0) {
                 return false;
             }
@@ -1276,7 +1274,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
         float $timeout,
     ): array {
         $timeout = \max(0.02, \min(0.1, $timeout));
-        $startedAt = \microtime(true);
+        $startedAt = ControlMessage::monotonicSeconds();
         $requestId = ControlCommandResult::requestId($action);
         $payload['msg_id'] = $requestId;
         $endpoint = $this->resolveControlEndpoint($instanceName);
@@ -1313,15 +1311,22 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 $payload,
                 (string)$endpoint['control_token'],
             );
-            $written = @\fwrite($connection, $command);
-            if ($written !== \strlen($command)) {
+            $remaining = $timeout - (ControlMessage::monotonicSeconds() - $startedAt);
+            if ($remaining <= 0.0) {
+                return ControlCommandResult::normalize([
+                    'success' => false,
+                    'message' => (string)__('缓存命名空间失效接收超时。'),
+                    'data' => ['accepted' => false, 'error_code' => 'accept_timeout'],
+                ], $instanceName, $action, $requestId, true);
+            }
+            if (!$this->writeCommandFully($connection, $command, $remaining)) {
                 return ControlCommandResult::normalize([
                     'success' => false,
                     'message' => (string)__('缓存命名空间失效控制帧未完整写入。'),
                     'data' => ['accepted' => false, 'error_code' => 'send_failed'],
                 ], $instanceName, $action, $requestId, true);
             }
-            $remaining = $timeout - (\microtime(true) - $startedAt);
+            $remaining = $timeout - (ControlMessage::monotonicSeconds() - $startedAt);
             if ($remaining <= 0.0) {
                 return ControlCommandResult::normalize([
                     'success' => false,

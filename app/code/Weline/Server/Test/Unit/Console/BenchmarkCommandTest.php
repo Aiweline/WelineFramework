@@ -180,6 +180,7 @@ final class BenchmarkCommandTest extends TestCase
     {
         $endpoint = $this->gatewayEndpoint();
         $endpoint['edge_adapter'] = 'wls';
+        $endpoint['ssl_enabled'] = true;
         $endpoint['gateway']['mode'] = 'wls';
         $endpoint['gateway']['fallback_state'] = 'DEGRADED_WLS';
         $endpoint['gateway']['public_https'] = 27673;
@@ -191,6 +192,24 @@ final class BenchmarkCommandTest extends TestCase
         self::assertSame('gateway_fallback_public', $target['target_endpoint_role']);
         self::assertSame(27673, $target['port']);
         self::assertTrue($target['ssl']);
+    }
+
+    public function testGatewayFallbackConsumesProjectedHttpScheme(): void
+    {
+        $endpoint = $this->gatewayEndpoint();
+        $endpoint['edge_adapter'] = 'wls';
+        $endpoint['ssl_enabled'] = false;
+        $endpoint['gateway']['mode'] = 'wls';
+        $endpoint['gateway']['fallback_state'] = 'DEGRADED_WLS';
+        $endpoint['gateway']['public_https'] = 27674;
+        $command = $this->createGatewayCommand($this->gatewayStatus());
+
+        $target = $command->buildTarget('gateway-benchmark', $endpoint);
+
+        self::assertIsArray($target);
+        self::assertSame('gateway_fallback_public', $target['target_endpoint_role']);
+        self::assertSame(27674, $target['port']);
+        self::assertFalse($target['ssl']);
     }
 
     public function testExplicitPureWlsRejectsPersistedOriginWithoutLiveLeaseProjection(): void
@@ -384,10 +403,17 @@ final class BenchmarkCommandTest extends TestCase
                 if ((string)($gateway['fallback_state'] ?? '') !== 'DEGRADED_WLS') {
                     return null;
                 }
+                $authorityHost = (string)($endpoint['public_host'] ?? 'shop.example.test');
+                $port = (int)($gateway['public_https'] ?? 0);
+                $https = (bool)($endpoint['ssl_enabled'] ?? false);
                 return [
+                    'origin' => ($https ? 'https://' : 'http://')
+                        . $authorityHost . ':' . $port,
                     'bind_host' => '127.0.0.1',
                     'connect_host' => '127.0.0.1',
-                    'port' => (int)($gateway['public_https'] ?? 0),
+                    'authority_host' => $authorityHost,
+                    'port' => $port,
+                    'https' => $https,
                 ];
             }
 

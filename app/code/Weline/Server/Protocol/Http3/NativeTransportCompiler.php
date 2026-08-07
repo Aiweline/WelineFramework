@@ -2226,13 +2226,13 @@ final class NativeTransportCompiler
         if (!\is_resource($lock)) {
             return null;
         }
-        $deadline = \microtime(true) + self::LOCK_TIMEOUT;
+        $deadline = self::monotonicSeconds() + self::LOCK_TIMEOUT;
         do {
             if (@\flock($lock, \LOCK_EX | \LOCK_NB)) {
                 return $lock;
             }
             SchedulerSystem::usleep(50000);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
         @\fclose($lock);
         return null;
     }
@@ -2244,13 +2244,13 @@ final class NativeTransportCompiler
         if (!\is_resource($lock)) {
             return null;
         }
-        $deadline = \microtime(true) + self::PUBLICATION_LOCK_TIMEOUT;
+        $deadline = self::monotonicSeconds() + self::PUBLICATION_LOCK_TIMEOUT;
         do {
             if (@\flock($lock, \LOCK_EX | \LOCK_NB)) {
                 return $lock;
             }
             SchedulerSystem::usleep(50000);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
         @\fclose($lock);
         return null;
     }
@@ -2452,5 +2452,10 @@ final class NativeTransportCompiler
             @\unlink($tmp);
             throw new \RuntimeException('unable to publish native transport manifest');
         }
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

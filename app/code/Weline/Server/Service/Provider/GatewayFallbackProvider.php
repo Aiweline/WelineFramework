@@ -93,6 +93,15 @@ final class GatewayFallbackProvider extends AbstractServiceProvider
         if (\preg_match('/\A[a-f0-9]{32}\z/D', $this->hostLeaseId) !== 1) {
             throw new \RuntimeException('Gateway fallback requires its exact host port lease identity.');
         }
+        $gatewayMasterLaunchId = \strtolower(\trim((string)$context->getConfig(
+            'wls.gateway.launch_id',
+            '',
+        )));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $gatewayMasterLaunchId) !== 1) {
+            throw new \RuntimeException(
+                'Gateway fallback requires its exact project Master launch identity.'
+            );
+        }
         if (!\is_file($this->certificate) || !\is_file($this->privateKey)
             || \is_link($this->certificate) || \is_link($this->privateKey)
         ) {
@@ -122,6 +131,7 @@ final class GatewayFallbackProvider extends AbstractServiceProvider
             '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver,
             '--gateway-fallback',
             '--gateway-host-lease-id=' . $this->hostLeaseId,
+            '--gateway-master-launch-id=' . $gatewayMasterLaunchId,
             '--defer-ssl',
         ];
         $arguments = \array_merge(

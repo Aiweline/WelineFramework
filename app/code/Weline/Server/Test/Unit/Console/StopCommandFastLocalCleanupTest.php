@@ -14,7 +14,7 @@ use Weline\Server\Service\ServerInstanceManager;
 
 final class StopCommandFastLocalCleanupTest extends TestCase
 {
-    public function testFastLocalCandidatesIncludeCurrentInstanceSharedServices(): void
+    public function testFastLocalVerificationCandidatesExcludeSharedServices(): void
     {
         $stop = new class extends Stop {
             public function candidates(ServerInstanceInfo $info): array
@@ -253,6 +253,13 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return [];
             }
 
+            protected function collectFastLocalResidualPids(string $name, ServerInstanceInfo $info): array
+            {
+                unset($name, $info);
+
+                return [];
+            }
+
             protected function releaseSharedStateConsumersForInstance(string $instanceName): void
             {
                 $this->calls[] = 'release:' . $instanceName;
@@ -302,7 +309,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         );
     }
 
-    public function testForceStopUsesIpcSkipDrainThenConcurrentResidualCleanup(): void
+    public function testForceStopUsesAuthenticatedIpcWithoutLocalKillFallbackOnSuccess(): void
     {
         $manager = new class extends ServerInstanceManager {
             public ?ServerInstanceInfo $info = null;
@@ -405,16 +412,15 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             protected function runFastLocalResidualCleanup(string $name, ServerInstanceInfo $info): void
             {
                 unset($name, $info);
-                $this->calls[] = 'kill';
-                $this->calls[] = 'residual';
+
+                throw new \RuntimeException('successful authenticated IPC must not enter local cleanup');
             }
 
             protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
             {
                 unset($info);
-                $this->calls[] = 'kill';
 
-                return 0;
+                throw new \RuntimeException('numeric PID cleanup must not run after authenticated IPC success');
             }
 
             protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
@@ -424,10 +430,18 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return [];
             }
 
+            protected function collectFastLocalResidualPids(string $name, ServerInstanceInfo $info): array
+            {
+                unset($name, $info);
+
+                return [];
+            }
+
             protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
             {
                 unset($name, $info, $includeSharedState);
-                $this->calls[] = 'residual';
+
+                throw new \RuntimeException('authenticated IPC success must not enter local lease cleanup');
             }
 
             protected function cleanupStaleRecoverableProcessPidFiles(): void
@@ -469,8 +483,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertSame(
             [
                 'show',
-                'kill',
-                'residual',
+                'ipc:default:force',
                 'release:default',
                 'pid:default',
                 'unlock:default',
@@ -479,7 +492,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         );
     }
 
-    public function testForceStopWithMissingMasterUsesDirectCleanupWithoutResidualRetry(): void
+    public function testForceStopWithMissingMasterUsesExactBirthRetirementThenVerification(): void
     {
         $manager = new class extends ServerInstanceManager {
             public ?ServerInstanceInfo $info = null;
@@ -574,19 +587,16 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
+            protected function retireExactInstanceGeneration(string $name): array
             {
-                unset($info);
-                $this->calls[] = 'kill';
+                $this->calls[] = 'exact:' . $name;
 
-                return 0;
-            }
-
-            protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
-            {
-                unset($info);
-
-                return [];
+                return [
+                    'terminated' => 0,
+                    'released' => 0,
+                    'unreleased' => 0,
+                    'reasons' => [],
+                ];
             }
 
             protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
@@ -626,10 +636,10 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         }
 
         self::assertSame(['default'], $manager->deleted);
-        self::assertSame(['show', 'kill', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
+        self::assertSame(['show', 'exact:default', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
     }
 
-    public function testDirectForceStopCandidateKillDoesNotRunPrefixBatchTwice(): void
+    public function testDirectForceRetirementUsesExactGenerationAndNeverPrefixBatch(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -649,17 +659,23 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
         $stop = new class extends Stop {
             public array $prefixCleanupNames = [];
+            public array $retiredInstances = [];
 
             public function terminate(ServerInstanceInfo $info): int
             {
                 return $this->terminateDirectForceStopCandidatePids($info);
             }
 
-            protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
+            protected function retireExactInstanceGeneration(string $name): array
             {
-                unset($info);
+                $this->retiredInstances[] = $name;
 
-                return [];
+                return [
+                    'terminated' => 1,
+                    'released' => 1,
+                    'unreleased' => 0,
+                    'reasons' => [],
+                ];
             }
 
             protected function terminateCurrentInstanceProcessPrefixes(string $name, bool $includeSharedState = false): int
@@ -671,11 +687,12 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             }
         };
 
-        self::assertSame(0, $stop->terminate($info));
+        self::assertSame(1, $stop->terminate($info));
+        self::assertSame([$info->name], $stop->retiredInstances);
         self::assertSame([], $stop->prefixCleanupNames);
     }
 
-    public function testForceStopKeepsInstanceFileWhenResidualCleanupCannotFinish(): void
+    public function testForceIpcSuccessKeepsMetadataWhenVerifiedResidualPidRemains(): void
     {
         $manager = new class extends ServerInstanceManager {
             public ?ServerInstanceInfo $info = null;
@@ -762,13 +779,6 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 $this->calls[] = 'show';
             }
 
-            protected function runFastLocalResidualCleanup(string $name, ServerInstanceInfo $info): void
-            {
-                unset($info);
-                $this->calls[] = 'kill';
-                $this->calls[] = 'residual:' . $name;
-            }
-
             protected function sendStopViaIpcAndWait(string $instanceName, int $controlPort, int $masterPid, bool $force): bool
             {
                 unset($controlPort, $masterPid);
@@ -777,17 +787,9 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
+            protected function collectFastLocalResidualPids(string $name, ServerInstanceInfo $info): array
             {
-                unset($info);
-                $this->calls[] = 'kill';
-
-                return 0;
-            }
-
-            protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
-            {
-                unset($info);
+                unset($name, $info);
 
                 return [33780];
             }
@@ -799,20 +801,9 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return $pids;
             }
 
-            protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
-            {
-                unset($info);
-                $this->calls[] = 'residual:' . $name;
-            }
-
-            protected function wasLastResidualCleanupComplete(): bool
-            {
-                return false;
-            }
-
             protected function cleanupPidFiles(string $name, ServerInstanceInfo $info): void
             {
-                unset($name, $info, $includeSharedState);
+                unset($name, $info);
                 $this->calls[] = 'pid';
             }
         };
@@ -831,7 +822,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         }
 
         self::assertSame([], $manager->deleted);
-        self::assertSame(['show', 'kill', 'residual:default'], $stop->calls);
+        self::assertSame(['show', 'ipc:default:force'], $stop->calls);
     }
 
     public function testGracefulStopTrustsAuthoritativeIpcCompletionWithoutLocalPrefixScan(): void

@@ -49,7 +49,7 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
         $this->writePrivateProperty($core, 'workerHealth', [
             19091 => [
                 'failures' => 3,
-                'blacklisted_at' => \microtime(true) - 1.0,
+                'blacklisted_at' => (\hrtime(true) / 1_000_000_000) - 1.0,
                 'last_success' => 0.0,
                 'total_failures' => 3,
             ],
@@ -67,8 +67,8 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
                 'port' => 19091,
                 'clientIp' => '127.0.0.1',
                 'sni' => '',
-                'open_time' => \microtime(true),
-                'request_sent_at' => \microtime(true),
+                'open_time' => (\hrtime(true) / 1_000_000_000),
+                'request_sent_at' => (\hrtime(true) / 1_000_000_000),
                 'worker_responded' => false,
             ],
         ]);
@@ -114,7 +114,7 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
             19091 => [
                 'failures' => 2,
                 'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true) - 1.0,
+                'last_success' => (\hrtime(true) / 1_000_000_000) - 1.0,
                 'total_failures' => 7,
             ],
         ]);
@@ -187,7 +187,7 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
             19091 => [
                 'failures' => 0,
                 'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true) - 1.0,
+                'last_success' => (\hrtime(true) / 1_000_000_000) - 1.0,
                 'total_failures' => 0,
             ],
         ]);
@@ -218,7 +218,7 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
             19091 => [
                 'failures' => 2,
                 'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true) - 2.0,
+                'last_success' => (\hrtime(true) / 1_000_000_000) - 2.0,
                 'total_failures' => 2,
             ],
         ]);
@@ -249,7 +249,7 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
             19091 => [
                 'failures' => 2,
                 'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true) - 60.0,
+                'last_success' => (\hrtime(true) / 1_000_000_000) - 60.0,
                 'total_failures' => 2,
             ],
         ]);

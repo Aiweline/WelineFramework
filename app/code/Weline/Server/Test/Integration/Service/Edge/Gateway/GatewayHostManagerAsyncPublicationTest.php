@@ -116,17 +116,23 @@ final class GatewayHostManagerAsyncPublicationTest extends TestCase
 
         try {
             $progressCalls = 0;
+            $progressDeadlines = [];
             $client = new GatewayClient($paths, 1.0, $credentials);
             $host = new GatewayHostManager(
                 $paths,
                 $client,
                 new HostGatewayPackageManager($paths),
                 new GatewayPlatformServiceInstaller($paths),
-                static function () use (&$progressCalls): void {
+                static function (?float $deadlineMonotonic = null) use (
+                    &$progressCalls,
+                    &$progressDeadlines,
+                ): void {
                     ++$progressCalls;
+                    $progressDeadlines[] = $deadlineMonotonic;
                 },
             );
             $await = new \ReflectionMethod($host, 'awaitPublication');
+            $operationDeadline = \hrtime(true) / 1_000_000_000 + 2.0;
             $result = $await->invoke(
                 $host,
                 [
@@ -139,6 +145,7 @@ final class GatewayHostManagerAsyncPublicationTest extends TestCase
                 false,
                 $projectUuid,
                 2.0,
+                $operationDeadline,
             );
 
             self::assertSame($operationId, $result['operation_id']);
@@ -146,6 +153,11 @@ final class GatewayHostManagerAsyncPublicationTest extends TestCase
             self::assertSame(73, $result['operation']['active_generation']);
             self::assertSame($projectUuid, $result['operation']['project_uuid']);
             self::assertGreaterThan(0, $progressCalls);
+            self::assertNotSame([], $progressDeadlines);
+            foreach ($progressDeadlines as $progressDeadline) {
+                self::assertIsFloat($progressDeadline);
+                self::assertLessThanOrEqual($operationDeadline, $progressDeadline);
+            }
         } finally {
             $waited = \pcntl_waitpid($childPid, $status);
             self::assertSame($childPid, $waited);
@@ -532,17 +544,55 @@ final class GatewayHostManagerAsyncPublicationTest extends TestCase
                     @\fclose($client);
                     continue;
                 }
+                $epoch = \str_repeat('a', 32);
+                $hostBootId = \str_repeat('b', 64);
+                $routeCollections = [
+                    'active_routes' => [],
+                    'desired_routes' => [],
+                ];
+                $pageFence = [
+                    'host_boot_id' => $hostBootId,
+                    'epoch' => $epoch,
+                    'generation' => 0,
+                    'active_config_generation' => 0,
+                    'active_config_digest' => '',
+                    'principal' => $projectUuid,
+                    'scope' => 'project-status',
+                    'routes_digest' => \hash(
+                        'sha256',
+                        GatewayClient::canonicalJson($routeCollections),
+                    ),
+                    'project_generation' => 0,
+                    'project_digest' => '',
+                ];
                 $response = [
                     'protocol' => GatewayPaths::PROTOCOL,
                     'request_id' => (string)$request['request_id'],
+                    'epoch' => $epoch,
                     'ok' => true,
                     'payload' => [
                         'ready' => true,
                         'protocol' => GatewayPaths::PROTOCOL,
+                        'host_boot_id' => $hostBootId,
                         'protocol_min' => 2,
                         'protocol_max' => 2,
                         'supervisor_ready' => true,
-                        'epoch' => \str_repeat('a', 32),
+                        'epoch' => $epoch,
+                        'project_uuid' => $projectUuid,
+                        ...$routeCollections,
+                        'page' => [
+                            'schema' => 1,
+                            'fence' => $pageFence,
+                            'fence_digest' => \hash(
+                                'sha256',
+                                GatewayClient::canonicalJson($pageFence),
+                            ),
+                            'offset' => 0,
+                            'limit' => 128,
+                            'total' => 0,
+                            'complete' => true,
+                            'next_cursor' => '',
+                        ],
                     ],
                 ];
                 $response['signature'] = \hash_hmac(
@@ -571,7 +621,10 @@ final class GatewayHostManagerAsyncPublicationTest extends TestCase
                 new GatewayPlatformServiceInstaller($paths),
             );
             $status = $host->status(2.0);
-            self::assertTrue($status['ok']);
+            self::assertTrue(
+                $status['ok'],
+                \json_encode($status, JSON_UNESCAPED_SLASHES) ?: 'status unavailable',
+            );
             self::assertTrue($status['ready']);
             self::assertSame(GatewayPaths::PROTOCOL, $status['protocol']);
             self::assertSame(\str_repeat('a', 32), $status['epoch']);
@@ -590,17 +643,24 @@ final class GatewayHostManagerAsyncPublicationTest extends TestCase
                 'counters_known' => true,
                 'active_requests' => 3,
                 'long_lived_connections' => 2,
+                'sse_connections' => 1,
+                'websocket_connections' => 1,
+                'http2_connections' => 4,
             ]);
-        self::assertSame(3, $summary['forced_connections']);
+        self::assertSame(4, $summary['forced_connections']);
         self::assertTrue($summary['forced_connections_known']);
         self::assertSame(3, $summary['forced_active_requests']);
         self::assertSame(2, $summary['forced_long_lived_connections']);
+        self::assertSame(4, $summary['forced_http2_connections']);
 
         $unknown = (new \ReflectionMethod(GatewayHostManager::class, 'forcedDrainSummary'))
             ->invoke(null, [
                 'counters_known' => false,
                 'active_requests' => 7,
                 'long_lived_connections' => 5,
+                'sse_connections' => 2,
+                'websocket_connections' => 1,
+                'http2_connections' => 3,
             ]);
         self::assertSame(0, $unknown['forced_connections']);
         self::assertFalse($unknown['forced_connections_known']);

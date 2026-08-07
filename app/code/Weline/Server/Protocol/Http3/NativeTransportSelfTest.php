@@ -112,7 +112,7 @@ final class NativeTransportSelfTest
         @\stream_set_blocking($pipes[1], false);
         @\stream_set_blocking($pipes[2], false);
 
-        $deadline = \microtime(true) + 5.0;
+        $deadline = self::monotonicSeconds() + 5.0;
         $dispatched = false;
         $exitCode = -1;
         $processRunning = true;
@@ -146,7 +146,7 @@ final class NativeTransportSelfTest
                 break;
             }
             SchedulerSystem::usleep(1000);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         $stdout = (string)@\stream_get_contents($pipes[1]);
         $stderr = (string)@\stream_get_contents($pipes[2]);
@@ -484,7 +484,7 @@ final class NativeTransportSelfTest
             }
             $added = true;
 
-            $deadline = \microtime(true) + 6.0;
+            $deadline = self::monotonicSeconds() + 6.0;
             $running = 1;
             $completed = false;
             $resultCode = \CURLE_OK;
@@ -530,7 +530,7 @@ final class NativeTransportSelfTest
                 } else {
                     SchedulerSystem::usleep(1000);
                 }
-            } while (\microtime(true) < $deadline);
+            } while (self::monotonicSeconds() < $deadline);
 
             $body = (string)\curl_multi_getcontent($easy);
             $httpCode = (int)\curl_getinfo($easy, \CURLINFO_RESPONSE_CODE);
@@ -620,7 +620,7 @@ final class NativeTransportSelfTest
         $exitCode = -1;
         $dispatched = false;
         $processRunning = true;
-        $deadline = \microtime(true) + 8.0;
+        $deadline = self::monotonicSeconds() + 8.0;
         try {
             do {
                 $adapter->poll(2);
@@ -646,7 +646,7 @@ final class NativeTransportSelfTest
                     break;
                 }
                 SchedulerSystem::usleep(1000);
-            } while (\microtime(true) < $deadline);
+            } while (self::monotonicSeconds() < $deadline);
 
             $stdout .= (string)@\stream_get_contents($pipes[1]);
             $stderr .= (string)@\stream_get_contents($pipes[2]);
@@ -840,5 +840,10 @@ final class NativeTransportSelfTest
             $librarySha256,
             $fingerprint,
         );
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

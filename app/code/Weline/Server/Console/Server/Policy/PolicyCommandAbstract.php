@@ -117,11 +117,11 @@ abstract class PolicyCommandAbstract extends CommandAbstract
             // Do not report a successful publish until every critical
             // participant has ACKed COMMIT and Master exposes the target digest
             // as its active runtime policy.
-            $deadline = \microtime(true) + 18.0;
+            $deadline = self::monotonicSeconds() + 18.0;
             $lastState = (string)($result['data']['policy_state'] ?? 'accepted');
             $lastError = '';
             do {
-                $remaining = $deadline - \microtime(true);
+                $remaining = $deadline - self::monotonicSeconds();
                 if ($remaining <= 0.0) {
                     break;
                 }
@@ -169,5 +169,10 @@ abstract class PolicyCommandAbstract extends CommandAbstract
             'status' => 'active_on_next_start',
             'state' => $state,
         ];
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

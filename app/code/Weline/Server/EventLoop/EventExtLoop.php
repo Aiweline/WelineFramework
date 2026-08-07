@@ -5,6 +5,11 @@ namespace Weline\Server\EventLoop;
 
 final class EventExtLoop implements EventLoopInterface
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private const KERNEL_READINESS_RECONCILE_INTERVAL_SECONDS = 0.1;
 
     private \EventBase $base;
@@ -108,7 +113,7 @@ final class EventExtLoop implements EventLoopInterface
 
         $readyRead = \array_intersect_key($this->readyRead, $this->readWatchers);
         $readyWrite = \array_intersect_key($this->readyWrite, $this->writeWatchers);
-        $reconcileAt = \microtime(true);
+        $reconcileAt = self::monotonicSeconds();
         if (($readyRead === [] && $readyWrite === [])
             || ($reconcileAt - $this->lastKernelReadinessReconcileAt)
                 >= self::KERNEL_READINESS_RECONCILE_INTERVAL_SECONDS

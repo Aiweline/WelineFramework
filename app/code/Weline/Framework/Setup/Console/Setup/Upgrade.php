@@ -3289,7 +3289,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             '升级模块系统，包括数据库模型、路由等',
             [
                 '--model' => '升级声明式数据库模型（执行 SchemaDiff；与全量相同的 schema 前置）',
-                '--route' => '仅升级路由',
+                '--route' => '仅升级路由（新增/变更 Controller 且不需要 Schema 时；部署与系统更新默认不要加此参数）',
                 '-m, --module=<模块名>' => '升级指定模块（例如：Vendor_Module）',
                 '--stage=<code>[,code...]' => __('优先运行指定阶段；framework_db_bootstrap/eav_schema/schema_diff 在全量路径仍必执行。阶段 code：%{1}。幽灵阶段 module_manager_bootstrap 已移除。', [$stageCodes]),
                 '--hot' => __('热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS'),
@@ -3308,9 +3308,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             ],
             [],
             [
-                '升级所有模块（默认等待优化完成）' => 'php bin/w setup:upgrade',
+                '升级所有模块（默认；部署/系统更新用此命令，已含路由同步）' => 'php bin/w setup:upgrade',
                 '升级数据库模型（含 SchemaDiff）' => 'php bin/w setup:upgrade --model',
-                '仅升级路由（新增 Controller 后）' => 'php bin/w setup:upgrade --route',
+                '仅升级路由（仅新增 Controller、无需 Schema 时）' => 'php bin/w setup:upgrade --route',
                 __('仅运行 schema_diff 阶段（测试声明式表）') => 'php bin/w setup:upgrade --stage=schema_diff',
                 __('仅运行 framework_db_bootstrap 阶段') => 'php bin/w setup:upgrade --stage=framework_db_bootstrap',
                 '升级指定模块（位置参数）' => 'php bin/w setup:upgrade Vendor_Module',

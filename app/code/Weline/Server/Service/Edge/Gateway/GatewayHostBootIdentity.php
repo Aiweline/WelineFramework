@@ -14,6 +14,7 @@ namespace Weline\Server\Service\Edge\Gateway;
 final class GatewayHostBootIdentity
 {
     private static ?string $currentBootId = null;
+    private static ?string $resolvedPlatformToken = null;
 
     public static function current(): string
     {
@@ -29,6 +30,15 @@ final class GatewayHostBootIdentity
      */
     public static function platformToken(): string
     {
+        return self::$resolvedPlatformToken ??= self::resolvePlatformToken();
+    }
+
+    /**
+     * Resolve the raw token once per PHP process. A host reboot terminates the
+     * process, so a successful value cannot outlive the boot it identifies.
+     */
+    private static function resolvePlatformToken(): string
+    {
         if (\PHP_OS_FAMILY === 'Linux') {
             $bootId = \strtolower(\trim(self::readStableLinuxBootId()));
             if (\preg_match(
@@ -43,7 +53,7 @@ final class GatewayHostBootIdentity
         if (\PHP_OS_FAMILY === 'Darwin') {
             $bootTime = self::readDarwinBootTime();
             if (\preg_match(
-                '/\A\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}/',
+                '/\A\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}\z/D',
                 $bootTime,
                 $matches,
             ) === 1
@@ -166,33 +176,21 @@ CDEF,
      */
     private static function readDarwinBootTime(): string
     {
-        $pattern = '/\A\{\s*sec\s*=\s*\d+,\s*usec\s*=\s*\d+\s*\}/';
+        $pattern = '/\A\{\s*sec\s*=\s*\d+,\s*usec\s*=\s*\d+\s*\}\z/D';
         $viaFfi = self::readDarwinBootTimeViaFfi();
         if ($viaFfi !== '' && \preg_match($pattern, $viaFfi) === 1) {
             return $viaFfi;
         }
 
-        $bounded = '';
-        try {
-            $result = GatewayBoundedCommandRunner::run([
-                '/usr/sbin/sysctl',
-                '-n',
-                'kern.boottime',
-            ], 3.0);
-            $bounded = \trim((string)($result['stdout'] ?? $result['output'] ?? ''));
-        } catch (\Throwable) {
-            $bounded = '';
-        }
-        $direct = self::readDarwinBootTimeDirect();
-        $boundedToken = self::normalizeDarwinBootTimeToken($bounded);
-        $directToken = self::normalizeDarwinBootTimeToken($direct);
-        if ($boundedToken !== ''
-            && $directToken !== ''
-            && \hash_equals($boundedToken, $directToken)
+        $first = self::readDarwinBootTimeBounded();
+        $second = self::readDarwinBootTimeBounded();
+        $firstToken = self::normalizeDarwinBootTimeToken($first);
+        $secondToken = self::normalizeDarwinBootTimeToken($second);
+        if ($firstToken !== ''
+            && $secondToken !== ''
+            && \hash_equals($firstToken, $secondToken)
         ) {
-            // Prefer the direct probe's raw payload: the bounded runner can
-            // append inherited FD noise after a still-parseable timeval.
-            return $direct !== '' ? $direct : $bounded;
+            return $second;
         }
 
         // Single-source subprocess evidence is not lease-safe under Master FD
@@ -202,13 +200,13 @@ CDEF,
     }
 
     /**
-     * Collapse `{ sec = N, usec = M } …optional noise` to a comparable token.
+     * Collapse one exact `{ sec = N, usec = M }` record to a comparable token.
      */
     private static function normalizeDarwinBootTimeToken(string $bootTime): string
     {
         if ($bootTime === ''
             || \preg_match(
-                '/\A\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}/',
+                '/\A\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}\z/D',
                 $bootTime,
                 $matches,
             ) !== 1
@@ -216,7 +214,13 @@ CDEF,
             return '';
         }
 
-        return 'darwin-' . (int)$matches[1] . '-' . (int)$matches[2];
+        $seconds = (int)$matches[1];
+        $microseconds = (int)$matches[2];
+        if ($seconds < 1 || $microseconds < 0 || $microseconds > 999_999) {
+            return '';
+        }
+
+        return 'darwin-' . $seconds . '-' . $microseconds;
     }
 
     /**
@@ -283,48 +287,48 @@ CDEF,
         return (int)$value;
     }
 
-    private static function readDarwinBootTimeDirect(): string
+    private static function readDarwinBootTimeBounded(): string
     {
-        if (!\function_exists('proc_open')
-            || !\is_file('/usr/sbin/sysctl')
+        if (!\is_file('/usr/sbin/sysctl')
             || !\is_executable('/usr/sbin/sysctl')
         ) {
             return '';
         }
-        $pipes = [];
-        $process = @\proc_open(
-            ['/usr/sbin/sysctl', '-n', 'kern.boottime'],
-            [
-                0 => ['file', '/dev/null', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes,
-            null,
-            null,
-            ['bypass_shell' => true],
-        );
-        if (!\is_resource($process)) {
+        try {
+            $result = GatewayBoundedCommandRunner::run([
+                '/usr/sbin/sysctl',
+                '-n',
+                'kern.boottime',
+            ], 3.0);
+            if (($result['truncated'] ?? true) === true
+                || !\in_array((int)($result['code'] ?? 1), [0, 125], true)
+            ) {
+                return '';
+            }
+            $stdout = \trim((string)($result['stdout'] ?? ''));
+            if (\strlen($stdout) > 4096
+                || \preg_match(
+                    '/\A\{\s*sec\s*=\s*([0-9]+),\s*usec\s*=\s*([0-9]+)\s*\}'
+                        . '(?:[ \t]+[A-Z][a-z]{2}[ \t]+[A-Z][a-z]{2}[ \t]+'
+                        . '[0-9]{1,2}[ \t]+[0-9]{2}:[0-9]{2}:[0-9]{2}[ \t]+'
+                        . '[0-9]{4})?\z/D',
+                    $stdout,
+                    $matches,
+                ) !== 1
+            ) {
+                return '';
+            }
+            // macOS appends ctime(3) text to kern.boottime on some releases.
+            // Validate that suffix exactly, then return only the canonical
+            // timeval so the two-read comparison cannot absorb pipe noise.
+            $canonical = '{ sec = ' . (string)$matches[1]
+                . ', usec = ' . (string)$matches[2] . ' }';
+            return self::normalizeDarwinBootTimeToken($canonical) !== ''
+                ? $canonical
+                : '';
+        } catch (\Throwable) {
             return '';
         }
-        $stdout = '';
-        try {
-            if (isset($pipes[1]) && \is_resource($pipes[1])) {
-                $chunk = @\stream_get_contents($pipes[1], 4096);
-                if (\is_string($chunk)) {
-                    $stdout = $chunk;
-                }
-            }
-        } finally {
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    @\fclose($pipe);
-                }
-            }
-            @\proc_close($process);
-        }
-
-        return \trim($stdout);
     }
 
     public static function validate(string $bootId): string

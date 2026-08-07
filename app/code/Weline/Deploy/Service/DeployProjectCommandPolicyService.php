@@ -137,9 +137,9 @@ class DeployProjectCommandPolicyService
                 'composer install --no-dev --prefer-dist --no-interaction --no-progress',
             ],
             'post_deploy_examples' => [
-                'php bin/w setup:upgrade --route',
+                'php bin/w setup:upgrade',
                 'php bin/w server:reload -r',
-                'php bin/w setup:upgrade --route && php bin/w server:reload -r',
+                'php bin/w setup:upgrade && php bin/w server:reload -r',
             ],
             'rollback_examples' => [
                 'last-stable',

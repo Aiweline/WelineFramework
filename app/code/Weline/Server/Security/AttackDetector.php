@@ -24,6 +24,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Service\AttackLogService;
+use Weline\Server\Service\Security\SecurityPolicyStateStore;
 
 class AttackDetector
 {
@@ -86,6 +87,8 @@ class AttackDetector
     private array $rules = [];
 
     private readonly CanonicalClientIdentity $clientIdentity;
+
+    private readonly SecurityPolicyStateStore $stateStore;
     
     /**
      * 默认规则
@@ -277,7 +280,7 @@ class AttackDetector
     /**
      * 上次规则检查时间
      */
-    private int $lastRulesCheck = 0;
+    private float $lastRulesCheck = 0.0;
     
     /**
      * 规则检查间隔（秒）
@@ -288,6 +291,18 @@ class AttackDetector
      * Last observed persisted rules update signal.
      */
     private string $lastRulesUpdateSignal = '';
+
+    private int $appliedRulesGeneration = -1;
+
+    private string $appliedRulesDigest = '';
+
+    private int $appliedBansGeneration = -1;
+
+    private string $appliedBansDigest = '';
+
+    private ?\Closure $monotonicClock = null;
+
+    private ?\Closure $rulesUpdatedNotifier = null;
     
     /**
      * 上次清理时间
@@ -335,14 +350,21 @@ class AttackDetector
     private int $spikeModeUntil = 0;
     
     /**
-     * 私有构造函数
+     * The optional state store keeps production singleton behavior while
+     * allowing isolated runtime/compiler validation against a bounded root.
      */
-    private function __construct()
+    public function __construct(
+        ?SecurityPolicyStateStore $stateStore = null,
+        ?\Closure $monotonicClock = null,
+        ?\Closure $rulesUpdatedNotifier = null,
+    )
     {
+        $this->stateStore = $stateStore ?? new SecurityPolicyStateStore();
+        $this->monotonicClock = $monotonicClock;
+        $this->rulesUpdatedNotifier = $rulesUpdatedNotifier;
         $this->clientIdentity = new CanonicalClientIdentity();
         $this->rules = $this->defaultRules;
-        $this->loadRules();
-        $this->loadPermanentBannedIps();
+        $this->reload();
     }
     
     /**
@@ -371,23 +393,6 @@ class AttackDetector
     public static function reset(): void
     {
         self::$instance = null;
-    }
-    
-    /**
-     * 加载规则配置
-     */
-    private function loadRules(): void
-    {
-        $rulesFile = $this->getRulesFilePath();
-        if (\is_file($rulesFile)) {
-            $rules = @\json_decode(\file_get_contents($rulesFile), true);
-            if (\is_array($rules)) {
-                $this->rules = $this->mergeRules($rules);
-            }
-        }
-        
-        // 从 env.php 加载 IP 白名单配置
-        $this->loadEnvWhitelist();
     }
     
     /**
@@ -461,7 +466,7 @@ class AttackDetector
      */
     public static function getRulesFilePath(): string
     {
-        return BP . 'var' . DS . 'server' . DS . 'security-rules.json';
+        return SecurityPolicyStateStore::defaultRulesPath();
     }
     
     /**
@@ -469,7 +474,7 @@ class AttackDetector
      */
     public static function getRulesUpdateFlagPath(): string
     {
-        return BP . 'var' . DS . 'server' . DS . 'security-rules-update.flag';
+        return SecurityPolicyStateStore::defaultLegacyFlagPath();
     }
 
     /**
@@ -477,43 +482,19 @@ class AttackDetector
      */
     public static function getPermanentBannedFilePath(): string
     {
-        return BP . 'var' . DS . 'server' . DS . 'permanent-banned-ips.json';
+        return SecurityPolicyStateStore::defaultPermanentBansPath();
     }
 
-    private function loadPermanentBannedIps(): void
+    /** @param list<string> $ips */
+    private function applyPermanentBannedIps(array $ips): void
     {
-        // 先移除当前内存中已记录的永久封禁 IP（避免重载后与文件不一致时残留）
         foreach (\array_keys($this->permanentBannedIps) as $ip) {
             unset($this->blockedIps[$ip]);
         }
-        $this->permanentBannedIps = [];
-
-        $file = self::getPermanentBannedFilePath();
-        if (!\is_file($file)) {
-            return;
+        $this->permanentBannedIps = \array_fill_keys($ips, true);
+        foreach ($this->permanentBannedIps as $ip => $_) {
+            $this->blockedIps[$ip] = \PHP_INT_MAX;
         }
-        $raw = @\file_get_contents($file);
-        if ($raw === false || $raw === '') {
-            return;
-        }
-        $data = @\json_decode($raw, true);
-        if (\is_array($data) && isset($data['ips']) && \is_array($data['ips'])) {
-            $this->permanentBannedIps = \array_fill_keys($data['ips'], true);
-            foreach ($this->permanentBannedIps as $ip => $_) {
-                $this->blockedIps[$ip] = \PHP_INT_MAX;
-            }
-        }
-    }
-
-    private function savePermanentBannedIps(): void
-    {
-        $file = self::getPermanentBannedFilePath();
-        $dir = \dirname($file);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-        $ips = \array_keys($this->permanentBannedIps);
-        @\file_put_contents($file, \json_encode(['ips' => $ips], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
     
     /**
@@ -521,8 +502,45 @@ class AttackDetector
      */
     public function reload(): void
     {
-        $this->loadRules();
-        $this->loadPermanentBannedIps();
+        $this->applyStateSnapshot($this->stateStore->snapshot());
+    }
+
+    /**
+     * @param array{rules:?array{rules:array<string,mixed>,generation:int,digest:string,signal:string},bans:array{ips:list<string>,generation:int,digest:string,signal:string},signal:string} $snapshot
+     */
+    private function applyStateSnapshot(array $snapshot): void
+    {
+        $rulesGeneration = (int)($snapshot['rules']['generation'] ?? 0);
+        $rulesDigest = $snapshot['rules'] !== null
+            ? (string)($snapshot['rules']['digest'] ?? '')
+            : '';
+        $bansGeneration = (int)($snapshot['bans']['generation'] ?? 0);
+        $bansDigest = (string)($snapshot['bans']['digest'] ?? '');
+        if ($rulesGeneration < $this->appliedRulesGeneration
+            || $bansGeneration < $this->appliedBansGeneration
+            || ($rulesGeneration > 0
+                && $rulesGeneration === $this->appliedRulesGeneration
+                && $this->appliedRulesDigest !== ''
+                && !\hash_equals($this->appliedRulesDigest, $rulesDigest))
+            || ($bansGeneration > 0
+                && $bansGeneration === $this->appliedBansGeneration
+                && $this->appliedBansDigest !== ''
+                && !\hash_equals($this->appliedBansDigest, $bansDigest))
+        ) {
+            throw new \RuntimeException(
+                'Security policy runtime snapshot regressed or forked its committed generation.'
+            );
+        }
+        $this->rules = $snapshot['rules'] !== null
+            ? $this->mergeRules($snapshot['rules']['rules'])
+            : $this->defaultRules;
+        $this->loadEnvWhitelist();
+        $this->applyPermanentBannedIps($snapshot['bans']['ips']);
+        $this->appliedRulesGeneration = $rulesGeneration;
+        $this->appliedRulesDigest = $rulesDigest;
+        $this->appliedBansGeneration = $bansGeneration;
+        $this->appliedBansDigest = $bansDigest;
+        $this->lastRulesUpdateSignal = $snapshot['signal'];
     }
     
     /**
@@ -530,23 +548,45 @@ class AttackDetector
      */
     public function checkRulesUpdate(bool $force = false): void
     {
-        $now = \time();
+        $now = $this->monotonicNow();
         if (!$force && $now - $this->lastRulesCheck < $this->rulesCheckInterval) {
             return;
         }
+        // Rate-limit both successful polls and fail-closed LKG retention. A
+        // damaged target must not turn every request into a filesystem retry.
         $this->lastRulesCheck = $now;
-        
-        $flagFile = self::getRulesUpdateFlagPath();
-        if (\is_file($flagFile)) {
-            $flagMtime = @\filemtime($flagFile);
-            $flagValue = \trim((string)@\file_get_contents($flagFile));
-            $flagSignal = (string)$flagMtime . ':' . $flagValue;
-            
-            if ($flagSignal !== $this->lastRulesUpdateSignal) {
-                $this->lastRulesUpdateSignal = $flagSignal;
-                $this->reload();
+
+        try {
+            $snapshot = $force
+                ? $this->stateStore->snapshot()
+                : $this->stateStore->snapshotForRuntime();
+            if (!\hash_equals($this->lastRulesUpdateSignal, $snapshot['signal'])) {
+                $this->applyStateSnapshot($snapshot);
             }
+        } catch (\Throwable $throwable) {
+            if ($force) {
+                throw $throwable;
+            }
+            // Worker request paths retain the last fully validated in-memory
+            // policy and retry after the monotonic interval. Recovery and
+            // legacy upgrade remain explicit/full-snapshot responsibilities.
         }
+    }
+
+    private function monotonicNow(): float
+    {
+        $now = $this->monotonicClock !== null
+            ? ($this->monotonicClock)()
+            : \hrtime(true) / 1_000_000_000;
+        if (!\is_float($now) && !\is_int($now)) {
+            throw new \RuntimeException('Attack detector monotonic clock returned a non-numeric value.');
+        }
+        $now = (float)$now;
+        if (!\is_finite($now) || $now < 0.0) {
+            throw new \RuntimeException('Attack detector monotonic clock returned an invalid value.');
+        }
+
+        return $now;
     }
     
     /**
@@ -771,12 +811,11 @@ class AttackDetector
      */
     private function blockIpPermanent(string $ip): void
     {
-        if (isset($this->permanentBannedIps[$ip])) {
-            return;
-        }
-        $this->permanentBannedIps[$ip] = true;
-        $this->blockedIps[$ip] = \PHP_INT_MAX;
-        $this->savePermanentBannedIps();
+        $state = $this->stateStore->addPermanentBan($ip);
+        $this->applyPermanentBannedIps($state['ips']);
+        $this->appliedBansGeneration = $state['generation'];
+        $this->appliedBansDigest = $state['digest'];
+        $this->lastRulesUpdateSignal = '';
         $this->logAttack($ip, 'block_permanent', 'IP 已永久封禁（命中扫描路径，仅后台可解禁）');
     }
 
@@ -1440,11 +1479,12 @@ class AttackDetector
      */
     public function unblock(string $ip): void
     {
+        $state = $this->stateStore->removePermanentBan($ip);
+        $this->applyPermanentBannedIps($state['ips']);
+        $this->appliedBansGeneration = $state['generation'];
+        $this->appliedBansDigest = $state['digest'];
+        $this->lastRulesUpdateSignal = '';
         unset($this->blockedIps[$ip]);
-        if (isset($this->permanentBannedIps[$ip])) {
-            unset($this->permanentBannedIps[$ip]);
-            $this->savePermanentBannedIps();
-        }
         $rule = $this->rules['unblock_retrigger_permanent'] ?? [];
         if (\is_array($rule) && ($rule['enabled'] ?? true)) {
             $this->unblockRetriggerCount[$ip] = (int)($this->unblockRetriggerCount[$ip] ?? 0) + 1;
@@ -1456,9 +1496,12 @@ class AttackDetector
      */
     public function clearAllBlocks(): void
     {
+        $state = $this->stateStore->clearPermanentBans();
         $this->blockedIps = [];
-        $this->permanentBannedIps = [];
-        $this->savePermanentBannedIps();
+        $this->applyPermanentBannedIps($state['ips']);
+        $this->appliedBansGeneration = $state['generation'];
+        $this->appliedBansDigest = $state['digest'];
+        $this->lastRulesUpdateSignal = '';
     }
 
     private function mergeRules(array $rules): array
@@ -1537,37 +1580,95 @@ class AttackDetector
 
     public function getRules(): array
     {
+        return $this->getRulesState()['rules'];
+    }
+
+    /** @return array{generation:int,digest:string} */
+    public function getRulesReceipt(): array
+    {
+        $state = $this->getRulesState();
+
+        return [
+            'generation' => $state['generation'],
+            'digest' => $state['digest'],
+        ];
+    }
+
+    /** @return array{rules:array<string,mixed>,generation:int,digest:string} */
+    public function getRulesState(): array
+    {
         $this->checkRulesUpdate(true);
 
-        return $this->rules;
+        return [
+            'rules' => $this->rules,
+            'generation' => \max(0, $this->appliedRulesGeneration),
+            'digest' => $this->appliedRulesDigest,
+        ];
     }
     
     /**
      * 更新规则
+     *
+     * @return array{rules:array<string,mixed>,generation:int,digest:string,signal:string,notification_pending:bool,notification_error:string}
      */
-    public function updateRules(array $rules): void
+    public function updateRules(
+        array $rules,
+        ?int $expectedGeneration = null,
+        ?string $expectedDigest = null,
+    ): array
     {
-        $this->rules = $this->mergeRules($rules);
-        
-        // 保存合并后的规则到文件，保证重载时与当前内存一致（避免只保存前端片段导致缺省项丢失）
-        $rulesFile = self::getRulesFilePath();
-        $dir = \dirname($rulesFile);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
+        if (($expectedGeneration === null) !== ($expectedDigest === null)) {
+            throw new \InvalidArgumentException(
+                'Security rules update requires both expected generation and digest.'
+            );
         }
-        @\file_put_contents($rulesFile, \json_encode($this->rules, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        
-        // 写入更新标记
-        @\file_put_contents(self::getRulesUpdateFlagPath(), (string) \time());
+        $expectedReceipt = $expectedGeneration === null
+            ? [
+                'generation' => \max(0, $this->appliedRulesGeneration),
+                'digest' => $this->appliedRulesDigest,
+            ]
+            : [
+                'generation' => $expectedGeneration,
+                'digest' => (string)$expectedDigest,
+            ];
+        $mergedRules = $this->mergeRules($rules);
+        $state = $this->stateStore->writeRules($mergedRules, $expectedReceipt);
+        // Persistence is the commit point. In-memory policy changes only
+        // after the generation/digest receipt has been verified.
+        $this->rules = $state['rules'];
+        $this->appliedRulesGeneration = $state['generation'];
+        $this->appliedRulesDigest = $state['digest'];
+        $this->lastRulesUpdateSignal = '';
 
-        /** @var EventsManager $eventsManager */
-        $eventsManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = [
             'rules' => $rules,
-            'merged_rules' => $this->rules,
+            'merged_rules' => $state['rules'],
             'instance' => $this->instanceName,
+            'generation' => $state['generation'],
+            'digest' => $state['digest'],
         ];
-        $eventsManager->dispatch('Weline_Server::integration::security_rules_updated', $eventData);
+        $notificationPending = false;
+        $notificationError = '';
+        try {
+            if ($this->rulesUpdatedNotifier !== null) {
+                ($this->rulesUpdatedNotifier)($eventData);
+            } else {
+                /** @var EventsManager $eventsManager */
+                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $eventsManager->dispatch('Weline_Server::integration::security_rules_updated', $eventData);
+            }
+        } catch (\Throwable $throwable) {
+            // The generation receipt above is already committed. A best-effort
+            // integration notification must never turn that commit into an
+            // apparent failure that an administrator will retry blindly.
+            $notificationPending = true;
+            $notificationError = $throwable->getMessage();
+        }
+
+        return $state + [
+            'notification_pending' => $notificationPending,
+            'notification_error' => $notificationError,
+        ];
     }
     
     /**

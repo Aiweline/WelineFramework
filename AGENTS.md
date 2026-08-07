@@ -12,6 +12,7 @@
 2. Follow `dev/ai/global-constraints.md` for repository-wide rules.
 3. Use `dev/ai/skills/_index.md` to select only the skills needed by the task.
 4. For module work, read the owning module's `doc/AI-INDEX.md`, then inspect the targeted source and existing verification surface.
+5. **WebUI 验收（强制）**：产品/UI 功能必须在真实 WLS + Cursor 内置 Browser 按用户路径测通后才能结案；详见 `global-constraints.md` §5 / §10.1 与 `.cursor/rules/real-device-acceptance.mdc`。禁止仅用 CLI/`curl`/单测冒充验收。
 
 `dev/ai/codex/SOUL.md`, `dev/ai/codex/USER.md`, and `dev/ai/codex/MEMORY.md` are context maps, not higher-priority rules.
 

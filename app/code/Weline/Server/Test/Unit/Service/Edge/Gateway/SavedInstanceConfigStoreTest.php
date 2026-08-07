@@ -9,9 +9,73 @@ use Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore;
 
 final class SavedInstanceConfigStoreTest extends TestCase
 {
+    public function testLoadCollectsAValidatedSavedConfigBackupUnderTheInstanceLock(): void
+    {
+        $temporaryRoot = \realpath(\sys_get_temp_dir());
+        self::assertIsString($temporaryRoot);
+        $directory = $temporaryRoot . DIRECTORY_SEPARATOR . 'wls-config-recovery-'
+            . \bin2hex(\random_bytes(8));
+        self::assertTrue(\mkdir($directory, 0700, true));
+        try {
+            $store = new SavedInstanceConfigStore($directory);
+            $store->update('default', static fn (array $config): array => [[
+                'edge_mode' => 'auto',
+            ], null]);
+            $file = $store->file('default');
+            $backup = $file . '.wls-backup-' . \str_repeat('a', 16);
+            self::assertTrue(\copy($file, $backup));
+
+            self::assertSame(['edge_mode' => 'auto'], $store->load('default'));
+            self::assertFileDoesNotExist($backup);
+        } finally {
+            foreach ((array)\glob($directory . DIRECTORY_SEPARATOR . '*') as $file) {
+                @\unlink($file);
+            }
+            @\rmdir($directory);
+        }
+    }
+
+    public function testLoadDoesNotTreatABackupWithoutItsPairedConfigAsNeverSaved(): void
+    {
+        $temporaryRoot = \realpath(\sys_get_temp_dir());
+        self::assertIsString($temporaryRoot);
+        $directory = $temporaryRoot . DIRECTORY_SEPARATOR
+            . 'wls-config-recovery-missing-' . \bin2hex(\random_bytes(8));
+        self::assertTrue(\mkdir($directory, 0700, true));
+        try {
+            $store = new SavedInstanceConfigStore($directory);
+            $store->update('default', static fn (array $config): array => [[
+                'edge_mode' => 'auto',
+            ], null]);
+            $file = $store->file('default');
+            $backup = $file . '.wls-backup-' . \str_repeat('b', 16);
+            self::assertTrue(\rename($file, $backup));
+            self::assertTrue(@\unlink($file . '.lock'));
+
+            try {
+                $store->load('default');
+                self::fail('Saved configuration recovery evidence must not look unsaved.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString(
+                    'paired target',
+                    \strtolower($exception->getMessage()),
+                );
+            }
+            self::assertFileExists($backup);
+            self::assertFileDoesNotExist($file);
+        } finally {
+            foreach ((array)\glob($directory . DIRECTORY_SEPARATOR . '*') as $file) {
+                @\unlink($file);
+            }
+            @\rmdir($directory);
+        }
+    }
+
     public function testOwnedFieldRollbackUsesAfterImageCas(): void
     {
-        $directory = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-config-cas-'
+        $temporaryRoot = \realpath(\sys_get_temp_dir());
+        self::assertIsString($temporaryRoot);
+        $directory = $temporaryRoot . DIRECTORY_SEPARATOR . 'wls-config-cas-'
             . \bin2hex(\random_bytes(8));
         self::assertTrue(\mkdir($directory, 0700, true));
         try {

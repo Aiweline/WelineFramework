@@ -82,7 +82,7 @@ final class SubprocessControlKernel
 
         $endpointFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
         $maxWaitSec = \max(0, \min(self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC, $maxWaitSec));
-        $deadline = \microtime(true) + $maxWaitSec;
+        $deadline = ControlMessage::monotonicSeconds() + $maxWaitSec;
         $masterHeartbeatTimeout = self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC;
 
         // Wait for the Master endpoint pointer to appear during bootstrap.
@@ -95,7 +95,11 @@ final class SubprocessControlKernel
                     $port = (int)($instanceData['control_port']);
                     $updatedAt = (int)($instanceData['updated_at'] ?? 0);
                     
-                    if ($port > 0 && $updatedAt > 0 && ($now - $updatedAt) <= $masterHeartbeatTimeout) {
+                    if ($port > 0
+                        && $updatedAt > 0
+                        && $updatedAt <= $now
+                        && ($now - $updatedAt) <= $masterHeartbeatTimeout
+                    ) {
                         return $port;
                     }
                 }
@@ -106,7 +110,7 @@ final class SubprocessControlKernel
             }
 
             SchedulerSystem::usleep(self::CONTROL_PORT_POLL_USEC);
-        } while (\microtime(true) < $deadline);
+        } while (ControlMessage::monotonicSeconds() < $deadline);
 
         return 0;
     }

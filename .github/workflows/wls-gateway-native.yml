@@ -4,20 +4,34 @@ on:
   push:
     paths:
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
+      - "app/code/Weline/Server/Protocol/Http3/Native/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPaths.php"
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
+      - "app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxInstaller.php"
+      - "app/code/Weline/Server/Service/Edge/Nginx/Runtime/NginxConfigPublication.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/ManagedNginxInstallerAtomicRecoveryTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/Runtime/NginxConfigPublicationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Runtime/NativeFileLockDeadlineTest.php"
       - "app/code/Weline/Server/Test/**/Gateway/**"
       - "composer.json"
       - "composer.lock"
+      - ".gitattributes"
       - ".github/workflows/wls-gateway-native.yml"
   pull_request:
     paths:
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
+      - "app/code/Weline/Server/Protocol/Http3/Native/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPaths.php"
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
+      - "app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxInstaller.php"
+      - "app/code/Weline/Server/Service/Edge/Nginx/Runtime/NginxConfigPublication.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/ManagedNginxInstallerAtomicRecoveryTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/Runtime/NginxConfigPublicationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Runtime/NativeFileLockDeadlineTest.php"
       - "app/code/Weline/Server/Test/**/Gateway/**"
       - "composer.json"
       - "composer.lock"
+      - ".gitattributes"
       - ".github/workflows/wls-gateway-native.yml"
   workflow_dispatch:
 
@@ -26,20 +40,48 @@ permissions:
 
 jobs:
   posix:
-    name: ${{ matrix.os }} native build
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }} ${{ matrix.arch }} native build
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - runner: ubuntu-24.04
+            platform: Linux
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            platform: Linux
+            arch: arm64
+          - runner: macos-15-intel
+            platform: Darwin
+            arch: x86_64
+          - runner: macos-15
+            platform: Darwin
+            arch: arm64
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
           extensions: sodium, openssl
           coverage: none
+      - name: Verify native runner target
+        run: >-
+          php -r '
+          $actualArch = match (strtolower(php_uname("m"))) {
+              "amd64", "x86_64" => "x86_64",
+              "aarch64", "arm64" => "arm64",
+              default => strtolower(php_uname("m")),
+          };
+          if (PHP_OS_FAMILY !== $argv[1] || $actualArch !== $argv[2]) {
+              fwrite(STDERR, "Native runner does not match its declared target.\n");
+              exit(1);
+          }'
+          '${{ matrix.platform }}'
+          '${{ matrix.arch }}'
       - name: Install locked PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
       - name: Install libsodium on Linux
@@ -61,8 +103,27 @@ jobs:
         run: ./build/wls-gateway-native/wls-gateway-broker --self-test
       - name: Native launcher self-test
         run: ./build/wls-gateway-native/wls-gateway-launcher --self-test
+      - name: Linux HTTP/3 reuseport ABI and runtime self-test
+        if: runner.os == 'Linux'
+        run: ./build/wls-gateway-native/wls-http3-reuseport-self-test
       - name: Controller self-test
         run: php app/code/Weline/Server/bin/wls_gateway_controller.php --self-test
+      - name: Native atomic candidate recovery contract
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/NativeGatewayAtomicCandidateRecoveryContractTest.php
+      - name: Native file-lock deadline contracts
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Runtime/NativeFileLockDeadlineTest.php
+      - name: Cross-platform Nginx atomic recovery contracts
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/ManagedNginxInstallerAtomicRecoveryTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/Runtime/NginxConfigPublicationTest.php
       - name: Native Broker lifecycle integration
         env:
           WLS_RUN_NATIVE_GATEWAY_INTEGRATION: "1"
@@ -82,16 +143,38 @@ jobs:
           app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/NativeGatewayLauncherTest.php
 
   windows:
-    name: windows native build
-    runs-on: windows-latest
+    name: Windows x86_64 native build
+    runs-on: windows-2025
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
           extensions: sodium, openssl
           coverage: none
+      - name: Verify Windows native runner target
+        shell: pwsh
+        run: |
+          $targetCheck = @'
+            $actualArch = match (strtolower(php_uname("m"))) {
+                "amd64", "x86_64" => "x86_64",
+                default => strtolower(php_uname("m")),
+            };
+            if (PHP_OS_FAMILY !== "Windows" || $actualArch !== "x86_64") {
+                fwrite(STDERR, "Windows native runner is not x86_64.\n");
+                exit(1);
+            }
+          '@
+          & php -r $targetCheck
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows native runner is not x86_64."
+          }
+      - name: Install locked PHP dependencies
+        shell: pwsh
+        run: composer install --no-interaction --prefer-dist --no-progress
       - name: Install libsodium
         shell: pwsh
         run: vcpkg install libsodium:x64-windows
@@ -162,6 +245,25 @@ jobs:
       - name: Controller self-test
         shell: pwsh
         run: php app/code/Weline/Server/bin/wls_gateway_controller.php --self-test
+      - name: Native atomic candidate recovery contract
+        shell: pwsh
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/NativeGatewayAtomicCandidateRecoveryContractTest.php
+      - name: Native file-lock deadline contracts
+        shell: pwsh
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Runtime/NativeFileLockDeadlineTest.php
+      - name: Cross-platform Nginx atomic recovery contracts
+        shell: pwsh
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/ManagedNginxInstallerAtomicRecoveryTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/Runtime/NginxConfigPublicationTest.php
       - name: Windows SCM recovery integration
         shell: pwsh
         env:

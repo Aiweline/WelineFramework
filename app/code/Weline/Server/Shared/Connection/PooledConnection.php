@@ -7,6 +7,7 @@ namespace Weline\Server\Shared\Connection;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Session\Server\SessionProtocol;
+use Weline\Server\Session\Server\SharedStateTokenStore;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
 
 /**
@@ -18,12 +19,22 @@ use Weline\Server\Shared\Contract\PooledConnectionInterface;
  */
 class PooledConnection implements PooledConnectionInterface
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    private static function wallLogTimestamp(): string
+    {
+        return (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s.v');
+    }
+
     private mixed $socket = null;
     private string $buffer = '';
     private bool $authenticated = false;
     private ?string $authToken = null;
-    private int $authTokenMtime = 0;
-    private int $authTokenVersion = 0;
+    private int $highestObservedAuthTokenVersion = 0;
+    private string $highestObservedAuthTokenDigest = '';
     private string $serviceType = '';
 
     private float $nextConnectAttemptAt = 0.0;
@@ -40,6 +51,7 @@ class PooledConnection implements PooledConnectionInterface
         private readonly bool $logConnectFailure = true,
         ?string $serviceType = null,
         private readonly bool $logLifecycleDetails = true,
+        private readonly ?string $tokenAuthorityInstance = null,
     ) {
         $this->connectTimeout = \max(0.001, $connectTimeout);
         $this->timeout = \max(0.001, $timeout);
@@ -72,16 +84,16 @@ class PooledConnection implements PooledConnectionInterface
             return true;
         }
 
-        if (\microtime(true) < $this->nextConnectAttemptAt) {
+        if (self::monotonicSeconds() < $this->nextConnectAttemptAt) {
             return false;
         }
 
         if ($this->logLifecycleDetails) {
-            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+            $timestamp = self::wallLogTimestamp();
             $this->log("[CONN-START] {$timestamp} Attempting connect to {$this->host}:{$this->port} ({$this->serviceType})");
         }
 
-        $connectStart = \microtime(true);
+        $connectStart = self::monotonicSeconds();
         $deadline = $connectStart + $this->connectTimeout;
         if (\defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux' && $this->connectTimeout > 2.0) {
             $deadline = $connectStart + 2.0;
@@ -103,7 +115,7 @@ class PooledConnection implements PooledConnectionInterface
             $ctx
         );
         if (!$socket) {
-            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+            $timestamp = self::wallLogTimestamp();
             if ($this->logConnectFailure) {
                 $this->log("[CONN-FAIL] {$timestamp} Connect failed: {$errstr} ({$errno}) ({$this->serviceType})");
             }
@@ -147,7 +159,7 @@ class PooledConnection implements PooledConnectionInterface
 
         if (!$this->authenticate($deadline)) {
             if ($this->logLifecycleDetails) {
-                $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+                $timestamp = self::wallLogTimestamp();
                 $this->log("[CONN-AUTH-FAIL] {$timestamp} Authentication failed ({$this->serviceType})");
             }
             $this->close();
@@ -156,7 +168,7 @@ class PooledConnection implements PooledConnectionInterface
         }
 
         if ($this->logLifecycleDetails) {
-            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+            $timestamp = self::wallLogTimestamp();
             $this->log("[CONN-OK] {$timestamp} Connected and authenticated ({$this->serviceType})");
         }
         $this->resetFailureState();
@@ -174,12 +186,12 @@ class PooledConnection implements PooledConnectionInterface
             return false;
         }
 
-        $deadline = \microtime(true) + $this->timeout;
-        $phaseStart = \microtime(true);
+        $deadline = self::monotonicSeconds() + $this->timeout;
+        $phaseStart = self::monotonicSeconds();
         $total = \strlen($payload);
         $offset = 0;
         while ($offset < $total) {
-            if (\microtime(true) >= $deadline) {
+            if (self::monotonicSeconds() >= $deadline) {
                 $this->close();
                 $this->recordPhaseMetric('write', $phaseStart, 'timeout');
                 return false;
@@ -212,8 +224,8 @@ class PooledConnection implements PooledConnectionInterface
             return null;
         }
 
-        $deadline = \microtime(true) + $this->timeout;
-        $phaseStart = \microtime(true);
+        $deadline = self::monotonicSeconds() + $this->timeout;
+        $phaseStart = self::monotonicSeconds();
 
         while (true) {
             $messages = SessionProtocol::extractMessages($this->buffer);
@@ -222,7 +234,7 @@ class PooledConnection implements PooledConnectionInterface
                 return $messages[0];
             }
 
-            if (\microtime(true) >= $deadline) {
+            if (self::monotonicSeconds() >= $deadline) {
                 $this->close();
                 $this->recordPhaseMetric('read', $phaseStart, 'timeout');
                 return null;
@@ -274,7 +286,7 @@ class PooledConnection implements PooledConnectionInterface
     {
         if ($this->socket !== null) {
             if ($this->logLifecycleDetails) {
-                $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+                $timestamp = self::wallLogTimestamp();
                 $this->log("[CONN-CLOSE] {$timestamp} Closing connection to {$this->host}:{$this->port}");
             }
             @\fclose($this->socket);
@@ -286,11 +298,20 @@ class PooledConnection implements PooledConnectionInterface
 
     private function authenticate(float $outerDeadline): bool
     {
-        $authStartTime = \microtime(true);
-        $deadline = \min($outerDeadline, \microtime(true) + $this->timeout);
+        $authStartTime = self::monotonicSeconds();
+        $deadline = \min($outerDeadline, self::monotonicSeconds() + $this->timeout);
 
         $token = $this->loadToken();
         if ($token === null) {
+            if ($this->tokenFilePath !== '') {
+                $this->authenticated = false;
+                $this->recordAuthMetric($authStartTime, 'failure', 'token_unavailable');
+                $this->incrementMetric(
+                    'wls_pool_auth_failure_total',
+                    ['reason' => 'token_unavailable'],
+                );
+                return false;
+            }
             $this->authenticated = true;
             $this->recordAuthMetric($authStartTime, 'success', 'no_auth');
             return true;
@@ -305,17 +326,30 @@ class PooledConnection implements PooledConnectionInterface
         $maxRetries = count($retryDelays);
 
         for ($retry = 0; $retry < $maxRetries; $retry++) {
-            if (\microtime(true) >= $deadline) {
+            $remaining = $deadline - self::monotonicSeconds();
+            if ($remaining <= 0.0) {
                 break;
             }
-            SchedulerSystem::usleep($retryDelays[$retry]);
+            SchedulerSystem::usleep((int)\min(
+                $retryDelays[$retry],
+                \max(0.0, $remaining * 1_000_000),
+            ));
             $freshToken = $this->loadToken(true);
 
-            if ($freshToken !== null && $freshToken !== $token && $this->tryAuthenticateWithToken($freshToken, $deadline)) {
-                $this->authenticated = true;
-                $this->recordAuthMetric($authStartTime, 'success', 'token_refresh_retry_' . ($retry + 1));
-                $this->incrementMetric('wls_pool_token_reload_total', ['reason' => 'auth_retry_' . ($retry + 1)]);
-                return true;
+            if ($freshToken !== null
+                && ($token === null || !\hash_equals($freshToken, $token))
+            ) {
+                // SessionServer deliberately closes a connection after an
+                // invalid AUTH frame. A freshly loaded generation therefore
+                // must never be retried on that rejected transport.
+                if ($this->reopenTransportForAuthentication($deadline)
+                    && $this->tryAuthenticateWithToken($freshToken, $deadline)
+                ) {
+                    $this->authenticated = true;
+                    $this->recordAuthMetric($authStartTime, 'success', 'token_refresh_retry_' . ($retry + 1));
+                    $this->incrementMetric('wls_pool_token_reload_total', ['reason' => 'auth_retry_' . ($retry + 1)]);
+                    return true;
+                }
             }
 
             $token = $freshToken;
@@ -327,9 +361,53 @@ class PooledConnection implements PooledConnectionInterface
         return false;
     }
 
+    private function reopenTransportForAuthentication(float $deadline): bool
+    {
+        $this->close();
+        if (self::monotonicSeconds() >= $deadline) {
+            return false;
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $ctx = @\stream_context_create([
+            'socket' => [
+                'tcp_nodelay' => true,
+            ],
+        ]);
+        $socket = @\stream_socket_client(
+            "tcp://{$this->host}:{$this->port}",
+            $errno,
+            $errstr,
+            0.0,
+            STREAM_CLIENT_CONNECT | STREAM_CLIENT_ASYNC_CONNECT,
+            $ctx,
+        );
+        if (!\is_resource($socket)) {
+            return false;
+        }
+
+        @\stream_set_blocking($socket, false);
+        @\stream_set_timeout(
+            $socket,
+            (int)$this->timeout,
+            (int)(($this->timeout - (int)$this->timeout) * 1_000_000),
+        );
+        $this->socket = $socket;
+        $this->buffer = '';
+        $this->authenticated = false;
+
+        if (!$this->awaitWritable($deadline) || !$this->assertSocketConnected()) {
+            $this->close();
+            return false;
+        }
+
+        return true;
+    }
+
     private function tryAuthenticateWithToken(string $token, float $deadline): bool
     {
-        $remaining = $deadline - \microtime(true);
+        $remaining = $deadline - self::monotonicSeconds();
         if ($remaining <= 0) {
             return false;
         }
@@ -349,7 +427,7 @@ class PooledConnection implements PooledConnectionInterface
         $total = \strlen($payload);
         $offset = 0;
         while ($offset < $total) {
-            if (\microtime(true) >= $deadline) {
+            if (self::monotonicSeconds() >= $deadline) {
                 $this->close();
                 return false;
             }
@@ -380,7 +458,7 @@ class PooledConnection implements PooledConnectionInterface
             if (!empty($messages)) {
                 return $messages[0];
             }
-            if (\microtime(true) >= $deadline) {
+            if (self::monotonicSeconds() >= $deadline) {
                 $this->close();
                 return null;
             }
@@ -409,7 +487,7 @@ class PooledConnection implements PooledConnectionInterface
         if (!\is_resource($this->socket)) {
             return false;
         }
-        $remaining = $deadline - \microtime(true);
+        $remaining = $deadline - self::monotonicSeconds();
         if ($remaining <= 0) {
             return false;
         }
@@ -421,7 +499,7 @@ class PooledConnection implements PooledConnectionInterface
         if (!\is_resource($this->socket)) {
             return false;
         }
-        $remaining = $deadline - \microtime(true);
+        $remaining = $deadline - self::monotonicSeconds();
         if ($remaining <= 0) {
             return false;
         }
@@ -452,42 +530,76 @@ class PooledConnection implements PooledConnectionInterface
 
     private function loadToken(bool $forceReload = false): ?string
     {
-        if (!$forceReload && $this->authToken !== null && !$this->isTokenFileChanged()) {
-            return $this->authToken;
-        }
+        // Authentication happens only while opening/reopening a transport, so
+        // always re-read the bounded capability envelope. Filesystem mtimes are
+        // second-resolution on supported hosts and cannot safely detect an
+        // atomic same-second rotation or a removed/unsafe capability path.
+        unset($forceReload);
         if ($this->tokenFilePath === '' || !\is_file($this->tokenFilePath)) {
             $this->authToken = null;
-            $this->authTokenMtime = 0;
-            $this->authTokenVersion = 0;
             return null;
         }
-        $mtime = (int)(@\filemtime($this->tokenFilePath) ?: 0);
-        $content = @\file_get_contents($this->tokenFilePath);
-        if ($content === false || $content === '') {
+        try {
+            $token = SharedStateTokenStore::readCapabilityStatePath(
+                $this->tokenFilePath,
+                $this->tokenAuthority(),
+            );
+        } catch (\Throwable) {
+            $token = null;
+        }
+        if ($token === null) {
             $this->authToken = null;
-            $this->authTokenMtime = $mtime;
-            $this->authTokenVersion = 0;
             return null;
         }
 
-        $content = \trim($content);
-        $parts = \explode(':', $content, 2);
-        $token = $parts[0];
-        $version = isset($parts[1]) ? (int)$parts[1] : 0;
+        $version = $token['version'];
+        $digest = $token['digest'];
+        if ($version < $this->highestObservedAuthTokenVersion
+            || ($version === $this->highestObservedAuthTokenVersion
+                && $this->highestObservedAuthTokenDigest !== ''
+                && !\hash_equals($this->highestObservedAuthTokenDigest, $digest))
+        ) {
+            $this->authToken = null;
+            return null;
+        }
+        if ($version > $this->highestObservedAuthTokenVersion
+            || $this->highestObservedAuthTokenDigest === ''
+        ) {
+            $this->highestObservedAuthTokenVersion = $version;
+            $this->highestObservedAuthTokenDigest = $digest;
+        }
 
-        $this->authToken = $token;
-        $this->authTokenMtime = $mtime;
-        $this->authTokenVersion = $version;
+        if (!$token['active']) {
+            $this->authToken = null;
+            return null;
+        }
+
+        $this->authToken = $token['secret'];
         return $this->authToken;
     }
 
-    private function isTokenFileChanged(): bool
+    /** @return array{role:string,host:string,port:int,instance:string} */
+    private function tokenAuthority(): array
     {
-        if ($this->tokenFilePath === '' || !\is_file($this->tokenFilePath)) {
-            return false;
+        $normalizedService = \strtolower(\trim($this->serviceType));
+        $role = \str_contains($normalizedService, 'memory')
+            ? 'memory_server'
+            : 'session_server';
+        $instance = \trim((string)$this->tokenAuthorityInstance);
+        if ($instance === '') {
+            $instance = SharedStateTokenStore::defaultInstance(
+                $role,
+                $this->host,
+                $this->port,
+            );
         }
-        $mtime = (int)(@\filemtime($this->tokenFilePath) ?: 0);
-        return $mtime !== $this->authTokenMtime;
+
+        return [
+            'role' => $role,
+            'host' => $this->host,
+            'port' => $this->port,
+            'instance' => $instance,
+        ];
     }
 
     private function log(string $message): void
@@ -500,7 +612,7 @@ class PooledConnection implements PooledConnectionInterface
 
     private function recordAuthMetric(float $startTime, string $result, string $reason): void
     {
-        $durationMs = (\microtime(true) - $startTime) * 1000;
+        $durationMs = (self::monotonicSeconds() - $startTime) * 1000;
         \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
             'wls_pool_auth_duration_ms',
             $durationMs,
@@ -511,7 +623,7 @@ class PooledConnection implements PooledConnectionInterface
 
     private function recordPhaseMetric(string $phase, float $startTime, string $result): void
     {
-        $durationMs = (\microtime(true) - $startTime) * 1000;
+        $durationMs = (self::monotonicSeconds() - $startTime) * 1000;
         \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
             'wls_pool_io_phase_duration_ms',
             $durationMs,
@@ -544,7 +656,7 @@ class PooledConnection implements PooledConnectionInterface
         $this->consecutiveFailures++;
         $step = \min(5, $this->consecutiveFailures - 1);
         $delaySec = \min(5.0, 0.25 * (2 ** $step));
-        $this->nextConnectAttemptAt = \microtime(true) + $delaySec;
+        $this->nextConnectAttemptAt = self::monotonicSeconds() + $delaySec;
     }
 
     private function resetFailureState(): void

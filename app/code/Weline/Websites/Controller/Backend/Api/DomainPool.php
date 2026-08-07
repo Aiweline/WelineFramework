@@ -39,6 +39,7 @@ class DomainPool extends BaseController
      * - limit: 返回数量限制（默认 50）
      * - grouped: 是否按根域名分组（默认 true）
      * - site_ready: 是否只返回可建站域名（默认 true）
+     * - allow_bound / include_bound: 为 true 时允许 site_created=1（已被占用）的就绪域名出现，供子路径挂载
      * - website_id: 编辑站点时传入当前站点ID，返回本站已绑定域名 + 其他可建站域名（便于默认勾选、取消绑定）
      * - pool_ids: 逗号分隔的 pool_id，返回列表会强制包含这些域名（与 website_id 二选一或同时传）
      * - parent_domain_id: 按根域名ID筛选
@@ -53,6 +54,11 @@ class DomainPool extends BaseController
             $limit = (int) $this->request->getGet('limit', 50);
             $grouped = $this->request->getGet('grouped', 'true') === 'true';
             $siteReadyOnly = $this->request->getGet('site_ready', 'true') === 'true';
+            $allowBound = \in_array(
+                \strtolower(\trim((string)$this->request->getGet('allow_bound', $this->request->getGet('include_bound', 'false')))),
+                ['1', 'true', 'yes'],
+                true
+            );
             $parentDomainId = (int) $this->request->getGet('parent_domain_id', 0);
             $websiteIdRaw = $this->request->getGet('website_id', null);
             $hasWebsiteId = $websiteIdRaw !== null && $websiteIdRaw !== '';
@@ -89,7 +95,10 @@ class DomainPool extends BaseController
             $forceIncludePoolIds = array_values(array_unique(array_merge($includePoolIds, $selectedPoolIds)));
             $needPhpFilterSiteReady = false;
             if ($siteReadyOnly) {
-                if (empty($forceIncludePoolIds)) {
+                if ($allowBound) {
+                    // 共享挂载：所有 site_ready 域名可选，含已被其他站占用的项。
+                    $model->where(DomainPoolModel::schema_fields_SITE_READY, 1);
+                } elseif (empty($forceIncludePoolIds)) {
                     $model->where(DomainPoolModel::schema_fields_SITE_READY, 1)
                         ->where(DomainPoolModel::schema_fields_SITE_CREATED, 0);
                 } else {
@@ -206,6 +215,11 @@ class DomainPool extends BaseController
      */
     private function formatDomainData(array $domain): array
     {
+        $host = \strtolower(\trim((string)($domain[DomainPoolModel::schema_fields_DOMAIN] ?? '')));
+        $isLocalServer = (int) ($domain[DomainPoolModel::schema_fields_IS_LOCAL_SERVER] ?? 0) === 1;
+        $isLocal = $isLocalServer
+            || \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $host) === 1;
+
         return [
             'pool_id' => $domain[DomainPoolModel::schema_fields_ID] ?? 0,
             'parent_domain_id' => $domain[DomainPoolModel::schema_fields_PARENT_DOMAIN_ID] ?? 0,
@@ -214,13 +228,131 @@ class DomainPool extends BaseController
             'status' => $domain[DomainPoolModel::schema_fields_STATUS] ?? '',
             'resolve_status' => $domain[DomainPoolModel::schema_fields_RESOLVE_STATUS] ?? 'pending',
             'resolved_ip' => $domain[DomainPoolModel::schema_fields_RESOLVED_IP] ?? '',
-            'is_local_server' => (int) ($domain[DomainPoolModel::schema_fields_IS_LOCAL_SERVER] ?? 0),
+            'is_local_server' => $isLocalServer ? 1 : 0,
+            'is_local' => $isLocal ? 1 : 0,
             'https_status' => $domain[DomainPoolModel::schema_fields_HTTPS_STATUS] ?? 'none',
             'https_expires_at' => $domain[DomainPoolModel::schema_fields_HTTPS_EXPIRES_AT] ?? '',
             'site_ready' => (int) ($domain[DomainPoolModel::schema_fields_SITE_READY] ?? 0),
             'site_created' => (int) ($domain[DomainPoolModel::schema_fields_SITE_CREATED] ?? 0),
             'description' => $domain[DomainPoolModel::schema_fields_DESCRIPTION] ?? '',
         ];
+    }
+
+    /**
+     * 查重：域名整域占用与 domain+sub_path 占用。
+     *
+     * GET /websites/backend/api/domain-pool/check-conflict
+     * ?domain=&sub_path=&exclude_website_id=
+     */
+    #[Acl('Weline_Websites::domain_pool_api_list', '获取域名池列表', 'mdi-format-list-bulleted', '获取域名池数据列表')]
+    public function getCheckConflict(): string
+    {
+        try {
+            $domain = \strtolower(\trim((string)$this->request->getGet('domain', '')));
+            $subPath = \trim((string)$this->request->getGet('sub_path', ''));
+            if ($subPath !== '' && $subPath !== '/') {
+                $subPath = '/' . \trim($subPath, '/');
+            } else {
+                $subPath = '';
+            }
+            $excludeRaw = $this->request->getGet('exclude_website_id', null);
+            $excludeWebsiteId = ($excludeRaw === null || $excludeRaw === '')
+                ? null
+                : (int)$excludeRaw;
+            if ($excludeWebsiteId !== null && $excludeWebsiteId < 0) {
+                $excludeWebsiteId = null;
+            }
+
+            if ($domain === ''
+                || \preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/D', $domain) !== 1
+            ) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => (string)__('目标域名格式无效。'),
+                    'data' => [
+                        'domain_conflict' => false,
+                        'sub_path_conflict' => false,
+                        'path_invalid' => true,
+                        'valid' => false,
+                    ],
+                ]);
+            }
+
+            $pathInvalid = false;
+            $pathInvalidReason = '';
+            if ($subPath !== '') {
+                if (\preg_match(
+                    '#^/(?:[A-Za-z0-9][A-Za-z0-9_-]{0,62})(?:/(?:[A-Za-z0-9][A-Za-z0-9_-]{0,62})){0,4}$#D',
+                    $subPath
+                ) !== 1) {
+                    $pathInvalid = true;
+                    $pathInvalidReason = (string)__('子路径格式无效。');
+                } else {
+                    $first = \strtolower((string)\explode('/', \ltrim($subPath, '/'), 2)[0]);
+                    $reserved = [
+                        'static' => true, 'pub' => true, 'media' => true, 'api' => true,
+                        'admin' => true, 'favicon.ico' => true, 'robots.txt' => true, 'sitemap.xml' => true,
+                    ];
+                    if (isset($reserved[$first])
+                        || \preg_match('/^[a-z]{2}(?:[_-][a-z0-9]{2,8}){1,2}$/D', $first) === 1
+                    ) {
+                        $pathInvalid = true;
+                        $pathInvalidReason = (string)__('子路径首段为保留字，请更换。');
+                    }
+                }
+            }
+
+            /** @var WebsiteDomain $websiteDomain */
+            $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
+            $apexConflict = $websiteDomain->findConflict($domain, '', $excludeWebsiteId);
+            $pathConflict = $subPath === ''
+                ? $apexConflict
+                : $websiteDomain->findConflict($domain, $subPath, $excludeWebsiteId);
+
+            $domainConflict = $apexConflict !== null;
+            $subPathConflict = $subPath !== '' && $pathConflict !== null;
+            $conflictName = '';
+            if ($subPathConflict) {
+                $conflictName = (string)($pathConflict['website_name'] ?? '');
+            } elseif ($domainConflict && $subPath === '') {
+                $conflictName = (string)($apexConflict['website_name'] ?? '');
+            } elseif ($domainConflict) {
+                $conflictName = (string)($apexConflict['website_name'] ?? '');
+            }
+
+            $valid = !$pathInvalid
+                && (
+                    (!$domainConflict && $subPath === '')
+                    || ($domainConflict && $subPath !== '' && !$subPathConflict)
+                    || (!$domainConflict && $subPath !== '' && !$subPathConflict)
+                );
+
+            return $this->fetchJson([
+                'success' => true,
+                'data' => [
+                    'domain' => $domain,
+                    'sub_path' => $subPath,
+                    'mount_url' => 'https://' . $domain . $subPath,
+                    'domain_conflict' => $domainConflict,
+                    'sub_path_conflict' => $subPathConflict,
+                    'path_invalid' => $pathInvalid,
+                    'path_invalid_reason' => $pathInvalidReason,
+                    'conflict_website_name' => $conflictName,
+                    'suggest_sub_path' => $domainConflict && $subPath === '',
+                    'valid' => $valid,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => [
+                    'domain_conflict' => false,
+                    'sub_path_conflict' => false,
+                    'valid' => false,
+                ],
+            ]);
+        }
     }
     
     /**

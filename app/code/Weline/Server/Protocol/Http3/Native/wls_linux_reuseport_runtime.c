@@ -21,6 +21,7 @@
 #include <sys/statfs.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #define WLS_LINUX_H3_BPFFS_ROOT "/sys/fs/bpf"
@@ -30,6 +31,8 @@
 #define WLS_LINUX_H3_MAP_OWNER "owner_map"
 #define WLS_LINUX_H3_BPF_LOG_BYTES (1024u * 1024u)
 #define WLS_LINUX_H3_WORKER_MAP_ENTRIES 262144u
+#define WLS_LINUX_H3_LOCK_TIMEOUT_MILLISECONDS UINT64_C(100)
+#define WLS_LINUX_H3_LOCK_POLL_MILLISECONDS UINT64_C(10)
 
 static int wls_linux_error(char *error, size_t capacity,
                            const char *format, ...) {
@@ -168,14 +171,104 @@ static int wls_linux_open_lock(wls_linux_h3_route *route,
   return WLS_TRANSPORT_OK;
 }
 
+static int wls_linux_monotonic_milliseconds(uint64_t *milliseconds) {
+  struct timespec now;
+  if (!milliseconds) {
+    errno = EINVAL;
+    return -1;
+  }
+  if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+    return -1;
+  }
+  if (now.tv_sec < 0 || now.tv_nsec < 0 || now.tv_nsec >= 1000000000L ||
+      (uint64_t)now.tv_sec >
+        (UINT64_MAX - (uint64_t)now.tv_nsec / UINT64_C(1000000)) /
+          UINT64_C(1000)) {
+    errno = EOVERFLOW;
+    return -1;
+  }
+  *milliseconds = (uint64_t)now.tv_sec * UINT64_C(1000) +
+    (uint64_t)now.tv_nsec / UINT64_C(1000000);
+  return 0;
+}
+
 static int wls_linux_lock(wls_linux_h3_route *route,
                           char *error, size_t error_capacity) {
-  if (!route || route->lock_fd < 0 ||
-      flock(route->lock_fd, LOCK_EX) != 0) {
-    return wls_linux_error(error, error_capacity,
-                           "lock Linux HTTP/3 route: %s", strerror(errno));
+  uint64_t now_ms;
+  uint64_t deadline_ms;
+  if (!route || route->lock_fd < 0) {
+    int result;
+    errno = EINVAL;
+    result = wls_linux_error(error, error_capacity,
+                             "lock Linux HTTP/3 route: invalid route lock");
+    errno = EINVAL;
+    return result;
   }
-  return WLS_TRANSPORT_OK;
+  if (wls_linux_monotonic_milliseconds(&now_ms) != 0) {
+    int clock_error = errno;
+    int result = wls_linux_error(
+      error, error_capacity, "clock Linux HTTP/3 route lock: %s",
+      strerror(clock_error));
+    errno = clock_error;
+    return result;
+  }
+  if (now_ms > UINT64_MAX - WLS_LINUX_H3_LOCK_TIMEOUT_MILLISECONDS) {
+    int result;
+    errno = EOVERFLOW;
+    result = wls_linux_error(error, error_capacity,
+                             "clock Linux HTTP/3 route lock overflow");
+    errno = EOVERFLOW;
+    return result;
+  }
+  deadline_ms = now_ms + WLS_LINUX_H3_LOCK_TIMEOUT_MILLISECONDS;
+  for (;;) {
+    int lock_error;
+    uint64_t remaining_ms;
+    uint64_t delay_ms;
+    struct timespec delay;
+    if (flock(route->lock_fd, LOCK_EX | LOCK_NB) == 0) {
+      return WLS_TRANSPORT_OK;
+    }
+    lock_error = errno;
+    if (lock_error != EWOULDBLOCK && lock_error != EAGAIN &&
+        lock_error != EINTR) {
+      int result = wls_linux_error(
+        error, error_capacity, "lock Linux HTTP/3 route: %s",
+        strerror(lock_error));
+      errno = lock_error;
+      return result;
+    }
+    if (wls_linux_monotonic_milliseconds(&now_ms) != 0) {
+      int clock_error = errno;
+      int result = wls_linux_error(
+        error, error_capacity, "clock Linux HTTP/3 route lock: %s",
+        strerror(clock_error));
+      errno = clock_error;
+      return result;
+    }
+    if (now_ms >= deadline_ms) {
+      int result;
+      errno = ETIMEDOUT;
+      result = wls_linux_error(
+        error, error_capacity, "lock Linux HTTP/3 route: %s",
+        strerror(ETIMEDOUT));
+      errno = ETIMEDOUT;
+      return result;
+    }
+    remaining_ms = deadline_ms - now_ms;
+    delay_ms = remaining_ms < WLS_LINUX_H3_LOCK_POLL_MILLISECONDS
+      ? remaining_ms : WLS_LINUX_H3_LOCK_POLL_MILLISECONDS;
+    delay.tv_sec = 0;
+    delay.tv_nsec = (long)(delay_ms * UINT64_C(1000000));
+    if (nanosleep(&delay, NULL) != 0 && errno != EINTR) {
+      int sleep_error = errno;
+      int result = wls_linux_error(
+        error, error_capacity, "wait Linux HTTP/3 route lock: %s",
+        strerror(sleep_error));
+      errno = sleep_error;
+      return result;
+    }
+  }
 }
 
 static void wls_linux_unlock(wls_linux_h3_route *route) {

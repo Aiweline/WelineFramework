@@ -530,7 +530,17 @@ WlsLogger::getInstance()
 
 if ($processName) {
     \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
-    \Weline\Framework\System\Process\Processer::setPid('--name=' . $processName, \getmypid());
+    // Publish generation fences with the managed lease so Master public-port
+    // confirmTransferred can match launch_id (name-only setPid left records
+    // without launch_id and blocked Dispatcher READY on Linux).
+    $managedIdentity = '--name=' . $processName;
+    if (\preg_match('/\A[a-f0-9]{32}\z/D', $orchestratorLaunchId) === 1) {
+        $managedIdentity .= ' --launch-id=' . $orchestratorLaunchId;
+    }
+    if ($orchestratorEpoch > 0) {
+        $managedIdentity .= ' --epoch=' . $orchestratorEpoch;
+    }
+    \Weline\Framework\System\Process\Processer::setPid($managedIdentity, \getmypid());
     if ($port > 0) {
         \Weline\Framework\System\Process\Processer::setProcessPorts('--name=' . $processName, [$port]);
     }

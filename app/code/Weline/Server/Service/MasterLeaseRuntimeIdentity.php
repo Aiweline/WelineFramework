@@ -56,6 +56,8 @@ final class MasterLeaseRuntimeIdentity
     private readonly ?\Closure $managedProcessVerifier;
     /** @var (\Closure(int):?string)|null */
     private readonly ?\Closure $pidNamespaceResolver;
+    /** @var (\Closure(int,string,string,float):array<string,mixed>)|null */
+    private readonly ?\Closure $stableProcessTerminator;
 
     public function __construct(
         ?\Closure $bootIdentityResolver = null,
@@ -63,12 +65,14 @@ final class MasterLeaseRuntimeIdentity
         ?\Closure $processInfoResolver = null,
         ?\Closure $managedProcessVerifier = null,
         ?\Closure $pidNamespaceResolver = null,
+        ?\Closure $stableProcessTerminator = null,
     ) {
         $this->bootIdentityResolver = $bootIdentityResolver;
         $this->monotonicClock = $monotonicClock;
         $this->processInfoResolver = $processInfoResolver;
         $this->managedProcessVerifier = $managedProcessVerifier;
         $this->pidNamespaceResolver = $pidNamespaceResolver;
+        $this->stableProcessTerminator = $stableProcessTerminator;
     }
 
     public function hostBootId(): string
@@ -204,6 +208,486 @@ final class MasterLeaseRuntimeIdentity
         return \hash_equals($birth, $observedBirth)
             ? self::OWNER_MATCH
             : self::OWNER_MISMATCH;
+    }
+
+    /**
+     * Terminate one exact process-birth lease through a stable kernel handle.
+     *
+     * A numeric PID is discovery data, never signalling authority. Linux opens
+     * a pidfd before re-observing the birth tuple and signals only through that
+     * descriptor. Windows opens a process HANDLE, compares creation FILETIME on
+     * the same handle, and calls TerminateProcess on that handle. Darwin has no
+     * equivalent stable signalling handle in the supported PHP runtime and
+     * therefore fails closed while the exact process is still alive.
+     *
+     * @return array{
+     *     released:bool,
+     *     terminated:bool,
+     *     reason:string,
+     *     owner_state:string,
+     *     pid:int
+     * }
+     */
+    public function terminateExactProcessIdentity(
+        int $pid,
+        string $birth,
+        string $pidNamespaceId,
+        float $graceSeconds = 0.5,
+    ): array {
+        $birth = \strtolower(\trim($birth));
+        $pidNamespaceId = \trim($pidNamespaceId);
+        $graceSeconds = \max(0.01, \min(2.0, $graceSeconds));
+        if ($pid <= 0
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $birth) !== 1
+            || (PHP_OS_FAMILY === 'Linux'
+                ? \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $pidNamespaceId) !== 1
+                : $pidNamespaceId !== '')
+        ) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'process_identity_invalid',
+                self::OWNER_UNKNOWN,
+            );
+        }
+
+        if ($this->stableProcessTerminator !== null) {
+            $ownerState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
+            $released = $this->releasedOwnerOutcome($pid, $ownerState);
+            if ($released !== null) {
+                return $released;
+            }
+            if ($ownerState !== self::OWNER_MATCH) {
+                return $this->terminationOutcome(
+                    $pid,
+                    false,
+                    false,
+                    'process_identity_unknown',
+                    $ownerState,
+                );
+            }
+            try {
+                $result = ($this->stableProcessTerminator)(
+                    $pid,
+                    $birth,
+                    $pidNamespaceId,
+                    $graceSeconds,
+                );
+            } catch (\Throwable) {
+                return $this->terminationOutcome(
+                    $pid,
+                    false,
+                    false,
+                    'stable_process_termination_exception',
+                    self::OWNER_MATCH,
+                );
+            }
+            if (!\is_array($result)
+                || !\is_bool($result['released'] ?? null)
+                || !\is_bool($result['terminated'] ?? null)
+                || !\is_string($result['reason'] ?? null)
+                || \trim((string)$result['reason']) === ''
+            ) {
+                return $this->terminationOutcome(
+                    $pid,
+                    false,
+                    false,
+                    'stable_process_termination_result_invalid',
+                    self::OWNER_MATCH,
+                );
+            }
+
+            return $this->terminationOutcome(
+                $pid,
+                (bool)$result['released'],
+                (bool)$result['terminated'],
+                \substr(\trim((string)$result['reason']), 0, 256),
+                self::OWNER_MATCH,
+            );
+        }
+
+        return match (PHP_OS_FAMILY) {
+            'Linux' => $this->terminateLinuxProcessIdentity(
+                $pid,
+                $birth,
+                $pidNamespaceId,
+                $graceSeconds,
+            ),
+            'Windows' => $this->terminateWindowsProcessIdentity(
+                $pid,
+                $birth,
+                $graceSeconds,
+            ),
+            'Darwin' => $this->terminateDarwinProcessIdentity(
+                $pid,
+                $birth,
+                $pidNamespaceId,
+            ),
+            default => $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'stable_process_handle_unavailable_on_platform',
+                self::OWNER_UNKNOWN,
+            ),
+        };
+    }
+
+    /** @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int}|null */
+    private function releasedOwnerOutcome(int $pid, string $ownerState): ?array
+    {
+        if (!\in_array($ownerState, [self::OWNER_MISSING, self::OWNER_MISMATCH], true)) {
+            return null;
+        }
+
+        return $this->terminationOutcome(
+            $pid,
+            true,
+            false,
+            'process_identity_released_without_signal',
+            $ownerState,
+        );
+    }
+
+    /** @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int} */
+    private function terminateDarwinProcessIdentity(
+        int $pid,
+        string $birth,
+        string $pidNamespaceId,
+    ): array {
+        $ownerState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
+        $released = $this->releasedOwnerOutcome($pid, $ownerState);
+        if ($released !== null) {
+            return $released;
+        }
+
+        return $this->terminationOutcome(
+            $pid,
+            false,
+            false,
+            $ownerState === self::OWNER_MATCH
+                ? 'stable_process_handle_unavailable_on_darwin'
+                : 'process_identity_unknown',
+            $ownerState,
+        );
+    }
+
+    /** @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int} */
+    private function terminateLinuxProcessIdentity(
+        int $pid,
+        string $birth,
+        string $pidNamespaceId,
+        float $graceSeconds,
+    ): array {
+        if (!\extension_loaded('FFI') || !\class_exists(\FFI::class)) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'linux_pidfd_ffi_unavailable',
+                self::OWNER_UNKNOWN,
+            );
+        }
+        $ffiEnabled = \strtolower(\trim((string)\ini_get('ffi.enable')));
+        if (\in_array($ffiEnabled, ['', '0', 'off', 'false', 'no'], true)) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'linux_pidfd_ffi_unavailable',
+                self::OWNER_UNKNOWN,
+            );
+        }
+        try {
+            $ffi = \FFI::cdef(
+                <<<'CDEF'
+long syscall(long number, ...);
+int close(int fd);
+struct pollfd { int fd; short events; short revents; };
+int poll(struct pollfd *fds, unsigned long nfds, int timeout);
+CDEF,
+            );
+            // Linux assigns these stable syscall numbers on every WLS 2.0
+            // supported architecture: SYS_pidfd_send_signal=424 and
+            // SYS_pidfd_open=434.
+            $pidfd = (int)$ffi->syscall(434, $pid, 0); // pidfd_open
+        } catch (\Throwable) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'linux_pidfd_open_unavailable',
+                self::OWNER_UNKNOWN,
+            );
+        }
+        if ($pidfd < 0) {
+            $ownerState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
+            $released = $this->releasedOwnerOutcome($pid, $ownerState);
+
+            return $released ?? $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'linux_pidfd_open_failed',
+                $ownerState,
+            );
+        }
+
+        try {
+            // The descriptor was opened before this re-observation. A PID
+            // reuse now yields MISMATCH and the descriptor is closed without
+            // signalling either the old or replacement process.
+            $ownerState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
+            $released = $this->releasedOwnerOutcome($pid, $ownerState);
+            if ($released !== null) {
+                return $released;
+            }
+            if ($ownerState !== self::OWNER_MATCH) {
+                return $this->terminationOutcome(
+                    $pid,
+                    false,
+                    false,
+                    'process_identity_unknown',
+                    $ownerState,
+                );
+            }
+
+            $poll = $ffi->new('struct pollfd[1]');
+            $poll[0]->fd = $pidfd;
+            $poll[0]->events = 1; // POLLIN: pidfd becomes readable on exit.
+            $poll[0]->revents = 0;
+            if ((int)$ffi->poll($poll, 1, 0) === 1) {
+                return $this->terminationOutcome(
+                    $pid,
+                    true,
+                    false,
+                    'linux_pidfd_already_exited',
+                    self::OWNER_MISSING,
+                );
+            }
+
+            // Variadic FFI calls cannot safely marshal a PHP null as the
+            // siginfo_t pointer. Use an explicitly typed null pointer so the
+            // kernel receives the pidfd_send_signal(2) "no siginfo" value.
+            $nullSiginfo = $ffi->cast('void *', 0);
+            $termSent = (int)$ffi->syscall(424, $pidfd, 15, $nullSiginfo, 0) === 0; // pidfd_send_signal
+            $waitMs = \max(1, (int)\ceil($graceSeconds * 1000));
+            $poll[0]->revents = 0;
+            if ((int)$ffi->poll($poll, 1, $waitMs) === 1) {
+                return $this->terminationOutcome(
+                    $pid,
+                    true,
+                    $termSent,
+                    'linux_pidfd_term_released',
+                    self::OWNER_MISSING,
+                );
+            }
+
+            $killSent = (int)$ffi->syscall(424, $pidfd, 9, $nullSiginfo, 0) === 0; // pidfd_send_signal
+            $poll[0]->revents = 0;
+            $releasedAfterKill = (int)$ffi->poll($poll, 1, $waitMs) === 1;
+
+            return $this->terminationOutcome(
+                $pid,
+                $releasedAfterKill,
+                $termSent || $killSent,
+                $releasedAfterKill
+                    ? 'linux_pidfd_kill_released'
+                    : 'linux_pidfd_termination_unverified',
+                $releasedAfterKill ? self::OWNER_MISSING : self::OWNER_MATCH,
+            );
+        } catch (\Throwable) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'linux_pidfd_termination_exception',
+                self::OWNER_UNKNOWN,
+            );
+        } finally {
+            try {
+                $ffi->close($pidfd);
+            } catch (\Throwable) {
+                // The stable handle has no further authority after return.
+            }
+        }
+    }
+
+    /** @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int} */
+    private function terminateWindowsProcessIdentity(
+        int $pid,
+        string $birth,
+        float $graceSeconds,
+    ): array {
+        if (!\extension_loaded('FFI') || !\class_exists(\FFI::class) || PHP_INT_SIZE < 8) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'windows_process_handle_ffi_unavailable',
+                self::OWNER_UNKNOWN,
+            );
+        }
+        $ffiEnabled = \strtolower(\trim((string)\ini_get('ffi.enable')));
+        if (\in_array($ffiEnabled, ['', '0', 'off', 'false', 'no'], true)) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'windows_process_handle_ffi_unavailable',
+                self::OWNER_UNKNOWN,
+            );
+        }
+        try {
+            $ffi = \FFI::cdef(
+                <<<'CDEF'
+typedef unsigned long DWORD;
+typedef int BOOL;
+typedef void *HANDLE;
+typedef struct _FILETIME {
+    DWORD dwLowDateTime;
+    DWORD dwHighDateTime;
+} FILETIME;
+HANDLE OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId);
+BOOL GetExitCodeProcess(HANDLE hProcess, DWORD *lpExitCode);
+BOOL GetProcessTimes(
+    HANDLE hProcess,
+    FILETIME *lpCreationTime,
+    FILETIME *lpExitTime,
+    FILETIME *lpKernelTime,
+    FILETIME *lpUserTime
+);
+DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
+BOOL TerminateProcess(HANDLE hProcess, unsigned int uExitCode);
+BOOL CloseHandle(HANDLE hObject);
+DWORD GetLastError(void);
+CDEF,
+                'kernel32.dll',
+            );
+            // PROCESS_TERMINATE | SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION.
+            $handle = $ffi->OpenProcess(0x00101001, 0, $pid);
+        } catch (\Throwable) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'windows_process_handle_open_unavailable',
+                self::OWNER_UNKNOWN,
+            );
+        }
+        if (\FFI::isNull($handle)) {
+            $lastError = (int)$ffi->GetLastError();
+            if ($lastError === 87) { // ERROR_INVALID_PARAMETER: PID absent.
+                return $this->terminationOutcome(
+                    $pid,
+                    true,
+                    false,
+                    'windows_process_handle_owner_missing',
+                    self::OWNER_MISSING,
+                );
+            }
+
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'windows_process_handle_open_failed',
+                self::OWNER_UNKNOWN,
+            );
+        }
+
+        try {
+            $active = $this->windowsProcessHandleIsActive($ffi, $handle);
+            if ($active === false) {
+                return $this->terminationOutcome(
+                    $pid,
+                    true,
+                    false,
+                    'windows_process_handle_owner_exited',
+                    self::OWNER_MISSING,
+                );
+            }
+            if ($active !== true) {
+                return $this->terminationOutcome(
+                    $pid,
+                    false,
+                    false,
+                    'windows_process_handle_state_unknown',
+                    self::OWNER_UNKNOWN,
+                );
+            }
+            $creationTicks = $this->windowsProcessCreationTicks($ffi, $handle);
+            if ($creationTicks === null) {
+                return $this->terminationOutcome(
+                    $pid,
+                    false,
+                    false,
+                    'windows_process_handle_birth_unknown',
+                    self::OWNER_UNKNOWN,
+                );
+            }
+            $handleBirth = \hash(
+                'sha256',
+                'wls-managed-process-birth/1|' . $pid
+                . '|windows-creation-ticks:' . $creationTicks,
+            );
+            if (!\hash_equals($birth, $handleBirth)) {
+                return $this->terminationOutcome(
+                    $pid,
+                    true,
+                    false,
+                    'process_identity_released_without_signal',
+                    self::OWNER_MISMATCH,
+                );
+            }
+
+            $terminated = (int)$ffi->TerminateProcess($handle, 1) !== 0;
+            $waitMs = \max(1, (int)\ceil($graceSeconds * 1000));
+            $wait = (int)$ffi->WaitForSingleObject($handle, $waitMs);
+            $released = $wait === 0; // WAIT_OBJECT_0
+
+            return $this->terminationOutcome(
+                $pid,
+                $released,
+                $terminated,
+                $released
+                    ? 'windows_process_handle_released'
+                    : 'windows_process_handle_termination_unverified',
+                $released ? self::OWNER_MISSING : self::OWNER_MATCH,
+            );
+        } catch (\Throwable) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'windows_process_handle_termination_exception',
+                self::OWNER_UNKNOWN,
+            );
+        } finally {
+            try {
+                $ffi->CloseHandle($handle);
+            } catch (\Throwable) {
+                // The stable handle has no further authority after return.
+            }
+        }
+    }
+
+    /** @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int} */
+    private function terminationOutcome(
+        int $pid,
+        bool $released,
+        bool $terminated,
+        string $reason,
+        string $ownerState,
+    ): array {
+        return [
+            'released' => $released,
+            'terminated' => $terminated,
+            'reason' => $reason,
+            'owner_state' => $ownerState,
+            'pid' => \max(0, $pid),
+        ];
     }
 
     /**
@@ -382,7 +866,7 @@ final class MasterLeaseRuntimeIdentity
         $observedName = \trim((string)($info['name'] ?? ''));
         $command = \trim((string)($info['command'] ?? ''));
         // Under Master FD inheritance, Darwin libproc can prove birth while
-        // bounded/direct ps cannot. Self observation still has the authoritative
+        // bounded ps cannot. Self observation still has the authoritative
         // CLI title set by applyProcessTitle().
         if (($observedName === '' || $command === '')
             && $pid === (int)\getmypid()
@@ -702,33 +1186,44 @@ final class MasterLeaseRuntimeIdentity
             'command=',
         ];
         $stdout = '';
-        try {
-            $result = GatewayBoundedCommandRunner::run(
-                $command,
-                self::PROCESS_PROBE_TIMEOUT_SECONDS,
-            );
-            $stdout = (string)($result['stdout'] ?? '');
-            if (($result['truncated'] ?? true) === true
-                || \strlen($stdout) > self::MAX_PROCESS_PROBE_OUTPUT_BYTES
-            ) {
+        // A transient descriptor-handoff failure can invalidate one bounded
+        // launch while ps itself is healthy. Retry with a fresh isolated
+        // process group, but never fall back to blocking proc_close().
+        for ($attempt = 0; $attempt < 2 && $stdout === ''; ++$attempt) {
+            try {
+                $result = GatewayBoundedCommandRunner::run(
+                    $command,
+                    self::PROCESS_PROBE_TIMEOUT_SECONDS,
+                );
+                $rawCandidate = (string)($result['stdout'] ?? '');
+                $candidate = '';
+                if (\preg_match('/\A([^\r\n]*)(?:\r?\n)?\z/D', $rawCandidate, $row) === 1) {
+                    $candidate = (string)$row[1];
+                }
+                if (($result['truncated'] ?? true) !== true
+                    && \in_array((int)($result['code'] ?? 1), [0, 125], true)
+                    && \strlen($rawCandidate) <= self::MAX_PROCESS_PROBE_OUTPUT_BYTES
+                    && $this->looksLikePosixPsRow($candidate, $pid)
+                ) {
+                    // Exit code 125 can still carry a complete ps row when
+                    // only the process-group exit proof was inconclusive.
+                    $stdout = $candidate;
+                }
+            } catch (\Throwable) {
                 $stdout = '';
             }
-            // Under Master FD inheritance the bounded runner often returns 125
-            // even when ps already wrote a valid row. Keep parseable stdout.
-            if ($stdout === '' || !$this->looksLikePosixPsRow($stdout, $pid)) {
-                $stdout = $this->readPosixProcessWithPsDirect($command);
-            }
-        } catch (\Throwable) {
-            $stdout = $this->readPosixProcessWithPsDirect($command);
         }
         if ($stdout === '') {
             $exists = $this->probePosixProcessExistence($pid);
             return $exists === false ? ['exists' => false] : [];
         }
+        if (\preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $stdout) === 1) {
+            return [];
+        }
         if (\preg_match(
-            '/\A\s*([1-9][0-9]*)\s+(\S+)\s+'
-            . '(\S+\s+\S+\s+[0-9]{1,2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2}\s+[0-9]{4})'
-            . '(?:\s+(.*))?\s*\z/sD',
+            '/\A[ \t]*([1-9][0-9]*)[ \t]+(\S+)[ \t]+'
+            . '(\S+[ \t]+\S+[ \t]+[0-9]{1,2}[ \t]+[0-9]{2}:[0-9]{2}:[0-9]{2}[ \t]+[0-9]{4})'
+            . '(?:[ \t]+([^\r\n]*))?[ \t]*\z/D',
             $stdout,
             $matches,
         ) !== 1 || (int)$matches[1] !== $pid) {
@@ -764,58 +1259,16 @@ final class MasterLeaseRuntimeIdentity
     /** @param list<string> $command */
     private function looksLikePosixPsRow(string $stdout, int $pid): bool
     {
+        if (\preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $stdout) === 1) {
+            return false;
+        }
+
         return \preg_match(
-            '/\A\s*' . $pid . '\s+\S+\s+'
-            . '\S+\s+\S+\s+[0-9]{1,2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2}\s+[0-9]{4}/sD',
+            '/\A[ \t]*' . $pid . '[ \t]+\S+[ \t]+'
+            . '\S+[ \t]+\S+[ \t]+[0-9]{1,2}[ \t]+[0-9]{2}:[0-9]{2}:[0-9]{2}[ \t]+[0-9]{4}'
+            . '(?:[ \t]+[^\r\n]*)?[ \t]*\z/D',
             $stdout,
         ) === 1;
-    }
-
-    /**
-     * Plain proc_open fallback when the bounded process-group runner cannot
-     * prove exit cleanly (common under Master inherited FD 3 handoff).
-     *
-     * @param list<string> $command
-     */
-    private function readPosixProcessWithPsDirect(array $command): string
-    {
-        if (!\function_exists('proc_open') || $command === []) {
-            return '';
-        }
-        $pipes = [];
-        $process = @\proc_open(
-            $command,
-            [
-                0 => ['file', '/dev/null', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes,
-            null,
-            null,
-            ['bypass_shell' => true],
-        );
-        if (!\is_resource($process)) {
-            return '';
-        }
-        $stdout = '';
-        try {
-            if (isset($pipes[1]) && \is_resource($pipes[1])) {
-                $chunk = @\stream_get_contents($pipes[1], self::MAX_PROCESS_PROBE_OUTPUT_BYTES + 1);
-                if (\is_string($chunk) && \strlen($chunk) <= self::MAX_PROCESS_PROBE_OUTPUT_BYTES) {
-                    $stdout = $chunk;
-                }
-            }
-        } finally {
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    @\fclose($pipe);
-                }
-            }
-            @\proc_close($process);
-        }
-
-        return \trim($stdout);
     }
 
     /** @return array<string,mixed> */
@@ -1177,7 +1630,7 @@ CDEF,
                 return [];
             }
             $rawPath = \FFI::string(
-                \FFI::cast('char *', $buffer),
+                $ffi->cast('char *', $buffer),
                 $characterCount * 2,
             );
             $imagePath = @\iconv('UTF-16LE', 'UTF-8', $rawPath);

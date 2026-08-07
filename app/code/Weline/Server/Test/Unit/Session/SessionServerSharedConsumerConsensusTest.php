@@ -80,7 +80,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         } finally {
             $server->stop();
             $registry->removeRecord(self::ROLE);
-            $tokenPath = BP . 'var/session/' . $tokenFileName;
+            $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
             }
@@ -142,7 +142,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         } finally {
             $server->stop();
             $registry->removeRecord(self::ROLE);
-            $tokenPath = BP . 'var/session/' . $tokenFileName;
+            $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
             }
@@ -185,7 +185,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         } finally {
             $server->stop();
             $registry->removeRecord(self::ROLE);
-            $tokenPath = BP . 'var/session/' . $tokenFileName;
+            $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
             }
@@ -243,7 +243,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         } finally {
             $server->stop();
             $registry->removeRecord(self::ROLE);
-            $tokenPath = BP . 'var/session/' . $tokenFileName;
+            $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
             }
@@ -299,7 +299,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         } finally {
             $server->stop();
             $registry->removeRecord(self::ROLE);
-            $tokenPath = BP . 'var/session/' . $tokenFileName;
+            $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
             }
@@ -363,7 +363,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         } finally {
             $server->stop();
             $registry->removeRecord(self::ROLE);
-            $tokenPath = BP . 'var/session/' . $tokenFileName;
+            $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
             }

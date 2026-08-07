@@ -110,7 +110,10 @@ final class HostGatewayPackageManagerTest extends TestCase
             $manager->verifyPackage($package, 'default');
             self::fail('A traversal component path must be rejected.');
         } catch (\RuntimeException $exception) {
-            self::assertStringContainsString('relative and contained', $exception->getMessage());
+            self::assertStringContainsString(
+                'unsafe platform segment',
+                $exception->getMessage(),
+            );
         }
 
         if (\PHP_OS_FAMILY !== 'Windows') {
@@ -258,6 +261,254 @@ final class HostGatewayPackageManagerTest extends TestCase
         );
     }
 
+    public function testUpgradeRollbackCollectsOnlyAFullyBoundCurrentRequestBackup(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('rollback-clean-initial'), 'default');
+        $manager->activate($initial['slot']);
+        $candidate = $manager->stage($this->createPackage('rollback-clean-candidate'), 'default');
+        $manager->beginUpgradeActivation($candidate);
+        $intent = (string)\file_get_contents($this->paths->upgradeIntentFile());
+        self::assertSame(1, \preg_match(
+            '/prepared_at=([0-9]+).*nonce=([a-f0-9]{32})/sD',
+            $intent,
+            $matches,
+        ));
+        $request = $this->paths->stateDir() . DIRECTORY_SEPARATOR
+            . 'upgrade-rollback.request';
+        $contents = "WLS-UPGRADE-ROLLBACK/2\n"
+            . 'intent_sha256=' . \hash('sha256', $intent) . "\n"
+            . 'intent_nonce=' . (string)$matches[2] . "\n"
+            . 'from=' . $candidate['slot'] . "\n"
+            . 'to=' . $initial['slot'] . "\n"
+            . 'at=' . \max((int)$matches[1], \time()) . "\n"
+            . 'request_nonce=' . \bin2hex(\random_bytes(16)) . "\n";
+        self::assertNotFalse(\file_put_contents($request, $contents));
+        $backup = $request . '.wls-backup-' . \str_repeat('a', 16);
+        self::assertTrue(\copy($request, $backup));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($request, 0600));
+            self::assertTrue(\chmod($backup, 0600));
+        }
+
+        $manager->rollbackUpgradeActivation($candidate['slot'], $initial['slot']);
+
+        self::assertFileDoesNotExist($backup);
+        self::assertSame($contents, \file_get_contents($request));
+        self::assertSame($initial['slot'], $this->paths->activeSlot());
+    }
+
+    public function testUpgradeRollbackRetainsBackupWhenPairedRequestIsMissingOrCorrupt(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('rollback-evidence-initial'), 'default');
+        $manager->activate($initial['slot']);
+        $candidate = $manager->stage($this->createPackage('rollback-evidence-candidate'), 'default');
+        $manager->beginUpgradeActivation($candidate);
+        $intent = (string)\file_get_contents($this->paths->upgradeIntentFile());
+        self::assertSame(1, \preg_match(
+            '/prepared_at=([0-9]+).*nonce=([a-f0-9]{32})/sD',
+            $intent,
+            $matches,
+        ));
+        $request = $this->paths->stateDir() . DIRECTORY_SEPARATOR
+            . 'upgrade-rollback.request';
+        $valid = "WLS-UPGRADE-ROLLBACK/2\n"
+            . 'intent_sha256=' . \hash('sha256', $intent) . "\n"
+            . 'intent_nonce=' . (string)$matches[2] . "\n"
+            . 'from=' . $candidate['slot'] . "\n"
+            . 'to=' . $initial['slot'] . "\n"
+            . 'at=' . \max((int)$matches[1], \time()) . "\n"
+            . 'request_nonce=' . \bin2hex(\random_bytes(16)) . "\n";
+        $backup = $request . '.wls-backup-' . \str_repeat('b', 16);
+        self::assertNotFalse(\file_put_contents($backup, $valid));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($backup, 0600));
+        }
+
+        try {
+            $manager->rollbackUpgradeActivation($candidate['slot'], $initial['slot']);
+            self::fail('A missing paired rollback request must retain recovery evidence.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('paired target is missing', $exception->getMessage());
+        }
+        self::assertFileExists($backup);
+        self::assertFileExists($this->paths->upgradeIntentFile());
+        self::assertSame($candidate['slot'], $this->paths->activeSlot());
+
+        self::assertNotFalse(\file_put_contents($request, "corrupt\n"));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($request, 0600));
+        }
+        try {
+            $manager->rollbackUpgradeActivation($candidate['slot'], $initial['slot']);
+            self::fail('A corrupt paired rollback request must retain recovery evidence.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('malformed or bound', $exception->getMessage());
+        }
+        self::assertSame("corrupt\n", \file_get_contents($request));
+        self::assertSame($valid, \file_get_contents($backup));
+        self::assertFileExists($this->paths->upgradeIntentFile());
+        self::assertSame($candidate['slot'], $this->paths->activeSlot());
+    }
+
+    public function testHostStateRecoveryBackupsRequireWholeClosureValidation(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('host-recovery-initial'), 'default');
+        $manager->activate($initial['slot']);
+        $candidate = $manager->stage(
+            $this->createPackage('host-recovery-candidate'),
+            'default',
+        );
+        $manager->beginUpgradeActivation($candidate);
+        $stateTargets = [
+            $this->paths->activeSlotFile(),
+            $this->paths->previousSlotFile(),
+            $this->paths->upgradeIntentFile(),
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR . 'stable-launcher.sha256',
+            $this->paths->hostIdFile(),
+            $this->paths->adminTokenFile(),
+        ];
+        $backups = [];
+        foreach ($stateTargets as $index => $target) {
+            self::assertFileExists($target);
+            $backup = $target . '.wls-backup-'
+                . \str_pad(\dechex($index + 1), 16, '0', STR_PAD_LEFT);
+            self::assertTrue(\copy($target, $backup));
+            if (\PHP_OS_FAMILY !== 'Windows') {
+                self::assertTrue(\chmod(
+                    $backup,
+                    \fileperms($target) & 0777,
+                ));
+            }
+            $backups[] = $backup;
+        }
+        $installLock = new \ReflectionMethod($manager, 'withInstallLock');
+
+        $installLock->invoke($manager, static fn (): null => null);
+
+        foreach ($backups as $backup) {
+            self::assertFileDoesNotExist($backup);
+        }
+
+        $activeBackup = $this->paths->activeSlotFile()
+            . '.wls-backup-' . \str_repeat('a', 16);
+        $previousBackup = $this->paths->previousSlotFile()
+            . '.wls-backup-' . \str_repeat('b', 16);
+        self::assertTrue(\copy($this->paths->activeSlotFile(), $activeBackup));
+        self::assertTrue(\copy($this->paths->previousSlotFile(), $previousBackup));
+        self::assertNotFalse(\file_put_contents($previousBackup, "X\n"));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($activeBackup, 0640));
+            self::assertTrue(\chmod($previousBackup, 0640));
+        }
+
+        try {
+            $installLock->invoke($manager, static fn (): null => null);
+            self::fail('A malformed later backup must fail the whole host-state closure.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'previous-slot recovery backup is invalid',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileExists($activeBackup);
+        self::assertFileExists($previousBackup);
+
+        self::assertTrue(\copy(
+            $this->paths->previousSlotFile(),
+            $previousBackup,
+        ));
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->previousSlotFile(),
+            "X\n",
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($previousBackup, 0640));
+            self::assertTrue(\chmod($this->paths->previousSlotFile(), 0640));
+        }
+        try {
+            $installLock->invoke($manager, static fn (): null => null);
+            self::fail('A malformed later current target must preserve every earlier backup.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'previous-slot recovery target is invalid',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileExists($activeBackup);
+        self::assertFileExists($previousBackup);
+    }
+
+    public function testHostRecoveryInventoryCoversEveryReusableAtomicTarget(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $inventory = new \ReflectionMethod($manager, 'hostAtomicRecoveryTargets');
+        $targets = $inventory->invoke($manager);
+
+        self::assertIsArray($targets);
+        self::assertSame([
+            'active-slot',
+            'previous-slot',
+            'host-id',
+            'admin-token',
+            'stable-launcher-identity',
+            'upgrade-intent',
+            'upgrade-rollback-request',
+            'slot-retention',
+            'failed-initial-cleanup',
+        ], \array_keys($targets));
+        self::assertSame(
+            $this->paths->stateDir() . DIRECTORY_SEPARATOR
+                . 'upgrade-rollback.request',
+            $targets['upgrade-rollback-request']['path'],
+        );
+        self::assertSame(
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR . 'slot-retention',
+            $targets['slot-retention']['path'],
+        );
+        self::assertSame(
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR
+                . 'failed-initial-cleanup.intent',
+            $targets['failed-initial-cleanup']['path'],
+        );
+        self::assertSame(
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR
+                . 'stable-launcher.sha256',
+            $targets['stable-launcher-identity']['path'],
+        );
+    }
+
+    public function testFirstLauncherIdentityPublicationPreservesUnpairedRecoveryEvidence(): void
+    {
+        $this->paths->ensureDirectories();
+        $identity = $this->paths->trustDir() . DIRECTORY_SEPARATOR
+            . 'stable-launcher.sha256';
+        $backup = $identity . '.wls-backup-' . \str_repeat('c', 16);
+        self::assertNotFalse(\file_put_contents(
+            $backup,
+            \str_repeat('d', 64) . "\n",
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($backup, 0600));
+        }
+        $manager = new HostGatewayPackageManager($this->paths);
+        $installLock = new \ReflectionMethod($manager, 'withInstallLock');
+
+        try {
+            $installLock->invoke($manager, static fn (): null => null);
+            self::fail('An unpaired first-publication backup must block destructive cleanup.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'paired target is missing',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileExists($backup);
+        self::assertFileDoesNotExist($identity);
+    }
+
     public function testPlatformServiceDefinitionUsesStableLauncherAndSystemScopeContract(): void
     {
         $installer = new GatewayPlatformServiceInstaller($this->paths);
@@ -305,8 +556,16 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertFalse($result['applied']);
         self::assertTrue($result['test_mode']);
         self::assertSame('test-session', $result['service_identity']);
-        self::assertDirectoryExists(
-            $project . DIRECTORY_SEPARATOR . 'var'
+        $projectRoot = \realpath($project);
+        self::assertIsString($projectRoot);
+        $identities = $projectRoot . DIRECTORY_SEPARATOR . 'var'
+            . DIRECTORY_SEPARATOR . 'server'
+            . DIRECTORY_SEPARATOR . 'gateway-identities';
+        self::assertSame($identities, $result['identities_dir']);
+        self::assertSame($identities, $result['instances_dir']);
+        self::assertDirectoryExists($identities);
+        self::assertDirectoryDoesNotExist(
+            $projectRoot . DIRECTORY_SEPARATOR . 'var'
                 . DIRECTORY_SEPARATOR . 'server'
                 . DIRECTORY_SEPARATOR . 'instances',
         );
@@ -608,6 +867,72 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertFileExists($this->paths->adminStoppedIntentFile());
     }
 
+    public function testFailedStartRestoreCannotOverwriteANewerAdminStopIntent(): void
+    {
+        $this->paths->ensureDirectories();
+        $secret = \bin2hex(\random_bytes(32));
+        $key = \hex2bin($secret);
+        self::assertIsString($key);
+        self::assertNotFalse(\file_put_contents($this->paths->adminTokenFile(), $secret));
+        $signedIntent = static function (string $nonce, int $at) use ($key): string {
+            $payload = "WLS-ADMIN-STOPPED/1\n"
+                . 'host_id=' . \str_repeat('a', 32) . "\n"
+                . 'epoch=' . \str_repeat('b', 32) . "\n"
+                . 'at=' . $at . "\n"
+                . 'nonce=' . $nonce . "\n";
+            return $payload . 'signature='
+                . \hash_hmac('sha256', $payload, $key) . "\n";
+        };
+        $old = $signedIntent(\str_repeat('c', 32), \time());
+        $new = $signedIntent(\str_repeat('d', 32), \time() + 1);
+        \sodium_memzero($key);
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->adminStoppedIntentFile(),
+            $old,
+        ));
+
+        $host = new GatewayHostManager($this->paths);
+        $clear = new \ReflectionMethod($host, 'clearAdminStoppedIntent');
+        $restore = new \ReflectionMethod($host, 'restoreAdminStoppedIntent');
+        self::assertSame($old, $clear->invoke($host));
+        self::assertFileDoesNotExist($this->paths->adminStoppedIntentFile());
+
+        // Model a concurrent native Broker STOP after explicit start cleared
+        // the old generation but before the platform start failed.
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->adminStoppedIntentFile(),
+            $new,
+        ));
+        $restore->invoke($host, $old);
+
+        self::assertSame(
+            $new,
+            \file_get_contents($this->paths->adminStoppedIntentFile()),
+            'Failure compensation must preserve the newer authoritative stop generation.',
+        );
+    }
+
+    public function testMissingAdminStopTargetWithRecoveryEvidenceFailsClosed(): void
+    {
+        $this->paths->ensureDirectories();
+        $secret = \bin2hex(\random_bytes(32));
+        self::assertNotFalse(\file_put_contents($this->paths->adminTokenFile(), $secret));
+        $target = $this->paths->adminStoppedIntentFile();
+        $backup = $target . '.wls-backup-' . \str_repeat('e', 16);
+        self::assertNotFalse(\file_put_contents($backup, "unresolved-stop-evidence\n"));
+
+        $host = new GatewayHostManager($this->paths);
+        $clear = new \ReflectionMethod($host, 'clearAdminStoppedIntent');
+        try {
+            $clear->invoke($host);
+            self::fail('Unresolved stop recovery evidence was ignored.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('paired target', $exception->getMessage());
+        }
+        self::assertFileExists($backup);
+        self::assertFileDoesNotExist($target);
+    }
+
     public function testHostUpgradeWritesSignedObservationBeforeSwitchingWholeSlot(): void
     {
         $host = new GatewayHostManager(
@@ -703,6 +1028,266 @@ final class HostGatewayPackageManagerTest extends TestCase
         );
     }
 
+    public function testPackageLockRecoversStableLauncherCandidateAndHostStateTemporaries(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('recovery-initial'), 'default');
+        $manager->activate($initial['slot']);
+
+        $launcher = $this->paths->launcherFile();
+        $launcherCandidate = $launcher . '.candidate.' . \str_repeat('a', 16);
+        self::assertTrue(\copy($launcher, $launcherCandidate));
+        self::assertTrue(\chmod($launcherCandidate, 0755));
+        $hostTemporary = $this->paths->hostIdFile()
+            . '.tmp-' . \str_repeat('b', 24);
+        $tokenTemporary = $this->paths->adminTokenFile()
+            . '.tmp-' . \str_repeat('c', 24);
+        self::assertNotFalse(\file_put_contents($hostTemporary, 'partial-host'));
+        self::assertNotFalse(\file_put_contents($tokenTemporary, 'partial-token'));
+        self::assertTrue(\chmod($hostTemporary, 0600));
+        self::assertTrue(\chmod($tokenTemporary, 0600));
+
+        $manager->stage($this->createPackage('recovery-candidate'), 'default');
+
+        self::assertFileDoesNotExist($launcherCandidate);
+        self::assertFileDoesNotExist($hostTemporary);
+        self::assertFileDoesNotExist($tokenTemporary);
+        self::assertFileExists($launcher);
+    }
+
+    public function testPackageLockRestoresAMissingLauncherFromATrustedCandidate(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('launcher-recovery'), 'default');
+        $manager->activate($initial['slot']);
+        $launcher = $this->paths->launcherFile();
+        $expectedDigest = \hash_file('sha256', $launcher);
+        self::assertIsString($expectedDigest);
+        $candidate = $launcher . '.candidate.' . \str_repeat('d', 16);
+        self::assertTrue(\rename($launcher, $candidate));
+
+        $recovery = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'withInstallLock',
+        );
+        $targetPresentInsideLock = $recovery->invoke(
+            $manager,
+            static fn (): bool => \is_file($launcher),
+        );
+
+        self::assertTrue($targetPresentInsideLock);
+        self::assertFileDoesNotExist($candidate);
+        self::assertSame($expectedDigest, \hash_file('sha256', $launcher));
+    }
+
+    public function testPackageRecoveryPreservesEveryArtifactWhenOnePairedTargetIsMissing(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('missing-pair'), 'default');
+        $manager->activate($initial['slot']);
+        $hostTemporary = $this->paths->hostIdFile()
+            . '.tmp-' . \str_repeat('e', 24);
+        $tokenTemporary = $this->paths->adminTokenFile()
+            . '.tmp-' . \str_repeat('f', 24);
+        self::assertNotFalse(\file_put_contents($hostTemporary, 'partial-host'));
+        self::assertNotFalse(\file_put_contents($tokenTemporary, 'partial-token'));
+        self::assertTrue(\chmod($hostTemporary, 0600));
+        self::assertTrue(\chmod($tokenTemporary, 0600));
+        self::assertTrue(\unlink($this->paths->adminTokenFile()));
+
+        $recovery = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'withInstallLock',
+        );
+        $exception = $this->captureRuntimeException(
+            static fn (): mixed => $recovery->invoke(
+                $manager,
+                static fn (): null => null,
+            ),
+        );
+        self::assertStringContainsString('paired target', $exception->getMessage());
+
+        self::assertFileExists($hostTemporary);
+        self::assertFileExists($tokenTemporary);
+    }
+
+    public function testPackageRecoveryRejectsMalformedReservedLeavesBeforeAnyCleanup(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('malformed-residue'), 'default');
+        $manager->activate($initial['slot']);
+        $valid = $this->paths->hostIdFile()
+            . '.tmp-' . \str_repeat('1', 24);
+        $malformed = $this->paths->adminTokenFile()
+            . '.tmp-' . \str_repeat('G', 24);
+        self::assertNotFalse(\file_put_contents($valid, 'partial-host'));
+        self::assertNotFalse(\file_put_contents($malformed, 'partial-token'));
+        self::assertTrue(\chmod($valid, 0600));
+        self::assertTrue(\chmod($malformed, 0600));
+
+        $recovery = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'withInstallLock',
+        );
+        $exception = $this->captureRuntimeException(
+            static fn (): mixed => $recovery->invoke(
+                $manager,
+                static fn (): null => null,
+            ),
+        );
+        self::assertStringContainsString('malformed reserved leaf', $exception->getMessage());
+
+        self::assertFileExists($valid);
+        self::assertFileExists($malformed);
+    }
+
+    public function testPackageRecoveryEnforcesPerTargetTemporaryQuotaBeforeCleanup(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('temporary-quota'), 'default');
+        $manager->activate($initial['slot']);
+        $paths = [];
+        for ($index = 0; $index < 9; ++$index) {
+            $path = $this->paths->hostIdFile() . '.tmp-'
+                . \str_pad(\dechex($index + 1), 24, '0', STR_PAD_LEFT);
+            self::assertNotFalse(\file_put_contents($path, 'partial-' . $index));
+            self::assertTrue(\chmod($path, 0600));
+            $paths[] = $path;
+        }
+
+        $recovery = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'withInstallLock',
+        );
+        $exception = $this->captureRuntimeException(
+            static fn (): mixed => $recovery->invoke(
+                $manager,
+                static fn (): null => null,
+            ),
+        );
+        self::assertStringContainsString('temporary quota', $exception->getMessage());
+        foreach ($paths as $path) {
+            self::assertFileExists($path);
+        }
+    }
+
+    public function testPackageRecoveryPreservesLauncherCandidatesWhenIdentityIsCorrupt(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('candidate-identity'), 'default');
+        $manager->activate($initial['slot']);
+        $candidate = $this->paths->launcherFile()
+            . '.candidate.' . \str_repeat('2', 16);
+        self::assertTrue(\copy($this->paths->launcherFile(), $candidate));
+        self::assertTrue(\chmod($candidate, 0755));
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR . 'stable-launcher.sha256',
+            "corrupt\n",
+        ));
+
+        $recovery = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'withInstallLock',
+        );
+        $exception = $this->captureRuntimeException(
+            static fn (): mixed => $recovery->invoke(
+                $manager,
+                static fn (): null => null,
+            ),
+        );
+        self::assertStringContainsString(
+            'launcher identity',
+            \strtolower($exception->getMessage()),
+        );
+        self::assertFileExists($candidate);
+    }
+
+    public function testPackageRecoveryRejectsMalformedLauncherCandidateBeforeAnyCleanup(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('malformed-candidate'), 'default');
+        $manager->activate($initial['slot']);
+        $temporary = $this->paths->hostIdFile()
+            . '.tmp-' . \str_repeat('3', 24);
+        $malformed = $this->paths->launcherFile()
+            . '.candidate.' . \str_repeat('Z', 16);
+        self::assertNotFalse(\file_put_contents($temporary, 'partial-host'));
+        self::assertTrue(\chmod($temporary, 0600));
+        self::assertTrue(\copy($this->paths->launcherFile(), $malformed));
+        self::assertTrue(\chmod($malformed, 0755));
+
+        $recovery = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'withInstallLock',
+        );
+        $exception = $this->captureRuntimeException(
+            static fn (): mixed => $recovery->invoke(
+                $manager,
+                static fn (): null => null,
+            ),
+        );
+        self::assertStringContainsString('malformed reserved leaf', $exception->getMessage());
+        self::assertFileExists($temporary);
+        self::assertFileExists($malformed);
+    }
+
+    public function testPackageRecoveryEnforcesLauncherCandidateQuotaBeforeCleanup(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('candidate-quota'), 'default');
+        $manager->activate($initial['slot']);
+        $candidates = [];
+        for ($index = 0; $index < 9; ++$index) {
+            $candidate = $this->paths->launcherFile() . '.candidate.'
+                . \str_pad(\dechex($index + 1), 16, '0', STR_PAD_LEFT);
+            self::assertTrue(\copy($this->paths->launcherFile(), $candidate));
+            self::assertTrue(\chmod($candidate, 0755));
+            $candidates[] = $candidate;
+        }
+
+        $recovery = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'withInstallLock',
+        );
+        $exception = $this->captureRuntimeException(
+            static fn (): mixed => $recovery->invoke(
+                $manager,
+                static fn (): null => null,
+            ),
+        );
+        self::assertStringContainsString('candidate quota', $exception->getMessage());
+        foreach ($candidates as $candidate) {
+            self::assertFileExists($candidate);
+        }
+    }
+
+    public function testPackageRecoveryRejectsWindowsCaseAliasedReservedLeaves(): void
+    {
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::markTestSkipped('Windows reserved namespaces are case-insensitive.');
+        }
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('windows-case-alias'), 'default');
+        $manager->activate($initial['slot']);
+        $alias = \dirname($this->paths->hostIdFile()) . DIRECTORY_SEPARATOR
+            . \strtoupper(\basename($this->paths->hostIdFile()))
+            . '.TMP-' . \str_repeat('a', 24);
+        self::assertNotFalse(\file_put_contents($alias, 'partial-host'));
+
+        $recovery = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'withInstallLock',
+        );
+        $exception = $this->captureRuntimeException(
+            static fn (): mixed => $recovery->invoke(
+                $manager,
+                static fn (): null => null,
+            ),
+        );
+        self::assertStringContainsString('malformed reserved leaf', $exception->getMessage());
+        self::assertFileExists($alias);
+    }
+
     public function testLegacyStableLauncherIdentityMigratesOnlyFromVerifiedActiveSlot(): void
     {
         $manager = new HostGatewayPackageManager($this->paths);
@@ -741,7 +1326,7 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringNotContainsString('\\microtime(true) + 30.0', $source);
     }
 
-    public function testIncompatibleStableLauncherIsRejectedBeforeSlotActivation(): void
+    public function testIncompatibleBootstrapGenerationIsRejectedBeforeSlotActivation(): void
     {
         $manager = new HostGatewayPackageManager($this->paths);
         $initial = $manager->stage($this->createPackage('stable-initial'), 'default');
@@ -751,10 +1336,10 @@ final class HostGatewayPackageManagerTest extends TestCase
                 $this->createPackage('stable-incompatible', true),
                 'default',
             );
-            self::fail('An incompatible stable launcher must be rejected before activation.');
+            self::fail('An incompatible bootstrap generation must be rejected before activation.');
         } catch (\RuntimeException $exception) {
             self::assertStringContainsString(
-                'requires a different stable launcher',
+                'explicit host rebootstrap is required before slot activation',
                 $exception->getMessage(),
             );
         }
@@ -791,7 +1376,11 @@ final class HostGatewayPackageManagerTest extends TestCase
             $platform,
         );
         self::assertStringContainsString(
-            '$item->isDir() ? 0750 : ($item->isExecutable() ? 0550 : 0440)',
+            'GatewayBoundedTreeWalker::collect($normalizedRoot, true)',
+            $platform,
+        );
+        self::assertStringContainsString(
+            "\$entry['directory'] ? 0750 : (\$entry['executable'] ? 0550 : 0440)",
             $platform,
         );
         self::assertStringContainsString(
@@ -804,7 +1393,7 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringContainsString('$this->waitForWindowsServiceState(1);', $platform);
         self::assertStringContainsString('$this->waitForWindowsServiceState(4);', $platform);
         self::assertStringContainsString("'unrestricted'", $platform);
-        self::assertStringContainsString("'qsidtype'", $platform);
+        self::assertStringContainsString("'sidtype'", $platform);
         self::assertStringContainsString('Set-WlsExactAcl', $platform);
         self::assertStringContainsString('AreAccessRulesProtected', $platform);
         self::assertStringContainsString("'/setowner'", $platform);
@@ -812,7 +1401,11 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringContainsString('WLS_CONTROL_TREE_RELOAD', $posix);
         self::assertStringContainsString('signal_number == SIGHUP', $posix);
         self::assertStringContainsString(
-            'wls_reap_controller(controller_pid, 0, NULL) == 0',
+            'static int wls_reap_controller(',
+            $posixBroker,
+        );
+        self::assertStringContainsString(
+            'waitpid(controller_pid, controller_status, options)',
             $posixBroker,
         );
         self::assertStringContainsString('wls_release_controller_socket(controller_socket)', $posixBroker);
@@ -954,6 +1547,29 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringContainsString('Destination reparse point was followed', $fixture);
         self::assertStringContainsString('WLS_BUILD_TEST_HELPERS=ON', $workflow);
         self::assertStringContainsString('NativeGatewayBrokerTest.php', $workflow);
+        self::assertSame(
+            2,
+            \substr_count($workflow, 'NativeGatewayAtomicCandidateRecoveryContractTest.php'),
+            'Both POSIX and Windows native jobs must execute the atomic candidate recovery contract.',
+        );
+        self::assertSame(
+            4,
+            \substr_count($workflow, 'ManagedNginxInstallerAtomicRecoveryTest.php'),
+            'Both triggers and both platform jobs must cover the installer crash-recovery contract.',
+        );
+        self::assertSame(
+            4,
+            \substr_count($workflow, 'NginxConfigPublicationTest.php'),
+            'Both triggers and both platform jobs must cover the config publication crash-recovery contract.',
+        );
+        self::assertStringContainsString(
+            'app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxInstaller.php',
+            $workflow,
+        );
+        self::assertStringContainsString(
+            'app/code/Weline/Server/Service/Edge/Nginx/Runtime/NginxConfigPublication.php',
+            $workflow,
+        );
         self::assertStringContainsString('--bootstrap vendor/autoload.php', $workflow);
         self::assertStringNotContainsString('--bootstrap app/bootstrap_phpunit.php', $workflow);
         self::assertStringContainsString('if: always()', $workflow);
@@ -1066,7 +1682,7 @@ final class HostGatewayPackageManagerTest extends TestCase
         $files = [
             'app/controller.php' => [
                 "<?php echo \"controller-{$suffix}\\n\";\n",
-                0600,
+                0644,
             ],
             'bin/' . $this->binaryName('php') => ["#!/bin/sh\nexit 0\n", 0755],
             'bin/' . $this->binaryName('nginx') => ["#!/bin/sh\nexit 0\n", 0755],
@@ -1243,6 +1859,18 @@ final class HostGatewayPackageManagerTest extends TestCase
             'aarch64', 'arm64' => 'arm64',
             default => \strtolower((string)\php_uname('m')),
         };
+    }
+
+    private function captureRuntimeException(\Closure $operation): \RuntimeException
+    {
+        $exception = null;
+        try {
+            $operation();
+        } catch (\RuntimeException $caught) {
+            $exception = $caught;
+        }
+        self::assertInstanceOf(\RuntimeException::class, $exception);
+        return $exception;
     }
 
     private function removeTree(string $root): void

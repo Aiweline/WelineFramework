@@ -249,6 +249,165 @@ final class NativeGatewayBrokerTest extends TestCase
         }
     }
 
+    public function testAdminStopActionUsesTheSharedPackageLockBeforePublishing(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
+            self::markTestSkipped('pcntl and posix are required for the native broker action test.');
+        }
+        $home = $this->root . DIRECTORY_SEPARATOR . 'stop-home';
+        $trust = $home . DIRECTORY_SEPARATOR . 'trust';
+        self::assertTrue(\mkdir($trust, 0700, true));
+        $token = \bin2hex(\random_bytes(32));
+        $hostId = \bin2hex(\random_bytes(16));
+        $epoch = \bin2hex(\random_bytes(16));
+        self::assertSame(64, \file_put_contents(
+            $trust . DIRECTORY_SEPARATOR . 'admin.token',
+            $token,
+        ));
+        self::assertSame(32, \file_put_contents(
+            $trust . DIRECTORY_SEPARATOR . 'host-id',
+            $hostId,
+        ));
+
+        $adminSocket = $this->root . DIRECTORY_SEPARATOR . 'stop-admin.sock';
+        $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'stop-project.sock';
+        $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'stop-controller.sock';
+        $brokerLock = $this->root . DIRECTORY_SEPARATOR . 'stop-broker.lock';
+        $fencingFile = $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token';
+        $controller = \stream_socket_server(
+            'unix://' . $controllerSocket,
+            $errno,
+            $error,
+            \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($controller, $error);
+        $action = "WLS-ACTION/2\tSTOP\t{$epoch}\n";
+
+        $controllerPid = \pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $controllerPid);
+        if ($controllerPid === 0) {
+            foreach (["WLS-ACTION/2\tERR\tBUSY\tSTOP\t-\t-", "WLS-ACTION/2\tOK\tSTOP\t-\t-"] as $expected) {
+                $client = @\stream_socket_accept($controller, 5);
+                if (!\is_resource($client)) exit(80);
+                if (!$this->authenticateBrokerProbe($client, $fencingFile)
+                    || !\is_string(@\fgets($client, 4096))
+                    || !\is_string(@\fgets($client, 4096))
+                    || @\fwrite($client, $action) !== \strlen($action)
+                ) {
+                    exit(81);
+                }
+                $ack = @\fgets($client, 4096);
+                if (!\str_starts_with((string)$ack, $expected)) exit(82);
+                @\fwrite(
+                    $client,
+                    '{"protocol":"wls-edge/2","request_id":"stop","ok":true}' . "\n",
+                );
+                @\fclose($client);
+            }
+            @\fclose($controller);
+            exit(0);
+        }
+        @\fclose($controller);
+
+        $process = null;
+        $packageLock = null;
+        try {
+            $log = $this->root . DIRECTORY_SEPARATOR . 'stop-broker.log';
+            $process = \proc_open([
+                $this->broker,
+                '--serve',
+                '--admin-socket',
+                $adminSocket,
+                '--project-socket',
+                $projectSocket,
+                '--controller-socket',
+                $controllerSocket,
+                '--lock-file',
+                $brokerLock,
+                '--fencing-file',
+                $fencingFile,
+                '--home',
+                $home,
+            ], [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['file', $log, 'a'],
+                2 => ['file', $log, 'a'],
+            ], $pipes, null, null, ['bypass_shell' => true]);
+            self::assertIsResource($process);
+            $this->waitForSocket($adminSocket);
+
+            $trigger = function () use ($adminSocket, $log): void {
+                $client = @\stream_socket_client(
+                    'unix://' . $adminSocket,
+                    $errno,
+                    $error,
+                    2.0,
+                );
+                self::assertIsResource($client, $error);
+                self::assertNotFalse(@\fwrite($client, '{"request_id":"stop"}' . "\n"));
+                self::assertStringContainsString(
+                    '"ok":true',
+                    (string)@\fgets($client, 4096),
+                    (string)@\file_get_contents($log),
+                );
+                @\fclose($client);
+            };
+
+            $packageLock = @\fopen(
+                $trust . DIRECTORY_SEPARATOR . 'package-install.lock',
+                'c+b',
+            );
+            self::assertIsResource($packageLock);
+            self::assertTrue(\flock($packageLock, LOCK_EX | LOCK_NB));
+            $trigger();
+            self::assertFileDoesNotExist(
+                $trust . DIRECTORY_SEPARATOR . 'admin-stopped.intent',
+            );
+            self::assertTrue(\flock($packageLock, LOCK_UN));
+            self::assertTrue(\fclose($packageLock));
+            $packageLock = null;
+
+            $trigger();
+            $intent = \file_get_contents(
+                $trust . DIRECTORY_SEPARATOR . 'admin-stopped.intent',
+            );
+            self::assertIsString($intent);
+            self::assertMatchesRegularExpression(
+                '/\AWLS-ADMIN-STOPPED\/1\n'
+                    . 'host_id=' . $hostId . '\n'
+                    . 'epoch=' . $epoch . '\n'
+                    . 'at=[0-9]+\n'
+                    . 'nonce=[a-f0-9]{32}\n'
+                    . 'signature=[a-f0-9]{64}\n\z/D',
+                $intent,
+            );
+            [$payload, $signature] = \explode('signature=', $intent, 2);
+            self::assertSame(
+                \hash_hmac('sha256', $payload, \hex2bin($token)),
+                \trim($signature),
+            );
+
+            self::assertSame($controllerPid, \pcntl_waitpid($controllerPid, $status));
+            self::assertTrue(\pcntl_wifexited($status));
+            self::assertSame(0, \pcntl_wexitstatus($status));
+        } finally {
+            if (\is_resource($packageLock)) {
+                @\flock($packageLock, LOCK_UN);
+                @\fclose($packageLock);
+            }
+            if (\is_resource($process)) {
+                $status = \proc_get_status($process);
+                if ($status['running'] ?? false) {
+                    \posix_kill((int)$status['pid'], SIGTERM);
+                }
+                \proc_close($process);
+            }
+            if ($controllerPid > 0) {
+                \pcntl_waitpid($controllerPid, $ignored, WNOHANG);
+            }
+        }
+    }
+
     public function testBrokerSidebandAuthorizesAndSnapshotsOnlyEnrolledProjectSource(): void
     {
         if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
@@ -377,6 +536,11 @@ final class NativeGatewayBrokerTest extends TestCase
                     exit(31);
                 }
                 $ack = @\fgets($client, 4096);
+                @\file_put_contents(
+                    $this->root . DIRECTORY_SEPARATOR . 'rollback-actions.log',
+                    (string)$ack,
+                    FILE_APPEND,
+                );
                 if (($expectedSuccess
                         && !\str_starts_with((string)$ack, "WLS-ACTION/2\tOK\t"))
                     || (!$expectedSuccess
@@ -606,6 +770,27 @@ final class NativeGatewayBrokerTest extends TestCase
         $home = $this->root . DIRECTORY_SEPARATOR . 'restart-home';
         self::assertTrue(\mkdir($home, 0700));
         self::assertTrue(\mkdir($home . DIRECTORY_SEPARATOR . 'trust', 0700));
+        $adminToken = \bin2hex(\random_bytes(32));
+        $hostId = \bin2hex(\random_bytes(16));
+        $adminTokenFile = $home . DIRECTORY_SEPARATOR . 'trust/admin.token';
+        $hostIdFile = $home . DIRECTORY_SEPARATOR . 'trust/host-id';
+        self::assertSame(64, \file_put_contents($adminTokenFile, $adminToken));
+        self::assertSame(32, \file_put_contents($hostIdFile, $hostId));
+        self::assertTrue(\chmod($adminTokenFile, 0600));
+        self::assertTrue(\chmod($hostIdFile, 0600));
+        $runtimeGeneration = \str_repeat('0', 64);
+        $slotBin = $home . DIRECTORY_SEPARATOR . 'slots/A/bin';
+        self::assertTrue(\mkdir($slotBin, 0700, true));
+        $slotPhp = $slotBin . DIRECTORY_SEPARATOR . 'php';
+        self::assertTrue(\copy(\PHP_BINARY, $slotPhp));
+        self::assertTrue(\chmod($slotPhp, 0700));
+        self::assertNotFalse(\file_put_contents(
+            $home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json',
+            \json_encode(
+                ['runtime_generation' => $runtimeGeneration],
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
+            ) . "\n",
+        ));
         $adminSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-admin.sock';
         $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-project.sock';
         $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-controller.sock';
@@ -675,6 +860,43 @@ function authenticateBroker($client, string $fencingFile): bool
         sodium_memzero($key);
     }
 }
+function canonicalJson(mixed $value): string
+{
+    $normalize = static function (mixed $item) use (&$normalize): mixed {
+        if (!is_array($item)) {
+            return $item;
+        }
+        if (!array_is_list($item)) {
+            ksort($item, SORT_STRING);
+        }
+        foreach ($item as $key => $child) {
+            $item[$key] = $normalize($child);
+        }
+        return $item;
+    };
+    return (string)json_encode(
+        $normalize($value),
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION,
+    );
+}
+$adminToken = trim((string)@file_get_contents(
+    $home . DIRECTORY_SEPARATOR . 'trust/admin.token',
+));
+$hostId = trim((string)@file_get_contents(
+    $home . DIRECTORY_SEPARATOR . 'trust/host-id',
+));
+$manifest = json_decode((string)@file_get_contents(
+    $home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json',
+), true);
+$runtimeGeneration = is_array($manifest)
+    ? (string)($manifest['runtime_generation'] ?? '')
+    : '';
+if (preg_match('/\A[a-f0-9]{64}\z/D', $adminToken) !== 1
+    || preg_match('/\A[a-f0-9]{32}\z/D', $hostId) !== 1
+    || preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
+) {
+    exit(66);
+}
 @unlink($endpoint);
 $server = stream_socket_server(
     'unix://' . $endpoint,
@@ -707,6 +929,45 @@ while (true) {
     $requestLine = @fgets($client, 4096);
     $request = is_string($requestLine) ? json_decode($requestLine, true) : null;
     $requestId = is_array($request) ? (string)($request['request_id'] ?? '') : '';
+    if (is_array($request)
+        && ($request['operation'] ?? null) === 'bootstrap'
+        && $requestId !== ''
+    ) {
+        $epoch = str_repeat('1', 32);
+        $payload = [
+            'ready' => true,
+            'generation' => 1,
+            'active_config_generation' => 1,
+            'publication_generation' => 1,
+            'gateway_epoch' => $epoch,
+            'controller_epoch' => $epoch,
+            'active_slot' => 'A',
+            'runtime_generation' => $runtimeGeneration,
+            'host_boot_id' => $hostBootId,
+            'upgrade_intent_sha256' => str_repeat('0', 64),
+            'upgrade_intent_nonce' => str_repeat('0', 32),
+            'data_plane' => 'RUNNING',
+            'recovery_pending' => false,
+        ];
+        $response = [
+            'protocol' => 'wls-edge/2',
+            'request_id' => $requestId,
+            'ok' => true,
+            'epoch' => $epoch,
+            'payload' => $payload,
+        ];
+        $response['signature'] = hash_hmac(
+            'sha256',
+            canonicalJson($response),
+            $adminToken,
+        );
+        @fwrite(
+            $client,
+            json_encode($response, JSON_UNESCAPED_SLASHES) . PHP_EOL,
+        );
+        @fclose($client);
+        continue;
+    }
     @fwrite(
         $client,
         json_encode([
@@ -738,7 +999,7 @@ PHP;
             '--fencing-file',
             $fencingFile,
             '--php',
-            \PHP_BINARY,
+            $slotPhp,
             '--controller',
             $controllerScript,
             '--home',
@@ -748,7 +1009,7 @@ PHP;
             '--active-slot',
             'A',
             '--runtime-generation',
-            \str_repeat('0', 64),
+            $runtimeGeneration,
         ], [
             0 => ['file', '/dev/null', 'r'],
             1 => ['file', $log, 'a'],
@@ -764,7 +1025,7 @@ PHP;
                 $adminSocket,
                 (string)@\file_get_contents($log),
             );
-            $firstPids = $this->waitForControllerPids($pidFile, 1);
+            $firstPids = $this->waitForControllerPids($pidFile, 1, $log);
             $brokerStatus = \proc_get_status($process);
             $brokerPid = (int)($brokerStatus['pid'] ?? 0);
             self::assertGreaterThan(0, $brokerPid);
@@ -775,7 +1036,7 @@ PHP;
 
             $firstControllerPid = $firstPids[0];
             self::assertTrue(\posix_kill($firstControllerPid, SIGTERM));
-            $controllerPids = $this->waitForControllerPids($pidFile, 2);
+            $controllerPids = $this->waitForControllerPids($pidFile, 2, $log);
             self::assertNotSame($firstControllerPid, $controllerPids[1]);
 
             $after = \proc_get_status($process);
@@ -810,6 +1071,247 @@ PHP;
                     \posix_kill((int)$status['pid'], SIGTERM);
                 }
                 \proc_close($process);
+            }
+        }
+    }
+
+    public function testRollbackRequestPublicationIsLockedBoundAndRecoveryEvidenceSafe(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
+            self::markTestSkipped('pcntl and posix are required for the rollback action test.');
+        }
+        $home = $this->root . DIRECTORY_SEPARATOR . 'rollback-home';
+        $state = $home . DIRECTORY_SEPARATOR . 'state';
+        $trust = $home . DIRECTORY_SEPARATOR . 'trust';
+        $snapshots = $home . DIRECTORY_SEPARATOR . 'snapshots';
+        self::assertTrue(\mkdir($state, 0700, true));
+        self::assertTrue(\mkdir($trust, 0700, true));
+        self::assertTrue(\mkdir($snapshots, 0700, true));
+
+        $hostId = \bin2hex(\random_bytes(16));
+        $adminSecret = \random_bytes(32);
+        $preparedAt = \time() - 5;
+        $requestedAt = \time();
+        $runtimeGeneration = \str_repeat('d', 64);
+        $intentNonce = \bin2hex(\random_bytes(16));
+        $requestNonce = \bin2hex(\random_bytes(16));
+        $intentPayload = "WLS-UPGRADE/1\n"
+            . 'host_id=' . $hostId . "\n"
+            . "from=B\nto=A\n"
+            . 'prepared_at=' . $preparedAt . "\n"
+            . 'deadline=' . ($preparedAt + 300) . "\n"
+            . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'nonce=' . $intentNonce . "\n";
+        $intent = $intentPayload . 'signature='
+            . \hash_hmac('sha256', $intentPayload, $adminSecret) . "\n";
+        $intentDigest = \hash('sha256', $intent);
+        self::assertNotFalse(\file_put_contents(
+            $trust . DIRECTORY_SEPARATOR . 'admin.token',
+            \bin2hex($adminSecret),
+        ));
+        \sodium_memzero($adminSecret);
+        self::assertNotFalse(\file_put_contents(
+            $trust . DIRECTORY_SEPARATOR . 'host-id',
+            $hostId,
+        ));
+        $upgradeState = "WLS-UPGRADE-STATE/2\n"
+            . 'intent_sha256=' . $intentDigest . "\n"
+            . 'intent_nonce=' . $intentNonce . "\n"
+            . "from=B\nto=A\n"
+            . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'boot_id=' . \str_repeat('e', 64) . "\n"
+            . "phase=OBSERVING\nattempts=0\n"
+            . "observation_started_monotonic_ms=0\n"
+            . "observation_deadline_monotonic_ms=0\n"
+            . 'total_deadline=' . ($preparedAt + 900) . "\n";
+
+        $request = $state . DIRECTORY_SEPARATOR . 'upgrade-rollback.request';
+        $expectedRequest = "WLS-UPGRADE-ROLLBACK/2\n"
+            . 'intent_sha256=' . $intentDigest . "\n"
+            . 'intent_nonce=' . $intentNonce . "\n"
+            . "from=A\nto=B\n"
+            . 'at=' . $requestedAt . "\n"
+            . 'request_nonce=' . $requestNonce . "\n";
+        $action = 'WLS-ACTION/2' . "\t" . \implode("\t", [
+            'ROLLBACK_REQUEST',
+            $requestNonce,
+            $intentDigest,
+            $intentNonce,
+            'A',
+            'B',
+            (string)$requestedAt,
+        ]) . "\n";
+        $adminSocket = $this->root . DIRECTORY_SEPARATOR . 'rollback-admin.sock';
+        $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'rollback-project.sock';
+        $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'rollback-controller.sock';
+        $lockFile = $this->root . DIRECTORY_SEPARATOR . 'rollback-broker.lock';
+        $fencingFile = $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token';
+        $controller = \stream_socket_server(
+            'unix://' . $controllerSocket,
+            $errno,
+            $error,
+            \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($controller, $error);
+
+        $controllerPid = \pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $controllerPid);
+        if ($controllerPid === 0) {
+            foreach ([false, true, true, false] as $expectedSuccess) {
+                $client = @\stream_socket_accept($controller, 5);
+                if (!\is_resource($client)) exit(70);
+                if (!$this->authenticateBrokerProbe($client, $fencingFile)
+                    || !\is_string(@\fgets($client, 4096))
+                    || !\is_string(@\fgets($client, 4096))
+                    || @\fwrite($client, $action) !== \strlen($action)
+                ) {
+                    exit(71);
+                }
+                $ack = @\fgets($client, 4096);
+                if (($expectedSuccess
+                        && !\str_starts_with(
+                            (string)$ack,
+                            "WLS-ACTION/2\tOK\tROLLBACK_REQUEST\t",
+                        ))
+                    || (!$expectedSuccess
+                        && !\str_starts_with(
+                            (string)$ack,
+                            "WLS-ACTION/2\tERR\tROLLBACK_REQUEST_",
+                        ))
+                ) {
+                    @\fwrite(
+                        $client,
+                        \json_encode([
+                            'protocol' => 'wls-edge/2',
+                            'request_id' => 'rollback',
+                            'ok' => false,
+                            'ack' => (string)$ack,
+                        ], JSON_UNESCAPED_SLASHES) . "\n",
+                    );
+                    @\fclose($client);
+                    exit(72);
+                }
+                @\fwrite(
+                    $client,
+                    '{"protocol":"wls-edge/2","request_id":"rollback","ok":true}' . "\n",
+                );
+                @\fclose($client);
+            }
+            @\fclose($controller);
+            exit(0);
+        }
+        @\fclose($controller);
+
+        $process = null;
+        try {
+            $log = $this->root . DIRECTORY_SEPARATOR . 'rollback-broker.log';
+            $process = \proc_open([
+                $this->broker,
+                '--serve',
+                '--admin-socket',
+                $adminSocket,
+                '--project-socket',
+                $projectSocket,
+                '--controller-socket',
+                $controllerSocket,
+                '--lock-file',
+                $lockFile,
+                '--fencing-file',
+                $fencingFile,
+                '--home',
+                $home,
+            ], [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['file', $log, 'a'],
+                2 => ['file', $log, 'a'],
+            ], $pipes, null, null, ['bypass_shell' => true]);
+            self::assertIsResource($process);
+            $deadline = \microtime(true) + 3.0;
+            while (!\file_exists($projectSocket) && \microtime(true) < $deadline) {
+                \usleep(10_000);
+            }
+            self::assertFileExists(
+                $projectSocket,
+                (string)@\file_get_contents($log),
+            );
+            self::assertNotFalse(\file_put_contents(
+                $trust . DIRECTORY_SEPARATOR . 'active-slot',
+                "A\n",
+            ));
+            self::assertNotFalse(\file_put_contents(
+                $trust . DIRECTORY_SEPARATOR . 'upgrade.intent',
+                $intent,
+            ));
+            self::assertNotFalse(\file_put_contents(
+                $trust . DIRECTORY_SEPARATOR . 'upgrade-state',
+                $upgradeState,
+            ));
+
+            $trigger = function () use ($projectSocket, $log): void {
+                $client = @\stream_socket_client(
+                    'unix://' . $projectSocket,
+                    $errno,
+                    $error,
+                    2.0,
+                );
+                self::assertIsResource($client, $error);
+                self::assertNotFalse(@\fwrite(
+                    $client,
+                    '{"request_id":"rollback"}' . "\n",
+                ));
+                self::assertStringContainsString(
+                    '"ok":true',
+                    (string)@\fgets($client, 4096),
+                    (string)@\file_get_contents($log) . "\n"
+                        . (string)@\file_get_contents(
+                            $this->root . DIRECTORY_SEPARATOR . 'rollback-actions.log',
+                        ),
+                );
+                @\fclose($client);
+            };
+
+            $packageLock = @\fopen(
+                $trust . DIRECTORY_SEPARATOR . 'package-install.lock',
+                'c+b',
+            );
+            self::assertIsResource($packageLock);
+            self::assertTrue(\flock($packageLock, LOCK_EX | LOCK_NB));
+            $trigger();
+            self::assertFileDoesNotExist($request);
+            self::assertTrue(\flock($packageLock, LOCK_UN));
+            self::assertTrue(\fclose($packageLock));
+
+            $trigger();
+            self::assertSame($expectedRequest, \file_get_contents($request));
+
+            $backup = $request . '.wls-backup-' . \str_repeat('c', 16);
+            self::assertTrue(\copy($request, $backup));
+            $trigger();
+            self::assertFileDoesNotExist($backup);
+            self::assertSame($expectedRequest, \file_get_contents($request));
+
+            self::assertTrue(\copy($request, $backup));
+            self::assertNotFalse(\file_put_contents($request, "corrupt\n"));
+            $trigger();
+            self::assertSame("corrupt\n", \file_get_contents($request));
+            self::assertSame($expectedRequest, \file_get_contents($backup));
+            self::assertSame($intent, \file_get_contents(
+                $trust . DIRECTORY_SEPARATOR . 'upgrade.intent',
+            ));
+
+            self::assertSame($controllerPid, \pcntl_waitpid($controllerPid, $status));
+            self::assertTrue(\pcntl_wifexited($status));
+            self::assertSame(0, \pcntl_wexitstatus($status));
+        } finally {
+            if (\is_resource($process)) {
+                $status = \proc_get_status($process);
+                if ($status['running'] ?? false) {
+                    \posix_kill((int)$status['pid'], SIGTERM);
+                }
+                \proc_close($process);
+            }
+            if ($controllerPid > 0) {
+                \pcntl_waitpid($controllerPid, $ignored, WNOHANG);
             }
         }
     }
@@ -936,7 +1438,11 @@ PHP;
     /**
      * @return list<int>
      */
-    private function waitForControllerPids(string $path, int $expected): array
+    private function waitForControllerPids(
+        string $path,
+        int $expected,
+        ?string $diagnosticLog = null,
+    ): array
     {
         $deadline = \microtime(true) + 10.0;
         do {
@@ -954,9 +1460,13 @@ PHP;
             }
             \usleep(10_000);
         } while (\microtime(true) < $deadline);
-        self::fail(
-            'Native broker did not start ' . $expected . ' controller generation(s).',
-        );
+        $message = 'Native broker did not start '
+            . $expected
+            . ' controller generation(s).';
+        if ($diagnosticLog !== null && \is_file($diagnosticLog)) {
+            $message .= "\n" . (string)@\file_get_contents($diagnosticLog);
+        }
+        self::fail($message);
     }
 
     private function removeTree(string $root): void

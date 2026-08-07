@@ -5,16 +5,36 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Policy;
 
 use Weline\Framework\Runtime\Policy\RuntimePolicyBundle;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
 
+/** @phpstan-type PolicyState array{active_digest:string,staged_digest:string,previous_digest:string,updated_at:int} */
 final class RuntimePolicyStore
 {
     private const POSIX_DIRECTORY_MODE = 0700;
 
     private const POSIX_FILE_MODE = 0600;
 
+    private const MAX_BUNDLE_BYTES = 4_194_304;
+
+    private const MAX_STATE_BYTES = 65_536;
+
+    private const MAX_RECOVERY_ARTIFACTS_PER_KIND = 8;
+
+    private const MAX_DIRECTORY_ENTRIES = 16_384;
+
     public function __construct(
         private readonly ?string $baseDirectory = null,
+        private readonly float $lockTimeoutSeconds = 3.0,
     ) {
+        if (!\is_finite($this->lockTimeoutSeconds)
+            || $this->lockTimeoutSeconds <= 0.0
+            || $this->lockTimeoutSeconds > 300.0
+        ) {
+            throw new \InvalidArgumentException(
+                'Runtime policy store lock timeout must be within (0, 300] seconds.'
+            );
+        }
     }
 
     public function save(string $instance, RuntimePolicyBundle $bundle): string
@@ -24,6 +44,7 @@ final class RuntimePolicyStore
         });
     }
 
+    /** @return PolicyState */
     public function stage(string $instance, RuntimePolicyBundle $bundle): array
     {
         return $this->withLock($instance, function () use ($instance, $bundle): array {
@@ -36,6 +57,7 @@ final class RuntimePolicyStore
         });
     }
 
+    /** @return PolicyState */
     public function stageDigest(string $instance, string $digest): array
     {
         return $this->withLock($instance, function () use ($instance, $digest): array {
@@ -48,12 +70,13 @@ final class RuntimePolicyStore
         });
     }
 
+    /** @return PolicyState */
     public function activate(string $instance, string $digest): array
     {
         return $this->withLock($instance, function () use ($instance, $digest): array {
             $this->loadUnlocked($instance, $digest);
             $state = $this->readStateUnlocked($instance);
-            $current = (string)($state['active_digest'] ?? '');
+            $current = $state['active_digest'];
             if ($current !== '' && $current !== $digest) {
                 $state['previous_digest'] = $current;
             }
@@ -65,18 +88,19 @@ final class RuntimePolicyStore
         });
     }
 
+    /** @return PolicyState */
     public function rollback(string $instance, ?string $digest = null): array
     {
         return $this->withLock($instance, function () use ($instance, $digest): array {
             $state = $this->readStateUnlocked($instance);
             $target = $digest !== null && $digest !== ''
                 ? $digest
-                : (string)($state['previous_digest'] ?? '');
+                : $state['previous_digest'];
             if ($target === '') {
                 throw new \RuntimeException('No previous runtime policy bundle is available for rollback.');
             }
             $this->loadUnlocked($instance, $target);
-            $current = (string)($state['active_digest'] ?? '');
+            $current = $state['active_digest'];
             $state['active_digest'] = $target;
             $state['staged_digest'] = '';
             $state['previous_digest'] = $current !== $target ? $current : '';
@@ -86,13 +110,14 @@ final class RuntimePolicyStore
         });
     }
 
+    /** @return PolicyState */
     public function prepareRollback(string $instance, ?string $digest = null): array
     {
         return $this->withLock($instance, function () use ($instance, $digest): array {
             $state = $this->readStateUnlocked($instance);
             $target = $digest !== null && $digest !== ''
                 ? $digest
-                : (string)($state['previous_digest'] ?? '');
+                : $state['previous_digest'];
             if ($target === '') {
                 throw new \RuntimeException('No previous runtime policy bundle is available for rollback.');
             }
@@ -111,13 +136,13 @@ final class RuntimePolicyStore
 
     public function active(string $instance): ?RuntimePolicyBundle
     {
-        $digest = (string)($this->state($instance)['active_digest'] ?? '');
+        $digest = $this->state($instance)['active_digest'];
         return $digest !== '' ? $this->load($instance, $digest) : null;
     }
 
     public function staged(string $instance): ?RuntimePolicyBundle
     {
-        $digest = (string)($this->state($instance)['staged_digest'] ?? '');
+        $digest = $this->state($instance)['staged_digest'];
         return $digest !== '' ? $this->load($instance, $digest) : null;
     }
 
@@ -174,7 +199,7 @@ final class RuntimePolicyStore
             }
             return $target;
         }
-        $this->writePhpArrayAtomically($target, $bundle->toArray(), false);
+        $this->writePhpArrayAtomically($target, $bundle->toArray());
         return $target;
     }
 
@@ -205,52 +230,277 @@ final class RuntimePolicyStore
         return $state;
     }
 
+    /** @param PolicyState $state */
     private function writeStateUnlocked(string $instance, array $state): void
     {
         $target = $this->ensureInstanceDirectory($instance) . DS . 'state.php';
         $this->writePhpArrayAtomically($target, [
-            'active_digest' => (string)($state['active_digest'] ?? ''),
-            'staged_digest' => (string)($state['staged_digest'] ?? ''),
-            'previous_digest' => (string)($state['previous_digest'] ?? ''),
-            'updated_at' => (int)($state['updated_at'] ?? \time()),
-        ], true);
+            'active_digest' => $state['active_digest'],
+            'staged_digest' => $state['staged_digest'],
+            'previous_digest' => $state['previous_digest'],
+            'updated_at' => $state['updated_at'],
+        ]);
     }
 
-    private function writePhpArrayAtomically(string $target, array $data, bool $replace): void
+    /** @param array<string,mixed> $data */
+    private function writePhpArrayAtomically(string $target, array $data): void
     {
         $payload = "<?php\n\ndeclare(strict_types=1);\n\nreturn " . \var_export($data, true) . ";\n";
-        $temporary = $target . '.tmp.' . \getmypid() . '.' . \bin2hex(\random_bytes(4));
-        $bytes = \file_put_contents($temporary, $payload, \LOCK_EX);
-        if ($bytes === false || $bytes !== \strlen($payload)) {
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to write runtime policy file: ' . $target);
+        $maximumBytes = \basename($target) === 'state.php'
+            ? self::MAX_STATE_BYTES
+            : self::MAX_BUNDLE_BYTES;
+        if (\strlen($payload) > $maximumBytes) {
+            throw new \RuntimeException('Runtime policy publication exceeds its fixed size limit.');
         }
-        try {
-            $this->secureFilePermissions($temporary);
-        } catch (\Throwable $throwable) {
-            @\unlink($temporary);
-            throw $throwable;
-        }
-        if ($replace && \PHP_OS_FAMILY === 'Windows' && \is_file($target)) {
-            @\unlink($target);
-        }
-        if (!@\rename($temporary, $target)) {
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to atomically publish runtime policy file: ' . $target);
-        }
-        // rename(2) preserves the private temporary-file mode on POSIX. Apply
-        // and verify it once more after publication so an unexpected platform
-        // or filesystem cannot leave an active bundle/state broadly readable.
-        $this->secureFilePermissions($target);
+        GatewayProjectStateFilesystem::atomicWrite(
+            $target,
+            $payload,
+            self::POSIX_FILE_MODE,
+        );
         if (\function_exists('opcache_invalidate')) {
             @\opcache_invalidate($target, true);
         }
         \clearstatcache(true, $target);
     }
 
+    private function recoverInterruptedPublications(string $directory): void
+    {
+        $artifacts = $this->publicationRecoveryArtifacts($directory);
+        if ($artifacts === []) {
+            return;
+        }
+        $targets = [];
+        foreach ($artifacts as $artifact) {
+            $target = $artifact['target'];
+            if (!isset($targets[$target])) {
+                $targets[$target] = $this->validateRecoveryTarget(
+                    $target,
+                    $artifact['target_leaf'],
+                );
+            }
+        }
+
+        // No evidence is removed until every reserved leaf and every paired
+        // target has passed one complete, bounded preflight.
+        $rechecked = $this->publicationRecoveryArtifacts($directory);
+        if (\array_keys($artifacts) !== \array_keys($rechecked)) {
+            throw new \RuntimeException(
+                'Runtime policy recovery artifact set changed before cleanup.'
+            );
+        }
+        foreach ($artifacts as $path => $artifact) {
+            $current = $rechecked[$path] ?? null;
+            if (!\is_array($current)
+                || !$this->sameFileState($artifact['identity'], $current['identity'])
+                || !\hash_equals($artifact['kind'], $current['kind'])
+                || !\hash_equals($artifact['target'], $current['target'])
+            ) {
+                throw new \RuntimeException(
+                    'Runtime policy recovery artifact changed before cleanup.'
+                );
+            }
+        }
+        foreach ($targets as $target => $identity) {
+            $validated = $this->validateRecoveryTarget(
+                $target,
+                \basename($target),
+            );
+            if (!$this->sameFileState($identity, $validated)) {
+                throw new \RuntimeException(
+                    'Runtime policy recovery target changed before cleanup.'
+                );
+            }
+        }
+
+        foreach ($artifacts as $artifact) {
+            $targetStatus = @\lstat($artifact['target']);
+            if (!\is_array($targetStatus)
+                || !$this->sameFileState($targets[$artifact['target']], $targetStatus)
+            ) {
+                throw new \RuntimeException(
+                    'Runtime policy recovery target changed during cleanup.'
+                );
+            }
+            GatewayProjectStateFilesystem::removeRegular(
+                $artifact['path'],
+                'runtime policy ' . $artifact['kind'],
+                $artifact['identity'],
+            );
+        }
+    }
+
+    /**
+     * @return array<string,array{path:string,target:string,target_leaf:string,kind:string,identity:array<string|int,mixed>}>
+     */
+    private function publicationRecoveryArtifacts(string $directory): array
+    {
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to enumerate runtime policy recovery artifacts.');
+        }
+        $artifacts = [];
+        $counts = [];
+        $visited = 0;
+        $reservedPrefix = '/\A(?:state\.php|[a-f0-9]{64}\.php)'
+            . '(?:\.tmp-|\.wls-backup-|\.tmp\.)/D';
+        $exact = '/\A(?<target>state\.php|[a-f0-9]{64}\.php)'
+            . '(?:(?<staging>\.tmp-[a-f0-9]{24})'
+            . '|(?<backup>\.wls-backup-[a-f0-9]{16})'
+            . '|(?<legacy>\.tmp\.[1-9][0-9]{0,18}\.[a-f0-9]{8}))\z/D';
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if (++$visited > self::MAX_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        'Runtime policy recovery directory exceeds its raw entry quota.'
+                    );
+                }
+                if (\preg_match($reservedPrefix, \strtolower($leaf)) !== 1) {
+                    continue;
+                }
+                if (\preg_match($exact, $leaf, $match) !== 1) {
+                    throw new \RuntimeException(
+                        $leaf !== \strtolower($leaf)
+                            ? 'Runtime policy recovery contains a non-canonical case alias.'
+                            : 'Runtime policy recovery contains a malformed reserved leaf.'
+                    );
+                }
+                $kind = ($match['staging'] ?? '') !== ''
+                    ? 'staging file'
+                    : ((($match['backup'] ?? '') !== '') ? 'backup' : 'legacy staging file');
+                $targetLeaf = (string)$match['target'];
+                $countKey = $targetLeaf . ':' . $kind;
+                $counts[$countKey] = ($counts[$countKey] ?? 0) + 1;
+                if ($counts[$countKey] > self::MAX_RECOVERY_ARTIFACTS_PER_KIND) {
+                    throw new \RuntimeException(
+                        'Runtime policy recovery artifact quota is exhausted.'
+                    );
+                }
+                $path = $directory . DS . $leaf;
+                $maximumBytes = $targetLeaf === 'state.php'
+                    ? self::MAX_STATE_BYTES
+                    : self::MAX_BUNDLE_BYTES;
+                $before = @\lstat($path);
+                if (!\is_array($before)) {
+                    throw new \RuntimeException(
+                        'Runtime policy recovery artifact is indeterminate.'
+                    );
+                }
+                GatewayProjectStateFilesystem::size(
+                    $path,
+                    $maximumBytes,
+                    'runtime policy recovery artifact',
+                );
+                $after = @\lstat($path);
+                if (!\is_array($after) || !$this->sameFileState($before, $after)) {
+                    throw new \RuntimeException(
+                        'Runtime policy recovery artifact changed during inspection.'
+                    );
+                }
+                $artifacts[$path] = [
+                    'path' => $path,
+                    'target' => $directory . DS . $targetLeaf,
+                    'target_leaf' => $targetLeaf,
+                    'kind' => $kind,
+                    'identity' => $after,
+                ];
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        \ksort($artifacts, SORT_STRING);
+
+        return $artifacts;
+    }
+
+    /** @return array<string|int,mixed> */
+    private function validateRecoveryTarget(string $target, string $targetLeaf): array
+    {
+        $maximumBytes = $targetLeaf === 'state.php'
+            ? self::MAX_STATE_BYTES
+            : self::MAX_BUNDLE_BYTES;
+        $before = @\lstat($target);
+        if (!\is_array($before)) {
+            throw new \RuntimeException(
+                'Runtime policy recovery paired target is missing or unsafe.'
+            );
+        }
+        $contents = GatewayProjectStateFilesystem::read(
+            $target,
+            $maximumBytes,
+            'runtime policy recovery paired target',
+        );
+        if (\function_exists('opcache_invalidate')) {
+            @\opcache_invalidate($target, true);
+        }
+        $data = (static fn (string $path): mixed => require $path)($target);
+        $after = @\lstat($target);
+        if (!\is_array($data)
+            || !\is_array($after)
+            || !$this->sameFileState($before, $after)
+            || (int)$after['size'] !== \strlen($contents)
+        ) {
+            throw new \RuntimeException(
+                'Runtime policy recovery paired target is corrupt or changed.'
+            );
+        }
+        if ($targetLeaf === 'state.php') {
+            foreach (['active_digest', 'staged_digest', 'previous_digest'] as $key) {
+                if (!\array_key_exists($key, $data) || !\is_string($data[$key])) {
+                    throw new \RuntimeException('Runtime policy recovery state target is corrupt.');
+                }
+                if ($data[$key] !== '') {
+                    $this->normalizeDigest($data[$key]);
+                }
+            }
+            if (!\array_key_exists('updated_at', $data)
+                || !\is_int($data['updated_at'])
+                || $data['updated_at'] < 0
+            ) {
+                throw new \RuntimeException('Runtime policy recovery state target is corrupt.');
+            }
+        } else {
+            $digest = \substr($targetLeaf, 0, 64);
+            $bundle = RuntimePolicyBundle::fromArray($data);
+            if (!\hash_equals($digest, $bundle->digest)) {
+                throw new \RuntimeException(
+                    'Runtime policy recovery bundle target digest is corrupt.'
+                );
+            }
+        }
+
+        return $after;
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameFileState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function instanceDirectory(string $instance): string
     {
-        return \rtrim($this->baseDirectory ?? (BP . 'var' . DS . 'server' . DS . 'policy'), '/\\')
+        $baseDirectory = $this->baseDirectory;
+        if ($baseDirectory === null) {
+            if (!\defined('BP')) {
+                throw new \RuntimeException('Runtime policy store project root is unavailable.');
+            }
+            $baseDirectory = (string)\constant('BP')
+                . 'var' . DS . 'server' . DS . 'policy';
+        }
+
+        return \rtrim($baseDirectory, '/\\')
             . DS . $this->normalizeInstance($instance);
     }
 
@@ -277,10 +527,6 @@ final class RuntimePolicyStore
      */
     private function secureExistingPolicyFiles(string $directory): void
     {
-        if (\PHP_OS_FAMILY === 'Windows') {
-            return;
-        }
-
         $entries = @\scandir($directory);
         if (!\is_array($entries)) {
             throw new \RuntimeException('Unable to inspect runtime policy directory: ' . $directory);
@@ -294,10 +540,21 @@ final class RuntimePolicyStore
             }
 
             $path = $directory . DS . $entry;
-            if (\is_link($path) || !\is_file($path)) {
-                throw new \RuntimeException('Runtime policy artifact must be a regular file: ' . $path);
+            $status = @\lstat($path);
+            if (!\is_array($status)
+                || \is_link($path)
+                || ((((int)$status['mode']) & 0170000) !== 0100000)
+                || (int)$status['nlink'] !== 1
+            ) {
+                throw new \RuntimeException(
+                    $entry === '.lock'
+                        ? 'Runtime policy store lock must be a single-link regular file: ' . $path
+                        : 'Runtime policy artifact must be a single-link regular file: ' . $path
+                );
             }
-            $this->secureFilePermissions($path);
+            if (\PHP_OS_FAMILY !== 'Windows') {
+                $this->secureFilePermissions($path);
+            }
         }
     }
 
@@ -323,15 +580,26 @@ final class RuntimePolicyStore
     {
         $directory = $this->ensureInstanceDirectory($instance);
         $lockPath = $directory . DS . '.lock';
-        $lock = @\fopen($lockPath, 'c+b');
+        $pid = (int)\getmypid();
+        $lock = VerifiedPersistentFileLock::acquire(
+            $lockPath,
+            $this->lockTimeoutSeconds,
+            static fn (): array => [
+                'pid' => $pid,
+                'instance' => $instance,
+                'purpose' => 'runtime-policy-publish',
+                'started_at' => \date('Y-m-d H:i:s'),
+            ],
+        );
         if (!\is_resource($lock)) {
-            throw new \RuntimeException('Unable to open runtime policy store lock.');
+            throw new \RuntimeException(
+                'Unable to acquire the verified runtime policy store lock within '
+                . \number_format($this->lockTimeoutSeconds, 3, '.', '')
+                . ' seconds.'
+            );
         }
         try {
-            $this->secureFilePermissions($lockPath);
-            if (!\flock($lock, \LOCK_EX)) {
-                throw new \RuntimeException('Unable to lock runtime policy store.');
-            }
+            $this->recoverInterruptedPublications($directory);
             return $operation();
         } finally {
             @\flock($lock, \LOCK_UN);

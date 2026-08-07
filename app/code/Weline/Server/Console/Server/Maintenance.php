@@ -271,8 +271,8 @@ class Maintenance extends CommandAbstract
             return null;
         }
 
-        $deadline = \microtime(true) + self::WAIT_MAX_TIMEOUT;
-        while (\microtime(true) < $deadline) {
+        $deadline = self::monotonicSeconds() + self::WAIT_MAX_TIMEOUT;
+        while (self::monotonicSeconds() < $deadline) {
             $status = $this->sendMaintenanceCommand($instanceName, ControlMessage::ACTION_STATUS);
             if ($status === null || !($status['success'] ?? false)) {
                 SchedulerSystem::usleep(100000);
@@ -398,9 +398,9 @@ class Maintenance extends CommandAbstract
         
         // 等待响应
         $buffer = '';
-        $deadline = \microtime(true) + 10;
+        $deadline = self::monotonicSeconds() + 10;
         
-        while (\microtime(true) < $deadline) {
+        while (self::monotonicSeconds() < $deadline) {
             $data = @\fread($conn, 4096);
             
             if ($data === false) {
@@ -432,12 +432,12 @@ class Maintenance extends CommandAbstract
      */
     protected function waitForCompletion($conn): void
     {
-        $startTime = \microtime(true);
+        $startTime = self::monotonicSeconds();
         $deadline = $startTime + self::WAIT_MAX_TIMEOUT;
         $buffer = '';
         $lastProgress = '';
         
-        while (\microtime(true) < $deadline) {
+        while (self::monotonicSeconds() < $deadline) {
             $data = @\fread($conn, 4096);
             
             if ($data === false) {
@@ -645,5 +645,10 @@ class Maintenance extends CommandAbstract
                 __('手动禁用维护模式') => 'php bin/w server:maintenance disable',
             ]
         );
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

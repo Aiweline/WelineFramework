@@ -127,6 +127,311 @@ final class GatewayRegistrationLifecycleTest extends TestCase
         self::assertStringContainsString('transport failed', $fact['reason']);
     }
 
+    public function testMutationRejectsAPresentButTamperedRetirementFence(): void
+    {
+        $endpoint = $this->endpoint();
+        $endpoint['gateway']['registration_lifecycle']['state']
+            = GatewayRegistrationLifecycle::STATE_RETIRED;
+        $this->write($endpoint);
+        $lifecycle = new GatewayRegistrationLifecycle(
+            fn (string $instance): string => $this->file,
+        );
+
+        try {
+            $lifecycle->beginMutation('shop', 'register');
+            self::fail('A present lifecycle fact with an invalid seal must fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('lifecycle fact is invalid', $exception->getMessage());
+        }
+
+        try {
+            $lifecycle->claimRetirement('shop');
+            self::fail('Retirement must not replace a present lifecycle fact with an invalid seal.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('lifecycle fact is invalid', $exception->getMessage());
+        }
+
+        $persisted = \json_decode(
+            (string)\file_get_contents($this->file),
+            true,
+            64,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_RETIRED,
+            $persisted['gateway']['registration_lifecycle']['state'],
+            'A tampered retirement fence must not be overwritten by registration.',
+        );
+    }
+
+    public function testMutationRejectsAnEndpointResolvedForAnotherInstance(): void
+    {
+        $endpoint = $this->endpoint();
+        $gateway = $endpoint['gateway'];
+        $gateway['instance_id'] = 'other';
+        $gateway['registration_lifecycle'] = GatewayRegistrationLifecycle::initial(
+            (string)$gateway['project_uuid'],
+            'other',
+            (int)$gateway['instance_generation'],
+            (string)$gateway['launch_id'],
+            1_700_000_001,
+        );
+        $endpoint['gateway'] = $gateway;
+        $this->write($endpoint);
+        $lifecycle = new GatewayRegistrationLifecycle(
+            fn (string $instance): string => $this->file,
+        );
+
+        try {
+            $lifecycle->beginMutation('shop', 'register');
+            self::fail('A resolver must not redirect one instance mutation to another endpoint.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'does not match the requested instance',
+                $exception->getMessage(),
+            );
+        }
+
+        $persisted = \json_decode(
+            (string)\file_get_contents($this->file),
+            true,
+            64,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_NEVER_ATTEMPTED,
+            $persisted['gateway']['registration_lifecycle']['state'],
+        );
+    }
+
+    public function testDurableMutationRemainsCommittedWhenPublicationCrossesDeadline(): void
+    {
+        $now = 100.0;
+        $updaterCalls = 0;
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            atomicUpdater: function (
+                string $file,
+                callable $modifier,
+                float $timeout,
+            ) use (&$now, &$updaterCalls): bool {
+                $updaterCalls++;
+                self::assertGreaterThan(0.0, $timeout);
+                $current = \json_decode(
+                    (string)\file_get_contents($file),
+                    true,
+                    64,
+                    JSON_THROW_ON_ERROR,
+                );
+                $next = $modifier($current);
+                self::assertIsArray($next);
+                self::assertNotFalse(\file_put_contents(
+                    $file,
+                    \json_encode($next, JSON_THROW_ON_ERROR),
+                    LOCK_EX,
+                ));
+                $now = 101.0;
+                return true;
+            },
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+
+        $attempt = $lifecycle->beginMutation(
+            'shop',
+            'register',
+            0.25,
+            100.5,
+        );
+
+        self::assertSame(1, $updaterCalls);
+        self::assertSame(1, $attempt['attempt_sequence']);
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_REGISTERING,
+            $this->fact()['state'],
+        );
+    }
+
+    public function testFalseAtomicResultRecoversAnExactlyCommittedFact(): void
+    {
+        $now = 200.0;
+        $updaterCalls = 0;
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            atomicUpdater: function (
+                string $file,
+                callable $modifier,
+                float $timeout,
+            ) use (&$updaterCalls): bool {
+                $updaterCalls++;
+                self::assertGreaterThan(0.0, $timeout);
+                $current = \json_decode(
+                    (string)\file_get_contents($file),
+                    true,
+                    64,
+                    JSON_THROW_ON_ERROR,
+                );
+                $next = $modifier($current);
+                self::assertIsArray($next);
+                self::assertNotFalse(\file_put_contents(
+                    $file,
+                    \json_encode($next, JSON_THROW_ON_ERROR),
+                    LOCK_EX,
+                ));
+                // Model a rename that committed before a later durability
+                // acknowledgement failed to reach the helper's caller.
+                return false;
+            },
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+
+        $attempt = $lifecycle->beginMutation(
+            'shop',
+            'register',
+            0.25,
+            201.0,
+        );
+
+        self::assertSame(1, $updaterCalls);
+        self::assertSame(1, $attempt['attempt_sequence']);
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_REGISTERING,
+            $this->fact()['state'],
+        );
+    }
+
+    public function testUnprovenAtomicOutcomeIsExplicitAndRetryable(): void
+    {
+        $now = 300.0;
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            atomicUpdater: static function (
+                string $file,
+                callable $modifier,
+                float $timeout,
+            ): bool {
+                $current = \json_decode(
+                    (string)\file_get_contents($file),
+                    true,
+                    64,
+                    JSON_THROW_ON_ERROR,
+                );
+                self::assertIsArray($modifier($current));
+                // The helper cannot prove whether its intended rename
+                // committed; leave the old file in place for reconciliation.
+                return false;
+            },
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+
+        try {
+            $lifecycle->beginMutation('shop', 'register', 0.25, 301.0);
+            self::fail('An unproven lifecycle publication must be explicit.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'publication outcome is uncertain',
+                $exception->getMessage(),
+            );
+        }
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_NEVER_ATTEMPTED,
+            $this->fact()['state'],
+        );
+
+        $retry = (new GatewayRegistrationLifecycle(
+            fn (string $instance): string => $this->file,
+        ))->beginMutation('shop', 'register');
+        self::assertSame(1, $retry['attempt_sequence']);
+    }
+
+    public function testFailureCompensationUsesAnIndependentBoundedDeadline(): void
+    {
+        $now = 400.0;
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+        $attempt = $lifecycle->beginMutation(
+            'shop',
+            'register',
+            0.25,
+            401.0,
+        );
+
+        // The host-operation deadline has passed, but compensation receives
+        // a fresh one-second local budget instead of reusing it.
+        $now = 500.0;
+        self::assertTrue($lifecycle->markUncertain(
+            'shop',
+            (int)$attempt['attempt_sequence'],
+            'register',
+            'operation deadline expired after submission',
+        ));
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_UNCERTAIN,
+            $this->fact()['state'],
+        );
+    }
+
+    public function testRetirementMutationsRecoverExactlyCommittedFacts(): void
+    {
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            atomicUpdater: static function (
+                string $file,
+                callable $modifier,
+                float $timeout,
+            ): bool {
+                $current = \json_decode(
+                    (string)\file_get_contents($file),
+                    true,
+                    64,
+                    JSON_THROW_ON_ERROR,
+                );
+                $next = $modifier($current);
+                self::assertIsArray($next);
+                self::assertNotFalse(\file_put_contents(
+                    $file,
+                    \json_encode($next, JSON_THROW_ON_ERROR),
+                    LOCK_EX,
+                ));
+                return false;
+            },
+        );
+
+        $claim = $lifecycle->claimRetirement('shop');
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_RETIRING,
+            $this->fact()['state'],
+        );
+        self::assertTrue($lifecycle->cancelRetirement(
+            'shop',
+            (string)$claim['nonce'],
+        ));
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_NEVER_ATTEMPTED,
+            $this->fact()['state'],
+        );
+
+        $claim = $lifecycle->claimRetirement('shop');
+        self::assertTrue($lifecycle->completeRetirement(
+            'shop',
+            (string)$claim['nonce'],
+            'authenticated absence',
+        ));
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_RETIRED,
+            $this->fact()['state'],
+        );
+    }
+
     /** @return array<string,mixed> */
     private function endpoint(): array
     {

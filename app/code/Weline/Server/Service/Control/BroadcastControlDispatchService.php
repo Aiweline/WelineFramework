@@ -73,7 +73,7 @@ class BroadcastControlDispatchService
         ?string $instanceName = null,
         string $requestId = '',
     ): array {
-        $startedAt = \microtime(true);
+        $startedAt = ControlMessage::monotonicSeconds();
         $deadline = $startedAt + 0.5;
         $failedByInstance = [];
         $skippedByInstance = [];
@@ -84,7 +84,7 @@ class BroadcastControlDispatchService
         $operationsByInstance = [];
 
         foreach ($targets as $target) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - ControlMessage::monotonicSeconds();
             if ($remaining <= 0.0) {
                 $failedByInstance[$target] = 'namespace_accept_total_budget_exceeded';
                 continue;
@@ -133,7 +133,7 @@ class BroadcastControlDispatchService
             'failed_by_instance' => $failedByInstance,
             'skipped_by_instance' => $skippedByInstance,
             'results_by_instance' => $resultsByInstance,
-            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 3),
+            'elapsed_ms' => \round((ControlMessage::monotonicSeconds() - $startedAt) * 1000, 3),
             'message' => $success
                 ? (string)__('可用 WLS 实例已接收缓存命名空间失效操作。')
                 : (string)__('部分目标 WLS 实例未接收缓存命名空间失效操作。'),

@@ -98,8 +98,8 @@ class MasterResurrector
             return true;
         }
 
-        $deadline = \microtime(true) + $grace;
-        while (\microtime(true) < $deadline) {
+        $deadline = ControlMessage::monotonicSeconds() + $grace;
+        while (ControlMessage::monotonicSeconds() < $deadline) {
             if ($this->isMasterAlive()) {
                 return false;
             }
@@ -447,7 +447,7 @@ class MasterResurrector
         $timeout = \is_numeric($configured)
             ? \max(2.0, \min(120.0, (float)$configured))
             : ($isWin ? 60.0 : 15.0);
-        $deadline = \microtime(true) + $timeout;
+        $deadline = ControlMessage::monotonicSeconds() + $timeout;
         do {
             $validation = (new MasterLeaseManager())->validateRunningLease(
                 MasterLeaseManager::pathForInstance($this->instanceName),
@@ -471,7 +471,7 @@ class MasterResurrector
                 return false;
             }
             SchedulerSystem::usleep(50_000);
-        } while (\microtime(true) < $deadline);
+        } while (ControlMessage::monotonicSeconds() < $deadline);
 
         return false;
     }

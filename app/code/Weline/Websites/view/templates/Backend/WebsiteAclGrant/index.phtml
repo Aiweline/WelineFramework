@@ -1,0 +1,53 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$websites = $this->getData('websites') ?: [];
+?>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><lang>网站功能授权</lang></h4>
+        <a class="btn btn-sm btn-outline-secondary" href="@backend-url('*/admin/website/index')">
+            <i class="mdi mdi-arrow-left"></i> <lang>返回网站管理</lang>
+        </a>
+    </div>
+    <p class="text-muted"><lang>为非默认网站勾选可用菜单与 ACL。未授权的子站后台菜单为空。</lang></p>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+            <tr>
+                <th><lang>网站</lang></th>
+                <th><lang>代码</lang></th>
+                <th><lang>已授权资源数</lang></th>
+                <th class="text-end"><lang>操作</lang></th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php if ($websites === []): ?>
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4"><lang>暂无非默认网站</lang></td>
+                </tr>
+            <?php else: ?>
+                <?php foreach ($websites as $row): ?>
+                    <tr>
+                        <td><?= htmlspecialchars((string)$row['name']) ?></td>
+                        <td><code><?= htmlspecialchars((string)$row['code']) ?></code></td>
+                        <td><?= (int)$row['grant_count'] ?></td>
+                        <td class="text-end">
+                            <?php
+                            $editUrl = $this->getUrl('*/backend/website-acl-grant/edit', [
+                                'website_id' => (int)$row['website_id'],
+                            ]);
+                            ?>
+                            <a class="btn btn-sm btn-outline-primary"
+                               href="<?= htmlspecialchars((string)$editUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                <i class="mdi mdi-shield-edit-outline"></i> <lang>授权</lang>
+                            </a>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>

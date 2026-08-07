@@ -939,6 +939,22 @@ class MasterLeaseManager
                 throw new \RuntimeException('WLS Master lease lock identity changed after locking.');
             }
 
+            $leasePath = self::pathForInstance($instance);
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                $leasePath,
+                self::MAX_PROTECTED_LEASE_BYTES,
+                'WLS Master lease',
+                function (string $contents) use ($leasePath): void {
+                    unset($contents);
+                    $state = $this->readMutationLease($leasePath);
+                    if (($state['kind'] ?? 'absent') === 'absent') {
+                        throw new \RuntimeException(
+                            'WLS Master lease recovery target is absent.',
+                        );
+                    }
+                },
+            );
+
             return $operation();
         } finally {
             if ($locked) {

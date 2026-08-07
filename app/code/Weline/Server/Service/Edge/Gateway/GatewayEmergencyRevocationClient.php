@@ -27,8 +27,12 @@ final class GatewayEmergencyRevocationClient
      * @param array{domain:string,generation:int,source_digest:string} $tombstone
      * @return array<string,mixed>
      */
-    public function revoke(array $tombstone): array
+    public function revoke(
+        array $tombstone,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
+        $this->remainingDeadlineSeconds($deadlineMonotonic);
         $credential = $this->credentials->load();
         $projectUuid = (string)$credential['project_uuid'];
         $credentialId = (string)$credential['credential_id'];
@@ -81,13 +85,17 @@ final class GatewayEmergencyRevocationClient
         $endpoint = $this->paths->endpoint('project');
         $errno = 0;
         $error = '';
+        $connectTimeout = \min(
+            \max(0.5, \min(10.0, $this->timeoutSeconds)),
+            $this->remainingDeadlineSeconds($deadlineMonotonic),
+        );
         $socket = $endpoint['transport'] === 'pipe'
             ? @\fopen($endpoint['address'], 'r+b')
             : @\stream_socket_client(
                 $endpoint['address'],
                 $errno,
                 $error,
-                \max(0.5, \min(10.0, $this->timeoutSeconds)),
+                $connectTimeout,
                 \STREAM_CLIENT_CONNECT,
             );
         if (!\is_resource($socket)) {
@@ -97,9 +105,15 @@ final class GatewayEmergencyRevocationClient
             );
         }
         try {
-            \stream_set_timeout($socket, (int)\ceil(\max(1.0, $this->timeoutSeconds)));
             $offset = 0;
             while ($offset < \strlen($frame)) {
+                $this->setStreamDeadlineTimeout(
+                    $socket,
+                    \min(
+                        \max(0.001, $this->timeoutSeconds),
+                        $this->remainingDeadlineSeconds($deadlineMonotonic),
+                    ),
+                );
                 $written = @\fwrite($socket, \substr($frame, $offset));
                 if (!\is_int($written) || $written < 1) {
                     throw new \RuntimeException(
@@ -108,6 +122,13 @@ final class GatewayEmergencyRevocationClient
                 }
                 $offset += $written;
             }
+            $this->setStreamDeadlineTimeout(
+                $socket,
+                \min(
+                    \max(0.001, $this->timeoutSeconds),
+                    $this->remainingDeadlineSeconds($deadlineMonotonic),
+                ),
+            );
             $line = @\fgets($socket, self::MAX_FRAME_BYTES + 1);
         } finally {
             @\fclose($socket);
@@ -165,5 +186,44 @@ final class GatewayEmergencyRevocationClient
             'data_plane_stopped' => true,
             'controller_restart_requested' => true,
         ];
+    }
+
+    private function remainingDeadlineSeconds(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return \max(0.001, $this->timeoutSeconds);
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Emergency gateway revocation deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Emergency gateway revocation deadline was exhausted.',
+            );
+        }
+        return $remaining;
+    }
+
+    /** @param resource $stream */
+    private function setStreamDeadlineTimeout($stream, float $seconds): void
+    {
+        if (!\is_finite($seconds) || $seconds <= 0.0) {
+            throw new \RuntimeException(
+                'Emergency gateway revocation stream deadline is invalid.',
+            );
+        }
+        $wholeSeconds = (int)\floor($seconds);
+        $microseconds = (int)\floor(($seconds - $wholeSeconds) * 1_000_000);
+        if ($wholeSeconds === 0 && $microseconds === 0) {
+            $microseconds = 1;
+        }
+        if (!@\stream_set_timeout($stream, $wholeSeconds, $microseconds)) {
+            throw new \RuntimeException(
+                'Unable to apply the emergency gateway revocation deadline.',
+            );
+        }
     }
 }

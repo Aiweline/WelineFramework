@@ -203,14 +203,14 @@ class Reload extends CommandAbstract
      */
     protected function waitForCompletion($conn, int $totalWorkers, int $waitTimeout): int
     {
-        $startTime = \microtime(true);
+        $startTime = self::monotonicSeconds();
         $deadline = $startTime + $waitTimeout;
         $lastMessageAt = $startTime;
         $buffer = '';
         $lastProgress = '';
         $lastIdleNoticeAt = $startTime;
         
-        while (\microtime(true) < $deadline) {
+        while (self::monotonicSeconds() < $deadline) {
             $data = @\fread($conn, 4096);
             
             if ($data === false) {
@@ -228,8 +228,8 @@ class Reload extends CommandAbstract
                     return 1;
                 }
 
-                if ((\microtime(true) - $lastMessageAt) >= self::WAIT_IDLE_TIMEOUT) {
-                    $now = \microtime(true);
+                if ((self::monotonicSeconds() - $lastMessageAt) >= self::WAIT_IDLE_TIMEOUT) {
+                    $now = self::monotonicSeconds();
                     if (($now - $lastIdleNoticeAt) >= 30.0) {
                         $elapsed = (int)\round($now - $startTime);
                         $remaining = \max(0, (int)\round($deadline - $now));
@@ -242,7 +242,7 @@ class Reload extends CommandAbstract
                 continue;
             }
             
-            $lastMessageAt = \microtime(true);
+            $lastMessageAt = self::monotonicSeconds();
             $buffer .= $data;
             $messages = ControlMessage::extractMessages($buffer);
             
@@ -605,5 +605,10 @@ class Reload extends CommandAbstract
                 __('强制重载') => 'php bin/w server:reload -f',
             ]
         );
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

@@ -29,9 +29,11 @@ final class GatewayRuntimeEndpointPublisher
         string $nativeEdgeState,
         array $registration,
         array $activeRouteIds,
+        ?float $deadlineMonotonic = null,
     ): bool {
         self::assertInstanceName($instanceName);
         self::assertHealthyObservation($status);
+        self::remainingDeadlineSeconds($deadlineMonotonic, 5.0);
         $instances = $this->instances ?? new ServerInstanceManager();
         $file = $instances->getInstanceFile($instanceName);
         $current = $instances->getRawInstanceData($instanceName);
@@ -48,6 +50,7 @@ final class GatewayRuntimeEndpointPublisher
             $status,
             $registration,
             $activeRouteIds,
+            $deadlineMonotonic,
         );
         if (self::healthyProjectionIsCurrent(
             $current,
@@ -59,6 +62,10 @@ final class GatewayRuntimeEndpointPublisher
         }
         $now = \time();
         $monotonicNow = self::monotonicNow();
+        $endpointWriteTimeout = self::remainingDeadlineSeconds(
+            $deadlineMonotonic,
+            5.0,
+        );
         $casApplied = false;
         $updated = ServerInstanceManager::updateJsonFileAtomically(
             $file,
@@ -87,6 +94,7 @@ final class GatewayRuntimeEndpointPublisher
                     $monotonicNow,
                 );
             },
+            $endpointWriteTimeout,
         );
         return $updated && $casApplied;
     }
@@ -95,8 +103,10 @@ final class GatewayRuntimeEndpointPublisher
         string $instanceName,
         array $leaseObservation,
         string $reason,
+        ?float $deadlineMonotonic = null,
     ): bool {
         self::assertInstanceName($instanceName);
+        self::remainingDeadlineSeconds($deadlineMonotonic, 5.0);
         $httpsPort = (int)($leaseObservation['port'] ?? 0);
         if ($httpsPort < 20000 || $httpsPort > 29999) {
             throw new \RuntimeException('Fallback HTTPS port is outside the project lease range.');
@@ -139,6 +149,10 @@ final class GatewayRuntimeEndpointPublisher
         }
         $now = \time();
         $monotonicNow = self::monotonicNow();
+        $endpointWriteTimeout = self::remainingDeadlineSeconds(
+            $deadlineMonotonic,
+            5.0,
+        );
         $casApplied = false;
         $updated = ServerInstanceManager::updateJsonFileAtomically(
             $file,
@@ -171,6 +185,7 @@ final class GatewayRuntimeEndpointPublisher
                     $monotonicNow,
                 );
             },
+            $endpointWriteTimeout,
         );
         return $updated && $casApplied;
     }
@@ -377,6 +392,7 @@ final class GatewayRuntimeEndpointPublisher
         array $status,
         array $registration,
         array $activeRouteIds,
+        ?float $deadlineMonotonic = null,
     ): array {
         $gateway = \is_array($endpoint['gateway'] ?? null)
             ? $endpoint['gateway']
@@ -662,6 +678,7 @@ final class GatewayRuntimeEndpointPublisher
             \array_keys($routes),
             $routeGenerations,
             \count($routes) === \count($desired),
+            $deadlineMonotonic,
         );
         $proof = [
             'schema_version' => 2,
@@ -1044,9 +1061,6 @@ final class GatewayRuntimeEndpointPublisher
         $port = (int)($observation['port'] ?? 0);
         $bindHost = \strtolower(\trim((string)($observation['bind_host'] ?? ''), " \t\n\r\0\x0B[]"));
         $leaseId = \strtolower(\trim((string)($observation['lease_id'] ?? '')));
-        $workerLaunchId = \strtolower(\trim((string)(
-            $observation['worker_launch_id'] ?? ''
-        )));
         $masterPid = (int)($observation['master_pid'] ?? 0);
         if (!\hash_equals($projectUuid, (string)($observation['project_uuid'] ?? ''))
             || !\hash_equals($leaseInstanceId, (string)(
@@ -1058,17 +1072,17 @@ final class GatewayRuntimeEndpointPublisher
                 'Fallback lease observation does not match the current project endpoint.'
             );
         }
-        $live = (new GatewayPortLeaseAllocator())->liveServingLease(
+        $live = (new GatewayPortLeaseAllocator())->liveServingLeaseForAnyOwner(
             $leaseInstanceId,
             $bindHost,
             $port,
             $leaseId,
-            $workerLaunchId,
             $masterPid,
         );
         if (!\is_array($live)) {
             throw new \RuntimeException('Fallback lease observation is no longer live.');
         }
+        $workerLaunchId = \strtolower(\trim((string)($live['launch_id'] ?? '')));
         $authorityHost = self::fallbackAuthorityForManifest(
             $endpoint,
             $servingManifest,
@@ -1140,7 +1154,7 @@ final class GatewayRuntimeEndpointPublisher
             || !\hash_equals($authorityHost, (string)($proof['authority_host'] ?? ''))
             || (int)($proof['port'] ?? 0) !== $httpsPort
             || (int)($proof['master_pid'] ?? 0) !== (int)($endpoint['master_pid'] ?? 0)
-            || !\in_array((string)($proof['state'] ?? ''), ['ACTIVE', 'DRAINING'], true)
+            || !\hash_equals('ACTIVE', (string)($proof['state'] ?? ''))
             || (int)($proof['confirmed_timestamp'] ?? 0) < 1
             || (int)($proof['serving_manifest_generation'] ?? 0) < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
@@ -1194,6 +1208,32 @@ final class GatewayRuntimeEndpointPublisher
     private static function monotonicNow(): float
     {
         return \hrtime(true) / 1_000_000_000;
+    }
+
+    private static function remainingDeadlineSeconds(
+        ?float $deadlineMonotonic,
+        float $maximumSeconds,
+    ): float {
+        if (!\is_finite($maximumSeconds) || $maximumSeconds <= 0.0) {
+            throw new \InvalidArgumentException(
+                'Gateway runtime publication timeout is invalid.',
+            );
+        }
+        if ($deadlineMonotonic === null) {
+            return $maximumSeconds;
+        }
+        if (!\is_finite($deadlineMonotonic) || $deadlineMonotonic < 0.0) {
+            throw new \InvalidArgumentException(
+                'Gateway runtime publication deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - self::monotonicNow();
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Gateway runtime publication deadline was exhausted.',
+            );
+        }
+        return \min($maximumSeconds, $remaining);
     }
 
     /** @param array<string,mixed> $status */

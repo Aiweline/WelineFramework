@@ -119,6 +119,50 @@ class Processer
     private const WINDOWS_PS1_UTF8_BOM = "\xEF\xBB\xBF";
     private const WINDOWS_ISOLATED_BATCH_MARKER = '--weline-isolated-child';
     private const WINDOWS_ISOLATED_BATCH_ID_PREFIX = '--weline-isolated-batch=';
+    private const WINDOWS_PROCESS_IMAGE_MAX_CHARACTERS = 32768;
+    private const WINDOWS_PROCESS_COMMAND_QUERY_MAX_BYTES = 131072;
+
+    private static function monotonicDeadlineFrom(
+        int|float $startedAtNanoseconds,
+        float $timeoutSeconds,
+    ): int|float
+    {
+        $startedAtNanoseconds = \max(0, $startedAtNanoseconds);
+        if (!\is_finite($timeoutSeconds) || $timeoutSeconds <= 0.0) {
+            return $startedAtNanoseconds;
+        }
+
+        $durationNanoseconds = $timeoutSeconds * 1_000_000_000;
+        if (!\is_finite($durationNanoseconds)) {
+            return $startedAtNanoseconds;
+        }
+        if (\is_float($startedAtNanoseconds)) {
+            $deadlineNanoseconds = $startedAtNanoseconds + $durationNanoseconds;
+
+            return \is_finite($deadlineNanoseconds) ? $deadlineNanoseconds : $startedAtNanoseconds;
+        }
+
+        $availableNanoseconds = \PHP_INT_MAX - $startedAtNanoseconds;
+        if ($durationNanoseconds >= $availableNanoseconds) {
+            return \PHP_INT_MAX;
+        }
+
+        return $startedAtNanoseconds + (int)\round($durationNanoseconds);
+    }
+
+    private static function monotonicElapsedSeconds(
+        int|float $startedAtNanoseconds,
+        int|float|null $finishedAtNanoseconds = null,
+    ): float {
+        $finishedAtNanoseconds ??= \hrtime(true);
+        if (!\is_finite((float)$startedAtNanoseconds)
+            || !\is_finite((float)$finishedAtNanoseconds)
+        ) {
+            return 0.0;
+        }
+
+        return \max(0.0, $finishedAtNanoseconds - $startedAtNanoseconds) / 1_000_000_000;
+    }
     
     /*----------------------------------------进程名规范化区域------------------------------------------*/
     
@@ -385,7 +429,7 @@ class Processer
     public static function generateProcessName(string $command): string
     {
         if (empty($command)) {
-            return self::WELINE_PROCESS_PREFIX . 'unknown-' . \time();
+            return self::WELINE_PROCESS_PREFIX . 'unknown-' . \hrtime(true);
         }
         
         // 尝试从命令行提取现有的 --name 参数
@@ -790,9 +834,11 @@ class Processer
         if (IS_WIN && !$foreground) {
             $argv = self::buildWindowsDetachedPhpArgvFromCommand($pname);
             if ($argv !== []) {
-                $fastPathStart = \microtime(true);
+                $fastPathStartedAtNanoseconds = \hrtime(true);
                 $pid = self::createWindowsDetachedPhpArgv($argv, BP, $pname, $enableLog);
-                $fastPathCostMs = (int) \round((\microtime(true) - $fastPathStart) * 1000);
+                $fastPathCostMs = (int)\round(
+                    self::monotonicElapsedSeconds($fastPathStartedAtNanoseconds) * 1000,
+                );
                 if ($pid > 0) {
                     if ($enableLog) {
                         self::setOutput(
@@ -867,9 +913,9 @@ class Processer
                     $stderr = '';
                     if (isset($psPipes[1])) {
                         @\stream_set_blocking($psPipes[1], false);
-                        $startedAt = \microtime(true);
+                        $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), 0.35);
                         $buffer = '';
-                        while ((\microtime(true) - $startedAt) < 0.35) {
+                        while (\hrtime(true) < $deadlineNanoseconds) {
                             $chunk = @\fread($psPipes[1], 256);
                             if (\is_string($chunk) && $chunk !== '') {
                                 $buffer .= $chunk;
@@ -886,8 +932,8 @@ class Processer
                     if (isset($psPipes[2])) {
                         @\stream_set_blocking($psPipes[2], false);
                         $bufferErr = '';
-                        $startedAt = \microtime(true);
-                        while ((\microtime(true) - $startedAt) < 0.1) {
+                        $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), 0.1);
+                        while (\hrtime(true) < $deadlineNanoseconds) {
                             $chunkErr = @\fread($psPipes[2], 256);
                             if (\is_string($chunkErr) && $chunkErr !== '') {
                                 $bufferErr .= $chunkErr;
@@ -971,9 +1017,9 @@ class Processer
                         }
                     } else {
                         \stream_set_blocking($procPipes[1], false);
-                        $start = \microtime(true);
+                        $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), 0.35);
                         $buffer = '';
-                        while ((\microtime(true) - $start) < 0.35) {
+                        while (\hrtime(true) < $deadlineNanoseconds) {
                             $chunk = \fread($procPipes[1], 64);
                             if ($chunk !== false && $chunk !== '') {
                                 $buffer .= $chunk;
@@ -1106,7 +1152,10 @@ class Processer
             throw new \RuntimeException('POSIX detached PHP fork/exec did not return a child PID.');
         }
 
-        return self::setPid($processIdentity, $pid);
+        // The launcher may have published this lease before the target exec
+        // completed. Never reintroduce the raw PID into the generic trust
+        // cache here; later operations must prove the live managed identity.
+        return self::setPid($processIdentity, $pid, false);
     }
 
     /**
@@ -1152,14 +1201,82 @@ class Processer
         if (!\is_string($configJson) || $configJson === '') {
             throw new \RuntimeException('POSIX detached spawn config could not be encoded.');
         }
+        if (\strlen($configJson) > 1_048_576) {
+            throw new \RuntimeException('POSIX detached spawn config exceeds the secure size limit.');
+        }
 
         $configDir = Env::VAR_DIR . 'process' . DS . 'spawn';
-        if (!\is_dir($configDir) && !@\mkdir($configDir, 0777, true) && !\is_dir($configDir)) {
+        if (!\is_dir($configDir) && !@\mkdir($configDir, 0700, true) && !\is_dir($configDir)) {
             throw new \RuntimeException('POSIX detached spawn config directory is unavailable.');
         }
-        $configPath = $configDir . DS . 'spawn-' . \bin2hex(\random_bytes(8)) . '.json';
-        if (@\file_put_contents($configPath, $configJson) === false) {
+        \clearstatcache(true, $configDir);
+        $configDirStat = @\lstat($configDir);
+        $effectiveUid = \function_exists('posix_geteuid') ? @\posix_geteuid() : false;
+        if (
+            !\is_array($configDirStat)
+            || (((int)($configDirStat['mode'] ?? 0) & 0170000) !== 0040000)
+            || \is_link($configDir)
+            || !\is_int($effectiveUid)
+            || $effectiveUid < 0
+            || (int)($configDirStat['uid'] ?? -1) !== $effectiveUid
+        ) {
+            throw new \RuntimeException('POSIX detached spawn config directory identity is unsafe.');
+        }
+        if (!@\chmod($configDir, 0700)) {
+            throw new \RuntimeException('POSIX detached spawn config directory permissions could not be restricted.');
+        }
+        \clearstatcache(true, $configDir);
+        $configDirStat = @\lstat($configDir);
+        if (
+            !\is_array($configDirStat)
+            || (((int)($configDirStat['mode'] ?? 0) & 0170000) !== 0040000)
+            || (((int)($configDirStat['mode'] ?? 0) & 0777) !== 0700)
+            || (int)($configDirStat['uid'] ?? -1) !== $effectiveUid
+        ) {
+            throw new \RuntimeException('POSIX detached spawn config directory permissions are unsafe.');
+        }
+
+        $configPath = $configDir . DS . 'spawn-' . \bin2hex(\random_bytes(16)) . '.json';
+        $configHandle = @\fopen($configPath, 'xb');
+        if (!\is_resource($configHandle)) {
             throw new \RuntimeException('POSIX detached spawn config could not be written.');
+        }
+        $configReady = false;
+        try {
+            if (!@\chmod($configPath, 0600)) {
+                throw new \RuntimeException('POSIX detached spawn config permissions could not be restricted.');
+            }
+            $configStat = @\fstat($configHandle);
+            if (
+                !\is_array($configStat)
+                || (((int)($configStat['mode'] ?? 0) & 0170000) !== 0100000)
+                || (((int)($configStat['mode'] ?? 0) & 0777) !== 0600)
+                || (int)($configStat['nlink'] ?? 0) !== 1
+                || (int)($configStat['uid'] ?? -1) !== $effectiveUid
+            ) {
+                throw new \RuntimeException('POSIX detached spawn config identity is unsafe.');
+            }
+
+            $remaining = $configJson;
+            while ($remaining !== '') {
+                $written = @\fwrite($configHandle, $remaining);
+                if (!\is_int($written) || $written <= 0) {
+                    throw new \RuntimeException('POSIX detached spawn config could not be written completely.');
+                }
+                $remaining = (string)\substr($remaining, $written);
+            }
+            if (!@\fflush($configHandle)) {
+                throw new \RuntimeException('POSIX detached spawn config could not be flushed.');
+            }
+            if (!\function_exists('fsync') || !@\fsync($configHandle)) {
+                throw new \RuntimeException('POSIX detached spawn config could not be synchronized.');
+            }
+            $configReady = true;
+        } finally {
+            @\fclose($configHandle);
+            if (!$configReady) {
+                @\unlink($configPath);
+            }
         }
 
         $descriptors = [
@@ -1391,7 +1508,20 @@ class Processer
             exit(70);
         }
 
-        @\chdir($cwd);
+        if (!@\chdir($cwd)) {
+            try {
+                self::removeManagedProcessLeaseRecord(
+                    (int)\getmypid(),
+                    $processIdentity,
+                    self::getManagedIdentityLaunchId($processIdentity)
+                );
+            } catch (\Throwable) {
+                // The child still terminates before exec. Retaining an exact,
+                // untrusted stale lease is safer than running from the wrong cwd.
+            }
+            @\posix_kill((int)\getmypid(), \defined('SIGKILL') ? \SIGKILL : 9);
+            exit(70);
+        }
         self::closeUnixDescriptorsBeforeExec($openFileDescriptors);
         @\fclose(\STDIN);
         @\fclose(\STDOUT);
@@ -1601,8 +1731,11 @@ class Processer
             if (isset($psPipes[2])) {
                 @\stream_set_blocking($psPipes[2], false);
             }
-            $deadline = \microtime(true) + self::resolveWindowsStartProcessPidEchoTimeout();
-            while (\microtime(true) < $deadline) {
+            $deadlineNanoseconds = self::monotonicDeadlineFrom(
+                \hrtime(true),
+                self::resolveWindowsStartProcessPidEchoTimeout(),
+            );
+            while (\hrtime(true) < $deadlineNanoseconds) {
                 if (isset($psPipes[1])) {
                     $chunk = @\fread($psPipes[1], 256);
                     if (\is_string($chunk) && $chunk !== '') {
@@ -2770,7 +2903,7 @@ class Processer
         // 禁止复用传统驱动内部的 wait + retry，否则等待期间 PID 被复用时可能误杀新进程。
         $terminated = $driver->killProcessOnce($pid, $tree);
 
-        $verifyDeadline = \microtime(true) + 0.05;
+        $verifyDeadlineNanoseconds = \hrtime(true) + 50_000_000;
         do {
             $verified = self::probeManagedProcessIdentity(
                 $pid,
@@ -2783,7 +2916,7 @@ class Processer
             $verifiedState = (string) ($verified['state'] ?? self::PROCESS_STATE_UNKNOWN);
             if ($verifiedState === self::PROCESS_STATE_EXITED
                 || $verifiedState === self::PROCESS_STATE_IDENTITY_MISMATCH
-                || \microtime(true) >= $verifyDeadline) {
+                || \hrtime(true) >= $verifyDeadlineNanoseconds) {
                 break;
             }
             // 仅等待 OS 回收，不会再次发信号；PID 若被复用，下一次身份探测会返回 mismatch。
@@ -2804,6 +2937,104 @@ class Processer
         }
 
         return $verified;
+    }
+
+    /**
+     * Terminate a bounded set of frozen managed-process leases without allowing
+     * one malformed or unprobeable target to abort containment of later targets.
+     *
+     * Each target still passes through terminateManagedProcessLease(), so the
+     * same fresh live-identity gate and fail-closed PID-reuse semantics apply.
+     * The total budget is advisory for liveness: once exhausted, untouched
+     * targets receive an explicit UNKNOWN outcome and are never signalled.
+     *
+     * @param array<int|string,array{
+     *     pid:int,
+     *     expected_process_name:string,
+     *     expected_launch_id:string,
+     *     expected_pname:string,
+     *     required_live_arguments?:array<string,string>
+     * }> $requests
+     * @return array<int|string,array<string,mixed>>
+     */
+    public static function terminateManagedProcessLeases(
+        array $requests,
+        bool $tree = true,
+        float $timeoutSeconds = 2.0
+    ): array {
+        $deadline = self::monotonicDeadlineFrom(
+            \hrtime(true),
+            \max(0.01, \min(10.0, $timeoutSeconds)),
+        );
+        $outcomes = [];
+
+        foreach ($requests as $key => $request) {
+            if (!\is_array($request)) {
+                $outcomes[$key] = self::invalidManagedTerminationOutcome(0);
+                continue;
+            }
+
+            $pid = (int)($request['pid'] ?? 0);
+            $expectedProcessName = \trim((string)($request['expected_process_name'] ?? ''));
+            $expectedLaunchId = \trim((string)($request['expected_launch_id'] ?? ''));
+            $expectedPname = \trim((string)($request['expected_pname'] ?? ''));
+            $requiredLiveArguments = $request['required_live_arguments'] ?? [];
+            if ($pid <= 0
+                || $expectedProcessName === ''
+                || $expectedLaunchId === ''
+                || $expectedPname === ''
+                || !\is_array($requiredLiveArguments)
+            ) {
+                $outcomes[$key] = self::invalidManagedTerminationOutcome($pid);
+                continue;
+            }
+
+            if (\hrtime(true) >= $deadline) {
+                $outcomes[$key] = [
+                    'state' => self::PROCESS_STATE_UNKNOWN,
+                    'reason' => 'managed_termination_budget_exhausted',
+                    'pid' => $pid,
+                    'terminated' => false,
+                    'released' => false,
+                ];
+                continue;
+            }
+
+            try {
+                /** @var array<string,string> $requiredLiveArguments */
+                $outcomes[$key] = self::terminateManagedProcessLease(
+                    $pid,
+                    $expectedProcessName,
+                    $expectedLaunchId,
+                    $expectedPname,
+                    $tree,
+                    $requiredLiveArguments,
+                );
+            } catch (\Throwable $throwable) {
+                $outcomes[$key] = [
+                    'state' => self::PROCESS_STATE_UNKNOWN,
+                    'reason' => 'managed_termination_exception',
+                    'pid' => $pid,
+                    'terminated' => false,
+                    'released' => false,
+                    'error' => \substr(\trim($throwable->getMessage()), 0, 512),
+                ];
+            }
+        }
+
+        return $outcomes;
+    }
+
+    /** @return array{state:string,reason:string,pid:int,terminated:bool,released:bool} */
+    private static function invalidManagedTerminationOutcome(int $pid): array
+    {
+        return [
+            'state' => self::PROCESS_STATE_UNKNOWN,
+            'reason' => 'managed_termination_request_invalid',
+            'pid' => \max(0, $pid),
+            'terminated' => false,
+            'released' => false,
+        ];
     }
 
     /**
@@ -2849,29 +3080,39 @@ class Processer
         }
 
         $record = self::getProcessRecordByPid($pid);
+        if ($record === []) {
+            // A process name sampled from the current PID cannot recreate the
+            // authority of a missing managed lease: the PID may have been
+            // recycled after the index disappeared.
+            return false;
+        }
         if ($expectedPname !== null && $expectedPname !== '') {
-            $record['pname'] = $expectedPname;
-            $record['pname_key'] = self::buildPnameKey($expectedPname);
-        }
-        if ($expectedProcessName !== null && $expectedProcessName !== '') {
-            $record['process_name'] = self::normalizeName($expectedProcessName);
-        }
-        if ($expectedLaunchId !== '') {
-            if (!empty($record['launch_id']) && (string) $record['launch_id'] !== $expectedLaunchId) {
+            $recordedPname = \trim((string)($record['pname'] ?? ''));
+            if ($recordedPname === ''
+                || self::buildPnameKey($recordedPname) !== self::buildPnameKey($expectedPname)
+            ) {
                 return false;
             }
-            $record['launch_id'] = $expectedLaunchId;
         }
-
-        if ($record === []) {
-            $pname = self::getNameByPid($pid);
-            if ($pname !== 'unknown' && \strpos($pname, self::WELINE_PROCESS_PREFIX) !== false) {
-                return true;
+        if ($expectedProcessName !== null && $expectedProcessName !== '') {
+            $recordedProcessName = self::getRecordedProcessName($record);
+            if ($recordedProcessName === ''
+                || $recordedProcessName !== self::normalizeName($expectedProcessName)
+            ) {
+                return false;
             }
-            return self::isProcessManagerCreated($pid);
+        }
+        if ($expectedLaunchId !== '') {
+            $recordedLaunchId = \trim((string)($record['launch_id'] ?? ''));
+            if ($recordedLaunchId === '' || !\hash_equals($expectedLaunchId, $recordedLaunchId)) {
+                return false;
+            }
         }
 
-        return self::doesRecordedPidIdentityAllowOperation($pid, $record);
+        // Historical indexes are discovery caches only. A destructive
+        // operation additionally requires the live OS command identity to
+        // match the exact lease immediately before signalling.
+        return self::doesPidMatchRecordedIdentity($pid, $record);
     }
 
     /**
@@ -4449,15 +4690,15 @@ class Processer
         if ($resolvedCwd === '' || !\is_dir($resolvedCwd)) {
             throw new \InvalidArgumentException('Windows isolated argv working directory is unavailable.');
         }
-        $processIdentity = self::normalizeName($processIdentity);
-        if ($processIdentity === '') {
+        $processIdentity = self::buildManagedIdentity($processIdentity);
+        if (self::getTaskName($processIdentity) === '') {
             throw new \InvalidArgumentException('Windows isolated argv process identity is empty.');
         }
 
         $key = 'windows-isolated-exact-argv';
         $results = self::batchCreate([
             $key => [
-                'command' => $key . ' --name=' . $processIdentity,
+                'command' => $key . ' ' . $processIdentity,
                 'windowsArgv' => $normalizedArgv,
                 'cwd' => $resolvedCwd,
                 'block' => false,
@@ -4537,7 +4778,14 @@ class Processer
         }
         $requiredFunctions = $masterOwnedRequested
             ? ['proc_open', 'proc_get_status']
-            : ['proc_open', 'pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill'];
+            : [
+                'proc_open',
+                'pcntl_fork',
+                'pcntl_exec',
+                'pcntl_waitpid',
+                'posix_setsid',
+                'posix_kill',
+            ];
         $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
         foreach ($requiredFunctions as $function) {
             if (!\function_exists($function) || \in_array($function, $disabledFunctions, true)) {
@@ -4546,6 +4794,18 @@ class Processer
                         'POSIX Master-owned process support is unavailable: ' . $function
                     );
                 }
+                return null;
+            }
+        }
+        if (!$masterOwnedRequested) {
+            try {
+                if (!\class_exists(\FFI::class)) {
+                    return null;
+                }
+                // The optimized launcher requires an explicit FD_CLOEXEC
+                // readiness pipe. PHP stream pipes do not guarantee that flag.
+                \FFI::cdef('int pipe(int descriptors[2]);');
+            } catch (\Throwable) {
                 return null;
             }
         }
@@ -4567,7 +4827,7 @@ class Processer
             return null;
         }
 
-        $startedAt = \microtime(true);
+        $startedAtNanoseconds = \hrtime(true);
         $results = [];
         $prepared = [];
         // Strict preflight: callers may provide an already separated argv.
@@ -4695,7 +4955,7 @@ class Processer
             $results,
             $inheritedDescriptors,
             $openFileDescriptors,
-            $startedAt,
+            $startedAtNanoseconds,
         );
         if ($masterOwnedResults !== null) {
             return $masterOwnedResults;
@@ -4726,7 +4986,9 @@ class Processer
         )));
         \sort($launcherFileDescriptors, \SORT_NUMERIC);
 
-        $submitStartedAt = \microtime(true);
+        $resultTimeout = self::resolveUnixBatchCreateResultTimeout(\count($launchItems));
+        $handshakeTimeout = \max(0.05, $resultTimeout - 0.25);
+        $submitStartedAtNanoseconds = \hrtime(true);
         $launcher = @\proc_open(
             [
                 PHP_BINARY,
@@ -4734,6 +4996,7 @@ class Processer
                 self::unixBatchLauncherCode(),
                 \base64_encode($payload),
                 \base64_encode((string) \json_encode($launcherFileDescriptors)),
+                (string)$handshakeTimeout,
             ],
             $descriptors,
             $pipes,
@@ -4746,13 +5009,15 @@ class Processer
         }
         @\stream_set_blocking($pipes[1], false);
         @\stream_set_blocking($pipes[2], false);
-        $submitSeconds = \microtime(true) - $submitStartedAt;
+        $submitNanoseconds = \max(0, \hrtime(true) - $submitStartedAtNanoseconds);
 
         $stdout = '';
         $stderr = '';
-        $resultStartedAt = \microtime(true);
-        $resultTimeout = self::resolveUnixBatchCreateResultTimeout(\count($launchItems));
-        $deadline = $resultStartedAt + $resultTimeout;
+        $resultStartedAtNanoseconds = \hrtime(true);
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(
+            $resultStartedAtNanoseconds,
+            $resultTimeout,
+        );
         $launcherStatus = [];
         do {
             $stdout .= (string) (@\fread($pipes[1], 8192) ?: '');
@@ -4763,7 +5028,7 @@ class Processer
                 break;
             }
             \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
-        } while (\microtime(true) < $deadline);
+        } while (\hrtime(true) < $deadlineNanoseconds);
 
         // Keep the result pipes open while reaping the short-lived launcher.
         // Closing them first can deliver SIGPIPE before a scheduler-delayed
@@ -4794,6 +5059,7 @@ class Processer
             \error_log('[Processer] unix batch launcher: ' . self::redactSensitiveProcessText(\trim($stderr)));
         }
 
+        $finishedAtNanoseconds = \hrtime(true);
         $timing = \json_encode([
             'item_count' => \count($commands),
             'submitted_count' => \count($launchItems),
@@ -4802,9 +5068,15 @@ class Processer
             'fallback_count' => 0,
             'result_timeout_ms' => \round($resultTimeout * 1000, 3),
             'launcher_running_after_collection' => $launcherRunningAfterCollection,
-            'submit_ms' => \round($submitSeconds * 1000, 3),
-            'result_ms' => \round((\microtime(true) - $resultStartedAt) * 1000, 3),
-            'total_ms' => \round((\microtime(true) - $startedAt) * 1000, 3),
+            'submit_ms' => \round($submitNanoseconds / 1_000_000, 3),
+            'result_ms' => \round(
+                \max(0, $finishedAtNanoseconds - $resultStartedAtNanoseconds) / 1_000_000,
+                3,
+            ),
+            'total_ms' => \round(
+                \max(0, $finishedAtNanoseconds - $startedAtNanoseconds) / 1_000_000,
+                3,
+            ),
         ], \JSON_UNESCAPED_SLASHES);
         \error_log('[Processer] batchCreateUnix timing ' . ($timing !== false ? $timing : '{}'));
 
@@ -4832,7 +5104,7 @@ class Processer
         array $results,
         array $inheritedDescriptors,
         array $openFileDescriptors,
-        float $startedAt,
+        int|float $startedAtNanoseconds,
     ): ?array {
         if (IS_WIN || $launchItems === []) {
             return null;
@@ -4877,7 +5149,7 @@ class Processer
         }
 
         self::reapUnixMasterOwnedChildren();
-        $submitStartedAt = \microtime(true);
+        $submitStartedAtNanoseconds = \hrtime(true);
         $started = [];
         $failed = 0;
         foreach ($launchItems as $item) {
@@ -4952,14 +5224,21 @@ class Processer
             $results[$key] ??= 0;
         }
 
+        $finishedAtNanoseconds = \hrtime(true);
         $timing = \json_encode([
             'mode' => 'master_owned_proc_open',
             'item_count' => \count($commands),
             'submitted_count' => \count($launchItems),
             'returned_count' => \count($started),
             'missing_count' => $failed,
-            'submit_ms' => \round((\microtime(true) - $submitStartedAt) * 1000, 3),
-            'total_ms' => \round((\microtime(true) - $startedAt) * 1000, 3),
+            'submit_ms' => \round(
+                \max(0, $finishedAtNanoseconds - $submitStartedAtNanoseconds) / 1_000_000,
+                3,
+            ),
+            'total_ms' => \round(
+                \max(0, $finishedAtNanoseconds - $startedAtNanoseconds) / 1_000_000,
+                3,
+            ),
         ], \JSON_UNESCAPED_SLASHES);
         \error_log('[Processer] batchCreateUnix timing ' . ($timing !== false ? $timing : '{}'));
 
@@ -4976,7 +5255,7 @@ class Processer
             'process' => $process,
             'pid' => $pid,
             'key' => $key,
-            'started_at' => \microtime(true),
+            'started_at' => \hrtime(true) / 1_000_000_000,
         ];
     }
 
@@ -5231,9 +5510,56 @@ class Processer
         return \array_values(\array_map('strval', $tokens));
     }
 
-    private static function unixBatchLauncherCode(): string
+    private static function unixBatchLauncherTerminateAndReapCode(): string
     {
         return <<<'PHP'
+static function (
+    int $pid,
+    bool $alreadyReaped,
+    int|float $deadlineNanoseconds,
+    callable $kill,
+    callable $waitPid,
+    callable $lastError,
+    callable $monotonicClock,
+    callable $pause,
+): bool {
+    if ($pid <= 0) {
+        return false;
+    }
+    if ($alreadyReaped) {
+        return true;
+    }
+
+    $kill($pid, defined('SIGKILL') ? SIGKILL : 9);
+    $waitNoHang = defined('WNOHANG') ? WNOHANG : 1;
+    $interrupted = defined('PCNTL_EINTR') ? PCNTL_EINTR : 4;
+    while (true) {
+        $status = 0;
+        $waited = $waitPid($pid, $status, $waitNoHang);
+        if ($waited === $pid) {
+            return true;
+        }
+        if ($waited > 0) {
+            return false;
+        }
+        if ($waited === -1 && $lastError() !== $interrupted) {
+            return false;
+        }
+
+        $now = $monotonicClock();
+        if ($now >= $deadlineNanoseconds) {
+            return false;
+        }
+        $remainingMicroseconds = (int)ceil(($deadlineNanoseconds - $now) / 1_000);
+        $pause(max(1, min(5_000, $remainingMicroseconds)));
+    }
+}
+PHP;
+    }
+
+    private static function unixBatchLauncherCode(): string
+    {
+        $code = <<<'PHP'
 (static function (array $arguments): void {
     $decoded = base64_decode((string)($arguments[1] ?? ''), true);
     $items = is_string($decoded) ? json_decode($decoded, true) : null;
@@ -5245,20 +5571,161 @@ class Processer
     if (!is_array($items)) {
         return;
     }
+    $handshakeTimeout = (float)($arguments[3] ?? 4.0);
+    if (!is_finite($handshakeTimeout) || $handshakeTimeout < 0.05 || $handshakeTimeout > 8.0) {
+        $handshakeTimeout = 4.0;
+    }
+    $batchDeadline = hrtime(true) + round($handshakeTimeout * 1_000_000_000);
+    // batchCreateUnix reserves 250ms beyond the handshake deadline. Keep the
+    // kill/reap phase inside 200ms of that reserve so a non-waitable child can
+    // never hold the launcher or its result pipes open indefinitely.
+    $batchCleanupDeadline = $batchDeadline + 200_000_000;
+    $writeResult = static function (string $id, int $pid): void {
+        fwrite(STDOUT, $id . "\t" . $pid . "\n");
+        fflush(STDOUT);
+    };
+    $writeFailure = static function (string $id, string $failure): void {
+        $message = $id . ': ';
+        if ($failure === 'setsid') {
+            $message .= 'setsid failed';
+        } elseif ($failure === 'chdir') {
+            $message .= 'chdir failed';
+        } elseif (preg_match('/\Aexec:([0-9]{1,10})\z/D', $failure, $match) === 1) {
+            $errorCode = (int)$match[1];
+            try {
+                $errorText = function_exists('pcntl_strerror')
+                    ? pcntl_strerror($errorCode)
+                    : 'unknown';
+            } catch (Throwable) {
+                $errorText = 'unknown';
+            }
+            $message .= 'exec failed errno=' . $errorCode . ' message=' . $errorText;
+        } elseif ($failure === 'timeout') {
+            $message .= 'exec readiness timed out';
+        } elseif ($failure === 'pipe') {
+            $message .= 'exec readiness pipe failed';
+        } elseif ($failure === 'exited') {
+            $message .= 'child exited before exec readiness';
+        } elseif ($failure === 'fork') {
+            $message .= 'pcntl_fork failed';
+        } elseif ($failure === 'poll') {
+            $message .= 'exec readiness wait failed';
+        } elseif ($failure === 'read') {
+            $message .= 'exec readiness read failed';
+        } elseif ($failure === 'invalid') {
+            $message .= 'exec readiness response invalid';
+        } elseif ($failure === 'reap') {
+            $message .= 'child reap deadline expired';
+        } else {
+            $message .= 'exec readiness failed';
+        }
+        fwrite(STDERR, $message . "\n");
+        fflush(STDERR);
+    };
+    $terminateAndReap = __WLS_UNIX_BATCH_TERMINATE_AND_REAP__;
+    $killChild = static function (int $pid, int $signal): bool {
+        return @posix_kill($pid, $signal);
+    };
+    $waitForChild = static function (int $pid, int &$status, int $options): int {
+        return @pcntl_waitpid($pid, $status, $options);
+    };
+    $lastWaitError = static function (): int {
+        return function_exists('pcntl_get_last_error') ? (int)pcntl_get_last_error() : 0;
+    };
+    $monotonicClock = static fn (): int|float => hrtime(true);
+    $pause = static function (int $microseconds): void {
+        if ($microseconds > 0) {
+            usleep($microseconds);
+        }
+    };
+    try {
+        $readinessNfdsType = PHP_OS_FAMILY === 'Darwin'
+            ? 'unsigned int'
+            : 'unsigned long';
+        $readinessLibc = class_exists('FFI')
+            ? FFI::cdef(
+                'int pipe(int descriptors[2]);'
+                . ' int fcntl(int descriptor, int command, ...);'
+                . ' int close(int descriptor);'
+                . ' long read(int descriptor, void *buffer, unsigned long count);'
+                . ' long write(int descriptor, const void *buffer, unsigned long count);'
+                . ' struct pollfd { int fd; short events; short revents; };'
+                . ' int poll(struct pollfd *descriptors, '
+                . $readinessNfdsType . ' count, int timeout);'
+            )
+            : null;
+    } catch (Throwable) {
+        $readinessLibc = null;
+    }
+    $createReadinessPipe = static function () use ($readinessLibc): ?array {
+        if ($readinessLibc === null) {
+            return null;
+        }
+        $descriptors = $readinessLibc->new('int[2]');
+        if ($readinessLibc->pipe($descriptors) !== 0) {
+            return null;
+        }
+        $readDescriptor = (int)$descriptors[0];
+        $writeDescriptor = (int)$descriptors[1];
+        // F_SETFD=2 and FD_CLOEXEC=1 are POSIX constants on Linux and macOS.
+        if ($readinessLibc->fcntl($readDescriptor, 2, 1) !== 0
+            || $readinessLibc->fcntl($writeDescriptor, 2, 1) !== 0
+        ) {
+            $readinessLibc->close($readDescriptor);
+            $readinessLibc->close($writeDescriptor);
+            return null;
+        }
+        return [$readDescriptor, $writeDescriptor];
+    };
+    $childFailure = static function ($libc, int $descriptor, string $failure): void {
+        if ($libc === null || $descriptor < 0) {
+            return;
+        }
+        $payload = $failure . "\n";
+        $libc->write($descriptor, $payload, strlen($payload));
+        $libc->close($descriptor);
+        @posix_kill((int)getmypid(), defined('SIGKILL') ? SIGKILL : 9);
+    };
     foreach ($items as $item) {
         if (!is_array($item) || !is_array($item['argv'] ?? null)) {
             continue;
         }
         $id = (string)($item['id'] ?? '');
+        if (hrtime(true) >= $batchDeadline) {
+            $writeFailure($id, 'timeout');
+            $writeResult($id, 0);
+            continue;
+        }
+        $readiness = $createReadinessPipe();
+        if (!is_array($readiness) || count($readiness) !== 2) {
+            $writeFailure($id, 'pipe');
+            $writeResult($id, 0);
+            continue;
+        }
+        [$readinessParent, $readinessChild] = $readiness;
         $pid = pcntl_fork();
         if ($pid === -1) {
-            fwrite(STDOUT, $id . "\t0\n");
-            fwrite(STDERR, $id . ": pcntl_fork failed\n");
+            $readinessLibc->close($readinessParent);
+            $readinessLibc->close($readinessChild);
+            $writeFailure($id, 'fork');
+            $writeResult($id, 0);
             continue;
         }
         if ($pid === 0) {
-            @posix_setsid();
-            @chdir((string)($item['cwd'] ?? getcwd()));
+            $readinessLibc->close($readinessParent);
+            try {
+                $sessionId = function_exists('posix_setsid') ? @posix_setsid() : -1;
+            } catch (Throwable) {
+                $sessionId = -1;
+            }
+            if (!is_int($sessionId) || $sessionId < 0) {
+                $childFailure($readinessLibc, $readinessChild, 'setsid');
+                return;
+            }
+            if (!@chdir((string)($item['cwd'] ?? getcwd()))) {
+                $childFailure($readinessLibc, $readinessChild, 'chdir');
+                return;
+            }
             $preserveFds = is_array($item['preserve_fds'] ?? null)
                 ? array_fill_keys(array_map('intval', $item['preserve_fds']), true)
                 : [];
@@ -5294,28 +5761,83 @@ class Processer
             }
             $argv = array_values(array_map('strval', $item['argv']));
             $php = (string)array_shift($argv);
-            @pcntl_exec($php, $argv);
-            $errorCode = function_exists('pcntl_get_last_error') ? pcntl_get_last_error() : 0;
-            $errorText = function_exists('pcntl_strerror')
-                ? pcntl_strerror($errorCode)
-                : 'unknown';
-            $script = (string)($argv[0] ?? '');
-            @fwrite(
-                $stderr,
-                '[ERROR] pcntl_exec failed errno=' . $errorCode
-                . ' message=' . $errorText
-                . ' executable=' . basename($php)
-                . ' script=' . basename($script)
-                . PHP_EOL
-            );
-            @fflush($stderr);
+            try {
+                @pcntl_exec($php, $argv);
+            } catch (Throwable) {
+                // Report only the failed phase through the private readiness
+                // channel; exception text can contain host paths or argv.
+            }
+            $errorCode = function_exists('pcntl_get_last_error')
+                ? max(0, (int)pcntl_get_last_error())
+                : 0;
+            $childFailure($readinessLibc, $readinessChild, 'exec:' . $errorCode);
             return;
         }
-        fwrite(STDOUT, $id . "\t" . $pid . "\n");
-        fflush(STDOUT);
+        $readinessLibc->close($readinessChild);
+        $failure = '';
+        $ready = false;
+        $waited = 0;
+        $remainingNanoseconds = max(0, $batchDeadline - hrtime(true));
+        $timeoutMilliseconds = max(
+            1,
+            min(8_000, (int)ceil($remainingNanoseconds / 1_000_000)),
+        );
+        $pollDescriptor = $readinessLibc->new('struct pollfd[1]');
+        $pollDescriptor[0]->fd = $readinessParent;
+        $pollDescriptor[0]->events = 1; // POLLIN
+        $pollDescriptor[0]->revents = 0;
+        $pollResult = $readinessLibc->poll($pollDescriptor, 1, $timeoutMilliseconds);
+        if ($pollResult === 0) {
+            $failure = 'timeout';
+        } elseif ($pollResult < 0) {
+            $failure = 'poll';
+        } else {
+            $buffer = $readinessLibc->new('char[65]');
+            $amount = (int)$readinessLibc->read($readinessParent, $buffer, 64);
+            if ($amount === 0) {
+                $waited = @pcntl_waitpid($pid, $status, WNOHANG);
+                if ($waited === 0) {
+                    $ready = true;
+                } else {
+                    $failure = 'exited';
+                }
+            } elseif ($amount > 0) {
+                $failure = trim(FFI::string($buffer, $amount));
+            } else {
+                $failure = 'read';
+            }
+        }
+        $readinessLibc->close($readinessParent);
+        if ($ready) {
+            $writeResult($id, $pid);
+            continue;
+        }
+        $alreadyReaped = $waited === $pid;
+        $reapDeadline = min($batchCleanupDeadline, hrtime(true) + 200_000_000);
+        $reaped = $terminateAndReap(
+            $pid,
+            $alreadyReaped,
+            $reapDeadline,
+            $killChild,
+            $waitForChild,
+            $lastWaitError,
+            $monotonicClock,
+            $pause,
+        );
+        $writeFailure($id, $failure);
+        if (!$reaped) {
+            $writeFailure($id, 'reap');
+        }
+        $writeResult($id, 0);
     }
 })($argv);
 PHP;
+
+        return \str_replace(
+            '__WLS_UNIX_BATCH_TERMINATE_AND_REAP__',
+            self::unixBatchLauncherTerminateAndReapCode(),
+            $code,
+        );
     }
 
     /**
@@ -5345,11 +5867,11 @@ PHP;
         $status = @\proc_get_status($launcher);
         if (($status['running'] ?? false) === true) {
             @\proc_terminate($launcher);
-            $deadline = \microtime(true) + 0.1;
+            $deadlineNanoseconds = \hrtime(true) + 100_000_000;
             do {
                 \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
                 $status = @\proc_get_status($launcher);
-            } while (($status['running'] ?? false) === true && \microtime(true) < $deadline);
+            } while (($status['running'] ?? false) === true && \hrtime(true) < $deadlineNanoseconds);
         }
         if (($status['running'] ?? false) === true && (int)($status['pid'] ?? 0) > 0) {
             @\posix_kill((int)$status['pid'], \SIGKILL);
@@ -5411,12 +5933,12 @@ PHP;
      */
     private static function batchCreateWindows(array $commands): ?array
     {
-        $timingStartedAt = \microtime(true);
+        $timingStartedAtNanoseconds = \hrtime(true);
         $timings = [];
-        $phaseStartedAt = $timingStartedAt;
+        $phaseStartedAtNanoseconds = $timingStartedAtNanoseconds;
         self::reapWindowsMasterOwnedChildren();
         self::reapWindowsDetachedBatchHelpers();
-        $timings['reap'] = \microtime(true) - $phaseStartedAt;
+        $timings['reap'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
         $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
         $procOpenAvailable = \function_exists('proc_open') && !\in_array('proc_open', $disabledFunctions, true);
@@ -5428,7 +5950,7 @@ PHP;
         $results = [];
         $batchLaunchItems = [];
         $requiresParentHandleIsolation = false;
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAtNanoseconds = \hrtime(true);
 
         foreach ($commands as $key => $config) {
             $command = (string) ($config['command'] ?? '');
@@ -5533,14 +6055,14 @@ PHP;
             return $results;
         }
 
-        $timings['prepare'] = \microtime(true) - $phaseStartedAt;
+        $timings['prepare'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
         $masterOwnedResults = $requiresParentHandleIsolation
             ? null
             : self::batchCreateWindowsMasterOwned(
                 $batchLaunchItems,
                 $results,
-                $timingStartedAt,
+                $timingStartedAtNanoseconds,
                 $timings,
             );
         if ($masterOwnedResults !== null) {
@@ -5551,7 +6073,7 @@ PHP;
             return self::batchCreateWindowsDetachedHelpers(
                 $batchLaunchItems,
                 $results,
-                $timingStartedAt,
+                $timingStartedAtNanoseconds,
                 $timings,
                 self::resolveWindowsBatchCreateHelperParallelism(\count($batchLaunchItems))
             );
@@ -5562,13 +6084,13 @@ PHP;
             return self::batchCreateWindowsDetachedHelpers(
                 $batchLaunchItems,
                 $results,
-                $timingStartedAt,
+                $timingStartedAtNanoseconds,
                 $timings,
                 self::resolveWindowsBatchCreateHelperParallelism(\count($batchLaunchItems))
             );
         }
 
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAtNanoseconds = \hrtime(true);
         $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
         $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
         if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
@@ -5610,7 +6132,7 @@ PHP;
         } finally {
             \restore_error_handler();
         }
-        $timings['submit'] = \microtime(true) - $phaseStartedAt;
+        $timings['submit'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
         if (\is_resource($psProcess) && isset($psPipes[0])) {
             @\fclose($psPipes[0]);
@@ -5630,16 +6152,16 @@ PHP;
             return null;
         }
 
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAtNanoseconds = \hrtime(true);
         self::waitForWindowsBatchCreateHelper($psProcess, $resultPath, \count($batchLaunchItems));
         $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents($resultPath) ?: ''));
         $stderr = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents($errorPath) ?: ''));
         @\unlink($scriptPath);
         @\unlink($resultPath);
         @\unlink($errorPath);
-        $timings['result'] = \microtime(true) - $phaseStartedAt;
+        $timings['result'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAtNanoseconds = \hrtime(true);
         $diagnostic = \trim(\implode(' | ', \array_filter([$output, $stderr], static fn (string $text): bool => $text !== '')));
         $pidMap = self::parseWindowsBatchCreatePidMap($output);
         $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution($batchLaunchItems, $pidMap, true);
@@ -5653,7 +6175,7 @@ PHP;
             }
             $results[$key] = self::recordWindowsBatchCreatePid($item, $pid);
         }
-        $timings['pid_record'] = \microtime(true) - $phaseStartedAt;
+        $timings['pid_record'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
         foreach ($commands as $key => $config) {
             unset($config);
@@ -5664,7 +6186,7 @@ PHP;
 
         self::logWindowsBatchCreateTiming(
             'wait',
-            $timingStartedAt,
+            $timingStartedAtNanoseconds,
             $timings,
             1,
             \count($batchLaunchItems)
@@ -5691,7 +6213,7 @@ PHP;
     private static function batchCreateWindowsMasterOwned(
         array $launchItems,
         array $results,
-        float $timingStartedAt,
+        int|float $timingStartedAtNanoseconds,
         array $timings,
     ): ?array {
         if ($launchItems === []) {
@@ -5733,7 +6255,7 @@ PHP;
             }
         }
 
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAtNanoseconds = \hrtime(true);
         $started = [];
         foreach ($launchItems as $item) {
             $key = (string)($item['key'] ?? '');
@@ -5810,12 +6332,12 @@ PHP;
             $results[$key] = self::recordWindowsBatchCreatePid($item, $pid);
         }
 
-        $timings['submit'] = \microtime(true) - $phaseStartedAt;
+        $timings['submit'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
         $timings['result'] = 0.0;
         $timings['pid_record'] = 0.0;
         self::logWindowsBatchCreateTiming(
             'master_owned_proc_open',
-            $timingStartedAt,
+            $timingStartedAtNanoseconds,
             $timings,
             0,
             \count($launchItems),
@@ -5834,7 +6356,7 @@ PHP;
             'process' => $process,
             'pid' => $pid,
             'key' => $key,
-            'started_at' => \microtime(true),
+            'started_at' => \hrtime(true) / 1_000_000_000,
         ];
     }
 
@@ -5909,11 +6431,11 @@ PHP;
     private static function batchCreateWindowsDetachedHelpers(
         array $batchLaunchItems,
         array $results,
-        ?float $timingStartedAt = null,
+        int|float|null $timingStartedAtNanoseconds = null,
         array $timings = [],
         ?int $parallelism = null
     ): array {
-        $timingStartedAt ??= \microtime(true);
+        $timingStartedAtNanoseconds ??= \hrtime(true);
         $itemCount = \count($batchLaunchItems);
         $resultBudgetSeconds = self::resolveWindowsBatchCreateNonBlockingResultRowTimeout($itemCount);
         $parallelism ??= self::resolveWindowsBatchCreateHelperParallelism($itemCount);
@@ -5929,7 +6451,7 @@ PHP;
             $results[$key] = 0;
         }
 
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAtNanoseconds = \hrtime(true);
         $helpers = [];
         foreach ($groups as $launchItems) {
             if ($launchItems === []) {
@@ -5946,10 +6468,13 @@ PHP;
                 '[Processer] batchCreateWindows lane fallback items=' . \count($launchItems)
                 . ' reason=' . $attempt['reason']
             );
-            $fallbackDeadline = \microtime(true) + self::resolveWindowsBatchCreateLaneFallbackBudget(\count($launchItems));
+            $fallbackDeadlineNanoseconds = self::monotonicDeadlineFrom(
+                \hrtime(true),
+                self::resolveWindowsBatchCreateLaneFallbackBudget(\count($launchItems)),
+            );
             $fallbackLimit = \min(8, \count($launchItems));
             foreach ($launchItems as $index => $item) {
-                if ($index >= $fallbackLimit || \microtime(true) >= $fallbackDeadline) {
+                if ($index >= $fallbackLimit || \hrtime(true) >= $fallbackDeadlineNanoseconds) {
                     self::logWindowsBatchCreateUnavailable(
                         [$item],
                         'per-item lane fallback budget exhausted after: ' . $attempt['reason']
@@ -5969,12 +6494,12 @@ PHP;
                 );
             }
         }
-        $timings['submit'] = \microtime(true) - $phaseStartedAt;
+        $timings['submit'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
 
-        $deadline = \microtime(true) + $resultBudgetSeconds;
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), $resultBudgetSeconds);
 
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAtNanoseconds = \hrtime(true);
         $pidMap = [];
         if ($helpers !== []) {
             do {
@@ -6003,7 +6528,7 @@ PHP;
                     }
                 }
 
-                if ($pendingHelpers <= 0 || \microtime(true) >= $deadline) {
+                if ($pendingHelpers <= 0 || \hrtime(true) >= $deadlineNanoseconds) {
                     break;
                 }
 
@@ -6015,9 +6540,9 @@ PHP;
                 $pidMap += self::parseWindowsBatchCreatePidMap($output);
             }
         }
-        $timings['result'] = \microtime(true) - $phaseStartedAt;
+        $timings['result'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAtNanoseconds = \hrtime(true);
         $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution($batchLaunchItems, $pidMap, false);
         $pidResolutionTimeout = self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(\count($pidResolutionItems));
         // Result-row waiting and managed-process adoption are two different
@@ -6082,11 +6607,11 @@ PHP;
                 $results[$key] = 0;
             }
         }
-        $timings['pid_record'] = \microtime(true) - $phaseStartedAt;
+        $timings['pid_record'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
         self::logWindowsBatchCreateTiming(
             'parallel_helpers',
-            $timingStartedAt,
+            $timingStartedAtNanoseconds,
             $timings,
             \count($helpers),
             $itemCount
@@ -6291,7 +6816,10 @@ PHP;
         }
 
         $paths = [$submissionPath, $stdoutPath];
-        $deadline = \microtime(true) + \max(0.2, \min(3.0, $timeoutSeconds));
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(
+            \hrtime(true),
+            \max(0.2, \min(3.0, $timeoutSeconds)),
+        );
         do {
             $observed = self::inspectWindowsIsolatedBatchSubmission($paths, $batchId);
             if ($observed['state'] === 'committed') {
@@ -6310,7 +6838,7 @@ PHP;
             }
 
             \Weline\Framework\Runtime\SchedulerSystem::usleep(20_000);
-        } while (\microtime(true) < $deadline);
+        } while (\hrtime(true) < $deadlineNanoseconds);
 
         $observed = self::inspectWindowsIsolatedBatchSubmission($paths, $batchId);
         if ($observed['state'] === 'committed') {
@@ -6392,8 +6920,6 @@ PHP;
             return 0;
         }
 
-        $identityNeedle = self::WINDOWS_ISOLATED_BATCH_ID_PREFIX . $batchId;
-        $normalizedScript = \strtolower(\str_replace('/', '\\', $scriptPath));
         $candidatePids = [];
         foreach (['powershell.exe', 'powershell'] as $processName) {
             foreach (self::getProcessIdsByName($processName) as $candidatePid) {
@@ -6406,10 +6932,7 @@ PHP;
                 continue;
             }
             $commandLine = self::getProcessCommandLine($candidatePid, true);
-            $normalizedCommand = \strtolower(\str_replace('/', '\\', $commandLine));
-            if (\str_contains($commandLine, $identityNeedle)
-                && \str_contains($normalizedCommand, $normalizedScript)
-            ) {
+            if (self::windowsIsolatedBatchBrokerCommandMatches($commandLine, $batchId, $scriptPath)) {
                 return $candidatePid;
             }
         }
@@ -6417,26 +6940,310 @@ PHP;
         return 0;
     }
 
-    private static function isWindowsIsolatedBatchBrokerRunning(array $helper): bool
+    /**
+     * Terminate an isolated batch broker only through the process object which
+     * was opened before identity verification. A PID may be recycled between a
+     * command-line lookup and a later PID-based signal; retaining one HANDLE
+     * fences every observation and the signal to the same kernel process.
+     *
+     * @param array<string,mixed> $helper
+     */
+    private static function terminateWindowsIsolatedBatchBrokerByHandle(array $helper): bool
     {
         $brokerPid = (int)($helper['isolated_broker_pid'] ?? 0);
         $batchId = (string)($helper['isolated_batch_id'] ?? '');
         $scriptPath = (string)($helper['script_path'] ?? '');
-        if ($brokerPid <= 0
+        if (!self::isWindows()
+            || $brokerPid <= 0
             || \preg_match('/^[a-f0-9]{32}$/D', $batchId) !== 1
             || $scriptPath === ''
-            || !self::isRunningByPid($brokerPid)
+            || \str_contains($scriptPath, "\0")
+            || PHP_INT_SIZE < 8
+            || !\extension_loaded('FFI')
+            || !\class_exists(\FFI::class)
+            || !\function_exists('iconv')
         ) {
             return false;
         }
 
-        $commandLine = self::getProcessCommandLine($brokerPid, true);
-        $identityNeedle = self::WINDOWS_ISOLATED_BATCH_ID_PREFIX . $batchId;
-        return \str_contains($commandLine, $identityNeedle)
-            && \str_contains(
-                \strtolower(\str_replace('/', '\\', $commandLine)),
-                \strtolower(\str_replace('/', '\\', $scriptPath))
+        $ffiEnabled = \strtolower(\trim((string)\ini_get('ffi.enable')));
+        if (\in_array($ffiEnabled, ['', '0', 'off', 'false', 'no'], true)) {
+            return false;
+        }
+
+        try {
+            $ffi = \FFI::cdef(
+                <<<'CDEF'
+typedef unsigned short USHORT;
+typedef unsigned short WCHAR;
+typedef unsigned long DWORD;
+typedef unsigned long ULONG;
+typedef long NTSTATUS;
+typedef int BOOL;
+typedef void *HANDLE;
+typedef struct _WLS_UNICODE_STRING {
+    USHORT Length;
+    USHORT MaximumLength;
+    WCHAR *Buffer;
+} WLS_UNICODE_STRING;
+typedef NTSTATUS (*WLS_NT_QUERY_INFORMATION_PROCESS)(
+    HANDLE ProcessHandle,
+    ULONG ProcessInformationClass,
+    void *ProcessInformation,
+    ULONG ProcessInformationLength,
+    ULONG *ReturnLength
+);
+HANDLE OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId);
+BOOL QueryFullProcessImageNameW(
+    HANDLE hProcess,
+    DWORD dwFlags,
+    WCHAR *lpExeName,
+    DWORD *lpdwSize
+);
+DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
+BOOL TerminateProcess(HANDLE hProcess, unsigned int uExitCode);
+BOOL CloseHandle(HANDLE hObject);
+DWORD GetLastError(void);
+HANDLE GetModuleHandleA(const char *lpModuleName);
+void *GetProcAddress(HANDLE hModule, const char *lpProcName);
+CDEF,
+                'kernel32.dll',
             );
+            // PROCESS_TERMINATE | SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION.
+            $processHandle = $ffi->OpenProcess(0x00101001, 0, $brokerPid);
+            if (\FFI::isNull($processHandle)) {
+                // ERROR_INVALID_PARAMETER proves that the recorded PID no
+                // longer names a process. Every other error is unverifiable.
+                return (int)$ffi->GetLastError() === 87;
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        try {
+            $imagePath = self::windowsProcessImagePathFromHandle($ffi, $processHandle);
+            $imageName = $imagePath === null
+                ? ''
+                : \strtolower(\basename(\str_replace('\\', '/', $imagePath)));
+            if ($imageName !== 'powershell.exe') {
+                return false;
+            }
+
+            $commandLine = self::windowsProcessCommandLineFromHandle($ffi, $processHandle);
+            if ($commandLine === null
+                || !self::windowsIsolatedBatchBrokerCommandMatches($commandLine, $batchId, $scriptPath)
+            ) {
+                return false;
+            }
+
+            $wait = (int)$ffi->WaitForSingleObject($processHandle, 0);
+            if ($wait === 0) { // WAIT_OBJECT_0: the verified broker already exited.
+                return true;
+            }
+            if ($wait !== 258) { // WAIT_TIMEOUT; WAIT_FAILED remains unverifiable.
+                return false;
+            }
+
+            if ((int)$ffi->TerminateProcess($processHandle, 1) === 0) {
+                // It may have exited between the zero-time wait and signal.
+                return (int)$ffi->WaitForSingleObject($processHandle, 0) === 0;
+            }
+
+            // TerminateProcess is asynchronous. Do not discard the broker's
+            // script/results until exit of this same process object is visible.
+            return (int)$ffi->WaitForSingleObject($processHandle, 100) === 0;
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            try {
+                $ffi->CloseHandle($processHandle);
+            } catch (\Throwable) {
+                // The stable process authority ends with this scope.
+            }
+        }
+    }
+
+    private static function windowsProcessImagePathFromHandle(\FFI $ffi, mixed $processHandle): ?string
+    {
+        try {
+            $buffer = $ffi->new('WCHAR[' . self::WINDOWS_PROCESS_IMAGE_MAX_CHARACTERS . ']');
+            $length = $ffi->new('DWORD[1]');
+            $length[0] = self::WINDOWS_PROCESS_IMAGE_MAX_CHARACTERS;
+            if ((int)$ffi->QueryFullProcessImageNameW($processHandle, 0, $buffer, $length) === 0) {
+                return null;
+            }
+
+            $characterCount = (int)$length[0];
+            if ($characterCount < 1 || $characterCount >= self::WINDOWS_PROCESS_IMAGE_MAX_CHARACTERS) {
+                return null;
+            }
+            $rawPath = \FFI::string($ffi->cast('char *', $buffer), $characterCount * 2);
+            $imagePath = @\iconv('UTF-16LE', 'UTF-8', $rawPath);
+            if (!\is_string($imagePath)
+                || $imagePath === ''
+                || \str_contains($imagePath, "\0")
+            ) {
+                return null;
+            }
+
+            return $imagePath;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private static function windowsProcessCommandLineFromHandle(\FFI $ffi, mixed $processHandle): ?string
+    {
+        try {
+            $ntdll = $ffi->GetModuleHandleA('ntdll.dll');
+            if (\FFI::isNull($ntdll)) {
+                return null;
+            }
+            $queryAddress = $ffi->GetProcAddress($ntdll, 'NtQueryInformationProcess');
+            if (\FFI::isNull($queryAddress)) {
+                return null;
+            }
+            $queryProcess = $ffi->cast('WLS_NT_QUERY_INFORMATION_PROCESS', $queryAddress);
+
+            // ProcessCommandLineInformation (60) returns a UNICODE_STRING and
+            // its UTF-16 payload in one caller-owned buffer.
+            $requiredLength = $ffi->new('ULONG[1]');
+            $requiredLength[0] = 0;
+            $queryProcess($processHandle, 60, null, 0, $requiredLength);
+            $bufferLength = (int)$requiredLength[0];
+            if ($bufferLength < 16 || $bufferLength > self::WINDOWS_PROCESS_COMMAND_QUERY_MAX_BYTES) {
+                return null;
+            }
+
+            $buffer = $ffi->new('unsigned char[' . $bufferLength . ']');
+            $status = (int)$queryProcess(
+                $processHandle,
+                60,
+                $buffer,
+                $bufferLength,
+                $requiredLength,
+            );
+            if ($status < 0 || (int)$requiredLength[0] > $bufferLength) {
+                return null;
+            }
+
+            $unicode = $ffi->cast('WLS_UNICODE_STRING *', $buffer)[0];
+            $commandBytes = (int)$unicode->Length;
+            if ($commandBytes < 2
+                || ($commandBytes % 2) !== 0
+                || $commandBytes > (int)$unicode->MaximumLength
+                || $commandBytes > ($bufferLength - 16)
+                || \FFI::isNull($unicode->Buffer)
+            ) {
+                return null;
+            }
+
+            $rawCommand = \FFI::string(
+                $ffi->cast('char *', $unicode->Buffer),
+                $commandBytes,
+            );
+            $commandLine = @\iconv('UTF-16LE', 'UTF-8', $rawCommand);
+            if (!\is_string($commandLine)
+                || $commandLine === ''
+                || \str_contains($commandLine, "\0")
+            ) {
+                return null;
+            }
+
+            return $commandLine;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private static function windowsIsolatedBatchBrokerCommandMatches(
+        string $commandLine,
+        string $batchId,
+        string $scriptPath
+    ): bool {
+        if ($commandLine === ''
+            || \str_contains($commandLine, "\0")
+            || \preg_match('/^[a-f0-9]{32}$/D', $batchId) !== 1
+            || $scriptPath === ''
+            || \str_contains($scriptPath, "\0")
+        ) {
+            return false;
+        }
+
+        $tokens = self::tokenizeWindowsIdentityCommandLineArguments($commandLine);
+        if (\count($tokens) < 5) {
+            return false;
+        }
+        $executable = \strtolower(\basename(\str_replace('\\', '/', (string)$tokens[0])));
+        if (!\in_array($executable, ['powershell.exe', 'powershell'], true)) {
+            return false;
+        }
+
+        $fileIndex = null;
+        foreach ($tokens as $index => $token) {
+            if (\strcasecmp((string)$token, '-File') !== 0) {
+                continue;
+            }
+            if ($fileIndex !== null) {
+                return false;
+            }
+            $fileIndex = $index;
+        }
+        if ($fileIndex === null
+            || $fileIndex < 1
+            || \count($tokens) !== $fileIndex + 4
+        ) {
+            return false;
+        }
+
+        $actualScript = \strtolower(\str_replace('/', '\\', (string)$tokens[$fileIndex + 1]));
+        $expectedScript = \strtolower(\str_replace('/', '\\', $scriptPath));
+        return \hash_equals($expectedScript, $actualScript)
+            && \hash_equals(self::WINDOWS_ISOLATED_BATCH_MARKER, (string)$tokens[$fileIndex + 2])
+            && \hash_equals(
+                self::WINDOWS_ISOLATED_BATCH_ID_PREFIX . $batchId,
+                (string)$tokens[$fileIndex + 3],
+            );
+    }
+
+    /**
+     * Parse the deliberately simple broker command grammar without rewriting
+     * Windows path separators. The general command tokenizer decodes doubled
+     * backslashes and would corrupt an exact UNC script identity.
+     *
+     * @return list<string>
+     */
+    private static function tokenizeWindowsIdentityCommandLineArguments(string $commandLine): array
+    {
+        $matched = \preg_match_all(
+            '/"([^"\r\n]*)"|([^\s"\r\n]+)/',
+            $commandLine,
+            $matches,
+            \PREG_SET_ORDER | \PREG_OFFSET_CAPTURE | \PREG_UNMATCHED_AS_NULL,
+        );
+        if ($matched === false || $matched === 0) {
+            return [];
+        }
+
+        $tokens = [];
+        $cursor = 0;
+        foreach ($matches as $match) {
+            $whole = (string)$match[0][0];
+            $offset = (int)$match[0][1];
+            $gap = \substr($commandLine, $cursor, $offset - $cursor);
+            if (($tokens === [] && \trim($gap) !== '')
+                || ($tokens !== [] && \preg_match('/^\s+$/D', $gap) !== 1)
+            ) {
+                return [];
+            }
+
+            $quoted = $match[1][1] >= 0 ? (string)$match[1][0] : null;
+            $unquoted = $match[2][1] >= 0 ? (string)$match[2][0] : null;
+            $tokens[] = $quoted ?? $unquoted ?? '';
+            $cursor = $offset + \strlen($whole);
+        }
+
+        return \trim(\substr($commandLine, $cursor)) === '' ? $tokens : [];
     }
 
 
@@ -6524,7 +7331,7 @@ PHP;
      */
     private static function logWindowsBatchCreateTiming(
         string $mode,
-        float $startedAt,
+        int|float $startedAtNanoseconds,
         array $timings,
         int $helperCount,
         int $itemCount
@@ -6539,7 +7346,7 @@ PHP;
             'result_ms' => $milliseconds((float) ($timings['result'] ?? 0.0)),
             'pid_record_ms' => $milliseconds((float) ($timings['pid_record'] ?? 0.0)),
             'reap_ms' => $milliseconds((float) ($timings['reap'] ?? 0.0)),
-            'total_ms' => $milliseconds(\microtime(true) - $startedAt),
+            'total_ms' => $milliseconds(self::monotonicElapsedSeconds($startedAtNanoseconds)),
         ];
         $encoded = \json_encode($payload, \JSON_UNESCAPED_SLASHES);
 
@@ -6632,7 +7439,10 @@ PHP;
         }
 
         $expectedRows = \max(1, $expectedRows);
-        $deadline = \microtime(true) + \max(0.05, $timeoutSeconds);
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(
+            \hrtime(true),
+            \max(0.05, $timeoutSeconds),
+        );
         do {
             if (self::countWindowsBatchResultRows($resultPath) >= $expectedRows) {
                 break;
@@ -6644,7 +7454,7 @@ PHP;
             }
 
             \Weline\Framework\Runtime\SchedulerSystem::usleep(20_000);
-        } while (\microtime(true) < $deadline);
+        } while (\hrtime(true) < $deadlineNanoseconds);
     }
 
     /**
@@ -6689,7 +7499,7 @@ PHP;
 
         $expectedRows = \max(1, $expectedRows);
         $timeoutSeconds = self::resolveWindowsBatchCreateHelperTimeout($expectedRows);
-        $deadline = \microtime(true) + $timeoutSeconds;
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), $timeoutSeconds);
         $status = @\proc_get_status($process);
 
         do {
@@ -6703,7 +7513,7 @@ PHP;
             }
 
             \Weline\Framework\Runtime\SchedulerSystem::usleep(20_000);
-        } while (\microtime(true) < $deadline);
+        } while (\hrtime(true) < $deadlineNanoseconds);
 
         $status = @\proc_get_status($process);
         if (($status['running'] ?? false) === true) {
@@ -6762,14 +7572,14 @@ PHP;
         $status ??= @\proc_get_status($process);
         if (($status['running'] ?? false) === true) {
             @\proc_terminate($process);
-            $deadline = \microtime(true) + 0.1;
+            $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), 0.1);
             do {
                 \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
                 $status = @\proc_get_status($process);
                 if (($status['running'] ?? false) !== true) {
                     break;
                 }
-            } while (\microtime(true) < $deadline);
+            } while (\hrtime(true) < $deadlineNanoseconds);
         }
 
         // Do not call proc_close() here on Windows detached helpers. In
@@ -6904,7 +7714,7 @@ PHP;
         }
 
         $output = '';
-        $deadline = \microtime(true) + 2.0;
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), 2.0);
         $status = null;
         do {
             if (isset($pipes[1])) {
@@ -6918,7 +7728,7 @@ PHP;
                 break;
             }
             \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
-        } while (\microtime(true) < $deadline);
+        } while (\hrtime(true) < $deadlineNanoseconds);
 
         if (isset($pipes[1])) {
             $chunk = @\stream_get_contents($pipes[1]);
@@ -7029,7 +7839,10 @@ PHP;
             'system.processer.windows_batch_create_pid_resolution_system_scan',
             '0'
         ))), ['1', 'true', 'yes', 'on'], true);
-        $deadline = \microtime(true) + \max(0.1, $timeoutSeconds);
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(
+            \hrtime(true),
+            \max(0.1, $timeoutSeconds),
+        );
         do {
             foreach ($pending as $key => $item) {
                 // Fast path: WLS children register their own exact managed
@@ -7072,7 +7885,7 @@ PHP;
             }
 
             \Weline\Framework\Runtime\SchedulerSystem::usleep(50_000);
-        } while (\microtime(true) < $deadline);
+        } while (\hrtime(true) < $deadlineNanoseconds);
 
         return $resolved;
     }
@@ -7629,8 +8442,8 @@ POWERSHELL;
                 @\stream_set_blocking($psPipes[2], false);
             }
 
-            $deadline = \microtime(true) + 0.5;
-            while (\microtime(true) < $deadline) {
+            $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), 0.5);
+            while (\hrtime(true) < $deadlineNanoseconds) {
                 if (isset($psPipes[1])) {
                     $chunk = @\fread($psPipes[1], 512);
                     if (\is_string($chunk) && $chunk !== '') {
@@ -7689,7 +8502,10 @@ POWERSHELL;
 
     private static function waitForManagedProcessLaunch(string $pname, float $timeoutSeconds = 5.0): int
     {
-        $deadline = \microtime(true) + \max(0.1, $timeoutSeconds);
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(
+            \hrtime(true),
+            \max(0.1, $timeoutSeconds),
+        );
         $processName = self::extractCommandLineArg($pname, 'name');
         $launchId = self::extractCommandLineArg($pname, 'launch-id');
         do {
@@ -7712,7 +8528,7 @@ POWERSHELL;
             }
 
             \Weline\Framework\Runtime\SchedulerSystem::usleep(100_000);
-        } while (\microtime(true) < $deadline);
+        } while (\hrtime(true) < $deadlineNanoseconds);
 
         return 0;
     }
@@ -7863,7 +8679,7 @@ POWERSHELL;
         self::registerWindowsDetachedBatchHelperShutdown();
         self::$windowsDetachedBatchHelpers[] = [
             'process' => $process,
-            'started_at' => \microtime(true),
+            'started_at' => \hrtime(true) / 1_000_000_000,
             'script_path' => $scriptPath,
             'result_path' => $resultPath,
             'error_path' => $errorPath,
@@ -7894,9 +8710,12 @@ POWERSHELL;
             return;
         }
 
-        $now = \microtime(true);
+        $nowNanoseconds = \hrtime(true);
+        $now = $nowNanoseconds / 1_000_000_000;
         $helperTtlSeconds = self::resolveWindowsDetachedBatchHelperTtl();
-        $forceDeadline = $force ? $now + 0.1 : null;
+        $forceDeadlineNanoseconds = $force
+            ? self::monotonicDeadlineFrom($nowNanoseconds, 0.1)
+            : null;
         foreach (self::$windowsDetachedBatchHelpers as $key => $helper) {
             $age = \max(0.0, $now - (float)($helper['started_at'] ?? $now));
             if ((bool)($helper['isolate_parent_handles'] ?? false)
@@ -7916,18 +8735,15 @@ POWERSHELL;
             }
 
 
-            if ((bool)($helper['isolate_parent_handles'] ?? false)
-                && self::isWindowsIsolatedBatchBrokerRunning($helper)
-            ) {
+            if ((bool)($helper['isolate_parent_handles'] ?? false)) {
                 if (!$force && $age < $helperTtlSeconds) {
                     continue;
                 }
 
-                $brokerPid = (int)($helper['isolated_broker_pid'] ?? 0);
-                if ($brokerPid > 0) {
-                    self::killByPid($brokerPid, true);
-                }
-                if (!$force && self::isWindowsIsolatedBatchBrokerRunning($helper)) {
+                // Never split identity observation and termination across raw
+                // PID operations. Unknown HANDLE/identity state is retained so
+                // a recycled PID cannot authorize cleanup or a signal.
+                if (!self::terminateWindowsIsolatedBatchBrokerByHandle($helper)) {
                     continue;
                 }
             }
@@ -7952,12 +8768,15 @@ POWERSHELL;
                 $lastTerminateAt = (float) ($helper['termination_requested_at'] ?? 0.0);
                 if ($force || $lastTerminateAt <= 0.0 || ($now - $lastTerminateAt) >= 0.1) {
                     @\proc_terminate($process);
-                    self::$windowsDetachedBatchHelpers[$key]['termination_requested_at'] = \microtime(true);
+                    self::$windowsDetachedBatchHelpers[$key]['termination_requested_at']
+                        = \hrtime(true) / 1_000_000_000;
                 }
                 $status = @\proc_get_status($process);
 
                 if ($force) {
-                    while (($status['running'] ?? false) === true && \microtime(true) < (float) $forceDeadline) {
+                    while (($status['running'] ?? false) === true
+                        && \hrtime(true) < $forceDeadlineNanoseconds
+                    ) {
                         \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
                         $status = @\proc_get_status($process);
                     }
@@ -9036,10 +9855,10 @@ POWERSHELL;
             return $result;
         }
         
-        $startTime = \microtime(true);
+        $deadlineNanoseconds = self::monotonicDeadlineFrom(\hrtime(true), \max(0.0, $timeout));
         $stillRunning = \array_map('intval', $pids);
         
-        while (\microtime(true) - $startTime < $timeout && !empty($stillRunning)) {
+        while (\hrtime(true) < $deadlineNanoseconds && !empty($stillRunning)) {
             $runningMap = self::batchCheckRunning($stillRunning);
             $newStillRunning = [];
             foreach ($stillRunning as $pid) {
@@ -9746,6 +10565,28 @@ POWERSHELL;
         $launchId = self::extractCommandLineArg($identitySource, 'launch-id');
         $epoch = self::extractCommandLineArg($identitySource, 'epoch');
 
+        // Self-registration usually passes pname as "--name=..." only. Generation
+        // fences (--launch-id / --epoch) live on argv; pull them so public lease
+        // confirmation can match the child's READY proof. Without this, Dispatcher
+        // pid records lack launch_id and READY fails with
+        // "managed-process record is unavailable".
+        if ($pid === \getmypid()
+            && ($launchId === '' || $epoch === '' || $processName === '')
+        ) {
+            $argvSource = self::buildIdentitySourceFromCurrentArgv();
+            if ($argvSource !== '') {
+                if ($processName === '') {
+                    $processName = self::extractCommandLineArg($argvSource, 'name');
+                }
+                if ($launchId === '') {
+                    $launchId = self::extractCommandLineArg($argvSource, 'launch-id');
+                }
+                if ($epoch === '') {
+                    $epoch = self::extractCommandLineArg($argvSource, 'epoch');
+                }
+            }
+        }
+
         // Newly-created managed processes already carry stable identity flags in
         // the command we used to launch them. Avoid an immediate WMI command-line
         // query on Windows startup; later control paths still verify live PIDs.
@@ -9960,6 +10801,30 @@ POWERSHELL;
         }
 
         return false;
+    }
+
+    /**
+     * Join current CLI argv into a probeable identity string for self setPid().
+     */
+    private static function buildIdentitySourceFromCurrentArgv(): string
+    {
+        $argv = $_SERVER['argv'] ?? null;
+        if (!\is_array($argv) || $argv === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($argv as $token) {
+            if (!\is_scalar($token)) {
+                continue;
+            }
+            $token = \trim((string)$token);
+            if ($token !== '') {
+                $parts[] = $token;
+            }
+        }
+
+        return $parts !== [] ? \implode(' ', $parts) : '';
     }
 
     private static function extractCommandLineArg(string $commandLine, string $name): string
@@ -11075,7 +11940,11 @@ POWERSHELL;
                 'in_use' => true,
                 'pid' => 0,
                 'pid_running' => false,
-                'is_weline' => false,
+                // Advisory port_index / name hints are the only identity left when
+                // the kernel listener PID cannot be resolved (common without
+                // privileged ss -p). Do not force is_weline=false or startup
+                // treats our own dispatcher as a foreign orphan.
+                'is_weline' => $portIndexSuggestsWeline || self::nameIndexSuggestsWelinePort($port),
                 'state' => 'orphan',
                 'pname' => $portIndexPname,
                 'scope' => self::extractProjectScopeFromProcessName($portIndexPname),
@@ -11093,11 +11962,12 @@ POWERSHELL;
 
         $pidRunning = self::isRunningByPid($pid);
         if (!$pidRunning) {
+            $advisoryWeline = $portIndexSuggestsWeline || self::nameIndexSuggestsWelinePort($port);
             return [
                 'in_use' => true,
                 'pid' => $pid,
                 'pid_running' => false,
-                'is_weline' => false,
+                'is_weline' => $advisoryWeline,
                 'state' => 'orphan',
                 'pname' => $portIndexPname,
                 'scope' => self::extractProjectScopeFromProcessName($portIndexPname),

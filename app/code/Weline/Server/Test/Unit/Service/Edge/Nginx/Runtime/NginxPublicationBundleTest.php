@@ -16,6 +16,9 @@ final class NginxPublicationBundleTest extends TestCase
         $this->root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-nginx-bundle-'
             . \bin2hex(\random_bytes(8));
         self::assertTrue(\mkdir($this->root, 0700, true));
+        $canonicalRoot = \realpath($this->root);
+        self::assertIsString($canonicalRoot);
+        $this->root = $canonicalRoot;
     }
 
     protected function tearDown(): void

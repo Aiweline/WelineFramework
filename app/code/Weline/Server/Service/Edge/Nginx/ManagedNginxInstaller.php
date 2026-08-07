@@ -37,6 +37,7 @@ final class ManagedNginxInstaller
     private const BUILD_TIMEOUT_SECONDS = 1800.0;
     private const INSTALL_TIMEOUT_SECONDS = 600.0;
     private const INSTALL_LOCK_TIMEOUT_SECONDS = 30.0;
+    private const MAX_INSTALL_CANDIDATE_RECOVERY_ENTRIES = 256;
 
     public const VERSION = '1.30.4';
 
@@ -77,7 +78,9 @@ final class ManagedNginxInstaller
     private function ensureInstalledLocked(bool $force): array
     {
         try {
+            $this->cleanupManifestAtomicWriteRecoveryBackups();
             $this->reconcileInterruptedInstallPublication();
+            $this->reconcileInterruptedInstallCandidates();
         } catch (\Throwable $throwable) {
             return [
                 'ok' => false,
@@ -104,6 +107,7 @@ final class ManagedNginxInstaller
                         'Managed nginx legacy manifest migration did not produce a valid pinned manifest.',
                     );
                 }
+                $this->reconcileInterruptedInstallCandidates();
 
                 return [
                     'ok' => true,
@@ -394,6 +398,41 @@ final class ManagedNginxInstaller
             throw new \RuntimeException('Nginx install root is missing or unsafe: ' . $root);
         }
         $this->writeManifestFile($this->paths->manifestFile(), $manifest);
+        $this->cleanupManifestAtomicWriteRecoveryBackups();
+    }
+
+    /**
+     * The active install manifest has one writer namespace: ensureInstalled()
+     * while holding managed-nginx.install.lock. Candidate-slot manifests use
+     * unique paths and are deliberately outside this recovery collector.
+     */
+    private function cleanupManifestAtomicWriteRecoveryBackups(): void
+    {
+        $root = $this->paths->installRoot();
+        if (!\is_dir($root) || \is_link($root)) {
+            return;
+        }
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $this->paths->manifestFile(),
+            16 * 1024 * 1024,
+            'Managed Nginx install manifest',
+            function (string $contents): void {
+                $manifest = \json_decode(
+                    $contents,
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR,
+                );
+                if (!\is_array($manifest)
+                    || (!$this->manifestMatches($manifest)
+                        && !$this->legacyManifestMatches($manifest))
+                ) {
+                    throw new \RuntimeException(
+                        'Managed Nginx install manifest recovery target is invalid.',
+                    );
+                }
+            },
+        );
     }
 
     /**
@@ -486,15 +525,20 @@ final class ManagedNginxInstaller
             );
         }
         if ($requireExistingOwnership) {
-            $manifest = $this->readManifest();
-            if (!$this->managedInstallOwnershipMatches($manifest)
-                && !$this->legacyManifestMatches($manifest)
-            ) {
-                throw new \RuntimeException(
-                    'Existing managed nginx install_root has no valid WLS ownership manifest; '
-                        . 'automatic replacement is refused.'
-                );
-            }
+            $this->assertExistingInstallOwnership();
+        }
+    }
+
+    private function assertExistingInstallOwnership(): void
+    {
+        $manifest = $this->readManifest();
+        if (!$this->managedInstallOwnershipMatches($manifest)
+            && !$this->legacyManifestMatches($manifest)
+        ) {
+            throw new \RuntimeException(
+                'Existing managed nginx install_root has no valid WLS ownership manifest; '
+                    . 'automatic replacement is refused.'
+            );
         }
     }
 
@@ -582,6 +626,106 @@ final class ManagedNginxInstaller
             );
         }
         $this->removeTree($rollback);
+    }
+
+    /**
+     * Collect crash residues only while ensureInstalled() owns the installer
+     * lock. Enumeration and validation finish before the first deletion, and
+     * an exact committed prefix is the sole authority for discarding them.
+     */
+    private function reconcileInterruptedInstallCandidates(): void
+    {
+        $prefix = $this->paths->installRoot();
+        $parent = \dirname($prefix);
+        if (!\file_exists($parent) && !\is_link($parent)) {
+            return;
+        }
+        $parentStatus = @\lstat($parent);
+        if (!\is_array($parentStatus)
+            || \is_link($parent)
+            || ((((int)($parentStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx install candidate parent is unsafe.',
+            );
+        }
+        $candidates = [];
+        $entries = 0;
+        $namespacePrefix = 'install-candidate-';
+        foreach (new \FilesystemIterator($parent, \FilesystemIterator::SKIP_DOTS) as $entry) {
+            if (++$entries > self::MAX_INSTALL_CANDIDATE_RECOVERY_ENTRIES) {
+                throw new \RuntimeException(
+                    'Managed nginx install candidate recovery enumeration exceeds its fixed limit.',
+                );
+            }
+            $name = $entry->getFilename();
+            $reserved = \str_starts_with($name, $namespacePrefix)
+                || (\PHP_OS_FAMILY === 'Windows'
+                    && \strncasecmp(
+                        $name,
+                        $namespacePrefix,
+                        \strlen($namespacePrefix),
+                    ) === 0);
+            if (!$reserved) {
+                continue;
+            }
+            if (\preg_match('/\Ainstall-candidate-[a-f0-9]{16}\z/D', $name) !== 1) {
+                throw new \RuntimeException(
+                    'Managed nginx install candidate namespace contains a malformed retained entry.',
+                );
+            }
+            $path = $entry->getPathname();
+            if ($entry->isLink() || \is_link($path) || !$entry->isDir()) {
+                throw new \RuntimeException(
+                    'Managed nginx install candidate recovery found a linked or special candidate.',
+                );
+            }
+            $candidates[] = $path;
+        }
+        $parentAfterDiscovery = @\lstat($parent);
+        if (!\is_array($parentAfterDiscovery)
+            || \is_link($parent)
+            || ((((int)($parentAfterDiscovery['mode'] ?? 0)) & 0170000) !== 0040000)
+            || (int)($parentAfterDiscovery['dev'] ?? -1) !== (int)($parentStatus['dev'] ?? -2)
+            || (int)($parentAfterDiscovery['ino'] ?? -1) !== (int)($parentStatus['ino'] ?? -2)
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx install candidate parent changed during discovery.',
+            );
+        }
+        if ($candidates === [] || !$this->committedInstallPrefixFullyValid()) {
+            return;
+        }
+        foreach ($candidates as $candidate) {
+            $this->assertSafeTree($candidate, 'managed nginx interrupted install candidate');
+        }
+        if (!$this->committedInstallPrefixFullyValid()) {
+            throw new \RuntimeException(
+                'Committed managed nginx install changed before candidate cleanup.',
+            );
+        }
+        foreach ($candidates as $candidate) {
+            $this->removeTree($candidate);
+        }
+    }
+
+    private function committedInstallPrefixFullyValid(): bool
+    {
+        $prefix = $this->paths->installRoot();
+        if (!\is_dir($prefix) || \is_link($prefix)) {
+            return false;
+        }
+        try {
+            if (\PHP_OS_FAMILY === 'Windows') {
+                $this->assertExistingInstallOwnership();
+            } else {
+                $this->assertUnixInstallRootPolicy($prefix, true);
+            }
+            $this->assertSafeTree($prefix, 'committed managed nginx install');
+            return $this->paths->isInstalled() && $this->manifestMatches();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function managedRollbackMatches(string $rollback): bool
@@ -1187,6 +1331,25 @@ final class ManagedNginxInstaller
                 'platform' => 'Windows',
             ];
         }
+        if (\file_exists($prefix) || \is_link($prefix)) {
+            if (!\is_dir($prefix) || \is_link($prefix)) {
+                return [
+                    'ok' => false,
+                    'message' => 'Windows managed nginx install root is linked or special and will not be replaced',
+                    'platform' => 'Windows',
+                ];
+            }
+            try {
+                $this->assertSafeTree($prefix, 'existing Windows managed nginx install');
+                $this->assertExistingInstallOwnership();
+            } catch (\Throwable $throwable) {
+                return [
+                    'ok' => false,
+                    'message' => $throwable->getMessage(),
+                    'platform' => 'Windows',
+                ];
+            }
+        }
 
         $zip = $cacheDir . DIRECTORY_SEPARATOR . 'nginx-' . self::VERSION . '.zip';
         $extractDir = '';
@@ -1245,7 +1408,7 @@ final class ManagedNginxInstaller
                 $candidate . DIRECTORY_SEPARATOR . \basename($this->paths->manifestFile()),
                 $manifest,
             );
-            $this->publishInstallCandidate($candidate, $prefix);
+            $this->publishInstallCandidate($candidate, $prefix, true);
 
             return [
                 'ok' => true,
@@ -1416,7 +1579,11 @@ final class ManagedNginxInstaller
                 throw new \RuntimeException('Managed nginx install target is linked or special.');
             }
             if ($requireOwnedPrevious) {
-                $this->assertUnixInstallRootPolicy($prefix, true);
+                if (\PHP_OS_FAMILY === 'Windows') {
+                    $this->assertExistingInstallOwnership();
+                } else {
+                    $this->assertUnixInstallRootPolicy($prefix, true);
+                }
             }
             $this->assertSafeTree($prefix, 'existing managed nginx install');
         }
@@ -1474,6 +1641,7 @@ final class ManagedNginxInstaller
                 throw new \RuntimeException('Managed nginx install succeeded but rollback cleanup failed: ' . $rollback);
             }
         }
+        $this->reconcileInterruptedInstallCandidates();
     }
 
     private function findWindowsNginxRoot(string $root): ?string

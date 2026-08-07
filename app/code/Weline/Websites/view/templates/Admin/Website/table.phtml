@@ -237,10 +237,27 @@ $storeLifecycleLabels = [
                     </td>
                     <td class="text-end weline-websites-op-cell">
                         <div class="d-flex gap-2 flex-wrap justify-content-end">
-                            <?php if ($siteUrl !== ''): ?>
-                                <a href="<?= htmlspecialchars($siteUrl) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary" title="<?= __('访问网站') ?>">
-                                    <i class="mdi mdi-open-in-new"></i> <lang>访问</lang>
+                            <?php
+                            $frontendUrl = (string)($website['frontend_url'] ?? $siteUrl);
+                            $backendUrl = (string)($website['backend_url'] ?? '');
+                            ?>
+                            <?php if ($frontendUrl !== ''): ?>
+                                <a href="<?= htmlspecialchars($frontendUrl) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary" title="<?= __('访问前端') ?>">
+                                    <i class="mdi mdi-open-in-new"></i> <lang>访问前端</lang>
                                 </a>
+                            <?php else: ?>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="<?= __('请先绑定域名') ?>">
+                                    <i class="mdi mdi-open-in-new"></i> <lang>访问前端</lang>
+                                </button>
+                            <?php endif; ?>
+                            <?php if ($backendUrl !== ''): ?>
+                                <a href="<?= htmlspecialchars($backendUrl) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success" title="<?= __('管理后端') ?>">
+                                    <i class="mdi mdi-monitor-dashboard"></i> <lang>管理后端</lang>
+                                </a>
+                            <?php else: ?>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="<?= __('请先绑定域名') ?>">
+                                    <i class="mdi mdi-monitor-dashboard"></i> <lang>管理后端</lang>
+                                </button>
                             <?php endif; ?>
                             <block class='Weline\Component\Block\OffCanvas'
                                    cache='0'

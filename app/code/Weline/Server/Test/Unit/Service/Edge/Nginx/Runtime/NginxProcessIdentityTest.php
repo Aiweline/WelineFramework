@@ -89,6 +89,49 @@ final class NginxProcessIdentityTest extends TestCase
         self::assertNull($identity->recordedPid());
     }
 
+    public function testIdentityLockCollectsValidatedRetainedBackupBeforeClear(): void
+    {
+        [$identity, $command, , $processManifest] = $this->fixture('backup-cleanup');
+        self::assertTrue($identity->inspect(32123, $command, true)['ok']);
+        $backup = $processManifest . '.wls-backup-' . \str_repeat('a', 16);
+        self::assertSame(17, \file_put_contents($backup, '{"previous":true}'));
+
+        self::assertSame(32123, $identity->recordedPid());
+        self::assertFileDoesNotExist($backup);
+
+        self::assertSame(17, \file_put_contents($backup, '{"previous":true}'));
+        $identity->clear(32123);
+        self::assertFileDoesNotExist($processManifest);
+        self::assertFileDoesNotExist($backup);
+    }
+
+    public function testIdentityLockPreservesBackupWhenPairedManifestIsInvalidOrMissing(): void
+    {
+        [$identity, $command, , $processManifest] = $this->fixture('backup-preserve');
+        self::assertTrue($identity->inspect(32123, $command, true)['ok']);
+        $backup = $processManifest . '.wls-backup-' . \str_repeat('b', 16);
+        self::assertSame(17, \file_put_contents($backup, '{"previous":true}'));
+        self::assertSame(8, \file_put_contents($processManifest, '{broken:'));
+
+        try {
+            $identity->recordedPid();
+            self::fail('An invalid paired process manifest must fail closed.');
+        } catch (\RuntimeException) {
+            self::assertFileExists($processManifest);
+            self::assertFileExists($backup);
+        }
+
+        self::assertTrue(\unlink($processManifest));
+        try {
+            $identity->recordedPid();
+            self::fail('A missing paired process manifest must fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('missing or unsafe', $exception->getMessage());
+        }
+        self::assertFileDoesNotExist($processManifest);
+        self::assertFileExists($backup);
+    }
+
     public function testNormalizeProcessStartTimeRecoversBleedingNumericColumns(): void
     {
         [$identity] = $this->fixture('start-time');

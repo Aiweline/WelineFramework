@@ -18,6 +18,7 @@ final class ConnectionAdapter
     private const DEFAULT_FLOW_WINDOW = 65535;
     private const MAX_FLOW_WINDOW = 0x7fffffff;
     private const MAX_DRAIN_BYTES = 262144;
+    private const MAX_COMPRESSED_HEADER_BLOCK_BYTES = 65536;
 
     private string $buffer = '';
     private bool $prefaceSeen = false;
@@ -43,13 +44,15 @@ final class ConnectionAdapter
      *   remote_closed:bool,
      *   local_closed:bool,
      *   request_emitted:bool,
+     *   response_started:bool,
+     *   response_streaming:bool,
      *   receive_window:int,
      *   send_window:int
      * }>
      */
     private array $streams = [];
 
-    /** @var array<int,array{body:string,offset:int}> */
+    /** @var array<int,array{body:string,offset:int,end_stream:bool}> */
     private array $pendingResponses = [];
 
     public function __construct(?HpackDecoder $decoder = null)
@@ -246,7 +249,11 @@ final class ConnectionAdapter
                     if (!$this->openClientStream($streamId, $write, $resetStreams)) {
                         continue;
                     }
-                    $this->streams[$streamId]['headers'] = $this->stripHeadersPayload($payload, $flags);
+                    $headerBlock = $this->stripHeadersPayload($payload, $flags);
+                    if (\strlen($headerBlock) > self::MAX_COMPRESSED_HEADER_BLOCK_BYTES) {
+                        throw new \UnexpectedValueException('header_block_too_large');
+                    }
+                    $this->streams[$streamId]['headers'] = $headerBlock;
                     $this->streams[$streamId]['end_headers']
                         = (($flags & FrameCodec::FLAG_END_HEADERS) === FrameCodec::FLAG_END_HEADERS);
                     $this->streams[$streamId]['remote_closed']
@@ -273,6 +280,12 @@ final class ConnectionAdapter
                             FrameCodec::ERROR_PROTOCOL_ERROR,
                             'continuation_without_headers'
                         );
+                    }
+                    $currentHeaderBytes = \strlen($this->streams[$streamId]['headers']);
+                    if (\strlen($payload)
+                        > self::MAX_COMPRESSED_HEADER_BLOCK_BYTES - $currentHeaderBytes
+                    ) {
+                        throw new \UnexpectedValueException('header_block_too_large');
                     }
                     $this->streams[$streamId]['headers'] .= $payload;
                     if (($flags & FrameCodec::FLAG_END_HEADERS) === FrameCodec::FLAG_END_HEADERS) {
@@ -389,20 +402,14 @@ final class ConnectionAdapter
         if (!isset($this->streams[$streamId])
             || $this->streams[$streamId]['local_closed']
             || !($this->streams[$streamId]['request_emitted'] ?? false)
+            || ($this->streams[$streamId]['response_started'] ?? false)
         ) {
             return '';
         }
 
-        $headerBlock = self::encodeStatusHeader($status);
-        foreach ($headers as $name => $values) {
-            $lower = \strtolower((string)$name);
-            if (\in_array($lower, ['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'upgrade'], true)) {
-                continue;
-            }
-            foreach ((array)$values as $value) {
-                $headerBlock .= self::encodeLiteralHeader($lower, (string)$value);
-            }
-        }
+        $this->streams[$streamId]['response_started'] = true;
+        $this->streams[$streamId]['response_streaming'] = false;
+        $headerBlock = $this->encodeResponseHeaderBlock($status, $headers);
 
         if ($body === '') {
             $frames = $this->encodeHeaderBlockFrames($streamId, $headerBlock, true);
@@ -412,9 +419,144 @@ final class ConnectionAdapter
         }
 
         $frames = $this->encodeHeaderBlockFrames($streamId, $headerBlock, false);
-        $this->pendingResponses[$streamId] = ['body' => $body, 'offset' => 0];
+        $this->pendingResponses[$streamId] = [
+            'body' => $body,
+            'offset' => 0,
+            'end_stream' => true,
+        ];
 
         return $frames . $this->flushPendingResponses($streamId);
+    }
+
+    /**
+     * Start a response whose DATA frames are supplied incrementally by the Worker.
+     *
+     * The bridge accepts the existing WLS HTTP/1 response-head representation but
+     * emits a native HTTP/2 HEADERS block without END_STREAM. Connection-specific
+     * headers and Content-Length are removed because a streaming response has no
+     * fixed body length.
+     */
+    public function beginStreamingResponse(int $streamId, string $httpResponseHeaders): string
+    {
+        if (!isset($this->streams[$streamId])
+            || $this->streams[$streamId]['local_closed']
+            || !($this->streams[$streamId]['request_emitted'] ?? false)
+            || ($this->streams[$streamId]['response_started'] ?? false)
+            || !\str_contains($httpResponseHeaders, "\r\n\r\n")
+        ) {
+            return '';
+        }
+
+        [$status, $headers, $body] = $this->parseHttpResponse($httpResponseHeaders);
+        if ($body !== '') {
+            return '';
+        }
+
+        unset($headers['content-length']);
+        $this->streams[$streamId]['response_started'] = true;
+        $this->streams[$streamId]['response_streaming'] = true;
+
+        return $this->encodeHeaderBlockFrames(
+            $streamId,
+            $this->encodeResponseHeaderBlock($status, $headers),
+            false,
+        );
+    }
+
+    /** Queue one incremental DATA segment and return the immediately sendable frames. */
+    public function appendStreamingData(int $streamId, string $data): string
+    {
+        if ($data === ''
+            || !isset($this->streams[$streamId])
+            || $this->streams[$streamId]['local_closed']
+            || !($this->streams[$streamId]['response_streaming'] ?? false)
+        ) {
+            return '';
+        }
+
+        $pending = $this->pendingResponses[$streamId] ?? null;
+        if (\is_array($pending) && ($pending['end_stream'] ?? false)) {
+            return '';
+        }
+        if (\is_array($pending)) {
+            if ($pending['offset'] > 0) {
+                $pending['body'] = \substr($pending['body'], $pending['offset']);
+                $pending['offset'] = 0;
+            }
+            $pending['body'] .= $data;
+            $this->pendingResponses[$streamId] = $pending;
+        } else {
+            $this->pendingResponses[$streamId] = [
+                'body' => $data,
+                'offset' => 0,
+                'end_stream' => false,
+            ];
+        }
+
+        return $this->flushPendingResponses($streamId);
+    }
+
+    /**
+     * Request END_STREAM after every queued byte. If flow control is exhausted,
+     * the final DATA frame remains pending until WINDOW_UPDATE releases it.
+     */
+    public function endStreamingResponse(int $streamId): string
+    {
+        if (!isset($this->streams[$streamId])
+            || $this->streams[$streamId]['local_closed']
+            || !($this->streams[$streamId]['response_streaming'] ?? false)
+        ) {
+            return '';
+        }
+
+        if (isset($this->pendingResponses[$streamId])) {
+            $this->pendingResponses[$streamId]['end_stream'] = true;
+        } else {
+            $this->pendingResponses[$streamId] = [
+                'body' => '',
+                'offset' => 0,
+                'end_stream' => true,
+            ];
+        }
+
+        return $this->flushPendingResponses($streamId);
+    }
+
+    public function isStreamActive(int $streamId): bool
+    {
+        return isset($this->streams[$streamId]) && !$this->streams[$streamId]['local_closed'];
+    }
+
+    public function isStreamingResponse(int $streamId): bool
+    {
+        return $this->isStreamActive($streamId)
+            && ($this->streams[$streamId]['response_streaming'] ?? false);
+    }
+
+    public function pendingResponseBytes(?int $streamId = null): int
+    {
+        $pendingResponses = $streamId === null
+            ? $this->pendingResponses
+            : (isset($this->pendingResponses[$streamId])
+                ? [$streamId => $this->pendingResponses[$streamId]]
+                : []);
+        $bytes = 0;
+        foreach ($pendingResponses as $pending) {
+            $bytes += \max(0, \strlen($pending['body']) - $pending['offset']);
+        }
+
+        return $bytes;
+    }
+
+    /** Abort one local response without disturbing other multiplexed streams. */
+    public function abortStream(int $streamId, int $errorCode = FrameCodec::ERROR_CANCEL): string
+    {
+        if (!$this->isStreamActive($streamId)) {
+            return '';
+        }
+
+        $this->dropStream($streamId);
+        return FrameCodec::rstStream($streamId, $errorCode);
     }
 
     public function initiateGoaway(int $errorCode = FrameCodec::ERROR_NO_ERROR, string $debug = ''): string
@@ -491,6 +633,7 @@ final class ConnectionAdapter
             'last_processed_stream_id' => $this->lastProcessedStreamId,
             'active_streams' => $this->activeStreamCount(),
             'pending_response_streams' => \array_values(\array_map('intval', \array_keys($this->pendingResponses))),
+            'pending_response_bytes' => $this->pendingResponseBytes(),
             'connection_receive_window' => $this->connectionReceiveWindow,
             'connection_send_window' => $this->connectionSendWindow,
             'peer_initial_stream_window' => $this->peerInitialStreamWindow,
@@ -628,6 +771,8 @@ final class ConnectionAdapter
             'remote_closed' => false,
             'local_closed' => false,
             'request_emitted' => false,
+            'response_started' => false,
+            'response_streaming' => false,
             'receive_window' => self::INITIAL_RECEIVE_WINDOW,
             'send_window' => $this->peerInitialStreamWindow,
         ];
@@ -774,7 +919,7 @@ final class ConnectionAdapter
 
     private function flushPendingResponses(?int $onlyStreamId = null): string
     {
-        if ($this->pendingResponses === [] || $this->connectionSendWindow <= 0) {
+        if ($this->pendingResponses === []) {
             return '';
         }
 
@@ -794,8 +939,17 @@ final class ConnectionAdapter
                 $remaining = \strlen($pending['body']) - $pending['offset'];
                 if ($remaining <= 0) {
                     unset($this->pendingResponses[$streamId]);
-                    $this->streams[$streamId]['local_closed'] = true;
-                    $this->cleanupClosedStream($streamId);
+                    if ($pending['end_stream']) {
+                        $frames .= FrameCodec::encode(
+                            FrameCodec::TYPE_DATA,
+                            FrameCodec::FLAG_END_STREAM,
+                            $streamId,
+                            '',
+                        );
+                        $this->streams[$streamId]['local_closed'] = true;
+                        $this->cleanupClosedStream($streamId);
+                    }
+                    $progress = true;
                     continue;
                 }
 
@@ -812,10 +966,11 @@ final class ConnectionAdapter
 
                 $chunk = \substr($pending['body'], $pending['offset'], $available);
                 $newOffset = $pending['offset'] + $available;
-                $isLast = $newOffset >= \strlen($pending['body']);
+                $isLastChunk = $newOffset >= \strlen($pending['body']);
+                $endStream = $isLastChunk && $pending['end_stream'];
                 $frames .= FrameCodec::encode(
                     FrameCodec::TYPE_DATA,
-                    $isLast ? FrameCodec::FLAG_END_STREAM : 0,
+                    $endStream ? FrameCodec::FLAG_END_STREAM : 0,
                     $streamId,
                     $chunk
                 );
@@ -824,10 +979,12 @@ final class ConnectionAdapter
                 $budget -= $available;
                 $progress = true;
 
-                if ($isLast) {
+                if ($isLastChunk) {
                     unset($this->pendingResponses[$streamId]);
-                    $this->streams[$streamId]['local_closed'] = true;
-                    $this->cleanupClosedStream($streamId);
+                    if ($endStream) {
+                        $this->streams[$streamId]['local_closed'] = true;
+                        $this->cleanupClosedStream($streamId);
+                    }
                 } else {
                     $this->pendingResponses[$streamId]['offset'] = $newOffset;
                 }
@@ -835,6 +992,25 @@ final class ConnectionAdapter
         } while ($progress && $budget > 0 && $this->connectionSendWindow > 0);
 
         return $frames;
+    }
+
+    /**
+     * @param array<string,string|int|float|list<string|int|float>> $headers
+     */
+    private function encodeResponseHeaderBlock(int $status, array $headers): string
+    {
+        $headerBlock = self::encodeStatusHeader($status);
+        foreach ($headers as $name => $values) {
+            $lower = \strtolower((string)$name);
+            if (\in_array($lower, ['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'upgrade'], true)) {
+                continue;
+            }
+            foreach ((array)$values as $value) {
+                $headerBlock .= self::encodeLiteralHeader($lower, (string)$value);
+            }
+        }
+
+        return $headerBlock;
     }
 
     private function resetStream(int $streamId, int $errorCode, string &$write, array &$resetStreams): void

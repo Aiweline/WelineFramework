@@ -10,6 +10,7 @@ use Weline\Server\Service\Edge\Gateway\GatewayCredentialStore;
 use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectIdentityRotator;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
+use Weline\Server\Service\Edge\Gateway\ProjectIdentityStore;
 
 final class Enroll extends AbstractGatewayCommand
 {
@@ -23,8 +24,25 @@ final class Enroll extends AbstractGatewayCommand
                 'confirmation_required',
             );
         }
+        try {
+            return (new ProjectIdentityStore())->withEnrollmentTransitionLock(
+                fn (): int => $this->executeConfirmed($args, $data, $json),
+            );
+        } catch (\Throwable $throwable) {
+            return $this->failure(
+                $throwable->getMessage(),
+                $json,
+                'enrollment_transition_failed',
+                ['retryable' => true],
+            );
+        }
+    }
+
+    private function executeConfirmed(array $args, array $data, bool $json): int
+    {
         $rotate = isset($args['rotate-project-id']) || isset($args['rotate_project_id']);
         $abortRotation = isset($args['abort-rotation']) || isset($args['abort_rotation']);
+        $freshIdentity = [];
         if ($rotate || $abortRotation) {
             try {
                 $rotator = new GatewayProjectIdentityRotator();
@@ -32,15 +50,30 @@ final class Enroll extends AbstractGatewayCommand
                     $rotator->abort();
                     $result = ['state' => 'ABORTED'];
                 } else {
-                    $result = $rotator->rotate();
+                    $result = $rotator->rotate(
+                        isset($args['same-root-transfer'])
+                            || isset($args['same_root_transfer']),
+                    );
                 }
-                if (!$json) {
-                    $this->printer->success($abortRotation
-                        ? __('项目 UUID 轮换已在宿主提交前安全中止。')
-                        : __('项目 UUID、宿主授权与本地凭据已完成可恢复原子轮换。'));
+                if (!$abortRotation
+                    && \hash_equals(
+                        'FRESH_ENROLLMENT_REQUIRED',
+                        (string)($result['state'] ?? ''),
+                    )
+                ) {
+                    // A live same-host clone is a new tenant. Keep the source
+                    // enrollment untouched and continue this same serialized
+                    // command through the ordinary administrator enrollment.
+                    $freshIdentity = $result;
+                } else {
+                    if (!$json) {
+                        $this->printer->success($abortRotation
+                            ? __('项目 UUID 轮换已在宿主提交前安全中止。')
+                            : __('项目 UUID、宿主授权与本地凭据已完成可恢复原子轮换。'));
+                    }
+                    $this->output($result, $json);
+                    return 0;
                 }
-                $this->output($result, $json);
-                return 0;
             } catch (\Throwable $throwable) {
                 return $this->failure(
                     $throwable->getMessage(),
@@ -181,15 +214,56 @@ final class Enroll extends AbstractGatewayCommand
                     ],
                 );
             }
+            $identityStore = new ProjectIdentityStore();
+            $pendingFreshIdentity = $identityStore->freshEnrollmentState();
+            if ($pendingFreshIdentity !== []) {
+                try {
+                    $completedFreshIdentity = $identityStore->completeFreshEnrollment(
+                        $projectUuid,
+                    );
+                } catch (\Throwable $throwable) {
+                    return $this->failure(
+                        __('宿主 enrollment 与新项目凭据均已提交，但克隆身份恢复标记尚未清理；重试相同命令将幂等完成。'),
+                        $json,
+                        'fresh_enrollment_local_finalize_pending',
+                        [
+                            'host_committed' => true,
+                            'credential_installed' => true,
+                            'retryable' => true,
+                            'project_uuid' => $projectUuid,
+                            'local_error' => GatewayBoundedText::singleLine(
+                                $throwable->getMessage(),
+                                512,
+                                'Fresh enrollment marker cleanup failed.',
+                            ),
+                        ],
+                    );
+                }
+                $freshIdentity = $freshIdentity !== []
+                    ? $freshIdentity
+                    : [
+                        'state' => 'FRESH_ENROLLMENT_REQUIRED',
+                        'previous_uuid' => (string)(
+                            $completedFreshIdentity['previous_project_uuid'] ?? ''
+                        ),
+                        'project_uuid' => $projectUuid,
+                    ];
+            }
             unset($payload['credential']);
             $payload['project_uuid'] = $projectUuid;
             $payload['allowed_domains'] = $domains;
             $payload['credential_installed'] = true;
             $payload['certificate_access'] = 'broker_auth_snap';
-            if (!$json) {
-                $this->printer->success(
-                    __('当前项目已授权到 WLS 2.0 宿主网关；项目凭据已写入 var，证书仅通过 Broker AUTH/SNAP 读取。')
+            if ($freshIdentity !== []) {
+                $payload['state'] = 'FRESH_ENROLLED';
+                $payload['previous_uuid'] = (string)(
+                    $freshIdentity['previous_uuid'] ?? ''
                 );
+            }
+            if (!$json) {
+                $this->printer->success($freshIdentity !== []
+                    ? __('克隆项目已生成独立 UUID 并完成全新宿主 enrollment；原项目授权和路由保持不变。')
+                    : __('当前项目已授权到 WLS 2.0 宿主网关；项目凭据已写入 var，证书仅通过 Broker AUTH/SNAP 读取。'));
                 $this->printer->note(__('授权域名：%{1}', [\implode(', ', $domains)]));
             }
             $this->output($payload, $json);
@@ -216,7 +290,8 @@ final class Enroll extends AbstractGatewayCommand
                 '--acme-dns-01' => __('授权项目使用 DNS-01 能力'),
                 '--stateless' => __('声明项目后端可按无状态策略分流；仍需运行时证明'),
                 '--shared-session' => __('声明项目后端共享 Session；仍需运行时证明'),
-                '--rotate-project-id' => __('以旧凭据+新凭据双证明执行可恢复 UUID/授权转移'),
+                '--rotate-project-id' => __('存活克隆根生成新 UUID 并全新 enrollment；同根才以双凭据证明转移'),
+                '--same-root-transfer' => __('允许已完成 clone enrollment 的项目再次执行同根双凭据身份转移'),
                 '--abort-rotation' => __('仅在宿主 commit 前中止未完成 UUID 轮换'),
                 '--confirm' => __('确认 enrollment、域名能力和项目凭据轮换'),
                 '--json' => __('输出稳定 JSON 文档'),

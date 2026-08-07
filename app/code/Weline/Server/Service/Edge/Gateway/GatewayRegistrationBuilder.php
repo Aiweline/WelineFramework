@@ -31,12 +31,16 @@ final class GatewayRegistrationBuilder
     /**
      * @return array<string,mixed>
      */
-    public function build(string $instanceName): array
+    public function build(
+        string $instanceName,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         return $this->withServingPublicationTransaction(
             $instanceName,
             static fn (\Closure $buildGateway, \Closure $buildServing): array =>
                 $buildGateway(),
+            $deadlineMonotonic,
         );
     }
 
@@ -52,6 +56,7 @@ final class GatewayRegistrationBuilder
     public function withServingPublicationTransaction(
         string $instanceName,
         \Closure $callback,
+        ?float $deadlineMonotonic = null,
     ): mixed {
         return $this->withServingPublicationTransactions(
             [$instanceName],
@@ -70,6 +75,7 @@ final class GatewayRegistrationBuilder
                     $transaction['build_serving'],
                 );
             },
+            $deadlineMonotonic,
         );
     }
 
@@ -88,6 +94,7 @@ final class GatewayRegistrationBuilder
     public function withServingPublicationTransactions(
         array $instanceNames,
         \Closure $callback,
+        ?float $deadlineMonotonic = null,
     ): mixed {
         if (!\array_is_list($instanceNames)
             || $instanceNames === []
@@ -125,10 +132,12 @@ final class GatewayRegistrationBuilder
                 'build_gateway' => fn (): array => $this->buildLocked(
                     $instanceName,
                     $store,
+                    $deadlineMonotonic,
                 ),
                 'build_serving' => fn (): array => $this->buildServingManifestLocked(
                     $instanceName,
                     $store,
+                    $deadlineMonotonic,
                 ),
             ];
         }
@@ -138,19 +147,59 @@ final class GatewayRegistrationBuilder
             $stores,
             $transactions,
             $callback,
+            $deadlineMonotonic,
         ): mixed {
             if ($offset >= \count($instanceNames)) {
+                self::assertPublicationDeadline($deadlineMonotonic);
                 return $callback($transactions);
             }
             $instanceName = $instanceNames[$offset];
             return $stores[$instanceName]->withPublicationTransaction(
                 $instanceName,
-                fn (): mixed => $acquire($offset + 1),
+                function () use (&$acquire, $offset, $deadlineMonotonic): mixed {
+                    self::assertPublicationDeadline($deadlineMonotonic);
+                    return $acquire($offset + 1);
+                },
+                self::publicationLockWaitTimeout($deadlineMonotonic),
             );
         };
         return $this->identity->withDesiredStateBuildLock(
-            fn (): mixed => $acquire(0),
+            function () use ($acquire, $deadlineMonotonic): mixed {
+                self::assertPublicationDeadline($deadlineMonotonic);
+                return $acquire(0);
+            },
+            self::publicationLockWaitTimeout($deadlineMonotonic),
         );
+    }
+
+    private static function publicationLockWaitTimeout(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        $remaining = self::assertPublicationDeadline($deadlineMonotonic);
+        return \min(0.25, $remaining);
+    }
+
+    private static function assertPublicationDeadline(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Serving publication transaction deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Serving publication transaction exhausted its global deadline.',
+            );
+        }
+        return $remaining;
     }
 
     /**
@@ -174,7 +223,9 @@ final class GatewayRegistrationBuilder
     private function buildServingManifestLocked(
         string $instanceName,
         ProjectServingManifestStore $servingManifests,
+        ?float $deadlineMonotonic = null,
     ): array {
+        self::assertPublicationDeadline($deadlineMonotonic);
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceName) !== 1) {
             throw new \InvalidArgumentException('WLS serving instance ID is outside bounds.');
         }
@@ -185,7 +236,7 @@ final class GatewayRegistrationBuilder
             throw new \RuntimeException('WLS instance endpoint is missing: ' . $instanceName);
         }
         $this->assertBackendIdentitySchema($endpoint);
-        $projectUuid = $this->projectUuid();
+        $projectUuid = $this->projectUuid($deadlineMonotonic);
         $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
         if (!\hash_equals($instanceName, (string)($gateway['instance_id'] ?? ''))) {
             throw new \RuntimeException(
@@ -275,6 +326,7 @@ final class GatewayRegistrationBuilder
                 $domain,
                 $material,
                 $certificateRoots,
+                $deadlineMonotonic,
             );
             $forceHttps = (bool)$preflightRoute['force_https']
                 && $certificate['state'] !== 'disabled';
@@ -308,7 +360,10 @@ final class GatewayRegistrationBuilder
             ],
             $routes,
         )));
-        $this->identity->advanceCertificateState($certificateDigest);
+        $this->identity->advanceCertificateState(
+            $certificateDigest,
+            $deadlineMonotonic,
+        );
         $projectCapability = $this->backendCapabilities
             ->projectDesiredState($backendCapability);
         $projectDesired = [
@@ -350,7 +405,10 @@ final class GatewayRegistrationBuilder
             ]),
         );
         $requestDigest = \hash('sha256', GatewayClient::canonicalJson($projectDesired));
-        [$projectGeneration, $idempotencyKey] = $this->resolveGeneration($requestDigest);
+        [$projectGeneration, $idempotencyKey] = $this->resolveGeneration(
+            $requestDigest,
+            $deadlineMonotonic,
+        );
         $registration = [
             'project_uuid' => $projectUuid,
             'project_root' => $projectRoot,
@@ -374,7 +432,10 @@ final class GatewayRegistrationBuilder
             'idempotency_key' => $idempotencyKey,
         ];
         $this->assertRegistrationEnvelope($registration);
-        $servingManifest = $servingManifests->publishFromRegistration($registration);
+        $servingManifest = $servingManifests->publishFromRegistration(
+            $registration,
+            deadlineMonotonic: $deadlineMonotonic,
+        );
         $requestedMode = \strtolower(\trim((string)($gateway['requested_mode'] ?? '')));
         if (\in_array($requestedMode, [
             GatewayStartupDecision::MODE_AUTO,
@@ -385,7 +446,11 @@ final class GatewayRegistrationBuilder
             // only after the immutable project snapshot and manifest succeed,
             // so recovery can replay the newest complete desired state.
             (new ProjectCertificateRenewalIntentStore($projectRoot))
-                ->enqueueFromRegistration($registration);
+                ->enqueueFromRegistration(
+                    $registration,
+                    self::publicationLockWaitTimeout($deadlineMonotonic),
+                    $deadlineMonotonic,
+                );
         }
         return $servingManifest;
     }
@@ -394,7 +459,9 @@ final class GatewayRegistrationBuilder
     private function buildLocked(
         string $instanceName,
         ProjectServingManifestStore $servingManifests,
+        ?float $deadlineMonotonic = null,
     ): array {
+        self::assertPublicationDeadline($deadlineMonotonic);
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceName) !== 1) {
             throw new \InvalidArgumentException('Gateway instance ID is outside protocol bounds.');
         }
@@ -405,7 +472,7 @@ final class GatewayRegistrationBuilder
             throw new \RuntimeException('WLS instance endpoint is missing: ' . $instanceName);
         }
         $this->assertBackendIdentitySchema($endpoint);
-        $projectUuid = $this->projectUuid();
+        $projectUuid = $this->projectUuid($deadlineMonotonic);
         $endpointGateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
         $endpointProjectUuid = \strtolower(\trim((string)($endpointGateway['project_uuid'] ?? '')));
         if ($endpointProjectUuid !== '' && !\hash_equals($projectUuid, $endpointProjectUuid)) {
@@ -546,6 +613,7 @@ final class GatewayRegistrationBuilder
                 $domain,
                 $material,
                 $certificateRoots,
+                $deadlineMonotonic,
             );
             $forceHttps = (bool)$preflightRoute['force_https']
                 && $certificate['state'] !== 'disabled';
@@ -589,7 +657,10 @@ final class GatewayRegistrationBuilder
             ],
             $routes,
         )));
-        $this->identity->advanceCertificateState($certificateDigest);
+        $this->identity->advanceCertificateState(
+            $certificateDigest,
+            $deadlineMonotonic,
+        );
 
         $projectDesired = [
             'project_uuid' => $projectUuid,
@@ -631,7 +702,10 @@ final class GatewayRegistrationBuilder
             ]),
         );
         $digest = \hash('sha256', GatewayClient::canonicalJson($projectDesired));
-        [$generation, $idempotencyKey] = $this->resolveGeneration($digest);
+        [$generation, $idempotencyKey] = $this->resolveGeneration(
+            $digest,
+            $deadlineMonotonic,
+        );
         $instanceDigest = \hash('sha256', GatewayClient::canonicalJson([
             'project_uuid' => $projectUuid,
             'instance_id' => $instanceName,
@@ -660,7 +734,10 @@ final class GatewayRegistrationBuilder
             'idempotency_key' => $idempotencyKey,
         ];
         $this->assertRegistrationEnvelope($registration);
-        $servingManifest = $servingManifests->publishFromRegistration($registration);
+        $servingManifest = $servingManifests->publishFromRegistration(
+            $registration,
+            deadlineMonotonic: $deadlineMonotonic,
+        );
         $registration['serving_manifest_generation'] = (int)$servingManifest['generation'];
         $registration['serving_manifest_digest'] = (string)$servingManifest['digest'];
         $registration['serving_manifest_path'] = (string)$servingManifest['path'];
@@ -670,7 +747,11 @@ final class GatewayRegistrationBuilder
         // generation first. Only then publish the non-secret convergence
         // intent, so a gateway outage can never lose a renewal notification.
         (new ProjectCertificateRenewalIntentStore())
-            ->enqueueFromRegistration($registration);
+            ->enqueueFromRegistration(
+                $registration,
+                self::publicationLockWaitTimeout($deadlineMonotonic),
+                $deadlineMonotonic,
+            );
         return $registration;
     }
 
@@ -698,9 +779,9 @@ final class GatewayRegistrationBuilder
         );
     }
 
-    public function projectUuid(): string
+    public function projectUuid(?float $deadlineMonotonic = null): string
     {
-        return $this->identity->projectUuid();
+        return $this->identity->projectUuid($deadlineMonotonic);
     }
 
     /**
@@ -857,7 +938,7 @@ final class GatewayRegistrationBuilder
 
     /**
      * Resolve the listener fence from the exact host allocator identity. The
-     * endpoint copy is useful only when it matches the live schema-5 lease;
+     * endpoint copy is useful only when it matches the live schema-6 lease;
      * neither synthesized IDs nor an unbound startup handoff are accepted.
      *
      * @param array<string,mixed> $endpoint
@@ -890,14 +971,15 @@ final class GatewayRegistrationBuilder
                 $instanceName,
                 GatewayLeaseIdentity::ROLE_INITIAL_BACKEND,
             );
-            if ((int)($embedded['schema_version'] ?? 0) !== 5
+            if ((int)($embedded['schema_version'] ?? 0)
+                    !== GatewayPortLeaseAllocator::SCHEMA_VERSION
                 || !\hash_equals('RESERVED', (string)($embedded['state'] ?? ''))
                 || !\hash_equals($leaseInstance, (string)($embedded['instance'] ?? ''))
                 || !\hash_equals($host, (string)($embedded['bind_host'] ?? ''))
                 || (int)($embedded['port'] ?? 0) !== $port
             ) {
                 throw new \RuntimeException(
-                    'Gateway backend endpoint has no exact schema-5 startup lease; restart is required.',
+                    'Gateway backend endpoint has no exact schema-6 startup lease; restart is required.',
                 );
             }
             $handoff = $gateway['startup_listener_handoff'] ?? null;
@@ -920,15 +1002,32 @@ final class GatewayRegistrationBuilder
             );
         }
 
-        $lease = (new GatewayPortLeaseAllocator())->status($leaseInstance);
+        $leases = new GatewayPortLeaseAllocator();
+        $masterPid = (int)($endpoint['master_pid'] ?? 0);
+        if ($masterPid < 1) {
+            throw new \RuntimeException(
+                'Gateway backend listener lease is not ACTIVE for the current Master fence.',
+            );
+        }
+        $lease = $leases->liveServingLeaseForAnyOwner(
+            $leaseInstance,
+            $host,
+            $port,
+            $leaseId,
+            $masterPid,
+        );
         if (!\is_array($lease)
-            || (int)($lease['schema_version'] ?? 0) !== 5
+            || (int)($lease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals('ACTIVE', (string)($lease['state'] ?? ''))
             || !\hash_equals($leaseInstance, (string)($lease['instance'] ?? ''))
             || !\hash_equals($leaseId, (string)($lease['lease_id'] ?? ''))
             || !\hash_equals($host, (string)($lease['bind_host'] ?? ''))
             || (int)($lease['port'] ?? 0) !== $port
-            || (int)($lease['master_pid'] ?? 0) !== (int)($endpoint['master_pid'] ?? 0)
+            || (int)($lease['master_pid'] ?? 0) !== $masterPid
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)(
+                $lease['launch_id'] ?? ''
+            )) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
                 $lease['master_process_birth'] ?? ''
             )) !== 1
@@ -1298,7 +1397,9 @@ final class GatewayRegistrationBuilder
         string $domain,
         array $material,
         array $certificateRoots,
+        ?float $deadlineMonotonic = null,
     ): array {
+        self::assertPublicationDeadline($deadlineMonotonic);
         $requestedState = (string)($material['certificate_state'] ?? 'pending');
         $activeCertificate = null;
         $disabledCertificate = null;
@@ -1309,10 +1410,18 @@ final class GatewayRegistrationBuilder
                 \trim((string)($material['key'] ?? '')),
                 \trim((string)($material['chain'] ?? '')),
                 $certificateRoots,
+                $deadlineMonotonic,
             );
         } elseif ($requestedState === 'disabled') {
-            $this->certificateGenerations->deactivate($domain);
-            $disabledCertificate = $this->certificateGenerations->disabled($domain);
+            $this->certificateGenerations->deactivate(
+                $domain,
+                false,
+                $deadlineMonotonic,
+            );
+            $disabledCertificate = $this->certificateGenerations->disabled(
+                $domain,
+                $deadlineMonotonic,
+            );
             if ($disabledCertificate === null) {
                 throw new \RuntimeException(
                     'Disabled certificate generation was not durably published: ' . $domain,
@@ -1322,8 +1431,14 @@ final class GatewayRegistrationBuilder
             // Missing source material is not by itself a revocation. Preserve a
             // previously activated generation unless a newer disabled tombstone
             // has already made that generation ineligible for serving.
-            $activeCertificate = $this->certificateGenerations->active($domain);
-            $disabledCertificate = $this->certificateGenerations->disabled($domain);
+            $activeCertificate = $this->certificateGenerations->active(
+                $domain,
+                $deadlineMonotonic,
+            );
+            $disabledCertificate = $this->certificateGenerations->disabled(
+                $domain,
+                $deadlineMonotonic,
+            );
             if ($activeCertificate !== null && $disabledCertificate !== null) {
                 if ((int)$activeCertificate['generation'] <= (int)$disabledCertificate['generation']) {
                     $activeCertificate = null;
@@ -1533,9 +1648,15 @@ final class GatewayRegistrationBuilder
     /**
      * @return array{0:int,1:string}
      */
-    private function resolveGeneration(string $digest): array
+    private function resolveGeneration(
+        string $digest,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        $state = $this->identity->advanceDesiredState($digest);
+        $state = $this->identity->advanceDesiredState(
+            $digest,
+            $deadlineMonotonic,
+        );
         return [$state['generation'], $state['idempotency_key']];
     }
 

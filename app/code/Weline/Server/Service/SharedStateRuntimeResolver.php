@@ -19,7 +19,7 @@ class SharedStateRuntimeResolver
      */
     public function resolve(array $config = [], array $envConfig = [], ?string $instanceName = null): array
     {
-        $resolveStartedAt = \microtime(true);
+        $resolveStartedAt = self::monotonicSeconds();
         if ($envConfig === []) {
             $loaded = Env::getInstance()->getConfig();
             $envConfig = \is_array($loaded) ? $loaded : [];
@@ -130,7 +130,7 @@ class SharedStateRuntimeResolver
             ],
         ];
 
-        $elapsedMs = \max(0, (int) \round((\microtime(true) - $resolveStartedAt) * 1000));
+        $elapsedMs = \max(0, (int) \round((self::monotonicSeconds() - $resolveStartedAt) * 1000));
         WlsLogger::info_(
             '[SharedStateRuntimeResolver] resolve instance=' . ($instanceName ?? 'auto')
             . ' elapsed=' . $elapsedMs . 'ms'
@@ -211,6 +211,11 @@ class SharedStateRuntimeResolver
     private function resolveImplicitTokenFileName(string $role, int $port): string
     {
         return SharedStateRuntimeScope::defaultTokenFileNameForRole($role, $port);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 
 }

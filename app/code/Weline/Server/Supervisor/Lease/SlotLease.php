@@ -5,6 +5,16 @@ namespace Weline\Server\Supervisor\Lease;
 
 final class SlotLease
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    private static function wallClockSeconds(): float
+    {
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
+    }
+
     public const STATE_LEASED = 'leased';
     public const STATE_READY = 'ready';
     public const STATE_DRAINING = 'draining';
@@ -22,6 +32,8 @@ final class SlotLease
         public readonly string $state = self::STATE_LEASED,
         public readonly float $createdAt = 0.0,
         public readonly float $updatedAt = 0.0,
+        public readonly float $createdMonotonic = 0.0,
+        public readonly float $updatedMonotonic = 0.0,
         public readonly int $heartbeatSeq = 0,
     ) {
     }
@@ -33,7 +45,7 @@ final class SlotLease
 
     public function markReady(int $port, ?float $now = null): self
     {
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
 
         return new self(
             slotId: $this->slotId,
@@ -45,14 +57,16 @@ final class SlotLease
             launchNonce: $this->launchNonce,
             state: self::STATE_READY,
             createdAt: $this->createdAt,
-            updatedAt: $now,
+            updatedAt: self::wallClockSeconds(),
+            createdMonotonic: $this->createdMonotonic,
+            updatedMonotonic: $now,
             heartbeatSeq: $this->heartbeatSeq,
         );
     }
 
     public function markHeartbeat(int $seq, ?float $now = null): self
     {
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
 
         return new self(
             slotId: $this->slotId,
@@ -64,7 +78,9 @@ final class SlotLease
             launchNonce: $this->launchNonce,
             state: $this->state,
             createdAt: $this->createdAt,
-            updatedAt: $now,
+            updatedAt: self::wallClockSeconds(),
+            createdMonotonic: $this->createdMonotonic,
+            updatedMonotonic: $now,
             heartbeatSeq: $seq,
         );
     }

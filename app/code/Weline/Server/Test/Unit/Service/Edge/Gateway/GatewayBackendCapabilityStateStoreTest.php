@@ -61,6 +61,80 @@ final class GatewayBackendCapabilityStateStoreTest extends TestCase
         );
     }
 
+    public function testCapabilityRecoveryBackupsRequireValidPairedStateUnderTheSharedLock(): void
+    {
+        $now = 1500;
+        $file = $this->stateFile();
+        $store = new GatewayBackendCapabilityStateStore(
+            $file,
+            static function () use (&$now): int {
+                return $now;
+            },
+            30,
+        );
+        $healthy = $this->observation('shared_session', 'authenticated_session_runtime');
+        $store->stabilize($healthy);
+        $backup = $file . '.wls-backup-' . \str_repeat('a', 16);
+        self::assertTrue(\copy($file, $backup));
+
+        $store->stabilize($healthy);
+        self::assertFileDoesNotExist($backup);
+
+        self::assertNotFalse(\file_put_contents($file, '{corrupt-a'));
+        $now++;
+        $store->stabilize($healthy);
+        $quarantine = $file . '.corrupt-latest';
+        $quarantineBackup = $quarantine . '.wls-backup-' . \str_repeat('b', 16);
+        self::assertTrue(\copy($quarantine, $quarantineBackup));
+        self::assertNotFalse(\file_put_contents($file, '{corrupt-b'));
+        $now++;
+
+        $store->stabilize($healthy);
+        self::assertFileDoesNotExist($quarantineBackup);
+
+        $missingBackup = $file . '.wls-backup-' . \str_repeat('c', 16);
+        self::assertTrue(\rename($file, $missingBackup));
+        $now++;
+        $result = $store->stabilize($healthy);
+
+        self::assertSame('capability_state_unavailable', $result['evidence']['reason']);
+        self::assertFileExists($missingBackup);
+        self::assertFileDoesNotExist($file);
+    }
+
+    public function testCapabilityRecoveryRejectsNumericStringsInMonotonicState(): void
+    {
+        $now = 1600;
+        $file = $this->stateFile();
+        $store = new GatewayBackendCapabilityStateStore(
+            $file,
+            static function () use (&$now): int {
+                return $now;
+            },
+            30,
+        );
+        $healthy = $this->observation('shared_session', 'authenticated_session_runtime');
+        $store->stabilize($healthy);
+        $backup = $file . '.wls-backup-' . \str_repeat('d', 16);
+        self::assertTrue(\copy($file, $backup));
+        $state = \json_decode(
+            (string)\file_get_contents($file),
+            true,
+            32,
+            JSON_THROW_ON_ERROR,
+        );
+        $state['healthy_since_monotonic'] = (string)$state['healthy_since_monotonic'];
+        self::assertNotFalse(\file_put_contents(
+            $file,
+            \json_encode($state, JSON_THROW_ON_ERROR),
+        ));
+
+        $result = $store->stabilize($healthy);
+
+        self::assertSame('capability_state_unavailable', $result['evidence']['reason']);
+        self::assertFileExists($backup);
+    }
+
     public function testFailureDemotesImmediatelyAndRestartsRecoveryWindow(): void
     {
         $now = 2000;
@@ -162,6 +236,35 @@ final class GatewayBackendCapabilityStateStoreTest extends TestCase
         self::assertSame('isolated', $afterCorruption['mode']);
         self::assertSame('shared_session_recovery_pending', $afterCorruption['evidence']['reason']);
         self::assertNotEmpty(\glob($file . '.corrupt-*') ?: []);
+    }
+
+    public function testRepeatedCorruptionUsesOneBoundedQuarantineSlot(): void
+    {
+        $now = 3200;
+        $file = $this->stateFile();
+        $store = new GatewayBackendCapabilityStateStore(
+            $file,
+            static function () use (&$now): int {
+                return $now;
+            },
+            10,
+        );
+        $healthy = $this->observation('shared_session', 'authenticated_session_runtime');
+        self::assertSame('isolated', $store->stabilize($healthy)['mode']);
+
+        foreach (['{corrupt-a', '{corrupt-b'] as $index => $corrupt) {
+            self::assertNotFalse(\file_put_contents($file, $corrupt));
+            $now += $index + 1;
+            self::assertSame('isolated', $store->stabilize($healthy)['mode']);
+        }
+
+        $quarantines = \glob($file . '.corrupt-*') ?: [];
+        self::assertCount(
+            1,
+            $quarantines,
+            'Repeated recovery of one derived state file must not amplify disk usage.',
+        );
+        self::assertSame('{corrupt-b', (string)\file_get_contents($quarantines[0]));
     }
 
     public function testHostRebootAndMonotonicRegressionRestartFullRecoveryWindow(): void

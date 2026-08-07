@@ -41,6 +41,7 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
         );
         if ($existing instanceof AiSiteProvisioningRequest) {
             $this->repairLegacyPageBuilderBinding($existing, $normalized);
+            $this->adoptShellRequestedWebsiteId($existing, $normalized);
             $this->assertSameCommand($existing, $normalized);
             $this->synchronizePageBuilderDefaultLanguage($existing, $normalized['default_locale']);
 
@@ -63,6 +64,7 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
                 AiSiteProvisioningRequest::schema_fields_CLIENT_REQUEST_ID => $normalized['client_request_id'],
                 AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE => $normalized['domain_mode'],
                 AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => $normalized['target_domain'],
+                AiSiteProvisioningRequest::schema_fields_SUB_PATH => $normalized['sub_path'],
                 AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID => $normalized['registrar_account_id'],
                 AiSiteProvisioningRequest::schema_fields_YEARS => $normalized['years'],
                 AiSiteProvisioningRequest::schema_fields_PURCHASE_CONFIRMED => $normalized['purchase_confirmed'],
@@ -162,6 +164,9 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
                 (string)__('尚未找到当前 AI 建站会话的域名绑定。')
             );
         }
+        // Publish often runs after intake dehydration. Align shell website id
+        // from the durable request before asserting command identity.
+        $this->alignRequestedWebsiteId($request, $normalized);
         $this->assertSameCommand($request, $normalized);
 
         $status = $this->formatRequest($request);
@@ -171,7 +176,7 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
             && (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_BOUND) === 1
             && $websiteId >= Website::ID_DEFAULT
             && ObjectManager::getInstance(AiSiteDomainPreparationService::class)
-                ->isBound($normalized['target_domain'], $websiteId);
+                ->isBound($normalized['target_domain'], $websiteId, $normalized['sub_path']);
         if ((int)$request->getData(AiSiteProvisioningRequest::schema_fields_ADMIN_USER_ID) !== $normalized['admin_user_id']
             || !$bindingVerified
         ) {
@@ -258,19 +263,20 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
 
         $existingWebsiteId = (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_ID);
         $domain = $normalized['target_domain'];
+        $subPath = $normalized['sub_path'];
         $domainPreparation = ObjectManager::getInstance(AiSiteDomainPreparationService::class);
         if ((string)$request->getData(AiSiteProvisioningRequest::schema_fields_STATUS)
                 === AiSiteProvisioningRequest::STATUS_DONE
             && (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_BOUND) === 1
             && $existingWebsiteId >= Website::ID_DEFAULT
-            && $domainPreparation->isBound($domain, $existingWebsiteId)
+            && $domainPreparation->isBound($domain, $existingWebsiteId, $subPath)
         ) {
             return $this->formatRequest($request);
         }
 
         $prepared = $domainPreparation->prepareIgnoringLocalHosts($request);
         $websiteId = (int)($prepared['website_id'] ?? 0);
-        if (!$domainPreparation->isBound($domain, $websiteId)) {
+        if (!$domainPreparation->isBound($domain, $websiteId, $subPath)) {
             throw new AiSiteProvisioningException(
                 'WEBSITE_DOMAIN_BINDING_FAILED',
                 (string)__('跳过 hosts 后仍未能验证站点绑定。')
@@ -437,6 +443,9 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
             'client_request_id' => (string)$request->getData(AiSiteProvisioningRequest::schema_fields_CLIENT_REQUEST_ID),
             'domain_mode' => (string)$request->getData(AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE),
             'target_domain' => (string)$request->getData(AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN),
+            'sub_path' => $this->normalizeSubPath(
+                (string)$request->getData(AiSiteProvisioningRequest::schema_fields_SUB_PATH)
+            ),
             'registrar_account_id' => $request->getData(AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID) === null
                 ? null
                 : (int)$request->getData(AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID),
@@ -444,6 +453,7 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
             'purchase_order_id' => (int)$request->getData(AiSiteProvisioningRequest::schema_fields_PURCHASE_ORDER_ID),
             'website_bound' => (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_BOUND),
             'website_id' => (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_ID),
+            'requested_website_id' => (int)($request->getRequestedWebsiteId() ?? 0),
             'status' => $effectiveStatus,
             'queue' => [
                 'queue_id' => $queueId,
@@ -509,7 +519,7 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
 
     /**
      * @param array<string, mixed> $command
-     * @return array{source_module:string,admin_user_id:int,source_public_id:string,client_request_id:string,domain_mode:string,target_domain:string,registrar_account_id:?int,years:int,purchase_confirmed:int,requested_website_id:?int}
+     * @return array{source_module:string,admin_user_id:int,source_public_id:string,client_request_id:string,domain_mode:string,target_domain:string,sub_path:string,registrar_account_id:?int,years:int,purchase_confirmed:int,requested_website_id:?int}
      */
     private function normalizeCommand(array $command): array
     {
@@ -535,7 +545,11 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
         if ($clientRequestId === '' || \strlen($clientRequestId) > 128) {
             throw new AiSiteProvisioningException('CLIENT_REQUEST_ID_REQUIRED', (string)__('幂等命令 ID 不能为空。'));
         }
-        if (!\in_array($domainMode, [AiSiteProvisioningRequest::DOMAIN_MODE_TEST, AiSiteProvisioningRequest::DOMAIN_MODE_PURCHASE], true)) {
+        if (!\in_array($domainMode, [
+            AiSiteProvisioningRequest::DOMAIN_MODE_TEST,
+            AiSiteProvisioningRequest::DOMAIN_MODE_PURCHASE,
+            AiSiteProvisioningRequest::DOMAIN_MODE_BIND,
+        ], true)) {
             throw new AiSiteProvisioningException(
                 'DOMAIN_MODE_UNSUPPORTED',
                 (string)__('当前站点绑定不支持域名模式：%{1}', $domainMode)
@@ -545,12 +559,16 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
         if ($targetDomain === '') {
             throw new AiSiteProvisioningException('TARGET_DOMAIN_REQUIRED', (string)__('目标域名格式无效。'));
         }
+        $subPath = $this->normalizeSubPath((string)($command['sub_path'] ?? $command['mount_path'] ?? ''));
         $managedLocal = $this->isManagedLocalDomain($targetDomain);
         if ($domainMode === AiSiteProvisioningRequest::DOMAIN_MODE_TEST && !$managedLocal) {
             throw new AiSiteProvisioningException('TEST_DOMAIN_REQUIRED', (string)__('测试模式必须使用 *.weline.test 本地域名。'));
         }
         if ($domainMode === AiSiteProvisioningRequest::DOMAIN_MODE_PURCHASE && $managedLocal) {
             throw new AiSiteProvisioningException('PUBLIC_DOMAIN_REQUIRED', (string)__('正式购买模式必须选择可公开注册的域名。'));
+        }
+        if ($domainMode === AiSiteProvisioningRequest::DOMAIN_MODE_BIND && $managedLocal) {
+            // Local hosts still go through bind-only; keep mode as bind when selected from pool.
         }
 
         $registrarAccountId = null;
@@ -575,17 +593,60 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
             'client_request_id' => $clientRequestId,
             'domain_mode' => $domainMode,
             'target_domain' => $targetDomain,
+            'sub_path' => $subPath,
             'registrar_account_id' => $registrarAccountId,
             'years' => $years,
             'purchase_confirmed' => $purchaseConfirmed,
-            'requested_website_id' => 0,
+            'requested_website_id' => $this->requestedWebsiteId($command['requested_website_id'] ?? null),
             'default_locale' => $defaultLocale,
             'rearm_failed' => $this->truthy($command['rearm_failed'] ?? false),
         ];
     }
 
     /**
-     * @param array{source_module:string,admin_user_id:int,source_public_id:string,client_request_id:string,domain_mode:string,target_domain:string,registrar_account_id:?int,years:int,purchase_confirmed:int,requested_website_id:?int} $command
+     * Upgrade legacy requests that stored requested_website_id=0 so a later
+     * Start can attach the shell website allocated at requirements confirmation.
+     * Also backfill a dehydrated publish command from the durable request.
+     *
+     * @param array<string, mixed> $command
+     */
+    private function adoptShellRequestedWebsiteId(
+        AiSiteProvisioningRequest $request,
+        array &$command
+    ): void {
+        $this->alignRequestedWebsiteId($request, $command);
+    }
+
+    /**
+     * Keep request ↔ command requested_website_id aligned in either direction:
+     * - command has shell id, request still 0 → persist onto request
+     * - request already has shell id, dehydrated command has 0 → fill command
+     *
+     * @param array<string, mixed> $command
+     */
+    private function alignRequestedWebsiteId(
+        AiSiteProvisioningRequest $request,
+        array &$command
+    ): void {
+        $incoming = $command['requested_website_id'] ?? null;
+        $incomingId = \is_int($incoming) ? $incoming : 0;
+        $existing = $request->getRequestedWebsiteId();
+        $existingId = $existing === null ? 0 : (int)$existing;
+
+        if ($incomingId <= Website::ID_DEFAULT && $existingId > Website::ID_DEFAULT) {
+            $command['requested_website_id'] = $existingId;
+
+            return;
+        }
+        if ($incomingId <= Website::ID_DEFAULT || $existingId > Website::ID_DEFAULT) {
+            return;
+        }
+        $request->setData(AiSiteProvisioningRequest::schema_fields_REQUESTED_WEBSITE_ID, $incomingId);
+        $this->requestRepository->save($request);
+    }
+
+    /**
+     * @param array{source_module:string,admin_user_id:int,source_public_id:string,client_request_id:string,domain_mode:string,target_domain:string,sub_path:string,registrar_account_id:?int,years:int,purchase_confirmed:int,requested_website_id:?int} $command
      */
     private function assertSameCommand(AiSiteProvisioningRequest $request, array $command): void
     {
@@ -594,16 +655,30 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
             || (int)$request->getData(AiSiteProvisioningRequest::schema_fields_ADMIN_USER_ID) !== $command['admin_user_id']
             || (string)$request->getData(AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE) !== $command['domain_mode']
             || (string)$request->getData(AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN) !== $command['target_domain']
+            || $this->normalizeSubPath((string)$request->getData(AiSiteProvisioningRequest::schema_fields_SUB_PATH))
+                !== $this->normalizeSubPath((string)($command['sub_path'] ?? ''))
             || (int)($request->getData(AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID) ?? 0) !== (int)($command['registrar_account_id'] ?? 0)
             || (int)$request->getData(AiSiteProvisioningRequest::schema_fields_YEARS) !== $command['years']
             || (int)$request->getData(AiSiteProvisioningRequest::schema_fields_PURCHASE_CONFIRMED) !== $command['purchase_confirmed']
-            || $request->getRequestedWebsiteId() !== $command['requested_website_id']
+            || (int)($request->getRequestedWebsiteId() ?? 0) !== (int)($command['requested_website_id'] ?? 0)
         ) {
             throw new AiSiteProvisioningException(
                 'PROVISIONING_COMMAND_CONFLICT',
                 (string)__('同一幂等命令 ID 的站点绑定参数不一致。')
             );
         }
+    }
+
+    private function requestedWebsiteId(mixed $value): int
+    {
+        if (\is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (\is_string($value) && \preg_match('/^(0|[1-9]\d*)$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return 0;
     }
 
     private function normalizeDomain(string $value): string
@@ -618,6 +693,17 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
         return \preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/D', $domain) === 1
             ? $domain
             : '';
+    }
+
+    private function normalizeSubPath(string $subPath): string
+    {
+        $subPath = \trim($subPath);
+        if ($subPath === '' || $subPath === '/') {
+            return '';
+        }
+        $subPath = '/' . \trim($subPath, '/');
+
+        return $subPath === '/' ? '' : $subPath;
     }
 
     private function isManagedLocalDomain(string $domain): bool

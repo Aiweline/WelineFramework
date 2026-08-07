@@ -594,6 +594,88 @@ final class NativeGatewayLauncherTest extends TestCase
         }
     }
 
+    public function testForcedBrokerTerminationRequiresPlatformServiceTreeRestart(): void
+    {
+        $starts = $this->root . DIRECTORY_SEPARATOR . 'forced-broker-starts';
+        $descendantPids = $this->root . DIRECTORY_SEPARATOR . 'forced-descendant-pids';
+        $cleanup = $this->root . DIRECTORY_SEPARATOR . 'forced-cleanup';
+        $broker = "#!/bin/sh\n"
+            . "trap '' TERM INT HUP\n"
+            . "printf 'started\\n' >> " . \escapeshellarg($starts) . "\n"
+            . "(\n"
+            . "  trap '' TERM INT HUP\n"
+            . "  while [ ! -f " . \escapeshellarg($cleanup) . " ]; do sleep 1; done\n"
+            . ") &\n"
+            . "printf '%s\\n' \"\$!\" >> " . \escapeshellarg($descendantPids) . "\n"
+            . "while [ ! -f " . \escapeshellarg($cleanup) . " ]; do sleep 1; done\n";
+        [$home, $run] = $this->createSignedHome(false, $broker);
+        $process = \proc_open(
+            [$this->launcher, '--service', '--home=' . $home, '--run=' . $run, '--profile=default'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            null,
+            ['bypass_shell' => true],
+        );
+        self::assertIsResource($process);
+        $exitCode = -1;
+        try {
+            for ($attempt = 0; $attempt < 50 && !\is_file($descendantPids); $attempt++) {
+                \usleep(100000);
+            }
+            self::assertFileExists($descendantPids);
+            $status = \proc_get_status($process);
+            $launcherPid = (int)($status['pid'] ?? 0);
+            self::assertGreaterThan(0, $launcherPid);
+            self::assertTrue(\posix_kill($launcherPid, SIGHUP));
+
+            $deadline = \hrtime(true) + 8_000_000_000;
+            do {
+                $status = \proc_get_status($process);
+                if (!(bool)($status['running'] ?? false)) {
+                    $exitCode = (int)($status['exitcode'] ?? -1);
+                    break;
+                }
+                \usleep(50_000);
+            } while (\hrtime(true) < $deadline);
+
+            self::assertFalse(
+                (bool)($status['running'] ?? false),
+                'A forced Broker kill must not be followed by an internal Broker reload.',
+            );
+            self::assertSame(79, $exitCode);
+            self::assertSame(
+                ['started'],
+                \file($starts, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES),
+                'The stable Launcher started an overlapping Broker generation.',
+            );
+            $pids = \array_map(
+                'intval',
+                \file($descendantPids, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES),
+            );
+            self::assertCount(1, $pids);
+            self::assertTrue(
+                \posix_kill($pids[0], 0),
+                'The fixture must prove that platform-level whole-tree cleanup is still required.',
+            );
+        } finally {
+            self::assertNotFalse(\touch($cleanup));
+            $this->stopProcess($process, $pipes ?? [], 8.0);
+            if (\is_file($descendantPids)) {
+                foreach (\file($descendantPids, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $pid) {
+                    $pid = (int)$pid;
+                    $deadline = \hrtime(true) + 2_000_000_000;
+                    while ($pid > 0 && @\posix_kill($pid, 0) && \hrtime(true) < $deadline) {
+                        \usleep(25_000);
+                    }
+                    if ($pid > 0 && @\posix_kill($pid, 0)) {
+                        @\posix_kill($pid, SIGKILL);
+                    }
+                }
+            }
+        }
+    }
+
     public function testLinuxSystemdRestartsUnexpectedCleanBrokerExit(): void
     {
         if (\PHP_OS_FAMILY !== 'Linux') {

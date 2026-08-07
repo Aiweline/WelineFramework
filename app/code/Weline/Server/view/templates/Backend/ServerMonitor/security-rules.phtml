@@ -4,6 +4,8 @@ $rulesJson = (string) $this->getData('rulesJson');
 if ($rulesJson === '') {
     $rulesJson = '{}';
 }
+$rulesGeneration = \max(0, (int)$this->getData('rulesGeneration'));
+$rulesDigest = \trim((string)$this->getData('rulesDigest'));
 ?>
 <style>
 .wls-security-rules-panel { background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius-md); }
@@ -252,6 +254,8 @@ if ($rulesJson === '') {
 </script>
 <script>
 (function () {
+    var rulesGeneration = <?= (string)json_encode($rulesGeneration, JSON_THROW_ON_ERROR) ?>;
+    var rulesDigest = <?= (string)json_encode($rulesDigest, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR) ?>;
     'use strict';
 
     function toastSuccess(message) {
@@ -593,10 +597,18 @@ if ($rulesJson === '') {
             var response = await window.bqAdmin['server'](url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ rules: payload })
+                body: JSON.stringify({
+                    rules: payload,
+                    expected_generation: rulesGeneration,
+                    expected_digest: rulesDigest
+                })
             });
             var result = response && typeof response.json==='function' ? await response.json() : ((response && response.data !== undefined) ? response.data : response);
             if (result && result.success) {
+                if (result.data && Number.isInteger(Number(result.data.generation))) {
+                    rulesGeneration = Number(result.data.generation);
+                    rulesDigest = String(result.data.digest || '');
+                }
                 toastSuccess(result.message || __('安全规则已保存'));
                 return;
             }
@@ -638,4 +650,3 @@ if ($rulesJson === '') {
     init();
 })();
 </script>
-

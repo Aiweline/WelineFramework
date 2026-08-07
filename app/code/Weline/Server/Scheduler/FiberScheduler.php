@@ -14,6 +14,11 @@ use Weline\Framework\Runtime\RequestExitException;
  */
 class FiberScheduler
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * @var array<int, array{deadline: float, fiber: \Fiber}>
      */
@@ -50,7 +55,7 @@ class FiberScheduler
     {
         $id = $this->nextTimerId++;
         $this->timers[$id] = [
-            'deadline' => \microtime(true) + $delaySeconds,
+            'deadline' => self::monotonicSeconds() + $delaySeconds,
             'fiber' => $fiber,
         ];
     }
@@ -93,7 +98,7 @@ class FiberScheduler
                 && $waiter['stream'] === $stream
                 && $waiter['direction'] === $direction
             ) {
-                $this->ioWaiters[$id]['deadline'] = \microtime(true) + \max(0.0, $timeoutSec);
+                $this->ioWaiters[$id]['deadline'] = self::monotonicSeconds() + \max(0.0, $timeoutSec);
                 $this->ioWaiters[$id]['result'] = null;
                 return;
             }
@@ -113,7 +118,7 @@ class FiberScheduler
                 'fiber' => $fiber,
                 'stream' => $stream,
                 'direction' => $direction,
-                'deadline' => \microtime(true),
+                'deadline' => self::monotonicSeconds(),
                 'result' => false,
             ];
             return;
@@ -123,7 +128,7 @@ class FiberScheduler
             'fiber' => $fiber,
             'stream' => $stream,
             'direction' => $direction,
-            'deadline' => \microtime(true) + \max(0.0, $timeoutSec),
+            'deadline' => self::monotonicSeconds() + \max(0.0, $timeoutSec),
             'result' => null,
         ];
     }
@@ -207,7 +212,7 @@ class FiberScheduler
     public function getNextTimerDelay(): ?float
     {
         $minDelay = null;
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
 
         foreach ($this->timers as $timer) {
             $remaining = $timer['deadline'] - $now;
@@ -245,7 +250,7 @@ class FiberScheduler
         ?callable $onResumeFailure = null,
     ): void
     {
-        $startAt = $maxExecutionMs !== null ? \microtime(true) : 0.0;
+        $startAt = $maxExecutionMs !== null ? self::monotonicSeconds() : 0.0;
         $this->resumeDueIoWaiters(
             $beforeResume,
             $maxExecutionMs,
@@ -258,7 +263,7 @@ class FiberScheduler
             return;
         }
 
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
 
         /** @var array<int, array{deadline: float, fiber: \Fiber}> */
         $expired = [];
@@ -270,7 +275,7 @@ class FiberScheduler
 
         foreach ($expired as $id => $timer) {
             if ($maxExecutionMs !== null) {
-                $elapsedMs = (\microtime(true) - $startAt) * 1000;
+                $elapsedMs = (self::monotonicSeconds() - $startAt) * 1000;
                 if ($elapsedMs >= $maxExecutionMs) {
                     break;
                 }
@@ -299,7 +304,7 @@ class FiberScheduler
             return;
         }
 
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         foreach (\array_keys($this->ioWaiters) as $id) {
             if (!isset($this->ioWaiters[$id])) {
                 continue;
@@ -316,7 +321,7 @@ class FiberScheduler
             }
 
             if ($maxExecutionMs !== null) {
-                $elapsedMs = (\microtime(true) - $startAt) * 1000;
+                $elapsedMs = (self::monotonicSeconds() - $startAt) * 1000;
                 if ($elapsedMs >= $maxExecutionMs) {
                     // Keep resolved waiter for the next tick; do not lose the result.
                     $this->ioWaiters[$id] = $waiter;

@@ -15,12 +15,15 @@ final class I18nJsSwitchLangSamePathContractTest extends TestCase
         $content = (string) file_get_contents($path);
 
         self::assertStringContainsString('async function switchLang(lang, authoritativeHref = \'\')', $content);
+        self::assertStringContainsString('window.__WelineI18nNavigating', $content);
         self::assertStringContainsString("configuredHref || buildLanguageUrl", $content);
         self::assertStringContainsString('writeLanguagePreference(lang)', $content);
         self::assertStringContainsString('samePath', $content);
         self::assertStringContainsString('window.location.reload()', $content);
-        self::assertStringContainsString('前台切到默认语言时 URL 往往不含语言段', $content);
-        self::assertStringContainsString('onBackendPath', $content);
-        self::assertStringContainsString('路由语言段最高优先', $content);
+        self::assertStringContainsString('window.location.replace(target.href)', $content);
+        self::assertStringContainsString('setTimeout(navigate, 0)', $content);
+        self::assertStringContainsString('empty document', $content);
+        self::assertStringContainsString('__weline_i18n_recover', $content);
+        self::assertStringContainsString('installBlankDocumentRecovery', $content);
     }
 }

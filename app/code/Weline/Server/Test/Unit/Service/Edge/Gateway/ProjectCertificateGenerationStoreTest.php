@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 
@@ -87,6 +88,332 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         self::assertFileExists($second['cert_path']);
     }
 
+    public function testAtomicStagingArtifactDoesNotPoisonActiveManifestEnumeration(): void
+    {
+        $this->assertAtomicArtifactDoesNotPoisonActiveManifest(
+            '.tmp-' . \str_repeat('a', 24),
+        );
+    }
+
+    public function testWindowsBackupArtifactDoesNotPoisonActiveManifestEnumeration(): void
+    {
+        $this->assertAtomicArtifactDoesNotPoisonActiveManifest(
+            '.wls-backup-' . \str_repeat('b', 16),
+        );
+    }
+
+    public function testAtomicStagingArtifactDoesNotPoisonDisabledManifestEnumeration(): void
+    {
+        $this->assertAtomicArtifactDoesNotPoisonDisabledManifest(
+            '.tmp-' . \str_repeat('c', 24),
+        );
+    }
+
+    public function testWindowsBackupArtifactDoesNotPoisonDisabledManifestEnumeration(): void
+    {
+        $this->assertAtomicArtifactDoesNotPoisonDisabledManifest(
+            '.wls-backup-' . \str_repeat('d', 16),
+        );
+    }
+
+    public function testValidatedActiveManifestReclaimsAccumulatedAtomicArtifacts(): void
+    {
+        $domain = 'active-artifact-recovery.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'active-artifact-recovery');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $target = $this->selectorManifestPath('active', $domain);
+        $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
+
+        $nextDomain = 'active-artifact-recovery-next.example.test';
+        $next = $this->createCertificate($nextDomain, 'active-artifact-recovery-next');
+        self::assertSame(
+            2,
+            $store->activate($nextDomain, $next['cert'], $next['key'])['generation'],
+        );
+
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testValidatedDisabledManifestReclaimsAccumulatedAtomicArtifacts(): void
+    {
+        $domain = 'disabled-artifact-recovery.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'disabled-artifact-recovery');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $target = $this->selectorManifestPath('disabled', $domain);
+        $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
+
+        self::assertArrayHasKey($domain, $store->disabledCertificates());
+
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testRetirementPhaseUpdateReclaimsDisabledAtomicArtifactsBeforeWrite(): void
+    {
+        $domain = 'disabled-artifact-update.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'disabled-artifact-update');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $intent = $store->pendingRetirementIntents()[$domain] ?? null;
+        self::assertIsArray($intent);
+        $target = $this->selectorManifestPath('disabled', $domain);
+        $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
+
+        self::assertTrue($store->completeRetirementIntent(
+            $intent,
+            $this->retirementProof($intent),
+        ));
+
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testDisabledUpdateReclaimsArtifactsForOtherTargetsInTheSameDirectory(): void
+    {
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $firstDomain = 'disabled-artifact-directory-first.example.test';
+        $secondDomain = 'disabled-artifact-directory-second.example.test';
+        foreach ([$firstDomain, $secondDomain] as $index => $domain) {
+            $source = $this->createCertificate(
+                $domain,
+                'disabled-artifact-directory-' . $index,
+            );
+            $store->activate($domain, $source['cert'], $source['key']);
+            $store->deactivate($domain);
+        }
+        $intents = $store->pendingRetirementIntents();
+        $firstIntent = $intents[$firstDomain] ?? null;
+        self::assertIsArray($firstIntent);
+        $otherTarget = $this->selectorManifestPath('disabled', $secondDomain);
+        $artifacts = $this->createAtomicRecoveryArtifacts($otherTarget, 12);
+
+        self::assertTrue($store->completeRetirementIntent(
+            $firstIntent,
+            $this->retirementProof($firstIntent),
+        ));
+
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testReenableIntentUpdateReclaimsValidatedAtomicArtifactsBeforeWrite(): void
+    {
+        $domain = 'reenable-artifact-update.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $first = $this->createCertificate($domain, 'reenable-artifact-first');
+        $second = $this->createCertificate($domain, 'reenable-artifact-second');
+        $store->activate($domain, $first['cert'], $first['key']);
+        $store->deactivate($domain);
+        $issue = static function () use ($store, $domain, $second): array {
+            return $store->withCertificateLifecycleLock(
+                fn (): array => $store->issueExplicitReenableIntent(
+                    $domain,
+                    $second['cert'],
+                    $second['key'],
+                ),
+            );
+        };
+        self::assertTrue($issue()['required']);
+        $target = $this->selectorManifestPath('reenable-intents', $domain);
+        $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
+
+        self::assertTrue($issue()['required']);
+
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testSnapshotRetirementUpdateDiscardsRebuildableAtomicArtifacts(): void
+    {
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $firstDomain = 'snapshot-retirement-artifact.example.test';
+        $first = $this->createCertificate(
+            $firstDomain,
+            'snapshot-retirement-artifact-first',
+        );
+        $store->activate($firstDomain, $first['cert'], $first['key']);
+        $target = $this->snapshotRetirementStatePath();
+        self::assertFileExists($target);
+        $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
+
+        $nextDomain = 'snapshot-retirement-artifact-next.example.test';
+        $next = $this->createCertificate(
+            $nextDomain,
+            'snapshot-retirement-artifact-next',
+        );
+        $store->activate($nextDomain, $next['cert'], $next['key']);
+
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testRetirementReplayCursorUpdateDiscardsRebuildableAtomicArtifacts(): void
+    {
+        $domain = 'retirement-cursor-artifact.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'retirement-cursor-artifact');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $intent = $store->pendingRetirementIntents()[$domain] ?? null;
+        self::assertIsArray($intent);
+        $store->advanceRetirementReplayCursor($intent);
+        $target = $this->retirementReplayCursorPath();
+        $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
+
+        $store->advanceRetirementReplayCursor($intent);
+
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testMissingActiveTargetFailsClosedAndPreservesItsAtomicRecoveryArtifact(): void
+    {
+        $domain = 'active-artifact-missing-target.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'active-artifact-missing-target');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $target = $this->selectorManifestPath('active', $domain);
+        $artifact = $target . '.wls-backup-' . \str_repeat('e', 16);
+        self::assertTrue(\copy($target, $artifact));
+        self::assertTrue(\chmod($artifact, 0600));
+        self::assertTrue(\unlink($target));
+
+        $nextDomain = 'active-artifact-missing-target-next.example.test';
+        $next = $this->createCertificate(
+            $nextDomain,
+            'active-artifact-missing-target-next',
+        );
+        $failure = null;
+        try {
+            $store->activate($nextDomain, $next['cert'], $next['key']);
+        } catch (\RuntimeException $throwable) {
+            $failure = $throwable;
+        }
+
+        self::assertInstanceOf(\RuntimeException::class, $failure);
+        self::assertStringContainsString('recovery', $failure->getMessage());
+        self::assertFileExists(
+            $artifact,
+            'An artifact without a validated committed target may be the only recovery copy.',
+        );
+    }
+
+    public function testMissingDisabledTargetFailsClosedAndPreservesItsAtomicRecoveryArtifact(): void
+    {
+        $domain = 'disabled-artifact-missing-target.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'disabled-artifact-missing-target');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $target = $this->selectorManifestPath('disabled', $domain);
+        $artifact = $target . '.wls-backup-' . \str_repeat('1', 16);
+        self::assertTrue(\copy($target, $artifact));
+        self::assertTrue(\chmod($artifact, 0600));
+        self::assertTrue(\unlink($target));
+
+        $failure = null;
+        try {
+            $store->disabledCertificates();
+        } catch (\RuntimeException $throwable) {
+            $failure = $throwable;
+        }
+
+        self::assertInstanceOf(\RuntimeException::class, $failure);
+        self::assertStringContainsString('recovery', $failure->getMessage());
+        self::assertFileExists($artifact);
+    }
+
+    public function testCorruptActiveTargetPreservesItsAtomicRecoveryArtifact(): void
+    {
+        $domain = 'active-artifact-corrupt-target.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'active-artifact-corrupt-target');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $target = $this->selectorManifestPath('active', $domain);
+        $artifact = $target . '.wls-backup-' . \str_repeat('f', 16);
+        self::assertTrue(\copy($target, $artifact));
+        self::assertTrue(\chmod($artifact, 0600));
+        self::assertNotFalse(\file_put_contents($target, "{corrupt\n"));
+        self::assertTrue(\chmod($target, 0600));
+
+        $nextDomain = 'active-artifact-corrupt-target-next.example.test';
+        $next = $this->createCertificate(
+            $nextDomain,
+            'active-artifact-corrupt-target-next',
+        );
+        try {
+            $store->activate($nextDomain, $next['cert'], $next['key']);
+            self::fail('A corrupt committed selector target must fail closed.');
+        } catch (\RuntimeException $throwable) {
+            self::assertStringContainsString('integrity', $throwable->getMessage());
+        }
+        self::assertFileExists(
+            $artifact,
+            'Recovery evidence must survive failure to validate the committed target.',
+        );
+    }
+
+    public function testValidatedGenerationFloorReclaimsAccumulatedAtomicArtifacts(): void
+    {
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $domain = 'generation-floor-artifact.example.test';
+        $source = $this->createCertificate($domain, 'generation-floor-artifact');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $target = $this->certificateGenerationFloorPath();
+        $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
+
+        $nextDomain = 'generation-floor-artifact-next.example.test';
+        $next = $this->createCertificate($nextDomain, 'generation-floor-artifact-next');
+        self::assertSame(
+            2,
+            $store->activate($nextDomain, $next['cert'], $next['key'])['generation'],
+        );
+
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testMissingGenerationFloorTargetFailsClosedAndPreservesRecoveryArtifact(): void
+    {
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $domain = 'generation-floor-missing-target.example.test';
+        $source = $this->createCertificate($domain, 'generation-floor-missing-target');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $target = $this->certificateGenerationFloorPath();
+        $artifact = $target . '.wls-backup-' . \str_repeat('a', 16);
+        self::assertTrue(\copy($target, $artifact));
+        self::assertTrue(\chmod($artifact, 0600));
+        self::assertTrue(\unlink($target));
+
+        $nextDomain = 'generation-floor-missing-target-next.example.test';
+        $next = $this->createCertificate(
+            $nextDomain,
+            'generation-floor-missing-target-next',
+        );
+        $failure = null;
+        try {
+            $store->activate($nextDomain, $next['cert'], $next['key']);
+        } catch (\RuntimeException $throwable) {
+            $failure = $throwable;
+        }
+        self::assertInstanceOf(\RuntimeException::class, $failure);
+        self::assertStringContainsString('recovery', $failure->getMessage());
+        self::assertFileExists($artifact);
+    }
+
     public function testInvalidRenewalRetainsPreviousValidGeneration(): void
     {
         $domain = 'retain.example.test';
@@ -119,6 +446,575 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         self::assertNull($store->active($domain));
         self::assertFileExists((string)$active['cert_path']);
         self::assertFileExists((string)$active['key_path']);
+    }
+
+    public function testDeactivationPublishesBoundPendingRetirementInTheTombstoneCommit(): void
+    {
+        $domain = 'retirement-intent.example.test';
+        $source = $this->createCertificate($domain, 'retirement-intent');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $source['cert'], $source['key']);
+
+        $store->deactivate($domain);
+
+        $disabled = $store->disabled($domain);
+        self::assertIsArray($disabled);
+        $intent = $disabled['retirement_intent'] ?? null;
+        self::assertIsArray($intent);
+        self::assertSame('pending', $intent['state'] ?? null);
+        self::assertSame('runtime_pending', $intent['phase'] ?? null);
+        self::assertSame('projection', $intent['operation'] ?? null);
+        self::assertSame($domain, $intent['domain'] ?? null);
+        self::assertSame($disabled['generation'], $intent['generation'] ?? null);
+        self::assertSame($disabled['source_digest'], $intent['source_digest'] ?? null);
+        self::assertSame([], $intent['phase_receipts'] ?? null);
+        self::assertMatchesRegularExpression(
+            '/\A[a-f0-9]{64}\z/D',
+            (string)($intent['intent_id'] ?? ''),
+        );
+        self::assertSame([$domain => $intent], $store->pendingRetirementIntents());
+    }
+
+    public function testRetirementReceiptMapRejectsNonEmptyListForgery(): void
+    {
+        $domain = 'retirement-receipt-list.example.test';
+        $source = $this->createCertificate($domain, 'retirement-receipt-list');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $disabled = $store->disabled($domain);
+        self::assertIsArray($disabled);
+        $intent = $disabled['retirement_intent'] ?? null;
+        self::assertIsArray($intent);
+        $intent['phase_receipts'] = [\str_repeat('a', 64)];
+
+        $normalizer = new \ReflectionMethod($store, 'normalizeRetirementIntent');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('phase receipts are invalid');
+        $normalizer->invoke(
+            $store,
+            $intent,
+            $domain,
+            (int)$disabled['generation'],
+            (string)$disabled['source_digest'],
+        );
+    }
+
+    public function testHistoricalTombstoneWithoutIntentIsNotReplayedAsANewRetirement(): void
+    {
+        $domain = 'historical-tombstone.example.test';
+        $source = $this->createCertificate($domain, 'historical-tombstone');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $this->removeRetirementIntentFromTombstone($domain);
+
+        $disabled = $store->disabled($domain);
+
+        self::assertIsArray($disabled);
+        self::assertArrayNotHasKey('retirement_intent', $disabled);
+        self::assertSame([], $store->pendingRetirementIntents());
+    }
+
+    public function testExplicitLifecycleCreatesIntentAboveHistoricalTombstone(): void
+    {
+        $domain = 'historical-explicit-retirement.example.test';
+        $source = $this->createCertificate($domain, 'historical-explicit-retirement');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $this->removeRetirementIntentFromTombstone($domain);
+        $historical = $store->disabled($domain);
+        self::assertIsArray($historical);
+
+        // Ordinary projection scans preserve the compatibility boundary.
+        $store->deactivate($domain);
+        self::assertSame([], $store->pendingRetirementIntents());
+
+        // A new explicit user transition is new authority and gets its own
+        // atomic outbox entry rather than replaying the historical tombstone.
+        $store->deactivate($domain, ensureRetirementIntent: true);
+        $current = $store->disabled($domain);
+        self::assertIsArray($current);
+        self::assertGreaterThan($historical['generation'], $current['generation']);
+        self::assertSame(
+            'pending',
+            $current['retirement_intent']['state'] ?? null,
+        );
+        self::assertArrayHasKey($domain, $store->pendingRetirementIntents());
+    }
+
+    public function testExactRuntimeProofKeepsLaterRetirementStagesReplayable(): void
+    {
+        $domain = 'retirement-proof.example.test';
+        $source = $this->createCertificate($domain, 'retirement-proof');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $intent = $store->pendingRetirementIntents()[$domain] ?? null;
+        self::assertIsArray($intent);
+        $proof = $this->retirementProof($intent);
+
+        self::assertTrue($store->completeRetirementIntent($intent, $proof));
+        self::assertTrue($store->completeRetirementIntent($intent, $proof));
+        $runtimeRetired = $store->pendingRetirementIntents()[$domain] ?? null;
+        self::assertIsArray($runtimeRetired);
+        self::assertSame(
+            'pending',
+            $store->disabled($domain)['retirement_intent']['state'] ?? null,
+        );
+        self::assertSame('runtime_retired', $runtimeRetired['phase'] ?? null);
+
+        $current = $runtimeRetired;
+        foreach ([
+            ['runtime_retired', 'legacy_retired'],
+            ['legacy_retired', 'endpoint_retired'],
+            ['endpoint_retired', 'source_retired'],
+            ['source_retired', 'database_retired'],
+            ['database_retired', 'event_dispatched'],
+        ] as [$from, $to]) {
+            $current = $store->advanceRetirementPhase(
+                $current,
+                $from,
+                $to,
+                \hash('sha256', $domain . ':' . $to),
+            );
+            self::assertIsArray($current);
+        }
+        self::assertTrue($store->finishRetirementIntent($current));
+        self::assertSame([], $store->pendingRetirementIntents());
+        self::assertSame(
+            'completed',
+            $store->disabled($domain)['retirement_intent']['state'] ?? null,
+        );
+        self::assertSame(
+            'complete',
+            $store->disabled($domain)['retirement_intent']['phase'] ?? null,
+        );
+    }
+
+    public function testExplicitRetirementPrepareIsDurableBeforeBusinessCommit(): void
+    {
+        $domain = 'prepared-retirement.example.test';
+        $source = $this->createCertificate($domain, 'prepared-retirement');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $source['cert'], $source['key']);
+        $rowDigest = \hash('sha256', 'pgsql-row-17');
+
+        $intent = $store->prepareCertificateRetirement(
+            $domain,
+            ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DELETE,
+            17,
+            'unit retirement',
+            $rowDigest,
+        );
+
+        self::assertNull($store->active($domain));
+        self::assertSame('pending', $intent['state'] ?? null);
+        self::assertSame('prepared', $intent['phase'] ?? null);
+        self::assertSame('delete', $intent['operation'] ?? null);
+        self::assertSame(17, $intent['certificate_id'] ?? null);
+        self::assertSame($rowDigest, $intent['expected_row_digest'] ?? null);
+        self::assertSame(
+            $intent['intent_id'],
+            $store->pendingRetirementIntents()[$domain]['intent_id'] ?? null,
+        );
+    }
+
+    public function testExplicitRetirementMustFinishItsEventBeforeReenable(): void
+    {
+        $domain = 'retirement-event-order.example.test';
+        $source = $this->createCertificate($domain, 'retirement-event-order');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->prepareCertificateRetirement(
+            $domain,
+            ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DISABLE,
+            31,
+            'ordered event',
+            \hash('sha256', 'pgsql-row-31'),
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('generation-bound event');
+        $store->withCertificateLifecycleLock(
+            static fn (): array => $store->issueExplicitReenableIntent(
+                $domain,
+                $source['cert'],
+                $source['key'],
+            ),
+        );
+    }
+
+    public function testExplicitReenableRequiresTheCurrentLifecycleAuthority(): void
+    {
+        $domain = 'reenable-lock.example.test';
+        $source = $this->createCertificate($domain, 'reenable-lock');
+        $store = new ProjectCertificateGenerationStore($this->root);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('current lifecycle lock');
+        $store->issueExplicitReenableIntent(
+            $domain,
+            $source['cert'],
+            $source['key'],
+        );
+    }
+
+    public function testSnapshotGcGraceStartsAtReferenceRetirementNotSnapshotMtime(): void
+    {
+        $wall = 1_800_000_000;
+        $monotonic = 10_000.0;
+        $boot = \str_repeat('a', 64);
+        $store = $this->generationStoreWithClock($wall, $monotonic, $boot);
+        $digest = \str_repeat('1', 64);
+        $inventory = $this->snapshotRetirementInventory($digest, 1);
+
+        $store->transitionCertificateSnapshotReferences([$digest]);
+        $store->transitionCertificateSnapshotReferences([], [$digest]);
+
+        $wall += 604_799;
+        $monotonic += 604_799.0;
+        self::assertSame(
+            [],
+            $this->collectableSnapshotRetirementDigests($store, $inventory),
+        );
+        $wall++;
+        $monotonic += 1.0;
+        self::assertSame(
+            [$digest],
+            $this->collectableSnapshotRetirementDigests($store, $inventory),
+        );
+    }
+
+    public function testSnapshotRetirementCommitIsNotReversedWhenDeadlineCrossesDuringWrite(): void
+    {
+        $wall = 1_805_000_000;
+        $monotonicReads = [100.0, 100.0, 100.0, 101.0];
+        $store = new ProjectCertificateGenerationStore(
+            $this->root,
+            static fn (): int => $wall,
+            static function () use (&$monotonicReads): float {
+                return \array_shift($monotonicReads) ?? 101.0;
+            },
+            static fn (): string => \str_repeat('9', 64),
+        );
+        $digest = \str_repeat('8', 64);
+
+        $store->transitionCertificateSnapshotReferences(
+            [],
+            [$digest],
+            100.5,
+        );
+
+        $envelope = \json_decode(
+            (string)\file_get_contents($this->snapshotRetirementStateFile()),
+            true,
+        );
+        self::assertIsArray($envelope);
+        self::assertIsArray($envelope['payload'] ?? null);
+        self::assertArrayHasKey($digest, $envelope['payload']['markers'] ?? []);
+        self::assertSame(101.0, $envelope['payload']['updated_monotonic'] ?? null);
+    }
+
+    public function testRetirementFactCommitIsNotReversedWhenDeadlineCrossesDuringWrite(): void
+    {
+        $wall = 1_806_000_000;
+        $monotonic = 200.0;
+        $boot = \str_repeat('7', 64);
+        $store = $this->generationStoreWithClock($wall, $monotonic, $boot);
+        $directory = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations';
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $fact = $directory . DIRECTORY_SEPARATOR . 'commit-boundary.fact';
+        $lock = $directory . DIRECTORY_SEPARATOR . 'commit-boundary.lock';
+        $method = new \ReflectionMethod($store, 'withRetirementStateLock');
+
+        $result = $method->invoke(
+            $store,
+            $lock,
+            static function () use (&$monotonic, $fact): string {
+                GatewayProjectStateFilesystem::atomicWrite(
+                    $fact,
+                    "committed\n",
+                    0600,
+                );
+                $monotonic = 201.0;
+                return 'committed';
+            },
+            200.5,
+        );
+
+        self::assertSame('committed', $result);
+        self::assertSame("committed\n", \file_get_contents($fact));
+    }
+
+    public function testSnapshotReferenceRecoveryAndHostRebootRestartTheFullGrace(): void
+    {
+        $wall = 1_810_000_000;
+        $monotonic = 20_000.0;
+        $boot = \str_repeat('b', 64);
+        $store = $this->generationStoreWithClock($wall, $monotonic, $boot);
+        $digest = \str_repeat('2', 64);
+        $inventory = $this->snapshotRetirementInventory($digest, 1);
+
+        $store->transitionCertificateSnapshotReferences([], [$digest]);
+        $wall += 604_900;
+        $monotonic += 604_900.0;
+        $store->transitionCertificateSnapshotReferences([$digest]);
+        $store->transitionCertificateSnapshotReferences([], [$digest]);
+        $wall += 604_799;
+        $monotonic += 604_799.0;
+        self::assertSame(
+            [],
+            $this->collectableSnapshotRetirementDigests($store, $inventory),
+        );
+
+        $wall += 2;
+        $monotonic += 2.0;
+        $boot = \str_repeat('c', 64);
+        self::assertSame(
+            [],
+            $this->collectableSnapshotRetirementDigests($store, $inventory),
+        );
+        $wall += 604_800;
+        $monotonic += 604_800.0;
+        self::assertSame(
+            [$digest],
+            $this->collectableSnapshotRetirementDigests($store, $inventory),
+        );
+    }
+
+    public function testMissingCorruptAndFutureSnapshotRetirementStateCannotDeleteEarly(): void
+    {
+        $wall = 1_820_000_000;
+        $monotonic = 30_000.0;
+        $boot = \str_repeat('d', 64);
+        $store = $this->generationStoreWithClock($wall, $monotonic, $boot);
+        $digest = \str_repeat('3', 64);
+        $inventory = $this->snapshotRetirementInventory($digest, 1);
+
+        // Ancient directory metadata is deliberately irrelevant when the
+        // durable unreferenced marker is missing.
+        self::assertSame(
+            [],
+            $this->collectableSnapshotRetirementDigests($store, $inventory),
+        );
+        $stateFile = $this->snapshotRetirementStateFile();
+        $envelope = \json_decode((string)\file_get_contents($stateFile), true);
+        self::assertIsArray($envelope);
+        self::assertIsArray($envelope['payload'] ?? null);
+        $envelope['payload']['markers'][$digest]['unreferenced_since_unix']
+            = $wall + 86_400;
+        $envelope['payload']['markers'][$digest]['unreferenced_since_monotonic']
+            = $monotonic + 86_400.0;
+        $envelope['sha256'] = \hash(
+            'sha256',
+            \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson(
+                $envelope['payload'],
+            ),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $stateFile,
+            \json_encode($envelope, JSON_THROW_ON_ERROR),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($stateFile, 0600));
+        }
+        self::assertSame(
+            [],
+            $this->collectableSnapshotRetirementDigests($store, $inventory),
+        );
+
+        self::assertNotFalse(\file_put_contents($stateFile, '{corrupt'));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($stateFile, 0600));
+        }
+        $wall += 604_801;
+        $monotonic += 604_801.0;
+        self::assertSame(
+            [],
+            $this->collectableSnapshotRetirementDigests($store, $inventory),
+        );
+    }
+
+    public function testStaticSnapshotRetirementContractUsesBootBoundMonotonicMarkers(): void
+    {
+        $generationSource = \file_get_contents(
+            \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+                . 'app/code/Weline/Server/Service/Edge/Gateway/'
+                . 'ProjectCertificateGenerationStore.php',
+        );
+        $servingSource = \file_get_contents(
+            \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+                . 'app/code/Weline/Server/Service/Edge/Gateway/'
+                . 'ProjectServingManifestStore.php',
+        );
+        self::assertIsString($generationSource);
+        self::assertIsString($servingSource);
+        self::assertStringContainsString(
+            'transitionCertificateSnapshotReferences(',
+            $generationSource,
+        );
+        self::assertStringContainsString(
+            'collectableSnapshotRetirementDigests(',
+            $generationSource,
+        );
+        self::assertStringContainsString('GatewayHostBootIdentity::current()', $generationSource);
+        self::assertStringContainsString('unreferenced_since_monotonic', $generationSource);
+        self::assertStringContainsString('snapshotRetirementMarkersForClock(', $generationSource);
+        self::assertStringNotContainsString(
+            "(int)\$entry['mtime'] <= \$cutoff",
+            $generationSource,
+        );
+        $transition = \strpos(
+            $servingSource,
+            '->transitionCertificateSnapshotReferences(',
+        );
+        $lockedRevalidation = \strpos(
+            $servingSource,
+            '$this->assertPayload($payload, true);',
+        );
+        $authority = \strpos($servingSource, '$authority = $this->readPublicationAuthority(');
+        self::assertIsInt($transition);
+        self::assertIsInt($lockedRevalidation);
+        self::assertIsInt($authority);
+        self::assertLessThan($transition, $lockedRevalidation);
+        self::assertLessThan($authority, $transition);
+        self::assertStringContainsString(
+            'synchronizeCertificateSnapshotRetirementReferences(',
+            $servingSource,
+        );
+    }
+
+    public function testLifecycleReentrancyDoesNotAuthorizeAnotherFiber(): void
+    {
+        if (!\class_exists(\Fiber::class)) {
+            self::markTestSkipped('Fibers are unavailable in this PHP runtime.');
+        }
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $fiber = new \Fiber(static function () use ($store): string {
+            return $store->withCertificateLifecycleLock(static function (): string {
+                \Fiber::suspend('locked');
+                return 'released';
+            });
+        });
+        self::assertSame('locked', $fiber->start());
+
+        try {
+            $store->withCertificateLifecycleLock(static fn (): string => 'unsafe');
+            self::fail('Another Fiber must not inherit the current lifecycle lock.');
+        } catch (\RuntimeException $throwable) {
+            self::assertStringContainsString(
+                'another execution context',
+                $throwable->getMessage(),
+            );
+        }
+
+        $fiber->resume();
+        self::assertTrue($fiber->isTerminated());
+        self::assertSame('released', $fiber->getReturn());
+    }
+
+    public function testRetirementStateLocksShareTheCallersAbsoluteDeadline(): void
+    {
+        $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . 'app/code/Weline/Server/Service/Edge/Gateway/'
+            . 'ProjectCertificateGenerationStore.php';
+        $lines = \file($path);
+        self::assertIsArray($lines);
+        $methodSource = static function (string $methodName) use ($lines): string {
+            $method = new \ReflectionMethod(
+                ProjectCertificateGenerationStore::class,
+                $methodName,
+            );
+            return \implode('', \array_slice(
+                $lines,
+                $method->getStartLine() - 1,
+                $method->getEndLine() - $method->getStartLine() + 1,
+            ));
+        };
+
+        $stateLock = $methodSource('withRetirementStateLock');
+        self::assertStringContainsString(
+            '$this->retirementDeadlineRemaining($deadlineMonotonic)',
+            $stateLock,
+        );
+        self::assertStringContainsString(
+            'waitTimeoutSeconds: $this->retirementLockWaitTimeout(',
+            $stateLock,
+        );
+        foreach ([
+            'active',
+            'disabled',
+            'issueExplicitReenableIntent',
+            'prepareCertificateRetirement',
+            'retirementIntent',
+            'completeRetirementIntent',
+            'advanceRetirementPhase',
+            'finishRetirementIntent',
+            'deactivate',
+        ] as $methodName) {
+            self::assertStringContainsString(
+                '$deadlineMonotonic',
+                $methodSource($methodName),
+                $methodName . ' must preserve the retirement deadline.',
+            );
+        }
+    }
+
+    public function testMismatchedRetirementProofCannotCompletePendingIntent(): void
+    {
+        $domain = 'retirement-proof-mismatch.example.test';
+        $source = $this->createCertificate($domain, 'retirement-proof-mismatch');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $intent = $store->pendingRetirementIntents()[$domain] ?? null;
+        self::assertIsArray($intent);
+        $proof = $this->retirementProof($intent);
+        $proof['source_digest'] = \str_repeat('f', 64);
+
+        try {
+            $store->completeRetirementIntent($intent, $proof);
+            self::fail('A mismatched retirement proof must be rejected.');
+        } catch (\RuntimeException $throwable) {
+            self::assertStringContainsString('proof', $throwable->getMessage());
+        }
+        self::assertArrayHasKey($domain, $store->pendingRetirementIntents());
+    }
+
+    public function testHigherActiveGenerationSupersedesPendingRetirementBeforeReplay(): void
+    {
+        $domain = 'retirement-superseded.example.test';
+        $firstSource = $this->createCertificate($domain, 'retirement-superseded-first');
+        $secondSource = $this->createCertificate($domain, 'retirement-superseded-second');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $store->activate($domain, $firstSource['cert'], $firstSource['key']);
+        $store->deactivate($domain);
+
+        $second = $store->withCertificateLifecycleLock(
+            function () use ($store, $domain, $secondSource): array {
+                $store->issueExplicitReenableIntent(
+                    $domain,
+                    $secondSource['cert'],
+                    $secondSource['key'],
+                );
+                return $store->activate(
+                    $domain,
+                    $secondSource['cert'],
+                    $secondSource['key'],
+                );
+            },
+        );
+
+        self::assertSame([], $store->pendingRetirementIntents());
+        $retirement = $store->disabled($domain)['retirement_intent'] ?? null;
+        self::assertIsArray($retirement);
+        self::assertSame('superseded', $retirement['state'] ?? null);
+        self::assertSame($second['generation'], $retirement['superseded_by_generation'] ?? null);
+        self::assertSame($second['source_digest'], $retirement['superseded_by_source_digest'] ?? null);
     }
 
     public function testWildcardRouteAcceptsOnlyTheExactWildcardSan(): void
@@ -280,10 +1176,13 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         }
     }
 
-    public function testSnapshotGarbageCollectionRetainsCurrentAndPreviousGeneration(): void
+    public function testSnapshotGarbageCollectionRetainsCurrentPreviousAndNewlyRetiredGeneration(): void
     {
+        $wall = 1_830_000_000;
+        $monotonic = 40_000.0;
+        $boot = \str_repeat('e', 64);
         $domain = 'gc.example.test';
-        $store = new ProjectCertificateGenerationStore($this->root);
+        $store = $this->generationStoreWithClock($wall, $monotonic, $boot);
         $firstSource = $this->createCertificate($domain, 'gc-first');
         $first = $store->activate($domain, $firstSource['cert'], $firstSource['key']);
         $secondSource = $this->createCertificate($domain, 'gc-second');
@@ -293,6 +1192,11 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $firstDirectory = \dirname((string)$first['cert_path']);
         self::assertTrue(\touch($firstDirectory, \time() - 604_801));
 
+        (new \ReflectionMethod($store, 'assertSnapshotStoreCapacity'))->invoke($store, 1);
+
+        self::assertDirectoryExists($firstDirectory);
+        $wall += 604_800;
+        $monotonic += 604_800.0;
         (new \ReflectionMethod($store, 'assertSnapshotStoreCapacity'))->invoke($store, 1);
 
         self::assertDirectoryDoesNotExist($firstDirectory);
@@ -311,7 +1215,20 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         self::assertNull($store->active($domain));
 
         $secondSource = $this->createCertificate($domain, 'reactivated-second');
-        $second = $store->activate($domain, $secondSource['cert'], $secondSource['key']);
+        $second = $store->withCertificateLifecycleLock(
+            function () use ($store, $domain, $secondSource): array {
+                $store->issueExplicitReenableIntent(
+                    $domain,
+                    $secondSource['cert'],
+                    $secondSource['key'],
+                );
+                return $store->activate(
+                    $domain,
+                    $secondSource['cert'],
+                    $secondSource['key'],
+                );
+            },
+        );
         self::assertGreaterThan((int)$first['generation'], (int)$second['generation']);
     }
 
@@ -626,6 +1543,111 @@ CONF
         return DIRECTORY_SEPARATOR;
     }
 
+    private function generationStoreWithClock(
+        int &$wall,
+        float &$monotonic,
+        string &$boot,
+    ): ProjectCertificateGenerationStore {
+        return new ProjectCertificateGenerationStore(
+            $this->root,
+            static function () use (&$wall): int {
+                return $wall;
+            },
+            static function () use (&$monotonic): float {
+                return $monotonic;
+            },
+            static function () use (&$boot): string {
+                return $boot;
+            },
+        );
+    }
+
+    /**
+     * @return array<string,array{digest:string,path:string,bytes:int,mtime:int,cert_sha256:string,key_sha256:string,chain_sha256:string}>
+     */
+    private function snapshotRetirementInventory(string $digest, int $mtime): array
+    {
+        return [$digest => [
+            'digest' => $digest,
+            'path' => $this->root . DIRECTORY_SEPARATOR . 'unused-' . $digest,
+            'bytes' => 1,
+            'mtime' => $mtime,
+            'cert_sha256' => \str_repeat('4', 64),
+            'key_sha256' => \str_repeat('5', 64),
+            'chain_sha256' => '',
+        ]];
+    }
+
+    /**
+     * @param array<string,array{digest:string,path:string,bytes:int,mtime:int,cert_sha256:string,key_sha256:string,chain_sha256:string}> $inventory
+     * @return list<string>
+     */
+    private function collectableSnapshotRetirementDigests(
+        ProjectCertificateGenerationStore $store,
+        array $inventory,
+    ): array {
+        $method = new \ReflectionMethod(
+            ProjectCertificateGenerationStore::class,
+            'collectableSnapshotRetirementDigests',
+        );
+        $method->setAccessible(true);
+        return $method->invoke($store, $inventory, []);
+    }
+
+    private function snapshotRetirementStateFile(): string
+    {
+        return $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/snapshot-retirement.json';
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function retirementProof(array $intent): array
+    {
+        return [
+            'schema' => 'wls-certificate-retirement-proof/1',
+            'intent_id' => (string)$intent['intent_id'],
+            'domain' => (string)$intent['domain'],
+            'generation' => (int)$intent['generation'],
+            'source_digest' => (string)$intent['source_digest'],
+            'gateway' => [
+                'status' => 'not_observed',
+                'evidence_digest' => \str_repeat('a', 64),
+            ],
+            'native' => [
+                'status' => 'not_observed',
+                'evidence_digest' => \str_repeat('b', 64),
+            ],
+            'verified_at' => '2026-08-06T00:00:00+00:00',
+        ];
+    }
+
+    private function removeRetirementIntentFromTombstone(string $domain): void
+    {
+        $file = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/disabled/'
+            . \substr(\hash('sha256', $domain), 0, 32) . '.json';
+        $envelope = \json_decode((string)\file_get_contents($file), true);
+        self::assertIsArray($envelope);
+        self::assertIsArray($envelope['payload'] ?? null);
+        unset($envelope['payload']['retirement_intent']);
+        $envelope['sha256'] = \hash(
+            'sha256',
+            \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson(
+                $envelope['payload'],
+            ),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $file,
+            \json_encode(
+                $envelope,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($file, 0600));
+        }
+    }
+
     private function changeOwnership(string $root, int $uid, int $gid): void
     {
         $iterator = new \RecursiveIteratorIterator(
@@ -638,6 +1660,91 @@ CONF
         }
         self::assertTrue(@\chown($root, $uid));
         self::assertTrue(@\chgrp($root, $gid));
+    }
+
+    private function assertAtomicArtifactDoesNotPoisonActiveManifest(string $suffix): void
+    {
+        $domain = 'active-artifact.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'active-artifact');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $target = $this->selectorManifestPath('active', $domain);
+        $artifact = $target . $suffix;
+        self::assertTrue(\copy($target, $artifact));
+        self::assertTrue(\chmod($artifact, 0600));
+
+        $nextDomain = 'active-artifact-next.example.test';
+        $next = $this->createCertificate($nextDomain, 'active-artifact-next');
+        $activated = $store->activate($nextDomain, $next['cert'], $next['key']);
+
+        self::assertSame(2, $activated['generation']);
+        self::assertFileDoesNotExist(
+            $artifact,
+            'Validated committed selector targets make paired artifacts safely reclaimable.',
+        );
+    }
+
+    private function assertAtomicArtifactDoesNotPoisonDisabledManifest(string $suffix): void
+    {
+        $domain = 'disabled-artifact.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $source = $this->createCertificate($domain, 'disabled-artifact');
+        $store->activate($domain, $source['cert'], $source['key']);
+        $store->deactivate($domain);
+        $target = $this->selectorManifestPath('disabled', $domain);
+        $artifact = $target . $suffix;
+        self::assertTrue(\copy($target, $artifact));
+        self::assertTrue(\chmod($artifact, 0600));
+
+        $facts = $store->disabledCertificates();
+
+        self::assertArrayHasKey($domain, $facts);
+        self::assertFileDoesNotExist(
+            $artifact,
+            'Validated committed tombstones make paired artifacts safely reclaimable.',
+        );
+    }
+
+    private function selectorManifestPath(string $selector, string $domain): string
+    {
+        return $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations/'
+            . $selector . DIRECTORY_SEPARATOR
+            . \substr(\hash('sha256', $domain), 0, 32) . '.json';
+    }
+
+    private function certificateGenerationFloorPath(): string
+    {
+        return $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/generation-floor.txt';
+    }
+
+    private function snapshotRetirementStatePath(): string
+    {
+        return $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/snapshot-retirement.json';
+    }
+
+    private function retirementReplayCursorPath(): string
+    {
+        return $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/retirement-replay.cursor.json';
+    }
+
+    /** @return list<string> */
+    private function createAtomicRecoveryArtifacts(string $target, int $count): array
+    {
+        $artifacts = [];
+        for ($index = 0; $index < $count; ++$index) {
+            $suffix = $index % 2 === 0
+                ? '.tmp-' . \str_pad(\dechex($index + 1), 24, '0', STR_PAD_LEFT)
+                : '.wls-backup-'
+                    . \str_pad(\dechex($index + 1), 16, '0', STR_PAD_LEFT);
+            $artifact = $target . $suffix;
+            self::assertTrue(\copy($target, $artifact));
+            self::assertTrue(\chmod($artifact, 0600));
+            $artifacts[] = $artifact;
+        }
+        return $artifacts;
     }
 
     private function removeTree(string $root): void

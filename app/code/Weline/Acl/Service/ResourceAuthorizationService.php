@@ -7,6 +7,8 @@ namespace Weline\Acl\Service;
 use Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\RoleAccess;
+use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -46,9 +48,31 @@ final class ResourceAuthorizationService implements ResourceAuthorizationService
         }
 
         // Super administrators bypass role_access only after the exact source
-        // has been proven to exist and be an enabled backend resource.
+        // has been proven to exist and be an enabled backend resource — unless
+        // website ceiling observers deny bypass (non-default site).
         if ($roleId === 1) {
-            return true;
+            $eventData = new DataObject([
+                'role_id' => $roleId,
+                'allow_bypass' => true,
+                'source_id' => $sourceId,
+            ]);
+            try {
+                ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Acl::super_admin_bypass_check', $eventData);
+            } catch (\Throwable) {
+                return true;
+            }
+            if ((bool)$eventData->getData('allow_bypass')) {
+                return true;
+            }
+            /** @var AclServiceInterface $aclService */
+            $aclService = ObjectManager::getInstance(AclServiceInterface::class);
+            foreach ($aclService->getRoleAclEntries(1) as $row) {
+                if (\hash_equals($sourceId, \trim((string)($row[Acl::schema_fields_SOURCE_ID] ?? '')))) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /** @var RoleAccess $access */

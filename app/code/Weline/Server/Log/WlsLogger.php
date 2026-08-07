@@ -52,7 +52,7 @@ class WlsLogger
 
     private function __construct()
     {
-        $this->lastFlushTime = \microtime(true);
+        $this->lastFlushTime = self::monotonicSeconds();
         $resolvedTag = $this->resolveFallbackProcessTag();
         if ($resolvedTag !== null) {
             $this->processTag = $resolvedTag;
@@ -183,7 +183,7 @@ class WlsLogger
             return ['emit' => true, 'low_pri_ipc_rate_limited' => false];
         }
 
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if ($now - self::$ipcSinkWindowStart >= self::IPC_SINK_WINDOW_SEC) {
             self::$ipcSinkWindowStart = $now;
             self::$ipcSinkWindowCount = 0;
@@ -255,7 +255,7 @@ class WlsLogger
 
     private function warnBottleneck(string $message): void
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (($now - $this->lastBottleneckWarnAt) < $this->bottleneckWarnInterval) {
             return;
         }
@@ -573,7 +573,7 @@ class WlsLogger
             return false;
         }
 
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (($now - $this->lastFlushTime) >= $this->flushInterval) {
             $this->flush(true);
             return true;
@@ -589,7 +589,7 @@ class WlsLogger
         }
 
         if (!$force) {
-            $now = \microtime(true);
+            $now = self::monotonicSeconds();
             if (($now - $this->lastFlushTime) < $this->flushInterval) {
                 return;
             }
@@ -615,7 +615,7 @@ class WlsLogger
         $this->buffer = '';
         $this->bufferSize = 0;
         $this->bufferLineCount = 0;
-        $this->lastFlushTime = \microtime(true);
+        $this->lastFlushTime = self::monotonicSeconds();
     }
 
     private function writeDevDebugMirror(string $line): void
@@ -1039,5 +1039,10 @@ class WlsLogger
 
         $tag = \trim($tag);
         return $tag === '' || \strcasecmp($tag, 'Unknown') === 0;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

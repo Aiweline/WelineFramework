@@ -60,7 +60,8 @@ final class NamespaceInvalidationOperationQueue
             'payload_hash' => $payloadHash,
             'client_id' => $clientId,
             'msg_id' => $msgId,
-            'accepted_at' => \microtime(true),
+            'accepted_at' => self::wallClockSeconds(),
+            'accepted_monotonic' => self::monotonicSeconds(),
         ];
         if ($this->pending === null) {
             $this->pending = $this->newAggregate($frame, $member);
@@ -110,7 +111,8 @@ final class NamespaceInvalidationOperationQueue
         $this->active = $this->pending;
         $this->pending = null;
         $this->active['state'] = 'running';
-        $this->active['started_at'] = \microtime(true);
+        $this->active['started_at'] = self::wallClockSeconds();
+        $this->active['started_monotonic'] = self::monotonicSeconds();
         foreach ($this->active['members'] as $member) {
             $id = (string)$member['operation_id'];
             if (isset($this->known[$id])) {
@@ -175,7 +177,8 @@ final class NamespaceInvalidationOperationQueue
         $failures = (array)($operation['failures'] ?? []);
         $success = $targets !== [] && \count($acks) === \count($targets) && $failures === [];
         $state = $success ? 'completed' : 'failed';
-        $finishedAt = \microtime(true);
+        $finishedAt = self::wallClockSeconds();
+        $finishedMonotonic = self::monotonicSeconds();
 
         foreach ((array)$operation['members'] as $member) {
             $id = (string)$member['operation_id'];
@@ -194,6 +197,7 @@ final class NamespaceInvalidationOperationQueue
                 'accepted_at' => (float)$member['accepted_at'],
                 'started_at' => (float)($operation['started_at'] ?? 0.0),
                 'finished_at' => $finishedAt,
+                'finished_monotonic' => $finishedMonotonic,
             ];
             $this->history[$id] = $entry;
             $this->known[$id] = [
@@ -281,8 +285,10 @@ final class NamespaceInvalidationOperationQueue
             'frame' => $frame,
             'members' => [$member],
             'state' => 'queued',
-            'queued_at' => \microtime(true),
+            'queued_at' => self::wallClockSeconds(),
+            'queued_monotonic' => self::monotonicSeconds(),
             'started_at' => null,
+            'started_monotonic' => null,
             'targets' => [],
             'acks' => [],
             'failures' => [],
@@ -348,9 +354,9 @@ final class NamespaceInvalidationOperationQueue
 
     private function pruneHistory(): void
     {
-        $cutoff = \microtime(true) - self::HISTORY_TTL_SEC;
+        $cutoff = self::monotonicSeconds() - self::HISTORY_TTL_SEC;
         foreach ($this->history as $id => $entry) {
-            if ((float)($entry['finished_at'] ?? 0.0) >= $cutoff) {
+            if ((float)($entry['finished_monotonic'] ?? 0.0) >= $cutoff) {
                 continue;
             }
             unset($this->history[$id], $this->known[$id]);
@@ -362,6 +368,16 @@ final class NamespaceInvalidationOperationQueue
             }
             unset($this->history[$id], $this->known[$id]);
         }
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    private static function wallClockSeconds(): float
+    {
+        return (float)\time();
     }
 
     /** @return array{success:bool,accepted:bool,duplicate:bool,completed:bool,operation_id:string,state:string,error_code:string,message:string,primary_operation_id:string} */

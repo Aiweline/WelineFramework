@@ -52,12 +52,28 @@ final class SslCertificateGatewayAcmePublishRetryTest extends TestCase
         self::assertSame(1, $service->publishCalls);
         self::assertSame(0, $service->waitCalls);
     }
+
+    public function testRetriesPropagateOneAbsolutePublicationDeadline(): void
+    {
+        $service = new SslCertificateGatewayAcmePublishRetryProbe(
+            [false, false, true],
+            1.0,
+        );
+
+        self::assertTrue($service->publishBeforeValidation(
+            self::DESIRED,
+            'shop.example.com',
+        ));
+        self::assertSame([15.0, 15.0, 15.0], $service->publicationDeadlines);
+    }
 }
 
 final class SslCertificateGatewayAcmePublishRetryProbe extends SslCertificateService
 {
     public int $publishCalls = 0;
     public int $waitCalls = 0;
+    /** @var list<float|null> */
+    public array $publicationDeadlines = [];
     private float $now = 0.0;
 
     /** @param list<bool> $publishResults */
@@ -86,9 +102,11 @@ final class SslCertificateGatewayAcmePublishRetryProbe extends SslCertificateSer
     protected function publishGatewayAcmeDesired(
         array $desired,
         ?string $requiredDomain = null,
+        ?float $deadlineMonotonic = null,
     ): bool {
         unset($desired, $requiredDomain);
         $this->publishCalls++;
+        $this->publicationDeadlines[] = $deadlineMonotonic;
         return \array_shift($this->publishResults) ?? false;
     }
 

@@ -15,6 +15,38 @@
                   disabled="false"
                   shared="true" sort="0"/>
     </event>
+
+    <event name="Weline_Acl::role_acl_entries_after">
+        <observer name="Weline_Websites::filter_role_acl_entries"
+                  instance="Weline\Websites\Observer\FilterRoleAclEntriesByWebsiteGrant"
+                  disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Acl::super_admin_bypass_check">
+        <observer name="Weline_Websites::deny_super_admin_bypass"
+                  instance="Weline\Websites\Observer\DenySuperAdminBypassOnNonDefaultWebsite"
+                  disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Acl::role_access_save_before">
+        <observer name="Weline_Websites::validate_role_access_grant"
+                  instance="Weline\Websites\Observer\ValidateRoleAccessAgainstWebsiteGrant"
+                  disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Acl::role_listing_filter">
+        <observer name="Weline_Websites::filter_role_listing"
+                  instance="Weline\Websites\Observer\FilterRoleListingByWebsite"
+                  disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Acl::acl_assignment_rows_after">
+        <observer name="Weline_Websites::filter_acl_assignment_rows"
+                  instance="Weline\Websites\Observer\FilterAclAssignmentRowsByWebsiteGrant"
+                  disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Admin_Login::password_verified">
+        <observer name="Weline_Websites::enforce_backend_user_website_bind"
+                  instance="Weline\Websites\Observer\EnforceBackendUserWebsiteBindOnLogin"
+                  disabled="false" shared="true" sort="-20"/>
+    </event>
+
     <!--货币验证观察者：在网站检测之后验证货币是否被允许-->
     <event name="Weline_Framework_Url::detect_currency">
         <observer name="Weline_Websites::validate_currency" instance="Weline\Websites\Observer\ValidateCurrency"

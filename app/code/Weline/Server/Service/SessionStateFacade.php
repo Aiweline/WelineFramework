@@ -176,6 +176,11 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
             'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
             'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
+            'token_authority_instance' => (string) (
+                $config['token_authority_instance']
+                ?? $runtime['token_authority_instance']
+                ?? ''
+            ),
             'service_type' => 'Session',
             'service_role' => ControlMessage::ROLE_SESSION_SERVER,
         ];
@@ -210,7 +215,7 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
     private function traceOperation(string $name, array $meta, callable $operation): mixed
     {
         $start = \class_exists(RequestLifecycleTrace::class, false) && RequestLifecycleTrace::isEnabled()
-            ? \microtime(true)
+            ? self::monotonicSeconds()
             : 0.0;
 
         try {
@@ -219,7 +224,7 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
             if ($start > 0.0) {
                 RequestLifecycleTrace::recordSpan(
                     $name,
-                    (\microtime(true) - $start) * 1000,
+                    (self::monotonicSeconds() - $start) * 1000,
                     'wls',
                     null,
                     $meta + $this->traceRuntimeMeta()
@@ -241,6 +246,11 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
             'port' => (int)($runtime['port'] ?? 0),
             'direct_connect' => (bool)($runtime['direct_connect'] ?? false),
         ];
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 
     private function cleanupInitializationFailure(): void

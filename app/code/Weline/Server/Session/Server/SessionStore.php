@@ -17,9 +17,32 @@ declare(strict_types=1);
 namespace Weline\Server\Session\Server;
 
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
 
 final class SessionStore
 {
+    private const POSIX_PERSIST_DIRECTORY_MODE = 0700;
+
+    private const POSIX_PERSIST_FILE_MODE = 0600;
+
+    private const DEFAULT_MAX_PERSIST_BYTES = 268_435_456;
+
+    private const ABSOLUTE_MAX_PERSIST_BYTES = 536_870_912;
+
+    private const DEFAULT_MAX_RECOVERY_DIRECTORY_ENTRIES = 16_000;
+
+    private const MAX_RECOVERY_ARTIFACTS_PER_KIND = 8;
+
+    private const PERSIST_LOCK_SUFFIX = '.persist.lock';
+
+    private const DEFAULT_PERSIST_LOCK_TIMEOUT_SECONDS = 0.25;
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * Session 存储
      * 结构：[sessionId => ['data' => array, 'expire' => int, 'atime' => int]]
@@ -27,12 +50,14 @@ final class SessionStore
      * - expire: 过期时间戳（0 = 永不过期）
      * - atime: 最后访问时间（用于 LRU）
      */
+    /** @var array<array-key,array{data:array<array-key,mixed>,expire:int,atime:int}> */
     private array $store = [];
 
     /**
      * LRU 访问顺序（最近访问的在末尾）
      * 结构：[sessionId => true]
      */
+    /** @var array<array-key,true> */
     private array $lruOrder = [];
 
     /** 最大 Session 数量 */
@@ -52,9 +77,24 @@ final class SessionStore
 
     /** 持久化文件路径 */
     private string $persistPath;
+
+    /** WLS 2.0 专用目录启用前的兼容快照；仅用于一次性迁移。 */
+    private ?string $legacyPersistPath = null;
+
+    /** 单个完整快照和恢复证据的最大字节数 */
+    private int $maxPersistBytes;
+
+    /** 持久化命名空间单次恢复最多检查的目录项 */
+    private int $maxRecoveryDirectoryEntries;
+
+    /** 等待其他 Session Server 释放持久化锁的单调时限 */
+    private float $persistLockTimeout;
     
     /** 持久化失败后的下一次重试时间戳 */
     private int $nextPersistRetryAt = 0;
+
+    /** 持久化失败后的进程内单调重试截止时间 */
+    private float $nextPersistRetryMonotonic = 0.0;
 
     /** 持久化间隔（秒） */
     private int $persistInterval;
@@ -64,6 +104,9 @@ final class SessionStore
 
     /** 上次持久化时间 */
     private int $lastPersistTime = 0;
+
+    /** 上次持久化的进程内单调时间 */
+    private float $lastPersistMonotonic = 0.0;
 
     /** 最小持久化间隔（秒），防止高并发下重复刷盘 */
     private int $persistMinInterval = 5;
@@ -89,6 +132,7 @@ final class SessionStore
     // ==================== 监控指标 ====================
     
     /** 请求计数 */
+    /** @var array<string,int> */
     private array $requestCounts = [
         'get' => 0,
         'set' => 0,
@@ -105,13 +149,14 @@ final class SessionStore
     /** 持久化计数 */
     private int $persistCount = 0;
     
-    /** 服务启动时间 */
-    private int $startTime;
+    /** 服务启动的进程内单调时间 */
+    private float $startMonotonic;
 
     /** 操作延迟采样率（10%） */
     private int $metricsSampleRate = 10;
 
     /** 慢操作阈值（毫秒） */
+    /** @var array<string,int> */
     private array $slowOperationThresholds = [
         'get' => 50,
         'set' => 100,
@@ -119,19 +164,10 @@ final class SessionStore
         'destroy' => 100,
     ];
 
-    /** 变更的 Session ID 集合（用于增量持久化） */
-    private array $changedSessionIds = [];
-
-    /** 是否启用增量持久化 */
-    private bool $incrementalPersist = true;
-
-    /** 增量持久化阈值（变更数量超过此值时使用全量持久化） */
-    private int $incrementalThreshold = 1000;
-
     /**
      * 构造函数
      *
-     * @param array $config 配置项
+     * @param array<string,mixed> $config 配置项
      */
     public function __construct(array $config = [])
     {
@@ -145,10 +181,14 @@ final class SessionStore
             ? $persistEnabled
             : !\in_array(\strtolower(\trim((string)$persistEnabled)), ['', '0', 'false', 'no', 'off'], true);
         
-        $basePath = $config['persist_path'] ?? (\defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/');
-        if (!\is_dir($basePath)) {
-            @\mkdir($basePath, 0755, true);
-        }
+        $defaultLegacyPath = \defined('BP')
+            ? BP . 'var/session/'
+            : '/tmp/wls_session/';
+        $persistPathExplicit = \array_key_exists('persist_path', $config)
+            && \trim((string)$config['persist_path']) !== '';
+        $basePath = (string)($persistPathExplicit
+            ? $config['persist_path']
+            : \rtrim($defaultLegacyPath, '/\\') . '/.wls-state/');
         $persistFileName = \trim((string)($config['persist_file_name'] ?? 'wls_session_store.dat'));
         if ($persistFileName === '') {
             $persistFileName = 'wls_session_store.dat';
@@ -158,6 +198,36 @@ final class SessionStore
             $persistFileName = 'wls_session_store.dat';
         }
         $this->persistPath = \rtrim($basePath, '/\\') . '/' . $persistFileName;
+        $legacyBasePath = \trim((string)($config['legacy_persist_path']
+            ?? (!$persistPathExplicit ? $defaultLegacyPath : '')));
+        if ($legacyBasePath !== '') {
+            $legacyPath = \rtrim($legacyBasePath, '/\\') . '/' . $persistFileName;
+            if (!\hash_equals(
+                \str_replace('\\', '/', $this->persistPath),
+                \str_replace('\\', '/', $legacyPath),
+            )) {
+                $this->legacyPersistPath = $legacyPath;
+            }
+        }
+        $this->maxPersistBytes = \max(1024, \min(
+            self::ABSOLUTE_MAX_PERSIST_BYTES,
+            (int)($config['persist_max_bytes'] ?? self::DEFAULT_MAX_PERSIST_BYTES),
+        ));
+        $this->maxRecoveryDirectoryEntries = \max(16, \min(
+            self::DEFAULT_MAX_RECOVERY_DIRECTORY_ENTRIES,
+            (int)($config['persist_recovery_max_directory_entries']
+                ?? self::DEFAULT_MAX_RECOVERY_DIRECTORY_ENTRIES),
+        ));
+        $this->persistLockTimeout = (float)($config['persist_lock_timeout']
+            ?? self::DEFAULT_PERSIST_LOCK_TIMEOUT_SECONDS);
+        if (!\is_finite($this->persistLockTimeout)
+            || $this->persistLockTimeout <= 0.0
+            || $this->persistLockTimeout > 300.0
+        ) {
+            throw new \InvalidArgumentException(
+                'Session persist lock timeout must be within (0, 300] seconds.'
+            );
+        }
         $this->persistMinInterval = (int)($config['persist_min_interval'] ?? 5);
         if ($this->persistMinInterval < 1) {
             $this->persistMinInterval = 1;
@@ -186,7 +256,8 @@ final class SessionStore
         }
         
         $this->lastPersistTime = \time();
-        $this->startTime = \time();
+        $this->lastPersistMonotonic = self::monotonicSeconds();
+        $this->startMonotonic = $this->lastPersistMonotonic;
     }
 
     /**
@@ -206,53 +277,50 @@ final class SessionStore
             $this->log('Persistence disabled, starting fresh');
             return false;
         }
-
-        if (!\is_file($this->persistPath)) {
-            $this->log('No persist file found, starting fresh');
+        try {
+            return $this->withPersistenceLock(function (): bool {
+                $this->recoverInterruptedPersistenceLocked();
+                $this->migrateLegacyPersistenceLocked();
+                $this->recoverInterruptedPersistenceLocked();
+                $content = GatewayProjectStateFilesystem::readOptional(
+                    $this->persistPath,
+                    $this->maxPersistBytes,
+                    'WLS Session persistence snapshot',
+                );
+                if ($content === null) {
+                    $this->log('No persist file found, starting fresh');
+                    return false;
+                }
+                $decoded = $this->decodePersistSnapshot($content, true);
+                $now = \time();
+                $loadedStore = [];
+                $loadedLru = [];
+                $expired = 0;
+                foreach ($decoded['sessions'] as $sessionId => $entry) {
+                    if ($entry['expire'] > 0 && $entry['expire'] <= $now) {
+                        ++$expired;
+                        continue;
+                    }
+                    $loadedStore[$sessionId] = $entry;
+                    $loadedLru[$sessionId] = true;
+                }
+                $this->store = $loadedStore;
+                $this->lruOrder = $loadedLru;
+                $this->dirty = false;
+                $this->writesSinceLastPersist = 0;
+                $this->lastPersistTime = \time();
+                $this->lastPersistMonotonic = self::monotonicSeconds();
+                $this->nextPersistRetryAt = 0;
+                $this->nextPersistRetryMonotonic = 0.0;
+                $loaded = \count($loadedStore);
+                $legacy = $decoded['incremental'] ? ' (legacy incremental baseline)' : '';
+                $this->log("Loaded {$loaded} sessions from file{$legacy}, {$expired} expired");
+                return true;
+            });
+        } catch (\Throwable $throwable) {
+            $this->log('Failed to load persist file: ' . $throwable->getMessage());
             return false;
         }
-
-        $content = @\file_get_contents($this->persistPath);
-        if ($content === false) {
-            $this->log('Failed to read persist file');
-            return false;
-        }
-
-        $data = @\unserialize($content);
-        if (!\is_array($data)) {
-            $this->log('Invalid persist file format');
-            return false;
-        }
-
-        // 检查是否是增量持久化格式
-        $isIncremental = isset($data['incremental']) && $data['incremental'] === true;
-        $sessions = $isIncremental ? ($data['data'] ?? []) : $data;
-
-        $now = \time();
-        $loaded = 0;
-        $expired = 0;
-
-        foreach ($sessions as $sessionId => $entry) {
-            if (!isset($entry['data']) || !isset($entry['expire'])) {
-                continue;
-            }
-
-            if ($entry['expire'] > 0 && $entry['expire'] < $now) {
-                $expired++;
-                continue;
-            }
-
-            $this->store[$sessionId] = [
-                'data' => $entry['data'],
-                'expire' => $entry['expire'],
-                'atime' => $entry['atime'] ?? $now,
-            ];
-            $this->lruOrder[$sessionId] = true;
-            $loaded++;
-        }
-
-        $this->log("Loaded {$loaded} sessions from file" . ($isIncremental ? ' (incremental)' : '') . ", {$expired} expired");
-        return true;
     }
 
     /**
@@ -260,12 +328,11 @@ final class SessionStore
      */
     public function persistToFile(): bool
     {
-        $startTime = \microtime(true);
+        $startTime = self::monotonicSeconds();
 
         if (!$this->persistEnabled) {
             $this->dirty = false;
             $this->writesSinceLastPersist = 0;
-            $this->changedSessionIds = [];
             return true;
         }
 
@@ -273,74 +340,57 @@ final class SessionStore
             return true;
         }
 
-        if (!$this->ensurePersistDirectory()) {
-            $this->recordPersistMetric(\microtime(true) - $startTime, 'failure', 'dir_error');
-            return false;
-        }
-
-        // 决定使用增量持久化还是全量持久化
-        $useIncremental = $this->incrementalPersist
-            && !empty($this->changedSessionIds)
-            && \count($this->changedSessionIds) < $this->incrementalThreshold
-            && \count($this->changedSessionIds) < \count($this->store) * 0.5; // 变更少于50%时使用增量
-
-        $dataToPersist = $this->store;
-
-        if ($useIncremental) {
-            // 增量持久化：只序列化变更的 Session
-            $dataToPersist = [];
-            foreach ($this->changedSessionIds as $sessionId => $_) {
-                if (isset($this->store[$sessionId])) {
-                    $dataToPersist[$sessionId] = $this->store[$sessionId];
-                }
-            }
-            $this->log('Incremental persist: ' . \count($dataToPersist) . ' changed sessions');
-        }
-
-        $tempPath = $this->persistPath . '.tmp.' . \getmypid() . '.' . \str_replace('.', '', \uniqid('', true));
         try {
-            $content = \serialize($useIncremental ? ['incremental' => true, 'data' => $dataToPersist] : $dataToPersist);
+            $dataToPersist = $this->completeSnapshotForPersistence();
+            $content = \serialize($dataToPersist);
+            if ($content === '' || \strlen($content) > $this->maxPersistBytes) {
+                throw new \RuntimeException(
+                    'Session persistence snapshot exceeds its fixed byte limit.'
+                );
+            }
         } catch (\Throwable $throwable) {
             $this->markPersistFailure('Failed to serialize persist payload: ' . $throwable->getMessage());
-            $this->recordPersistMetric(\microtime(true) - $startTime, 'failure', 'serialize_error');
+            $this->recordPersistMetric(self::monotonicSeconds() - $startTime, 'failure', 'serialize_error');
             return false;
         }
-
-        if (@\file_put_contents($tempPath, $content, LOCK_EX) === false) {
-            @\unlink($tempPath);
-            $this->markPersistFailure($this->buildLastPhpErrorMessage(
-                'Failed to write persist temp file',
-                $tempPath
-            ));
-            $this->recordPersistMetric(\microtime(true) - $startTime, 'failure', 'write_error');
+        try {
+            $this->withPersistenceLock(function () use ($content): void {
+                $this->recoverInterruptedPersistenceLocked();
+                GatewayProjectStateFilesystem::atomicWrite(
+                    $this->persistPath,
+                    $content,
+                    self::POSIX_PERSIST_FILE_MODE,
+                );
+                $published = GatewayProjectStateFilesystem::read(
+                    $this->persistPath,
+                    $this->maxPersistBytes,
+                    'published WLS Session persistence snapshot',
+                );
+                if (!\hash_equals(\hash('sha256', $content), \hash('sha256', $published))) {
+                    throw new \RuntimeException(
+                        'Published Session persistence snapshot failed content validation.'
+                    );
+                }
+            });
+        } catch (\Throwable $throwable) {
+            $this->markPersistFailure('Failed to atomically publish persist file: ' . $throwable->getMessage());
+            $this->recordPersistMetric(
+                self::monotonicSeconds() - $startTime,
+                'failure',
+                'publication_error',
+            );
             return false;
-        }
-
-        if (!@\rename($tempPath, $this->persistPath)) {
-            // Windows 下 rename 可能无法覆盖目标文件，尝试 unlink 后再 rename 一次。
-            $renamed = false;
-            if (@\is_file($this->persistPath) && @\unlink($this->persistPath)) {
-                $renamed = @\rename($tempPath, $this->persistPath);
-            }
-            if (!$renamed) {
-                @\unlink($tempPath);
-                $this->markPersistFailure($this->buildLastPhpErrorMessage(
-                    'Failed to replace persist file',
-                    $this->persistPath
-                ));
-                $this->recordPersistMetric(\microtime(true) - $startTime, 'failure', 'rename_error');
-                return false;
-            }
         }
 
         $this->dirty = false;
         $this->lastPersistTime = \time();
+        $this->lastPersistMonotonic = self::monotonicSeconds();
         $this->writesSinceLastPersist = 0;
         $this->nextPersistRetryAt = 0;
+        $this->nextPersistRetryMonotonic = 0.0;
         $this->persistCount++;
-        $this->changedSessionIds = []; // 清空变更追踪
-        $this->recordPersistMetric(\microtime(true) - $startTime, 'success', '');
-        $this->log('Persisted ' . \count($dataToPersist) . ' sessions to file' . ($useIncremental ? ' (incremental)' : ''));
+        $this->recordPersistMetric(self::monotonicSeconds() - $startTime, 'success', '');
+        $this->log('Persisted ' . \count($dataToPersist) . ' sessions to file');
         return true;
     }
 
@@ -358,10 +408,10 @@ final class SessionStore
             return false;
         }
 
-        $now = \time();
-        $elapsed = $now - $this->lastPersistTime;
+        $now = self::monotonicSeconds();
+        $elapsed = $now - $this->lastPersistMonotonic;
 
-        if ($this->nextPersistRetryAt > $now) {
+        if ($this->nextPersistRetryMonotonic > $now) {
             return false;
         }
 
@@ -395,11 +445,11 @@ final class SessionStore
     public function get(string $sessionId, ?string $key = null): mixed
     {
         $shouldSample = \mt_rand(1, 100) <= $this->metricsSampleRate;
-        $startTime = $shouldSample ? \microtime(true) : 0;
+        $startTime = $shouldSample ? self::monotonicSeconds() : 0;
 
         if (!isset($this->store[$sessionId])) {
             if ($shouldSample) {
-                $this->recordOperationMetric('get', \microtime(true) - $startTime, 'miss');
+                $this->recordOperationMetric('get', self::monotonicSeconds() - $startTime, 'miss');
             }
             return $key === null ? [] : null;
         }
@@ -409,7 +459,7 @@ final class SessionStore
         if ($entry['expire'] > 0 && $entry['expire'] < \time()) {
             $this->destroy($sessionId);
             if ($shouldSample) {
-                $this->recordOperationMetric('get', \microtime(true) - $startTime, 'expired');
+                $this->recordOperationMetric('get', self::monotonicSeconds() - $startTime, 'expired');
             }
             return $key === null ? [] : null;
         }
@@ -420,7 +470,7 @@ final class SessionStore
         $result = $key === null ? $entry['data'] : ($entry['data'][$key] ?? null);
 
         if ($shouldSample) {
-            $this->recordOperationMetric('get', \microtime(true) - $startTime, 'hit');
+            $this->recordOperationMetric('get', self::monotonicSeconds() - $startTime, 'hit');
         }
 
         return $result;
@@ -446,7 +496,7 @@ final class SessionStore
     public function set(string $sessionId, string $key, mixed $value, int $ttl = 0): bool
     {
         $shouldSample = \mt_rand(1, 100) <= $this->metricsSampleRate;
-        $startTime = $shouldSample ? \microtime(true) : 0;
+        $startTime = $shouldSample ? self::monotonicSeconds() : 0;
 
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         $expire = $ttl > 0 ? \time() + $ttl : 0;
@@ -467,11 +517,11 @@ final class SessionStore
         }
 
         $this->store[$sessionId]['data'][$key] = $value;
-        $this->markDirty($sessionId);
+        $this->markDirty();
         $this->evictIfNeeded(true);
 
         if ($shouldSample) {
-            $this->recordOperationMetric('set', \microtime(true) - $startTime, 'success');
+            $this->recordOperationMetric('set', self::monotonicSeconds() - $startTime, 'success');
         }
 
         return true;
@@ -497,7 +547,7 @@ final class SessionStore
         ];
         $this->lruOrder[$sessionId] = true;
         $this->touchLru($sessionId);
-        $this->markDirty($sessionId);
+        $this->markDirty();
         $this->evictIfNeeded(true);
 
         return true;
@@ -509,27 +559,27 @@ final class SessionStore
     public function delete(string $sessionId, string $key): bool
     {
         $shouldSample = \mt_rand(1, 100) <= $this->metricsSampleRate;
-        $startTime = $shouldSample ? \microtime(true) : 0;
+        $startTime = $shouldSample ? self::monotonicSeconds() : 0;
 
         if (!isset($this->store[$sessionId])) {
             if ($shouldSample) {
-                $this->recordOperationMetric('delete', \microtime(true) - $startTime, 'miss');
+                $this->recordOperationMetric('delete', self::monotonicSeconds() - $startTime, 'miss');
             }
             return false;
         }
 
         if (!isset($this->store[$sessionId]['data'][$key])) {
             if ($shouldSample) {
-                $this->recordOperationMetric('delete', \microtime(true) - $startTime, 'key_not_found');
+                $this->recordOperationMetric('delete', self::monotonicSeconds() - $startTime, 'key_not_found');
             }
             return false;
         }
 
         unset($this->store[$sessionId]['data'][$key]);
-        $this->markDirty($sessionId);
+        $this->markDirty();
 
         if ($shouldSample) {
-            $this->recordOperationMetric('delete', \microtime(true) - $startTime, 'success');
+            $this->recordOperationMetric('delete', self::monotonicSeconds() - $startTime, 'success');
         }
 
         return true;
@@ -541,17 +591,17 @@ final class SessionStore
     public function destroy(string $sessionId): bool
     {
         $shouldSample = \mt_rand(1, 100) <= $this->metricsSampleRate;
-        $startTime = $shouldSample ? \microtime(true) : 0;
+        $startTime = $shouldSample ? self::monotonicSeconds() : 0;
 
         if (!isset($this->store[$sessionId])) {
             if ($shouldSample) {
-                $this->recordOperationMetric('destroy', \microtime(true) - $startTime, 'miss');
+                $this->recordOperationMetric('destroy', self::monotonicSeconds() - $startTime, 'miss');
             }
             return false;
         }
 
         unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
-        $this->markDirty($sessionId);
+        $this->markDirty();
 
         $this->destroyCount++;
         if ($this->persistOnCritical && $this->destroyCount >= 10) {
@@ -560,7 +610,7 @@ final class SessionStore
         }
 
         if ($shouldSample) {
-            $this->recordOperationMetric('destroy', \microtime(true) - $startTime, 'success');
+            $this->recordOperationMetric('destroy', self::monotonicSeconds() - $startTime, 'success');
         }
 
         return true;
@@ -590,7 +640,7 @@ final class SessionStore
         $this->store[$sessionId]['data'][$key] = $newValue;
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
-        $this->markDirty($sessionId);
+        $this->markDirty();
         
         return $newValue;
     }
@@ -629,7 +679,7 @@ final class SessionStore
         $this->store[$sessionId]['data'][$key] = $current;
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
-        $this->markDirty($sessionId);
+        $this->markDirty();
         
         return true;
     }
@@ -657,7 +707,7 @@ final class SessionStore
         $this->store[$sessionId]['data'][$key] = $newValue;
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
-        $this->markDirty($sessionId);
+        $this->markDirty();
         
         return true;
     }
@@ -781,7 +831,7 @@ final class SessionStore
             $this->store[$sessionId]['data'][(string)$key] = $value;
         }
 
-        $this->markDirty($sessionId);
+        $this->markDirty();
         $this->evictIfNeeded(true);
         return true;
     }
@@ -813,7 +863,7 @@ final class SessionStore
      */
     public function gc(int $maxLifetime = 0): int
     {
-        $startTime = \microtime(true);
+        $startTime = self::monotonicSeconds();
         $now = \time();
         $cleaned = 0;
 
@@ -831,7 +881,7 @@ final class SessionStore
         }
 
         // 记录 GC 耗时
-        $durationMs = (\microtime(true) - $startTime) * 1000;
+        $durationMs = (self::monotonicSeconds() - $startTime) * 1000;
         \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
             'wls_store_gc_duration_ms',
             $durationMs,
@@ -890,7 +940,7 @@ final class SessionStore
             'memory_high_watermark_bytes' => $this->memoryHighWatermarkBytes,
             'memory_low_watermark_bytes' => $this->memoryLowWatermarkBytes,
             'memory_pressure_eviction_count' => $this->memoryPressureEvictionCount,
-            'uptime' => \time() - $this->startTime,
+            'uptime' => \max(0.0, self::monotonicSeconds() - $this->startMonotonic),
             'request_counts' => $this->requestCounts,
             'eviction_count' => $this->evictionCount,
             'gc_cleaned_count' => $this->gcCleanedCount,
@@ -922,7 +972,8 @@ final class SessionStore
         
         $lines[] = "# HELP {$prefix}uptime_seconds Uptime in seconds";
         $lines[] = "# TYPE {$prefix}uptime_seconds counter";
-        $lines[] = "{$prefix}uptime_seconds " . (\time() - $this->startTime);
+        $lines[] = "{$prefix}uptime_seconds "
+            . \max(0.0, self::monotonicSeconds() - $this->startMonotonic);
         
         $lines[] = "# HELP {$prefix}requests_total Total requests by operation";
         $lines[] = "# TYPE {$prefix}requests_total counter";
@@ -985,14 +1036,11 @@ final class SessionStore
             return;
         }
 
-        $startTime = \microtime(true);
+        $startTime = self::monotonicSeconds();
         $toEvict = $countPressure ? \max(1, (int)\ceil($this->maxSessions * 0.1)) : 0;
         $evicted = 0;
         while ($this->lruOrder !== []) {
             $sessionId = \array_key_first($this->lruOrder);
-            if ($sessionId === null) {
-                break;
-            }
             unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
             $evicted++;
 
@@ -1016,7 +1064,7 @@ final class SessionStore
             $this->markDirty();
 
             // 记录淘汰耗时
-            $durationMs = (\microtime(true) - $startTime) * 1000;
+            $durationMs = (self::monotonicSeconds() - $startTime) * 1000;
             \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
                 'wls_store_lru_eviction_duration_ms',
                 $durationMs,
@@ -1055,20 +1103,11 @@ final class SessionStore
         };
     }
 
-    /**
-     * 标记数据已更改
-     *
-     * @param string|null $sessionId 变更的 Session ID（用于增量持久化）
-     */
-    private function markDirty(?string $sessionId = null): void
+    /** 标记数据已更改。持久化始终发布完整快照。 */
+    private function markDirty(): void
     {
         $this->dirty = true;
         $this->writesSinceLastPersist++;
-
-        // 追踪变更的 Session ID（用于增量持久化）
-        if ($sessionId !== null && $this->incrementalPersist) {
-            $this->changedSessionIds[$sessionId] = true;
-        }
     }
 
     /**
@@ -1103,38 +1142,901 @@ final class SessionStore
     }
 
     /**
-     * 确保持久化目录存在。
+     * @return array<array-key,array{data:array<array-key,mixed>,expire:int,atime:int}>
      */
-    private function ensurePersistDirectory(): bool
+    private function completeSnapshotForPersistence(): array
     {
-        $persistDir = \dirname($this->persistPath);
-        if ($persistDir === '' || $persistDir === '.' || $persistDir === DIRECTORY_SEPARATOR) {
-            $this->markPersistFailure('Invalid persist directory: ' . $persistDir);
+        $now = \time();
+        $expired = 0;
+        foreach ($this->store as $sessionId => $entry) {
+            if ($entry['expire'] > 0 && $entry['expire'] <= $now) {
+                unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
+                ++$expired;
+            }
+        }
+        if ($expired > 0) {
+            $this->gcCleanedCount += $expired;
+        }
+
+        return $this->store;
+    }
+
+    /**
+     * @return array{
+     *   sessions:array<array-key,array{data:array<array-key,mixed>,expire:int,atime:int}>,
+     *   incremental:bool
+     * }
+     */
+    private function decodePersistSnapshot(string $content, bool $allowLegacyIncremental): array
+    {
+        if ($content === '' || \strlen($content) > $this->maxPersistBytes) {
+            throw new \RuntimeException('Session persistence snapshot has an invalid size.');
+        }
+        try {
+            $decoded = @\unserialize($content, ['allowed_classes' => true]);
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'Session persistence snapshot cannot be decoded.',
+                0,
+                $throwable,
+            );
+        }
+        if (!\is_array($decoded)) {
+            throw new \RuntimeException('Session persistence snapshot must contain an array.');
+        }
+
+        $incremental = isset($decoded['incremental']) && $decoded['incremental'] === true;
+        if ($incremental) {
+            if (!$allowLegacyIncremental
+                || \count($decoded) !== 2
+                || !\array_key_exists('data', $decoded)
+                || !\is_array($decoded['data'])
+            ) {
+                throw new \RuntimeException(
+                    'Legacy incremental Session persistence cannot be used as a complete snapshot.'
+                );
+            }
+            $decoded = $decoded['data'];
+        }
+        if (\count($decoded) > $this->maxSessions) {
+            throw new \RuntimeException(
+                'Session persistence snapshot exceeds the configured Session count limit.'
+            );
+        }
+
+        $sessions = [];
+        $now = \time();
+        foreach ($decoded as $sessionId => $entry) {
+            $sessionId = (string)$sessionId;
+            if ($sessionId === '' || \strlen($sessionId) > 8192 || !\is_array($entry)) {
+                throw new \RuntimeException('Session persistence snapshot contains an invalid Session ID or entry.');
+            }
+            if (!\array_key_exists('data', $entry)
+                || !\is_array($entry['data'])
+                || !\array_key_exists('expire', $entry)
+                || !\is_int($entry['expire'])
+                || $entry['expire'] < 0
+            ) {
+                throw new \RuntimeException(
+                    'Session persistence snapshot contains an invalid Session entry.'
+                );
+            }
+            $atime = $entry['atime'] ?? $now;
+            if (!\is_int($atime) || $atime < 0) {
+                throw new \RuntimeException(
+                    'Session persistence snapshot contains an invalid access time.'
+                );
+            }
+            $sessions[$sessionId] = [
+                'data' => $entry['data'],
+                'expire' => $entry['expire'],
+                'atime' => $atime,
+            ];
+        }
+
+        return ['sessions' => $sessions, 'incremental' => $incremental];
+    }
+
+    /**
+     * @template TResult
+     * @param \Closure():TResult $operation
+     * @return TResult
+     */
+    private function withPersistenceLock(\Closure $operation): mixed
+    {
+        if (!$this->ensurePersistDirectory()) {
+            throw new \RuntimeException('Session persistence directory is unavailable or unsafe.');
+        }
+        $lockPath = $this->persistPath . self::PERSIST_LOCK_SUFFIX;
+        $pid = (int)\getmypid();
+        $lock = VerifiedPersistentFileLock::acquire(
+            $lockPath,
+            $this->persistLockTimeout,
+            fn (): array => [
+                'pid' => $pid,
+                'purpose' => 'wls-session-store-persistence',
+                'target' => \basename($this->persistPath),
+                'started_at' => \date(DATE_ATOM),
+            ],
+        );
+        if (!\is_resource($lock)) {
+            throw new \RuntimeException(
+                'Unable to acquire the verified Session persistence lock within '
+                . \number_format($this->persistLockTimeout, 3, '.', '')
+                . ' seconds.'
+            );
+        }
+        try {
+            return $operation();
+        } finally {
+            @\flock($lock, LOCK_UN);
+            @\fclose($lock);
+        }
+    }
+
+    private function recoverInterruptedPersistenceLocked(): void
+    {
+        $selected = $this->persistenceRecoverySnapshot();
+        if ($selected['artifacts'] === []) {
+            return;
+        }
+
+        $targetIdentity = $selected['target_identity'];
+        if (\is_array($targetIdentity)) {
+            $targetRaw = GatewayProjectStateFilesystem::read(
+                $this->persistPath,
+                $this->maxPersistBytes,
+                'Session persistence recovery paired target',
+            );
+            $this->decodePersistSnapshot($targetRaw, true);
+            $targetAfterValidation = @\lstat($this->persistPath);
+            if (!\is_array($targetAfterValidation)
+                || !$this->sameFileState($targetIdentity, $targetAfterValidation)
+            ) {
+                throw new \RuntimeException(
+                    'Session persistence recovery target changed during validation.'
+                );
+            }
+            $rechecked = $this->persistenceRecoverySnapshot();
+            $this->assertSameRecoverySnapshot($selected, $rechecked);
+            if (!$this->sameOptionalFileState(
+                $targetAfterValidation,
+                $rechecked['target_identity'],
+            )) {
+                throw new \RuntimeException(
+                    'Session persistence recovery target changed before cleanup.'
+                );
+            }
+            $this->removeRecoveryArtifacts(
+                $rechecked['artifacts'],
+                $targetAfterValidation,
+            );
+            return;
+        }
+        if (\file_exists($this->persistPath) || \is_link($this->persistPath)) {
+            throw new \RuntimeException(
+                'Session persistence recovery target is indeterminate or unsafe.'
+            );
+        }
+
+        $backups = [];
+        $legacyStaging = [];
+        foreach ($selected['artifacts'] as $artifact) {
+            if ($artifact['kind'] === 'atomic backup') {
+                $backups[] = $artifact;
+            } elseif ($artifact['kind'] === 'legacy staging') {
+                $legacyStaging[] = $artifact;
+            }
+        }
+        if (\count($backups) > 1) {
+            throw new \RuntimeException(
+                'Session persistence recovery has ambiguous backups for one missing target.'
+            );
+        }
+
+        $restore = $backups[0] ?? null;
+        $allowIncremental = true;
+        if (!\is_array($restore) && $legacyStaging !== []) {
+            if (\count($legacyStaging) > 1) {
+                throw new \RuntimeException(
+                    'Session persistence recovery has ambiguous legacy staging files for one missing target.'
+                );
+            }
+            $restore = $legacyStaging[0];
+            $allowIncremental = false;
+        }
+        $restoreRaw = null;
+        $restoreSha256 = null;
+        if (\is_array($restore)) {
+            $restoreRaw = GatewayProjectStateFilesystem::read(
+                $restore['path'],
+                $this->maxPersistBytes,
+                'Session persistence retained recovery snapshot',
+            );
+            $this->decodePersistSnapshot($restoreRaw, $allowIncremental);
+            $restoreSha256 = \hash('sha256', $restoreRaw);
+        }
+
+        $rechecked = $this->persistenceRecoverySnapshot();
+        $this->assertSameRecoverySnapshot($selected, $rechecked);
+        if (\is_array($rechecked['target_identity'])
+            || \file_exists($this->persistPath)
+            || \is_link($this->persistPath)
+        ) {
+            throw new \RuntimeException(
+                'Session persistence recovery target appeared before recovery.'
+            );
+        }
+        if (!\is_array($restore)) {
+            $this->removeRecoveryArtifacts($rechecked['artifacts'], null);
+            return;
+        }
+
+        $current = $rechecked['artifacts'][$restore['path']] ?? null;
+        if (!\is_array($current)
+            || !\is_string($restoreRaw)
+            || !\is_string($restoreSha256)
+            || !$this->sameFileState($restore['identity'], $current['identity'])
+        ) {
+            throw new \RuntimeException(
+                'Session persistence retained recovery snapshot changed before restoration.'
+            );
+        }
+        $currentRaw = GatewayProjectStateFilesystem::read(
+            $current['path'],
+            $this->maxPersistBytes,
+            'Session persistence retained recovery snapshot',
+        );
+        $this->decodePersistSnapshot($currentRaw, $allowIncremental);
+        if (!\hash_equals($restoreSha256, \hash('sha256', $currentRaw))) {
+            throw new \RuntimeException(
+                'Session persistence retained recovery snapshot contents changed before restoration.'
+            );
+        }
+        $this->restoreMissingPersistTarget($current, $restoreSha256);
+        $this->recoverInterruptedPersistenceLocked();
+    }
+
+    /**
+     * Move the one legacy committed snapshot out of the high-cardinality PHP
+     * Session directory. The persistent retirement marker prevents an old,
+     * later-reappearing file from becoming authoritative after migration.
+     */
+    private function migrateLegacyPersistenceLocked(): void
+    {
+        $legacyPath = $this->legacyPersistPath;
+        if ($legacyPath === null) {
+            return;
+        }
+        $legacyDirectory = \dirname($legacyPath);
+        $retirementMarker = $this->legacyRetirementMarkerPath($legacyPath);
+        $markerExists = $this->validateLegacyRetirementMarker($retirementMarker);
+
+        $current = GatewayProjectStateFilesystem::readOptional(
+            $this->persistPath,
+            $this->maxPersistBytes,
+            'WLS Session dedicated persistence snapshot',
+        );
+        if ($current !== null) {
+            $this->decodePersistSnapshot($current, true);
+            if (!$markerExists) {
+                $this->createLegacyRetirementMarker($retirementMarker);
+            }
+            $this->retireLegacyPersistTargetUnderLock($legacyPath);
+            return;
+        }
+        if ($markerExists) {
+            return;
+        }
+        if (!\is_dir($legacyDirectory)) {
+            $this->createLegacyRetirementMarker($retirementMarker);
+            return;
+        }
+
+        $legacyLock = VerifiedPersistentFileLock::acquire(
+            $legacyPath . self::PERSIST_LOCK_SUFFIX,
+            $this->persistLockTimeout,
+            static fn (): array => [
+                'pid' => (int) \getmypid(),
+                'purpose' => 'wls-session-store-legacy-migration',
+                'target' => \basename($legacyPath),
+                'started_at' => \date(DATE_ATOM),
+            ],
+        );
+        if (!\is_resource($legacyLock)) {
+            throw new \RuntimeException(
+                'Unable to acquire the verified legacy Session persistence migration lock.'
+            );
+        }
+        try {
+            if ($this->validateLegacyRetirementMarker($retirementMarker)) {
+                return;
+            }
+            $legacyIdentity = @\lstat($legacyPath);
+            $legacyRaw = GatewayProjectStateFilesystem::readOptional(
+                $legacyPath,
+                $this->maxPersistBytes,
+                'legacy WLS Session persistence snapshot',
+            );
+            if ($legacyRaw === null) {
+                $this->createLegacyRetirementMarker($retirementMarker);
+                return;
+            }
+            if (!\is_array($legacyIdentity)) {
+                throw new \RuntimeException(
+                    'Legacy Session persistence snapshot identity is unavailable.'
+                );
+            }
+            $this->decodePersistSnapshot($legacyRaw, true);
+            $legacyAfterRead = @\lstat($legacyPath);
+            if (!\is_array($legacyAfterRead)
+                || !$this->sameFileState($legacyIdentity, $legacyAfterRead)
+            ) {
+                throw new \RuntimeException(
+                    'Legacy Session persistence snapshot changed during migration.'
+                );
+            }
+
+            GatewayProjectStateFilesystem::atomicWrite(
+                $this->persistPath,
+                $legacyRaw,
+                self::POSIX_PERSIST_FILE_MODE,
+            );
+            $migrated = GatewayProjectStateFilesystem::read(
+                $this->persistPath,
+                $this->maxPersistBytes,
+                'migrated WLS Session persistence snapshot',
+            );
+            $this->decodePersistSnapshot($migrated, true);
+            if (!\hash_equals(\hash('sha256', $legacyRaw), \hash('sha256', $migrated))) {
+                throw new \RuntimeException(
+                    'Migrated Session persistence snapshot failed digest validation.'
+                );
+            }
+            $this->createLegacyRetirementMarker($retirementMarker);
+            try {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $legacyPath,
+                    'retired legacy Session persistence snapshot',
+                    $legacyAfterRead,
+                );
+            } catch (\Throwable $throwable) {
+                // The durable marker is already committed. Preserve a target
+                // that changed rather than deleting an unverified file.
+                $this->log('Legacy Session persistence retirement preserved evidence: '
+                    . $throwable->getMessage());
+            }
+        } finally {
+            @\flock($legacyLock, LOCK_UN);
+            @\fclose($legacyLock);
+        }
+    }
+
+    private function legacyRetirementMarkerPath(string $legacyPath): string
+    {
+        return \dirname($this->persistPath)
+            . DIRECTORY_SEPARATOR
+            . '.legacy-retired-'
+            . \substr(\hash('sha256', \str_replace('\\', '/', $legacyPath)), 0, 24);
+    }
+
+    private function validateLegacyRetirementMarker(string $path): bool
+    {
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException(
+                    'Session persistence legacy retirement marker is indeterminate.'
+                );
+            }
             return false;
         }
-        if (\is_dir($persistDir)) {
-            return true;
+        if (\is_link($path)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && ((((int)($status['mode'] ?? 0)) & 0777) !== self::POSIX_PERSIST_DIRECTORY_MODE))
+        ) {
+            throw new \RuntimeException(
+                'Session persistence legacy retirement marker is unsafe.'
+            );
         }
-        if (!@\mkdir($persistDir, 0755, true) && !\is_dir($persistDir)) {
-            $this->markPersistFailure($this->buildLastPhpErrorMessage(
-                'Failed to create persist directory',
-                $persistDir
-            ));
-            return false;
+
+        return true;
+    }
+
+    private function createLegacyRetirementMarker(string $path): void
+    {
+        if ($this->validateLegacyRetirementMarker($path)) {
+            return;
+        }
+        if (!@\mkdir($path, self::POSIX_PERSIST_DIRECTORY_MODE)
+            && !$this->validateLegacyRetirementMarker($path)
+        ) {
+            throw new \RuntimeException(
+                'Unable to commit the Session persistence legacy retirement marker.'
+            );
+        }
+        if (!$this->validateLegacyRetirementMarker($path)) {
+            throw new \RuntimeException(
+                'Session persistence legacy retirement marker failed verification.'
+            );
+        }
+        GatewayProjectStateFilesystem::syncDirectory(\dirname($path));
+    }
+
+    private function retireLegacyPersistTargetBestEffort(string $legacyPath): void
+    {
+        $identity = @\lstat($legacyPath);
+        if (!\is_array($identity)) {
+            return;
+        }
+        try {
+            GatewayProjectStateFilesystem::removeRegular(
+                $legacyPath,
+                'retired legacy Session persistence snapshot',
+                $identity,
+            );
+        } catch (\Throwable $throwable) {
+            $this->log('Legacy Session persistence retirement preserved evidence: '
+                . $throwable->getMessage());
+        }
+    }
+
+    private function retireLegacyPersistTargetUnderLock(string $legacyPath): void
+    {
+        if (!\is_dir(\dirname($legacyPath))) {
+            return;
+        }
+        $lock = VerifiedPersistentFileLock::acquire(
+            $legacyPath . self::PERSIST_LOCK_SUFFIX,
+            $this->persistLockTimeout,
+            static fn (): array => [
+                'pid' => (int) \getmypid(),
+                'purpose' => 'wls-session-store-legacy-retirement',
+                'target' => \basename($legacyPath),
+                'started_at' => \date(DATE_ATOM),
+            ],
+        );
+        if (!\is_resource($lock)) {
+            $this->log('Legacy Session persistence retirement deferred because its lock is held.');
+            return;
+        }
+        try {
+            $this->retireLegacyPersistTargetBestEffort($legacyPath);
+        } finally {
+            @\flock($lock, LOCK_UN);
+            @\fclose($lock);
+        }
+    }
+
+    /**
+     * @return array{
+     *   directory_identity:array<string|int,mixed>,
+     *   target_identity:array<string|int,mixed>|null,
+     *   artifacts:array<string,array{
+     *     path:string,kind:string,identity:array<string|int,mixed>
+     *   }>
+     * }
+     */
+    private function persistenceRecoverySnapshot(): array
+    {
+        $directory = \dirname($this->persistPath);
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || \is_link($directory)
+            || ((((int)$directoryBefore['mode']) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'Session persistence recovery directory is unsafe.'
+            );
+        }
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException(
+                'Unable to enumerate the Session persistence recovery directory.'
+            );
+        }
+        $targetLeaf = \basename($this->persistPath);
+        $lockLeaf = $targetLeaf . self::PERSIST_LOCK_SUFFIX;
+        $foldedTargetLeaf = \strtolower($targetLeaf);
+        $foldedLockLeaf = \strtolower($lockLeaf);
+        $quotedTarget = \preg_quote($targetLeaf, '/');
+        $legacyPattern = '/\A' . $quotedTarget
+            . '\.tmp\.[1-9][0-9]{0,18}\.[a-f0-9]{14}[0-9]{8}\z/D';
+        $stagingPattern = '/\A' . $quotedTarget . '\.tmp-[a-f0-9]{24}\z/D';
+        $backupPattern = '/\A' . $quotedTarget . '\.wls-backup-[a-f0-9]{16}\z/D';
+        $foldedLegacyPrefix = $foldedTargetLeaf . '.tmp.';
+        $foldedStagingPrefix = $foldedTargetLeaf . '.tmp-';
+        $foldedBackupPrefix = $foldedTargetLeaf . '.wls-backup-';
+        $artifacts = [];
+        $counts = [];
+        $visited = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if ($leaf === '.' || $leaf === '..') {
+                    continue;
+                }
+                if (++$visited > $this->maxRecoveryDirectoryEntries) {
+                    throw new \RuntimeException(
+                        'Session persistence recovery directory exceeds its fixed raw entry quota.'
+                    );
+                }
+                $foldedLeaf = \strtolower($leaf);
+                if (\hash_equals($foldedLockLeaf, $foldedLeaf)) {
+                    if (!\hash_equals($lockLeaf, $leaf)) {
+                        throw new \RuntimeException(
+                            'Session persistence lock has a non-canonical case alias.'
+                        );
+                    }
+                    continue;
+                }
+                if (\hash_equals($foldedTargetLeaf, $foldedLeaf)) {
+                    if (!\hash_equals($targetLeaf, $leaf)) {
+                        throw new \RuntimeException(
+                            'Session persistence target has a non-canonical case alias.'
+                        );
+                    }
+                    continue;
+                }
+
+                $kind = '';
+                $reserved = false;
+                if (\str_starts_with($foldedLeaf, $foldedLegacyPrefix)) {
+                    $reserved = true;
+                    if (\preg_match($legacyPattern, $leaf) === 1) {
+                        $kind = 'legacy staging';
+                    }
+                } elseif (\str_starts_with($foldedLeaf, $foldedStagingPrefix)) {
+                    $reserved = true;
+                    if (\preg_match($stagingPattern, $leaf) === 1) {
+                        $kind = 'atomic staging';
+                    }
+                } elseif (\str_starts_with($foldedLeaf, $foldedBackupPrefix)) {
+                    $reserved = true;
+                    if (\preg_match($backupPattern, $leaf) === 1) {
+                        $kind = 'atomic backup';
+                    }
+                }
+                if (!$reserved) {
+                    continue;
+                }
+                if ($kind === '') {
+                    throw new \RuntimeException(
+                        $leaf !== $foldedLeaf
+                            ? 'Session persistence recovery contains a non-canonical case alias.'
+                            : 'Session persistence recovery contains a malformed reserved leaf.'
+                    );
+                }
+                $counts[$kind] = ($counts[$kind] ?? 0) + 1;
+                if ($counts[$kind] > self::MAX_RECOVERY_ARTIFACTS_PER_KIND) {
+                    throw new \RuntimeException(
+                        'Session persistence recovery artifact quota is exhausted.'
+                    );
+                }
+                $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                $before = @\lstat($path);
+                if (!\is_array($before)) {
+                    throw new \RuntimeException(
+                        'Session persistence recovery artifact is indeterminate.'
+                    );
+                }
+                GatewayProjectStateFilesystem::size(
+                    $path,
+                    $this->maxPersistBytes,
+                    'Session persistence recovery artifact',
+                );
+                $after = @\lstat($path);
+                if (!\is_array($after) || !$this->sameFileState($before, $after)) {
+                    throw new \RuntimeException(
+                        'Session persistence recovery artifact changed during inspection.'
+                    );
+                }
+                $artifacts[$path] = [
+                    'path' => $path,
+                    'kind' => $kind,
+                    'identity' => $after,
+                ];
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        $directoryAfter = @\lstat($directory);
+        if (!\is_array($directoryAfter)
+            || !$this->sameDirectoryIdentity($directoryBefore, $directoryAfter)
+        ) {
+            throw new \RuntimeException(
+                'Session persistence recovery directory changed during inspection.'
+            );
+        }
+        $targetIdentity = @\lstat($this->persistPath);
+        if (!\is_array($targetIdentity)
+            && (\file_exists($this->persistPath) || \is_link($this->persistPath))
+        ) {
+            throw new \RuntimeException(
+                'Session persistence recovery target is indeterminate.'
+            );
+        }
+        \ksort($artifacts, SORT_STRING);
+
+        return [
+            'directory_identity' => $directoryAfter,
+            'target_identity' => \is_array($targetIdentity) ? $targetIdentity : null,
+            'artifacts' => $artifacts,
+        ];
+    }
+
+    /**
+     * @param array{
+     *   directory_identity:array<string|int,mixed>,
+     *   target_identity:array<string|int,mixed>|null,
+     *   artifacts:array<string,array{path:string,kind:string,identity:array<string|int,mixed>}>
+     * } $before
+     * @param array{
+     *   directory_identity:array<string|int,mixed>,
+     *   target_identity:array<string|int,mixed>|null,
+     *   artifacts:array<string,array{path:string,kind:string,identity:array<string|int,mixed>}>
+     * } $after
+     */
+    private function assertSameRecoverySnapshot(array $before, array $after): void
+    {
+        if (!$this->sameDirectoryIdentity(
+            $before['directory_identity'],
+            $after['directory_identity'],
+        )
+            || !$this->sameOptionalFileState(
+                $before['target_identity'],
+                $after['target_identity'],
+            )
+            || \array_keys($before['artifacts']) !== \array_keys($after['artifacts'])
+        ) {
+            throw new \RuntimeException(
+                'Session persistence recovery namespace changed before mutation.'
+            );
+        }
+        foreach ($before['artifacts'] as $path => $artifact) {
+            $current = $after['artifacts'][$path] ?? null;
+            if (!\is_array($current)
+                || !\hash_equals($artifact['kind'], $current['kind'])
+                || !$this->sameFileState($artifact['identity'], $current['identity'])
+            ) {
+                throw new \RuntimeException(
+                    'Session persistence recovery artifact changed before mutation.'
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array<string,array{path:string,kind:string,identity:array<string|int,mixed>}> $artifacts
+     * @param array<string|int,mixed>|null $targetIdentity
+     */
+    private function removeRecoveryArtifacts(array $artifacts, ?array $targetIdentity): void
+    {
+        foreach ($artifacts as $artifact) {
+            $currentTarget = @\lstat($this->persistPath);
+            if (!$this->sameOptionalFileState($targetIdentity, $currentTarget)) {
+                throw new \RuntimeException(
+                    'Session persistence recovery target changed during cleanup.'
+                );
+            }
+            if (!GatewayProjectStateFilesystem::removeRegular(
+                $artifact['path'],
+                'Session persistence interrupted ' . $artifact['kind'],
+                $artifact['identity'],
+            )) {
+                throw new \RuntimeException(
+                    'Unable to collect a Session persistence recovery artifact.'
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array{path:string,kind:string,identity:array<string|int,mixed>} $artifact
+     */
+    private function restoreMissingPersistTarget(array $artifact, string $expectedSha256): void
+    {
+        if ($this->freshFileStatus($this->persistPath) !== null
+            || \file_exists($this->persistPath)
+            || \is_link($this->persistPath)
+        ) {
+            throw new \RuntimeException(
+                'Session persistence recovery target is no longer missing.'
+            );
+        }
+        $before = @\lstat($artifact['path']);
+        if (!\is_array($before)
+            || !$this->sameFileState($artifact['identity'], $before)
+        ) {
+            throw new \RuntimeException(
+                'Session persistence recovery source changed before restoration.'
+            );
+        }
+        $restoreRaw = GatewayProjectStateFilesystem::read(
+            $artifact['path'],
+            $this->maxPersistBytes,
+            'Session persistence retained recovery snapshot',
+        );
+        if (!\hash_equals($expectedSha256, \hash('sha256', $restoreRaw))) {
+            throw new \RuntimeException(
+                'Session persistence recovery source contents changed before restoration.'
+            );
+        }
+        if ($artifact['kind'] === 'atomic backup') {
+            GatewayProjectStateFilesystem::restoreVerifiedAtomicBackup(
+                $artifact['path'],
+                $this->persistPath,
+                $artifact['identity'],
+                null,
+                $expectedSha256,
+                \strlen($restoreRaw),
+                self::POSIX_PERSIST_FILE_MODE,
+            );
+        } else {
+            // Legacy staging is not in the current atomic helper's reserved
+            // namespace. Publish a sealed copy first; the recovery loop only
+            // retires the legacy evidence after the new target is verified.
+            GatewayProjectStateFilesystem::atomicWrite(
+                $this->persistPath,
+                $restoreRaw,
+                self::POSIX_PERSIST_FILE_MODE,
+            );
+        }
+        $restoredRaw = GatewayProjectStateFilesystem::read(
+            $this->persistPath,
+            $this->maxPersistBytes,
+            'restored Session persistence snapshot',
+        );
+        $identityReceiptValid = $artifact['kind'] === 'atomic backup'
+            ? $this->publicationObjectIdentityMatchesPath(
+                $artifact['identity'],
+                $this->persistPath,
+            )
+            : $this->isSealedPublishedPersistTarget($this->persistPath, \strlen($restoredRaw));
+        if (!$identityReceiptValid
+            || !\hash_equals($expectedSha256, \hash('sha256', $restoredRaw))
+        ) {
+            throw new \RuntimeException(
+                'Restored Session persistence target failed identity or content validation.'
+            );
+        }
+        GatewayProjectStateFilesystem::syncDirectory(\dirname($this->persistPath));
+    }
+
+    private function isSealedPublishedPersistTarget(string $path, int $expectedSize): bool
+    {
+        $status = $this->freshFileStatus($path);
+        return \is_array($status)
+            && (int)($status['size'] ?? -1) === $expectedSize
+            && (\PHP_OS_FAMILY === 'Windows'
+                || ((((int)($status['mode'] ?? 0)) & 0777) === self::POSIX_PERSIST_FILE_MODE));
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameFileState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
         }
         return true;
     }
 
     /**
-     * 构建带系统错误信息的日志。
+     * @param array<string|int,mixed>|null $before
+     * @param array<string|int,mixed>|false|null $after
      */
-    private function buildLastPhpErrorMessage(string $prefix, string $path): string
+    private function sameOptionalFileState(?array $before, array|false|null $after): bool
     {
-        $error = \error_get_last();
-        if (\is_array($error) && !empty($error['message'])) {
-            return $prefix . ': path=' . $path . ', error=' . $error['message'];
+        if ($before === null || !\is_array($after)) {
+            return $before === null && !\is_array($after);
         }
-        return $prefix . ': path=' . $path;
+        return $this->sameFileState($before, $after);
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameDirectoryIdentity(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function samePublicationObjectIdentity(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** @param array<string|int,mixed> $expected */
+    private function publicationObjectIdentityMatchesPath(array $expected, string $path): bool
+    {
+        $actual = $this->freshFileStatus($path);
+        return \is_array($actual)
+            && $this->samePublicationObjectIdentity($expected, $actual);
+    }
+
+    /** @return array<string|int,mixed>|null */
+    private function freshFileStatus(string $path): ?array
+    {
+        \clearstatcache(true, $path);
+        $status = @\lstat($path);
+        return \is_array($status) ? $status : null;
+    }
+
+    /** @return array<string|int,mixed>|null */
+    private function safePersistDirectoryStatus(string $path): ?array
+    {
+        \clearstatcache(true, $path);
+        $status = @\lstat($path);
+        if (!\is_array($status)
+            || \is_link($path)
+            || ((((int)$status['mode']) & 0170000) !== 0040000)
+        ) {
+            return null;
+        }
+        return $status;
+    }
+
+    /**
+     * 确保持久化目录存在。
+     */
+    private function ensurePersistDirectory(): bool
+    {
+        $persistDir = \dirname($this->persistPath);
+        if ($persistDir === ''
+            || $persistDir === '.'
+            || \dirname($persistDir) === $persistDir
+            || \str_contains($persistDir, "\0")
+        ) {
+            return false;
+        }
+        if (!\is_dir($persistDir)
+            && !@\mkdir($persistDir, self::POSIX_PERSIST_DIRECTORY_MODE, true)
+            && !\is_dir($persistDir)
+        ) {
+            return false;
+        }
+        $before = $this->safePersistDirectoryStatus($persistDir);
+        if ($before === null) {
+            return false;
+        }
+        if (\PHP_OS_FAMILY !== 'Windows'
+            && !@\chmod($persistDir, self::POSIX_PERSIST_DIRECTORY_MODE)
+        ) {
+            return false;
+        }
+        $after = $this->safePersistDirectoryStatus($persistDir);
+        return $after !== null
+            && (\PHP_OS_FAMILY === 'Windows'
+                || (((int)$after['mode'] & 0777) === self::POSIX_PERSIST_DIRECTORY_MODE));
     }
 
     /**
@@ -1143,6 +2045,7 @@ final class SessionStore
     private function markPersistFailure(string $message): void
     {
         $this->nextPersistRetryAt = \time() + $this->persistFailureBackoffSec;
+        $this->nextPersistRetryMonotonic = self::monotonicSeconds() + $this->persistFailureBackoffSec;
         $this->log($message . ', retry_in=' . $this->persistFailureBackoffSec . 's');
     }
 

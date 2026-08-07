@@ -16,6 +16,11 @@ use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
  */
 final class ConnectionAcceptGatePool
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private const RECONCILE_INTERVAL_SECONDS = 0.25;
 
     private static ?self $instance = null;
@@ -122,7 +127,7 @@ final class ConnectionAcceptGatePool
      */
     public function sweep(?float $now = null): array
     {
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         $directives = [];
         foreach ($this->gates as $digest => $gate) {
             $next = $gate->nextSweepAt();
@@ -179,7 +184,7 @@ final class ConnectionAcceptGatePool
      */
     public function reconcileIfDue(array $liveConnectionIds, ?float $now = null): void
     {
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         if ($now < $this->nextReconcileAt) {
             return;
         }
@@ -195,7 +200,7 @@ final class ConnectionAcceptGatePool
      */
     public function reconcileMapsIfDue(array ...$liveConnectionMaps): void
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if ($now < $this->nextReconcileAt) {
             return;
         }
