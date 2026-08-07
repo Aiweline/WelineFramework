@@ -209,7 +209,14 @@ final class FormRenderer
         }
 
         $csrf = self::normalizeSwitch((string)($attributes['csrf'] ?? 'auto'), ['auto', 'on', 'off'], 'auto');
-        $captcha = self::normalizeSwitch((string)($attributes['captcha'] ?? 'auto'), ['auto', 'required', 'off'], 'auto');
+        // Captcha is opt-in: ordinary POST forms (including async admin actions) stay clean
+        // unless a template explicitly sets captcha="auto|required".
+        $captcha = self::normalizeSwitch((string)($attributes['captcha'] ?? 'off'), ['auto', 'required', 'off'], 'off');
+        // Async form posts are handled by XHR/bin-query and never go through the
+        // synchronous captcha challenge path, so keep the widget out of the markup.
+        if ($captcha !== 'off' && isset($attributes['data-async-action'])) {
+            $captcha = 'off';
+        }
         $intent = \trim((string)($attributes['intent'] ?? 'generic'));
         if (\preg_match('/\A[A-Za-z0-9_.:-]{1,80}\z/D', $intent) !== 1) {
             $intent = 'generic';

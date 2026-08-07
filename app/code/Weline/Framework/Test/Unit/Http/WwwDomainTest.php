@@ -708,6 +708,63 @@ class WwwDomainTest extends TestCore
     }
 
     /**
+     * 同 host 下 path 挂载站：先剥挂载，再解析站内 locale/页面段。
+     * 正确：/aisite_accept_ok/en_US/about → mount 站 + lang=en_US + uri=about
+     * 错误顺序 /en_US/aisite_accept_ok/about 不得命中挂载站。
+     */
+    public function testPathMountedSiteParsesLocaleOnlyAfterMount(): void
+    {
+        Url::resetWebsiteParserSites();
+        $this->setupWebsiteConfigs([
+            'http://example.com' => [
+                'website_id' => 10,
+                'name' => '整域站',
+                'code' => 'root_site',
+                'url' => 'http://example.com',
+                'default_currency' => 'CNY',
+                'default_language' => 'zh_Hans_CN',
+                'default_timezone' => 'Asia/Shanghai',
+            ],
+            'http://example.com/aisite_accept_ok' => [
+                'website_id' => 20,
+                'name' => '挂载站',
+                'code' => 'mount_site',
+                'url' => 'http://example.com/aisite_accept_ok',
+                'default_currency' => 'CNY',
+                'default_language' => 'zh_Hans_CN',
+                'default_timezone' => 'Asia/Shanghai',
+            ],
+        ]);
+
+        $this->simulateServer('example.com', '/aisite_accept_ok/en_US/about');
+        $this->enterParserRequestContext();
+        try {
+            $result = Url::parser();
+
+            $this->assertIsArray($result);
+            $this->assertEquals(20, (int)($result['server']['WELINE_WEBSITE_ID'] ?? 0));
+            $this->assertEquals('http://example.com/aisite_accept_ok', $result['website_url'] ?? '');
+            $this->assertSame('en_US', (string)($result['server']['WELINE_USER_LANG'] ?? $result['language'] ?? ''));
+            $this->assertStringContainsString('about', (string)($result['server']['REQUEST_URI'] ?? ''));
+            $this->assertStringNotContainsString('aisite_accept_ok', (string)($result['server']['REQUEST_URI'] ?? ''));
+            $this->assertStringNotContainsString('en_US', (string)($result['server']['REQUEST_URI'] ?? ''));
+        } finally {
+            $this->leaveParserRequestContext();
+        }
+
+        $this->simulateServer('example.com', '/en_US/aisite_accept_ok/about');
+        $this->enterParserRequestContext();
+        try {
+            $result = Url::parser();
+            $this->assertIsArray($result);
+            // locale 在 mount 前：不能当成挂载站命中
+            $this->assertNotEquals(20, (int)($result['server']['WELINE_WEBSITE_ID'] ?? 0));
+        } finally {
+            $this->leaveParserRequestContext();
+        }
+    }
+
+    /**
      * /shop 不匹配 /shopper（路径段边界）。
      */
     public function testWebsiteBaseUrlRequiresPathSegmentBoundary(): void
