@@ -62,6 +62,44 @@ final class LanguageSwitcherPublicRouteTest extends TestCase
         self::assertSame('/contact', $this->resolvePublicFrontendPath($request));
     }
 
+    public function testPublicFrontendRouteStripsWebsiteMountSubPath(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getGet')->willReturnCallback(static function (string $key, mixed $default = null) {
+            return $default;
+        });
+        $request->method('getServer')->willReturnCallback(static function (string $key, mixed $default = null) {
+            return match ($key) {
+                'WELINE_ORIGIN_REQUEST_URI' => '/aisite_accept_ok/',
+                'REQUEST_URI' => '/pagebuilder/frontend/page/view?page_id=1',
+                'WELINE_WEBSITE_URL' => 'https://pre.example.test/aisite_accept_ok',
+                default => is_string($default) || is_array($default) ? $default : '',
+            };
+        });
+        $request->method('getUrlPath')->willReturn('/pagebuilder/frontend/page/view');
+
+        self::assertSame('/', $this->resolvePublicFrontendPath($request));
+    }
+
+    public function testPublicFrontendRouteStripsMountBeforePageHandle(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getGet')->willReturnCallback(static function (string $key, mixed $default = null) {
+            return $default;
+        });
+        $request->method('getServer')->willReturnCallback(static function (string $key, mixed $default = null) {
+            return match ($key) {
+                'WELINE_ORIGIN_REQUEST_URI' => '/aisite_accept_ok/about',
+                'REQUEST_URI' => '/pagebuilder/frontend/page/view',
+                'WELINE_WEBSITE_URL' => 'https://pre.example.test/aisite_accept_ok',
+                default => is_string($default) || is_array($default) ? $default : '',
+            };
+        });
+        $request->method('getUrlPath')->willReturn('/pagebuilder/frontend/page/view');
+
+        self::assertSame('/about', $this->resolvePublicFrontendPath($request));
+    }
+
     private function resolvePublicFrontendPath(Request $request): string
     {
         $method = new ReflectionMethod(LanguageSwitcher::class, 'resolvePublicFrontendPath');

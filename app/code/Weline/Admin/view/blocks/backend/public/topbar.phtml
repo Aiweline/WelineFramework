@@ -239,7 +239,8 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
         z-index: 10050;
     }
 
-    #page-topbar .dropdown-menu {
+    #page-topbar .dropdown-menu,
+    #page-topbar .weline-i18n-switcher-panel {
         z-index: 10055;
     }
 
@@ -255,7 +256,8 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
         #page-topbar,
         #page-topbar .navbar-header {
             max-width: 100vw !important;
-            overflow: hidden !important;
+            /* visible: language/user dropdowns must escape the 72px header box */
+            overflow: visible !important;
         }
 
         #page-topbar .navbar-header {
