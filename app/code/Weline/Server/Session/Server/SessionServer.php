@@ -258,6 +258,12 @@ final class SessionServer
         $this->store->loadFromFile();
         $startupShutdownDueAt = $this->monotonicNow() + $this->startupConsumerGraceSec;
         $startupShutdownWallDueAt = (int)\ceil($this->wallClockNow() + $this->startupConsumerGraceSec);
+        $processName = \trim((string)($this->config['process_name'] ?? ''));
+        $instanceName = \trim((string)(
+            $this->config['service_instance_name']
+            ?? $this->config['instance_name']
+            ?? ''
+        ));
         $serviceRecord = [
             'role' => $this->serviceRole,
             'host' => $this->host,
@@ -268,6 +274,13 @@ final class SessionServer
             'healthy_at' => \date('c'),
             'shared_service' => true,
         ];
+        if ($processName !== '') {
+            $serviceRecord['process_name'] = $processName;
+        }
+        if ($instanceName !== '') {
+            $serviceRecord['instance_name'] = $instanceName;
+            $serviceRecord['service_instance_name'] = $instanceName;
+        }
         $publishedRecord = $this->sharedRegistry->updateRecord(
             $this->serviceRole,
             static function (array $record) use ($serviceRecord, $startupShutdownWallDueAt): array {

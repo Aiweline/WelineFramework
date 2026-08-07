@@ -247,6 +247,16 @@ final class StartCommandArgsSolidificationTest extends TestCase
         );
     }
 
+    public function testPureWlsLocalDevelopmentDomainKeepsSelfSignedColdStart(): void
+    {
+        $result = $this->createProbe()->resolveMissingCertificate([
+            'edge_mode' => 'wls',
+            'gateway' => ['requested_mode' => 'auto'],
+        ], 'p8af22c44.weline.test', true, false);
+
+        self::assertNull($result);
+    }
+
     public function testRetiredCertificateTombstoneStartsWithoutPemInHttpOnlyMode(): void
     {
         $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR

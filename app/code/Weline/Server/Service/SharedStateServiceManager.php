@@ -2281,6 +2281,14 @@ class SharedStateServiceManager
                     (string)($runtime['lifecycle_identity_digest'] ?? ''),
                 )
             ) {
+                $completed = self::preferCompletedLifecycleIdentity(
+                    $role,
+                    $record,
+                    $runtime,
+                );
+                if ($completed !== null) {
+                    return $completed;
+                }
                 throw new \RuntimeException(
                     'Conflicting WLS shared-state lifecycle identities claim the same generation.'
                 );
@@ -2291,6 +2299,81 @@ class SharedStateServiceManager
             return $record;
         }
         return $runtimeBound ? $runtime : [];
+    }
+
+    /**
+     * Same generation with different digests is usually a hard fork. One
+     * recoverable case remains: the registry published the listen identity
+     * before process/instance names were known, while the runtime file already
+     * carries the complete managed identity for the same pid/port/token.
+     *
+     * @param array<string,mixed> $record
+     * @param array<string,mixed> $runtime
+     * @return array<string,mixed>|null
+     */
+    private static function preferCompletedLifecycleIdentity(
+        string $role,
+        array $record,
+        array $runtime,
+    ): ?array {
+        if (!self::lifecycleCoreIdentityEquals($role, $record, $runtime)) {
+            return null;
+        }
+        $recordComplete = self::hasManagedLifecycleNames($record);
+        $runtimeComplete = self::hasManagedLifecycleNames($runtime);
+        if ($recordComplete === $runtimeComplete) {
+            return null;
+        }
+
+        return $runtimeComplete ? $runtime : $record;
+    }
+
+    /**
+     * @param array<string,mixed> $left
+     * @param array<string,mixed> $right
+     */
+    private static function lifecycleCoreIdentityEquals(
+        string $role,
+        array $left,
+        array $right,
+    ): bool {
+        $role = \trim($role);
+        foreach (['host', 'token_file_name', 'started_at'] as $field) {
+            $leftValue = \trim((string)($left[$field] ?? ''));
+            $rightValue = \trim((string)($right[$field] ?? ''));
+            if ($field === 'host') {
+                $leftValue = \strtolower($leftValue);
+                $rightValue = \strtolower($rightValue);
+            }
+            if ($leftValue === ''
+                || $rightValue === ''
+                || !\hash_equals($leftValue, $rightValue)
+            ) {
+                return false;
+            }
+        }
+        $leftRole = \trim((string)($left['role'] ?? $role));
+        $rightRole = \trim((string)($right['role'] ?? $role));
+        if ($leftRole === ''
+            || $rightRole === ''
+            || !\hash_equals($role, $leftRole)
+            || !\hash_equals($role, $rightRole)
+        ) {
+            return false;
+        }
+
+        return (int)($left['port'] ?? 0) === (int)($right['port'] ?? 0)
+            && (int)($left['pid'] ?? 0) === (int)($right['pid'] ?? 0)
+            && (int)($left['port'] ?? 0) > 0
+            && (int)($left['pid'] ?? 0) > 0;
+    }
+
+    /** @param array<string,mixed> $record */
+    private static function hasManagedLifecycleNames(array $record): bool
+    {
+        return \trim((string)($record['process_name'] ?? '')) !== ''
+            || \trim((string)($record['instance_name'] ?? '')) !== ''
+            || \trim((string)($record['service_instance_name'] ?? '')) !== '';
     }
 
     /**
@@ -2649,6 +2732,10 @@ class SharedStateServiceManager
             return [];
         }
 
+        // Do not carry lifecycle_* from runtime into the registry updater.
+        // bindLifecycleGeneration() must rebind from the previous registry
+        // identity; copying a peer binding turns an incomplete→complete
+        // identity repair into a same-generation fork.
         $recordFields = [];
         foreach ([
             'role',
@@ -2662,9 +2749,6 @@ class SharedStateServiceManager
             'instance_name',
             'service_instance_name',
             'shared_service',
-            'lifecycle_schema',
-            'lifecycle_generation',
-            'lifecycle_identity_digest',
         ] as $key) {
             if (!\array_key_exists($key, $runtime)) {
                 continue;

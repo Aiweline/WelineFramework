@@ -224,6 +224,16 @@ foreach (['empty_token_exit_grace_sec', 'empty_token_check_interval_sec', 'start
 }
 $sessionConfig['port'] = $port;
 $sessionConfig['role'] = $role;
+// Shared-state lifecycle digests include process/instance identity. The
+// sidecar must publish the same fields the manager binds into runtime files,
+// otherwise cold start collides on generation 1 with two digests.
+if ($processName !== '') {
+    $sessionConfig['process_name'] = $processName;
+}
+if ($instanceName !== '') {
+    $sessionConfig['instance_name'] = $instanceName;
+    $sessionConfig['service_instance_name'] = $instanceName;
+}
 $configuredPersistPath = \trim((string)($sessionConfig['persist_path'] ?? ''));
 if ($configuredPersistPath === '') {
     $legacyPersistPath = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
