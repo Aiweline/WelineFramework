@@ -86,11 +86,41 @@ class WebsiteAclGrant extends BackendController
         // Force platform (default) context for full tree: observer skips filter when website_id=0
         $trees = $treeService->getAclAssignmentTree($probeRole);
 
+        $selected = \array_fill_keys($this->grantService->getGrantedSourceIds($websiteId), true);
+        foreach ($trees as $tree) {
+            $this->applyGrantSelectionToTree($tree, $selected);
+        }
+
         /** @var Acl $aclModel */
         $aclModel = ObjectManager::getInstance(Acl::class, [], false);
         $allRows = $aclModel->reset()->select()->fetchArray();
-        $selected = \array_fill_keys($this->grantService->getGrantedSourceIds($websiteId), true);
         $tagTree = AclResourcePresentation::buildTagTree($allRows, $selected);
+
+        $statistics = [];
+        $moduleSet = [];
+        $typeSet = [];
+        foreach ($trees as $tree) {
+            $sid = (string)$tree->getSourceId();
+            $stats = $this->countNodeStats($tree, $moduleSet, $typeSet);
+            $statistics[$sid] = [
+                'source_id' => $sid,
+                'source_name' => $tree->getSourceName(),
+                'module' => \explode('::', $sid)[0] ?? $sid,
+                'type' => $tree->getType(),
+                'total' => $stats['total'],
+                'selected' => $stats['selected'],
+            ];
+        }
+        foreach ($allRows as $row) {
+            $rowType = (string)($row['type'] ?? '');
+            if (\in_array($rowType, ['query', 'task', 'operation'], true)) {
+                $typeSet[$rowType] = true;
+                $rowModule = (string)($row['module'] ?? (\explode('::', (string)($row['source_id'] ?? ''))[0] ?? ''));
+                if ($rowModule !== '') {
+                    $moduleSet[$rowModule] = true;
+                }
+            }
+        }
 
         $this->assign('website', $website->getData());
         $this->assign('website_id', $websiteId);
@@ -99,8 +129,51 @@ class WebsiteAclGrant extends BackendController
         $this->assign('selected_source_ids', \array_keys($selected));
         $this->assign('tag_path_leaves', AclResourcePresentation::buildTagPathLeaves($allRows));
         $this->assign('tag_grants', []);
+        $this->assign('tree_statistics', $statistics);
+        $this->assign('module_list', \array_keys($moduleSet));
+        $this->assign('type_list', \array_keys($typeSet));
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/backend/website-acl-grant/save'));
         return $this->fetch('edit');
+    }
+
+    /**
+     * Mark tree nodes selected according to website grant package (reuses role_id flag for jstree).
+     */
+    private function applyGrantSelectionToTree(object $node, array $selected): void
+    {
+        $sid = (string)$node->getSourceId();
+        $node->setData('role_id', isset($selected[$sid]) ? true : null);
+        foreach ($node->getSub() ?: [] as $sub) {
+            $this->applyGrantSelectionToTree($sub, $selected);
+        }
+    }
+
+    /**
+     * Recursively count nodes and collect module/type filters (same as Role::getAssign).
+     *
+     * @return array{total:int,selected:int}
+     */
+    private function countNodeStats(object $node, array &$moduleSet, array &$typeSet): array
+    {
+        $total = 1;
+        $selected = $node->getData('role_id') ? 1 : 0;
+
+        $module = $node->getModule();
+        $type = $node->getType();
+        if ($module !== '' && $module !== null) {
+            $moduleSet[$module] = true;
+        }
+        if ($type !== '' && $type !== null) {
+            $typeSet[$type] = true;
+        }
+
+        foreach ($node->getSub() ?: [] as $sub) {
+            $subStats = $this->countNodeStats($sub, $moduleSet, $typeSet);
+            $total += $subStats['total'];
+            $selected += $subStats['selected'];
+        }
+
+        return ['total' => $total, 'selected' => $selected];
     }
 
     #[AclAttr('Weline_Websites::website_acl_grant_save', '保存网站功能授权', 'mdi mdi-content-save', '保存子站授权包')]

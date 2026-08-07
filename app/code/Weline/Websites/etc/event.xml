@@ -46,6 +46,11 @@
                   instance="Weline\Websites\Observer\EnforceBackendUserWebsiteBindOnLogin"
                   disabled="false" shared="true" sort="-20"/>
     </event>
+    <event name="Weline_Framework_Router::backend_whitelist_url">
+        <observer name="Weline_Websites::backend_whitelist_url"
+                  instance="Weline\Websites\Observer\BackendWhitelistUrl"
+                  disabled="false" shared="true" sort="20"/>
+    </event>
 
     <!--货币验证观察者：在网站检测之后验证货币是否被允许-->
     <event name="Weline_Framework_Url::detect_currency">
