@@ -523,10 +523,35 @@ class SharedStateServiceManager
                 }
 
                 $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
-                $runtime['started_at'] = $startedAt;
                 $runtime['healthy_at'] = \date('c');
                 $runtime['created_now'] = true;
                 $runtime['shared_service'] = true;
+                // Sidecar registry is the authority for incarnation started_at.
+                // Using the wait-loop wall clock here creates a same-generation
+                // digest fork when bind happens one second later.
+                $registryRecord = $this->createRegistry()->getRecord($roleKey);
+                $registryPid = (int)($registryRecord['pid'] ?? 0);
+                $runtimePid = (int)($runtime['pid'] ?? 0);
+                if ($registryPid > 0 && $registryPid === $runtimePid) {
+                    foreach ([
+                        'started_at',
+                        'healthy_at',
+                        'process_name',
+                        'instance_name',
+                        'service_instance_name',
+                        'token_file_name',
+                    ] as $field) {
+                        $value = $registryRecord[$field] ?? null;
+                        if (\is_string($value) && \trim($value) !== '') {
+                            $runtime[$field] = $value;
+                        }
+                    }
+                }
+                if (!\is_string($runtime['started_at'] ?? null)
+                    || \trim((string)$runtime['started_at']) === ''
+                ) {
+                    $runtime['started_at'] = $startedAt;
+                }
                 $this->writeRuntimeFile($roleKey, $runtime);
                 $done[$roleKey] = $runtime;
                 unset($pending[$roleKey]);
@@ -2281,7 +2306,7 @@ class SharedStateServiceManager
                     (string)($runtime['lifecycle_identity_digest'] ?? ''),
                 )
             ) {
-                $completed = self::preferCompletedLifecycleIdentity(
+                $completed = self::preferConvergedLifecycleIdentity(
                     $role,
                     $record,
                     $runtime,
@@ -2302,30 +2327,92 @@ class SharedStateServiceManager
     }
 
     /**
-     * Same generation with different digests is usually a hard fork. One
-     * recoverable case remains: the registry published the listen identity
-     * before process/instance names were known, while the runtime file already
-     * carries the complete managed identity for the same pid/port/token.
+     * Same generation with different digests is usually a hard fork. Recoverable
+     * cases remain when both sides describe the same live sidecar ownership:
+     * - registry published before managed process/instance names were known;
+     * - wait-loop runtime stamped started_at one second before the sidecar bind.
+     * Prefer the registry tuple; it is written by the owning sidecar process.
      *
      * @param array<string,mixed> $record
      * @param array<string,mixed> $runtime
      * @return array<string,mixed>|null
      */
-    private static function preferCompletedLifecycleIdentity(
+    private static function preferConvergedLifecycleIdentity(
         string $role,
         array $record,
         array $runtime,
     ): ?array {
-        if (!self::lifecycleCoreIdentityEquals($role, $record, $runtime)) {
+        if (!self::lifecycleLiveOwnershipEquals($role, $record, $runtime)) {
             return null;
         }
         $recordComplete = self::hasManagedLifecycleNames($record);
         $runtimeComplete = self::hasManagedLifecycleNames($runtime);
-        if ($recordComplete === $runtimeComplete) {
+        if ($recordComplete !== $runtimeComplete) {
+            return $runtimeComplete ? $runtime : $record;
+        }
+        if (!$recordComplete || !$runtimeComplete) {
+            return null;
+        }
+        if (!self::managedLifecycleNamesEqual($record, $runtime)) {
             return null;
         }
 
-        return $runtimeComplete ? $runtime : $record;
+        // Same live ownership and managed names: only started_at (or another
+        // non-ownership stamp) diverged. Sidecar registry wins.
+        return $record;
+    }
+
+    /**
+     * @param array<string,mixed> $left
+     * @param array<string,mixed> $right
+     */
+    private static function lifecycleLiveOwnershipEquals(
+        string $role,
+        array $left,
+        array $right,
+    ): bool {
+        $role = \trim($role);
+        $leftHost = \strtolower(\trim((string)($left['host'] ?? '')));
+        $rightHost = \strtolower(\trim((string)($right['host'] ?? '')));
+        $leftToken = \trim((string)($left['token_file_name'] ?? ''));
+        $rightToken = \trim((string)($right['token_file_name'] ?? ''));
+        $leftRole = \trim((string)($left['role'] ?? $role));
+        $rightRole = \trim((string)($right['role'] ?? $role));
+        if ($leftHost === ''
+            || $rightHost === ''
+            || $leftToken === ''
+            || $rightToken === ''
+            || $leftRole === ''
+            || $rightRole === ''
+            || !\hash_equals($leftHost, $rightHost)
+            || !\hash_equals($leftToken, $rightToken)
+            || !\hash_equals($role, $leftRole)
+            || !\hash_equals($role, $rightRole)
+        ) {
+            return false;
+        }
+
+        return (int)($left['port'] ?? 0) === (int)($right['port'] ?? 0)
+            && (int)($left['pid'] ?? 0) === (int)($right['pid'] ?? 0)
+            && (int)($left['port'] ?? 0) > 0
+            && (int)($left['pid'] ?? 0) > 0;
+    }
+
+    /**
+     * @param array<string,mixed> $left
+     * @param array<string,mixed> $right
+     */
+    private static function managedLifecycleNamesEqual(array $left, array $right): bool
+    {
+        foreach (['process_name', 'instance_name', 'service_instance_name'] as $field) {
+            $leftValue = \trim((string)($left[$field] ?? ''));
+            $rightValue = \trim((string)($right[$field] ?? ''));
+            if ($leftValue === '' || $rightValue === '' || !\hash_equals($leftValue, $rightValue)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -2337,35 +2424,15 @@ class SharedStateServiceManager
         array $left,
         array $right,
     ): bool {
-        $role = \trim($role);
-        foreach (['host', 'token_file_name', 'started_at'] as $field) {
-            $leftValue = \trim((string)($left[$field] ?? ''));
-            $rightValue = \trim((string)($right[$field] ?? ''));
-            if ($field === 'host') {
-                $leftValue = \strtolower($leftValue);
-                $rightValue = \strtolower($rightValue);
-            }
-            if ($leftValue === ''
-                || $rightValue === ''
-                || !\hash_equals($leftValue, $rightValue)
-            ) {
-                return false;
-            }
-        }
-        $leftRole = \trim((string)($left['role'] ?? $role));
-        $rightRole = \trim((string)($right['role'] ?? $role));
-        if ($leftRole === ''
-            || $rightRole === ''
-            || !\hash_equals($role, $leftRole)
-            || !\hash_equals($role, $rightRole)
-        ) {
+        if (!self::lifecycleLiveOwnershipEquals($role, $left, $right)) {
             return false;
         }
+        $leftStarted = \trim((string)($left['started_at'] ?? ''));
+        $rightStarted = \trim((string)($right['started_at'] ?? ''));
 
-        return (int)($left['port'] ?? 0) === (int)($right['port'] ?? 0)
-            && (int)($left['pid'] ?? 0) === (int)($right['pid'] ?? 0)
-            && (int)($left['port'] ?? 0) > 0
-            && (int)($left['pid'] ?? 0) > 0;
+        return $leftStarted !== ''
+            && $rightStarted !== ''
+            && \hash_equals($leftStarted, $rightStarted);
     }
 
     /** @param array<string,mixed> $record */
