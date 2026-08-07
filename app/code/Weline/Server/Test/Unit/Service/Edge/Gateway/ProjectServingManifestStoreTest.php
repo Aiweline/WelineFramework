@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 
 final class ProjectServingManifestStoreTest extends TestCase
@@ -75,6 +76,70 @@ final class ProjectServingManifestStoreTest extends TestCase
             $first['digest'],
             $store->currentForFence($this->fence('primary'))['digest'],
         );
+    }
+
+    public function testCommittedPointerSurvivesExpiredPostCommitReferenceCleanup(): void
+    {
+        $now = 100.0;
+        $transitionDeadlines = [];
+        $store = new ProjectServingManifestStore(
+            $this->root,
+            publicationMonotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+            snapshotReferenceTransition: static function (
+                array $_referenced,
+                array $_retiring,
+                ?float $deadline,
+            ) use (&$now, &$transitionDeadlines): void {
+                $transitionDeadlines[] = $deadline;
+                if (\count($transitionDeadlines) === 2) {
+                    $now = 102.0;
+                    throw new \RuntimeException('synthetic post-commit cleanup failure');
+                }
+            },
+        );
+
+        $published = $store->publishFromRegistration(
+            $this->registration('primary', [$this->route('deadline.example.test')]),
+            deadlineMonotonic: 100.5,
+        );
+
+        self::assertSame(1, $published['generation']);
+        self::assertSame($published['digest'], $store->current('primary')['digest']);
+        self::assertCount(2, $transitionDeadlines);
+        self::assertSame(100.5, $transitionDeadlines[0]);
+        self::assertGreaterThan(100.5, $transitionDeadlines[1]);
+    }
+
+    public function testSnapshotReferenceCallbackCommitIsNotReversedByExpiredDeadline(): void
+    {
+        $now = 300.0;
+        $store = new ProjectServingManifestStore(
+            $this->root,
+            publicationMonotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+        $fact = $this->root . DIRECTORY_SEPARATOR
+            . 'var/server/reference-callback.fact';
+
+        $result = $store->withCertificateSnapshotReferences(
+            static function (array $references) use (&$now, $fact): string {
+                self::assertSame([], $references);
+                GatewayProjectStateFilesystem::atomicWrite(
+                    $fact,
+                    "committed\n",
+                    0600,
+                );
+                $now = 301.0;
+                return 'committed';
+            },
+            300.5,
+        );
+
+        self::assertSame('committed', $result);
+        self::assertSame("committed\n", \file_get_contents($fact));
     }
 
     public function testInstancePointersAndGenerationFloorsAreIsolated(): void
@@ -260,6 +325,78 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertArrayHasKey($digests[3], $references);
     }
 
+    public function testMutableRecoveryBackupsRequireWholeClosureValidationBeforeCleanup(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $registration = $this->registration('primary', [
+            $this->route('recovery-backup.example.test'),
+        ]);
+        $store->publishFromRegistration($registration);
+        $nextDigest = $this->createSnapshot(
+            'recovery-backup-certificate',
+            'recovery-backup-private-key',
+            'recovery-backup-chain',
+        );
+        $registration = $this->registration('primary', [
+            $this->route(
+                'recovery-backup.example.test',
+                false,
+                $nextDigest,
+                4,
+            ),
+        ]);
+        $store->publishFromRegistration($registration);
+
+        $stateRoot = \dirname($store->currentPointerPath('primary'));
+        $instanceKey = \substr(\hash('sha256', 'primary'), 0, 32);
+        $targets = [
+            $stateRoot . DIRECTORY_SEPARATOR . 'generation-' . $instanceKey,
+            $stateRoot . DIRECTORY_SEPARATOR . 'authority-' . $instanceKey . '.json',
+            $store->currentPointerPath('primary'),
+            $stateRoot . DIRECTORY_SEPARATOR . 'lkg-' . $instanceKey . '.json',
+            $stateRoot . DIRECTORY_SEPARATOR . 'manifest-retirement.json',
+        ];
+        $backups = [];
+        foreach ($targets as $index => $target) {
+            self::assertFileExists($target);
+            $backup = $target . '.wls-backup-'
+                . \str_pad(\dechex($index + 1), 16, '0', STR_PAD_LEFT);
+            self::assertTrue(\copy($target, $backup));
+            if (\PHP_OS_FAMILY !== 'Windows') {
+                self::assertTrue(\chmod($backup, 0600));
+            }
+            $backups[] = $backup;
+        }
+
+        $store->publishFromRegistration($registration);
+
+        foreach ($backups as $backup) {
+            self::assertFileDoesNotExist($backup);
+        }
+
+        $pointerBackup = $store->currentPointerPath('primary')
+            . '.wls-backup-' . \str_repeat('a', 16);
+        $lkg = $stateRoot . DIRECTORY_SEPARATOR . 'lkg-' . $instanceKey . '.json';
+        $lkgBackup = $lkg . '.wls-backup-' . \str_repeat('b', 16);
+        self::assertTrue(\copy($store->currentPointerPath('primary'), $pointerBackup));
+        self::assertTrue(\copy($lkg, $lkgBackup));
+        self::assertNotFalse(\file_put_contents($lkg, '{"corrupt":true}'));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            foreach ([$pointerBackup, $lkgBackup, $lkg] as $path) {
+                self::assertTrue(\chmod($path, 0600));
+            }
+        }
+
+        try {
+            $store->publishFromRegistration($registration);
+            self::fail('A damaged paired target must fail the complete recovery closure.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('LKG reference is corrupt', $exception->getMessage());
+        }
+        self::assertFileExists($pointerBackup);
+        self::assertFileExists($lkgBackup);
+    }
+
     public function testServingManifestStoreRejectsFilesystemProjectRoot(): void
     {
         $this->expectException(\RuntimeException::class);
@@ -379,9 +516,46 @@ final class ProjectServingManifestStoreTest extends TestCase
         ]));
     }
 
-    public function testManifestStoreReclaimsExpiredUnreferencedGenerationAtQuota(): void
+    public function testCrashOrphanedImmutableManifestCandidateIsRecovered(): void
     {
         $store = new ProjectServingManifestStore($this->root);
+        $manifestRoot = \dirname($store->currentPointerPath('primary'))
+            . DIRECTORY_SEPARATOR . 'manifests';
+        self::assertTrue(\mkdir($manifestRoot, 0700, true));
+        $orphan = $manifestRoot . DIRECTORY_SEPARATOR . '1-'
+            . \str_repeat('a', 64) . '.json.tmp-' . \str_repeat('b', 24);
+        self::assertNotFalse(\file_put_contents($orphan, '{"partial":true}'));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($orphan, 0600));
+        }
+
+        $published = $store->publishFromRegistration($this->registration(
+            'primary',
+            [$this->route('atomic-recovery.example.test')],
+        ));
+
+        self::assertSame(1, $published['generation']);
+        self::assertFileExists($published['path']);
+        self::assertFileDoesNotExist($orphan);
+    }
+
+    public function testManifestStoreGraceStartsWhenAnOldGenerationBecomesUnreferenced(): void
+    {
+        $wall = 1_900_000_000;
+        $monotonic = 50_000.0;
+        $boot = \str_repeat('7', 64);
+        $store = new ProjectServingManifestStore(
+            $this->root,
+            publicationWallClock: static function () use (&$wall): int {
+                return $wall;
+            },
+            publicationMonotonicClock: static function () use (&$monotonic): float {
+                return $monotonic;
+            },
+            publicationBootIdentityResolver: static function () use (&$boot): string {
+                return $boot;
+            },
+        );
         $manifestRoot = \dirname($store->currentPointerPath('primary'))
             . DIRECTORY_SEPARATOR . 'manifests';
         self::assertTrue(\mkdir($manifestRoot, 0700, true));
@@ -396,6 +570,22 @@ final class ProjectServingManifestStoreTest extends TestCase
             }
         }
 
+        try {
+            $store->publishFromRegistration($this->registration('primary', [
+                $this->route('reclaimed-quota.example.test'),
+            ]));
+            self::fail('Ancient file metadata must not shorten the retirement grace.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'no capacity for another generation',
+                $exception->getMessage(),
+            );
+        }
+        self::assertCount(128, \glob($manifestRoot . DIRECTORY_SEPARATOR . '*.json') ?: []);
+
+        $wall += 604_800;
+        $monotonic += 604_800.0;
+
         $published = $store->publishFromRegistration($this->registration('primary', [
             $this->route('reclaimed-quota.example.test'),
         ]));
@@ -403,6 +593,115 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertSame(1, $published['generation']);
         self::assertSame(1, $published['route_count']);
         self::assertFileExists($published['path']);
+    }
+
+    public function testManifestRetirementStateDamageRebootAndFutureClockRestartGrace(): void
+    {
+        $wall = 1_910_000_000;
+        $monotonic = 60_000.0;
+        $boot = \str_repeat('6', 64);
+        $store = new ProjectServingManifestStore(
+            $this->root,
+            publicationWallClock: static function () use (&$wall): int {
+                return $wall;
+            },
+            publicationMonotonicClock: static function () use (&$monotonic): float {
+                return $monotonic;
+            },
+            publicationBootIdentityResolver: static function () use (&$boot): string {
+                return $boot;
+            },
+        );
+        $digest = \str_repeat('5', 64);
+        $entry = [[
+            'path' => \dirname($store->currentPointerPath('primary'))
+                . DIRECTORY_SEPARATOR . 'manifests' . DIRECTORY_SEPARATOR
+                . '1-' . $digest . '.json',
+            'size' => 1,
+            'mtime' => 1,
+            'generation' => 1,
+            'digest' => $digest,
+        ]];
+        $collectable = new \ReflectionMethod($store, 'collectableManifestRetirementEntries');
+
+        self::assertSame([], $collectable->invoke($store, $entry, []));
+        $wall += 604_800;
+        $monotonic += 604_800.0;
+        self::assertCount(1, $collectable->invoke($store, $entry, []));
+
+        $stateFile = \dirname($store->currentPointerPath('primary'))
+            . DIRECTORY_SEPARATOR . 'manifest-retirement.json';
+        self::assertNotFalse(\file_put_contents($stateFile, '{corrupt'));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($stateFile, 0600));
+        }
+        self::assertSame([], $collectable->invoke($store, $entry, []));
+
+        $wall += 604_800;
+        $monotonic += 604_800.0;
+        $boot = \str_repeat('4', 64);
+        self::assertSame([], $collectable->invoke($store, $entry, []));
+
+        $envelope = \json_decode((string)\file_get_contents($stateFile), true);
+        self::assertIsArray($envelope);
+        self::assertIsArray($envelope['payload'] ?? null);
+        $envelope['payload']['updated_monotonic'] = $monotonic + 1.0;
+        $envelope['sha256'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($envelope['payload']),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $stateFile,
+            \json_encode($envelope, JSON_THROW_ON_ERROR),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($stateFile, 0600));
+        }
+        self::assertSame([], $collectable->invoke($store, $entry, []));
+    }
+
+    public function testManifestReReferenceClearsItsRetirementMarker(): void
+    {
+        $wall = 1_920_000_000;
+        $monotonic = 70_000.0;
+        $boot = \str_repeat('3', 64);
+        $store = new ProjectServingManifestStore(
+            $this->root,
+            publicationWallClock: static function () use (&$wall): int {
+                return $wall;
+            },
+            publicationMonotonicClock: static function () use (&$monotonic): float {
+                return $monotonic;
+            },
+            publicationBootIdentityResolver: static function () use (&$boot): string {
+                return $boot;
+            },
+        );
+        $registration = $this->registration('primary', [
+            $this->route('re-reference.example.test'),
+        ]);
+        $published = $store->publishFromRegistration($registration);
+        $entry = [[
+            'path' => (string)$published['path'],
+            'size' => (int)\filesize((string)$published['path']),
+            'mtime' => 1,
+            'generation' => (int)$published['generation'],
+            'digest' => (string)$published['digest'],
+        ]];
+        $collectable = new \ReflectionMethod($store, 'collectableManifestRetirementEntries');
+        self::assertSame([], $collectable->invoke($store, $entry, []));
+
+        $store->publishFromRegistration($registration);
+
+        $stateFile = \dirname($store->currentPointerPath('primary'))
+            . DIRECTORY_SEPARATOR . 'manifest-retirement.json';
+        $envelope = \json_decode((string)\file_get_contents($stateFile), true);
+        self::assertIsArray($envelope);
+        self::assertIsArray($envelope['payload'] ?? null);
+        self::assertArrayNotHasKey(
+            (string)$published['digest'],
+            $envelope['payload']['markers'] ?? [],
+        );
     }
 
     public function testCurrentPointerRejectsRetiredLaunchAndProjectGenerationRollback(): void
@@ -415,9 +714,10 @@ final class ProjectServingManifestStoreTest extends TestCase
 
         $rejected = [
             [[...$registration, 'instance_generation' => 10], 'stale instance generation'],
-            [[...$registration, 'master_pid' => 12346], 'another Master launch'],
-            [[...$registration, 'master_epoch' => 23], 'another Master launch'],
-            [[...$registration, 'launch_id' => \str_repeat('f', 32)], 'another Master launch'],
+            [[...$registration, 'master_pid' => 12346], 'another or stale Master launch'],
+            [[...$registration, 'master_epoch' => 21], 'another or stale Master launch'],
+            [[...$registration, 'launch_id' => \str_repeat('f', 32)],
+                'another or stale Master launch'],
             [[...$registration, 'project_generation' => 4], 'stale project generation'],
             [[...$registration, 'request_digest' => \str_repeat('d', 64)],
                 'conflicting desired-state digests'],
@@ -494,8 +794,15 @@ final class ProjectServingManifestStoreTest extends TestCase
     {
         $apex = $this->route('pending-target.example.test', true);
         $target = $this->route('www.pending-target.example.test');
-        $target['certificate']['generation'] = 0;
-        $target['certificate']['pending'] = true;
+        $target['certificate'] = [
+            'generation' => 0,
+            'source_digest' => \hash(
+                'sha256',
+                "wls-pending-certificate\0www.pending-target.example.test",
+            ),
+            'state' => 'pending',
+            'pending' => true,
+        ];
 
         $manifest = (new ProjectServingManifestStore($this->root))
             ->publishFromRegistration($this->registration('primary', [$apex, $target]));
@@ -534,16 +841,20 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertStringContainsString('validateRunningLease(', $source);
         self::assertStringContainsString("['authorized']", $source);
         self::assertStringContainsString(
-            'reloadSslCert($domains, $instanceName)',
+            'reloadSslCertAndWait(',
             $source,
         );
+        self::assertStringContainsString('$instanceName,', $source);
+        self::assertStringContainsString('assertNativeReloadReceipt(', $source);
         self::assertStringNotContainsString('->reloadSslCert($domains);', $source);
-        self::assertStringContainsString('if ($explicitLegacy)', $source);
-        self::assertStringContainsString('continue;', \substr(
-            $source,
-            (int)\strpos($source, 'if ($explicitLegacy)'),
-            512,
-        ));
+        $legacyStart = \strpos($source, 'if ($explicitLegacy)');
+        $legacyEnd = \strpos($source, '$rawMasterPid =', (int)$legacyStart);
+        self::assertIsInt($legacyStart);
+        self::assertIsInt($legacyEnd);
+        $legacyBlock = \substr($source, $legacyStart, $legacyEnd - $legacyStart);
+        self::assertStringContainsString('validateRunningLease(', $legacyBlock);
+        self::assertStringContainsString("['authorized']", $legacyBlock);
+        self::assertStringContainsString('continue;', $legacyBlock);
     }
 
     public function testFallbackManifestStaticContractPersistsGatewayRenewalIntent(): void
@@ -558,8 +869,49 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertStringContainsString("['requested_mode']", $method);
         self::assertStringContainsString('GatewayStartupDecision::MODE_AUTO', $method);
         self::assertStringContainsString('GatewayStartupDecision::MODE_GATEWAY', $method);
-        self::assertStringContainsString('enqueueFromRegistration($registration)', $method);
+        self::assertStringContainsString('->enqueueFromRegistration(', $method);
+        self::assertStringContainsString('$registration,', $method);
+        self::assertStringContainsString('$deadlineMonotonic,', $method);
         self::assertStringNotContainsString('GatewayStartupDecision::MODE_WLS', $method);
+    }
+
+    public function testCandidateConstructionChecksPublicationDeadlineInsideRouteLoop(): void
+    {
+        $reflection = new \ReflectionMethod(
+            ProjectServingManifestStore::class,
+            'candidateFromRegistration',
+        );
+        $lines = \file($reflection->getFileName());
+        self::assertIsArray($lines);
+        $method = \implode('', \array_slice(
+            $lines,
+            $reflection->getStartLine() - 1,
+            $reflection->getEndLine() - $reflection->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString(
+            '?float $deadlineMonotonic',
+            $method,
+        );
+        $routeLoop = \strpos($method, 'foreach ($desiredRoutes as $route)');
+        self::assertIsInt($routeLoop);
+        $deadlineCheck = \strpos(
+            $method,
+            '$this->assertPublicationDeadline($deadlineMonotonic);',
+            $routeLoop,
+        );
+        self::assertIsInt($deadlineCheck);
+        self::assertLessThan(
+            \strpos($method, 'if (!\\is_array($route))', $routeLoop),
+            $deadlineCheck,
+        );
+        self::assertGreaterThanOrEqual(
+            3,
+            \substr_count(
+                \substr($method, $routeLoop),
+                '$this->assertPublicationDeadline($deadlineMonotonic);',
+            ),
+        );
     }
 
     public function testTlsWorkerStaticContractRejectsUnparsedH2AndInvalidAuthorityPorts(): void

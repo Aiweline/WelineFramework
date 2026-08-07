@@ -129,6 +129,7 @@ final class GatewayClientWireCanonicalizationTest extends TestCase
             'host_id' => $hostId,
             'project_uuid' => $projectUuid,
             'credential_id' => $credentialId,
+            'credential_generation' => 3,
             'secret' => $secret,
             'issued_at' => '2026-08-03T00:00:00+00:00',
         ];
@@ -151,6 +152,7 @@ final class GatewayClientWireCanonicalizationTest extends TestCase
                 GatewayClient::canonicalJson($enrollment['capabilities']),
             ),
             'request_digest' => $enrollment['request_digest'],
+            'authenticated_desired_digest' => \str_repeat('f', 64),
             'idempotency_key' => $enrollment['idempotency_key'],
             'state' => 'COMMITTED',
             'issued_at' => '2026-08-03T00:00:01+00:00',
@@ -195,7 +197,7 @@ final class GatewayClientWireCanonicalizationTest extends TestCase
                     'committed' => true,
                 ],
             ],
-        ]);
+        ], null);
     }
 
     public function testNumericInstanceIdsRemainDistinctInWireClosure(): void

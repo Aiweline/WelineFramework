@@ -24,6 +24,11 @@ use Weline\Server\Model\ServerStatusLog;
  */
 class StatusLogService
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * 是否启用
      */
@@ -35,6 +40,9 @@ class StatusLogService
      * 上次记录时间
      */
     private static int $lastLogTime = 0;
+
+    /** 上次记录的进程内单调时间，仅用于节流。 */
+    private static float $lastLogMonotonic = 0.0;
     
     /**
      * 记录间隔（秒）
@@ -44,7 +52,7 @@ class StatusLogService
     /**
      * 状态写库失败后的冷却截止时间。
      */
-    private static int $failureCooldownUntil = 0;
+    private static float $failureCooldownUntilMonotonic = 0.0;
 
     /**
      * 状态日志是观测旁路，数据库不可用时不应持续拖慢 WLS 主链路。
@@ -77,8 +85,8 @@ class StatusLogService
             return;
         }
         
-        $now = \time();
-        if (!$force && ($now - self::$lastLogTime < self::$logInterval)) {
+        $nowMonotonic = self::monotonicSeconds();
+        if (!$force && ($nowMonotonic - self::$lastLogMonotonic < self::$logInterval)) {
             return;
         }
         
@@ -106,7 +114,8 @@ class StatusLogService
             ];
             
             self::getModel()->clearQuery()->logStatus($data);
-            self::$lastLogTime = $now;
+            self::$lastLogTime = \time();
+            self::$lastLogMonotonic = $nowMonotonic;
             self::clearFailureCooldown();
         } catch (\Throwable $e) {
             self::enterFailureCooldown();
@@ -242,17 +251,18 @@ class StatusLogService
 
     private static function isInFailureCooldown(): bool
     {
-        return self::$failureCooldownUntil > \time();
+        return self::$failureCooldownUntilMonotonic > self::monotonicSeconds();
     }
 
     private static function enterFailureCooldown(): void
     {
-        self::$failureCooldownUntil = \time() + \max(1, self::$failureCooldownSeconds);
+        self::$failureCooldownUntilMonotonic = self::monotonicSeconds()
+            + \max(1, self::$failureCooldownSeconds);
     }
 
     private static function clearFailureCooldown(): void
     {
-        self::$failureCooldownUntil = 0;
+        self::$failureCooldownUntilMonotonic = 0.0;
     }
     
     /**
@@ -361,7 +371,8 @@ class StatusLogService
         self::$enabledOverride = null;
         self::$configuredEnabled = null;
         self::$lastLogTime = 0;
-        self::$failureCooldownUntil = 0;
+        self::$lastLogMonotonic = 0.0;
+        self::$failureCooldownUntilMonotonic = 0.0;
         self::$model = null;
     }
 }

@@ -3035,6 +3035,189 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame('stray-ready', $decoded['msg_id'] ?? null);
     }
 
+    public function testUnmatchedDispatcherRegisterReceivesRejectInsteadOfPidTermination(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+            /** @var list<int> */
+            public array $closed = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closed[] = $clientId;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleRegister', [[
+            'role' => ControlMessage::ROLE_DISPATCHER,
+            'pid' => 0,
+            'port' => 28100,
+            'worker_id' => 0,
+            'epoch' => $context->epoch,
+            'launch_id' => 'stray-dispatcher-launch',
+            'msg_id' => 'stray-dispatcher-ready',
+        ], 910]);
+
+        self::assertSame([910], $mockControl->closed);
+        self::assertCount(1, $mockControl->sent);
+        $decoded = \json_decode(\rtrim($mockControl->sent[0]['message'], "\n"), true);
+        self::assertIsArray($decoded);
+        self::assertSame(ControlMessage::TYPE_READY_ACK, $decoded['type'] ?? null);
+        self::assertFalse((bool)($decoded['accepted'] ?? true));
+        self::assertSame('no_matching_slot', $decoded['reason'] ?? null);
+        self::assertSame('stray-dispatcher-ready', $decoded['msg_id'] ?? null);
+    }
+
+    public function testForcedTerminationLeaseRequiresCredentialBoundProcessBirth(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            launchId: 'dispatcher-launch',
+            pid: 41001,
+            rootPid: 41002,
+            launcherPid: 41002,
+        );
+        $instance->setMeta('process_name', 'weline-wls-dispatcher-default-ptest');
+        $instance->setMeta('child_credential_id', \str_repeat('c', 64));
+        $instance->setMeta('child_credential_pid', 41001);
+        $instance->setMeta('child_process_birth', \str_repeat('d', 64));
+        $instance->setMeta('child_pid_namespace_id', '');
+
+        self::assertNull($this->invokePrivateWithArgs(
+            $orchestrator,
+            'buildCredentialBoundTerminationLease',
+            [$instance],
+        ));
+
+        $instance->setMeta('child_credential_pid', 41002);
+        $lease = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'buildCredentialBoundTerminationLease',
+            [$instance],
+        );
+        self::assertIsArray($lease);
+        self::assertSame(41002, $lease['pid'] ?? 0);
+        self::assertSame(\str_repeat('d', 64), $lease['process_birth'] ?? '');
+        self::assertSame('dispatcher-launch', $lease['launch_id'] ?? '');
+    }
+
+    public function testAdvisoryPortInspectionCannotAuthorizePidCleanup(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $port = Processer::findAvailablePort(29500, 29999);
+        self::assertGreaterThan(0, $port);
+
+        self::assertFalse($this->invokePrivateWithArgs(
+            $orchestrator,
+            'releaseCurrentInstancePortOwner',
+            [
+                ControlMessage::ROLE_DISPATCHER,
+                $port,
+                [
+                    'pid' => 2_000_000_003,
+                    'pid_running' => true,
+                    'is_weline' => true,
+                    'pname' => 'weline-wls-dispatcher-default-ptest',
+                    'scope' => MasterProcess::getProjectScopeToken(),
+                ],
+            ],
+        ));
+    }
+
+    public function testGatewayBackendPublicationSkipsEarlierInvalidAdoption(): void
+    {
+        $first = new ServiceInstance(
+            role: ControlMessage::ROLE_GATEWAY_BACKEND,
+            instanceId: 1,
+            launchId: 'first-launch',
+            state: ServiceInstance::STATE_READY,
+        );
+        $second = new ServiceInstance(
+            role: ControlMessage::ROLE_GATEWAY_BACKEND,
+            instanceId: 2,
+            launchId: 'second-launch',
+            state: ServiceInstance::STATE_READY,
+        );
+
+        $selected = $this->invokePrivateWithArgs(
+            new ServiceOrchestrator(),
+            'gatewayJoinBackendPublicationInstance',
+            [
+                [$first, $second],
+                static fn (ServiceInstance $instance): bool => $instance->instanceId === 2,
+            ],
+        );
+
+        self::assertSame($second, $selected);
+    }
+
+    public function testPrimaryHostLeaseActivationOccursAfterEveryFinalReadyGate(): void
+    {
+        $method = new \ReflectionMethod(ServiceOrchestrator::class, 'handleReady');
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $http3Gate = \strpos($source, '$this->holdLinuxHttp3ReadyForActivation(');
+        $namespaceGate = \strpos($source, '$finalNamespaceRejection =');
+        $publicLeaseActivation = \strpos($source, '$this->confirmPublicEdgeLease(');
+        $initialBackendActivation = \strpos(
+            $source,
+            '$this->confirmGatewayInitialBackendLease(',
+        );
+
+        self::assertIsInt($http3Gate);
+        self::assertIsInt($namespaceGate);
+        self::assertIsInt($publicLeaseActivation);
+        self::assertIsInt($initialBackendActivation);
+        self::assertGreaterThan($http3Gate, $publicLeaseActivation);
+        self::assertGreaterThan($namespaceGate, $publicLeaseActivation);
+        self::assertGreaterThan($http3Gate, $initialBackendActivation);
+        self::assertGreaterThan($namespaceGate, $initialBackendActivation);
+    }
+
+    public function testHomepageFailOpenAuditUsesInitializedWorkerReadinessProof(): void
+    {
+        $method = new \ReflectionMethod(ServiceOrchestrator::class, 'handleReady');
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $homepageProof = \strpos($source, '$homepageProcessFpcReady =');
+        $failOpenAudit = \strpos($source, 'Worker READY admitted via homepage fail-open');
+        $workerRejection = \strpos($source, "if (\$readyRejection !== '')", (int)$homepageProof);
+
+        self::assertIsInt($homepageProof);
+        self::assertIsInt($failOpenAudit);
+        self::assertIsInt($workerRejection);
+        self::assertGreaterThan($homepageProof, $failOpenAudit);
+        self::assertLessThan($workerRejection, $failOpenAudit);
+    }
+
     public function testLeasedSharedPortRegisterIsRejectedOnlyOnceByExactSlot(): void
     {
         $mockControl = new class extends MasterControlServer {

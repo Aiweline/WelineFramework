@@ -117,6 +117,12 @@ class FileWatcher
     private int $inotifyMaxWatches = 8192;
 
     /**
+     * Optional owner/control-plane fence checked at least every 200ms.
+     * Throwing or returning false stops the watcher fail-closed.
+     */
+    private ?\Closure $runGuard = null;
+
+    /**
      * FileWatcher 初始化完成时间戳
      */
     private static float $initCompletedAt = 0.0;
@@ -172,6 +178,12 @@ class FileWatcher
         $this->checkInterval = \max(0.1, $seconds);
         return $this;
     }
+
+    public function setRunGuard(callable $guard): self
+    {
+        $this->runGuard = \Closure::fromCallable($guard);
+        return $this;
+    }
     
     /**
      * 设置防抖间隔
@@ -202,10 +214,10 @@ class FileWatcher
                 $this->scanDirectory($dir);
             }
         }
-        $this->lastCheckTime = \microtime(true);
+        $this->lastCheckTime = self::monotonicSeconds();
 
         // 记录初始化完成时间（用于启动后冷却期）
-        self::$initCompletedAt = \microtime(true);
+        self::$initCompletedAt = self::monotonicSeconds();
     }
     
     /**
@@ -249,7 +261,7 @@ class FileWatcher
      */
     public function checkChanges(): array
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         
         // 防抖
         if (($now - $this->lastCheckTime) * 1000 < $this->debounceMs) {
@@ -285,7 +297,7 @@ class FileWatcher
     {
         $changes = [];
         $dirsChecked = 0;
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         $needFullScan = ($now - $this->lastFullScanTime) >= $this->fullScanInterval;
         
         if ($needFullScan) {
@@ -410,7 +422,7 @@ class FileWatcher
 
         // 启动后冷却期：避免初始化时的误触发
         if (self::$initCompletedAt > 0) {
-            $elapsed = \microtime(true) - self::$initCompletedAt;
+            $elapsed = self::monotonicSeconds() - self::$initCompletedAt;
             if ($elapsed < self::$startupCooldown) {
                 $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
                 $msg = self::ANSI_YELLOW . "忽略启动后冷却期内的变更（已启动 " . \round($elapsed, 1) . "s，冷却期 " . self::$startupCooldown . "s）" . self::ANSI_RESET;
@@ -520,11 +532,14 @@ class FileWatcher
         $pendingChanges = [];
         $lastFlushTime = 0.0;
 
-        while ($this->running) {
+        while ($this->shouldContinueWatching()) {
             $read = [$stream];
-            $timeoutSec = (int) \max(0.2, $this->checkInterval);
-            $timeoutUsec = (int) ((\max(0.2, $this->checkInterval) - $timeoutSec) * 1_000_000);
-            if (@\stream_select($read, $write = null, $except = null, $timeoutSec, $timeoutUsec) > 0) {
+            $guardInterval = \min(0.2, \max(0.1, $this->checkInterval));
+            $timeoutSec = (int)$guardInterval;
+            $timeoutUsec = (int)(($guardInterval - $timeoutSec) * 1_000_000);
+            $write = null;
+            $except = null;
+            if (@\stream_select($read, $write, $except, $timeoutSec, $timeoutUsec) > 0) {
                 $events = \inotify_read($stream);
                 if (\is_array($events)) {
                     foreach ($events as $event) {
@@ -560,7 +575,7 @@ class FileWatcher
                 }
             }
 
-            $now = \microtime(true);
+            $now = self::monotonicSeconds();
             if (!empty($pendingChanges) && ($now - $lastFlushTime) * 1000 >= $this->debounceMs) {
                 $changes = \array_values($pendingChanges);
                 $pendingChanges = [];
@@ -602,15 +617,48 @@ class FileWatcher
             return;
         }
 
-        while ($this->running) {
+        while ($this->shouldContinueWatching()) {
             $changes = $this->checkChanges();
 
             if (!empty($changes)) {
                 $this->triggerCallbacks($changes);
             }
 
-            SchedulerSystem::usleep((int) ($this->checkInterval * 1_000_000));
+            $this->waitForNextCheck();
         }
+    }
+
+    private function shouldContinueWatching(): bool
+    {
+        if (!$this->running) {
+            return false;
+        }
+        if ($this->runGuard === null) {
+            return true;
+        }
+
+        try {
+            return (bool)($this->runGuard)();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function waitForNextCheck(): void
+    {
+        $deadline = \hrtime(true) + (int)($this->checkInterval * 1_000_000_000);
+        do {
+            $remainingNanoseconds = $deadline - \hrtime(true);
+            if ($remainingNanoseconds <= 0 || !$this->shouldContinueWatching()) {
+                return;
+            }
+            SchedulerSystem::usleep((int)\min(200_000, \max(1, \intdiv($remainingNanoseconds, 1_000))));
+        } while (true);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
     
     /**

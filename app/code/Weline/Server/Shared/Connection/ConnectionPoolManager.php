@@ -11,6 +11,11 @@ use Weline\Server\Shared\Contract\PooledConnectionInterface;
 
 class ConnectionPoolManager implements ConnectionPoolInterface
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /** @var array<string, self> */
     private static array $instances = [];
 
@@ -48,10 +53,28 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             );
             $normalizedOptions['token_file_name'] = $tokenFileName;
         }
+        $authorityRoleHint = \strtolower(
+            (string)($normalizedOptions['service_type'] ?? '') . ' ' . $tokenFileName,
+        );
+        $authorityRole = \str_contains($authorityRoleHint, 'memory')
+            ? 'memory_server'
+            : 'session_server';
+        if ((string)($normalizedOptions['token_authority_instance'] ?? '') === '') {
+            $normalizedOptions['token_authority_instance']
+                = \Weline\Server\Session\Server\SharedStateTokenStore::defaultInstance(
+                    $authorityRole,
+                    $host,
+                    $port,
+                );
+        }
         // 默认池按连接身份字段（host:port:token）复用；显式 profile 用于隔离启动协调器等
         // 具有不同 deadline/cooldown 语义的控制面连接，避免被请求热路径的 fail-fast 参数污染。
         $poolProfile = \trim((string)($normalizedOptions['pool_profile'] ?? ''));
-        $key = $host . ':' . $port . ':' . $tokenFileName . ':' . \hash('sha256', $poolProfile);
+        $tokenAuthorityInstance = (string)($normalizedOptions['token_authority_instance'] ?? '');
+        $key = $host . ':' . $port . ':' . $tokenFileName . ':' . \hash(
+            'sha256',
+            $poolProfile . "\0" . $tokenAuthorityInstance,
+        );
         if (!isset(self::$instances[$key])) {
             self::$instances[$key] = new self($host, $port, $normalizedOptions);
         } else {
@@ -116,6 +139,13 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     private function mergeOptions(array $incoming): void
     {
         $a = $this->options;
+        if ((string)($a['token_authority_instance'] ?? '')
+            !== (string)($incoming['token_authority_instance'] ?? '')
+        ) {
+            throw new \LogicException(
+                'A shared-state connection pool cannot change capability authority.'
+            );
+        }
         $merged = $a;
         $merged['min_idle'] = \max((int)($a['min_idle'] ?? 0), (int)($incoming['min_idle'] ?? 0));
         $merged['max_size'] = \max((int)($a['max_size'] ?? 8), (int)($incoming['max_size'] ?? 8));
@@ -219,7 +249,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             $this->pool[] = [
                 'conn' => $conn,
                 'busy' => false,
-                'last_used' => \microtime(true),
+                'last_used' => self::monotonicSeconds(),
                 'lease_fiber_id' => null,
             ];
             // WLS 下在 Fiber 内预热时让出，避免独占 Worker/Dispatcher 主循环前的同步段
@@ -239,14 +269,14 @@ class ConnectionPoolManager implements ConnectionPoolInterface
 
     public function acquire(float $timeoutSec = 0.05): ?PooledConnectionInterface
     {
-        $startTime = \microtime(true);
+        $startTime = self::monotonicSeconds();
         $deadline = $startTime + $timeoutSec;
         $maxSize = \max(1, (int)($this->options['max_size'] ?? 8));
         $retryCount = 0;
 
         $leaseFiberId = self::currentFiberLeaseId();
 
-        while (\microtime(true) <= $deadline) {
+        while (self::monotonicSeconds() <= $deadline) {
             if ($this->isInConnectCooldown()) {
                 if ((bool)($this->options['fail_fast_on_cooldown'] ?? false)) {
                     $this->recordAcquireMetric($startTime, 'cooldown', $retryCount);
@@ -284,7 +314,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                     continue;
                 }
                 $this->registerConnectSuccess();
-                $now = \microtime(true);
+                $now = self::monotonicSeconds();
                 $this->applyCurrentTimeouts($conn);
                 $this->pool[$idx] = [
                     'conn' => $conn,
@@ -315,7 +345,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                         $this->pool[] = [
                             'conn' => $conn,
                             'busy' => true,
-                            'last_used' => \microtime(true),
+                            'last_used' => self::monotonicSeconds(),
                             'lease_fiber_id' => $leaseFiberId,
                         ];
 
@@ -384,7 +414,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             $this->pool[$idx] = [
                 'conn' => $connection,
                 'busy' => false,
-                'last_used' => \microtime(true),
+                'last_used' => self::monotonicSeconds(),
                 'lease_fiber_id' => null,
             ];
 
@@ -425,7 +455,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     public function healthCheck(): bool
     {
         $ok = true;
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         $idleTimeout = (float)($this->options['idle_timeout'] ?? 300.0); // 默认 5 分钟空闲超时
         $minIdle = \max(0, (int)($this->options['min_idle'] ?? 0));
 
@@ -487,7 +517,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                 $this->pool[$idx] = [
                     'conn' => $conn,
                     'busy' => false,
-                    'last_used' => \microtime(true),
+                    'last_used' => self::monotonicSeconds(),
                     'lease_fiber_id' => null,
                 ];
             }
@@ -535,6 +565,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             (bool)($this->options['log_connect_fail'] ?? true),
             $serviceType !== '' ? $serviceType : null,
             (bool)($this->options['log_pool_lifecycle'] ?? true),
+            (string)($this->options['token_authority_instance'] ?? '') ?: null,
         );
     }
 
@@ -559,6 +590,15 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         }
         if (\array_key_exists('token_file_name', $options)) {
             $options['token_file_name'] = self::normalizeTokenFileName((string)$options['token_file_name']);
+        }
+        if (\array_key_exists('token_authority_instance', $options)) {
+            $instance = \strtolower(\trim((string)$options['token_authority_instance']));
+            if (\strlen($instance) > 192 || \preg_match('/[\x00-\x1f\x7f]/', $instance) === 1) {
+                throw new \InvalidArgumentException(
+                    'Shared-state token authority instance is invalid.'
+                );
+            }
+            $options['token_authority_instance'] = $instance;
         }
         return $options;
     }
@@ -589,7 +629,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
      */
     private function recordAcquireMetric(float $startTime, string $result, int $retryCount): void
     {
-        $durationMs = (\microtime(true) - $startTime) * 1000;
+        $durationMs = (self::monotonicSeconds() - $startTime) * 1000;
         $metrics = \Weline\Server\Service\Telemetry\MetricsCollector::getInstance();
 
         $metrics->recordHistogram(
@@ -624,14 +664,14 @@ class ConnectionPoolManager implements ConnectionPoolInterface
      */
     private function isInConnectCooldown(): bool
     {
-        return \microtime(true) < $this->nextConnectAttemptAt;
+        return self::monotonicSeconds() < $this->nextConnectAttemptAt;
     }
 
     private function sleepUntilRetryWindow(float $deadline): void
     {
         $remainingSec = \min(
-            \max(0.0, $this->nextConnectAttemptAt - \microtime(true)),
-            \max(0.0, $deadline - \microtime(true))
+            \max(0.0, $this->nextConnectAttemptAt - self::monotonicSeconds()),
+            \max(0.0, $deadline - self::monotonicSeconds())
         );
         if ($remainingSec <= 0) {
             return;
@@ -645,7 +685,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $this->consecutiveConnectFailures++;
         $step = \min(5, $this->consecutiveConnectFailures - 1);
         $delaySec = \min(5.0, 0.25 * (2 ** $step));
-        $this->nextConnectAttemptAt = \microtime(true) + $delaySec;
+        $this->nextConnectAttemptAt = self::monotonicSeconds() + $delaySec;
 
         if (
             $this->consecutiveConnectFailures === 1
@@ -684,7 +724,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
 
     public function detectLeaks(float $leakThresholdSec = 30.0, bool $autoReclaim = true): int
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         $leakCount = 0;
         $toInvalidate = [];
 

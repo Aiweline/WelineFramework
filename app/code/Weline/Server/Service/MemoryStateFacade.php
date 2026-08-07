@@ -295,6 +295,11 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
                 ?? $this->runtime['token_file_name']
                 ?? $this->resolveConfiguredRuntime($config)['token_file_name']
             ),
+            'token_authority_instance' => (string) (
+                $config['token_authority_instance']
+                ?? $this->runtime['token_authority_instance']
+                ?? ''
+            ),
             'service_type' => 'Memory',
             'service_role' => ControlMessage::ROLE_MEMORY_SERVER,
             // Master/CLI 门面默认静默逐条 CONN-*，避免与 Memory 侧车/token 就绪竞态时刷屏；排障可设 log_pool_lifecycle=true
@@ -326,7 +331,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
     private function traceOperation(string $name, array $meta, callable $operation): mixed
     {
         $start = \class_exists(RequestLifecycleTrace::class, false) && RequestLifecycleTrace::isEnabled()
-            ? \microtime(true)
+            ? self::monotonicSeconds()
             : 0.0;
 
         try {
@@ -335,7 +340,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
             if ($start > 0.0) {
                 RequestLifecycleTrace::recordSpan(
                     $name,
-                    (\microtime(true) - $start) * 1000,
+                    (self::monotonicSeconds() - $start) * 1000,
                     'wls',
                     null,
                     $meta + $this->traceRuntimeMeta()
@@ -357,6 +362,11 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
             'port' => (int)($runtime['port'] ?? 0),
             'direct_connect' => (bool)($runtime['direct_connect'] ?? false),
         ];
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 
     private function cleanupInitializationFailure(): void

@@ -176,6 +176,11 @@ final class DirectSharedListener
         return \is_resource($this->listener);
     }
 
+    public function getPort(): int
+    {
+        return $this->port;
+    }
+
     public function matches(string $host, int $port): bool
     {
         return $this->isListening()

@@ -109,7 +109,7 @@ final class StopCommandRuntimeCacheTest extends TestCase
         );
     }
 
-    public function testKillInvalidatesRuntimeCaches(): void
+    public function testFailClosedPidKillDoesNotInvalidateVerificationCaches(): void
     {
         $stop = new class extends Stop {
             public int $runningQueries = 0;
@@ -130,7 +130,7 @@ final class StopCommandRuntimeCacheTest extends TestCase
                 unset($pid);
                 $this->killQueries++;
 
-                return true;
+                return false;
             }
 
             protected function queryRecoverablePortOccupant(int $port): array
@@ -169,14 +169,14 @@ final class StopCommandRuntimeCacheTest extends TestCase
         self::assertSame(1, $stop->portQueries);
         self::assertSame(1, $stop->headerQueries);
 
-        self::assertTrue($this->invokeProtected($stop, 'killManagedProcessTreeForStop', 100));
+        self::assertFalse($this->invokeProtected($stop, 'killManagedProcessTreeForStop', 100));
         self::assertTrue($this->invokeProtected($stop, 'isStopPidRunning', 100));
         $this->invokeProtected($stop, 'inspectRecoverablePortOccupant', 80);
         $this->invokeProtected($stop, 'readRecoverablePortHeaders', 80, 'tcp');
 
-        self::assertSame(2, $stop->runningQueries);
-        self::assertSame(2, $stop->portQueries);
-        self::assertSame(2, $stop->headerQueries);
+        self::assertSame(1, $stop->runningQueries);
+        self::assertSame(1, $stop->portQueries);
+        self::assertSame(1, $stop->headerQueries);
         self::assertSame(1, $stop->killQueries);
     }
 

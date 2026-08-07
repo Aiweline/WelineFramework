@@ -141,6 +141,29 @@ else()
     target_link_libraries(wls-gateway-broker PRIVATE ${SODIUM_LIBRARIES} Threads::Threads)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_definitions(wls-gateway-broker PRIVATE _GNU_SOURCE)
+
+        set(
+            WLS_HTTP3_NATIVE_ROOT
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../../../Protocol/Http3/Native"
+        )
+        add_executable(
+            wls-http3-reuseport-self-test
+            posix/wls_linux_reuseport_runtime_self_test.c
+            "${WLS_HTTP3_NATIVE_ROOT}/wls_linux_reuseport_runtime.c"
+        )
+        target_include_directories(
+            wls-http3-reuseport-self-test
+            PRIVATE
+            "${WLS_HTTP3_NATIVE_ROOT}"
+        )
+        target_compile_options(
+            wls-http3-reuseport-self-test
+            PRIVATE
+            -Wall
+            -Wextra
+            -Werror
+            -fstack-protector-strong
+        )
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         target_compile_definitions(wls-gateway-broker PRIVATE _DARWIN_C_SOURCE)
         # proc_pidinfo/proc_pidpath are exported by libproc, not by the

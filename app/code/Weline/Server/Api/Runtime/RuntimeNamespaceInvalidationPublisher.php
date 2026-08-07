@@ -93,10 +93,10 @@ final class RuntimeNamespaceInvalidationPublisher implements RuntimeNamespaceInv
         }
 
         $completion = [];
-        $deadline = \microtime(true) + $timeout;
-        while ($pending !== [] && \microtime(true) < $deadline) {
+        $deadline = self::monotonicSeconds() + $timeout;
+        while ($pending !== [] && self::monotonicSeconds() < $deadline) {
             foreach ($pending as $instance => $operationId) {
-                $remaining = $deadline - \microtime(true);
+                $remaining = $deadline - self::monotonicSeconds();
                 if ($remaining <= 0.0) {
                     break 2;
                 }
@@ -161,5 +161,10 @@ final class RuntimeNamespaceInvalidationPublisher implements RuntimeNamespaceInv
         }
 
         return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on', 'enabled'], true);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

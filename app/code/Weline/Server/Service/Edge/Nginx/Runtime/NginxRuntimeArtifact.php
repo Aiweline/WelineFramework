@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Edge\Nginx\Runtime;
 
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedTreeWalker;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 
 /**
  * Installs and verifies one immutable Nginx runtime directory.
@@ -23,6 +24,14 @@ final class NginxRuntimeArtifact
     // reserve a further bounded 16 MiB for the artifact's own manifest.
     public const MAX_TOTAL_BYTES = 553_648_128;
     public const MAX_MANIFEST_BYTES = 16_777_216;
+    public const MAX_RECOVERY_CANDIDATES = 8;
+    public const MAX_RECOVERY_DIRECTORY_ENTRIES = 16_384;
+    // Bound retained PHP metadata to one maximally sized artifact tree plus
+    // the roots of every other admitted crash candidate.
+    public const MAX_RECOVERY_TREE_RECORDS = self::MAX_TREE_ENTRIES
+        + self::MAX_RECOVERY_CANDIDATES;
+    private const INSTALL_LOCK_WAIT_SECONDS = 30.0;
+    private const CANDIDATE_ALLOCATION_ATTEMPTS = 8;
 
     /**
      * @param array<string,array{
@@ -32,6 +41,7 @@ final class NginxRuntimeArtifact
      *   sha256?:string,
      *   size?:int
      * }> $components
+     * @phpstan-param array<array-key,mixed> $components
      * @param array<string,mixed> $metadata
      * @return array<string,mixed>
      */
@@ -46,200 +56,580 @@ final class NginxRuntimeArtifact
             throw new \InvalidArgumentException('Nginx runtime artifact contract is invalid.');
         }
         $this->assertInstallComponentEnvelope($components);
-        if (\file_exists($slotDirectory) || \is_link($slotDirectory)) {
-            throw new \RuntimeException('Immutable Nginx runtime slot already exists.');
-        }
         $parent = \dirname($slotDirectory);
+        $this->assertInstallParent($parent);
+        $slotLeaf = $this->installTargetLeaf($slotDirectory);
+        $lockPath = $parent . DIRECTORY_SEPARATOR . $slotLeaf . '.install.lock';
+
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockPath,
+            function () use (
+                $slotDirectory,
+                $slotLeaf,
+                $parent,
+                $lockPath,
+                $role,
+                $components,
+                $metadata,
+            ): array {
+                $lockSize = GatewayProjectStateFilesystem::size(
+                    $lockPath,
+                    4096,
+                    'Nginx runtime exact-slot installation lock',
+                );
+                if ($lockSize !== 0) {
+                    throw new \RuntimeException(
+                        'Nginx runtime exact-slot installation lock has an invalid size.'
+                    );
+                }
+                $this->assertInstallParent($parent);
+                $this->assertInstallTargetAbsent($slotDirectory);
+                $this->recoverOrphanCandidates(
+                    $slotDirectory,
+                    $parent,
+                    $slotLeaf,
+                );
+                [$candidate, $candidateRootRecord] = $this->createCandidate(
+                    $slotDirectory,
+                    $parent,
+                    $slotLeaf,
+                );
+
+                $published = false;
+                try {
+                    $componentManifest = [];
+                    $targetIdentities = [];
+                    $totalBytes = 0;
+                    foreach ($components as $relative => $definition) {
+                        $relative = $this->validateRelativePath((string)$relative);
+                        if (!\is_array($definition)) {
+                            throw new \InvalidArgumentException('Nginx runtime component definition is invalid.');
+                        }
+                        $hasSource = \array_key_exists('source', $definition);
+                        $hasContents = \array_key_exists('contents', $definition);
+                        $mode = (int)($definition['mode'] ?? 0600);
+                        $hasExpectedDigest = \array_key_exists('sha256', $definition);
+                        $hasExpectedSize = \array_key_exists('size', $definition);
+                        $expectedDigest = \strtolower(\trim((string)($definition['sha256'] ?? '')));
+                        $expectedSize = (int)($definition['size'] ?? -1);
+                        $targetIdentity = \PHP_OS_FAMILY === 'Windows'
+                            ? \strtolower($relative)
+                            : $relative;
+                        if ($hasSource === $hasContents
+                            || ($hasSource && !\is_string($definition['source']))
+                            || ($hasContents && !\is_string($definition['contents']))
+                            || \hash_equals('manifest.json', $targetIdentity)
+                            || isset($targetIdentities[$targetIdentity])
+                            || $hasExpectedDigest !== $hasExpectedSize
+                            || ($hasExpectedDigest
+                                && (\preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
+                                    || $expectedSize < 0))
+                            || $mode < 0400
+                            || $mode > 0777
+                        ) {
+                            throw new \RuntimeException('Nginx runtime source component contract is unsafe.');
+                        }
+                        $targetIdentities[$targetIdentity] = true;
+                        $target = $candidate . DIRECTORY_SEPARATOR
+                            . \str_replace('/', DIRECTORY_SEPARATOR, $relative);
+                        $targetDirectory = \dirname($target);
+                        $this->ensureCandidateDirectory($targetDirectory, $candidate);
+                        $remainingBytes = self::MAX_TOTAL_BYTES - $totalBytes;
+                        if ($remainingBytes < 0
+                            || ($hasExpectedSize && $expectedSize > $remainingBytes)
+                        ) {
+                            throw new \RuntimeException(
+                                'Nginx runtime components exceed the fixed total-byte limit.'
+                            );
+                        }
+                        $installed = $hasSource
+                            ? $this->copyStableSource(
+                                (string)$definition['source'],
+                                $target,
+                                $mode,
+                                $hasExpectedDigest ? $expectedDigest : null,
+                                $hasExpectedSize ? $expectedSize : null,
+                                $remainingBytes,
+                            )
+                            : $this->writeInlineComponent(
+                                (string)$definition['contents'],
+                                $target,
+                                $mode,
+                                $hasExpectedDigest ? $expectedDigest : null,
+                                $hasExpectedSize ? $expectedSize : null,
+                                $remainingBytes,
+                            );
+                        $totalBytes += $installed['size'];
+                        if ($totalBytes > self::MAX_TOTAL_BYTES) {
+                            throw new \RuntimeException(
+                                'Nginx runtime components exceed the fixed total-byte limit.'
+                            );
+                        }
+                        $componentManifest[$relative] = [
+                            'sha256' => $installed['sha256'],
+                            'size' => $installed['size'],
+                            'mode' => $mode,
+                        ];
+                    }
+                    \ksort($componentManifest, SORT_STRING);
+                    unset($metadata['components'], $metadata['runtime_generation'], $metadata['schema_version']);
+                    $manifest = $metadata + [
+                        'schema_version' => self::SCHEMA_VERSION,
+                        'role' => $role,
+                        'components' => $componentManifest,
+                        'installed_at' => \gmdate(DATE_ATOM),
+                    ];
+                    $manifest = [
+                        'schema_version' => self::SCHEMA_VERSION,
+                        'role' => $role,
+                    ] + $manifest;
+                    $canonical = $this->canonicalize($manifest);
+                    $manifest['runtime_generation'] = \hash(
+                        'sha256',
+                        \json_encode($canonical, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                    );
+                    $payload = \json_encode(
+                        $manifest,
+                        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                    ) . PHP_EOL;
+                    if (\strlen($payload) > self::MAX_MANIFEST_BYTES
+                        || \strlen($payload) > self::MAX_TOTAL_BYTES - $totalBytes
+                    ) {
+                        throw new \RuntimeException(
+                            'Nginx runtime manifest or complete artifact exceeds its fixed byte limit.'
+                        );
+                    }
+                    $manifestFile = $candidate . DIRECTORY_SEPARATOR . 'manifest.json';
+                    $this->writeInlineComponent(
+                        $payload,
+                        $manifestFile,
+                        0600,
+                        null,
+                        null,
+                        self::MAX_TOTAL_BYTES - $totalBytes,
+                    );
+                    if (!$this->syncTreeDirectories($candidate)) {
+                        throw new \RuntimeException(
+                            'Unable to durably assemble the Nginx runtime candidate.'
+                        );
+                    }
+                    $verified = $this->verify($candidate, $role);
+                    if (!$verified['ok']) {
+                        throw new \RuntimeException(
+                            'Nginx runtime candidate verification failed: '
+                            . $verified['reason']
+                        );
+                    }
+                    $candidateIdentity = @\lstat($candidate);
+                    if (!\is_array($candidateIdentity)
+                        || \is_link($candidate)
+                        || ((((int)$candidateIdentity['mode']) & 0170000) !== 0040000)
+                        || !@\rename($candidate, $slotDirectory)
+                    ) {
+                        throw new \RuntimeException('Unable to activate the immutable Nginx runtime slot.');
+                    }
+                    $published = true;
+                    $publishedRootRecord = $candidateRootRecord;
+                    $publishedRootRecord['path'] = $slotDirectory;
+                    $slotIdentity = @\lstat($slotDirectory);
+                    if (!\is_array($slotIdentity)
+                        || \is_link($slotDirectory)
+                        || !$this->sameObjectIdentity($candidateIdentity, $slotIdentity)
+                    ) {
+                        throw new \RuntimeException(
+                            'Activated Nginx runtime slot identity changed during publication.'
+                        );
+                    }
+                    GatewayBoundedTreeWalker::revalidate($publishedRootRecord);
+                    if (\PHP_OS_FAMILY !== 'Windows'
+                        && (!@\chmod($slotDirectory, 0700)
+                            || !$this->syncDirectory($slotDirectory)
+                            || !$this->syncDirectory($parent))
+                    ) {
+                        throw new \RuntimeException(
+                            'Unable to durably activate the immutable Nginx runtime slot.'
+                        );
+                    }
+                    return $manifest;
+                } catch (\Throwable $throwable) {
+                    $cleanup = $published ? $slotDirectory : $candidate;
+                    $cleanupRootRecord = $candidateRootRecord;
+                    $cleanupRootRecord['path'] = $cleanup;
+                    try {
+                        $this->removeTree($cleanup, $cleanupRootRecord);
+                    } catch (\Throwable) {
+                        throw new \RuntimeException(
+                            'Unable to remove a failed immutable Nginx runtime publication.',
+                            0,
+                            $throwable,
+                        );
+                    }
+                    if (\file_exists($cleanup) || \is_link($cleanup)) {
+                        throw new \RuntimeException(
+                            'Unable to remove a failed immutable Nginx runtime publication.',
+                            0,
+                            $throwable,
+                        );
+                    }
+                    if ($published && !$this->syncDirectory($parent)) {
+                        throw new \RuntimeException(
+                            'Unable to durably remove a failed immutable Nginx runtime publication.',
+                            0,
+                            $throwable,
+                        );
+                    }
+                    throw $throwable;
+                }
+            },
+            waitTimeoutSeconds: self::INSTALL_LOCK_WAIT_SECONDS,
+        );
+    }
+
+    private function assertInstallParent(string $parent): void
+    {
         $parentStatus = @\lstat($parent);
         if (!\is_array($parentStatus)
             || \is_link($parent)
-            || ((((int)($parentStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+            || ((((int)$parentStatus['mode']) & 0170000) !== 0040000)
             || (\PHP_OS_FAMILY !== 'Windows'
-                && (((int)($parentStatus['mode'] ?? 0)) & 0022) !== 0)
+                && (((int)$parentStatus['mode']) & 0022) !== 0)
         ) {
             throw new \RuntimeException('Nginx runtime slot parent is unsafe.');
         }
-        $candidate = $parent . DIRECTORY_SEPARATOR . \basename($slotDirectory)
-            . '.candidate.' . \bin2hex(\random_bytes(8));
-        if (!@\mkdir($candidate, 0700)) {
-            throw new \RuntimeException('Unable to create the Nginx runtime candidate.');
-        }
+    }
 
-        $published = false;
-        try {
-            $componentManifest = [];
-            $targetIdentities = [];
-            $totalBytes = 0;
-            foreach ($components as $relative => $definition) {
-                $relative = $this->validateRelativePath((string)$relative);
-                if (!\is_array($definition)) {
-                    throw new \InvalidArgumentException('Nginx runtime component definition is invalid.');
-                }
-                $hasSource = \array_key_exists('source', $definition);
-                $hasContents = \array_key_exists('contents', $definition);
-                $mode = (int)($definition['mode'] ?? 0600);
-                $hasExpectedDigest = \array_key_exists('sha256', $definition);
-                $hasExpectedSize = \array_key_exists('size', $definition);
-                $expectedDigest = \strtolower(\trim((string)($definition['sha256'] ?? '')));
-                $expectedSize = (int)($definition['size'] ?? -1);
-                $targetIdentity = \PHP_OS_FAMILY === 'Windows'
-                    ? \strtolower($relative)
-                    : $relative;
-                if ($hasSource === $hasContents
-                    || ($hasSource && !\is_string($definition['source']))
-                    || ($hasContents && !\is_string($definition['contents']))
-                    || \hash_equals('manifest.json', $targetIdentity)
-                    || isset($targetIdentities[$targetIdentity])
-                    || $hasExpectedDigest !== $hasExpectedSize
-                    || ($hasExpectedDigest
-                        && (\preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
-                            || $expectedSize < 0))
-                    || $mode < 0400
-                    || $mode > 0777
-                ) {
-                    throw new \RuntimeException('Nginx runtime source component contract is unsafe.');
-                }
-                $targetIdentities[$targetIdentity] = true;
-                $target = $candidate . DIRECTORY_SEPARATOR
-                    . \str_replace('/', DIRECTORY_SEPARATOR, $relative);
-                $targetDirectory = \dirname($target);
-                $this->ensureCandidateDirectory($targetDirectory, $candidate);
-                $remainingBytes = self::MAX_TOTAL_BYTES - $totalBytes;
-                if ($remainingBytes < 0
-                    || ($hasExpectedSize && $expectedSize > $remainingBytes)
-                ) {
-                    throw new \RuntimeException(
-                        'Nginx runtime components exceed the fixed total-byte limit.'
-                    );
-                }
-                $installed = $hasSource
-                    ? $this->copyStableSource(
-                        (string)$definition['source'],
-                        $target,
-                        $mode,
-                        $hasExpectedDigest ? $expectedDigest : null,
-                        $hasExpectedSize ? $expectedSize : null,
-                        $remainingBytes,
-                    )
-                    : $this->writeInlineComponent(
-                        (string)$definition['contents'],
-                        $target,
-                        $mode,
-                        $hasExpectedDigest ? $expectedDigest : null,
-                        $hasExpectedSize ? $expectedSize : null,
-                        $remainingBytes,
-                    );
-                $totalBytes += $installed['size'];
-                if ($totalBytes > self::MAX_TOTAL_BYTES) {
-                    throw new \RuntimeException(
-                        'Nginx runtime components exceed the fixed total-byte limit.'
-                    );
-                }
-                $componentManifest[$relative] = [
-                    'sha256' => $installed['sha256'],
-                    'size' => $installed['size'],
-                    'mode' => $mode,
-                ];
-            }
-            \ksort($componentManifest, SORT_STRING);
-            unset($metadata['components'], $metadata['runtime_generation'], $metadata['schema_version']);
-            $manifest = $metadata + [
-                'schema_version' => self::SCHEMA_VERSION,
-                'role' => $role,
-                'components' => $componentManifest,
-                'installed_at' => \gmdate(DATE_ATOM),
-            ];
-            $manifest = [
-                'schema_version' => self::SCHEMA_VERSION,
-                'role' => $role,
-            ] + $manifest;
-            $canonical = $this->canonicalize($manifest);
-            $manifest['runtime_generation'] = \hash(
-                'sha256',
-                \json_encode($canonical, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            );
-            $payload = \json_encode(
-                $manifest,
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-            ) . PHP_EOL;
-            if (\strlen($payload) > self::MAX_MANIFEST_BYTES
-                || \strlen($payload) > self::MAX_TOTAL_BYTES - $totalBytes
-            ) {
-                throw new \RuntimeException(
-                    'Nginx runtime manifest or complete artifact exceeds its fixed byte limit.'
-                );
-            }
-            $manifestFile = $candidate . DIRECTORY_SEPARATOR . 'manifest.json';
-            $this->writeInlineComponent(
-                $payload,
-                $manifestFile,
-                0600,
-                null,
-                null,
-                self::MAX_TOTAL_BYTES - $totalBytes,
-            );
-            if (!$this->syncTreeDirectories($candidate)) {
-                throw new \RuntimeException(
-                    'Unable to durably assemble the Nginx runtime candidate.'
-                );
-            }
-            $verified = $this->verify($candidate, $role);
-            if (!($verified['ok'] ?? false)) {
-                throw new \RuntimeException(
-                    'Nginx runtime candidate verification failed: '
-                    . (string)($verified['reason'] ?? 'unknown')
-                );
-            }
-            $candidateIdentity = @\lstat($candidate);
-            if (!\is_array($candidateIdentity)
-                || \is_link($candidate)
-                || ((((int)($candidateIdentity['mode'] ?? 0)) & 0170000) !== 0040000)
-                || !@\rename($candidate, $slotDirectory)
-            ) {
-                throw new \RuntimeException('Unable to activate the immutable Nginx runtime slot.');
-            }
-            $published = true;
-            $slotIdentity = @\lstat($slotDirectory);
-            if (!\is_array($slotIdentity)
-                || \is_link($slotDirectory)
-                || !$this->sameObjectIdentity($candidateIdentity, $slotIdentity)
-            ) {
-                throw new \RuntimeException(
-                    'Activated Nginx runtime slot identity changed during publication.'
-                );
-            }
-            if (\PHP_OS_FAMILY !== 'Windows'
-                && (!@\chmod($slotDirectory, 0700)
-                    || !$this->syncDirectory($slotDirectory)
-                    || !$this->syncDirectory($parent))
-            ) {
-                throw new \RuntimeException(
-                    'Unable to durably activate the immutable Nginx runtime slot.'
-                );
-            }
-            return $manifest;
-        } catch (\Throwable $throwable) {
-            $cleanup = $published ? $slotDirectory : $candidate;
-            $this->removeTree($cleanup);
-            if (\file_exists($cleanup) || \is_link($cleanup)) {
-                throw new \RuntimeException(
-                    'Unable to remove a failed immutable Nginx runtime publication.',
-                    0,
-                    $throwable,
-                );
-            }
-            if ($published && !$this->syncDirectory($parent)) {
-                throw new \RuntimeException(
-                    'Unable to durably remove a failed immutable Nginx runtime publication.',
-                    0,
-                    $throwable,
-                );
-            }
-            throw $throwable;
+    private function installTargetLeaf(string $slotDirectory): string
+    {
+        if ($slotDirectory === ''
+            || \str_contains($slotDirectory, "\0")
+            || \str_ends_with($slotDirectory, '/')
+            || \str_ends_with($slotDirectory, '\\')
+        ) {
+            throw new \InvalidArgumentException('Nginx runtime slot path is invalid.');
+        }
+        $leaf = \basename(\PHP_OS_FAMILY === 'Windows'
+            ? \str_replace('\\', '/', $slotDirectory)
+            : $slotDirectory);
+        if (\PHP_OS_FAMILY !== 'Windows' && \str_contains($leaf, '\\')) {
+            throw new \InvalidArgumentException('Nginx runtime slot path is invalid.');
+        }
+        $canonical = $this->validateRelativePath($leaf);
+        if (!\hash_equals($leaf, $canonical) || \str_contains($canonical, '/')) {
+            throw new \InvalidArgumentException('Nginx runtime slot leaf is invalid.');
+        }
+        return $canonical;
+    }
+
+    private function assertInstallTargetAbsent(string $slotDirectory): void
+    {
+        $status = @\lstat($slotDirectory);
+        if (\is_array($status)
+            || \file_exists($slotDirectory)
+            || \is_link($slotDirectory)
+        ) {
+            throw new \RuntimeException('Immutable Nginx runtime slot already exists.');
         }
     }
 
-    /** @param array<string,array<string,mixed>> $components */
+    private function recoverOrphanCandidates(
+        string $slotDirectory,
+        string $parent,
+        string $slotLeaf,
+    ): void {
+        $this->assertInstallTargetAbsent($slotDirectory);
+        $namespace = $this->discoverCandidateNamespace($parent, $slotLeaf);
+        if ($namespace['candidates'] === []) {
+            return;
+        }
+
+        $closures = [];
+        $totalRecoveryRecords = 0;
+        foreach ($namespace['candidates'] as $candidate) {
+            $this->assertInstallTargetAbsent($slotDirectory);
+            $current = @\lstat($candidate['path']);
+            if (!\is_array($current)
+                || !$this->sameObjectIdentity($candidate['status'], $current)
+            ) {
+                throw new \RuntimeException(
+                    'Nginx runtime recovery candidate changed before tree validation.'
+                );
+            }
+            $records = GatewayBoundedTreeWalker::collect(
+                $candidate['path'],
+                true,
+                true,
+                self::MAX_TREE_ENTRIES,
+                self::MAX_PATH_DEPTH,
+            );
+            if (\count($records)
+                > self::MAX_RECOVERY_TREE_RECORDS - $totalRecoveryRecords
+            ) {
+                throw new \RuntimeException(
+                    'Nginx runtime recovery candidates exceed the aggregate tree entry quota.'
+                );
+            }
+            $totalRecoveryRecords += \count($records);
+            $rootRecord = null;
+            $recordStates = [];
+            $totalBytes = 0;
+            foreach ($records as $record) {
+                $recordState = GatewayBoundedTreeWalker::revalidate($record);
+                $recordStates[(string)$record['path']] = $recordState;
+                if (!$record['directory']) {
+                    $size = (int)$recordState['size'];
+                    if ($size < 0
+                        || $size > self::MAX_TOTAL_BYTES
+                        || $totalBytes > self::MAX_TOTAL_BYTES - $size
+                    ) {
+                        throw new \RuntimeException(
+                            'Nginx runtime recovery candidate exceeds its fixed byte limit.'
+                        );
+                    }
+                    $totalBytes += $size;
+                }
+                if (\hash_equals($candidate['path'], (string)$record['path'])) {
+                    $rootRecord = $record;
+                }
+            }
+            $after = @\lstat($candidate['path']);
+            if (!\is_array($rootRecord)
+                || !\is_array($after)
+                || !$this->sameObjectIdentity($candidate['status'], $after)
+            ) {
+                throw new \RuntimeException(
+                    'Nginx runtime recovery candidate changed during tree validation.'
+                );
+            }
+            $closures[] = [
+                'path' => $candidate['path'],
+                'status' => $after,
+                'root' => $rootRecord,
+                'records' => $records,
+                'states' => $recordStates,
+            ];
+        }
+
+        // Close the complete reserved namespace after every tree has passed
+        // its own no-follow walk. Nothing is removed until this second view
+        // proves that no candidate was added, replaced, or renamed.
+        $this->assertInstallTargetAbsent($slotDirectory);
+        $closedNamespace = $this->discoverCandidateNamespace($parent, $slotLeaf);
+        if (!$this->sameCandidateSelection(
+            $namespace['candidates'],
+            $closedNamespace['candidates'],
+        )) {
+            throw new \RuntimeException(
+                'Nginx runtime recovery candidate namespace changed during validation.'
+            );
+        }
+        foreach ($closures as $closure) {
+            foreach ($closure['records'] as $record) {
+                $current = GatewayBoundedTreeWalker::revalidate($record);
+                $expected = $closure['states'][(string)$record['path']] ?? null;
+                if (!\is_array($expected)
+                    || !$this->sameFileState($expected, $current)
+                ) {
+                    throw new \RuntimeException(
+                        'Nginx runtime recovery candidate state changed before cleanup.'
+                    );
+                }
+            }
+        }
+
+        $this->assertInstallTargetAbsent($slotDirectory);
+        foreach ($closures as $closure) {
+            $this->assertInstallTargetAbsent($slotDirectory);
+            $this->removeCollectedTree($closure['records']);
+        }
+        if (!$this->syncDirectory($parent)) {
+            throw new \RuntimeException(
+                'Unable to durably collect orphan Nginx runtime candidates.'
+            );
+        }
+        $this->assertInstallTargetAbsent($slotDirectory);
+    }
+
+    /**
+     * @return array{
+     *   raw_entries:int,
+     *   candidates:list<array{path:string,status:array<string|int,mixed>}>
+     * }
+     */
+    private function discoverCandidateNamespace(string $parent, string $slotLeaf): array
+    {
+        $this->assertInstallParent($parent);
+        $parentBefore = @\lstat($parent);
+        if (!\is_array($parentBefore)) {
+            throw new \RuntimeException(
+                'Nginx runtime candidate parent identity is unavailable.'
+            );
+        }
+        $handle = @\opendir($parent);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException(
+                'Unable to enumerate the Nginx runtime candidate namespace.'
+            );
+        }
+        $prefix = $slotLeaf . '.candidate.';
+        $comparisonPrefix = \PHP_OS_FAMILY === 'Windows'
+            ? \strtolower($prefix)
+            : $prefix;
+        $pattern = '/\A' . \preg_quote($comparisonPrefix, '/') . '[a-f0-9]{16}\z/D';
+        $candidates = [];
+        $visited = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if (++$visited > self::MAX_RECOVERY_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        'Nginx runtime recovery directory exceeds its fixed raw entry quota.'
+                    );
+                }
+                $comparisonLeaf = \PHP_OS_FAMILY === 'Windows'
+                    ? \strtolower($leaf)
+                    : $leaf;
+                if (!\str_starts_with($comparisonLeaf, $comparisonPrefix)) {
+                    continue;
+                }
+                if (\preg_match($pattern, $comparisonLeaf) !== 1) {
+                    throw new \RuntimeException(
+                        'Nginx runtime recovery directory contains a malformed reserved leaf.'
+                    );
+                }
+                if (\count($candidates) >= self::MAX_RECOVERY_CANDIDATES) {
+                    throw new \RuntimeException(
+                        'Nginx runtime recovery candidate quota is exhausted.'
+                    );
+                }
+                $path = $parent . DIRECTORY_SEPARATOR . $leaf;
+                $status = @\lstat($path);
+                if (!\is_array($status)
+                    || \is_link($path)
+                    || ((((int)$status['mode']) & 0170000) !== 0040000)
+                ) {
+                    throw new \RuntimeException(
+                        'Nginx runtime recovery candidate is missing, linked or special.'
+                    );
+                }
+                $candidates[] = ['path' => $path, 'status' => $status];
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        $parentAfter = @\lstat($parent);
+        if (!\is_array($parentAfter)
+            || !$this->sameObjectIdentity($parentBefore, $parentAfter)
+            || \is_link($parent)
+        ) {
+            throw new \RuntimeException(
+                'Nginx runtime recovery directory changed during enumeration.'
+            );
+        }
+        \usort(
+            $candidates,
+            static fn (array $left, array $right): int =>
+                \strcmp((string)$left['path'], (string)$right['path']),
+        );
+        return ['raw_entries' => $visited, 'candidates' => $candidates];
+    }
+
+    /**
+     * @param list<array{path:string,status:array<string|int,mixed>}> $expected
+     * @param list<array{path:string,status:array<string|int,mixed>}> $actual
+     */
+    private function sameCandidateSelection(array $expected, array $actual): bool
+    {
+        if (\count($expected) !== \count($actual)) {
+            return false;
+        }
+        foreach ($expected as $index => $candidate) {
+            if (!isset($actual[$index])
+                || !\hash_equals($candidate['path'], $actual[$index]['path'])
+                || !$this->sameObjectIdentity(
+                    $candidate['status'],
+                    $actual[$index]['status'],
+                )
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @return array{
+     *   0:string,
+     *   1:array{path:string,depth:int,directory:bool,executable:bool,device:string,inode:string}
+     * }
+     */
+    private function createCandidate(
+        string $slotDirectory,
+        string $parent,
+        string $slotLeaf,
+    ): array {
+        $this->assertInstallTargetAbsent($slotDirectory);
+        $namespace = $this->discoverCandidateNamespace($parent, $slotLeaf);
+        if ($namespace['candidates'] !== []) {
+            throw new \RuntimeException(
+                'Nginx runtime recovery candidates remain after the closed cleanup pass.'
+            );
+        }
+        // Reserve one raw directory entry and one candidate quota position
+        // before mkdir. This prevents a nominally valid scan at the exact cap
+        // from creating the first over-limit object.
+        if ($namespace['raw_entries'] >= self::MAX_RECOVERY_DIRECTORY_ENTRIES) {
+            throw new \RuntimeException(
+                'Nginx runtime candidate namespace has no reserved entry capacity.'
+            );
+        }
+
+        for ($attempt = 0; $attempt < self::CANDIDATE_ALLOCATION_ATTEMPTS; ++$attempt) {
+            $candidate = $parent . DIRECTORY_SEPARATOR . $slotLeaf
+                . '.candidate.' . \bin2hex(\random_bytes(8));
+            $before = @\lstat($candidate);
+            if (\is_array($before)
+                || \file_exists($candidate)
+                || \is_link($candidate)
+            ) {
+                throw new \RuntimeException(
+                    'Nginx runtime candidate namespace changed before allocation.'
+                );
+            }
+            if (!@\mkdir($candidate, 0700)) {
+                \clearstatcache(true, $candidate);
+                $appeared = @\lstat($candidate);
+                if (\is_array($appeared)
+                    || \file_exists($candidate)
+                    || \is_link($candidate)
+                ) {
+                    throw new \RuntimeException(
+                        'Nginx runtime candidate appeared during allocation.'
+                    );
+                }
+                continue;
+            }
+            $records = GatewayBoundedTreeWalker::collect(
+                $candidate,
+                true,
+                true,
+                1,
+                self::MAX_PATH_DEPTH,
+            );
+            if (\count($records) !== 1
+                || !\hash_equals($candidate, (string)$records[0]['path'])
+                || !$records[0]['directory']
+            ) {
+                throw new \RuntimeException(
+                    'New Nginx runtime candidate identity is unsafe.'
+                );
+            }
+            return [$candidate, $records[0]];
+        }
+        throw new \RuntimeException(
+            'Unable to create the Nginx runtime candidate within the bounded retry budget.'
+        );
+    }
+
+    /** @param array<array-key,mixed> $components */
     private function assertInstallComponentEnvelope(array $components): void
     {
         if (\count($components) > self::MAX_COMPONENTS) {
@@ -310,8 +700,8 @@ final class NginxRuntimeArtifact
                 $status = @\lstat($source);
                 if (!\is_array($status)
                     || !$this->isRegularFileStatus($status)
-                    || (int)($status['nlink'] ?? 0) !== 1
-                    || (int)($status['size'] ?? -1) < 0
+                    || (int)$status['nlink'] !== 1
+                    || (int)$status['size'] < 0
                     || \is_link($source)
                 ) {
                     throw new \RuntimeException(
@@ -355,7 +745,7 @@ final class NginxRuntimeArtifact
             $status = @\lstat($current);
             if (!\is_array($status)
                 || \is_link($current)
-                || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+                || ((((int)$status['mode']) & 0170000) !== 0040000)
             ) {
                 throw new \RuntimeException('Nginx runtime component directory is unsafe.');
             }
@@ -386,7 +776,7 @@ final class NginxRuntimeArtifact
         $slotStatus = @\lstat($slotDirectory);
         if (!\is_array($slotStatus)
             || \is_link($slotDirectory)
-            || ((((int)($slotStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+            || ((((int)$slotStatus['mode']) & 0170000) !== 0040000)
         ) {
             return $failure('Nginx runtime slot is missing or unsafe.');
         }
@@ -602,9 +992,9 @@ final class NginxRuntimeArtifact
         if ($maximumBytes < 0
             || !\is_array($pathStatus)
             || !$this->isRegularFileStatus($pathStatus)
-            || (int)($pathStatus['nlink'] ?? 0) !== 1
-            || (int)($pathStatus['size'] ?? -1) < 0
-            || (int)($pathStatus['size'] ?? -1) > $maximumBytes
+            || (int)$pathStatus['nlink'] !== 1
+            || (int)$pathStatus['size'] < 0
+            || (int)$pathStatus['size'] > $maximumBytes
             || \is_link($source)
         ) {
             throw new \RuntimeException(
@@ -621,9 +1011,9 @@ final class NginxRuntimeArtifact
             if (!\is_array($openedStatus)
                 || !$this->sameFileState($pathStatus, $openedStatus)
                 || !$this->isRegularFileStatus($openedStatus)
-                || (int)($openedStatus['nlink'] ?? 0) !== 1
+                || (int)$openedStatus['nlink'] !== 1
                 || ($expectedSize !== null
-                    && (int)($openedStatus['size'] ?? -1) !== $expectedSize)
+                    && (int)$openedStatus['size'] !== $expectedSize)
             ) {
                 throw new \RuntimeException(
                     'Nginx runtime source component changed before copying.'
@@ -655,7 +1045,7 @@ final class NginxRuntimeArtifact
             $afterStatus = @\fstat($sourceHandle);
             if (!\is_array($afterStatus)
                 || !$this->sameFileState($openedStatus, $afterStatus)
-                || (int)($afterStatus['size'] ?? -1) !== $size
+                || (int)$afterStatus['size'] !== $size
             ) {
                 throw new \RuntimeException('Nginx runtime source component changed while copying.');
             }
@@ -749,8 +1139,8 @@ final class NginxRuntimeArtifact
         $status = @\fstat($handle);
         if (!\is_array($status)
             || !$this->isRegularFileStatus($status)
-            || (int)($status['nlink'] ?? 0) !== 1
-            || (int)($status['size'] ?? -1) !== $size
+            || (int)$status['nlink'] !== 1
+            || (int)$status['size'] !== $size
         ) {
             throw new \RuntimeException('Nginx runtime target component is unsafe.');
         }
@@ -808,9 +1198,9 @@ final class NginxRuntimeArtifact
         if ($maximumBytes < 0
             || !\is_array($pathStatus)
             || !$this->isRegularFileStatus($pathStatus)
-            || (int)($pathStatus['nlink'] ?? 0) !== 1
-            || (int)($pathStatus['size'] ?? -1) < 0
-            || (int)($pathStatus['size'] ?? -1) > $maximumBytes
+            || (int)$pathStatus['nlink'] !== 1
+            || (int)$pathStatus['size'] < 0
+            || (int)$pathStatus['size'] > $maximumBytes
             || \is_link($path)
         ) {
             throw new \RuntimeException('Nginx runtime file is missing, linked, or special.');
@@ -824,7 +1214,7 @@ final class NginxRuntimeArtifact
             if (!\is_array($openedStatus)
                 || !$this->sameFileState($pathStatus, $openedStatus)
                 || !$this->isRegularFileStatus($openedStatus)
-                || (int)($openedStatus['nlink'] ?? 0) !== 1
+                || (int)$openedStatus['nlink'] !== 1
             ) {
                 throw new \RuntimeException('Nginx runtime file changed before verification.');
             }
@@ -854,7 +1244,7 @@ final class NginxRuntimeArtifact
                 || !\is_array($pathAfter)
                 || !$this->sameFileState($openedStatus, $afterStatus)
                 || !$this->sameFileState($afterStatus, $pathAfter)
-                || (int)($afterStatus['size'] ?? -1) !== $size
+                || (int)$afterStatus['size'] !== $size
             ) {
                 throw new \RuntimeException('Nginx runtime file changed during verification.');
             }
@@ -862,7 +1252,7 @@ final class NginxRuntimeArtifact
                 'bytes' => $bytes,
                 'sha256' => \hash_final($hash),
                 'size' => $size,
-                'mode' => (int)($afterStatus['mode'] ?? 0),
+                'mode' => (int)$afterStatus['mode'],
             ];
         } finally {
             @\fclose($handle);
@@ -916,7 +1306,7 @@ final class NginxRuntimeArtifact
                 }
                 if (!$item->isFile()
                     || !$this->isRegularFileStatus($status)
-                    || (int)($status['nlink'] ?? 0) !== 1
+                    || (int)$status['nlink'] !== 1
                     || !isset($declaredFiles[$identity])
                 ) {
                     return false;
@@ -989,7 +1379,10 @@ final class NginxRuntimeArtifact
         }
     }
 
-    /** @return array<string,mixed> */
+    /**
+     * @param array<array-key,mixed> $value
+     * @return array<array-key,mixed>
+     */
     private function canonicalize(array $value): array
     {
         foreach ($value as $key => $item) {
@@ -1003,15 +1396,38 @@ final class NginxRuntimeArtifact
         return $value;
     }
 
-    private function removeTree(string $directory): void
+    /**
+     * @param array{
+     *   path:string,
+     *   depth:int,
+     *   directory:bool,
+     *   executable:bool,
+     *   device:string,
+     *   inode:string
+     * }|null $expectedRoot
+     */
+    private function removeTree(string $directory, ?array $expectedRoot = null): void
     {
         if (!\file_exists($directory) && !\is_link($directory)) {
+            if ($expectedRoot !== null) {
+                throw new \RuntimeException(
+                    'Failed Nginx runtime publication root disappeared before cleanup.'
+                );
+            }
             return;
         }
         if (!\is_dir($directory) || \is_link($directory)) {
             throw new \RuntimeException(
                 'Failed Nginx runtime publication root is linked or special.'
             );
+        }
+        if ($expectedRoot !== null) {
+            if (!\hash_equals($directory, $expectedRoot['path'])) {
+                throw new \RuntimeException(
+                    'Failed Nginx runtime publication cleanup target is not exact.'
+                );
+            }
+            GatewayBoundedTreeWalker::revalidate($expectedRoot);
         }
         // Preflight the complete tree before the first mutation. Returning
         // after a traversal limit is crossed would leave a half-deleted slot
@@ -1023,9 +1439,40 @@ final class NginxRuntimeArtifact
             self::MAX_TREE_ENTRIES,
             self::MAX_PATH_DEPTH,
         );
+        if ($expectedRoot !== null) {
+            $rootMatched = false;
+            foreach ($records as $record) {
+                if (\hash_equals($directory, (string)$record['path'])) {
+                    $rootMatched = $record['directory']
+                        && \hash_equals($expectedRoot['device'], (string)$record['device'])
+                        && \hash_equals($expectedRoot['inode'], (string)$record['inode']);
+                    break;
+                }
+            }
+            if (!$rootMatched) {
+                throw new \RuntimeException(
+                    'Failed Nginx runtime publication root identity changed before cleanup.'
+                );
+            }
+        }
+        $this->removeCollectedTree($records);
+    }
+
+    /**
+     * @param list<array{
+     *   path:string,
+     *   depth:int,
+     *   directory:bool,
+     *   executable:bool,
+     *   device:string,
+     *   inode:string
+     * }> $records
+     */
+    private function removeCollectedTree(array $records): void
+    {
         foreach ($records as $record) {
             GatewayBoundedTreeWalker::revalidate($record);
-            $removed = ($record['directory'] ?? false) === true
+            $removed = $record['directory']
                 ? @\rmdir((string)$record['path'])
                 : @\unlink((string)$record['path']);
             if (!$removed) {

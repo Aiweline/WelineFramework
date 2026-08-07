@@ -142,6 +142,10 @@ class Website extends BackendController
             // 获取关联域名（多个）
             $website['domain_list'] = $websiteDomain->getDomainsWithStatus($websiteId);
             $website['store_channel_directory'] = $this->storeChannelDirectory->forWebsite($websiteId);
+            $entryUrls = ObjectManager::getInstance(\Weline\Websites\Service\WebsiteEntryUrlService::class)
+                ->resolveForListingRow($website);
+            $website['frontend_url'] = $entryUrls['frontend_url'];
+            $website['backend_url'] = $entryUrls['backend_url'];
         }
         unset($website);
     }

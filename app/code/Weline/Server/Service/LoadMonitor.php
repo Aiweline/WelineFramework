@@ -31,11 +31,13 @@ class LoadMonitor
      */
     public function updateWorkerMetrics(int $workerId, array $metrics): void
     {
+        $now = self::monotonicSeconds();
         $this->workerMetrics[$workerId] = \array_merge($metrics, [
-            'updated_at' => \microtime(true),
+            'updated_at' => \time(),
+            'updated_monotonic' => $now,
         ]);
 
-        $this->lastUpdateTime = \microtime(true);
+        $this->lastUpdateTime = $now;
         $this->aggregateMetrics();
     }
 
@@ -84,7 +86,7 @@ class LoadMonitor
                 'total_connections' => 0,
                 'max_cpu' => 0.0,
                 'max_memory' => 0.0,
-                'updated_at' => \microtime(true),
+                'updated_at' => \time(),
             ];
             return;
         }
@@ -129,7 +131,7 @@ class LoadMonitor
             'max_cpu' => $maxCpu,
             'max_memory' => $maxMemory,
             'avg_requests_per_worker' => $totalActiveRequests / $count,
-            'updated_at' => \microtime(true),
+            'updated_at' => \time(),
         ];
     }
 
@@ -212,11 +214,11 @@ class LoadMonitor
      */
     public function cleanupStaleMetrics(): void
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         $timeout = 60.0;
 
         foreach ($this->workerMetrics as $workerId => $metrics) {
-            $updatedAt = (float) ($metrics['updated_at'] ?? 0.0);
+            $updatedAt = (float) ($metrics['updated_monotonic'] ?? 0.0);
             if ($now - $updatedAt > $timeout) {
                 unset($this->workerMetrics[$workerId]);
             }
@@ -225,5 +227,10 @@ class LoadMonitor
         if (!empty($this->workerMetrics)) {
             $this->aggregateMetrics();
         }
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

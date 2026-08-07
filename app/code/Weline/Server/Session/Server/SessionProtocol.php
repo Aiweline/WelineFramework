@@ -15,6 +15,11 @@ namespace Weline\Server\Session\Server;
 
 final class SessionProtocol
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     // ==================== 序列化器 ====================
     
     public const SERIALIZER_JSON = 'json';
@@ -388,7 +393,7 @@ final class SessionProtocol
         $offset = 0;
         while (($pos = \strpos($buffer, "\n", $offset)) !== false) {
             if (\count($messages) >= $maximumMessages
-                || ($deadline > 0.0 && \microtime(true) >= $deadline)
+                || ($deadline > 0.0 && self::monotonicSeconds() >= $deadline)
             ) {
                 break;
             }

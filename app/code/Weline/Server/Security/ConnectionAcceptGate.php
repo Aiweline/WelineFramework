@@ -24,6 +24,11 @@ use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
  */
 final class ConnectionAcceptGate
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private const INCOMPLETE_NAMESPACE = 'wls.policy.incomplete_connections';
 
     /** @var array<string, true> */
@@ -233,7 +238,7 @@ final class ConnectionAcceptGate
             throw new \LogicException("Connection {$connectionId} is already tracked by the accept gate.");
         }
 
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         $peerIp = $this->identity->normalizePeer($transportPeer);
         if ($peerIp === '') {
             return $this->reject('', 'invalid_peer');
@@ -315,7 +320,7 @@ final class ConnectionAcceptGate
         if ($this->connections[$connectionId]['incomplete']) {
             return true;
         }
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         $this->connections[$connectionId]['incomplete'] = true;
         $this->connections[$connectionId]['accepted_at'] = $now;
         $this->connections[$connectionId]['grace_at'] = $now + $this->incompleteGraceSeconds;
@@ -370,7 +375,7 @@ final class ConnectionAcceptGate
             $this->nextSweepAt = null;
             return [];
         }
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         if ($this->nextSweepAt !== null && $now < $this->nextSweepAt) {
             return [];
         }

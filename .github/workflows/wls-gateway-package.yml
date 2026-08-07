@@ -3,11 +3,130 @@ name: WLS Gateway release package
 on:
   push:
     paths:
+      - "app/code/Weline/Server/Console/Server/Gateway/**"
+      - "app/code/Weline/Server/Console/Server/Start.php"
+      - "app/code/Weline/Server/Console/Server/Stop.php"
+      - "app/code/Weline/Server/Console/Server/Reload.php"
+      - "app/code/Weline/Server/Console/Server/Status.php"
+      - "app/code/Weline/Server/Console/Server/Benchmark.php"
+      - "app/code/Weline/Server/Console/Console/Server/Start.php"
+      - "app/code/Weline/Server/Console/Console/Server/Stop.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/**"
+      - "app/code/Weline/Server/Service/Edge/CertificateMaterialUpdateCoordinator.php"
+      - "app/code/Weline/Server/Service/Edge/Nginx/**"
+      - "app/code/Weline/Server/IPC/ControlMessage.php"
+      - "app/code/Weline/Server/Service/ServiceOrchestrator.php"
+      - "app/code/Weline/Server/Service/Provider/GatewayProvider.php"
+      - "app/code/Weline/Server/Service/MasterChildCredentialStore.php"
+      - "app/code/Weline/Server/Service/MasterLeaseManager.php"
+      - "app/code/Weline/Server/Service/MasterLeaseRuntimeIdentity.php"
+      - "app/code/Weline/Server/Service/ServerInstanceManager.php"
+      - "app/code/Weline/Server/Service/Runtime/WindowsListenerHandoff*.php"
+      - "app/code/Weline/Server/Service/Runtime/ProtocolEdgeRuntime.php"
+      - "app/code/Weline/Server/Service/Runtime/RuntimeDependencyBootstrapper.php"
+      - "app/code/Weline/Server/Service/Runtime/TlsTicketRingStore.php"
+      - "app/code/Weline/Server/Service/Runtime/VerifiedPersistentFileLock.php"
+      - "app/code/Weline/Server/Service/Policy/RuntimePolicyStore.php"
+      - "app/code/Weline/Server/Service/WlsGateway.php"
+      - "app/code/Weline/Server/bin/worker.php"
+      - "app/code/Weline/Server/bin/worker_ssl.php"
+      - "app/code/Weline/Framework/System/Process/Processer.php"
+      - "app/code/Weline/Framework/Runtime/WlsRuntime.php"
+      - "app/code/Weline/Server/Log/WlsLogger.php"
+      - "app/code/Weline/Server/Observability/MetricsSnapshotWriter.php"
+      - "app/code/Weline/Server/Protocol/Http2/ConnectionAdapter.php"
+      - "app/code/Weline/Server/Protocol/Http3/**"
+      - "app/code/Weline/Server/Service/AttackLogService.php"
+      - "app/code/Weline/Server/Service/BatchManager.php"
+      - "app/code/Weline/Server/Service/FileWatcher.php"
+      - "app/code/Weline/Server/Service/MemoryStateFacade.php"
+      - "app/code/Weline/Server/Service/SessionStateFacade.php"
+      - "app/code/Weline/Server/Service/WlsPerformanceTraceStore.php"
+      - "app/code/Weline/Server/Service/SharedRuntimeConnectionWarmup.php"
+      - "app/code/Weline/Server/Service/SharedStateProtocolProbe.php"
+      - "app/code/Weline/Server/Service/SharedStateRuntimeResolver.php"
+      - "app/code/Weline/Server/Service/SharedStateRuntimeScope.php"
+      - "app/code/Weline/Server/Service/SharedStateServiceManager.php"
+      - "app/code/Weline/Server/Service/SharedStateServiceRegistry.php"
+      - "app/code/Weline/Server/Session/Client/SessionClient.php"
+      - "app/code/Weline/Server/Session/Server/SharedStateTokenStore.php"
+      - "app/code/Weline/Server/Shared/Client/SharedStateClient.php"
+      - "app/code/Weline/Server/Shared/Connection/ConnectionPoolManager.php"
+      - "app/code/Weline/Server/Shared/Connection/PooledConnection.php"
+      - "app/code/Weline/Server/bin/session_server.php"
+      - "app/code/Weline/Server/Service/WorkerStaticResponseL1.php"
+      - "app/code/Weline/Server/Runtime/WorkerFiberContextTracker.php"
+      - "app/code/Weline/Server/bin/worker_runtime_common.php"
+      - "app/code/Weline/Server/Api/System/HostsWriter.php"
+      - "app/code/Weline/Server/Console/Server/Hosts/Add.php"
+      - "app/code/Weline/Server/Service/HostsFileManager.php"
+      - "app/code/Weline/Server/Service/Security/SecurityPolicyStateStore.php"
+      - "app/code/Weline/Server/Security/AttackDetector.php"
+      - "app/code/Weline/Server/Service/WlsPanelSecurityDataService.php"
+      - "app/code/Weline/Server/Controller/Backend/WlsPanel.php"
+      - "app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml"
+      - "app/code/Weline/Framework/System/Process/bin/posix_detached_spawn.php"
+      - "app/code/Weline/Server/Test/Unit/Console/Gateway/**"
+      - "app/code/Weline/Server/Test/Unit/Console/StatusCommandTest.php"
+      - "app/code/Weline/Server/Test/Unit/Console/BenchmarkCommandTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/**"
+      - "app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/GatewayFallbackProviderTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/ServiceOrchestratorStopFlowTest.php"
+      - "app/code/Weline/Server/Test/Unit/Worker/GatewayFallbackWorkerListenerTransitionContractTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/MasterChildCredentialStoreTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/MasterLeaseManagerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/EndpointPersistenceFailureTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/MasterLeaseRuntimeIdentityTerminationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerMasterExitRetentionTest.php"
+      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserWindowsIsolatedBatchReaperTest.php"
+      - "app/code/Weline/Server/Test/Unit/Runtime/WindowsListenerHandoffTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/ProtocolEdgeRuntimeOwnershipTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/RuntimeDependencyBootstrapperLockSafetyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/TlsTicketRingStoreRecoveryTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/VerifiedPersistentFileLockSafetyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Policy/RuntimePolicyStoreLockSafetyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/StartupTraceLockSafetyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/**"
+      - "app/code/Weline/Server/Test/Unit/Protocol/Http2/ConnectionAdapterHeaderBlockLimitTest.php"
+      - "app/code/Weline/Server/Test/Unit/Runtime/RuntimeMaintenanceMonotonicTimingTest.php"
+      - "app/code/Weline/Server/Test/Unit/Worker/WorkerDetailedHealthCounterHotPathTest.php"
+      - "app/code/Weline/Server/Test/Session/SessionServerIntegrationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateGenerationAndRecoveryTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateProtocolProbeTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateRuntimeResolverTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateRuntimeScopeTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateServiceLifecycleTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateServiceManagerMonotonicTimingTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateServiceManagerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/StateFacadeInitializationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Session/SessionServerShutdownCommandTest.php"
+      - "app/code/Weline/Server/Test/Unit/Session/SessionServerTokenCleanupTest.php"
+      - "app/code/Weline/Server/Test/Unit/Session/SharedStateTokenStoreTest.php"
+      - "app/code/Weline/Server/Test/Unit/Shared/Client/SharedStateClientTest.php"
+      - "app/code/Weline/Server/Test/Unit/Shared/Connection/ConnectionPoolManagerFiberLeaseTest.php"
+      - "app/code/Weline/Server/Test/Unit/Shared/Connection/ConnectionPoolManagerOptionsMergeTest.php"
+      - "app/code/Weline/Server/Test/Unit/Shared/Connection/PooledConnectionTokenRotationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/WorkerStaticResponseL1MonotonicTest.php"
+      - "app/code/Weline/Server/Test/Unit/Runtime/WorkerFiberContextTrackerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Worker/WorkerMonotonicDeadlineDomainTest.php"
+      - "app/code/Weline/Server/Test/Unit/Console/HostsPrivilegeBoundaryWiringTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/HostsFileManagerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/HostsFileManagerTransactionTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerCleanupTransactionTest.php"
+      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserDetachedSpawnSecurityTest.php"
+      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserMonotonicClockContractTest.php"
+      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserUnixBatchLauncherHandshakeTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Security/SecurityPolicyStateStoreTest.php"
+      - "app/code/Weline/Server/Test/Unit/Security/AttackDetectorStateTransactionTest.php"
+      - "app/code/Weline/Server/Test/Unit/Security/SecurityRulesReceiptWiringTest.php"
+      - "app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/**"
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/env/gateway/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/HostGatewayPackageManager.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedTreeWalker.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayProjectStateFilesystem.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/WindowsBoundedCommandBootstrapResolver.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPortLeaseAllocator.php"
@@ -22,20 +141,143 @@ on:
       - "app/code/Weline/Server/Test/Unit/Console/StartCommandArgsSolidificationTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/MasterProcessDeferredSslPolicyTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/SslCertificateGatewayAcmePublishRetryTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SslCertificateReuseTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SslCertificateStorageSecurityTest.php"
       - "app/code/Weline/Server/Test/Unit/SslCertificateServiceTest.php"
       - "app/code/Weline/Server/Test/Unit/Session/SessionServerSharedConsumerConsensusTest.php"
       - "app/code/Weline/Server/Test/bootstrap_pgsql.php"
       - "dev/tools/wls-gateway-package.php"
+      - "app/etc/env.sample.php"
       - "composer.json"
       - "composer.lock"
+      - ".gitattributes"
       - ".github/workflows/wls-gateway-package.yml"
   pull_request:
     paths:
+      - "app/code/Weline/Server/Console/Server/Gateway/**"
+      - "app/code/Weline/Server/Console/Server/Start.php"
+      - "app/code/Weline/Server/Console/Server/Stop.php"
+      - "app/code/Weline/Server/Console/Server/Reload.php"
+      - "app/code/Weline/Server/Console/Server/Status.php"
+      - "app/code/Weline/Server/Console/Server/Benchmark.php"
+      - "app/code/Weline/Server/Console/Console/Server/Start.php"
+      - "app/code/Weline/Server/Console/Console/Server/Stop.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/**"
+      - "app/code/Weline/Server/Service/Edge/CertificateMaterialUpdateCoordinator.php"
+      - "app/code/Weline/Server/Service/Edge/Nginx/**"
+      - "app/code/Weline/Server/IPC/ControlMessage.php"
+      - "app/code/Weline/Server/Service/ServiceOrchestrator.php"
+      - "app/code/Weline/Server/Service/Provider/GatewayProvider.php"
+      - "app/code/Weline/Server/Service/MasterChildCredentialStore.php"
+      - "app/code/Weline/Server/Service/MasterLeaseManager.php"
+      - "app/code/Weline/Server/Service/MasterLeaseRuntimeIdentity.php"
+      - "app/code/Weline/Server/Service/ServerInstanceManager.php"
+      - "app/code/Weline/Server/Service/Runtime/WindowsListenerHandoff*.php"
+      - "app/code/Weline/Server/Service/Runtime/ProtocolEdgeRuntime.php"
+      - "app/code/Weline/Server/Service/Runtime/RuntimeDependencyBootstrapper.php"
+      - "app/code/Weline/Server/Service/Runtime/TlsTicketRingStore.php"
+      - "app/code/Weline/Server/Service/Runtime/VerifiedPersistentFileLock.php"
+      - "app/code/Weline/Server/Service/Policy/RuntimePolicyStore.php"
+      - "app/code/Weline/Server/Service/WlsGateway.php"
+      - "app/code/Weline/Server/bin/worker.php"
+      - "app/code/Weline/Server/bin/worker_ssl.php"
+      - "app/code/Weline/Framework/System/Process/Processer.php"
+      - "app/code/Weline/Framework/Runtime/WlsRuntime.php"
+      - "app/code/Weline/Server/Log/WlsLogger.php"
+      - "app/code/Weline/Server/Observability/MetricsSnapshotWriter.php"
+      - "app/code/Weline/Server/Protocol/Http2/ConnectionAdapter.php"
+      - "app/code/Weline/Server/Protocol/Http3/**"
+      - "app/code/Weline/Server/Service/AttackLogService.php"
+      - "app/code/Weline/Server/Service/BatchManager.php"
+      - "app/code/Weline/Server/Service/FileWatcher.php"
+      - "app/code/Weline/Server/Service/MemoryStateFacade.php"
+      - "app/code/Weline/Server/Service/SessionStateFacade.php"
+      - "app/code/Weline/Server/Service/WlsPerformanceTraceStore.php"
+      - "app/code/Weline/Server/Service/SharedRuntimeConnectionWarmup.php"
+      - "app/code/Weline/Server/Service/SharedStateProtocolProbe.php"
+      - "app/code/Weline/Server/Service/SharedStateRuntimeResolver.php"
+      - "app/code/Weline/Server/Service/SharedStateRuntimeScope.php"
+      - "app/code/Weline/Server/Service/SharedStateServiceManager.php"
+      - "app/code/Weline/Server/Service/SharedStateServiceRegistry.php"
+      - "app/code/Weline/Server/Session/Client/SessionClient.php"
+      - "app/code/Weline/Server/Session/Server/SharedStateTokenStore.php"
+      - "app/code/Weline/Server/Shared/Client/SharedStateClient.php"
+      - "app/code/Weline/Server/Shared/Connection/ConnectionPoolManager.php"
+      - "app/code/Weline/Server/Shared/Connection/PooledConnection.php"
+      - "app/code/Weline/Server/bin/session_server.php"
+      - "app/code/Weline/Server/Service/WorkerStaticResponseL1.php"
+      - "app/code/Weline/Server/Runtime/WorkerFiberContextTracker.php"
+      - "app/code/Weline/Server/bin/worker_runtime_common.php"
+      - "app/code/Weline/Server/Api/System/HostsWriter.php"
+      - "app/code/Weline/Server/Console/Server/Hosts/Add.php"
+      - "app/code/Weline/Server/Service/HostsFileManager.php"
+      - "app/code/Weline/Server/Service/Security/SecurityPolicyStateStore.php"
+      - "app/code/Weline/Server/Security/AttackDetector.php"
+      - "app/code/Weline/Server/Service/WlsPanelSecurityDataService.php"
+      - "app/code/Weline/Server/Controller/Backend/WlsPanel.php"
+      - "app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml"
+      - "app/code/Weline/Framework/System/Process/bin/posix_detached_spawn.php"
+      - "app/code/Weline/Server/Test/Unit/Console/Gateway/**"
+      - "app/code/Weline/Server/Test/Unit/Console/StatusCommandTest.php"
+      - "app/code/Weline/Server/Test/Unit/Console/BenchmarkCommandTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/**"
+      - "app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/GatewayFallbackProviderTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/ServiceOrchestratorStopFlowTest.php"
+      - "app/code/Weline/Server/Test/Unit/Worker/GatewayFallbackWorkerListenerTransitionContractTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/MasterChildCredentialStoreTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/MasterLeaseManagerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/EndpointPersistenceFailureTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/MasterLeaseRuntimeIdentityTerminationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerMasterExitRetentionTest.php"
+      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserWindowsIsolatedBatchReaperTest.php"
+      - "app/code/Weline/Server/Test/Unit/Runtime/WindowsListenerHandoffTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/ProtocolEdgeRuntimeOwnershipTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/RuntimeDependencyBootstrapperLockSafetyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/TlsTicketRingStoreRecoveryTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/VerifiedPersistentFileLockSafetyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Policy/RuntimePolicyStoreLockSafetyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/StartupTraceLockSafetyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/**"
+      - "app/code/Weline/Server/Test/Unit/Protocol/Http2/ConnectionAdapterHeaderBlockLimitTest.php"
+      - "app/code/Weline/Server/Test/Unit/Runtime/RuntimeMaintenanceMonotonicTimingTest.php"
+      - "app/code/Weline/Server/Test/Unit/Worker/WorkerDetailedHealthCounterHotPathTest.php"
+      - "app/code/Weline/Server/Test/Session/SessionServerIntegrationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateGenerationAndRecoveryTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateProtocolProbeTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateRuntimeResolverTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateRuntimeScopeTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateServiceLifecycleTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateServiceManagerMonotonicTimingTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SharedStateServiceManagerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/StateFacadeInitializationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Session/SessionServerShutdownCommandTest.php"
+      - "app/code/Weline/Server/Test/Unit/Session/SessionServerTokenCleanupTest.php"
+      - "app/code/Weline/Server/Test/Unit/Session/SharedStateTokenStoreTest.php"
+      - "app/code/Weline/Server/Test/Unit/Shared/Client/SharedStateClientTest.php"
+      - "app/code/Weline/Server/Test/Unit/Shared/Connection/ConnectionPoolManagerFiberLeaseTest.php"
+      - "app/code/Weline/Server/Test/Unit/Shared/Connection/ConnectionPoolManagerOptionsMergeTest.php"
+      - "app/code/Weline/Server/Test/Unit/Shared/Connection/PooledConnectionTokenRotationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/WorkerStaticResponseL1MonotonicTest.php"
+      - "app/code/Weline/Server/Test/Unit/Runtime/WorkerFiberContextTrackerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Worker/WorkerMonotonicDeadlineDomainTest.php"
+      - "app/code/Weline/Server/Test/Unit/Console/HostsPrivilegeBoundaryWiringTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/HostsFileManagerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/HostsFileManagerTransactionTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerCleanupTransactionTest.php"
+      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserDetachedSpawnSecurityTest.php"
+      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserMonotonicClockContractTest.php"
+      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserUnixBatchLauncherHandshakeTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Security/SecurityPolicyStateStoreTest.php"
+      - "app/code/Weline/Server/Test/Unit/Security/AttackDetectorStateTransactionTest.php"
+      - "app/code/Weline/Server/Test/Unit/Security/SecurityRulesReceiptWiringTest.php"
+      - "app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/**"
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/env/gateway/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/HostGatewayPackageManager.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedTreeWalker.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayProjectStateFilesystem.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/WindowsBoundedCommandBootstrapResolver.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPortLeaseAllocator.php"
@@ -50,12 +292,16 @@ on:
       - "app/code/Weline/Server/Test/Unit/Console/StartCommandArgsSolidificationTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/MasterProcessDeferredSslPolicyTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/SslCertificateGatewayAcmePublishRetryTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SslCertificateReuseTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SslCertificateStorageSecurityTest.php"
       - "app/code/Weline/Server/Test/Unit/SslCertificateServiceTest.php"
       - "app/code/Weline/Server/Test/Unit/Session/SessionServerSharedConsumerConsensusTest.php"
       - "app/code/Weline/Server/Test/bootstrap_pgsql.php"
       - "dev/tools/wls-gateway-package.php"
+      - "app/etc/env.sample.php"
       - "composer.json"
       - "composer.lock"
+      - ".gitattributes"
       - ".github/workflows/wls-gateway-package.yml"
   workflow_dispatch:
     inputs:
@@ -69,33 +315,17 @@ on:
         required: true
         default: 2.0.0-dev
         type: string
-      target_runner:
-        description: GitHub runner that exactly matches the component target
+      target_profile:
+        description: Locked platform, architecture and GitHub runner profile
         required: true
-        default: ubuntu-latest
+        default: linux-x86_64
         type: choice
         options:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - macos-14
-          - windows-latest
-      target_platform:
-        description: PHP_OS_FAMILY expected on the selected runner
-        required: true
-        default: Linux
-        type: choice
-        options:
-          - Linux
-          - Darwin
-          - Windows
-      target_arch:
-        description: Architecture expected on the selected runner
-        required: true
-        default: x86_64
-        type: choice
-        options:
-          - x86_64
-          - arm64
+          - linux-x86_64
+          - linux-arm64
+          - darwin-x86_64
+          - darwin-arm64
+          - windows-x86_64
       provenance_sha256:
         description: Approved SHA-256 of provenance.json in the component store
         required: false
@@ -105,13 +335,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: wls-gateway-package-${{ github.ref }}-${{ inputs.target_platform || 'contract' }}-${{ inputs.target_arch || 'native' }}
+  group: wls-gateway-package-${{ github.ref }}-${{ inputs.target_profile || 'contract' }}
   cancel-in-progress: false
 
 jobs:
   package-contract:
     name: Package contract and release-gate tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:
@@ -134,7 +364,7 @@ jobs:
       - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
-          extensions: sodium, openssl, intl, pdo_pgsql
+          extensions: sodium, openssl, intl, pdo_pgsql, pcntl
           coverage: none
       - name: Install locked PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
@@ -144,36 +374,221 @@ jobs:
           --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/WlsGatewayPackageBuilderTest.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/HostGatewayPackageManagerTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPlatformServiceInstallerSafetyTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPlatformRetirementRecoverySourceTest.php
       - name: Validate gateway first-certificate startup contract
         run: >-
           php vendor/bin/phpunit
           --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
           app/code/Weline/Server/Test/Unit/Console/StartCommandArgsSolidificationTest.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPortLeaseAllocatorTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayProjectStateFilesystemLockTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayCredentialStoreTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayFallbackOutageStoreTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayRuntimeEndpointPublisherTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayAcmeChallengePublisherTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/ProjectAcmeHttp01ChallengeStoreTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/ProjectCertificateGenerationStoreTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/ProjectIdentityStoreTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/ProjectServingManifestStoreTest.php
+          app/code/Weline/Server/Test/Unit/Console/Gateway/GatewayAgentDesiredStateLifecycleTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayRegistrationRetirementCoordinatorTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayStopRegistrationPolicyTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayHostManagerTrustTest.php
           app/code/Weline/Server/Test/Unit/Service/MasterProcessDeferredSslPolicyTest.php
           app/code/Weline/Server/Test/Unit/Service/SslCertificateGatewayAcmePublishRetryTest.php
           app/code/Weline/Server/Test/Unit/SslCertificateServiceTest.php
-      - name: Validate shared-service idle shutdown consensus
+      - name: Validate gateway Agent, Master lease and fallback runtime contracts
         run: >-
           php vendor/bin/phpunit
           --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Console/Gateway/GatewayAgentDrainCountersTest.php
+          app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php
+          app/code/Weline/Server/Test/Unit/Service/GatewayFallbackProviderTest.php
+          app/code/Weline/Server/Test/Unit/Service/ServiceOrchestratorStopFlowTest.php
+          app/code/Weline/Server/Test/Unit/Worker/GatewayFallbackWorkerListenerTransitionContractTest.php
+          app/code/Weline/Server/Test/Unit/Service/MasterChildCredentialStoreTest.php
+          app/code/Weline/Server/Test/Unit/Service/MasterLeaseManagerTest.php
+          app/code/Weline/Server/Test/Unit/Service/EndpointPersistenceFailureTest.php
+          app/code/Weline/Server/Test/Unit/Service/MasterLeaseRuntimeIdentityTerminationTest.php
+          app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerMasterExitRetentionTest.php
+          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserWindowsIsolatedBatchReaperTest.php
+          app/code/Weline/Server/Test/Unit/Runtime/WindowsListenerHandoffTest.php
+      - name: Validate gateway serving projection and diagnostic consumers
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayRuntimeServingProjectionTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayStartupRuntimeViewTest.php
+          app/code/Weline/Server/Test/Unit/Console/StatusCommandTest.php
+          app/code/Weline/Server/Test/Unit/Console/BenchmarkCommandTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayReleaseWorkflowCoverageTest.php
+      - name: Validate complete gateway unit contract
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway
+      - name: Validate managed-Nginx, Gateway console, TLS and legacy edge state contracts
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Nginx
+          app/code/Weline/Server/Test/Unit/Console/Gateway
+          app/code/Weline/Server/Test/Unit/Service/Runtime/ProtocolEdgeRuntimeOwnershipTest.php
+          app/code/Weline/Server/Test/Unit/Service/Runtime/TlsTicketRingStoreRecoveryTest.php
+          app/code/Weline/Server/Test/Unit/Service/SslCertificateReuseTest.php
+          app/code/Weline/Server/Test/Unit/Service/SslCertificateStorageSecurityTest.php
+      - name: Validate WLS request hot-path, timing and HTTP/2 bounds
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Worker/WorkerDetailedHealthCounterHotPathTest.php
+          app/code/Weline/Server/Test/Unit/Service/WorkerStaticResponseL1MonotonicTest.php
+          app/code/Weline/Server/Test/Unit/Runtime/WorkerFiberContextTrackerTest.php
+          app/code/Weline/Server/Test/Unit/Worker/WorkerMonotonicDeadlineDomainTest.php
+          app/code/Weline/Server/Test/Unit/Runtime/RuntimeMaintenanceMonotonicTimingTest.php
+          app/code/Weline/Server/Test/Unit/Protocol/Http2/ConnectionAdapterHeaderBlockLimitTest.php
+      - name: Validate startup and persistent lock safety contracts
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Service/Runtime/RuntimeDependencyBootstrapperLockSafetyTest.php
+          app/code/Weline/Server/Test/Unit/Service/Runtime/VerifiedPersistentFileLockSafetyTest.php
+          app/code/Weline/Server/Test/Unit/Service/Policy/RuntimePolicyStoreLockSafetyTest.php
+          app/code/Weline/Server/Test/Unit/Service/StartupTraceLockSafetyTest.php
+          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserDetachedSpawnSecurityTest.php
+          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserMonotonicClockContractTest.php
+          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserUnixBatchLauncherHandshakeTest.php
+      - name: Validate host mutation and instance cleanup transactions
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Console/HostsPrivilegeBoundaryWiringTest.php
+          app/code/Weline/Server/Test/Unit/Service/HostsFileManagerTest.php
+          app/code/Weline/Server/Test/Unit/Service/HostsFileManagerTransactionTest.php
+          app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerCleanupTransactionTest.php
+      - name: Validate security-policy transactions and receipt wiring
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Service/Security/SecurityPolicyStateStoreTest.php
+          app/code/Weline/Server/Test/Unit/Security/AttackDetectorStateTransactionTest.php
+          app/code/Weline/Server/Test/Unit/Security/SecurityRulesReceiptWiringTest.php
+      - name: Validate authenticated Controller protocol and publication contract
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/GatewayHostManagerAsyncPublicationTest.php
+          app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/GatewayProtocolSecurityTest.php
+      - name: Validate shared-state authority, token and transport lifecycle
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Session/SessionServerIntegrationTest.php
+          app/code/Weline/Server/Test/Unit/Service/SharedStateGenerationAndRecoveryTest.php
+          app/code/Weline/Server/Test/Unit/Service/SharedStateProtocolProbeTest.php
+          app/code/Weline/Server/Test/Unit/Service/SharedStateRuntimeResolverTest.php
+          app/code/Weline/Server/Test/Unit/Service/SharedStateRuntimeScopeTest.php
+          app/code/Weline/Server/Test/Unit/Service/SharedStateServiceLifecycleTest.php
+          app/code/Weline/Server/Test/Unit/Service/SharedStateServiceManagerMonotonicTimingTest.php
+          app/code/Weline/Server/Test/Unit/Service/SharedStateServiceManagerTest.php
+          app/code/Weline/Server/Test/Unit/Service/StateFacadeInitializationTest.php
           app/code/Weline/Server/Test/Unit/Session/SessionServerSharedConsumerConsensusTest.php
+          app/code/Weline/Server/Test/Unit/Session/SessionServerShutdownCommandTest.php
+          app/code/Weline/Server/Test/Unit/Session/SessionServerTokenCleanupTest.php
+          app/code/Weline/Server/Test/Unit/Session/SharedStateTokenStoreTest.php
+          app/code/Weline/Server/Test/Unit/Shared/Client/SharedStateClientTest.php
+          app/code/Weline/Server/Test/Unit/Shared/Connection/ConnectionPoolManagerFiberLeaseTest.php
+          app/code/Weline/Server/Test/Unit/Shared/Connection/ConnectionPoolManagerOptionsMergeTest.php
+          app/code/Weline/Server/Test/Unit/Shared/Connection/PooledConnectionTokenRotationTest.php
       - name: Validate package schema and builder syntax
         run: |
           php -l dev/tools/wls-gateway-package.php
           php -r 'json_decode(file_get_contents("app/code/Weline/Server/env/gateway/package-manifest.schema.json"), true, 512, JSON_THROW_ON_ERROR);'
 
+  platform-runtime-contract:
+    name: ${{ matrix.platform }} ${{ matrix.arch }} process and listener contracts
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: Linux
+            arch: x86_64
+            extensions: sodium, openssl, sockets, pcntl
+          - runner: ubuntu-24.04-arm
+            platform: Linux
+            arch: arm64
+            extensions: sodium, openssl, sockets, pcntl
+          - runner: macos-15-intel
+            platform: Darwin
+            arch: x86_64
+            extensions: sodium, openssl, sockets, pcntl
+          - runner: macos-15
+            platform: Darwin
+            arch: arm64
+            extensions: sodium, openssl, sockets, pcntl
+          - runner: windows-2025
+            platform: Windows
+            arch: x86_64
+            extensions: sodium, openssl, sockets
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
+        with:
+          php-version: "8.4"
+          extensions: ${{ matrix.extensions }}
+          coverage: none
+      - name: Install locked PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Verify platform runtime target
+        shell: pwsh
+        run: |
+          $targetCheck = @'
+            $actualArch = match (strtolower(php_uname("m"))) {
+                "amd64", "x86_64" => "x86_64",
+                "aarch64", "arm64" => "arm64",
+                default => strtolower(php_uname("m")),
+            };
+            if (PHP_OS_FAMILY !== $argv[1] || $actualArch !== $argv[2]) {
+                fwrite(STDERR, "Runtime runner does not match its declared target.\n");
+                exit(1);
+            }
+          '@
+          & php -r $targetCheck '${{ matrix.platform }}' '${{ matrix.arch }}'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Runtime runner does not match its declared target."
+          }
+      - name: Validate database-independent platform runtime contracts
+        shell: pwsh
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserDetachedSpawnSecurityTest.php
+          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserMonotonicClockContractTest.php
+          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserUnixBatchLauncherHandshakeTest.php
+          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserWindowsIsolatedBatchReaperTest.php
+          app/code/Weline/Server/Test/Unit/Runtime/WindowsListenerHandoffTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPlatformServiceInstallerSafetyTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPlatformRetirementRecoverySourceTest.php
+
   assemble-production:
-    name: Signed ${{ inputs.target_platform }} ${{ inputs.target_arch }} package
+    name: Signed ${{ inputs.target_profile }} package
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
-    needs: package-contract
-    runs-on: ${{ inputs.target_runner }}
+    needs:
+      - package-contract
+      - platform-runtime-contract
+    runs-on: ${{ inputs.target_profile == 'linux-x86_64' && 'ubuntu-24.04' || inputs.target_profile == 'linux-arm64' && 'ubuntu-24.04-arm' || inputs.target_profile == 'darwin-x86_64' && 'macos-15-intel' || inputs.target_profile == 'darwin-arm64' && 'macos-15' || inputs.target_profile == 'windows-x86_64' && 'windows-2025' || 'wls-invalid-target-profile' }}
     timeout-minutes: 45
     env:
       COMPONENT_BASE_URL: ${{ vars.WLS_GATEWAY_COMPONENT_BASE_URL }}
       WLS_RELEASE_VERSION: ${{ inputs.version }}
-      WLS_TARGET_PLATFORM: ${{ inputs.target_platform }}
-      WLS_TARGET_ARCH: ${{ inputs.target_arch }}
+      WLS_TARGET_PLATFORM: ${{ startsWith(inputs.target_profile, 'linux-') && 'Linux' || startsWith(inputs.target_profile, 'darwin-') && 'Darwin' || startsWith(inputs.target_profile, 'windows-') && 'Windows' || '' }}
+      WLS_TARGET_ARCH: ${{ endsWith(inputs.target_profile, '-arm64') && 'arm64' || 'x86_64' }}
       WLS_PROVENANCE_SHA256: ${{ inputs.provenance_sha256 }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -201,7 +616,11 @@ jobs:
             throw "An approved lowercase provenance SHA-256 is required."
           }
           if ($env:WLS_TARGET_PLATFORM -notin @('Linux', 'Darwin', 'Windows') -or
-              $env:WLS_TARGET_ARCH -notin @('x86_64', 'arm64')) {
+              $env:WLS_TARGET_ARCH -notin @('x86_64', 'arm64') -or
+              '${{ inputs.target_profile }}' -notin @(
+                'linux-x86_64', 'linux-arm64', 'darwin-x86_64',
+                'darwin-arm64', 'windows-x86_64'
+              )) {
             throw "The requested package target is invalid."
           }
           $targetCheck = @'
@@ -334,7 +753,7 @@ jobs:
     name: Audit immutable candidate without release secrets
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
     needs: assemble-production
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     container:
       image: ${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}
@@ -342,7 +761,7 @@ jobs:
     env:
       AUDITOR_IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}
       EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
-      EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_platform == 'Linux' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX || inputs.target_platform == 'Darwin' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN || vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS }}
+      EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS_X86_64 || '' }}
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -412,7 +831,7 @@ jobs:
     needs:
       - assemble-production
       - audit-production
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: wls-gateway-release
     container:
@@ -420,10 +839,10 @@ jobs:
       options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       RELEASE_KEY_ID: ${{ vars.WLS_GATEWAY_RELEASE_KEY_ID }}
-      WLS_TARGET_PLATFORM: ${{ inputs.target_platform }}
+      WLS_TARGET_PLATFORM: ${{ startsWith(inputs.target_profile, 'linux-') && 'Linux' || startsWith(inputs.target_profile, 'darwin-') && 'Darwin' || startsWith(inputs.target_profile, 'windows-') && 'Windows' || '' }}
       SIGNER_IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}
       EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
-      EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_platform == 'Linux' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX || inputs.target_platform == 'Darwin' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN || vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS }}
+      EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS_X86_64 || '' }}
       PROTECTED_REF: ${{ github.ref_protected }}
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -521,7 +940,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload signed Windows pure-WLS bootstrap helper
-        if: ${{ inputs.target_platform == 'Windows' }}
+        if: ${{ inputs.target_profile == 'windows-x86_64' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wls-windows-bounded-command-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}

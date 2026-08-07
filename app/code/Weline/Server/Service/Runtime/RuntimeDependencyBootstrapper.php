@@ -24,6 +24,25 @@ final class RuntimeDependencyBootstrapper
     private const RELAUNCH_TIMEOUT_SECONDS = 1800;
     private const MAX_CAPTURE_BYTES = 1048576;
     private const MAX_EVENT_INI_BYTES = 65536;
+    private const DEFAULT_LOCK_WAIT_SECONDS = 30.0;
+    private const MAX_LOCK_WAIT_SECONDS = 300.0;
+    private const LOCK_RETRY_MICROSECONDS = 10_000;
+
+    private readonly float $lockWaitSeconds;
+
+    public function __construct(
+        float $lockWaitSeconds = self::DEFAULT_LOCK_WAIT_SECONDS,
+    ) {
+        if (!\is_finite($lockWaitSeconds)
+            || $lockWaitSeconds <= 0.0
+            || $lockWaitSeconds > self::MAX_LOCK_WAIT_SECONDS
+        ) {
+            throw new \InvalidArgumentException(
+                'Runtime dependency lock wait must be within (0, 300] seconds.'
+            );
+        }
+        $this->lockWaitSeconds = $lockWaitSeconds;
+    }
 
     /**
      * @param array<int|string, mixed> $args
@@ -75,6 +94,21 @@ final class RuntimeDependencyBootstrapper
                 'failed',
                 (string)__('Direct shared_fd 需要 proc_open/proc_get_status、POSIX 进程控制和可枚举的继承描述符；当前 PHP/系统不满足。')
             );
+        }
+
+        if ($installRequested && $posix && $this->canUseEvent()) {
+            $eventRecovery = $this->configureEventExtensionForRuntime();
+            if (($eventRecovery['status'] ?? 'failed') !== 'ready') {
+                return [
+                    'status' => 'failed',
+                    'message' => (string)($eventRecovery['message']
+                        ?? 'ext-event ini 崩溃恢复失败。'),
+                    'restart_required' => false,
+                    'output' => (string)($eventRecovery['diagnostics']
+                        ?? $eventRecovery['message']
+                        ?? ''),
+                ];
+            }
         }
 
         $opensslReady = !$sslRequired || $this->canUseOpenSsl();
@@ -139,9 +173,14 @@ final class RuntimeDependencyBootstrapper
                         (string)__('本次显式 OpenSSL 安装后当前 Windows PHP 二进制仍无法加载该扩展；已拒绝重复安装循环。')
                     );
                 }
-                $lock = $this->acquireInstallLock();
+                $installLock = $this->acquireInstallLock();
+                $lock = $installLock['handle'];
                 if ($lock === null) {
-                    return $this->result('failed', (string)__('无法获取 WLS 运行时依赖安装锁；HTTPS 已拒绝启动。'));
+                    return $this->result(
+                        'failed',
+                        (string)__('无法获取 WLS 运行时依赖安装锁；HTTPS 已拒绝启动。')
+                            . ' ' . $installLock['error'],
+                    );
                 }
                 try {
                     if (!$this->freshPhpCanUseOpenSsl()) {
@@ -197,11 +236,13 @@ final class RuntimeDependencyBootstrapper
                 );
             }
 
-            $lock = $this->acquireInstallLock();
+            $installLock = $this->acquireInstallLock();
+            $lock = $installLock['handle'];
             if ($lock === null) {
                 return $this->result(
                     'platform_optimal',
                     (string)__('无法获取 Windows event 安装锁；WLS 将使用稳定的 Dispatcher + stream/select 运行时。')
+                        . ' ' . $installLock['error'],
                 );
             }
 
@@ -287,18 +328,21 @@ final class RuntimeDependencyBootstrapper
                 );
         }
 
-        $lock = $this->acquireInstallLock();
+        $installLock = $this->acquireInstallLock();
+        $lock = $installLock['handle'];
         if ($lock === null) {
             return ($direct || !$opensslReady)
                 ? $this->result(
                     'failed',
-                    $direct
+                    ($direct
                         ? (string)__('无法获取 WLS 运行时依赖安装锁；Direct 已拒绝启动。')
-                        : (string)__('无法获取 WLS 运行时依赖安装锁；HTTPS/OpenSSL 已拒绝启动。')
+                        : (string)__('无法获取 WLS 运行时依赖安装锁；HTTPS/OpenSSL 已拒绝启动。'))
+                        . ' ' . $installLock['error'],
                 )
                 : $this->result(
                     'platform_optimal',
                     (string)__('Dispatcher 无法获取可选 ext-event 安装锁；继续使用有界 stream_select。')
+                        . ' ' . $installLock['error'],
                 );
         }
 
@@ -402,6 +446,11 @@ final class RuntimeDependencyBootstrapper
     private const EVENT_MANAGED_MARKER = '; Managed by WLS 2.0 explicit --install-deps';
     private const EVENT_CHILD_TIMEOUT_SECONDS = 15;
     private const EVENT_MAX_CAPTURE_BYTES = 262144;
+    private const EVENT_STAGING_PREFIX = '.wls-event-staging-';
+    private const EVENT_BACKUP_PREFIX = '.wls-event-backup-';
+    private const EVENT_LEGACY_TEMP_PREFIX = '.wls-event-';
+    private const EVENT_MAX_RECOVERY_FILES_PER_KIND = 8;
+    private const EVENT_MAX_RECOVERY_DIRECTORY_ENTRIES = 256;
 
     /**
      * Atomically enables an installed ext-event for the current POSIX CLI.
@@ -426,6 +475,16 @@ final class RuntimeDependencyBootstrapper
             && ($runtime['event_base_available'] ?? false) === true
             && ($runtime['event_buffer_available'] ?? false) === true
         ) {
+            $recovery = $this->recoverLoadedEventPublications($runtime);
+            if (!$recovery['ok']) {
+                return $this->eventConfigurationResult(
+                    'failed',
+                    false,
+                    '已加载 ext-event，但 ini 崩溃恢复制品不安全或无法回收。',
+                    $diagnostics,
+                    $recovery['target'],
+                );
+            }
             return $this->eventConfigurationResult('ready', false, 'ext-event 已加载，无需修改配置。', $diagnostics);
         }
 
@@ -447,22 +506,27 @@ final class RuntimeDependencyBootstrapper
         if (\is_link($target) || (\file_exists($target) && !\is_file($target))) {
             return $this->eventConfigurationResult('failed', false, 'WLS ext-event ini 目标不是安全普通文件。', $diagnostics, $target);
         }
-        if (\is_link($lockPath) || (\file_exists($lockPath) && !\is_file($lockPath))) {
-            return $this->eventConfigurationResult('failed', false, 'WLS ext-event 配置锁不是安全普通文件。', $diagnostics, $target);
+        $eventLock = $this->acquireExclusiveRuntimeLock(
+            $lockPath,
+            'WLS ext-event 配置锁',
+        );
+        $lock = $eventLock['handle'];
+        if ($lock === null) {
+            return $this->eventConfigurationResult(
+                'failed',
+                false,
+                $eventLock['error'],
+                $diagnostics,
+                $target,
+            );
         }
-
-        $lock = @\fopen($lockPath, 'c+b');
-        if (!\is_resource($lock)) {
-            return $this->eventConfigurationResult('failed', false, '无法创建 WLS ext-event 配置锁。', $diagnostics, $target);
-        }
-        @\chmod($lockPath, 0600);
 
         try {
-            if (!@\flock($lock, \LOCK_EX)) {
-                return $this->eventConfigurationResult('failed', false, '无法独占 WLS ext-event 配置锁。', $diagnostics, $target);
-            }
             if (!$this->openedEventFileMatchesPath($lock, $lockPath)) {
                 return $this->eventConfigurationResult('failed', false, 'WLS ext-event 配置锁在打开期间发生身份变化。', $diagnostics, $target);
+            }
+            if (!$this->recoverEventIniPublication($target)) {
+                return $this->eventConfigurationResult('failed', false, 'WLS ext-event ini 崩溃恢复制品不安全或已超出固定配额。', $diagnostics, $target);
             }
             if (\is_link($target) || (\file_exists($target) && !\is_file($target))) {
                 return $this->eventConfigurationResult('failed', false, 'WLS ext-event ini 目标在加锁后不再安全。', $diagnostics, $target);
@@ -495,7 +559,7 @@ final class RuntimeDependencyBootstrapper
                 if ($changed) {
                     $rollbackOk = $previousExists
                         ? $this->atomicPublishEventIni($target, (string)$previousContent)
-                        : (!\file_exists($target) || @\unlink($target));
+                        : $this->removePublishedEventIni($target);
                 }
                 $probeDetail = \trim((string)($probe['stderr'] ?? '') . ' ' . (string)($probe['output'] ?? ''));
                 $failureDiagnostics = $diagnostics
@@ -626,60 +690,699 @@ final class RuntimeDependencyBootstrapper
     private function atomicPublishEventIni(string $target, string $content): bool
     {
         $directory = \dirname($target);
-        if (!$this->isSafeEventDirectory($directory) || \is_link($target)) {
+        if (!$this->isSafeEventDirectory($directory)
+            || \is_link($target)
+            || \strlen($content) > self::MAX_EVENT_INI_BYTES
+            || !\str_contains($content, self::EVENT_MANAGED_MARKER)
+            || !$this->recoverEventIniPublication($target)
+        ) {
             return false;
         }
-        $temporary = @\tempnam($directory, '.wls-event-');
-        if (!\is_string($temporary) || $temporary === '' || \dirname($temporary) !== $directory || \is_link($temporary)) {
+        $directoryIdentity = @\lstat($directory);
+        $targetBefore = $this->eventManagedTargetSnapshot($target, $directoryIdentity);
+        if (!\is_array($directoryIdentity)
+            || $targetBefore === false
+            || ($targetBefore['exists'] && !$targetBefore['valid'])
+        ) {
             return false;
         }
 
+        $temporary = $this->allocateEventRecoveryPath(
+            $directory,
+            self::EVENT_STAGING_PREFIX,
+            12,
+        );
+        if ($temporary === null) {
+            return false;
+        }
+        $handle = @\fopen($temporary, 'x+b');
+        if (!\is_resource($handle)) {
+            return false;
+        }
+        $temporaryIdentity = null;
+        $backup = null;
+        $backupIdentity = null;
         try {
-            $written = @\file_put_contents($temporary, $content, \LOCK_EX);
-            if ($written !== \strlen($content) || !@\chmod($temporary, 0600)) {
+            $temporaryIdentity = $this->sealedEventStagingIdentity(
+                $handle,
+                $temporary,
+                $directoryIdentity,
+                $content,
+            );
+            if ($temporaryIdentity === null) {
                 return false;
             }
-            $handle = @\fopen($temporary, 'rb');
-            if (\is_resource($handle)) {
-                if (\function_exists('fsync')) {
-                    @\fsync($handle);
+            @\fclose($handle);
+            $handle = null;
+
+            $publicationArtifacts = $this->eventPublicationArtifacts($directory);
+            if (!\is_array($publicationArtifacts)
+                || \count($publicationArtifacts) !== 1
+                || !isset($publicationArtifacts[$temporary])
+                || !$this->sameEventPublicationState(
+                    $temporaryIdentity,
+                    $publicationArtifacts[$temporary]['identity'],
+                )
+                || !$this->sameEventDirectoryIdentity($directory, $directoryIdentity)
+            ) {
+                return false;
+            }
+
+            $currentTarget = $this->eventManagedTargetSnapshot($target, $directoryIdentity);
+            if ($currentTarget === false
+                || $currentTarget['exists'] !== $targetBefore['exists']
+                || ($currentTarget['exists']
+                    && !$this->sameEventPublicationState(
+                        $targetBefore['identity'],
+                        $currentTarget['identity'],
+                    ))
+            ) {
+                return false;
+            }
+
+            if ($targetBefore['exists']) {
+                $backup = $this->allocateEventRecoveryPath(
+                    $directory,
+                    self::EVENT_BACKUP_PREFIX,
+                    8,
+                );
+                if ($backup === null
+                    || !@\rename($target, $backup)
+                ) {
+                    return false;
                 }
+                $backupIdentity = @\lstat($backup);
+                if (!\is_array($backupIdentity)
+                    || !$this->sameEventPublicationState(
+                        $targetBefore['identity'],
+                        $backupIdentity,
+                    )
+                    || !$this->sameEventDirectoryIdentity($directory, $directoryIdentity)
+                ) {
+                    return false;
+                }
+            }
+
+            if (!@\rename($temporary, $target)) {
+                if (\is_string($backup)
+                    && \is_array($backupIdentity)
+                    && !\file_exists($target)
+                    && !\is_link($target)
+                    && $this->eventPathHasIdentity($backup, $backupIdentity)
+                ) {
+                    @\rename($backup, $target);
+                }
+                return false;
+            }
+            $temporary = '';
+            $published = $this->eventManagedTargetSnapshot($target, $directoryIdentity);
+            if ($published === false
+                || !$published['exists']
+                || !$published['valid']
+                || !\hash_equals($content, $published['content'])
+                || !$this->sameEventPublicationState(
+                    $temporaryIdentity,
+                    $published['identity'],
+                )
+            ) {
+                return false;
+            }
+            if (\is_string($backup)
+                && \is_array($backupIdentity)
+                && !$this->removeEventRecoveryArtifact($backup, $backupIdentity)
+            ) {
+                return false;
+            }
+            $backup = null;
+            return $this->sameEventDirectoryIdentity($directory, $directoryIdentity);
+        } finally {
+            if (\is_resource($handle)) {
                 @\fclose($handle);
             }
-            if (\is_link($target) || (\file_exists($target) && !\is_file($target))) {
-                return false;
-            }
-            if (!@\rename($temporary, $target)) {
-                return false;
-            }
-            @\chmod($target, 0600);
-            return $this->isSafeEventRegularFile($target);
-        } finally {
-            if (\is_file($temporary) || \is_link($temporary)) {
+            if ($temporary !== ''
+                && \is_array($temporaryIdentity)
+                && $this->eventPathHasIdentity($temporary, $temporaryIdentity)
+            ) {
                 @\unlink($temporary);
             }
         }
     }
 
-    private function readBoundedEventIni(string $target): string|false
+    /**
+     * Reconciles publication artifacts while the caller owns EVENT_LOCK_NAME.
+     * A committed managed target wins. If the target is missing, one stable
+     * previous-generation backup is restored before uncommitted staging and
+     * legacy tempnam files are collected. Unsafe or ambiguous evidence is
+     * preserved in full and the explicit install fails closed.
+     */
+    private function recoverEventIniPublication(string $target): bool
     {
-        if (!$this->isSafeEventRegularFile($target)) {
+        $directory = \dirname($target);
+        if (!$this->isSafeEventDirectory($directory)) {
             return false;
         }
-        $handle = @\fopen($target, 'rb');
-        if (!\is_resource($handle) || !$this->openedEventFileMatchesPath($handle, $target)) {
-            if (\is_resource($handle)) {
-                @\fclose($handle);
+        $directoryIdentity = @\lstat($directory);
+        if (!\is_array($directoryIdentity)) {
+            return false;
+        }
+        $artifacts = $this->eventPublicationArtifacts($directory);
+        if (!\is_array($artifacts)) {
+            return false;
+        }
+        if ($artifacts === []) {
+            return true;
+        }
+
+        $targetSnapshot = $this->eventManagedTargetSnapshot(
+            $target,
+            $directoryIdentity,
+        );
+        if ($targetSnapshot === false
+            || ($targetSnapshot['exists'] && !$targetSnapshot['valid'])
+        ) {
+            return false;
+        }
+        $backups = \array_filter(
+            $artifacts,
+            static fn (array $artifact): bool => $artifact['kind'] === 'backup',
+        );
+        if (!$targetSnapshot['exists'] && \count($backups) > 1) {
+            $backupDigests = [];
+            foreach ($backups as $artifact) {
+                $backupDigests[] = \hash('sha256', $artifact['content']);
             }
+            if (\count(\array_unique($backupDigests, SORT_STRING)) !== 1) {
+                return false;
+            }
+        }
+
+        $rechecked = $this->eventPublicationArtifacts($directory);
+        $targetRechecked = $this->eventManagedTargetSnapshot(
+            $target,
+            $directoryIdentity,
+        );
+        if (!\is_array($rechecked)
+            || $targetRechecked === false
+            || !$this->sameEventArtifactInventory($artifacts, $rechecked)
+            || !$this->sameEventManagedTargetSnapshot(
+                $targetSnapshot,
+                $targetRechecked,
+            )
+            || !$this->sameEventDirectoryIdentity($directory, $directoryIdentity)
+        ) {
+            return false;
+        }
+
+        $restoredPath = null;
+        if (!$targetSnapshot['exists'] && $backups !== []) {
+            $restoredPath = (string)\array_key_first($backups);
+            $restored = $backups[$restoredPath];
+            if (\file_exists($target)
+                || \is_link($target)
+                || !$this->eventPathHasIdentity(
+                    $restoredPath,
+                    $restored['identity'],
+                )
+                || !@\rename($restoredPath, $target)
+            ) {
+                return false;
+            }
+            $restoredTarget = $this->eventManagedTargetSnapshot(
+                $target,
+                $directoryIdentity,
+            );
+            if ($restoredTarget === false
+                || !$restoredTarget['exists']
+                || !$restoredTarget['valid']
+                || !$this->sameEventPublicationState(
+                    $restored['identity'],
+                    $restoredTarget['identity'],
+                )
+            ) {
+                return false;
+            }
+        }
+
+        foreach ($artifacts as $path => $artifact) {
+            if ($path === $restoredPath) {
+                continue;
+            }
+            if (!$this->sameEventDirectoryIdentity($directory, $directoryIdentity)
+                || !$this->removeEventRecoveryArtifact(
+                    $path,
+                    $artifact['identity'],
+                )
+            ) {
+                return false;
+            }
+        }
+        return $this->sameEventDirectoryIdentity($directory, $directoryIdentity)
+            && $this->eventPublicationArtifacts($directory) === [];
+    }
+
+    /**
+     * A process may already have loaded event from the still-valid old target
+     * when an earlier publisher crashed before switching its staging file.
+     * Explicit --install-deps must therefore reconcile retained artifacts
+     * before the ordinary ready return, without touching clean scan dirs.
+     *
+     * @param array<string,mixed> $runtime
+     * @return array{ok:bool,target:?string}
+     */
+    private function recoverLoadedEventPublications(array $runtime): array
+    {
+        $visited = [];
+        foreach ((array)($runtime['scan_dirs'] ?? []) as $candidate) {
+            if (!\is_string($candidate) || $candidate === '') {
+                continue;
+            }
+            $directory = \rtrim($candidate, '/\\');
+            if ($directory === ''
+                || isset($visited[$directory])
+                || !$this->isSafeEventDirectory($directory)
+            ) {
+                continue;
+            }
+            $visited[$directory] = true;
+            $target = $directory . DIRECTORY_SEPARATOR . self::EVENT_INI_NAME;
+            $artifacts = $this->eventPublicationArtifacts($directory);
+            if (!\is_array($artifacts)) {
+                return ['ok' => false, 'target' => $target];
+            }
+            if ($artifacts === []) {
+                continue;
+            }
+            if (!\is_writable($directory)) {
+                return ['ok' => false, 'target' => $target];
+            }
+
+            $lockPath = $directory . DIRECTORY_SEPARATOR . self::EVENT_LOCK_NAME;
+            $eventLock = $this->acquireExclusiveRuntimeLock(
+                $lockPath,
+                'WLS ext-event 配置锁',
+            );
+            $lock = $eventLock['handle'];
+            if ($lock === null) {
+                return ['ok' => false, 'target' => $target];
+            }
+            try {
+                if (!$this->openedEventFileMatchesPath($lock, $lockPath)
+                    || !$this->recoverEventIniPublication($target)
+                ) {
+                    return ['ok' => false, 'target' => $target];
+                }
+            } finally {
+                @\flock($lock, LOCK_UN);
+                @\fclose($lock);
+            }
+        }
+        return ['ok' => true, 'target' => null];
+    }
+
+    /**
+     * @return array<string,array{kind:'legacy'|'staging'|'backup',identity:array<string|int,mixed>,content:string}>|false
+     */
+    private function eventPublicationArtifacts(string $directory): array|false
+    {
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            return false;
+        }
+        $artifacts = [];
+        $counts = ['legacy' => 0, 'staging' => 0, 'backup' => 0];
+        $visited = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if (++$visited > self::EVENT_MAX_RECOVERY_DIRECTORY_ENTRIES) {
+                    return false;
+                }
+                $folded = \strtolower($leaf);
+                if (!\str_starts_with(
+                    $folded,
+                    self::EVENT_LEGACY_TEMP_PREFIX,
+                )) {
+                    continue;
+                }
+                if (!\str_starts_with(
+                    $leaf,
+                    self::EVENT_LEGACY_TEMP_PREFIX,
+                )) {
+                    return false;
+                }
+                $kind = null;
+                if (\preg_match('/\A\.wls-event-staging-[a-f0-9]{24}\z/D', $leaf) === 1) {
+                    $kind = 'staging';
+                } elseif (\preg_match('/\A\.wls-event-backup-[a-f0-9]{16}\z/D', $leaf) === 1) {
+                    $kind = 'backup';
+                } elseif (\preg_match('/\A\.wls-event-(?:[A-Za-z0-9]{6}|[A-Za-z0-9]{20})\z/D', $leaf) === 1) {
+                    $kind = 'legacy';
+                } else {
+                    return false;
+                }
+                if (++$counts[$kind] > self::EVENT_MAX_RECOVERY_FILES_PER_KIND) {
+                    return false;
+                }
+                $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                $inspected = $this->inspectEventRecoveryArtifact(
+                    $path,
+                    $directory,
+                    $kind === 'backup',
+                );
+                if ($inspected === false) {
+                    return false;
+                }
+                $artifacts[$path] = [
+                    'kind' => $kind,
+                    'identity' => $inspected['identity'],
+                    'content' => $inspected['content'],
+                ];
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        \ksort($artifacts, SORT_STRING);
+        return $artifacts;
+    }
+
+    /** @return array{identity:array<string|int,mixed>,content:string}|false */
+    private function inspectEventRecoveryArtifact(
+        string $path,
+        string $directory,
+        bool $mustBeManaged,
+    ): array|false {
+        $directoryIdentity = @\lstat($directory);
+        $before = @\lstat($path);
+        if (!\is_array($directoryIdentity)
+            || !\is_array($before)
+            || !$this->isSafeEventPublicationFileStatus(
+                $before,
+                $directoryIdentity,
+            )
+            || (int)($before['size'] ?? -1) < 0
+            || (int)($before['size'] ?? -1) > self::MAX_EVENT_INI_BYTES
+        ) {
+            return false;
+        }
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
             return false;
         }
         try {
-            $content = @\stream_get_contents($handle, self::MAX_EVENT_INI_BYTES + 1);
+            $opened = @\fstat($handle);
+            $named = @\lstat($path);
+            if (!\is_array($opened)
+                || !\is_array($named)
+                || !$this->sameEventPublicationState($before, $opened)
+                || !$this->sameEventPublicationState($opened, $named)
+            ) {
+                return false;
+            }
+            $content = @\stream_get_contents(
+                $handle,
+                self::MAX_EVENT_INI_BYTES + 1,
+            );
+            $after = @\lstat($path);
+            if (!\is_string($content)
+                || \strlen($content) > self::MAX_EVENT_INI_BYTES
+                || !\is_array($after)
+                || !$this->sameEventPublicationState($named, $after)
+                || ($mustBeManaged
+                    && !\str_contains($content, self::EVENT_MANAGED_MARKER))
+            ) {
+                return false;
+            }
+            return ['identity' => $after, 'content' => $content];
         } finally {
             @\fclose($handle);
         }
-        return \is_string($content) && \strlen($content) <= self::MAX_EVENT_INI_BYTES
-            ? $content
+    }
+
+    /** @return array{exists:bool,valid:bool,identity:array<string|int,mixed>,content:string}|false */
+    private function eventManagedTargetSnapshot(
+        string $target,
+        mixed $directoryIdentity,
+    ): array|false {
+        if (!\is_array($directoryIdentity)) {
+            return false;
+        }
+        $before = @\lstat($target);
+        if (!\is_array($before)) {
+            return \file_exists($target) || \is_link($target)
+                ? false
+                : ['exists' => false, 'valid' => false, 'identity' => [], 'content' => ''];
+        }
+        if (!$this->isSafeEventPublicationFileStatus(
+            $before,
+            $directoryIdentity,
+        ) || (int)($before['size'] ?? -1) < 0
+            || (int)($before['size'] ?? -1) > self::MAX_EVENT_INI_BYTES
+        ) {
+            return false;
+        }
+        $handle = @\fopen($target, 'rb');
+        if (!\is_resource($handle)) {
+            return false;
+        }
+        try {
+            $opened = @\fstat($handle);
+            $named = @\lstat($target);
+            $content = @\stream_get_contents(
+                $handle,
+                self::MAX_EVENT_INI_BYTES + 1,
+            );
+            $after = @\lstat($target);
+            if (!\is_array($opened)
+                || !\is_array($named)
+                || !\is_array($after)
+                || !\is_string($content)
+                || \strlen($content) > self::MAX_EVENT_INI_BYTES
+                || !$this->sameEventPublicationState($before, $opened)
+                || !$this->sameEventPublicationState($opened, $named)
+                || !$this->sameEventPublicationState($named, $after)
+            ) {
+                return false;
+            }
+            return [
+                'exists' => true,
+                'valid' => \str_contains($content, self::EVENT_MANAGED_MARKER),
+                'identity' => $after,
+                'content' => $content,
+            ];
+        } finally {
+            @\fclose($handle);
+        }
+    }
+
+    /** @param resource $handle @param array<string|int,mixed> $directoryIdentity @return array<string|int,mixed>|null */
+    private function sealedEventStagingIdentity(
+        $handle,
+        string $path,
+        array $directoryIdentity,
+        string $content,
+    ): ?array {
+        $created = @\fstat($handle);
+        $named = @\lstat($path);
+        if (!\is_array($created)
+            || !\is_array($named)
+            || !$this->sameEventPublicationState($created, $named)
+            || !$this->isSafeEventPublicationFileStatus(
+                $created,
+                $directoryIdentity,
+            )
+            || @\fseek($handle, 0) !== 0
+        ) {
+            return null;
+        }
+        $length = \strlen($content);
+        $offset = 0;
+        while ($offset < $length) {
+            $written = @\fwrite($handle, \substr($content, $offset));
+            if (!\is_int($written) || $written < 1) {
+                return null;
+            }
+            $offset += $written;
+        }
+        if (!@\fflush($handle)
+            || (\function_exists('fsync') && !@\fsync($handle))
+            || (\function_exists('fchmod')
+                ? !@\fchmod($handle, 0600)
+                : !@\chmod($path, 0600))
+        ) {
+            return null;
+        }
+        $sealed = @\fstat($handle);
+        $sealedNamed = @\lstat($path);
+        return \is_array($sealed)
+            && \is_array($sealedNamed)
+            && $this->sameEventPublicationState($sealed, $sealedNamed)
+            && $this->isSafeEventPublicationFileStatus(
+                $sealed,
+                $directoryIdentity,
+            )
+            && (int)($sealed['size'] ?? -1) === $length
+            && (PHP_OS_FAMILY === 'Windows'
+                || (((int)($sealed['mode'] ?? 0)) & 0777) === 0600)
+            ? $sealed
+            : null;
+    }
+
+    private function allocateEventRecoveryPath(
+        string $directory,
+        string $prefix,
+        int $randomBytes,
+    ): ?string {
+        $artifacts = $this->eventPublicationArtifacts($directory);
+        if (!\is_array($artifacts)) {
+            return null;
+        }
+        $kind = $prefix === self::EVENT_BACKUP_PREFIX ? 'backup' : 'staging';
+        $count = \count(\array_filter(
+            $artifacts,
+            static fn (array $artifact): bool => $artifact['kind'] === $kind,
+        ));
+        if ($count >= self::EVENT_MAX_RECOVERY_FILES_PER_KIND) {
+            return null;
+        }
+        for ($attempt = 0; $attempt < 8; ++$attempt) {
+            $path = $directory . DIRECTORY_SEPARATOR . $prefix
+                . \bin2hex(\random_bytes($randomBytes));
+            if (!\file_exists($path) && !\is_link($path)) {
+                return $path;
+            }
+        }
+        return null;
+    }
+
+    /** @param array<string|int,mixed> $directoryIdentity */
+    private function isSafeEventPublicationFileStatus(
+        array $status,
+        array $directoryIdentity,
+    ): bool {
+        return (((int)($status['mode'] ?? 0)) & 0170000) === 0100000
+            && (int)($status['nlink'] ?? 0) === 1
+            && (PHP_OS_FAMILY === 'Windows'
+                || ((int)($status['uid'] ?? -1) === (int)($directoryIdentity['uid'] ?? -2)
+                    && (int)($status['gid'] ?? -1) === (int)($directoryIdentity['gid'] ?? -2)));
+    }
+
+    /** @param array<string|int,mixed> $left @param array<string|int,mixed> $right */
+    private function sameEventPublicationState(array $left, array $right): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'uid', 'gid'] as $key) {
+            if ((int)($left[$key] ?? -1) !== (int)($right[$key] ?? -2)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** @param array<string|int,mixed> $identity */
+    private function eventPathHasIdentity(string $path, array $identity): bool
+    {
+        $current = @\lstat($path);
+        return \is_array($current)
+            && $this->sameEventPublicationState($identity, $current);
+    }
+
+    /** @param array<string|int,mixed> $directoryIdentity */
+    private function sameEventDirectoryIdentity(
+        string $directory,
+        array $directoryIdentity,
+    ): bool {
+        $current = @\lstat($directory);
+        return \is_array($current)
+            && $this->sameRuntimeFileIdentity($directoryIdentity, $current)
+            && (((int)($current['mode'] ?? 0)) & 0170000) === 0040000
+            && (((int)($current['mode'] ?? 0)) & 07777)
+                === (((int)($directoryIdentity['mode'] ?? -1)) & 07777)
+            && (PHP_OS_FAMILY === 'Windows'
+                || ((int)($current['uid'] ?? -1) === (int)($directoryIdentity['uid'] ?? -2)
+                    && (int)($current['gid'] ?? -1) === (int)($directoryIdentity['gid'] ?? -2)));
+    }
+
+    /**
+     * @param array<string,array{kind:string,identity:array<string|int,mixed>,content:string}> $left
+     * @param array<string,array{kind:string,identity:array<string|int,mixed>,content:string}> $right
+     */
+    private function sameEventArtifactInventory(array $left, array $right): bool
+    {
+        if (\array_keys($left) !== \array_keys($right)) {
+            return false;
+        }
+        foreach ($left as $path => $artifact) {
+            $current = $right[$path] ?? null;
+            if (!\is_array($current)
+                || !\hash_equals($artifact['kind'], $current['kind'])
+                || !\hash_equals($artifact['content'], $current['content'])
+                || !$this->sameEventPublicationState(
+                    $artifact['identity'],
+                    $current['identity'],
+                )
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @param array{exists:bool,valid:bool,identity:array<string|int,mixed>,content:string} $left
+     * @param array{exists:bool,valid:bool,identity:array<string|int,mixed>,content:string} $right
+     */
+    private function sameEventManagedTargetSnapshot(array $left, array $right): bool
+    {
+        return $left['exists'] === $right['exists']
+            && $left['valid'] === $right['valid']
+            && \hash_equals($left['content'], $right['content'])
+            && (!$left['exists']
+                || $this->sameEventPublicationState(
+                    $left['identity'],
+                    $right['identity'],
+                ));
+    }
+
+    /** @param array<string|int,mixed> $identity */
+    private function removeEventRecoveryArtifact(
+        string $path,
+        array $identity,
+    ): bool {
+        if (!$this->eventPathHasIdentity($path, $identity)
+            || !@\unlink($path)
+        ) {
+            return false;
+        }
+        \clearstatcache(true, $path);
+        return !\file_exists($path) && !\is_link($path);
+    }
+
+    private function removePublishedEventIni(string $target): bool
+    {
+        if (!\file_exists($target) && !\is_link($target)) {
+            return true;
+        }
+        $directory = \dirname($target);
+        $directoryIdentity = @\lstat($directory);
+        $snapshot = $this->eventManagedTargetSnapshot($target, $directoryIdentity);
+        return \is_array($directoryIdentity)
+            && \is_array($snapshot)
+            && $snapshot['exists']
+            && $snapshot['valid']
+            && $this->sameEventDirectoryIdentity($directory, $directoryIdentity)
+            && $this->removeEventRecoveryArtifact(
+                $target,
+                $snapshot['identity'],
+            );
+    }
+
+    private function readBoundedEventIni(string $target): string|false
+    {
+        $directoryIdentity = @\lstat(\dirname($target));
+        $snapshot = $this->eventManagedTargetSnapshot(
+            $target,
+            $directoryIdentity,
+        );
+        return \is_array($snapshot) && $snapshot['exists']
+            ? $snapshot['content']
             : false;
     }
 
@@ -928,25 +1631,342 @@ PHP;
             . ' ' . $architecture . ' ' . $threadSafety . ' ' . $debug;
     }
 
-    /**
-     * @return resource|null
-     */
-    private function acquireInstallLock(): mixed
+    /** @return array{handle:resource|null,error:string} */
+    private function acquireInstallLock(): array
     {
         $directory = Env::VAR_DIR . 'server' . DS . 'locks';
-        if (!\is_dir($directory) && !@\mkdir($directory, 0755, true) && !\is_dir($directory)) {
-            return null;
+        if (!$this->ensureSafeRuntimeLockDirectory($directory)) {
+            return [
+                'handle' => null,
+                'error' => 'WLS 运行时依赖安装锁目录不是无符号链接的安全绝对路径。',
+            ];
         }
 
-        $handle = @\fopen($directory . DS . 'runtime_dependency_install.lock', 'c+');
-        if (!\is_resource($handle) || !@\flock($handle, \LOCK_EX)) {
-            if (\is_resource($handle)) {
-                @\fclose($handle);
+        return $this->acquireExclusiveRuntimeLock(
+            $directory . DS . 'runtime_dependency_install.lock',
+            'WLS 运行时依赖安装锁',
+        );
+    }
+
+    private function ensureSafeRuntimeLockDirectory(string $directory): bool
+    {
+        $directory = \rtrim($directory, '/\\');
+        if ($directory === '') {
+            return false;
+        }
+        if ($this->runtimeLockDirectoryStatus($directory) !== null) {
+            return true;
+        }
+        if (\file_exists($directory) || \is_link($directory)) {
+            return false;
+        }
+
+        $missing = [];
+        $current = $directory;
+        while (!\is_dir($current)) {
+            if (\file_exists($current) || \is_link($current)) {
+                return false;
             }
-            return null;
+            $missing[] = $current;
+            if (\count($missing) > 32) {
+                return false;
+            }
+            $parent = \dirname($current);
+            if ($parent === $current) {
+                return false;
+            }
+            $current = $parent;
+        }
+        if ($this->runtimeLockDirectoryStatus($current) === null) {
+            return false;
         }
 
-        return $handle;
+        foreach (\array_reverse($missing) as $path) {
+            if (!@\mkdir($path, 0755) && !\is_dir($path)) {
+                return false;
+            }
+            if ($this->runtimeLockDirectoryStatus($path) === null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @return array<string|int,mixed>|null
+     */
+    private function runtimeLockDirectoryStatus(string $directory): ?array
+    {
+        if ($directory === '' || \is_link($directory) || !\is_dir($directory)) {
+            return null;
+        }
+        $real = \realpath($directory);
+        if (!\is_string($real)
+            || !$this->sameRuntimePath($real, $directory)
+        ) {
+            return null;
+        }
+        $status = @\lstat($directory);
+        if (!\is_array($status)
+            || (((int)$status['mode']) & 0170000) !== 0040000
+        ) {
+            return null;
+        }
+        return $status;
+    }
+
+    private function sameRuntimePath(string $left, string $right): bool
+    {
+        $normalize = static function (string $path): string {
+            if (PHP_OS_FAMILY === 'Windows') {
+                $path = \str_replace('/', '\\', $path);
+                if (\str_starts_with($path, '\\\\?\\UNC\\')) {
+                    $path = '\\\\' . \substr($path, 8);
+                } elseif (\str_starts_with($path, '\\\\?\\')) {
+                    $path = \substr($path, 4);
+                }
+                return \strtolower(\rtrim($path, '\\'));
+            }
+            $path = \rtrim($path, '/');
+            return $path === '' ? '/' : $path;
+        };
+
+        return \hash_equals($normalize($left), $normalize($right));
+    }
+
+    /** @return array{handle:resource|null,error:string} */
+    private function acquireExclusiveRuntimeLock(string $path, string $label): array
+    {
+        $directory = \dirname($path);
+        $directoryBefore = $this->runtimeLockDirectoryStatus($directory);
+        if ($directoryBefore === null) {
+            return [
+                'handle' => null,
+                'error' => $label . '目录不是无符号链接的安全绝对路径。',
+            ];
+        }
+        $deadline = $this->monotonicLockSeconds() + $this->lockWaitSeconds;
+        $handle = null;
+
+        for ($attempt = 0; $attempt < 8; ++$attempt) {
+            \clearstatcache(true, $path);
+            $before = @\lstat($path);
+            $created = false;
+            if (\is_array($before)) {
+                $unsafe = $this->runtimeLockStatusError(
+                    $before,
+                    $directoryBefore,
+                    $label,
+                );
+                if ($unsafe !== null) {
+                    return ['handle' => null, 'error' => $unsafe];
+                }
+                $handle = @\fopen($path, 'r+b');
+            } else {
+                if (\file_exists($path) || \is_link($path)) {
+                    return [
+                        'handle' => null,
+                        'error' => $label . '路径状态不确定，已拒绝跟随。',
+                    ];
+                }
+                $handle = @\fopen($path, 'x+b');
+                $created = \is_resource($handle);
+            }
+
+            if (!\is_resource($handle)) {
+                \clearstatcache(true, $path);
+                if ($before === false && \is_array(@\lstat($path))) {
+                    if ($this->monotonicLockSeconds() >= $deadline) {
+                        return [
+                            'handle' => null,
+                            'error' => $label . '等待超时。',
+                        ];
+                    }
+                    $this->pauseRuntimeLockRetry($deadline);
+                    continue;
+                }
+                return [
+                    'handle' => null,
+                    'error' => '无法以不跟随方式打开' . $label . '。',
+                ];
+            }
+
+            $opened = @\fstat($handle);
+            \clearstatcache(true, $path);
+            $named = @\lstat($path);
+            $directoryAfterOpen = $this->runtimeLockDirectoryStatus($directory);
+            $unsafe = \is_array($opened)
+                ? $this->runtimeLockStatusError($opened, $directoryBefore, $label)
+                : $label . '打开后无法读取文件身份。';
+            if ($unsafe === null && \is_array($named)) {
+                $unsafe = $this->runtimeLockStatusError(
+                    $named,
+                    $directoryBefore,
+                    $label,
+                );
+            }
+            if ($unsafe !== null
+                || !\is_array($opened)
+                || !\is_array($named)
+                || $directoryAfterOpen === null
+                || !$this->sameRuntimeFileIdentity($directoryBefore, $directoryAfterOpen)
+                || (!$created
+                    && (!\is_array($before)
+                        || !$this->sameRuntimeFileIdentity($before, $opened)))
+                || !$this->sameRuntimeFileIdentity($opened, $named)
+            ) {
+                @\fclose($handle);
+                return [
+                    'handle' => null,
+                    'error' => $unsafe ?? $label . '在打开期间发生路径身份变化。',
+                ];
+            }
+            break;
+        }
+
+        if (!\is_resource($handle)) {
+            return [
+                'handle' => null,
+                'error' => '无法稳定打开' . $label . '。',
+            ];
+        }
+
+        $locked = false;
+        do {
+            if (@\flock($handle, LOCK_EX | LOCK_NB)) {
+                $locked = true;
+                break;
+            }
+            if ($this->monotonicLockSeconds() >= $deadline) {
+                break;
+            }
+            $this->pauseRuntimeLockRetry($deadline);
+        } while (true);
+        if (!$locked) {
+            @\fclose($handle);
+            return ['handle' => null, 'error' => $label . '等待超时。'];
+        }
+
+        $openedAfterLock = @\fstat($handle);
+        \clearstatcache(true, $path);
+        $namedAfterLock = @\lstat($path);
+        $directoryAfterLock = $this->runtimeLockDirectoryStatus($directory);
+        $unsafe = \is_array($openedAfterLock)
+            ? $this->runtimeLockStatusError(
+                $openedAfterLock,
+                $directoryBefore,
+                $label,
+            )
+            : $label . '加锁后无法读取文件身份。';
+        if ($unsafe === null && \is_array($namedAfterLock)) {
+            $unsafe = $this->runtimeLockStatusError(
+                $namedAfterLock,
+                $directoryBefore,
+                $label,
+            );
+        }
+        if ($unsafe !== null
+            || !\is_array($openedAfterLock)
+            || !\is_array($namedAfterLock)
+            || $directoryAfterLock === null
+            || !$this->sameRuntimeFileIdentity($directoryBefore, $directoryAfterLock)
+            || !$this->sameRuntimeFileIdentity($openedAfterLock, $namedAfterLock)
+        ) {
+            @\flock($handle, LOCK_UN);
+            @\fclose($handle);
+            return [
+                'handle' => null,
+                'error' => $unsafe ?? $label . '加锁后发生路径身份变化。',
+            ];
+        }
+
+        $sealed = PHP_OS_FAMILY === 'Windows'
+            || (\function_exists('fchmod')
+                ? @\fchmod($handle, 0600)
+                : @\chmod($path, 0600));
+        $sealedOpened = @\fstat($handle);
+        \clearstatcache(true, $path);
+        $sealedNamed = @\lstat($path);
+        if (!$sealed
+            || !\is_array($sealedOpened)
+            || !\is_array($sealedNamed)
+            || !$this->sameRuntimeFileIdentity($sealedOpened, $sealedNamed)
+            || $this->runtimeLockStatusError(
+                $sealedOpened,
+                $directoryBefore,
+                $label,
+            ) !== null
+            || (PHP_OS_FAMILY !== 'Windows'
+                && (((int)$sealedOpened['mode']) & 0777) !== 0600)
+        ) {
+            @\flock($handle, LOCK_UN);
+            @\fclose($handle);
+            return [
+                'handle' => null,
+                'error' => '无法将' . $label . '封印为 0600 的单链接普通文件。',
+            ];
+        }
+
+        return ['handle' => $handle, 'error' => ''];
+    }
+
+    /**
+     * @param array<string|int,mixed> $status
+     * @param array<string|int,mixed> $directoryStatus
+     */
+    private function runtimeLockStatusError(
+        array $status,
+        array $directoryStatus,
+        string $label,
+    ): ?string {
+        if ((((int)($status['mode'] ?? 0)) & 0170000) !== 0100000
+            || (int)($status['nlink'] ?? 0) !== 1
+        ) {
+            return $label . '必须是单链接普通文件。';
+        }
+        if (PHP_OS_FAMILY !== 'Windows'
+            && ((int)($status['uid'] ?? -1) !== (int)($directoryStatus['uid'] ?? -2)
+                || (int)($status['gid'] ?? -1) !== (int)($directoryStatus['gid'] ?? -2))
+        ) {
+            return $label . '所有者与其目录不匹配。';
+        }
+        return null;
+    }
+
+    /**
+     * @param array<string|int,mixed> $left
+     * @param array<string|int,mixed> $right
+     */
+    private function sameRuntimeFileIdentity(array $left, array $right): bool
+    {
+        return (int)($left['dev'] ?? -1) === (int)($right['dev'] ?? -2)
+            && (int)($left['ino'] ?? -1) === (int)($right['ino'] ?? -2);
+    }
+
+    private function monotonicLockSeconds(): float
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException(
+                'Runtime dependency lock monotonic clock is invalid.'
+            );
+        }
+        return $now;
+    }
+
+    private function pauseRuntimeLockRetry(float $deadline): void
+    {
+        $remaining = $deadline - $this->monotonicLockSeconds();
+        if ($remaining <= 0.0) {
+            return;
+        }
+        @\usleep((int)\max(
+            1,
+            \min(
+                self::LOCK_RETRY_MICROSECONDS,
+                \ceil($remaining * 1_000_000),
+            ),
+        ));
     }
 
     private function resolveBinWPath(): string

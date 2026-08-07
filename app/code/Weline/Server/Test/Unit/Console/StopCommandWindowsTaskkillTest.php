@@ -13,98 +13,50 @@ use Weline\Server\Service\Contract\ServiceInstance;
 
 final class StopCommandWindowsTaskkillTest extends TestCase
 {
-    public function testTreeKillUsesBoundedTaskkillSequenceOnWindows(): void
+    public function testTreeKillHelperFailsClosedWithoutProtectedBirthLease(): void
     {
         $stop = new class extends Stop {
-            /** @var list<array{pid:int,tree:bool}> */
-            public array $calls = [];
-            private int $runningChecks = 0;
+            public int $taskkillCalls = 0;
 
             public function killTree(int $pid): bool
             {
                 return $this->queryKillManagedProcessTreeForStop($pid);
             }
 
-            protected function isWindowsPlatform(): bool
-            {
-                return true;
-            }
-
-            protected function isResidualPidStillOwnedByWls(int $pid): bool
-            {
-                return $pid === 18628;
-            }
-
             protected function executeWindowsTaskkillForStop(int $pid, bool $tree): int
             {
-                $this->calls[] = ['pid' => $pid, 'tree' => $tree];
+                unset($pid, $tree);
+                ++$this->taskkillCalls;
 
-                return 1;
-            }
-
-            protected function queryStopPidRunning(int $pid): bool
-            {
-                unset($pid);
-                $this->runningChecks++;
-
-                return $this->runningChecks < 4;
+                throw new \RuntimeException('numeric PID must never reach taskkill');
             }
         };
 
-        self::assertTrue($stop->killTree(18628));
-        self::assertSame(
-            [
-                ['pid' => 18628, 'tree' => true],
-            ],
-            $stop->calls
-        );
+        self::assertFalse($stop->killTree(18628));
+        self::assertSame(0, $stop->taskkillCalls);
     }
 
-    public function testSinglePidKillUsesDirectTaskkillOnWindows(): void
+    public function testSinglePidKillHelperFailsClosedWithoutProtectedBirthLease(): void
     {
         $stop = new class extends Stop {
-            /** @var list<array{pid:int,tree:bool}> */
-            public array $calls = [];
-            private int $runningChecks = 0;
+            public int $taskkillCalls = 0;
 
             public function killPid(int $pid): bool
             {
                 return $this->killWindowsProcessForStop($pid, false);
             }
 
-            protected function isWindowsPlatform(): bool
-            {
-                return true;
-            }
-
-            protected function isResidualPidStillOwnedByWls(int $pid): bool
-            {
-                return $pid === 15364;
-            }
-
             protected function executeWindowsTaskkillForStop(int $pid, bool $tree): int
             {
-                $this->calls[] = ['pid' => $pid, 'tree' => $tree];
+                unset($pid, $tree);
+                ++$this->taskkillCalls;
 
-                return 1;
-            }
-
-            protected function queryStopPidRunning(int $pid): bool
-            {
-                unset($pid);
-                $this->runningChecks++;
-
-                return $this->runningChecks < 2;
+                throw new \RuntimeException('numeric PID must never reach taskkill');
             }
         };
 
-        self::assertTrue($stop->killPid(15364));
-        self::assertSame(
-            [
-                ['pid' => 15364, 'tree' => false],
-            ],
-            $stop->calls
-        );
+        self::assertFalse($stop->killPid(15364));
+        self::assertSame(0, $stop->taskkillCalls);
     }
 
     public function testWindowsRootResolutionDoesNotQueryParentWrapperCommandLine(): void
@@ -153,7 +105,7 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         self::assertFalse($reflection->hasMethod('buildWindowsCmdWindowTitleListCommand'));
     }
 
-    public function testRecoverableKnownPortsCanIncludeOwnedSharedStateForBootstrapCleanup(): void
+    public function testRecoverableKnownPortsExcludeSharedStateFromInstancePortVerification(): void
     {
         $stop = new class extends Stop {
             public function ports(ServerInstanceInfo $info, bool $includeSharedState): array
@@ -184,7 +136,7 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         self::assertNotContains(26423, $stop->ports($info, true));
     }
 
-    public function testSharedStatePortCleanupRequiresLiveOwnerToMatchStoppedInstance(): void
+    public function testSharedStatePortsRemainOutsideInstancePortVerification(): void
     {
         $stop = new class extends Stop {
             /** @var array<int, array{in_use:bool,pid:int,pid_running:bool,is_weline:bool,state:string}> */

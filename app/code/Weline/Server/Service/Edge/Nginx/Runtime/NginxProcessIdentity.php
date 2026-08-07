@@ -492,8 +492,90 @@ final class NginxProcessIdentity
         $lockFile = $this->processManifest . '.lock';
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $lockFile,
-            static fn (): mixed => $operation(),
+            function () use ($operation): mixed {
+                $this->cleanupProcessManifestAtomicWriteRecoveryBackups();
+                return $operation();
+            },
             $this->directoryOwnershipSeal($directory),
+        );
+    }
+
+    /**
+     * The PID-bound manifest has one writer namespace: withLock(). Retained
+     * Windows replacement evidence is removed only when the current record is
+     * fully bound to the immutable install runtime.
+     */
+    private function cleanupProcessManifestAtomicWriteRecoveryBackups(): void
+    {
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $this->processManifest,
+            self::MAX_MANIFEST_BYTES,
+            'PID-bound Nginx process identity',
+            function (string $contents): void {
+                try {
+                    $record = \json_decode(
+                        $contents,
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR,
+                    );
+                } catch (\JsonException $exception) {
+                    throw new \RuntimeException(
+                        'PID-bound Nginx process identity recovery target is invalid.',
+                        0,
+                        $exception,
+                    );
+                }
+                if (!\is_array($record)
+                    || !\is_int($record['pid'] ?? null)
+                    || (int)$record['pid'] < 1
+                ) {
+                    throw new \RuntimeException(
+                        'PID-bound Nginx process identity recovery target is invalid.',
+                    );
+                }
+                $expected = $this->expectedRuntime();
+                if (($record['schema_version'] ?? null) === 1) {
+                    if ($this->legacyProcessRecordMatches(
+                        $record,
+                        (int)$record['pid'],
+                        $expected,
+                    )) {
+                        return;
+                    }
+                    throw new \RuntimeException(
+                        'Legacy PID-bound Nginx process identity recovery target is invalid.',
+                    );
+                }
+                $startIdentity = $record['process_start_identity'] ?? null;
+                if (($record['schema_version'] ?? null) !== self::SCHEMA_VERSION
+                    || !\is_string($startIdentity)
+                    || $startIdentity === ''
+                    || \strlen($startIdentity) > 512
+                    || \str_contains($startIdentity, "\0")
+                ) {
+                    throw new \RuntimeException(
+                        'PID-bound Nginx process identity recovery target is invalid.',
+                    );
+                }
+                foreach ([
+                    'role',
+                    'binary',
+                    'binary_sha256',
+                    'prefix',
+                    'config',
+                    'runtime_generation',
+                ] as $field) {
+                    if (!\is_string($record[$field] ?? null)
+                        || !\hash_equals((string)$expected[$field], (string)$record[$field])
+                    ) {
+                        throw new \RuntimeException(
+                            'PID-bound Nginx process identity recovery target field mismatch: '
+                                . $field,
+                        );
+                    }
+                }
+            },
         );
     }
 

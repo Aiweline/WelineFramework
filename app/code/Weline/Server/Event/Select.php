@@ -27,6 +27,11 @@ use Weline\Framework\Runtime\SchedulerSystem;
  */
 class Select implements EventInterface
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * 读事件回调
      * @var array
@@ -126,7 +131,7 @@ class Select implements EventInterface
                     'callback' => $callback,
                     'args' => $args,
                     'persistent' => $persistent,
-                    'next_run' => microtime(true) + $interval,
+                    'next_run' => self::monotonicSeconds() + $interval,
                 ];
                 
                 return $timerId;
@@ -303,7 +308,7 @@ class Select implements EventInterface
             return;
         }
         
-        $now = microtime(true);
+        $now = self::monotonicSeconds();
         $toDelete = [];
         
         foreach ($this->timers as $id => $timer) {
@@ -339,7 +344,7 @@ class Select implements EventInterface
             return 1.0; // 默认 1 秒
         }
         
-        $now = microtime(true);
+        $now = self::monotonicSeconds();
         $min = PHP_FLOAT_MAX;
         
         foreach ($this->timers as $timer) {

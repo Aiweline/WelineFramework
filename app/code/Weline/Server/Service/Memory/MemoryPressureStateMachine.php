@@ -47,7 +47,7 @@ final class MemoryPressureStateMachine
      */
     public function tick(array $sample, ?float $now = null): array
     {
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         $config = $this->loadConfig();
         $upgradeSamples = $this->positiveInt($config['upgrade_samples'] ?? null, 3);
         $greenRecoverRatio = $this->ratio($config['green_recover_ratio'] ?? null, 0.65);
@@ -139,24 +139,24 @@ final class MemoryPressureStateMachine
 
     public function markScaleDown(?float $now = null): void
     {
-        $this->lastScaleDownAt = $now ?? \microtime(true);
+        $this->lastScaleDownAt = $now ?? self::monotonicSeconds();
         $this->criticalHoldSamples = 0;
     }
 
     public function markRecover(?float $now = null): void
     {
-        $this->lastRecoverAt = $now ?? \microtime(true);
+        $this->lastRecoverAt = $now ?? self::monotonicSeconds();
         $this->greenStreak = 0;
     }
 
     public function markPlannedExit(?float $now = null): void
     {
-        $this->lastExitAt = $now ?? \microtime(true);
+        $this->lastExitAt = $now ?? self::monotonicSeconds();
     }
 
     public function canScheduleAnotherExit(?float $now = null, ?float $exitStaggerSec = null): bool
     {
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         $stagger = $exitStaggerSec ?? $this->positiveFloat(
             ($this->loadConfig()['exit_stagger_sec'] ?? null),
             20.0
@@ -285,5 +285,10 @@ final class MemoryPressureStateMachine
     {
         $v = $this->positiveFloat($value, $default);
         return \max(0.0, \min(1.0, $v));
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

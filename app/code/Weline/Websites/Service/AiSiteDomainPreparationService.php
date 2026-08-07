@@ -22,6 +22,7 @@ final class AiSiteDomainPreparationService
         private readonly LocalWelineHostsSyncService $hostsSyncService,
         private readonly LocalWelineWildcardCertificateService $certificateService,
         private readonly AiSiteWebsiteTargetResolver $websiteTargetResolver,
+        private readonly Website $website,
     ) {
     }
 
@@ -41,6 +42,12 @@ final class AiSiteDomainPreparationService
     {
         $mode = (string)$request->getData(AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE);
         $domain = \strtolower(\trim((string)$request->getData(AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN)));
+        $subPath = $this->normalizeSubPath(
+            (string)$request->getData(AiSiteProvisioningRequest::schema_fields_SUB_PATH)
+        );
+        if ($mode === AiSiteProvisioningRequest::DOMAIN_MODE_BIND) {
+            return $this->prepareBindExisting($request, $domain, $subPath);
+        }
         if ($mode === AiSiteProvisioningRequest::DOMAIN_MODE_TEST) {
             if (\preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain) !== 1) {
                 throw new AiSiteProvisioningException('TEST_DOMAIN_REQUIRED', (string)__('测试模式必须使用单标签 *.weline.test 域名。'));
@@ -78,8 +85,8 @@ final class AiSiteDomainPreparationService
                 );
             }
             $poolId = $this->persistLocalPool($domain);
-            $websiteId = $this->websiteTargetResolver->resolve($request, $domain);
-            $this->bindDomain($domain, $websiteId, $poolId, true);
+            $websiteId = $this->websiteTargetResolver->resolve($request, $domain, $subPath);
+            $this->bindDomain($domain, $subPath, $websiteId, $poolId, true);
 
             return [
                 'website_id' => $websiteId,
@@ -137,8 +144,8 @@ final class AiSiteDomainPreparationService
             );
         }
         $this->defaultWebsiteService->ensureDefaultWebsite(false);
-        $websiteId = $this->websiteTargetResolver->resolve($request, $domain);
-        $this->bindDomain($domain, $websiteId, 0, false);
+        $websiteId = $this->websiteTargetResolver->resolve($request, $domain, $subPath);
+        $this->bindDomain($domain, $subPath, $websiteId, 0, false);
 
         return [
             'website_id' => $websiteId,
@@ -163,6 +170,9 @@ final class AiSiteDomainPreparationService
     {
         $mode = (string)$request->getData(AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE);
         $domain = \strtolower(\trim((string)$request->getData(AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN)));
+        $subPath = $this->normalizeSubPath(
+            (string)$request->getData(AiSiteProvisioningRequest::schema_fields_SUB_PATH)
+        );
         if ($mode !== AiSiteProvisioningRequest::DOMAIN_MODE_TEST) {
             throw new AiSiteProvisioningException(
                 'DOMAIN_MODE_UNSUPPORTED',
@@ -174,8 +184,8 @@ final class AiSiteDomainPreparationService
         }
         $this->defaultWebsiteService->ensureDefaultWebsite(false);
         $poolId = $this->persistLocalPool($domain);
-        $websiteId = $this->websiteTargetResolver->resolve($request, $domain);
-        $this->bindDomain($domain, $websiteId, $poolId, true);
+        $websiteId = $this->websiteTargetResolver->resolve($request, $domain, $subPath);
+        $this->bindDomain($domain, $subPath, $websiteId, $poolId, true);
 
         // Publish still needs loopback resolution. Hosts is best-effort here so a
         // missing admin approval cannot undo an already-bound Website.
@@ -192,19 +202,116 @@ final class AiSiteDomainPreparationService
         ];
     }
 
-    public function isBound(string $domain, int $websiteId): bool
+    public function isBound(string $domain, int $websiteId, string $subPath = ''): bool
     {
         $domain = \strtolower(\trim($domain));
+        $subPath = $this->normalizeSubPath($subPath);
         if ($domain === '' || $websiteId < Website::ID_DEFAULT) {
             return false;
         }
 
         $binding = clone $this->websiteDomain;
-        $binding->clearData()->loadByDomainAndSubPath($domain, '');
+        $binding->clearData()->loadByDomainAndSubPath($domain, $subPath);
 
         return $binding->getDomainId() > 0
             && $binding->getWebsiteId() === $websiteId
             && $binding->getStatus() === WebsiteDomain::STATUS_ACTIVE;
+    }
+
+    /**
+     * Bind an already-owned pool domain (local or public) without purchase.
+     *
+     * @return array{
+     *     website_id:int,
+     *     purchase_order_id:int,
+     *     local_ready:bool,
+     *     availability:array<string,mixed>
+     * }
+     */
+    private function prepareBindExisting(
+        AiSiteProvisioningRequest $request,
+        string $domain,
+        string $subPath
+    ): array {
+        if ($domain === '') {
+            throw new AiSiteProvisioningException('TARGET_DOMAIN_REQUIRED', (string)__('目标域名格式无效。'));
+        }
+        $conflict = $this->websiteDomain->findConflict(
+            $domain,
+            $subPath,
+            $request->getRequestedWebsiteId()
+        );
+        if ($conflict !== null) {
+            throw new AiSiteProvisioningException(
+                'DOMAIN_PATH_CONFLICT',
+                (string)__(
+                    '目标地址 %{1} 已绑定到其他站点「%{2}」。',
+                    [$domain . $subPath, (string)($conflict['website_name'] ?? $conflict['website_id'])]
+                )
+            );
+        }
+
+        $this->defaultWebsiteService->ensureDefaultWebsite(false);
+        $pool = clone $this->domainPool;
+        $pool->clearData()->loadByDomain($domain);
+        $poolId = $pool->getPoolId() > 0 ? $pool->getPoolId() : 0;
+        $isLocal = ($poolId > 0 && $pool->isLocalServer())
+            || \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain) === 1;
+
+        if ($isLocal && $poolId <= 0) {
+            $poolId = $this->persistLocalPool($domain);
+        }
+
+        $localReady = false;
+        if ($isLocal) {
+            $hosts = $this->hostsSyncService->ensureHostsInjected($domain);
+            if (($hosts['success'] ?? false) !== true) {
+                if (($hosts['authorization_pending'] ?? false) === true) {
+                    return [
+                        'website_id' => 0,
+                        'purchase_order_id' => 0,
+                        'local_ready' => false,
+                        'availability' => [
+                            'domain' => $domain,
+                            'available' => true,
+                            'simulated' => true,
+                        ],
+                        'authorization_pending' => true,
+                        'authorization_already_started' =>
+                            ($hosts['authorization_already_started'] ?? false) === true,
+                        'message' => \trim((string)($hosts['message'] ?? ''))
+                            ?: (string)__('正在等待 macOS 管理员批准本地域名 hosts 配置。'),
+                    ];
+                }
+                throw new AiSiteProvisioningException(
+                    'TEST_DOMAIN_HOSTS_FAILED',
+                    \trim((string)($hosts['message'] ?? '')) ?: (string)__('本地测试域名 hosts 准备失败。')
+                );
+            }
+            $certificate = $this->certificateService->ensureWildcardCertificateForDomain($domain, Website::ID_DEFAULT);
+            if (($certificate['success'] ?? false) !== true) {
+                throw new AiSiteProvisioningException(
+                    'TEST_DOMAIN_CERTIFICATE_FAILED',
+                    \trim((string)($certificate['message'] ?? '')) ?: (string)__('本地测试域名证书准备失败。')
+                );
+            }
+            $localReady = true;
+        }
+
+        $websiteId = $this->websiteTargetResolver->resolve($request, $domain, $subPath);
+        $this->bindDomain($domain, $subPath, $websiteId, $poolId, $isLocal);
+
+        return [
+            'website_id' => $websiteId,
+            'purchase_order_id' => 0,
+            'local_ready' => $localReady || !$isLocal,
+            'availability' => [
+                'domain' => $domain,
+                'available' => true,
+                'simulated' => $isLocal,
+                'sub_path' => $subPath,
+            ],
+        ];
     }
 
     private function persistLocalPool(string $domain): int
@@ -242,12 +349,25 @@ final class AiSiteDomainPreparationService
 
     private function bindDomain(
         string $domain,
+        string $subPath,
         int $websiteId,
         int $poolId,
         bool $httpsEnabled
     ): void {
+        $subPath = $this->normalizeSubPath($subPath);
+        $conflict = $this->websiteDomain->findConflict($domain, $subPath, $websiteId);
+        if ($conflict !== null) {
+            throw new AiSiteProvisioningException(
+                'DOMAIN_ALREADY_BOUND',
+                (string)__(
+                    '目标地址 %{1} 已绑定到其他站点「%{2}」，不能自动改绑。',
+                    [$domain . $subPath, (string)($conflict['website_name'] ?? $conflict['website_id'])]
+                )
+            );
+        }
+
         $binding = clone $this->websiteDomain;
-        $binding->clearData()->loadByDomainAndSubPath($domain, '');
+        $binding->clearData()->loadByDomainAndSubPath($domain, $subPath);
         if ($binding->getDomainId() > 0
             && $binding->getWebsiteId() !== $websiteId
             && $binding->getWebsiteId() !== Website::ID_DEFAULT
@@ -263,7 +383,7 @@ final class AiSiteDomainPreparationService
 
         $binding->setWebsiteId($websiteId)
             ->setDomain($domain)
-            ->setSubPath('')
+            ->setSubPath($subPath)
             ->setIsPrimary(false)
             ->setHttpsEnabled($httpsEnabled)
             ->setStatus(WebsiteDomain::STATUS_ACTIVE);
@@ -275,12 +395,47 @@ final class AiSiteDomainPreparationService
         if ($poolId > 0) {
             $this->markPoolCreated($poolId);
         }
-        if (!$this->isBound($domain, $websiteId)) {
+        $this->syncWebsiteUrl($websiteId, $domain, $subPath);
+        if (!$this->isBound($domain, $websiteId, $subPath)) {
             throw new AiSiteProvisioningException(
                 'WEBSITE_DOMAIN_BINDING_FAILED',
                 (string)__('域名记录保存后未能验证站点绑定。')
             );
         }
+    }
+
+    private function syncWebsiteUrl(int $websiteId, string $domain, string $subPath): void
+    {
+        if ($websiteId <= Website::ID_DEFAULT) {
+            return;
+        }
+        $url = 'https://' . $domain . $subPath;
+        if (\strlen($url) > 255) {
+            throw new AiSiteProvisioningException(
+                'TARGET_DOMAIN_INVALID',
+                (string)__('目标域名或子路径过长。')
+            );
+        }
+        $website = clone $this->website;
+        $website->clearData()->clearQuery()->load($websiteId);
+        if ($website->getWebsiteId() !== $websiteId) {
+            return;
+        }
+        if (\strtolower(\trim((string)$website->getUrl())) === \strtolower($url)) {
+            return;
+        }
+        $website->setUrl($url)->save();
+    }
+
+    private function normalizeSubPath(string $subPath): string
+    {
+        $subPath = \trim($subPath);
+        if ($subPath === '' || $subPath === '/') {
+            return '';
+        }
+        $subPath = '/' . \trim($subPath, '/');
+
+        return $subPath === '/' ? '' : $subPath;
     }
 
     private function markPoolCreated(int $poolId): void

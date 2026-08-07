@@ -68,8 +68,25 @@ app/etc/wls-project.json
 php bin/w server:gateway:enroll --rotate-project-id --confirm
 ```
 
-rotate 会生成新 UUID 并把两个 generation 重置为新项目事实；它不会替复制品撤销原
-项目的宿主路由。
+WLS 会先区分项目根：
+
+- 原路径仍存活的同宿主 clone：只在复制品内清除复制来的 active/pending
+  宿主凭据，原子生成新 UUID，重置 desired/certificate/instance generation，
+  然后执行全新 enrollment。它不会调用旧项目的 identity transfer，也不会删除
+  原项目的凭据、宿主声明或路由。
+- 当前根就是已声明的原项目根：才使用旧凭据 + pending 新凭据双证明，
+  可恢复地原子转移 UUID 和宿主授权。
+
+clone 的新身份会保留“待全新 enrollment”恢复标记；宿主已提交但本地凭据或
+标记清理中断时，重试同一命令会幂等续传，不会再生成第二个 UUID；
+若新 UUID 的宿主凭据已经完整落盘，恢复也会保留该精确 after-image，
+只清除复制来的旧身份或 pending 能力。
+完成回执也会持久化，因此进程在成功后、输出前异常退出时，再次执行仍只会返回已完成。
+若该 clone 日后确实需要再做一次同根双凭据转移，必须显式使用：
+
+```bash
+php bin/w server:gateway:enroll --rotate-project-id --same-root-transfer --confirm
+```
 
 ## 4. endpoint 与 Agent
 
@@ -163,6 +180,10 @@ Master 的受保护 lease 是运行中实例的代际事实源。status、Benchm
 - Windows 项目状态替换为每个目标最多 8 个、每目录最多 256 个恢复 backup 叶子设置
   硬配额；成功提交立即用内核 API 清理本代 backup，分享冲突导致的保留项达到配额后
   会 fail-closed 并要求修复，不能无限消耗目录或磁盘。
+- 项目凭据目录会在 `.credentials.lock` 内有界回收崩溃留下的
+  `<target>.tmp-<24hex>`。`<target>.wls-backup-<16hex>` 只在配对的 active/pending
+  target 完整解析、host ID 与文件名一致，且 UUID/rotation 受项目持久事实授权后
+  才删除；target 缺失、损坏或事实不匹配时保留 backup 证据并 fail-closed。
 - 控制协议标识为 `wls-edge/2`；管理/项目双通道、OS peer identity、项目能力凭据、
   nonce 防重放、请求/响应认证、generation 和 fencing 均已接通。
 - `repair`、`revoke`、`transfer`、`upgrade` 属于长管理事务，客户端和 Windows

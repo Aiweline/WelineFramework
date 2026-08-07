@@ -46,6 +46,9 @@ class BatchManager
      *     created_at: float,
      *     expires_at: float,
      *     completed_at: ?float,
+     *     created_monotonic: float,
+     *     deadline_monotonic: float,
+     *     completed_monotonic: ?float,
      *     client_id: ?int
      * }>
      */
@@ -104,8 +107,10 @@ class BatchManager
             $this->evictOldestCompleted();
         }
 
-        $now = \microtime(true);
-        $expiresAt = $now + ($timeout ?? $this->defaultTimeout);
+        $wallNow = (float)\time();
+        $monotonicNow = self::monotonicSeconds();
+        $timeoutSeconds = $timeout ?? $this->defaultTimeout;
+        $deadlineMonotonic = $monotonicNow + $timeoutSeconds;
 
         $this->operations[$batchId] = [
             'id' => $batchId,
@@ -117,9 +122,12 @@ class BatchManager
             'expected' => $expectedClients,
             'acked' => [],
             'responses' => [],
-            'created_at' => $now,
-            'expires_at' => $expiresAt,
+            'created_at' => $wallNow,
+            'expires_at' => $wallNow + $timeoutSeconds,
             'completed_at' => null,
+            'created_monotonic' => $monotonicNow,
+            'deadline_monotonic' => $deadlineMonotonic,
+            'completed_monotonic' => null,
             'client_id' => $clientId,
         ];
 
@@ -219,7 +227,8 @@ class BatchManager
         }
 
         $this->operations[$batchId]['state'] = self::STATE_CANCELLED;
-        $this->operations[$batchId]['completed_at'] = \microtime(true);
+        $this->operations[$batchId]['completed_at'] = (float)\time();
+        $this->operations[$batchId]['completed_monotonic'] = self::monotonicSeconds();
 
         WlsLogger::info_("[BatchManager] 取消批量操作 {$batchId}");
 
@@ -245,7 +254,8 @@ class BatchManager
         // 所有期望的客户端都已响应
         if (\count($op['responses']) >= \count($op['expected'])) {
             $op['state'] = self::STATE_COMPLETED;
-            $op['completed_at'] = \microtime(true);
+            $op['completed_at'] = (float)\time();
+            $op['completed_monotonic'] = self::monotonicSeconds();
 
             WlsLogger::info_(
                 "[BatchManager] 批量操作 {$batchId}（{$op['action']}）完成，" . \count($op['responses']) . " 个响应"
@@ -260,13 +270,14 @@ class BatchManager
      */
     public function checkTimeouts(): array
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         $timedOut = [];
 
         foreach ($this->operations as $batchId => &$op) {
-            if ($op['state'] === self::STATE_RUNNING && $now >= $op['expires_at']) {
+            if ($op['state'] === self::STATE_RUNNING && $now >= $op['deadline_monotonic']) {
                 $op['state'] = self::STATE_TIMEOUT;
-                $op['completed_at'] = $now;
+                $op['completed_at'] = (float)\time();
+                $op['completed_monotonic'] = $now;
                 $timedOut[] = $batchId;
 
                 WlsLogger::warning_(
@@ -350,15 +361,15 @@ class BatchManager
      */
     private function cleanup(): void
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
 
         foreach ($this->operations as $batchId => $op) {
             if (
                 ($op['state'] === self::STATE_COMPLETED ||
                  $op['state'] === self::STATE_TIMEOUT ||
                  $op['state'] === self::STATE_CANCELLED) &&
-                $op['completed_at'] !== null &&
-                ($now - $op['completed_at']) > $this->completedRetention
+                $op['completed_monotonic'] !== null &&
+                ($now - $op['completed_monotonic']) > $this->completedRetention
             ) {
                 unset($this->operations[$batchId]);
 
@@ -376,9 +387,9 @@ class BatchManager
         $oldestId = null;
 
         foreach ($this->operations as $batchId => $op) {
-            if ($op['completed_at'] !== null) {
-                if ($oldest === null || $op['completed_at'] < $oldest) {
-                    $oldest = $op['completed_at'];
+            if ($op['completed_monotonic'] !== null) {
+                if ($oldest === null || $op['completed_monotonic'] < $oldest) {
+                    $oldest = $op['completed_monotonic'];
                     $oldestId = $batchId;
                 }
             }
@@ -453,5 +464,10 @@ class BatchManager
         }
 
         return true;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

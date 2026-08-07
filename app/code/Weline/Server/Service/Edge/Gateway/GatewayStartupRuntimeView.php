@@ -33,7 +33,7 @@ final class GatewayStartupRuntimeView
         return self::resolveObserved(
             $endpoint,
             GatewayRuntimeServingProjection::gatewayIsServing($endpoint),
-            GatewayRuntimeServingProjection::fallbackWlsIsServing($endpoint),
+            GatewayRuntimeServingProjection::fallbackServingEndpoint($endpoint) !== null,
             $explicitNoNginx,
         );
     }

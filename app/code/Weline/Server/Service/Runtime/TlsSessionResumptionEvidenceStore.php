@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Runtime;
 
 use Weline\Framework\App\Env;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 
 /**
  * Immutable, non-secret evidence for the PHP 8.6 external stateful TLS cache.
@@ -26,6 +27,9 @@ final class TlsSessionResumptionEvidenceStore
     private const MAX_EVIDENCE_FILES = 64;
     private const MAX_EVIDENCE_TREE_ENTRIES = 256;
     private const MAX_EVIDENCE_TREE_DEPTH = 1;
+    private const MAX_PUBLICATION_ARTIFACTS = 128;
+    private const PUBLICATION_LOCK_WAIT_SECONDS = 30.0;
+    private const PUBLICATION_LOCK_LEAF = '.publication.lock';
     private const MAX_PERFORMANCE_REPORTS = 16;
     private const MAX_EVIDENCE_BYTES = 1_048_576;
     private const PRODUCTION_RESUMPTION_TLS_P95_LIMIT_MS = 50.0;
@@ -670,81 +674,47 @@ final class TlsSessionResumptionEvidenceStore
         $directory = $this->root() . DIRECTORY_SEPARATOR . $runtimeFingerprint;
         $this->ensureEvidenceDirectory($directory);
         $path = $directory . DIRECTORY_SEPARATOR . $document['evidence_sha256'] . '.json';
-        if (\is_link($path)) {
-            throw new \RuntimeException('TLS evidence target must not be a symbolic link.');
-        }
         $json = \json_encode(
             $document,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
         ) . PHP_EOL;
-        if (\is_file($path)) {
-            $existing = $this->boundedStableFile($path, self::MAX_EVIDENCE_BYTES);
-            if ($existing !== $json) {
-                throw new \RuntimeException('Immutable TLS evidence path already contains different bytes.');
-            }
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $directory . DIRECTORY_SEPARATOR . self::PUBLICATION_LOCK_LEAF,
+            function () use ($directory, $path, $json): string {
+                $this->recoverEvidencePublicationArtifactsLocked($directory);
+                $existing = GatewayProjectStateFilesystem::readOptional(
+                    $path,
+                    self::MAX_EVIDENCE_BYTES,
+                    'immutable TLS resumption evidence target',
+                );
+                if ($existing !== null) {
+                    if (!\hash_equals($json, $existing)) {
+                        throw new \RuntimeException(
+                            'Immutable TLS evidence path already contains different bytes.'
+                        );
+                    }
+                    return $path;
+                }
 
-            return $path;
-        }
-
-        $temporary = $directory . DIRECTORY_SEPARATOR . '.tmp-'
-            . \getmypid() . '-' . \bin2hex(\random_bytes(6));
-        $handle = @\fopen($temporary, 'xb');
-        if (!\is_resource($handle)) {
-            throw new \RuntimeException('Unable to create temporary TLS evidence file.');
-        }
-        $writeSucceeded = false;
-        try {
-            $writeSucceeded = @\fwrite($handle, $json) === \strlen($json) && @\fflush($handle);
-        } finally {
-            @\fclose($handle);
-        }
-        if (!$writeSucceeded) {
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to write complete TLS evidence bytes.');
-        }
-        @\chmod($temporary, 0640);
-        if (\is_link($directory) || \is_link($path)) {
-            @\unlink($temporary);
-            throw new \RuntimeException('TLS evidence publication path became unsafe.');
-        }
-        if (@\link($temporary, $path)) {
-            @\unlink($temporary);
-
-            return $path;
-        }
-
-        // Parallels/UNC filesystems may not support hard links. Preserve the
-        // no-overwrite contract with exclusive creation on that fallback.
-        $targetHandle = @\fopen($path, 'xb');
-        if (\is_resource($targetHandle)) {
-            $targetWritten = false;
-            try {
-                $targetWritten = @\fwrite($targetHandle, $json) === \strlen($json)
-                    && @\fflush($targetHandle);
-            } finally {
-                @\fclose($targetHandle);
-            }
-            @\unlink($temporary);
-            if (!$targetWritten) {
-                @\unlink($path);
-                throw new \RuntimeException('Unable to publish complete TLS evidence bytes.');
-            }
-            @\chmod($path, 0640);
-
-            return $path;
-        }
-        @\unlink($temporary);
-        if (\is_link($path)) {
-            throw new \RuntimeException('TLS evidence target became a symbolic link.');
-        }
-        $existing = \is_file($path)
-            ? $this->boundedStableFile($path, self::MAX_EVIDENCE_BYTES)
-            : false;
-        if ($existing !== $json) {
-            throw new \RuntimeException('Immutable TLS evidence target already exists with different bytes.');
-        }
-
-        return $path;
+                // The per-runtime publication lock is shared by every writer.
+                // Use the common cross-platform replace primitive so a crash
+                // can leave only a named staging/backup artifact, never a
+                // partially written immutable digest target.
+                GatewayProjectStateFilesystem::atomicWrite($path, $json, 0640);
+                $published = GatewayProjectStateFilesystem::read(
+                    $path,
+                    self::MAX_EVIDENCE_BYTES,
+                    'published TLS resumption evidence target',
+                );
+                if (!\hash_equals($json, $published)) {
+                    throw new \RuntimeException(
+                        'Published TLS evidence target failed exact read-back verification.'
+                    );
+                }
+                return $path;
+            },
+            waitTimeoutSeconds: self::PUBLICATION_LOCK_WAIT_SECONDS,
+        );
     }
 
     /**
@@ -2796,6 +2766,615 @@ final class TlsSessionResumptionEvidenceStore
         \sort($expectedKeys, SORT_STRING);
 
         return $actual === $expectedKeys;
+    }
+
+    /**
+     * Recover only the publication namespace for one runtime fingerprint.
+     * The caller holds PUBLICATION_LOCK_LEAF, so every compliant writer is
+     * excluded while two complete snapshots and all paired targets are
+     * validated before the first removal.
+     */
+    private function recoverEvidencePublicationArtifactsLocked(string $directory): void
+    {
+        $selected = $this->evidencePublicationArtifactSnapshot($directory);
+        if ($selected['artifacts'] === []) {
+            return;
+        }
+        $rechecked = $this->evidencePublicationArtifactSnapshot($directory);
+        if (!self::sameDirectoryIdentity(
+            $selected['directory_identity'],
+            $rechecked['directory_identity'],
+        ) || \array_keys($selected['artifacts']) !== \array_keys($rechecked['artifacts'])) {
+            throw new \RuntimeException(
+                'TLS evidence publication recovery namespace changed before cleanup.'
+            );
+        }
+        foreach ($selected['artifacts'] as $path => $artifact) {
+            $current = $rechecked['artifacts'][$path] ?? null;
+            if (!\is_array($current)
+                || !\hash_equals($artifact['kind'], $current['kind'])
+                || !\hash_equals($artifact['target'], $current['target'])
+                || !\hash_equals($artifact['target_sha256'], $current['target_sha256'])
+                || !\hash_equals($artifact['content_sha256'], $current['content_sha256'])
+                || $artifact['restore_missing_target']
+                    !== $current['restore_missing_target']
+                || $artifact['linked_alias'] !== $current['linked_alias']
+                || !self::sameFileState($artifact['identity'], $current['identity'])
+                || !self::sameOptionalFileState(
+                    $artifact['target_identity'],
+                    $current['target_identity'],
+                )
+            ) {
+                throw new \RuntimeException(
+                    'TLS evidence publication recovery artifact changed before cleanup.'
+                );
+            }
+        }
+
+        $restores = [];
+        $linkedAliases = [];
+        foreach ($rechecked['artifacts'] as $artifact) {
+            if ($artifact['restore_missing_target']) {
+                if (isset($restores[$artifact['target']])) {
+                    throw new \RuntimeException(
+                        'TLS evidence publication has ambiguous retained backups for one missing target.'
+                    );
+                }
+                $restores[$artifact['target']] = $artifact;
+            }
+            if ($artifact['linked_alias']) {
+                if (isset($linkedAliases[$artifact['target']])) {
+                    throw new \RuntimeException(
+                        'TLS evidence publication has ambiguous legacy hard-link aliases.'
+                    );
+                }
+                $linkedAliases[$artifact['target']] = $artifact;
+            }
+        }
+        if ($restores !== []) {
+            foreach ($restores as $artifact) {
+                $this->restoreMissingEvidenceTargetFromBackup($artifact);
+            }
+            // Restoring a target intentionally changes the paired state for
+            // its staging file. Re-inventory the now-committed namespace
+            // before collecting any uncommitted artifacts.
+            $this->recoverEvidencePublicationArtifactsLocked($directory);
+            return;
+        }
+        if ($linkedAliases !== []) {
+            foreach ($linkedAliases as $artifact) {
+                $this->removeLegacyEvidenceHardLinkAlias($artifact);
+            }
+            // Removing the old link changes nlink/ctime on the immutable
+            // target. Re-snapshot before ordinary cleanup.
+            $this->recoverEvidencePublicationArtifactsLocked($directory);
+            return;
+        }
+
+        foreach ($rechecked['artifacts'] as $artifact) {
+            if ($artifact['target'] !== '') {
+                $target = @\lstat($artifact['target']);
+                if (!self::sameOptionalFileState($artifact['target_identity'], $target)) {
+                    throw new \RuntimeException(
+                        'TLS evidence publication paired target changed during cleanup.'
+                    );
+                }
+            }
+            if (!GatewayProjectStateFilesystem::removeRegular(
+                $artifact['path'],
+                'TLS evidence interrupted publication artifact',
+                $artifact['identity'],
+            )) {
+                throw new \RuntimeException(
+                    'Unable to collect a TLS evidence interrupted publication artifact.'
+                );
+            }
+        }
+    }
+
+    /**
+     * @return array{
+     *   directory_identity:array<string|int,mixed>,
+     *   artifacts:array<string,array{
+     *     path:string,
+     *     kind:string,
+     *     target:string,
+     *     target_sha256:string,
+     *     content_sha256:string,
+     *     restore_missing_target:bool,
+     *     linked_alias:bool,
+     *     identity:array<string|int,mixed>,
+     *     target_identity:array<string|int,mixed>|null
+     *   }>
+     * }
+     */
+    private function evidencePublicationArtifactSnapshot(string $directory): array
+    {
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || \is_link($directory)
+            || ((((int)$directoryBefore['mode']) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'TLS evidence publication recovery directory is unsafe.'
+            );
+        }
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException(
+                'Unable to enumerate the TLS evidence publication recovery directory.'
+            );
+        }
+        $artifacts = [];
+        $visited = 0;
+        $legacyPattern = '/\A\.tmp-[1-9][0-9]{0,18}-[a-f0-9]{12}\z/D';
+        $atomicPattern = '/\A([a-f0-9]{64}\.json)\.'
+            . '(tmp-[a-f0-9]{24}|wls-backup-[a-f0-9]{16})\z/D';
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if ($leaf === '.' || $leaf === '..') {
+                    continue;
+                }
+                if (++$visited > self::MAX_EVIDENCE_TREE_ENTRIES) {
+                    throw new \RuntimeException(
+                        'TLS evidence publication recovery directory exceeds its raw entry quota.'
+                    );
+                }
+                $foldedLeaf = \strtolower($leaf);
+                if (\hash_equals(\strtolower(self::PUBLICATION_LOCK_LEAF), $foldedLeaf)) {
+                    if (!\hash_equals(self::PUBLICATION_LOCK_LEAF, $leaf)) {
+                        throw new \RuntimeException(
+                            'TLS evidence publication lock has a non-canonical case alias.'
+                        );
+                    }
+                    continue;
+                }
+
+                $kind = '';
+                $target = '';
+                if (\str_starts_with($foldedLeaf, '.tmp-')) {
+                    if (\preg_match($legacyPattern, $leaf) !== 1) {
+                        throw new \RuntimeException(
+                            $leaf !== $foldedLeaf
+                                ? 'TLS evidence recovery contains a non-canonical case alias.'
+                                : 'TLS evidence recovery contains a malformed legacy staging leaf.'
+                        );
+                    }
+                    $kind = 'legacy staging';
+                } elseif (\preg_match(
+                    '/\A[a-f0-9]{64}\.json\.(?:tmp-|wls-backup-)/iD',
+                    $leaf,
+                ) === 1) {
+                    if (\preg_match($atomicPattern, $leaf, $matches) !== 1) {
+                        throw new \RuntimeException(
+                            $leaf !== $foldedLeaf
+                                ? 'TLS evidence recovery contains a non-canonical case alias.'
+                                : 'TLS evidence recovery contains a malformed atomic publication leaf.'
+                        );
+                    }
+                    $kind = \str_starts_with((string)$matches[2], 'tmp-')
+                        ? 'atomic staging'
+                        : 'atomic backup';
+                    $target = $directory . DIRECTORY_SEPARATOR . (string)$matches[1];
+                } else {
+                    continue;
+                }
+
+                if (\count($artifacts) >= self::MAX_PUBLICATION_ARTIFACTS) {
+                    throw new \RuntimeException(
+                        'TLS evidence publication recovery artifact quota is exhausted.'
+                    );
+                }
+                $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                $inspected = $this->readEvidencePublicationArtifact(
+                    $path,
+                    $kind === 'legacy staging',
+                );
+                $after = $inspected['identity'];
+                $artifactRaw = $inspected['raw'];
+                $contentSha256 = \hash('sha256', $artifactRaw);
+
+                $targetIdentity = null;
+                $targetSha256 = '';
+                $restoreMissingTarget = false;
+                $linkedAlias = false;
+                if ($kind === 'atomic backup') {
+                    $this->validatedEvidenceRaw(
+                        $artifactRaw,
+                        \substr(\basename($target), 0, 64),
+                        'TLS evidence publication backup',
+                    );
+                }
+                if ($kind === 'legacy staging'
+                    && (int)($after['nlink'] ?? 0) === 2
+                ) {
+                    try {
+                        $legacyDigest = $this->validatedEvidenceRaw(
+                            $artifactRaw,
+                            null,
+                            'legacy TLS evidence hard-link publication',
+                        );
+                    } catch (\Throwable $throwable) {
+                        throw new \RuntimeException(
+                            'TLS evidence legacy hard-linked artifact is not an exact valid publication pair.',
+                            0,
+                            $throwable,
+                        );
+                    }
+                    $target = $directory . DIRECTORY_SEPARATOR
+                        . $legacyDigest . '.json';
+                    $linkedTarget = @\lstat($target);
+                    if (!\is_array($linkedTarget)
+                        || \is_link($target)
+                        || !self::sameFileState($after, $linkedTarget)
+                    ) {
+                        throw new \RuntimeException(
+                            'TLS evidence legacy hard-linked artifact has no exact immutable target peer.'
+                        );
+                    }
+                    $targetIdentity = $linkedTarget;
+                    $targetSha256 = $contentSha256;
+                    $linkedAlias = true;
+                }
+                if ($target !== '') {
+                    $targetBefore = @\lstat($target);
+                    if ($linkedAlias) {
+                        // The legacy target and artifact are the same inode;
+                        // the validated artifact bytes above are therefore the
+                        // exact target bytes. Ordinary readers intentionally
+                        // reject nlink=2 until the alias is collected.
+                    } elseif (\is_array($targetBefore)) {
+                        $targetRaw = $this->validatedEvidenceTargetRaw($target);
+                        $targetAfter = @\lstat($target);
+                        if (!\is_array($targetAfter)
+                            || !self::sameFileState($targetBefore, $targetAfter)
+                        ) {
+                            throw new \RuntimeException(
+                                'TLS evidence publication paired target changed during validation.'
+                            );
+                        }
+                        $targetIdentity = $targetAfter;
+                        $targetSha256 = \hash('sha256', $targetRaw);
+                    } elseif (\file_exists($target) || \is_link($target)) {
+                        throw new \RuntimeException(
+                            'TLS evidence publication paired target is indeterminate or unsafe.'
+                        );
+                    } elseif ($kind === 'atomic backup') {
+                        $restoreMissingTarget = true;
+                    }
+                }
+                $artifacts[$path] = [
+                    'path' => $path,
+                    'kind' => $kind,
+                    'target' => $target,
+                    'target_sha256' => $targetSha256,
+                    'content_sha256' => $contentSha256,
+                    'restore_missing_target' => $restoreMissingTarget,
+                    'linked_alias' => $linkedAlias,
+                    'identity' => $after,
+                    'target_identity' => $targetIdentity,
+                ];
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        $directoryAfter = @\lstat($directory);
+        if (!\is_array($directoryAfter)
+            || !self::sameDirectoryIdentity($directoryBefore, $directoryAfter)
+        ) {
+            throw new \RuntimeException(
+                'TLS evidence publication recovery directory changed during inspection.'
+            );
+        }
+        \ksort($artifacts, SORT_STRING);
+        return [
+            'directory_identity' => $directoryAfter,
+            'artifacts' => $artifacts,
+        ];
+    }
+
+    /**
+     * @return array{identity:array<string|int,mixed>,raw:string}
+     */
+    private function readEvidencePublicationArtifact(
+        string $path,
+        bool $allowLegacyHardLink,
+    ): array {
+        $before = @\lstat($path);
+        $links = \is_array($before) ? (int)($before['nlink'] ?? 0) : 0;
+        if (!\is_array($before)
+            || \is_link($path)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+            || ($links !== 1 && !($allowLegacyHardLink && $links === 2))
+        ) {
+            throw new \RuntimeException(
+                'TLS evidence publication recovery artifact must be one regular non-linked file or one exact legacy hard-link pair.'
+            );
+        }
+        $size = (int)($before['size'] ?? -1);
+        if ($size < 0 || $size > self::MAX_EVIDENCE_BYTES) {
+            throw new \RuntimeException(
+                'TLS evidence publication recovery artifact exceeds its fixed size limit.'
+            );
+        }
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException(
+                'Unable to open the TLS evidence publication recovery artifact.'
+            );
+        }
+        try {
+            $opened = @\fstat($handle);
+            $named = @\lstat($path);
+            $raw = @\stream_get_contents($handle, self::MAX_EVIDENCE_BYTES + 1);
+            $after = @\lstat($path);
+            if (!\is_array($opened)
+                || !\is_array($named)
+                || !\is_array($after)
+                || !\is_string($raw)
+                || \strlen($raw) !== $size
+                || !self::sameFileState($before, $opened)
+                || !self::sameFileState($opened, $named)
+                || !self::sameFileState($named, $after)
+            ) {
+                throw new \RuntimeException(
+                    'TLS evidence publication recovery artifact changed while being read.'
+                );
+            }
+            return ['identity' => $after, 'raw' => $raw];
+        } finally {
+            @\fclose($handle);
+        }
+    }
+
+    private function validatedEvidenceRaw(
+        string $raw,
+        ?string $expectedDigest,
+        string $label,
+    ): string {
+        try {
+            $document = \json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new \RuntimeException($label . ' is invalid JSON.', 0, $exception);
+        }
+        $digest = \is_array($document)
+            && \is_string($document['evidence_sha256'] ?? null)
+            ? (string)$document['evidence_sha256']
+            : '';
+        if (!\is_array($document)
+            || \array_is_list($document)
+            || !$this->isSha256($digest)
+            || ($expectedDigest !== null
+                && !\hash_equals($expectedDigest, $digest))
+            || !\hash_equals($digest, $this->documentSha256($document))
+            || $this->documentSchemaFailures($document, '') !== []
+        ) {
+            throw new \RuntimeException($label . ' failed integrity validation.');
+        }
+        $this->assertNoSecrets($document);
+        return $digest;
+    }
+
+    /**
+     * @param array{
+     *   path:string,kind:string,target:string,target_sha256:string,
+     *   content_sha256:string,restore_missing_target:bool,linked_alias:bool,
+     *   identity:array<string|int,mixed>,
+     *   target_identity:array<string|int,mixed>|null
+     * } $artifact
+     */
+    private function restoreMissingEvidenceTargetFromBackup(array $artifact): void
+    {
+        $target = $artifact['target'];
+        if ($artifact['kind'] !== 'atomic backup'
+            || !$artifact['restore_missing_target']
+            || $target === ''
+            || \is_array(@\lstat($target))
+            || \file_exists($target)
+            || \is_link($target)
+        ) {
+            throw new \RuntimeException(
+                'TLS evidence retained backup no longer has one missing target.'
+            );
+        }
+        $current = $this->readEvidencePublicationArtifact(
+            $artifact['path'],
+            false,
+        );
+        if (!self::sameFileState($artifact['identity'], $current['identity'])
+            || !\hash_equals(
+                $artifact['content_sha256'],
+                \hash('sha256', $current['raw']),
+            )
+        ) {
+            throw new \RuntimeException(
+                'TLS evidence retained backup changed before restoration.'
+            );
+        }
+        $expectedDigest = \substr(\basename($target), 0, 64);
+        $this->validatedEvidenceRaw(
+            $current['raw'],
+            $expectedDigest,
+            'TLS evidence retained backup',
+        );
+        if (!@\rename($artifact['path'], $target)) {
+            throw new \RuntimeException(
+                'Unable to atomically restore the missing TLS evidence target.'
+            );
+        }
+        $restored = @\lstat($target);
+        $publishedRaw = $this->validatedEvidenceTargetRaw($target);
+        if (!\is_array($restored)
+            || !self::samePublicationObjectIdentity(
+                $artifact['identity'],
+                $restored,
+            )
+            || !\hash_equals(
+                $artifact['content_sha256'],
+                \hash('sha256', $publishedRaw),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Restored TLS evidence target failed identity or content validation.'
+            );
+        }
+        GatewayProjectStateFilesystem::syncDirectory(\dirname($target));
+    }
+
+    /**
+     * @param array{
+     *   path:string,kind:string,target:string,target_sha256:string,
+     *   content_sha256:string,restore_missing_target:bool,linked_alias:bool,
+     *   identity:array<string|int,mixed>,
+     *   target_identity:array<string|int,mixed>|null
+     * } $artifact
+     */
+    private function removeLegacyEvidenceHardLinkAlias(array $artifact): void
+    {
+        $targetIdentity = $artifact['target_identity'];
+        $target = $artifact['target'];
+        if ($artifact['kind'] !== 'legacy staging'
+            || !$artifact['linked_alias']
+            || $target === ''
+            || !\is_array($targetIdentity)
+        ) {
+            throw new \RuntimeException(
+                'TLS evidence legacy hard-link recovery selection is invalid.'
+            );
+        }
+        $current = $this->readEvidencePublicationArtifact(
+            $artifact['path'],
+            true,
+        );
+        $targetBefore = @\lstat($target);
+        if (!self::sameFileState($artifact['identity'], $current['identity'])
+            || !\is_array($targetBefore)
+            || !self::sameFileState($targetIdentity, $targetBefore)
+            || !self::sameFileState($current['identity'], $targetBefore)
+            || !\hash_equals(
+                $artifact['content_sha256'],
+                \hash('sha256', $current['raw']),
+            )
+            || !\hash_equals(
+                \substr(\basename($target), 0, 64),
+                $this->validatedEvidenceRaw(
+                    $current['raw'],
+                    null,
+                    'legacy TLS evidence hard-link publication',
+                ),
+            )
+            || !@\unlink($artifact['path'])
+        ) {
+            throw new \RuntimeException(
+                'Unable to safely collect the legacy TLS evidence hard-link alias.'
+            );
+        }
+        \clearstatcache(true, $artifact['path']);
+        $targetAfter = @\lstat($target);
+        $targetRaw = $this->validatedEvidenceTargetRaw($target);
+        if (\file_exists($artifact['path'])
+            || \is_link($artifact['path'])
+            || !\is_array($targetAfter)
+            || (int)($targetAfter['nlink'] ?? 0) !== 1
+            || !self::samePublicationObjectIdentity(
+                $targetIdentity,
+                $targetAfter,
+            )
+            || !\hash_equals(
+                $artifact['content_sha256'],
+                \hash('sha256', $targetRaw),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Legacy TLS evidence hard-link cleanup failed target validation.'
+            );
+        }
+        GatewayProjectStateFilesystem::syncDirectory(\dirname($target));
+    }
+
+    private function validatedEvidenceTargetRaw(string $path): string
+    {
+        $raw = GatewayProjectStateFilesystem::read(
+            $path,
+            self::MAX_EVIDENCE_BYTES,
+            'TLS evidence publication paired target',
+        );
+        $digest = \substr(\basename($path), 0, 64);
+        $this->validatedEvidenceRaw(
+            $raw,
+            $digest,
+            'TLS evidence publication paired target',
+        );
+        return $raw;
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private static function sameFileState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Compare the immutable object across a same-directory rename or legacy
+     * alias removal. Those operations may legitimately change ctime/nlink,
+     * while device, inode, type/mode and byte length must remain fixed.
+     *
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private static function samePublicationObjectIdentity(
+        array $before,
+        array $after,
+    ): bool {
+        foreach (['dev', 'ino', 'mode', 'size'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @param array<string|int,mixed>|null $before
+     * @param array<string|int,mixed>|false|null $after
+     */
+    private static function sameOptionalFileState(?array $before, array|false|null $after): bool
+    {
+        if ($before === null || !\is_array($after)) {
+            return $before === null && !\is_array($after);
+        }
+        return self::sameFileState($before, $after);
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private static function sameDirectoryIdentity(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

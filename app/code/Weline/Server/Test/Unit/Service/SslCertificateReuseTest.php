@@ -28,12 +28,16 @@ final class SslCertificateReuseTest extends TestCase
         $exportedCert = \openssl_x509_export($cert, $certPem);
         self::assertTrue($exportedCert);
 
-        $dir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-cert-reuse-' . \str_replace('.', '', \uniqid('', true)) . DIRECTORY_SEPARATOR;
-        \mkdir($dir, 0777, true);
+        $tempRoot = \realpath(\sys_get_temp_dir());
+        self::assertIsString($tempRoot);
+        $dir = $tempRoot . DIRECTORY_SEPARATOR . 'wls-cert-reuse-'
+            . \str_replace('.', '', \uniqid('', true)) . DIRECTORY_SEPARATOR;
+        \mkdir($dir, 0700, true);
         $certPath = $dir . 'fullchain.pem';
         $keyPath = $dir . 'privkey.pem';
         \file_put_contents($certPath, $certPem);
         \file_put_contents($keyPath, $keyPem);
+        \chmod($keyPath, 0600);
 
         try {
             $service = new class extends SslCertificateService {

@@ -19,6 +19,11 @@ use Weline\Server\Log\WlsLogger;
 
 class ProcessMonitor
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * 监控的进程列表 [id => ['pid' => int, 'start_time' => int, 'tag' => string]]
      */
@@ -42,6 +47,7 @@ class ProcessMonitor
         $this->processes[$id] = [
             'pid' => $pid,
             'start_time' => \time(),
+            'start_monotonic' => self::monotonicSeconds(),
             'tag' => $tag ?: $id,
             'last_check' => \time(),
         ];
@@ -63,6 +69,7 @@ class ProcessMonitor
         if (isset($this->processes[$id])) {
             $this->processes[$id]['pid'] = $pid;
             $this->processes[$id]['start_time'] = \time();
+            $this->processes[$id]['start_monotonic'] = self::monotonicSeconds();
             $this->processes[$id]['last_check'] = \time();
         }
     }
@@ -91,7 +98,7 @@ class ProcessMonitor
 
             if (!$this->isProcessRunning($pid)) {
                 $exitInfo = $this->getExitInfo($pid);
-                $runtime = \time() - $info['start_time'];
+                $runtime = $this->runtimeSeconds($info);
 
                 $deathInfo = [
                     'pid' => $pid,
@@ -136,7 +143,7 @@ class ProcessMonitor
         }
 
         $exitInfo = $this->getExitInfo($pid);
-        $runtime = \time() - $info['start_time'];
+        $runtime = $this->runtimeSeconds($info);
 
         return [
             'pid' => $pid,
@@ -275,7 +282,24 @@ class ProcessMonitor
      */
     public function getProcesses(): array
     {
-        return $this->processes;
+        $processes = $this->processes;
+        foreach ($processes as &$process) {
+            unset($process['start_monotonic']);
+        }
+        unset($process);
+
+        return $processes;
+    }
+
+    /** @param array<string,mixed> $process */
+    private function runtimeSeconds(array $process): int
+    {
+        $started = (float)($process['start_monotonic'] ?? 0.0);
+        if (!\is_finite($started) || $started <= 0.0) {
+            return 0;
+        }
+
+        return (int)\floor(\max(0.0, self::monotonicSeconds() - $started));
     }
 
     /**

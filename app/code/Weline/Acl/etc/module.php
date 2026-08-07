@@ -2,13 +2,14 @@
 
 return [
     "name" => 'Weline_Acl',
-    "version" => '1.0.9',
+    "version" => '1.1.0',
     "requires" => [
         'Weline_Framework' => '*',
     ],
     "optional" => [
     ],
     "provides" => [
+        \Weline\Acl\Service\AclServiceInterface::class => \Weline\Acl\Service\AclService::class,
         \Weline\Acl\Api\Authorization\AuthorizationServiceInterface::class => \Weline\Acl\Service\AclService::class,
         \Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface::class => \Weline\Acl\Service\ResourceAuthorizationService::class,
         \Weline\Acl\Api\Authorization\ObjectAuthorizationServiceInterface::class => \Weline\Acl\Service\ObjectAuthorizationService::class,

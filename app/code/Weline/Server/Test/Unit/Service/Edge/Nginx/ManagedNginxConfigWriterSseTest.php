@@ -17,6 +17,9 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
         $this->root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-nginx-sse-'
             . \bin2hex(\random_bytes(8));
         self::assertTrue(\mkdir($this->root, 0700, true));
+        $canonicalRoot = \realpath($this->root);
+        self::assertIsString($canonicalRoot);
+        $this->root = $canonicalRoot;
     }
 
     protected function tearDown(): void
@@ -34,6 +37,7 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
             'edge_cache' => true,
             'gzip' => true,
         ]);
+        $paths->ensureRuntimeDirectories();
         $result = (new ManagedNginxConfigWriter($paths))->write(
             19000,
             '127.0.0.1',
@@ -61,6 +65,29 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
         self::assertStringContainsString('proxy_buffering on;', $genericBlock);
         self::assertStringNotContainsString('proxy_read_timeout 300s;', $genericBlock);
         self::assertStringNotContainsString('proxy_send_timeout 300s;', $genericBlock);
+    }
+
+    public function testRefreshCandidateReadsActiveConfigThroughBoundedFilesystemContract(): void
+    {
+        $paths = new ManagedNginxPaths($this->root, [
+            'runtime_root' => 'refresh-runtime',
+            'install_root' => 'refresh-install',
+            'listen_http' => 18081,
+            'listen_https' => 18444,
+        ]);
+        $paths->ensureRuntimeDirectories();
+        $writer = new ManagedNginxConfigWriter($paths);
+        $initial = $writer->write(19001, '127.0.0.1', ['_']);
+
+        $refreshed = $writer->refreshCandidate();
+
+        self::assertTrue($refreshed['candidate']);
+        self::assertFileExists($refreshed['conf']);
+        self::assertNotSame($initial['config_generation'], $refreshed['config_generation']);
+        self::assertSame(
+            $refreshed['config_sha256'],
+            \hash_file('sha256', $refreshed['conf']),
+        );
     }
 
     private function removeTree(string $root): void

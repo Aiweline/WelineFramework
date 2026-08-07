@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Console;
 
+\defined('BP') || \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+\defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);
+
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
 use Weline\Server\Service\MasterProcess;
@@ -89,10 +92,19 @@ final class StartCommandDaemonModeTest extends TestCase
                 string $script,
                 string $instanceName,
                 string $masterName,
+                string $launchId,
                 bool $foregroundMode,
                 bool $windowMode
             ): array {
-                return $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
+                return $this->buildMasterBackgroundArgv(
+                    $phpBinary,
+                    $script,
+                    $instanceName,
+                    $masterName,
+                    $launchId,
+                    $foregroundMode,
+                    $windowMode,
+                );
             }
 
         };
@@ -101,10 +113,20 @@ final class StartCommandDaemonModeTest extends TestCase
         $masterName = MasterProcess::getMasterProcessName('default');
         $displayName = MasterProcess::getMasterProcessDisplayName('default', true);
 
-        $argv = $start->masterArgv('php', 'bin/w', 'default', $masterName, false, true);
+        $launchId = \str_repeat('a', 32);
+        $argv = $start->masterArgv(
+            'php',
+            'bin/w',
+            'default',
+            $masterName,
+            $launchId,
+            false,
+            true,
+        );
 
         self::assertContains('--win', $argv);
         self::assertContains('--name=' . $masterName, $argv);
+        self::assertContains('--launch-id=' . $launchId, $argv);
         self::assertContains('--window-title=' . $displayName, $argv);
     }
 
@@ -119,10 +141,19 @@ final class StartCommandDaemonModeTest extends TestCase
                 string $script,
                 string $instanceName,
                 string $masterName,
+                string $launchId,
                 bool $foregroundMode,
                 bool $windowMode
             ): array {
-                return $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
+                return $this->buildMasterBackgroundArgv(
+                    $phpBinary,
+                    $script,
+                    $instanceName,
+                    $masterName,
+                    $launchId,
+                    $foregroundMode,
+                    $windowMode,
+                );
             }
 
         };
@@ -130,10 +161,20 @@ final class StartCommandDaemonModeTest extends TestCase
 
         $masterName = MasterProcess::getMasterProcessName('default');
 
-        $argv = $start->masterArgv('php', 'bin/w', 'default', $masterName, false, false);
+        $launchId = \str_repeat('b', 32);
+        $argv = $start->masterArgv(
+            'php',
+            'bin/w',
+            'default',
+            $masterName,
+            $launchId,
+            false,
+            false,
+        );
 
         self::assertContains('--master-only', $argv);
         self::assertContains('--name=' . $masterName, $argv);
+        self::assertContains('--launch-id=' . $launchId, $argv);
         self::assertNotContains('--win', $argv);
         self::assertNotContains('--window-title=' . MasterProcess::getMasterProcessDisplayName('default', true), $argv);
     }

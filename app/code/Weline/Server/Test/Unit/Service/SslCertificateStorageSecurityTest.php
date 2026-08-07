@@ -249,7 +249,59 @@ final class SslCertificateStorageSecurityTest extends TestCase
         self::assertStringNotContainsString('\\unlink(', $source);
     }
 
-    public function testCertificateDeletionPublishesBeforeSourceAndRowCleanup(): void
+    public function testRetirementIntentPrecedesPostgresqlRevocationAndAllCleanupStages(): void
+    {
+        $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . 'app/code/Weline/Server/Service/SslCertificateService.php';
+        $lines = \file($path);
+        self::assertIsArray($lines);
+        $methodSource = static function (string $methodName) use ($lines): string {
+            $method = new ReflectionMethod(
+                SslCertificateService::class,
+                $methodName,
+            );
+            return \implode('', \array_slice(
+                $lines,
+                $method->getStartLine() - 1,
+                $method->getEndLine() - $method->getStartLine() + 1,
+            ));
+        };
+        $prepare = $methodSource('transitionCertificateOutOfServiceLocked');
+        $intentPrepare = \strpos($prepare, 'prepareCertificateRetirement(');
+        $databaseFact = \strpos($prepare, 'setHttpsEnabled(false)');
+        $businessCommit = \strpos($prepare, 'advanceRetirementPhase(');
+        foreach ([$intentPrepare, $databaseFact, $businessCommit] as $position) {
+            self::assertIsInt($position);
+        }
+        self::assertTrue($intentPrepare < $databaseFact && $databaseFact < $businessCommit);
+        self::assertStringContainsString('$deadlineMonotonic', $prepare);
+
+        $entry = $methodSource('transitionCertificateOutOfService');
+        self::assertStringContainsString('+ 75.0', $entry);
+        self::assertStringContainsString(
+            '$this->completeCertificateOutOfService(',
+            $entry,
+        );
+        self::assertStringContainsString('$deadlineMonotonic,', $entry);
+
+        $resume = $methodSource('resumeCertificateRetirementIntent');
+        $runtime = \strpos($resume, 'RETIREMENT_PHASE_RUNTIME_PENDING');
+        $legacy = \strpos($resume, 'RETIREMENT_PHASE_RUNTIME_RETIRED');
+        $endpoint = \strpos($resume, 'RETIREMENT_PHASE_LEGACY_RETIRED');
+        $sourceCleanup = \strpos($resume, 'RETIREMENT_PHASE_ENDPOINT_RETIRED');
+        $rowCleanup = \strpos($resume, 'RETIREMENT_PHASE_SOURCE_RETIRED');
+        $event = \strpos($resume, 'RETIREMENT_PHASE_DATABASE_RETIRED');
+        foreach ([$runtime, $legacy, $endpoint, $sourceCleanup, $rowCleanup, $event] as $position) {
+            self::assertIsInt($position);
+        }
+        self::assertTrue($runtime < $legacy
+            && $legacy < $endpoint
+            && $endpoint < $sourceCleanup
+            && $sourceCleanup < $rowCleanup
+            && $rowCleanup < $event);
+    }
+
+    public function testLegacyRetirementProvesExactWorkersAndTcpUdpListenersBeforeCleanup(): void
     {
         $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
             . 'app/code/Weline/Server/Service/SslCertificateService.php';
@@ -257,29 +309,244 @@ final class SslCertificateStorageSecurityTest extends TestCase
         self::assertIsArray($lines);
         $method = new ReflectionMethod(
             SslCertificateService::class,
-            'transitionCertificateOutOfServiceLocked',
+            'retireLegacyNginxCertificateGeneration',
         );
         $source = \implode('', \array_slice(
             $lines,
             $method->getStartLine() - 1,
             $method->getEndLine() - $method->getStartLine() + 1,
         ));
-        $facts = \strpos($source, 'setHttpsEnabled(false)');
-        $endpoint = \strpos($source, 'revokeDomainFromInstanceConfigs(');
-        $deactivate = \strpos($source, 'deactivateProjectCertificateGeneration(');
-        $publication = \strpos($source, 'regenerateCertificateMap()');
-        $sourceCleanup = \strpos($source, 'removeCertificateDirectoryPlan(');
-        $rowCleanup = \strpos($source, 'delete()->fetch()');
-        foreach ([$facts, $endpoint, $deactivate, $publication, $sourceCleanup, $rowCleanup] as $position) {
-            self::assertIsInt($position);
-        }
-        self::assertTrue(
-            $facts < $endpoint
-            && $endpoint < $deactivate
-            && $deactivate < $publication
-            && $publication < $sourceCleanup
-            && $sourceCleanup < $rowCleanup,
+        $stop = \strpos($source, '$managed->stop($deadlineMonotonic)');
+        $map = \strpos(
+            $source,
+            '$this->writeLegacyCertificateCompatibilityMap($deadlineMonotonic)',
         );
+        $after = \strpos(
+            $source,
+            '$after = $managed->retirementSnapshot($deadlineMonotonic)',
+        );
+
+        self::assertIsInt($stop);
+        self::assertIsInt($map);
+        self::assertIsInt($after);
+        self::assertTrue($stop < $map && $map < $after);
+        self::assertStringContainsString('NginxChildProcessProbe::workerPids(', $source);
+        self::assertStringContainsString("foreach (['tcp', 'udp'] as \$transport)", $source);
+        self::assertStringContainsString('STREAM_SERVER_BIND | STREAM_SERVER_LISTEN', $source);
+        self::assertStringContainsString("'retired_worker_pids'", $source);
+        self::assertStringContainsString("(?:ssl|quic)", $source);
+    }
+
+    public function testRetirementReplayIsGloballyBoundedAndEventOrderedBeforeReenable(): void
+    {
+        $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . 'app/code/Weline/Server/Service/SslCertificateService.php';
+        $lines = \file($path);
+        self::assertIsArray($lines);
+        $methodSource = static function (string $methodName) use ($lines): string {
+            $method = new ReflectionMethod(SslCertificateService::class, $methodName);
+            return \implode('', \array_slice(
+                $lines,
+                $method->getStartLine() - 1,
+                $method->getEndLine() - $method->getStartLine() + 1,
+            ));
+        };
+        $replay = $methodSource('replayPendingCertificateRetirements');
+        self::assertStringContainsString('withRetirementReplayLease(', $replay);
+        self::assertStringContainsString('pendingRetirementBatch(', $replay);
+        self::assertStringContainsString('$maximumIntents,', $replay);
+        self::assertStringContainsString('$deadline,', $replay);
+        self::assertStringContainsString(
+            'advanceRetirementReplayCursor($intent, $deadline)',
+            $replay,
+        );
+        self::assertStringContainsString('$deadline', $replay);
+
+        $resume = $methodSource('resumeCertificateRetirementIntent');
+        self::assertStringContainsString(
+            '$store->retirementIntent($domain, $deadlineMonotonic)',
+            $resume,
+        );
+        self::assertStringContainsString(
+            "['wls_revocation_intent' => \$intent]",
+            $resume,
+        );
+        self::assertStringContainsString('$deadlineMonotonic,', $resume);
+
+        $boundedLock = $methodSource('withCertificateRetirementLifecycleLock');
+        self::assertStringContainsString('$remaining / 2.0', $boundedLock);
+        self::assertStringContainsString(
+            'withCertificateLifecycleLock(',
+            $boundedLock,
+        );
+        self::assertStringContainsString('$waitTimeout', $boundedLock);
+
+        $event = $methodSource('dispatchDurableCertificateRetirementEvent');
+        foreach ([
+            "'retirement_generation'",
+            "'retirement_intent_id'",
+            "'retirement_event_id'",
+            "'retirement_operation'",
+        ] as $field) {
+            self::assertStringContainsString($field, $event);
+        }
+
+        $enable = $methodSource('enableManagedCertificateLocked');
+        $pending = \strpos($enable, '$pendingRetirement =');
+        $databaseEnable = \strpos($enable, 'setStatus(SslCertificate::STATUS_ACTIVE)');
+        self::assertIsInt($pending);
+        self::assertIsInt($databaseEnable);
+        self::assertLessThan($databaseEnable, $pending);
+
+        $endpoint = $methodSource('revokeDomainFromEndpointPayload');
+        self::assertStringContainsString("\$data['ssl_enabled'] = false", $endpoint);
+        self::assertStringContainsString("\$data['ssl_cert'] = ''", $endpoint);
+        self::assertStringContainsString("\$data['ssl_key'] = ''", $endpoint);
+    }
+
+    public function testCertificateWritersCannotCrossAnExplicitPendingRetirement(): void
+    {
+        $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . 'app/code/Weline/Server/Service/SslCertificateService.php';
+        $lines = \file($path);
+        self::assertIsArray($lines);
+        $methodSource = static function (string $methodName) use ($lines): string {
+            $method = new ReflectionMethod(SslCertificateService::class, $methodName);
+            return \implode('', \array_slice(
+                $lines,
+                $method->getStartLine() - 1,
+                $method->getEndLine() - $method->getStartLine() + 1,
+            ));
+        };
+
+        foreach ([
+            'applyWildcardToSubdomainIfExists',
+            'generateLocalCaSignedCertificate',
+            'generateSelfSignedCertificate',
+            'reconcileCertificateFiles',
+            'regenerateCertificateMap',
+            'syncCertificateRecordFromFiles',
+            'syncWildcardToSubdomains',
+        ] as $writer) {
+            self::assertStringContainsString(
+                'withCertificateLifecycleLock(',
+                $methodSource($writer),
+                $writer,
+            );
+        }
+        foreach ([
+            'applyWildcardToSubdomainIfExistsLocked',
+            'generateLocalCaSignedCertificateLocked',
+            'generateSelfSignedCertificateLocked',
+            'syncCertificateRecordFromFilesLocked',
+            'acquireSslIssuanceLockUnlocked',
+            'importManualCertificateLocked',
+            'syncWildcardToSubdomains',
+        ] as $writer) {
+            self::assertStringContainsString(
+                'assertCertificateMutationNotBlockedByRetirement(',
+                $methodSource($writer),
+                $writer,
+            );
+        }
+    }
+
+    public function testCertificateEndpointRetirementReusesCanonicalAtomicWriters(): void
+    {
+        $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . 'app/code/Weline/Server/Service/SslCertificateService.php';
+        $lines = \file($path);
+        self::assertIsArray($lines);
+        $method = new ReflectionMethod(
+            SslCertificateService::class,
+            'revokeDomainFromInstanceConfigs',
+        );
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString(
+            'ServerInstanceManager::updateJsonFileAtomically(',
+            $source,
+        );
+        self::assertStringContainsString(
+            'GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(',
+            $source,
+        );
+        self::assertStringContainsString(
+            '$this->decodeCertificateEndpointRecord($candidate)',
+            $source,
+        );
+        self::assertStringContainsString(
+            '$this->assertSslStateTargetMode(',
+            $source,
+        );
+        self::assertStringContainsString('$lockBudget', $source);
+    }
+
+    public function testDeletionPlanRejectsLeafReplacementAfterPreflight(): void
+    {
+        $service = new CertificateStorageSecurityProbe(
+            $this->root . DIRECTORY_SEPARATOR . 'ssl',
+        );
+        $directory = $service->getCertificateDir('replace.example.test');
+        $leaf = $directory . 'fullchain.pem';
+        self::assertSame(5, \file_put_contents($leaf, 'first'));
+        $prepare = new ReflectionMethod(
+            SslCertificateService::class,
+            'prepareCertificateDirectoryRemoval',
+        );
+        $prepare->setAccessible(true);
+        $remove = new ReflectionMethod(
+            SslCertificateService::class,
+            'removeCertificateDirectoryPlan',
+        );
+        $remove->setAccessible(true);
+        $deadline = (\hrtime(true) / 1_000_000_000) + 5.0;
+        $plan = $prepare->invoke($service, 'replace.example.test', $deadline);
+        self::assertSame(6, \file_put_contents($leaf, 'second'));
+
+        try {
+            $remove->invoke($service, $plan, $deadline);
+            self::fail('Replacing a planned certificate leaf must abort deletion.');
+        } catch (\Throwable $throwable) {
+            self::assertStringContainsString('identity changed', $throwable->getMessage());
+        }
+        self::assertFileExists($leaf);
+        self::assertSame('second', \file_get_contents($leaf));
+    }
+
+    public function testDeletionPlanRejectsLeafDisappearanceAfterPreflight(): void
+    {
+        $service = new CertificateStorageSecurityProbe(
+            $this->root . DIRECTORY_SEPARATOR . 'ssl',
+        );
+        $directory = $service->getCertificateDir('missing.example.test');
+        $leaf = $directory . 'fullchain.pem';
+        self::assertSame(5, \file_put_contents($leaf, 'first'));
+        $prepare = new ReflectionMethod(
+            SslCertificateService::class,
+            'prepareCertificateDirectoryRemoval',
+        );
+        $prepare->setAccessible(true);
+        $remove = new ReflectionMethod(
+            SslCertificateService::class,
+            'removeCertificateDirectoryPlan',
+        );
+        $remove->setAccessible(true);
+        $deadline = (\hrtime(true) / 1_000_000_000) + 5.0;
+        $plan = $prepare->invoke($service, 'missing.example.test', $deadline);
+        self::assertTrue(\unlink($leaf));
+
+        try {
+            $remove->invoke($service, $plan, $deadline);
+            self::fail('A disappearing planned certificate leaf must abort deletion.');
+        } catch (\Throwable $throwable) {
+            self::assertStringContainsString('identity changed', $throwable->getMessage());
+        }
+        self::assertDirectoryExists(\rtrim($directory, '/\\'));
     }
 
     private function removeTree(string $path): void

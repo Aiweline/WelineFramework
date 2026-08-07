@@ -34,7 +34,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
         self::assertSame([101], $pids);
     }
 
-    public function testCollectResidualCleanupCandidatePidsIncludesRecoverableManagedPids(): void
+    public function testResidualVerificationCandidatesIncludeRecoverableManagedPidHints(): void
     {
         $stop = new class extends Stop {
             protected function collectBaseResidualPids(string $name, ServerInstanceInfo $info): array
@@ -344,7 +344,11 @@ final class StopCommandResidualPidIndexTest extends TestCase
             }
         };
 
-        self::assertNull($stop->findWelineServerInstanceNameByPort(26422));
+        self::assertNull($this->invokeProtected(
+            $stop,
+            'findPersistedRecoverableInstanceNameByPort',
+            26422
+        ));
     }
 
     public function testCollectRunningResidualPidsIgnoresReusedNonWlsPid(): void
@@ -373,7 +377,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
         );
     }
 
-    public function testCollectRunningResidualPidsTrustsExplicitEndpointPidsAfterNameFilter(): void
+    public function testCollectRunningResidualPidsDoesNotTrustEndpointPidWithoutLiveOwnership(): void
     {
         $stop = new class extends Stop {
             public array $ownershipChecks = [];
@@ -429,7 +433,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
         );
     }
 
-    public function testDirectForceCandidatesStayOnCurrentInstanceInfoHotPath(): void
+    public function testDirectForceVerificationCandidatesStayOnCurrentInstanceInfoHotPath(): void
     {
         $stop = new class extends Stop {
             public function collect(ServerInstanceInfo $info): array

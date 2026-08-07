@@ -29,9 +29,36 @@ final class GatewayRegistrationLifecycle
 
     private const MUTATIONS = ['register', 'renew'];
 
+    private const MAX_ATOMIC_JSON_BYTES = 16 * 1024 * 1024;
+
+    private const RECOVERY_LOCK_WAIT_SECONDS = 0.25;
+
+    private const CLEANUP_LOCK_WAIT_SECONDS = 0.25;
+
+    private const CLEANUP_DEADLINE_SECONDS = 1.0;
+
+    /** @var \Closure(string,callable,float):bool */
+    private readonly \Closure $atomicUpdater;
+
+    /** @var \Closure():float */
+    private readonly \Closure $monotonicClock;
+
     public function __construct(
         private readonly ?\Closure $instanceFileResolver = null,
+        ?\Closure $atomicUpdater = null,
+        ?\Closure $monotonicClock = null,
     ) {
+        $this->atomicUpdater = $atomicUpdater ?? static fn (
+            string $file,
+            callable $modifier,
+            float $timeout,
+        ): bool => ServerInstanceManager::updateJsonFileAtomically(
+            $file,
+            $modifier,
+            $timeout,
+        );
+        $this->monotonicClock = $monotonicClock
+            ?? static fn (): float => \hrtime(true) / 1_000_000_000;
     }
 
     /**
@@ -73,7 +100,12 @@ final class GatewayRegistrationLifecycle
      *
      * @return array{attempt_sequence:int,mutation:string,fact:array<string,mixed>}
      */
-    public function beginMutation(string $instanceName, string $mutation): array
+    public function beginMutation(
+        string $instanceName,
+        string $mutation,
+        float $waitTimeoutSeconds = 5.0,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         self::assertInstanceName($instanceName);
         $mutation = \strtolower(\trim($mutation));
@@ -95,7 +127,7 @@ final class GatewayRegistrationLifecycle
                         'Gateway registration is fenced by project shutdown.',
                     );
                 }
-                $fact = self::factForEndpoint($endpoint);
+                $fact = self::factForMutation($endpoint);
                 $state = (string)($fact['state'] ?? self::STATE_UNKNOWN);
                 if (\in_array($state, [
                     self::STATE_RETIRING,
@@ -135,6 +167,16 @@ final class GatewayRegistrationLifecycle
                 ];
                 return $endpoint;
             },
+            $waitTimeoutSeconds,
+            $deadlineMonotonic,
+            static function (array $endpoint) use (&$result): ?bool {
+                $expected = \is_array($result['fact'] ?? null)
+                    ? $result['fact']
+                    : [];
+                return $expected === []
+                    ? null
+                    : self::endpointContainsExactFact($endpoint, $expected);
+            },
         );
         if ($result === []) {
             throw new \RuntimeException('Gateway registration lifecycle was not published.');
@@ -146,6 +188,8 @@ final class GatewayRegistrationLifecycle
         string $instanceName,
         int $attemptSequence,
         string $mutation,
+        float $waitTimeoutSeconds = 5.0,
+        ?float $deadlineMonotonic = null,
     ): bool {
         return $this->finishMutation(
             $instanceName,
@@ -153,6 +197,8 @@ final class GatewayRegistrationLifecycle
             $mutation,
             self::STATE_REGISTERED,
             '',
+            $waitTimeoutSeconds,
+            $deadlineMonotonic,
         );
     }
 
@@ -161,13 +207,22 @@ final class GatewayRegistrationLifecycle
         int $attemptSequence,
         string $mutation,
         string $reason,
+        float $waitTimeoutSeconds = self::CLEANUP_LOCK_WAIT_SECONDS,
+        ?float $cleanupDeadlineMonotonic = null,
     ): bool {
+        // This is failure compensation, not continuation of the expired host
+        // mutation. Give it an independent bounded local deadline so the
+        // exact REGISTERING fact cannot be stranded indefinitely.
+        $cleanupDeadlineMonotonic ??= $this->monotonicNow()
+            + self::CLEANUP_DEADLINE_SECONDS;
         return $this->finishMutation(
             $instanceName,
             $attemptSequence,
             $mutation,
             self::STATE_UNCERTAIN,
             $reason,
+            $waitTimeoutSeconds,
+            $cleanupDeadlineMonotonic,
         );
     }
 
@@ -185,7 +240,7 @@ final class GatewayRegistrationLifecycle
             $instanceName,
             static function (array $endpoint) use ($nonce, &$result): array {
                 $identity = self::endpointIdentity($endpoint);
-                $fact = self::factForEndpoint($endpoint);
+                $fact = self::factForMutation($endpoint);
                 $state = (string)($fact['state'] ?? self::STATE_UNKNOWN);
                 $previous = $state === self::STATE_RETIRING
                     ? (string)($fact['previous_state'] ?? self::STATE_UNKNOWN)
@@ -232,6 +287,16 @@ final class GatewayRegistrationLifecycle
                 ];
                 return $endpoint;
             },
+            5.0,
+            null,
+            static function (array $endpoint) use (&$result): ?bool {
+                $expected = \is_array($result['fact'] ?? null)
+                    ? $result['fact']
+                    : [];
+                return $expected === []
+                    ? null
+                    : self::endpointContainsExactFact($endpoint, $expected);
+            },
         );
         if ($result === []) {
             throw new \RuntimeException('Gateway retirement fence was not published.');
@@ -247,9 +312,14 @@ final class GatewayRegistrationLifecycle
             return false;
         }
         $cancelled = false;
+        $expectedFact = [];
         $this->update(
             $instanceName,
-            static function (array $endpoint) use ($nonce, &$cancelled): array {
+            static function (array $endpoint) use (
+                $nonce,
+                &$cancelled,
+                &$expectedFact,
+            ): array {
                 $fact = self::factForEndpoint($endpoint);
                 if (!\hash_equals(self::STATE_RETIRING, (string)($fact['state'] ?? ''))
                     || !\hash_equals($nonce, (string)(
@@ -303,8 +373,16 @@ final class GatewayRegistrationLifecycle
                     'updated_timestamp' => \time(),
                 ]);
                 $endpoint['gateway']['registration_lifecycle'] = $next;
+                $expectedFact = $next;
                 $cancelled = true;
                 return $endpoint;
+            },
+            5.0,
+            null,
+            static function (array $endpoint) use (&$expectedFact): ?bool {
+                return $expectedFact === []
+                    ? null
+                    : self::endpointContainsExactFact($endpoint, $expectedFact);
             },
         );
         return $cancelled;
@@ -328,12 +406,14 @@ final class GatewayRegistrationLifecycle
         }
         $reason = self::boundedReason($reason);
         $completed = false;
+        $expectedFact = [];
         $this->update(
             $instanceName,
             static function (array $endpoint) use (
                 $nonce,
                 $reason,
                 &$completed,
+                &$expectedFact,
             ): array {
                 $fact = self::factForEndpoint($endpoint);
                 if ($fact === []
@@ -365,8 +445,16 @@ final class GatewayRegistrationLifecycle
                     'updated_timestamp' => \time(),
                 ]);
                 $endpoint['gateway']['registration_lifecycle'] = $next;
+                $expectedFact = $next;
                 $completed = true;
                 return $endpoint;
+            },
+            5.0,
+            null,
+            static function (array $endpoint) use (&$expectedFact): ?bool {
+                return $expectedFact === []
+                    ? null
+                    : self::endpointContainsExactFact($endpoint, $expectedFact);
             },
         );
         return $completed;
@@ -383,6 +471,24 @@ final class GatewayRegistrationLifecycle
             : [];
         if (!self::factMatchesEndpoint($fact, $endpoint)) {
             return [];
+        }
+        return $fact;
+    }
+
+    /** @param array<string,mixed> $endpoint */
+    private static function factForMutation(array $endpoint): array
+    {
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        if (!\array_key_exists('registration_lifecycle', $gateway)) {
+            return [];
+        }
+        $fact = self::factForEndpoint($endpoint);
+        if ($fact === []) {
+            throw new \RuntimeException(
+                'Gateway registration lifecycle fact is invalid.',
+            );
         }
         return $fact;
     }
@@ -412,6 +518,8 @@ final class GatewayRegistrationLifecycle
         string $mutation,
         string $state,
         string $reason,
+        float $waitTimeoutSeconds,
+        ?float $deadlineMonotonic,
     ): bool {
         self::assertInstanceName($instanceName);
         $mutation = \strtolower(\trim($mutation));
@@ -428,6 +536,7 @@ final class GatewayRegistrationLifecycle
         }
         $reason = self::boundedReason($reason);
         $finished = false;
+        $expectedFact = [];
         $this->update(
             $instanceName,
             static function (array $endpoint) use (
@@ -436,6 +545,7 @@ final class GatewayRegistrationLifecycle
                 $state,
                 $reason,
                 &$finished,
+                &$expectedFact,
             ): array {
                 $fact = self::factForEndpoint($endpoint);
                 if ($fact === []
@@ -463,15 +573,32 @@ final class GatewayRegistrationLifecycle
                     'updated_timestamp' => \time(),
                 ]);
                 $endpoint['gateway']['registration_lifecycle'] = $next;
+                $expectedFact = $next;
                 $finished = true;
                 return $endpoint;
+            },
+            $waitTimeoutSeconds,
+            $deadlineMonotonic,
+            static function (array $endpoint) use (&$expectedFact): ?bool {
+                return $expectedFact === []
+                    ? null
+                    : self::endpointContainsExactFact($endpoint, $expectedFact);
             },
         );
         return $finished;
     }
 
-    /** @param callable(array<string,mixed>):array<string,mixed> $callback */
-    private function update(string $instanceName, callable $callback): void
+    /**
+     * @param callable(array<string,mixed>):array<string,mixed> $callback
+     * @param (callable(array<string,mixed>):?bool)|null $commitVerifier
+     */
+    private function update(
+        string $instanceName,
+        callable $callback,
+        float $waitTimeoutSeconds = 5.0,
+        ?float $deadlineMonotonic = null,
+        ?callable $commitVerifier = null,
+    ): void
     {
         $file = $this->instanceFileResolver !== null
             ? (string)($this->instanceFileResolver)($instanceName)
@@ -481,11 +608,184 @@ final class GatewayRegistrationLifecycle
                 'Gateway registration lifecycle endpoint is unavailable or unsafe.',
             );
         }
-        if (!ServerInstanceManager::updateJsonFileAtomically($file, $callback)) {
+        $effectiveWaitTimeout = $this->effectiveWaitTimeout(
+            $waitTimeoutSeconds,
+            $deadlineMonotonic,
+        );
+        $callbackFailure = null;
+        $atomicFailure = null;
+        try {
+            $updated = ($this->atomicUpdater)(
+                $file,
+                function (array $endpoint) use (
+                    $instanceName,
+                    $callback,
+                    $deadlineMonotonic,
+                    &$callbackFailure,
+                ): array {
+                    try {
+                        $this->assertDeadline($deadlineMonotonic);
+                        self::assertEndpointInstance($endpoint, $instanceName);
+                        return $callback($endpoint);
+                    } catch (\Throwable $throwable) {
+                        $callbackFailure = $throwable;
+                        throw $throwable;
+                    }
+                },
+                $effectiveWaitTimeout,
+            );
+        } catch (\Throwable $throwable) {
+            $updated = false;
+            $atomicFailure = $throwable;
+        }
+        if ($updated === true) {
+            // A successful atomic helper result is the durable commit result.
+            // Crossing the business deadline during rename/fsync cannot turn
+            // that committed fact back into an apparent failure.
+            return;
+        }
+        if ($callbackFailure instanceof \Throwable) {
+            throw $callbackFailure;
+        }
+        if ($commitVerifier !== null) {
+            $recovered = $this->recoverPublicationOutcome(
+                $file,
+                $commitVerifier,
+                $atomicFailure,
+            );
+            if ($recovered === true) {
+                return;
+            }
+            if ($recovered === false) {
+                throw new \RuntimeException(
+                    'Gateway registration lifecycle publication outcome is uncertain.',
+                    previous: $atomicFailure,
+                );
+            }
+        }
+        throw new \RuntimeException(
+            'Gateway registration lifecycle CAS publication failed.',
+            previous: $atomicFailure,
+        );
+    }
+
+    private function assertDeadline(?float $deadlineMonotonic): void
+    {
+        if ($deadlineMonotonic === null) {
+            return;
+        }
+        if (!\is_finite($deadlineMonotonic)
+            || $this->monotonicNow() >= $deadlineMonotonic
+        ) {
             throw new \RuntimeException(
-                'Gateway registration lifecycle CAS publication failed.',
+                'Gateway registration lifecycle deadline was exhausted.',
             );
         }
+    }
+
+    private function effectiveWaitTimeout(
+        float $waitTimeoutSeconds,
+        ?float $deadlineMonotonic,
+    ): float {
+        if (!\is_finite($waitTimeoutSeconds) || $waitTimeoutSeconds <= 0.0) {
+            throw new \InvalidArgumentException(
+                'Gateway registration lifecycle lock wait must be positive and finite.',
+            );
+        }
+        $waitTimeoutSeconds = \min(300.0, $waitTimeoutSeconds);
+        if ($deadlineMonotonic === null) {
+            return $waitTimeoutSeconds;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Gateway registration lifecycle deadline was exhausted.',
+            );
+        }
+        $now = $this->monotonicNow();
+        if ($now >= $deadlineMonotonic) {
+            throw new \RuntimeException(
+                'Gateway registration lifecycle deadline was exhausted.',
+            );
+        }
+        return \min(
+            $waitTimeoutSeconds,
+            $deadlineMonotonic - $now,
+        );
+    }
+
+    /**
+     * Re-read the exact endpoint under a new bounded recovery lock. This
+     * deadline is intentionally independent of the exhausted business
+     * operation: it may only classify a side effect that might already have
+     * committed, never authorize a new host mutation.
+     *
+     * @param callable(array<string,mixed>):?bool $commitVerifier
+     */
+    private function recoverPublicationOutcome(
+        string $file,
+        callable $commitVerifier,
+        ?\Throwable $atomicFailure,
+    ): ?bool {
+        try {
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $file . '.lock',
+                static function () use ($file, $commitVerifier): ?bool {
+                    $encoded = GatewayProjectStateFilesystem::readOptional(
+                        $file,
+                        self::MAX_ATOMIC_JSON_BYTES,
+                        'gateway registration lifecycle recovery endpoint',
+                    );
+                    if ($encoded === null) {
+                        return null;
+                    }
+                    $endpoint = \json_decode(
+                        $encoded,
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR,
+                    );
+                    if (!\is_array($endpoint)) {
+                        throw new \RuntimeException(
+                            'Gateway registration lifecycle recovery endpoint is invalid.',
+                        );
+                    }
+                    return $commitVerifier($endpoint);
+                },
+                waitTimeoutSeconds: self::RECOVERY_LOCK_WAIT_SECONDS,
+            );
+        } catch (\Throwable $recoveryFailure) {
+            throw new \RuntimeException(
+                'Gateway registration lifecycle publication outcome is uncertain: '
+                    . $recoveryFailure->getMessage(),
+                previous: $atomicFailure ?? $recoveryFailure,
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $endpoint @param array<string,mixed> $expected */
+    private static function endpointContainsExactFact(
+        array $endpoint,
+        array $expected,
+    ): bool {
+        $actual = self::factForEndpoint($endpoint);
+        if ($actual === [] || !self::validFactShape($expected)) {
+            return false;
+        }
+        return \hash_equals(
+            GatewayClient::canonicalJson($expected),
+            GatewayClient::canonicalJson($actual),
+        );
+    }
+
+    private function monotonicNow(): float
+    {
+        $now = (float)($this->monotonicClock)();
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException(
+                'Gateway registration lifecycle monotonic clock is invalid.',
+            );
+        }
+        return $now;
     }
 
     /**
@@ -657,6 +957,22 @@ final class GatewayRegistrationLifecycle
     {
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $instanceName) !== 1) {
             throw new \InvalidArgumentException('WLS instance name is invalid.');
+        }
+    }
+
+    /** @param array<string,mixed> $endpoint */
+    private static function assertEndpointInstance(
+        array $endpoint,
+        string $instanceName,
+    ): void {
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $endpointInstance = \trim((string)($gateway['instance_id'] ?? ''));
+        if (!\hash_equals($instanceName, $endpointInstance)) {
+            throw new \RuntimeException(
+                'Gateway registration lifecycle endpoint does not match the requested instance.',
+            );
         }
     }
 

@@ -18,7 +18,7 @@ use Weline\Server\Service\ServiceOrchestrator;
  *
  * 负责把入口连接分发到 Worker。Nginx 模式只接收 loopback HTTP/1.1
  * 回源；纯 WLS 模式可透传公网 TLS/HTTP 连接。
- * Windows 上带 schema-5 启动租约的纯 WLS/网关回源都使用唯一
+ * Windows 上带 schema-6 启动租约的纯 WLS/网关回源都使用唯一
  * Dispatcher 持续接管预留监听器；无交接标记的 legacy Nginx 可保持 Direct。
  *
  * 优先级：30（在 Worker 之后启动，确保 Worker 就绪后再接收流量）

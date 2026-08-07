@@ -62,7 +62,7 @@ final class Watch extends CommandAbstract
                 }
                 if ($shutdown && $drainStartedAt === null) {
                     $this->watchdog->beginShutdownDrain();
-                    $drainStartedAt = microtime(true);
+                    $drainStartedAt = self::monotonicSeconds();
                 }
 
                 $this->heartbeat->beat($ownerId, $instanceName);
@@ -76,7 +76,7 @@ final class Watch extends CommandAbstract
                 }
 
                 if ($drainStartedAt !== null
-                    && microtime(true) >= $drainStartedAt + self::SHUTDOWN_DRAIN_SECONDS) {
+                    && self::monotonicSeconds() >= $drainStartedAt + self::SHUTDOWN_DRAIN_SECONDS) {
                     return;
                 }
                 SchedulerSystem::yieldDelay(self::TICK_MILLISECONDS);
@@ -214,8 +214,8 @@ final class Watch extends CommandAbstract
 
     private function sendWlsReady(SubprocessControlKernel $kernel): bool
     {
-        $deadline = microtime(true) + 3.0;
-        while (microtime(true) < $deadline) {
+        $deadline = self::monotonicSeconds() + 3.0;
+        while (self::monotonicSeconds() < $deadline) {
             if ($kernel->sendReady()) {
                 return true;
             }
@@ -231,6 +231,11 @@ final class Watch extends CommandAbstract
             SchedulerSystem::usleep(10_000);
         }
         return false;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 
     private function integerArgument(array $args, string $name, int $default = 0): int

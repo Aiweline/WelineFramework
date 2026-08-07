@@ -6,6 +6,7 @@ namespace Weline\Server\Service;
 
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Session\Server\SessionProtocol;
+use Weline\Server\Session\Server\SharedStateTokenStore;
 
 /**
  * 不依赖「进程可识别为 Weline」与 token 文件名猜测：直连 Session/Memory 协议探测是否可复用。
@@ -20,7 +21,13 @@ final class SharedStateProtocolProbe
      * 单次 TCP 直连 + 读 token + 鉴权后 PING（不经 ConnectionPool）。
      * 用于共享侧车就绪轮询，避免连接池失败退避带来的探测抖动与额外等待。
      */
-    public static function pingWithTokenBasename(string $host, int $port, string $tokenBasename): bool
+    public static function pingWithTokenBasename(
+        string $host,
+        int $port,
+        string $tokenBasename,
+        ?string $serviceRole = null,
+        ?string $tokenAuthorityInstance = null,
+    ): bool
     {
         $host = \trim($host);
         $tokenBasename = \trim($tokenBasename);
@@ -38,7 +45,13 @@ final class SharedStateProtocolProbe
         if (!\is_file($path) || !\is_readable($path)) {
             return false;
         }
-        $secret = self::readSecretFromTokenFile($path);
+        $secret = self::readSecretFromTokenFile(
+            $path,
+            $host,
+            $port,
+            $serviceRole,
+            $tokenAuthorityInstance,
+        );
         if ($secret === '' || \strlen($secret) > 8192) {
             return false;
         }
@@ -51,7 +64,9 @@ final class SharedStateProtocolProbe
         int $port,
         string $tokenBasename,
         ?string $consumerCode = null,
-        array $params = []
+        array $params = [],
+        ?string $serviceRole = null,
+        ?string $tokenAuthorityInstance = null,
     ): bool {
         $host = \trim($host);
         $tokenBasename = \trim($tokenBasename);
@@ -69,7 +84,13 @@ final class SharedStateProtocolProbe
         if (!\is_file($path) || !\is_readable($path)) {
             return false;
         }
-        $secret = self::readSecretFromTokenFile($path);
+        $secret = self::readSecretFromTokenFile(
+            $path,
+            $host,
+            $port,
+            $serviceRole,
+            $tokenAuthorityInstance,
+        );
         if ($secret === '' || \strlen($secret) > 8192) {
             return false;
         }
@@ -77,7 +98,13 @@ final class SharedStateProtocolProbe
         return self::rawAuthThenShutdown($host, $port, $secret, $consumerCode, $params);
     }
 
-    public static function findWorkingTokenBasename(string $host, int $port, string $defaultBasename): ?string
+    public static function findWorkingTokenBasename(
+        string $host,
+        int $port,
+        string $defaultBasename,
+        ?string $serviceRole = null,
+        ?string $tokenAuthorityInstance = null,
+    ): ?string
     {
         $host = \trim($host);
         if ($host === '' || $port <= 0) {
@@ -96,13 +123,19 @@ final class SharedStateProtocolProbe
             }
         }
         $defaultCandidates = \array_values(\array_unique(\array_map('basename', $defaultCandidates)));
-        $defaultBasename = (string)($defaultCandidates[0] ?? '');
+        $defaultBasename = $defaultCandidates[0];
 
         // Authenticated sidecars reject a bare PING. Probe the caller's known
         // token first so a busy token directory cannot hide a healthy service
         // behind the bounded fallback scan.
         foreach ($defaultCandidates as $candidate) {
-            if (self::pingWithTokenBasename($host, $port, $candidate)) {
+            if (self::pingWithTokenBasename(
+                $host,
+                $port,
+                $candidate,
+                $serviceRole,
+                $tokenAuthorityInstance,
+            )) {
                 return $candidate;
             }
         }
@@ -130,7 +163,13 @@ final class SharedStateProtocolProbe
             if (++$n > 48) {
                 break;
             }
-            $secret = self::readSecretFromTokenFile($path);
+            $secret = self::readSecretFromTokenFile(
+                $path,
+                $host,
+                $port,
+                $serviceRole,
+                $tokenAuthorityInstance,
+            );
             if ($secret === '' || \strlen($secret) > 8192) {
                 continue;
             }
@@ -254,9 +293,9 @@ final class SharedStateProtocolProbe
      */
     private static function readNextMessage($socket, string &$buffer, float $timeoutSec): ?array
     {
-        $deadline = \microtime(true) + $timeoutSec;
+        $deadline = self::monotonicSeconds() + $timeoutSec;
         $inSchedulerFiber = SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null;
-        while (\microtime(true) < $deadline) {
+        while (self::monotonicSeconds() < $deadline) {
             $messages = SessionProtocol::extractMessages($buffer);
             if ($messages !== []) {
                 return $messages[0];
@@ -288,19 +327,62 @@ final class SharedStateProtocolProbe
         return $messages[0] ?? null;
     }
 
-    private static function readSecretFromTokenFile(string $path): string
+    private static function readSecretFromTokenFile(
+        string $path,
+        string $host,
+        int $port,
+        ?string $serviceRole = null,
+        ?string $tokenAuthorityInstance = null,
+    ): string
     {
-        $raw = @\file_get_contents($path);
-        if ($raw === false) {
+        try {
+            $role = self::resolveTokenRole($path, $serviceRole);
+            if ($role === null || $port < 1 || $port > 65535 || \trim($host) === '') {
+                return '';
+            }
+            $instance = \trim((string)$tokenAuthorityInstance);
+            if ($instance === '') {
+                $instance = SharedStateTokenStore::defaultInstance($role, $host, $port);
+            }
+            $token = SharedStateTokenStore::readPath($path, [
+                'role' => $role,
+                'host' => $host,
+                'port' => $port,
+                'instance' => $instance,
+            ]);
+        } catch (\Throwable) {
             return '';
         }
 
-        $raw = \trim($raw);
-        if ($raw === '') {
-            return '';
+        return $token['secret'] ?? '';
+    }
+
+    private static function resolveTokenRole(string $path, ?string $serviceRole): ?string
+    {
+        $role = \strtolower(\trim((string)$serviceRole));
+        if ($role !== '') {
+            if (\str_contains($role, 'memory')) {
+                return 'memory_server';
+            }
+            if (\str_contains($role, 'session')) {
+                return 'session_server';
+            }
+            return null;
         }
 
-        $parts = \explode(':', $raw, 2);
-        return \trim((string)($parts[0] ?? ''));
+        $leaf = \strtolower(\basename(\str_replace('\\', '/', $path)));
+        if (\str_starts_with($leaf, 'memory_server')) {
+            return 'memory_server';
+        }
+        if (\str_starts_with($leaf, 'session_server')) {
+            return 'session_server';
+        }
+
+        return null;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

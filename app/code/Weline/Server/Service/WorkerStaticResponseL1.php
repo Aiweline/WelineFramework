@@ -26,10 +26,10 @@ final class WorkerStaticResponseL1
      *     etag:string,
      *     last_modified:string,
      *     path:string,
-     *     cached_at:int,
-     *     expires_at:int,
+     *     cached_at:float,
+     *     expires_at:float,
      *     hits:int,
-     *     last_access:int,
+     *     last_access:float,
      *     size:int
      * }>
      */
@@ -66,7 +66,7 @@ final class WorkerStaticResponseL1
             return null;
         }
 
-        $now = \time();
+        $now = self::monotonicSeconds();
         $entry = &self::$entries[$key];
         if (($entry['expires_at'] ?? 0) <= $now) {
             self::remove($key);
@@ -113,7 +113,6 @@ final class WorkerStaticResponseL1
         string $path,
         string $etag,
         string $lastModified,
-        int $cachedAt,
         int $maxAgeSeconds = self::DEFAULT_MAX_AGE_SECONDS,
     ): void {
         $key = self::cacheKey($requestTarget);
@@ -143,7 +142,7 @@ final class WorkerStaticResponseL1
             return;
         }
 
-        $cachedAt = $cachedAt > 0 ? $cachedAt : \time();
+        $cachedAt = self::monotonicSeconds();
         $maxAgeSeconds = \max(1, $maxAgeSeconds);
         self::$entries[$key] = [
             'response' => $hitResponse,
@@ -230,10 +229,10 @@ final class WorkerStaticResponseL1
     {
         while (self::$entries !== [] && self::$totalBytes + $neededBytes > self::MAX_TOTAL_BYTES) {
             $coldestKey = null;
-            $coldestAccess = PHP_INT_MAX;
+            $coldestAccess = \INF;
             $coldestHits = PHP_INT_MAX;
             foreach (self::$entries as $key => $entry) {
-                $lastAccess = (int)($entry['last_access'] ?? 0);
+                $lastAccess = (float)($entry['last_access'] ?? 0.0);
                 $hits = (int)($entry['hits'] ?? 0);
                 if ($lastAccess < $coldestAccess || ($lastAccess === $coldestAccess && $hits < $coldestHits)) {
                     $coldestKey = $key;
@@ -255,5 +254,10 @@ final class WorkerStaticResponseL1
         }
         self::$totalBytes = \max(0, self::$totalBytes - (int)self::$entries[$key]['size']);
         unset(self::$entries[$key]);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return (float)\hrtime(true) / 1_000_000_000;
     }
 }

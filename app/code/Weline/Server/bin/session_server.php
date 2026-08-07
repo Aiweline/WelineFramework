@@ -224,7 +224,17 @@ foreach (['empty_token_exit_grace_sec', 'empty_token_check_interval_sec', 'start
 }
 $sessionConfig['port'] = $port;
 $sessionConfig['role'] = $role;
-$sessionConfig['persist_path'] = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
+$configuredPersistPath = \trim((string)($sessionConfig['persist_path'] ?? ''));
+if ($configuredPersistPath === '') {
+    $legacyPersistPath = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
+    $sessionConfig['persist_path'] = $legacyPersistPath
+        . '.wls-state' . DIRECTORY_SEPARATOR;
+    $sessionConfig['legacy_persist_path'] = $legacyPersistPath;
+} else {
+    // An explicit operator path is already a dedicated contract. Do not
+    // silently relocate it or infer a legacy source outside that directory.
+    $sessionConfig['persist_path'] = $configuredPersistPath;
+}
 $persistFileName = \trim((string)($sessionConfig['persist_file_name'] ?? ''));
 if ($persistFileName === '') {
     $persistFileName = \Weline\Server\Service\SharedStateRuntimeScope::scopeDefaultFileName(

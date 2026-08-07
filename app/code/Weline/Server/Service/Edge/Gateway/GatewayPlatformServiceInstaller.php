@@ -15,6 +15,11 @@ final class GatewayPlatformServiceInstaller
     public const SERVICE_NAME = 'weline-wls-gateway-v2';
     private const WINDOWS_SERVICE_TRANSITION_TIMEOUT_SECONDS = 75.0;
     private const WINDOWS_SERVICE_POLL_MICROSECONDS = 100_000;
+    private const WINDOWS_SERVICE_QUERY_TIMEOUT_SECONDS = 5.0;
+    private const MIN_COMMAND_TIMEOUT_SECONDS = 0.1;
+    private const PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES = 2_000_000;
+    private const PLATFORM_ATOMIC_RECOVERY_ENTRY_QUOTA = 16_384;
+    private const PLATFORM_ATOMIC_RECOVERY_KIND_QUOTA = 8;
 
     public function __construct(
         private readonly GatewayPaths $paths = new GatewayPaths(),
@@ -32,6 +37,1247 @@ final class GatewayPlatformServiceInstaller
         $this->paths->ensureDirectories();
         if (!$this->paths->isTestMode()) {
             $this->assertAdministrator();
+        }
+        return $this->withPackageInstallLock(
+            fn (?array $recovered): array => $this->installDefinitionLocked(
+                $profile,
+                $recovered,
+            ),
+        );
+    }
+
+    /**
+     * @template TResult
+     * @param \Closure(array{operation:string,to_profile:string}|null):TResult $callback
+     * @return TResult
+     */
+    private function withPackageInstallLock(\Closure $callback): mixed
+    {
+        $this->paths->ensureDirectories();
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR . 'package-install.lock',
+            function () use ($callback): mixed {
+                $recovered = $this->recoverPlatformDefinitionTransaction();
+                $this->cleanupPlatformAtomicRecoveryBackups();
+                return $callback($recovered);
+            },
+        );
+    }
+
+    private function cleanupPlatformAtomicRecoveryBackups(): void
+    {
+        $specifications = [
+            $this->paths->platformServiceMetadataFile() => [
+                'maximum' => 16_384,
+                'label' => 'WLS Gateway platform service metadata',
+            ],
+            $this->paths->serviceDefinitionFile() => [
+                'maximum' => 1_048_576,
+                'label' => 'WLS Gateway platform service definition',
+            ],
+            $this->platformRemovalPendingFile() => [
+                'maximum' => 1024,
+                'label' => 'WLS Gateway platform removal fence',
+            ],
+            $this->platformDefinitionTransactionFile() => [
+                'maximum' => self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+                'label' => 'WLS Gateway platform definition transaction',
+            ],
+        ];
+        $recoveries = [];
+        foreach ($specifications as $path => $specification) {
+            if (GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
+                $path,
+                (int)$specification['maximum'],
+                (string)$specification['label'],
+            )) {
+                $recoveries[$path] = $specification;
+            }
+        }
+
+        // Pre-validate the complete transaction recovery set. No prior
+        // generation is removed when one paired platform target is missing or
+        // damaged.
+        foreach ($recoveries as $path => $specification) {
+            $raw = GatewayProjectStateFilesystem::read(
+                $path,
+                (int)$specification['maximum'],
+                (string)$specification['label'] . ' recovery backup paired target',
+            );
+            $this->validatePlatformRecoveryTarget($path, $raw);
+        }
+        foreach ($recoveries as $path => $specification) {
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                $path,
+                (int)$specification['maximum'],
+                (string)$specification['label'],
+                function (string $raw) use ($path): void {
+                    $this->validatePlatformRecoveryTarget($path, $raw);
+                },
+            );
+        }
+    }
+
+    private function validatePlatformRecoveryTarget(string $path, string $raw): void
+    {
+        if (\hash_equals($this->paths->platformServiceMetadataFile(), $path)) {
+            $this->decodePlatformServiceMetadata($raw);
+            return;
+        }
+        if (\hash_equals($this->platformDefinitionTransactionFile(), $path)) {
+            $this->decodePlatformDefinitionTransaction($raw);
+            return;
+        }
+        if (\hash_equals($this->paths->serviceDefinitionFile(), $path)) {
+            $metadataRaw = GatewayProjectStateFilesystem::read(
+                $this->paths->platformServiceMetadataFile(),
+                16_384,
+                'WLS Gateway platform metadata for definition recovery',
+            );
+            $metadata = $this->decodePlatformServiceMetadata($metadataRaw);
+            $expected = $this->renderDefinition((string)$metadata['profile']);
+            if (!\hash_equals($expected, $raw)) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform definition recovery target is not bound to installed metadata.'
+                );
+            }
+            return;
+        }
+        $expectedKind = $this->paths->isTestMode()
+            ? 'test-session'
+            : match (\PHP_OS_FAMILY) {
+                'Darwin' => 'launchd-system',
+                'Linux' => 'systemd-system',
+                'Windows' => 'windows-service',
+                default => '',
+            };
+        $matches = [];
+        if (\hash_equals($this->platformRemovalPendingFile(), $path)
+            && \preg_match(
+                '/\AWLS-PLATFORM-REMOVAL\/1\n'
+                    . 'kind=(test-session|launchd-system|systemd-system|windows-service)\n'
+                    . 'at=[1-9][0-9]{0,18}\n'
+                    . 'nonce=[a-f0-9]{32}\n\z/D',
+                $raw,
+                $matches,
+            ) === 1
+            && \hash_equals($expectedKind, (string)($matches[1] ?? ''))
+        ) {
+            return;
+        }
+        throw new \RuntimeException(
+            'WLS Gateway platform recovery target is malformed or unsupported.'
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private function decodePlatformServiceMetadata(string $raw): array
+    {
+        $decoded = \json_decode($raw, true);
+        $expected = [
+            'schema_version',
+            'kind',
+            'definition',
+            'profile',
+            'test_mode',
+            'installed_at',
+        ];
+        $actual = \is_array($decoded) ? \array_keys($decoded) : [];
+        \sort($expected, SORT_STRING);
+        \sort($actual, SORT_STRING);
+        $expectedKind = $this->paths->isTestMode()
+            ? 'test-session'
+            : match (\PHP_OS_FAMILY) {
+                'Darwin' => 'launchd-system',
+                'Linux' => 'systemd-system',
+                'Windows' => 'windows-service',
+                default => '',
+            };
+        if (!\is_array($decoded)
+            || $actual !== $expected
+            || ($decoded['schema_version'] ?? null) !== 1
+            || !\hash_equals($expectedKind, (string)($decoded['kind'] ?? ''))
+            || !\hash_equals(
+                $this->paths->serviceDefinitionFile(),
+                (string)($decoded['definition'] ?? ''),
+            )
+            || !\in_array((string)($decoded['profile'] ?? ''), [
+                'default',
+                'ipv4-only',
+            ], true)
+            || ($decoded['test_mode'] ?? null) !== $this->paths->isTestMode()
+            || !\is_string($decoded['installed_at'] ?? null)
+            || \strlen((string)$decoded['installed_at']) > 128
+            || \strtotime((string)$decoded['installed_at']) === false
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway platform service metadata recovery target is invalid.'
+            );
+        }
+        return $decoded;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function newPlatformDefinitionTransaction(
+        string $operation,
+        ?string $fromProfile,
+        string $toProfile,
+        ?string $oldDefinition,
+        ?string $oldMetadata,
+        string $newDefinition,
+        string $newMetadata,
+    ): array {
+        if (!\hash_equals($this->renderDefinition($toProfile), $newDefinition)) {
+            throw new \RuntimeException(
+                'WLS Gateway platform definition transaction cannot stage an unrendered definition.'
+            );
+        }
+        $journal = [
+            'schema_version' => 1,
+            'operation' => $operation,
+            'phase' => 'prepared',
+            'nonce' => \bin2hex(\random_bytes(16)),
+            'from_profile' => $fromProfile,
+            'to_profile' => $toProfile,
+            'old_definition_sha256' => $oldDefinition === null
+                ? null
+                : \hash('sha256', $oldDefinition),
+            'old_metadata_sha256' => $oldMetadata === null
+                ? null
+                : \hash('sha256', $oldMetadata),
+            'new_definition_sha256' => \hash('sha256', $newDefinition),
+            'new_metadata_sha256' => \hash('sha256', $newMetadata),
+            'new_definition_base64' => \base64_encode($newDefinition),
+            'new_metadata_base64' => \base64_encode($newMetadata),
+        ];
+        return $this->decodePlatformDefinitionTransaction(
+            $this->encodePlatformDefinitionTransaction($journal),
+        );
+    }
+
+    /** @param array<string,mixed> $journal */
+    private function encodePlatformDefinitionTransaction(array $journal): string
+    {
+        return \json_encode(
+            [
+                'schema_version' => $journal['schema_version'] ?? null,
+                'operation' => $journal['operation'] ?? null,
+                'phase' => $journal['phase'] ?? null,
+                'nonce' => $journal['nonce'] ?? null,
+                'from_profile' => $journal['from_profile'] ?? null,
+                'to_profile' => $journal['to_profile'] ?? null,
+                'old_definition_sha256' => $journal['old_definition_sha256'] ?? null,
+                'old_metadata_sha256' => $journal['old_metadata_sha256'] ?? null,
+                'new_definition_sha256' => $journal['new_definition_sha256'] ?? null,
+                'new_metadata_sha256' => $journal['new_metadata_sha256'] ?? null,
+                'new_definition_base64' => $journal['new_definition_base64'] ?? null,
+                'new_metadata_base64' => $journal['new_metadata_base64'] ?? null,
+            ],
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ) . PHP_EOL;
+    }
+
+    /** @return array<string,mixed> */
+    private function decodePlatformDefinitionTransaction(string $raw): array
+    {
+        $decoded = \json_decode($raw, true);
+        $expectedKeys = [
+            'schema_version',
+            'operation',
+            'phase',
+            'nonce',
+            'from_profile',
+            'to_profile',
+            'old_definition_sha256',
+            'old_metadata_sha256',
+            'new_definition_sha256',
+            'new_metadata_sha256',
+            'new_definition_base64',
+            'new_metadata_base64',
+        ];
+        $actualKeys = \is_array($decoded) ? \array_keys($decoded) : [];
+        \sort($expectedKeys, SORT_STRING);
+        \sort($actualKeys, SORT_STRING);
+        if (!\is_array($decoded)
+            || $actualKeys !== $expectedKeys
+            || ($decoded['schema_version'] ?? null) !== 1
+            || !\in_array((string)($decoded['operation'] ?? ''), [
+                'install',
+                'refresh',
+            ], true)
+            || !\in_array((string)($decoded['phase'] ?? ''), [
+                'prepared',
+                'definition_published',
+                'metadata_published',
+            ], true)
+            || \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)($decoded['nonce'] ?? ''),
+            ) !== 1
+            || !\in_array((string)($decoded['to_profile'] ?? ''), [
+                'default',
+                'ipv4-only',
+            ], true)
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway platform definition transaction journal is malformed.'
+            );
+        }
+        $operation = (string)$decoded['operation'];
+        $fromProfile = $decoded['from_profile'] ?? null;
+        $oldDefinitionDigest = $decoded['old_definition_sha256'] ?? null;
+        $oldMetadataDigest = $decoded['old_metadata_sha256'] ?? null;
+        if (($operation === 'install'
+                && ($fromProfile !== null
+                    || $oldDefinitionDigest !== null
+                    || $oldMetadataDigest !== null))
+            || ($operation === 'refresh'
+                && (!\in_array((string)$fromProfile, [
+                    'default',
+                    'ipv4-only',
+                ], true)
+                    || \preg_match(
+                        '/\A[a-f0-9]{64}\z/D',
+                        (string)$oldDefinitionDigest,
+                    ) !== 1
+                    || \preg_match(
+                        '/\A[a-f0-9]{64}\z/D',
+                        (string)$oldMetadataDigest,
+                    ) !== 1))
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway platform definition transaction origin is invalid.'
+            );
+        }
+        foreach ([
+            'new_definition_sha256',
+            'new_metadata_sha256',
+        ] as $digestKey) {
+            if (\preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($decoded[$digestKey] ?? ''),
+            ) !== 1) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform definition transaction digest is invalid.'
+                );
+            }
+        }
+        $newDefinition = \base64_decode(
+            (string)($decoded['new_definition_base64'] ?? ''),
+            true,
+        );
+        $newMetadata = \base64_decode(
+            (string)($decoded['new_metadata_base64'] ?? ''),
+            true,
+        );
+        if (!\is_string($newDefinition)
+            || $newDefinition === ''
+            || \strlen($newDefinition) > 1_048_576
+            || !\is_string($newMetadata)
+            || $newMetadata === ''
+            || \strlen($newMetadata) > 16_384
+            || !\hash_equals(
+                (string)$decoded['new_definition_sha256'],
+                \hash('sha256', $newDefinition),
+            )
+            || !\hash_equals(
+                (string)$decoded['new_metadata_sha256'],
+                \hash('sha256', $newMetadata),
+            )
+            || !\hash_equals(
+                $this->renderDefinition((string)$decoded['to_profile']),
+                $newDefinition,
+            )
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway platform definition transaction after-image is invalid.'
+            );
+        }
+        $metadata = $this->decodePlatformServiceMetadata($newMetadata);
+        if (!\hash_equals(
+            (string)$decoded['to_profile'],
+            (string)$metadata['profile'],
+        )) {
+            throw new \RuntimeException(
+                'WLS Gateway platform definition transaction metadata profile is invalid.'
+            );
+        }
+        $decoded['new_definition'] = $newDefinition;
+        $decoded['new_metadata'] = $newMetadata;
+        return $decoded;
+    }
+
+    /**
+     * @return array{operation:string,to_profile:string}|null
+     */
+    private function recoverPlatformDefinitionTransaction(): ?array
+    {
+        $journalPath = $this->platformDefinitionTransactionFile();
+        $inventories = $this->preflightPlatformAtomicRecoveryInventories();
+        $journalStatus = @\lstat($journalPath);
+        if (!\is_array($journalStatus)) {
+            if (\file_exists($journalPath) || \is_link($journalPath)) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform definition transaction path is indeterminate.'
+                );
+            }
+            $journalArtifacts = $inventories[$journalPath] ?? [];
+            if ($journalArtifacts === []) {
+                return null;
+            }
+            $this->restoreMissingPlatformDefinitionTransaction(
+                $inventories,
+                $journalArtifacts,
+            );
+            $inventories = $this->preflightPlatformAtomicRecoveryInventories();
+        }
+
+        $journalRaw = $this->readStableRegularFile(
+            $journalPath,
+            self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+            'WLS Gateway platform definition transaction',
+        );
+        $journal = $this->decodePlatformDefinitionTransaction($journalRaw);
+        $this->assertPlatformDefinitionTransactionTargetsInClosure($journal);
+        if (($inventories[$journalPath] ?? []) !== []) {
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                $journalPath,
+                self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+                'WLS Gateway platform definition transaction',
+                fn (string $raw): array => $this->decodePlatformDefinitionTransaction($raw),
+            );
+            $journalRaw = $this->readStableRegularFile(
+                $journalPath,
+                self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+                'WLS Gateway platform definition transaction',
+            );
+            $journal = $this->decodePlatformDefinitionTransaction($journalRaw);
+        }
+
+        $this->cleanupPlatformDefinitionTransactionTargetArtifacts($journal);
+        $definitionState = $this->platformDefinitionTransactionTargetState(
+            $this->paths->serviceDefinitionFile(),
+            $journal['old_definition_sha256'],
+            (string)$journal['new_definition_sha256'],
+            (string)$journal['new_definition'],
+            1_048_576,
+            'definition',
+            $journal,
+        );
+        $metadataState = $this->platformDefinitionTransactionTargetState(
+            $this->paths->platformServiceMetadataFile(),
+            $journal['old_metadata_sha256'],
+            (string)$journal['new_metadata_sha256'],
+            (string)$journal['new_metadata'],
+            16_384,
+            'metadata',
+            $journal,
+        );
+
+        if ($definitionState === 'old') {
+            $this->atomicWrite(
+                $this->paths->serviceDefinitionFile(),
+                (string)$journal['new_definition'],
+                $this->paths->isTestMode() ? 0600 : 0644,
+            );
+        }
+        if (!\hash_equals('definition_published', (string)$journal['phase'])
+            && !\hash_equals('metadata_published', (string)$journal['phase'])
+        ) {
+            $journal = $this->advancePlatformDefinitionTransaction(
+                $journal,
+                'definition_published',
+            );
+        }
+        if ($metadataState === 'old') {
+            $this->atomicWrite(
+                $this->paths->platformServiceMetadataFile(),
+                (string)$journal['new_metadata'],
+                0600,
+            );
+        }
+        if (!\hash_equals('metadata_published', (string)$journal['phase'])) {
+            $journal = $this->advancePlatformDefinitionTransaction(
+                $journal,
+                'metadata_published',
+            );
+        }
+
+        foreach ([
+            [
+                $this->paths->serviceDefinitionFile(),
+                $journal['old_definition_sha256'],
+                (string)$journal['new_definition_sha256'],
+                (string)$journal['new_definition'],
+                1_048_576,
+                'definition',
+            ],
+            [
+                $this->paths->platformServiceMetadataFile(),
+                $journal['old_metadata_sha256'],
+                (string)$journal['new_metadata_sha256'],
+                (string)$journal['new_metadata'],
+                16_384,
+                'metadata',
+            ],
+        ] as [$path, $oldDigest, $newDigest, $newRaw, $maximum, $label]) {
+            if ($this->platformDefinitionTransactionTargetState(
+                (string)$path,
+                $oldDigest,
+                (string)$newDigest,
+                (string)$newRaw,
+                (int)$maximum,
+                (string)$label,
+                $journal,
+            ) !== 'new') {
+                throw new \RuntimeException(
+                    'WLS Gateway platform definition transaction did not reach its after-image.'
+                );
+            }
+        }
+        if (\hash_equals('install', (string)$journal['operation'])
+            && !$this->paths->isTestMode()
+            && \PHP_OS_FAMILY !== 'Windows'
+        ) {
+            // The journal remains authoritative until the privilege boundary
+            // is sealed. A crash during this pass therefore retries instead
+            // of exposing an apparently complete but untrusted installation.
+            $this->ensureServiceIdentityAndPermissions();
+        }
+        $this->cleanupPlatformDefinitionTransactionTargetArtifacts($journal);
+        $this->removePlatformDefinitionTransaction($journal);
+        return [
+            'operation' => (string)$journal['operation'],
+            'to_profile' => (string)$journal['to_profile'],
+        ];
+    }
+
+    /** @param array<string,mixed> $journal */
+    private function publishPlatformDefinitionTransaction(array $journal): void
+    {
+        $path = $this->platformDefinitionTransactionFile();
+        $inventories = $this->preflightPlatformAtomicRecoveryInventories();
+        foreach ($inventories as $artifacts) {
+            if ($artifacts !== []) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform definition transaction cannot start over unresolved atomic recovery evidence.'
+                );
+            }
+        }
+        if (@\lstat($path) !== false || \file_exists($path) || \is_link($path)) {
+            throw new \RuntimeException(
+                'A WLS Gateway platform definition transaction is already active.'
+            );
+        }
+        $this->atomicWrite(
+            $path,
+            $this->encodePlatformDefinitionTransaction($journal),
+            0600,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $journal
+     * @return array<string,mixed>
+     */
+    private function advancePlatformDefinitionTransaction(
+        array $journal,
+        string $phase,
+    ): array {
+        $path = $this->platformDefinitionTransactionFile();
+        $this->preflightPlatformAtomicRecoveryInventories();
+        $this->assertPlatformDefinitionTransactionTargetsInClosure($journal);
+        if (GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
+            $path,
+            self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+            'WLS Gateway platform definition transaction',
+        )) {
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                $path,
+                self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+                'WLS Gateway platform definition transaction',
+                fn (string $raw): array => $this->decodePlatformDefinitionTransaction($raw),
+            );
+        }
+        $current = $this->decodePlatformDefinitionTransaction(
+            $this->readStableRegularFile(
+                $path,
+                self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+                'WLS Gateway platform definition transaction',
+            ),
+        );
+        if (!\hash_equals((string)$journal['nonce'], (string)$current['nonce'])) {
+            throw new \RuntimeException(
+                'WLS Gateway platform definition transaction identity changed.'
+            );
+        }
+        $current['phase'] = $phase;
+        $this->atomicWrite(
+            $path,
+            $this->encodePlatformDefinitionTransaction($current),
+            0600,
+        );
+        return $current;
+    }
+
+    /** @param array<string,mixed> $journal */
+    private function removePlatformDefinitionTransaction(array $journal): void
+    {
+        $path = $this->platformDefinitionTransactionFile();
+        $this->preflightPlatformAtomicRecoveryInventories();
+        $this->assertPlatformDefinitionTransactionTargetsInClosure($journal);
+        if (GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
+            $path,
+            self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+            'WLS Gateway platform definition transaction',
+        )) {
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                $path,
+                self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+                'WLS Gateway platform definition transaction',
+                fn (string $raw): array => $this->decodePlatformDefinitionTransaction($raw),
+            );
+        }
+        $currentRaw = $this->readStableRegularFile(
+            $path,
+            self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+            'WLS Gateway platform definition transaction',
+        );
+        $current = $this->decodePlatformDefinitionTransaction($currentRaw);
+        if (!\hash_equals((string)$journal['nonce'], (string)$current['nonce'])
+            || !\hash_equals('metadata_published', (string)$current['phase'])
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway platform definition transaction is not removable.'
+            );
+        }
+        $status = @\lstat($path);
+        if (!\is_array($status)
+            || !GatewayProjectStateFilesystem::removeRegular(
+                $path,
+                'completed WLS Gateway platform definition transaction',
+                $status,
+            )
+        ) {
+            throw new \RuntimeException(
+                'Unable to remove the completed WLS Gateway platform definition transaction.'
+            );
+        }
+    }
+
+    /**
+     * @return array<string,array<string,array{path:string,kind:string,status:array<string|int,mixed>,contents:string}>>
+     */
+    private function preflightPlatformAtomicRecoveryInventories(): array
+    {
+        $specifications = [
+            $this->platformDefinitionTransactionFile() => [
+                self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+                'WLS Gateway platform definition transaction',
+            ],
+            $this->paths->serviceDefinitionFile() => [
+                1_048_576,
+                'WLS Gateway platform service definition',
+            ],
+            $this->paths->platformServiceMetadataFile() => [
+                16_384,
+                'WLS Gateway platform service metadata',
+            ],
+            $this->platformRemovalPendingFile() => [
+                1024,
+                'WLS Gateway platform removal fence',
+            ],
+        ];
+        $inventories = [];
+        foreach ($specifications as $target => [$maximumBytes, $label]) {
+            $inventories[$target] = $this->inspectPlatformAtomicRecoveryArtifacts(
+                $target,
+                $maximumBytes,
+                $label,
+            );
+        }
+        return $inventories;
+    }
+
+    /**
+     * @return array<string,array{path:string,kind:string,status:array<string|int,mixed>,contents:string}>
+     */
+    private function inspectPlatformAtomicRecoveryArtifacts(
+        string $target,
+        int $maximumBytes,
+        string $label,
+    ): array {
+        $directory = \dirname($target);
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || \is_link($directory)
+            || ((((int)($directoryBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                $label . ' atomic recovery directory is unsafe.'
+            );
+        }
+        $targetLeaf = \basename(\str_replace('\\', '/', $target));
+        if ($targetLeaf === '' || $targetLeaf === '.' || $targetLeaf === '..') {
+            throw new \RuntimeException($label . ' atomic recovery target is invalid.');
+        }
+        $backupPrefix = $targetLeaf . '.wls-backup-';
+        $stagingPrefix = $targetLeaf . '.tmp-';
+        $backupPattern = '/\A' . \preg_quote($backupPrefix, '/')
+            . '[a-f0-9]{16}\z/Du';
+        $stagingPattern = '/\A' . \preg_quote($stagingPrefix, '/')
+            . '[a-f0-9]{24}\z/Du';
+        $foldedBackupPrefix = \strtolower($backupPrefix);
+        $foldedStagingPrefix = \strtolower($stagingPrefix);
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException(
+                'Unable to enumerate ' . $label . ' atomic recovery directory.'
+            );
+        }
+        $artifacts = [];
+        $backups = 0;
+        $staging = 0;
+        $visited = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if (++$visited > self::PLATFORM_ATOMIC_RECOVERY_ENTRY_QUOTA) {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery directory exceeds its raw entry quota.'
+                    );
+                }
+                $foldedLeaf = \strtolower($leaf);
+                $isBackup = \str_starts_with($foldedLeaf, $foldedBackupPrefix);
+                $isStaging = \str_starts_with($foldedLeaf, $foldedStagingPrefix);
+                if (!$isBackup && !$isStaging) {
+                    continue;
+                }
+                if (($isBackup && !\str_starts_with($leaf, $backupPrefix))
+                    || ($isStaging && !\str_starts_with($leaf, $stagingPrefix))
+                ) {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery directory contains a case alias.'
+                    );
+                }
+                if ($isBackup && \preg_match($backupPattern, $leaf) === 1) {
+                    $kind = 'backup';
+                    ++$backups;
+                } elseif ($isStaging
+                    && \preg_match($stagingPattern, $leaf) === 1
+                ) {
+                    $kind = 'staging';
+                    ++$staging;
+                } else {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery directory contains a malformed reserved leaf.'
+                    );
+                }
+                if ($backups > self::PLATFORM_ATOMIC_RECOVERY_KIND_QUOTA
+                    || $staging > self::PLATFORM_ATOMIC_RECOVERY_KIND_QUOTA
+                ) {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery artifact quota is exhausted.'
+                    );
+                }
+                $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                [$contents, $status] = $this->readStablePlatformRecoveryArtifact(
+                    $path,
+                    $maximumBytes,
+                    $label . ' atomic recovery artifact',
+                );
+                $artifacts[$path] = [
+                    'path' => $path,
+                    'kind' => $kind,
+                    'status' => $status,
+                    'contents' => $contents,
+                ];
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        $directoryAfter = @\lstat($directory);
+        if (!\is_array($directoryAfter)
+            || !$this->sameFileState($directoryBefore, $directoryAfter)
+        ) {
+            throw new \RuntimeException(
+                $label . ' atomic recovery directory changed during inspection.'
+            );
+        }
+        \ksort($artifacts, SORT_STRING);
+        return $artifacts;
+    }
+
+    /**
+     * @return array{0:string,1:array<string|int,mixed>}
+     */
+    private function readStablePlatformRecoveryArtifact(
+        string $path,
+        int $maximumBytes,
+        string $label,
+    ): array {
+        $before = @\lstat($path);
+        if (!\is_array($before)
+            || \is_link($path)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($before['nlink'] ?? 0) !== 1
+            || (int)($before['size'] ?? -1) < 0
+            || (int)($before['size'] ?? -1) > $maximumBytes
+        ) {
+            throw new \RuntimeException(
+                $label . ' is missing, linked, oversized, or special.'
+            );
+        }
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to open ' . $label . '.');
+        }
+        try {
+            $opened = @\fstat($handle);
+            $contents = @\stream_get_contents($handle, $maximumBytes + 1);
+            $after = @\fstat($handle);
+            $pathAfter = @\lstat($path);
+            if (!\is_array($opened)
+                || !\is_string($contents)
+                || \strlen($contents) > $maximumBytes
+                || !\is_array($after)
+                || !\is_array($pathAfter)
+                || !$this->sameFileState($before, $opened)
+                || !$this->sameFileState($opened, $after)
+                || !$this->sameFileState($after, $pathAfter)
+                || (int)($after['size'] ?? -1) !== \strlen($contents)
+            ) {
+                throw new \RuntimeException($label . ' changed while being read.');
+            }
+            return [$contents, $after];
+        } finally {
+            @\fclose($handle);
+        }
+    }
+
+    /**
+     * @param array<string,array<string,array{path:string,kind:string,status:array<string|int,mixed>,contents:string}>> $expected
+     */
+    private function assertPlatformRecoveryInventoriesUnchanged(array $expected): void
+    {
+        $actual = $this->preflightPlatformAtomicRecoveryInventories();
+        if (\array_keys($expected) !== \array_keys($actual)) {
+            throw new \RuntimeException(
+                'WLS Gateway platform atomic recovery namespace changed.'
+            );
+        }
+        foreach ($expected as $target => $artifacts) {
+            $currentArtifacts = $actual[$target] ?? null;
+            if (!\is_array($currentArtifacts)
+                || \array_keys($artifacts) !== \array_keys($currentArtifacts)
+            ) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform atomic recovery artifact set changed.'
+                );
+            }
+            foreach ($artifacts as $path => $artifact) {
+                $current = $currentArtifacts[$path] ?? null;
+                if (!\is_array($current)
+                    || !\hash_equals($artifact['kind'], (string)$current['kind'])
+                    || !\hash_equals(
+                        \hash('sha256', $artifact['contents']),
+                        \hash('sha256', (string)$current['contents']),
+                    )
+                    || !$this->sameFileState(
+                        $artifact['status'],
+                        (array)$current['status'],
+                    )
+                ) {
+                    throw new \RuntimeException(
+                        'WLS Gateway platform atomic recovery artifact changed.'
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string,array<string,array{path:string,kind:string,status:array<string|int,mixed>,contents:string}>> $inventories
+     * @param array<string,array{path:string,kind:string,status:array<string|int,mixed>,contents:string}> $journalArtifacts
+     */
+    private function restoreMissingPlatformDefinitionTransaction(
+        array $inventories,
+        array $journalArtifacts,
+    ): void {
+        if (\count($journalArtifacts) !== 1) {
+            throw new \RuntimeException(
+                'A missing WLS Gateway platform transaction has ambiguous recovery evidence.'
+            );
+        }
+        $artifact = \reset($journalArtifacts);
+        if (!\is_array($artifact)
+            || !\hash_equals('staging', (string)$artifact['kind'])
+        ) {
+            throw new \RuntimeException(
+                'A missing WLS Gateway platform transaction has no validated staging after-image.'
+            );
+        }
+        $journal = $this->decodePlatformDefinitionTransaction(
+            (string)$artifact['contents'],
+        );
+        $this->assertPlatformDefinitionTransactionTargetsInClosure($journal);
+        $this->assertPlatformRecoveryInventoriesUnchanged($inventories);
+        $this->promotePlatformDefinitionTransactionStaging(
+            (string)$artifact['path'],
+            $this->platformDefinitionTransactionFile(),
+            (string)$artifact['contents'],
+            (array)$artifact['status'],
+        );
+    }
+
+    /** @param array<string|int,mixed> $expectedStatus */
+    private function promotePlatformDefinitionTransactionStaging(
+        string $staging,
+        string $target,
+        string $expectedContents,
+        array $expectedStatus,
+    ): void {
+        $current = @\lstat($staging);
+        if (!\is_array($current)
+            || !$this->sameRecoveryObjectIdentity($expectedStatus, $current)
+            || @\lstat($target) !== false
+            || \file_exists($target)
+            || \is_link($target)
+        ) {
+            throw new \RuntimeException(
+                'Interrupted platform transaction staging identity changed before promotion.'
+            );
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            if (!\extension_loaded('FFI')
+                || !\class_exists(\FFI::class)
+                || !\function_exists('iconv')
+            ) {
+                throw new \RuntimeException(
+                    'Windows platform transaction staging promotion requires the locked FFI runtime.'
+                );
+            }
+            try {
+                $ffi = \FFI::cdef(
+                    'typedef int BOOL; typedef unsigned long DWORD;'
+                        . ' typedef unsigned short WCHAR;'
+                        . ' BOOL MoveFileExW(const WCHAR*, const WCHAR*, DWORD);'
+                        . ' DWORD GetLastError(void);',
+                    'kernel32.dll',
+                );
+                $moved = (int)$ffi->MoveFileExW(
+                    $this->windowsTransactionWidePath($ffi, $staging),
+                    $this->windowsTransactionWidePath($ffi, $target),
+                    0x00000008,
+                );
+                if ($moved === 0) {
+                    throw new \RuntimeException(
+                        'Windows platform transaction staging promotion failed with error '
+                            . (int)$ffi->GetLastError() . '.',
+                    );
+                }
+            } catch (\RuntimeException $exception) {
+                throw $exception;
+            } catch (\Throwable $throwable) {
+                throw new \RuntimeException(
+                    'Windows platform transaction staging promotion is unavailable.',
+                    0,
+                    $throwable,
+                );
+            }
+        } elseif (!@\rename($staging, $target)) {
+            throw new \RuntimeException(
+                'Unable to atomically promote the platform transaction staging file.'
+            );
+        }
+        $published = @\lstat($target);
+        if (!\is_array($published)
+            || !$this->sameRecoveryObjectIdentity($expectedStatus, $published)
+            || @\lstat($staging) !== false
+            || \file_exists($staging)
+            || \is_link($staging)
+            || !\hash_equals(
+                $expectedContents,
+                $this->readStableRegularFile(
+                    $target,
+                    self::PLATFORM_DEFINITION_TRANSACTION_MAX_BYTES,
+                    'promoted WLS Gateway platform definition transaction',
+                ),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Promoted WLS Gateway platform transaction failed identity verification.'
+            );
+        }
+        GatewayProjectStateFilesystem::syncDirectory(\dirname($target));
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameRecoveryObjectIdentity(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size'] as $key) {
+            if (!\array_key_exists($key, $before)
+                || !\array_key_exists($key, $after)
+                || (int)$before[$key] !== (int)$after[$key]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function windowsTransactionWidePath(\FFI $ffi, string $path): \FFI\CData
+    {
+        if ($path === '' || \str_contains($path, "\0")) {
+            throw new \RuntimeException('Windows platform transaction path is invalid.');
+        }
+        $encoded = @\iconv('UTF-8', 'UTF-16LE', $path . "\0");
+        if (!\is_string($encoded) || $encoded === '' || (\strlen($encoded) % 2) !== 0) {
+            throw new \RuntimeException(
+                'Windows platform transaction path cannot be encoded safely.'
+            );
+        }
+        $buffer = $ffi->new('WCHAR[' . (int)(\strlen($encoded) / 2) . ']');
+        \FFI::memcpy($buffer, $encoded, \strlen($encoded));
+        return $buffer;
+    }
+
+    /** @param array<string,mixed> $journal */
+    private function cleanupPlatformDefinitionTransactionTargetArtifacts(
+        array $journal,
+    ): void {
+        $inventories = $this->preflightPlatformAtomicRecoveryInventories();
+        $targets = [
+            $this->paths->serviceDefinitionFile() => [
+                $journal['old_definition_sha256'],
+                (string)$journal['new_definition_sha256'],
+                (string)$journal['new_definition'],
+                1_048_576,
+                'definition',
+            ],
+            $this->paths->platformServiceMetadataFile() => [
+                $journal['old_metadata_sha256'],
+                (string)$journal['new_metadata_sha256'],
+                (string)$journal['new_metadata'],
+                16_384,
+                'metadata',
+            ],
+        ];
+        foreach ($targets as $path => [$oldDigest, $newDigest, $newRaw, $maximum, $label]) {
+            $this->platformDefinitionTransactionTargetState(
+                $path,
+                $oldDigest,
+                $newDigest,
+                $newRaw,
+                $maximum,
+                $label,
+                $journal,
+            );
+        }
+        $this->assertPlatformRecoveryInventoriesUnchanged($inventories);
+        foreach ($targets as $path => [$oldDigest, $newDigest, $newRaw, $maximum, $label]) {
+            $artifacts = $inventories[$path] ?? [];
+            if ($artifacts === []) {
+                continue;
+            }
+            $status = @\lstat($path);
+            if (\is_array($status)) {
+                GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                    $path,
+                    $maximum,
+                    'WLS Gateway platform transaction ' . $label,
+                    function (string $raw) use (
+                        $oldDigest,
+                        $newDigest,
+                        $newRaw,
+                        $label,
+                        $journal,
+                    ): void {
+                        $this->platformDefinitionTransactionRawState(
+                            $raw,
+                            $oldDigest,
+                            $newDigest,
+                            $newRaw,
+                            $label,
+                            $journal,
+                        );
+                    },
+                );
+                $inventories = $this->preflightPlatformAtomicRecoveryInventories();
+                continue;
+            }
+            if ($oldDigest !== null
+                || \file_exists($path)
+                || \is_link($path)
+            ) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform transaction target is missing or unsafe.'
+                );
+            }
+            foreach ($artifacts as $artifact) {
+                if (!\hash_equals('staging', (string)$artifact['kind'])) {
+                    throw new \RuntimeException(
+                        'A missing WLS Gateway platform transaction target has ambiguous recovery evidence.'
+                    );
+                }
+            }
+            $this->assertPlatformRecoveryInventoriesUnchanged($inventories);
+            foreach ($artifacts as $artifact) {
+                if (@\lstat($path) !== false
+                    || \file_exists($path)
+                    || \is_link($path)
+                ) {
+                    throw new \RuntimeException(
+                        'WLS Gateway platform transaction target appeared during staging cleanup.'
+                    );
+                }
+                if (!GatewayProjectStateFilesystem::removeRegular(
+                    (string)$artifact['path'],
+                    'interrupted WLS Gateway platform target staging file',
+                    (array)$artifact['status'],
+                )) {
+                    throw new \RuntimeException(
+                        'Unable to collect an interrupted platform target staging file.'
+                    );
+                }
+            }
+            $inventories = $this->preflightPlatformAtomicRecoveryInventories();
+        }
+    }
+
+    /** @param array<string,mixed> $journal */
+    private function assertPlatformDefinitionTransactionTargetsInClosure(
+        array $journal,
+    ): void {
+        $this->platformDefinitionTransactionTargetState(
+            $this->paths->serviceDefinitionFile(),
+            $journal['old_definition_sha256'],
+            (string)$journal['new_definition_sha256'],
+            (string)$journal['new_definition'],
+            1_048_576,
+            'definition',
+            $journal,
+        );
+        $this->platformDefinitionTransactionTargetState(
+            $this->paths->platformServiceMetadataFile(),
+            $journal['old_metadata_sha256'],
+            (string)$journal['new_metadata_sha256'],
+            (string)$journal['new_metadata'],
+            16_384,
+            'metadata',
+            $journal,
+        );
+    }
+
+    /**
+     * @param string|null $oldDigest
+     * @param array<string,mixed> $journal
+     */
+    private function platformDefinitionTransactionTargetState(
+        string $path,
+        mixed $oldDigest,
+        string $newDigest,
+        string $newRaw,
+        int $maximumBytes,
+        string $label,
+        array $journal,
+    ): string {
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path) || $oldDigest !== null) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform transaction target ' . $label
+                        . ' is missing or unsafe.'
+                );
+            }
+            return 'old';
+        }
+        try {
+            $raw = $this->readStableRegularFile(
+                $path,
+                $maximumBytes,
+                'WLS Gateway platform transaction target ' . $label,
+            );
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'WLS Gateway platform transaction target ' . $label
+                    . ' is unsafe.',
+                0,
+                $throwable,
+            );
+        }
+        return $this->platformDefinitionTransactionRawState(
+            $raw,
+            $oldDigest,
+            $newDigest,
+            $newRaw,
+            $label,
+            $journal,
+        );
+    }
+
+    /** @param array<string,mixed> $journal */
+    private function platformDefinitionTransactionRawState(
+        string $raw,
+        mixed $oldDigest,
+        string $newDigest,
+        string $newRaw,
+        string $label,
+        array $journal,
+    ): string {
+        $digest = \hash('sha256', $raw);
+        if (\hash_equals($newDigest, $digest)
+            && \hash_equals($newRaw, $raw)
+        ) {
+            return 'new';
+        }
+        if (\is_string($oldDigest) && \hash_equals($oldDigest, $digest)) {
+            if (\hash_equals('metadata', $label)) {
+                $metadata = $this->decodePlatformServiceMetadata($raw);
+                if (!\hash_equals(
+                    (string)$journal['from_profile'],
+                    (string)$metadata['profile'],
+                )) {
+                    throw new \RuntimeException(
+                        'WLS Gateway platform transaction old metadata profile is invalid.'
+                    );
+                }
+            }
+            return 'old';
+        }
+        throw new \RuntimeException(
+            'WLS Gateway platform transaction target ' . $label
+                . ' matches neither the old nor new generation.'
+        );
+    }
+
+    /** @return array{kind:string,path:string,test_mode:bool} */
+    private function installDefinitionLocked(
+        string $profile,
+        ?array $recoveredTransaction = null,
+    ): array
+    {
+        if (\is_array($recoveredTransaction)
+            && \hash_equals('install', (string)$recoveredTransaction['operation'])
+        ) {
+            if (!\hash_equals(
+                $profile,
+                (string)$recoveredTransaction['to_profile'],
+            )) {
+                throw new \RuntimeException(
+                    'Recovered WLS Gateway platform installation belongs to another profile.'
+                );
+            }
+            return $this->installedDefinition();
+        }
+        $path = $this->paths->serviceDefinitionFile();
+        $metadataPath = $this->paths->platformServiceMetadataFile();
+        $this->assertInitialInstallTargetsAbsent($path, $metadataPath);
+        if (!$this->paths->isTestMode()) {
             // A Windows virtual service SID is resolvable only after the SCM
             // service exists. start() creates the disabled service, applies
             // the service SID ACLs, and only then allows it to execute. The
@@ -48,27 +1294,34 @@ final class GatewayPlatformServiceInstaller
             default => throw new \RuntimeException('Unsupported WLS Gateway service platform.'),
         };
         $definition = $this->renderDefinition($profile);
-        $path = $this->paths->serviceDefinitionFile();
-        $this->atomicWrite($path, $definition, $this->paths->isTestMode() ? 0600 : 0644);
-        $this->atomicWrite(
-            $this->paths->platformServiceMetadataFile(),
-            \json_encode([
-                'schema_version' => 1,
-                'kind' => $this->paths->isTestMode() ? 'test-session' : $kind,
-                'definition' => $path,
-                'profile' => $profile,
-                'test_mode' => $this->paths->isTestMode(),
-                'installed_at' => \gmdate(DATE_ATOM),
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL,
-            0600,
+        $metadata = \json_encode([
+            'schema_version' => 1,
+            'kind' => $this->paths->isTestMode() ? 'test-session' : $kind,
+            'definition' => $path,
+            'profile' => $profile,
+            'test_mode' => $this->paths->isTestMode(),
+            'installed_at' => \gmdate(DATE_ATOM),
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)
+            . PHP_EOL;
+        $journal = $this->newPlatformDefinitionTransaction(
+            'install',
+            null,
+            $profile,
+            null,
+            null,
+            $definition,
+            $metadata,
         );
-        if (!$this->paths->isTestMode() && \PHP_OS_FAMILY !== 'Windows') {
-            // The metadata is published after the first privilege-separation
-            // pass. Seal the completed trust tree so the controller can prove
-            // its platform supervisor before the first start.
-            $this->ensureServiceIdentityAndPermissions();
+        $this->publishPlatformDefinitionTransaction($journal);
+        $completed = $this->recoverPlatformDefinitionTransaction();
+        if (!\is_array($completed)
+            || !\hash_equals('install', (string)$completed['operation'])
+            || !\hash_equals($profile, (string)$completed['to_profile'])
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway platform installation transaction did not complete.'
+            );
         }
-
         return [
             'kind' => $this->paths->isTestMode() ? 'test-session' : $kind,
             'path' => $path,
@@ -95,39 +1348,48 @@ final class GatewayPlatformServiceInstaller
         if (!$this->paths->isTestMode()) {
             $this->assertAdministrator();
         }
-        $installed = $this->installedDefinition();
-        $expectedKind = $this->paths->isTestMode()
-            ? 'test-session'
-            : match (\PHP_OS_FAMILY) {
-                'Darwin' => 'launchd-system',
-                'Linux' => 'systemd-system',
-                'Windows' => 'windows-service',
-                default => throw new \RuntimeException(
-                    'Unsupported WLS Gateway service platform.'
-                ),
-            };
-        $definitionPath = $this->paths->serviceDefinitionFile();
-        if (!\hash_equals($expectedKind, (string)$installed['kind'])
-            || !\hash_equals($definitionPath, (string)$installed['path'])
-        ) {
-            throw new \RuntimeException(
-                'Installed WLS Gateway platform definition identity is invalid.'
+        return $this->withPackageInstallLock(function (?array $_recovered) use ($profile): array {
+            // Refresh is the one administrator repair path allowed to replace
+            // a drifted release-owned definition. Authenticate the metadata
+            // first, then publish and re-verify the canonical definition.
+            $metadataPath = $this->paths->platformServiceMetadataFile();
+            $metadataRaw = GatewayProjectStateFilesystem::read(
+                $metadataPath,
+                16_384,
+                'Installed WLS Gateway platform service metadata',
             );
-        }
-        $this->atomicWrite(
-            $definitionPath,
-            $this->renderDefinition($profile),
-            $this->paths->isTestMode() ? 0600 : 0644,
-        );
-        if (!$this->paths->isTestMode() && \PHP_OS_FAMILY === 'Windows') {
-            // Migrate existing installations that were created with the old
-            // restricted service-SID model before the next controlled
-            // restart. Exact filesystem ACLs are applied only after the
-            // service has stopped in restart(), so the live Controller cannot
-            // race the recursive descriptor replacement.
-            $this->configureWindowsServiceDefinition(false);
-        }
-        return $installed;
+            $metadata = $this->decodePlatformServiceMetadata($metadataRaw);
+            $definitionPath = $this->paths->serviceDefinitionFile();
+            $definitionRaw = $this->readStableRegularFile(
+                $definitionPath,
+                1_048_576,
+                'Installed WLS Gateway platform service definition for refresh',
+            );
+            $newDefinition = $this->renderDefinition($profile);
+            $newMetadata = $metadata;
+            $newMetadata['profile'] = $profile;
+            $newMetadataRaw = \json_encode(
+                $newMetadata,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . PHP_EOL;
+            if (\hash_equals($definitionRaw, $newDefinition)
+                && \hash_equals($metadataRaw, $newMetadataRaw)
+            ) {
+                return $this->installedDefinition();
+            }
+            $journal = $this->newPlatformDefinitionTransaction(
+                'refresh',
+                (string)$metadata['profile'],
+                $profile,
+                $definitionRaw,
+                $metadataRaw,
+                $newDefinition,
+                $newMetadataRaw,
+            );
+            $this->publishPlatformDefinitionTransaction($journal);
+            $this->recoverPlatformDefinitionTransaction();
+            return $this->installedDefinition();
+        });
     }
 
     public function start(string $kind): void
@@ -172,6 +1434,7 @@ final class GatewayPlatformServiceInstaller
             $this->ensureWindowsServiceStopped(false);
             $this->configureWindowsServiceDefinition(true);
             $this->ensureServiceIdentityAndPermissions();
+            $this->enableWindowsServiceDefinition();
             $this->mustRun([$this->windowsSystemExecutable('sc.exe'), 'start', self::SERVICE_NAME], 'Windows service start');
             $this->waitForWindowsServiceState(4);
             return;
@@ -262,7 +1525,22 @@ final class GatewayPlatformServiceInstaller
         $identity = \function_exists('posix_getpwnam')
             ? @\posix_getpwnam($account)
             : false;
-        $group = \is_array($identity) ? (int)($identity['gid'] ?? 0) : 0;
+        $groupIdentity = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($account)
+            : false;
+        if (\is_array($identity)
+            && (!\is_array($groupIdentity)
+                || !self::posixServiceIdentityIsValid(
+                    $identity,
+                    $groupIdentity,
+                    \PHP_OS_FAMILY,
+                ))
+        ) {
+            throw new \RuntimeException(
+                'The existing WLS Gateway controller identity is unsafe.'
+            );
+        }
+        $group = \is_array($identity) ? (int)$identity['gid'] : 0;
         if ($group < 1) {
             // On a fresh host package verification/staging deliberately runs
             // before the platform definition is published. Provision the
@@ -272,12 +1550,22 @@ final class GatewayPlatformServiceInstaller
             $identity = \function_exists('posix_getpwnam')
                 ? @\posix_getpwnam($account)
                 : false;
-            $group = \is_array($identity) ? (int)($identity['gid'] ?? 0) : 0;
-            if ($group < 1) {
+            $groupIdentity = \function_exists('posix_getgrnam')
+                ? @\posix_getgrnam($account)
+                : false;
+            if (!\is_array($identity)
+                || !\is_array($groupIdentity)
+                || !self::posixServiceIdentityIsValid(
+                    $identity,
+                    $groupIdentity,
+                    \PHP_OS_FAMILY,
+                )
+            ) {
                 throw new \RuntimeException(
                     'Dedicated WLS Gateway controller identity is unavailable.'
                 );
             }
+            $group = (int)$identity['gid'];
         }
         $this->secureRuntimeTree($resolved, $group);
     }
@@ -391,19 +1679,54 @@ final class GatewayPlatformServiceInstaller
     /** @return array{kind:string,path:string,test_mode:bool} */
     public function installedDefinition(): array
     {
+        return $this->installedDefinitionFromMetadata(true);
+    }
+
+    /** @return array{kind:string,path:string,test_mode:bool} */
+    private function installedDefinitionFromMetadata(bool $requireBoundDefinition): array
+    {
         $file = $this->paths->platformServiceMetadataFile();
-        $decoded = \json_decode($this->readStableRegularFile(
-            $file,
-            16_384,
-            'WLS Gateway platform service metadata',
-        ), true);
-        if (!\is_array($decoded)
-            || !\is_string($decoded['kind'] ?? null)
-            || !\is_string($decoded['definition'] ?? null)
-        ) {
+        \clearstatcache(true, $file);
+        $status = @\lstat($file);
+        if (!\is_array($status)) {
+            if (\file_exists($file) || \is_link($file)) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform service metadata path is indeterminate.'
+                );
+            }
             throw new \RuntimeException(
                 'WLS Gateway platform service metadata is unavailable.'
             );
+        }
+        try {
+            $decoded = $this->decodePlatformServiceMetadata(
+                $this->readStableRegularFile(
+                    $file,
+                    16_384,
+                    'WLS Gateway platform service metadata',
+                ),
+            );
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'WLS Gateway platform service metadata is invalid.',
+                0,
+                $throwable,
+            );
+        }
+        if ($requireBoundDefinition) {
+            $definition = $this->readStableRegularFile(
+                $this->paths->serviceDefinitionFile(),
+                1_048_576,
+                'WLS Gateway platform service definition',
+            );
+            if (!\hash_equals(
+                $this->renderDefinition((string)$decoded['profile']),
+                $definition,
+            )) {
+                throw new \RuntimeException(
+                    'WLS Gateway platform service definition is not bound to installed metadata.'
+                );
+            }
         }
         return [
             'kind' => (string)$decoded['kind'],
@@ -518,6 +1841,7 @@ final class GatewayPlatformServiceInstaller
             $this->ensureWindowsServiceStopped(true);
             $this->configureWindowsServiceDefinition(false);
             $this->ensureServiceIdentityAndPermissions();
+            $this->enableWindowsServiceDefinition();
             $this->mustRun(
                 [$this->windowsSystemExecutable('sc.exe'), 'start', self::SERVICE_NAME],
                 'Windows gateway service restart',
@@ -663,15 +1987,33 @@ final class GatewayPlatformServiceInstaller
         if (!$this->paths->isTestMode()) {
             $this->assertAdministrator();
         }
+        $this->withPackageInstallLock(function (?array $_recovered) use ($kind): void {
         $pending = $this->platformRemovalPendingFile();
-        $this->atomicWrite(
+        $existingPending = GatewayProjectStateFilesystem::readOptional(
             $pending,
-            "WLS-PLATFORM-REMOVAL/1\n"
-                . 'kind=' . $kind . "\n"
-                . 'at=' . \time() . "\n"
-                . 'nonce=' . \bin2hex(\random_bytes(16)) . "\n",
-            0600,
+            1024,
+            'WLS Gateway platform removal fence',
         );
+        if ($existingPending === null) {
+            $this->atomicWrite(
+                $pending,
+                "WLS-PLATFORM-REMOVAL/1\n"
+                    . 'kind=' . $kind . "\n"
+                    . 'at=' . \time() . "\n"
+                    . 'nonce=' . \bin2hex(\random_bytes(16)) . "\n",
+                0600,
+            );
+        } elseif (\preg_match(
+            '/\AWLS-PLATFORM-REMOVAL\/1\nkind=([^\n]+)\n/',
+            $existingPending,
+            $pendingMatch,
+        ) !== 1
+            || !\hash_equals($kind, (string)$pendingMatch[1])
+        ) {
+            throw new \RuntimeException(
+                'Existing WLS Gateway platform removal fence belongs to another operation.'
+            );
+        }
         if (!$this->paths->isTestMode()) {
             if ($kind === 'launchd-system') {
                 $label = 'system/com.weline.wls-gateway-v2';
@@ -754,6 +2096,7 @@ final class GatewayPlatformServiceInstaller
             $pending,
             'completed gateway platform removal fence',
         );
+        });
     }
 
     public function renderDefinition(string $profile): string
@@ -937,6 +2280,20 @@ final class GatewayPlatformServiceInstaller
         }
     }
 
+    private function assertInitialInstallTargetsAbsent(
+        string $definitionPath,
+        string $metadataPath,
+    ): void {
+        foreach ([$definitionPath, $metadataPath] as $path) {
+            \clearstatcache(true, $path);
+            if (@\lstat($path) !== false) {
+                throw new \RuntimeException(
+                    'A WLS Gateway platform installation artifact already exists: ' . $path,
+                );
+            }
+        }
+    }
+
     private function assertAdministrator(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
@@ -985,7 +2342,7 @@ final class GatewayPlatformServiceInstaller
                 'binPath=',
                 $launcher,
                 'start=',
-                'auto',
+                'disabled',
                 'obj=',
                 'LocalSystem',
             ], 'Windows service definition refresh');
@@ -997,7 +2354,7 @@ final class GatewayPlatformServiceInstaller
                 'binPath=',
                 $launcher,
                 'start=',
-                'auto',
+                'disabled',
                 'obj=',
                 'LocalSystem',
             ], 'Windows service creation');
@@ -1056,6 +2413,17 @@ POWERSHELL;
             self::SERVICE_NAME,
             '1',
         ], 'Windows non-crash recovery policy');
+    }
+
+    private function enableWindowsServiceDefinition(): void
+    {
+        $this->mustRun([
+            $this->windowsSystemExecutable('sc.exe'),
+            'config',
+            self::SERVICE_NAME,
+            'start=',
+            'auto',
+        ], 'Windows service automatic-start enable');
     }
 
     /** @return array{code:int,output:string}|null */
@@ -1155,7 +2523,15 @@ POWERSHELL;
         $account = \PHP_OS_FAMILY === 'Darwin' ? '_welinegateway' : 'weline-gateway';
         $group = $account;
         $identity = \function_exists('posix_getpwnam') ? @\posix_getpwnam($account) : false;
+        $groupIdentity = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($group)
+            : false;
         if (!\is_array($identity)) {
+            if (\is_array($groupIdentity)) {
+                throw new \RuntimeException(
+                    'An orphan WLS Gateway controller group already exists.'
+                );
+            }
             if (\PHP_OS_FAMILY === 'Linux') {
                 $this->mustRun([
                     '/usr/sbin/useradd',
@@ -1168,29 +2544,20 @@ POWERSHELL;
                     $account,
                 ], 'gateway service account creation');
             } elseif (\PHP_OS_FAMILY === 'Darwin') {
-                $id = $this->availableDarwinSystemId();
-                $this->mustRun(['/usr/bin/dscl', '.', '-create', '/Groups/' . $group], 'gateway group creation');
-                $this->mustRun([
-                    '/usr/bin/dscl', '.', '-create', '/Groups/' . $group, 'PrimaryGroupID', (string)$id,
-                ], 'gateway group id assignment');
-                $this->mustRun(['/usr/bin/dscl', '.', '-create', '/Users/' . $account], 'gateway user creation');
-                foreach ([
-                    ['UniqueID', (string)$id],
-                    ['PrimaryGroupID', (string)$id],
-                    ['UserShell', '/usr/bin/false'],
-                    ['NFSHomeDirectory', '/var/empty'],
-                    ['RealName', 'Weline Gateway Controller'],
-                ] as [$property, $value]) {
-                    $this->mustRun([
-                        '/usr/bin/dscl', '.', '-create', '/Users/' . $account, $property, $value,
-                    ], 'gateway account property ' . $property);
-                }
+                $this->createDarwinServiceIdentity($account, $group);
             }
             $identity = \function_exists('posix_getpwnam') ? @\posix_getpwnam($account) : false;
+            $groupIdentity = \function_exists('posix_getgrnam')
+                ? @\posix_getgrnam($group)
+                : false;
         }
         if (!\is_array($identity)
-            || (int)($identity['uid'] ?? 0) < 1
-            || (int)($identity['gid'] ?? 0) < 1
+            || !\is_array($groupIdentity)
+            || !self::posixServiceIdentityIsValid(
+                $identity,
+                $groupIdentity,
+                \PHP_OS_FAMILY,
+            )
         ) {
             throw new \RuntimeException('Dedicated WLS Gateway controller identity is unavailable.');
         }
@@ -1330,6 +2697,7 @@ POWERSHELL;
             'broker-enrollments.tsv',
             'broker-security-v2.tsv',
             'package-install.lock',
+            'platform-definition.transaction',
         ];
     }
 
@@ -1604,7 +2972,7 @@ POWERSHELL;
                 );
             }
             $bytes = \FFI::string(
-                \FFI::cast('char*', $buffer),
+                $ffi->cast('char*', $buffer),
                 $length * 2,
             );
             $decoded = @\iconv('UTF-16LE', 'UTF-8', $bytes);
@@ -1716,16 +3084,139 @@ POWERSHELL;
         }
     }
 
+    private function createDarwinServiceIdentity(string $account, string $group): void
+    {
+        $id = $this->availableDarwinSystemId();
+        $groupCreated = false;
+        $userCreated = false;
+        try {
+            $this->mustRun(
+                ['/usr/bin/dscl', '.', '-create', '/Groups/' . $group],
+                'gateway group creation',
+            );
+            $groupCreated = true;
+            $this->mustRun([
+                '/usr/bin/dscl',
+                '.',
+                '-create',
+                '/Groups/' . $group,
+                'PrimaryGroupID',
+                (string)$id,
+            ], 'gateway group id assignment');
+            $this->mustRun(
+                ['/usr/bin/dscl', '.', '-create', '/Users/' . $account],
+                'gateway user creation',
+            );
+            $userCreated = true;
+            foreach ([
+                ['UniqueID', (string)$id],
+                ['PrimaryGroupID', (string)$id],
+                ['UserShell', '/usr/bin/false'],
+                ['NFSHomeDirectory', '/var/empty'],
+                ['RealName', 'Weline Gateway Controller'],
+            ] as [$property, $value]) {
+                $this->mustRun([
+                    '/usr/bin/dscl',
+                    '.',
+                    '-create',
+                    '/Users/' . $account,
+                    $property,
+                    $value,
+                ], 'gateway account property ' . $property);
+            }
+        } catch (\Throwable $throwable) {
+            $cleanupFailures = $this->rollbackDarwinServiceIdentityCreation(
+                $account,
+                $group,
+                $userCreated,
+                $groupCreated,
+            );
+            if ($cleanupFailures !== []) {
+                throw new \RuntimeException(
+                    $throwable->getMessage()
+                        . ' Darwin service identity rollback also failed: '
+                        . \implode('; ', $cleanupFailures),
+                    0,
+                    $throwable,
+                );
+            }
+            throw $throwable;
+        }
+    }
+
+    /** @return list<string> */
+    private function rollbackDarwinServiceIdentityCreation(
+        string $account,
+        string $group,
+        bool $userCreated,
+        bool $groupCreated,
+    ): array {
+        $failures = [];
+        if ($userCreated) {
+            $deleted = $this->runCommand([
+                '/usr/bin/dscl',
+                '.',
+                '-delete',
+                '/Users/' . $account,
+            ], true);
+            $remaining = \function_exists('posix_getpwnam')
+                ? @\posix_getpwnam($account)
+                : null;
+            if ($deleted['code'] !== 0 || $remaining !== false) {
+                $failures[] = 'user ' . $account . ': '
+                    . GatewayBoundedText::singleLine(
+                        $deleted['output'],
+                        512,
+                        'deletion was not verified',
+                    );
+            }
+        }
+        if ($groupCreated) {
+            $deleted = $this->runCommand([
+                '/usr/bin/dscl',
+                '.',
+                '-delete',
+                '/Groups/' . $group,
+            ], true);
+            $remaining = \function_exists('posix_getgrnam')
+                ? @\posix_getgrnam($group)
+                : null;
+            if ($deleted['code'] !== 0 || $remaining !== false) {
+                $failures[] = 'group ' . $group . ': '
+                    . GatewayBoundedText::singleLine(
+                        $deleted['output'],
+                        512,
+                        'deletion was not verified',
+                    );
+            }
+        }
+        return $failures;
+    }
+
     private function availableDarwinSystemId(): int
     {
-        $result = $this->runCommand(['/usr/bin/dscl', '.', '-list', '/Users', 'UniqueID'], true);
-        if ($result['code'] !== 0) {
-            throw new \RuntimeException('Unable to enumerate macOS system identities.');
-        }
         $used = [];
-        foreach (\preg_split('/\R/', $result['output']) ?: [] as $line) {
-            if (\preg_match('/\s([0-9]+)\s*$/', $line, $matches) === 1) {
-                $used[(int)$matches[1]] = true;
+        foreach ([
+            ['/Users', 'UniqueID'],
+            ['/Groups', 'PrimaryGroupID'],
+        ] as [$namespace, $property]) {
+            $result = $this->runCommand([
+                '/usr/bin/dscl',
+                '.',
+                '-list',
+                $namespace,
+                $property,
+            ], true);
+            if ($result['code'] !== 0) {
+                throw new \RuntimeException(
+                    'Unable to enumerate macOS system identity namespace: '
+                        . $namespace,
+                );
+            }
+            foreach (\preg_split('/\R/', $result['output']) ?: [] as $line) {
+                if (\preg_match('/\s([0-9]+)\s*$/', $line, $matches) === 1) {
+                    $used[(int)$matches[1]] = true;
+                }
             }
         }
         for ($candidate = 399; $candidate >= 200; $candidate--) {
@@ -1734,6 +3225,32 @@ POWERSHELL;
             }
         }
         throw new \RuntimeException('No free macOS system UID/GID is available for WLS Gateway.');
+    }
+
+    /**
+     * @param array<string|int,mixed> $identity
+     * @param array<string|int,mixed> $group
+     */
+    private static function posixServiceIdentityIsValid(
+        array $identity,
+        array $group,
+        string $platform,
+    ): bool {
+        [$expectedName, $expectedHome, $expectedShell] = match ($platform) {
+            'Darwin' => ['_welinegateway', '/var/empty', '/usr/bin/false'],
+            'Linux' => ['weline-gateway', '/nonexistent', '/usr/sbin/nologin'],
+            default => ['', '', ''],
+        };
+        $uid = (int)($identity['uid'] ?? 0);
+        $gid = (int)($identity['gid'] ?? 0);
+        return $expectedName !== ''
+            && $uid > 0
+            && $gid > 0
+            && (int)($group['gid'] ?? 0) === $gid
+            && \hash_equals($expectedName, (string)($identity['name'] ?? ''))
+            && \hash_equals($expectedName, (string)($group['name'] ?? ''))
+            && \hash_equals($expectedHome, (string)($identity['dir'] ?? ''))
+            && \hash_equals($expectedShell, (string)($identity['shell'] ?? ''));
     }
 
     private function secureRuntimeTree(
@@ -1904,9 +3421,17 @@ POWERSHELL;
         $lastState = null;
         $lastOutput = '';
         do {
+            $timeout = self::windowsPollCommandTimeoutSeconds(
+                $deadline,
+                \hrtime(true) / 1_000_000_000,
+            );
+            if ($timeout === null) {
+                break;
+            }
             $result = $this->runCommand(
                 [$this->windowsSystemExecutable('sc.exe'), 'query', self::SERVICE_NAME],
                 true,
+                $timeout,
             );
             $lastOutput = $result['output'];
             $lastState = $result['code'] === 0
@@ -1926,7 +3451,7 @@ POWERSHELL;
             if ($result['code'] !== 0
                 && \preg_match('/(?:^|\D)1072(?:\D|$)/D', $lastOutput) === 1
             ) {
-                $this->waitForWindowsServiceDeletion();
+                $this->waitForWindowsServiceDeletion($deadline);
                 if ($expectedState === 1) {
                     return;
                 }
@@ -1951,14 +3476,22 @@ POWERSHELL;
         );
     }
 
-    private function waitForWindowsServiceDeletion(): void
+    private function waitForWindowsServiceDeletion(?float $deadline = null): void
     {
-        $deadline = \hrtime(true) / 1_000_000_000
+        $deadline ??= \hrtime(true) / 1_000_000_000
             + self::WINDOWS_SERVICE_TRANSITION_TIMEOUT_SECONDS;
         do {
+            $timeout = self::windowsPollCommandTimeoutSeconds(
+                $deadline,
+                \hrtime(true) / 1_000_000_000,
+            );
+            if ($timeout === null) {
+                break;
+            }
             $query = $this->runCommand(
                 [$this->windowsSystemExecutable('sc.exe'), 'query', self::SERVICE_NAME],
                 true,
+                $timeout,
             );
             if ($query['code'] !== 0
                 && \preg_match('/(?:^|\D)1060(?:\D|$)/D', $query['output']) === 1
@@ -2027,19 +3560,15 @@ POWERSHELL;
                     'systemd gateway service state is indeterminate: ' . $query['output']
                 );
             }
-            $mainPid = \preg_match(
-                '/^MainPID=([0-9]+)$/m',
-                $query['output'],
-                $pidMatch,
-            ) === 1 ? (int)$pidMatch[1] : -1;
-            $active = \preg_match(
-                '/^ActiveState=([^\r\n]+)$/m',
-                $query['output'],
-                $activeMatch,
-            ) === 1 ? (string)$activeMatch[1] : 'unknown';
-            if ($mainPid !== 0
-                || !\in_array($active, ['inactive', 'failed'], true)
-            ) {
+            $state = self::systemdServiceStateFromShow($query['output']);
+            if ($state === null) {
+                throw new \RuntimeException(
+                    'systemd gateway service returned an incomplete or ambiguous state.'
+                );
+            }
+            $stopped = ($state['active'] === 'inactive' && $state['sub'] === 'dead')
+                || ($state['active'] === 'failed' && $state['sub'] === 'failed');
+            if ($state['main_pid'] !== 0 || !$stopped) {
                 throw new \RuntimeException(
                     'systemd still owns a live WLS Gateway supervisor after stop.'
                 );
@@ -2101,6 +3630,12 @@ POWERSHELL;
             . 'platform-removal.pending';
     }
 
+    private function platformDefinitionTransactionFile(): string
+    {
+        return $this->paths->trustDir() . DIRECTORY_SEPARATOR
+            . 'platform-definition.transaction';
+    }
+
     private static function windowsServiceStateFromQuery(string $output): ?int
     {
         if (\preg_match(
@@ -2111,6 +3646,49 @@ POWERSHELL;
             return null;
         }
         return (int)$match[1];
+    }
+
+    private static function windowsPollCommandTimeoutSeconds(
+        float $deadline,
+        float $now,
+    ): ?float {
+        $remaining = $deadline - $now;
+        if (!\is_finite($remaining) || $remaining < self::MIN_COMMAND_TIMEOUT_SECONDS) {
+            return null;
+        }
+        return \min(self::WINDOWS_SERVICE_QUERY_TIMEOUT_SECONDS, $remaining);
+    }
+
+    /** @return array{active:string,sub:string,main_pid:int}|null */
+    private static function systemdServiceStateFromShow(string $output): ?array
+    {
+        $values = [];
+        foreach ([
+            'ActiveState' => 'active',
+            'SubState' => 'sub',
+            'MainPID' => 'main_pid',
+        ] as $property => $key) {
+            $count = \preg_match_all(
+                '/^' . $property . '=([^\r\n]*)\r?$/mD',
+                $output,
+                $matches,
+            );
+            if ($count !== 1 || !isset($matches[1][0])) {
+                return null;
+            }
+            $values[$key] = (string)$matches[1][0];
+        }
+        if (\preg_match('/\A(?:0|[1-9][0-9]{0,9})\z/D', $values['main_pid']) !== 1
+            || \preg_match('/\A[a-z][a-z0-9-]{0,63}\z/D', $values['active']) !== 1
+            || \preg_match('/\A[a-z][a-z0-9-]{0,63}\z/D', $values['sub']) !== 1
+        ) {
+            return null;
+        }
+        return [
+            'active' => $values['active'],
+            'sub' => $values['sub'],
+            'main_pid' => (int)$values['main_pid'],
+        ];
     }
 
     /** @param list<string> $command */
@@ -2126,9 +3704,15 @@ POWERSHELL;
      * @param list<string> $command
      * @return array{code:int,output:string}
      */
-    private function runCommand(array $command, bool $allowFailure = false): array
+    private function runCommand(
+        array $command,
+        bool $allowFailure = false,
+        ?float $timeoutSeconds = null,
+    ): array
     {
-        $result = GatewayBoundedCommandRunner::run($command);
+        $result = $timeoutSeconds === null
+            ? GatewayBoundedCommandRunner::run($command)
+            : GatewayBoundedCommandRunner::run($command, $timeoutSeconds);
         if (!$allowFailure && $result['code'] !== 0) {
             throw new \RuntimeException(
                 'Gateway platform command failed: ' . $result['output']

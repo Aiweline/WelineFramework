@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+if (!\function_exists('wlsWorkerMonotonicNow')) {
+    function wlsWorkerMonotonicNow(): float
+    {
+        return (float)\hrtime(true) / 1_000_000_000;
+    }
+}
+
 /**
  * Transport-neutral helpers shared by the plain HTTP, stream TLS and
  * experimental EventBuffer TLS Workers.

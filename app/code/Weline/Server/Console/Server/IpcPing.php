@@ -44,12 +44,12 @@ class IpcPing extends CommandAbstract
         }
 
         $msg = ControlMessage::command(ControlMessage::ACTION_STATUS, '', [], $info->controlToken);
-        $t0 = \microtime(true);
+        $t0 = self::monotonicSeconds();
         @\fwrite($conn, $msg);
         \stream_set_blocking($conn, false);
         $buf = '';
-        $deadline = \microtime(true) + 1.5;
-        while (\microtime(true) < $deadline) {
+        $deadline = self::monotonicSeconds() + 1.5;
+        while (self::monotonicSeconds() < $deadline) {
             $chunk = @\fread($conn, 4096);
             if ($chunk !== false && $chunk !== '') {
                 $buf .= $chunk;
@@ -58,7 +58,7 @@ class IpcPing extends CommandAbstract
             \usleep(50000);
         }
         @\fclose($conn);
-        $dt = \microtime(true) - $t0;
+        $dt = self::monotonicSeconds() - $t0;
 
         $inspect = Processer::inspectPortOccupantWithHistory($cp);
         $this->printer->success(__('首包耗时 %{1}s owner_pid=%{2}', [
@@ -101,5 +101,10 @@ class IpcPing extends CommandAbstract
                 __('探测默认实例') => 'php bin/w server:ipc:ping',
             ]
         );
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

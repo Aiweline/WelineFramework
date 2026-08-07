@@ -60,7 +60,7 @@ class MetricsSnapshotWriter
      */
     public function maybeWrite(): bool
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (($now - $this->lastFlushAt) < $this->flushIntervalSec) {
             return false;
         }
@@ -75,7 +75,7 @@ class MetricsSnapshotWriter
      */
     public function writeNow(): bool
     {
-        $this->lastFlushAt = \microtime(true);
+        $this->lastFlushAt = self::monotonicSeconds();
 
         try {
             $baseDir = $this->resolveBaseDir();
@@ -218,5 +218,10 @@ class MetricsSnapshotWriter
     {
         $safe = \preg_replace('/[^A-Za-z0-9._-]/', '_', $value);
         return $safe !== null && $safe !== '' ? $safe : 'unknown';
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

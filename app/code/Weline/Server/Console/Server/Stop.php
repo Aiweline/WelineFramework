@@ -22,6 +22,9 @@ use Weline\Server\Console\Console\Server\Stop as CliStop;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\MasterChildCredentialStore;
+use Weline\Server\Service\MasterLeaseManager;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
@@ -75,6 +78,9 @@ class Stop extends CommandAbstract
     private array $loadedControlTokens = [];
     private bool $lastResidualCleanupComplete = true;
     private bool $lastIpcStopFlowStillActive = false;
+    private int $lastExactRetirementUnreleased = 0;
+    /** @var list<string> */
+    private array $lastExactRetirementReasons = [];
     private bool $managedNginxStopFailed = false;
     private bool $allowUnsafeGatewayStop = false;
 
@@ -133,10 +139,8 @@ class Stop extends CommandAbstract
         $instancePrefix = $this->parseInstancePrefix($args);
         $stopAll = isset($args['all']) || isset($args['a']);
         $force = isset($args['force']) || isset($args['f']);
-        $forceIpc = isset($args['ipc']) || isset($args['force-ipc']) || isset($args['force_ipc']);
         $fastLocal = isset($args['fast-local'])
-            || isset($args['fast_local'])
-            || ($force && !$forceIpc);
+            || isset($args['fast_local']);
         $restartCleanup = isset($args['restart-cleanup']) || isset($args['restart_cleanup']);
 
         if ($stopAll && $instancePrefix !== '') {
@@ -398,6 +402,8 @@ class Stop extends CommandAbstract
         $this->loadedControlTokens = [];
         $this->lastResidualCleanupComplete = true;
         $this->lastIpcStopFlowStillActive = false;
+        $this->lastExactRetirementUnreleased = 0;
+        $this->lastExactRetirementReasons = [];
         $this->allowUnsafeGatewayStop = false;
     }
 
@@ -505,36 +511,12 @@ class Stop extends CommandAbstract
      */
     public function killWlsProcessOnPort(int $port): bool
     {
-        $pid = $this->getPortProcessId($port);
-        if ($pid <= 0) {
-            return false;
-        }
-        $pname = $this->getProcessPnameByPid($pid);
-        $isWls = \str_contains($pname, 'weline-wls')
-            || $this->isRecoverableWlsPortResponder($port);
-        if (!$isWls) {
-            return false;
-        }
-
-        return $this->terminateWlsPortProcess($port, $pid);
-        /*
-        $this->printer->note(__('检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…', [$port, $pid]));
-        $rootPid = $this->resolveManagedStopRootPid($pid);
-        $killPid = $rootPid > 0 ? $rootPid : $pid;
-        if ($killPid !== $pid) {
-            $this->printer->note(__('  ROOT PID: %{1}', [$killPid]));
-        }
-
-        if ($this->killManagedProcessTreeForStop($killPid)) {
-            return true;
-        }
-
-        if ($killPid !== $pid) {
-            return $this->killManagedProcessTreeForStop($pid);
-        }
-
+        // A port is discovery evidence only. Its numeric owner can change
+        // between inspection and signalling, so it can never authorize a
+        // destructive action. Callers must resolve the instance and use the
+        // authenticated Master control channel or its protected birth leases.
+        unset($port);
         return false;
-        */
     }
     
     /**
@@ -697,9 +679,6 @@ class Stop extends CommandAbstract
                 'Instance startup_phase=%s, skip IPC graceful stop and use local cleanup.',
                 $phaseLabel
             ));
-            if ($masterPid > 0 && $this->terminateResidualProcesses([$masterPid], false) > 0) {
-                SchedulerSystem::usleep(500000);
-            }
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
             if (!$this->wasLastResidualCleanupComplete()) {
                 $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
@@ -741,12 +720,9 @@ class Stop extends CommandAbstract
                 $this->printer->warning(__('Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.'));
                 return;
             }
-            // IPC 失败，强制杀死 Master 并彻底清理该实例下所有进程（含 Worker/Dispatcher 等）
-            $this->printer->warning(__('IPC 超时，验证 Master 实时身份后清理该实例下所有进程...'));
-            if ($this->terminateResidualProcesses([$masterPid], false) > 0) {
-                SchedulerSystem::usleep(500000);
-            }
-            
+            // IPC failure may leave a live generation behind. Local cleanup is
+            // permitted only through the protected Master/child birth leases.
+            $this->printer->warning(__('IPC 超时，按受保护进程出生身份清理该实例下所有进程...'));
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
             if (!$this->wasLastResidualCleanupComplete()) {
                 $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
@@ -930,11 +906,191 @@ class Stop extends CommandAbstract
 
         return \strlen($plainText);
     }
+
+    /**
+     * Retire the current instance generation only through immutable process
+     * birth leases. Numeric PIDs, ports, command lines and name indexes are
+     * discovery inputs; none of them can authorize a signal.
+     *
+     * @return array{terminated:int,released:int,unreleased:int,reasons:list<string>}
+     */
+    protected function retireExactInstanceGeneration(string $name): array
+    {
+        $summary = [
+            'terminated' => 0,
+            'released' => 0,
+            'unreleased' => 0,
+            'reasons' => [],
+        ];
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $name) !== 1) {
+            $summary['unreleased'] = 1;
+            $summary['reasons'][] = 'instance_identity_invalid';
+            return $this->recordExactRetirementSummary($summary);
+        }
+
+        try {
+            $children = $this->retireCredentialBoundGeneration($name);
+            foreach ($children as $outcome) {
+                $summary['terminated'] += (bool)($outcome['terminated'] ?? false) ? 1 : 0;
+                if ((bool)($outcome['released'] ?? false)) {
+                    ++$summary['released'];
+                    continue;
+                }
+                ++$summary['unreleased'];
+                $summary['reasons'][] = \substr(
+                    (string)($outcome['reason'] ?? 'managed_child_retirement_unverified'),
+                    0,
+                    256,
+                );
+            }
+        } catch (\Throwable $throwable) {
+            ++$summary['unreleased'];
+            $summary['reasons'][] = 'managed_child_ledger_unavailable:'
+                . \substr($throwable->getMessage(), 0, 192);
+        }
+
+        $lease = $this->readProtectedMasterLease($name);
+        if (\is_array($lease)) {
+            if (!\hash_equals($name, (string)($lease['instance'] ?? ''))) {
+                ++$summary['unreleased'];
+                $summary['reasons'][] = 'master_lease_instance_mismatch';
+                return $this->recordExactRetirementSummary($summary);
+            }
+            if (!\hash_equals(
+                $this->currentStopHostBootId(),
+                (string)($lease['host_boot_id'] ?? ''),
+            )) {
+                // A cross-boot numeric PID cannot identify a live owner on the
+                // current boot. Verification below decides whether anything
+                // current remains; no signal is permitted from this lease.
+                return $this->recordExactRetirementSummary($summary);
+            }
+
+            $masterResult = $this->terminateProtectedProcessIdentity(
+                (int)($lease['master_pid'] ?? 0),
+                (string)($lease['master_process_birth'] ?? ''),
+                (string)($lease['pid_namespace_id'] ?? ''),
+                0.75,
+            );
+            $summary['terminated'] += (bool)($masterResult['terminated'] ?? false) ? 1 : 0;
+            if ((bool)($masterResult['released'] ?? false)) {
+                ++$summary['released'];
+            } else {
+                ++$summary['unreleased'];
+                $summary['reasons'][] = \substr(
+                    (string)($masterResult['reason'] ?? 'master_retirement_unverified'),
+                    0,
+                    256,
+                );
+            }
+
+            return $this->recordExactRetirementSummary($summary);
+        }
+
+        // Before Master publishes its schema-2 lease, Start persists its own
+        // exact birth tuple. This is the only safe local bootstrap fallback.
+        $endpoint = $this->getRawStopInstanceData($name) ?? [];
+        $startupPid = (int)($endpoint['pid'] ?? 0);
+        if ((string)($endpoint['startup_phase'] ?? '') === 'bootstrapping'
+            && (int)($endpoint['master_pid'] ?? 0) <= 0
+            && $startupPid > 0
+            && $startupPid !== (int)\getmypid()
+            && \hash_equals(
+                $this->currentStopHostBootId(),
+                (string)($endpoint['startup_host_boot_id'] ?? ''),
+            )
+        ) {
+            $startupResult = $this->terminateProtectedProcessIdentity(
+                $startupPid,
+                (string)($endpoint['startup_process_birth'] ?? ''),
+                (string)($endpoint['startup_pid_namespace_id'] ?? ''),
+                0.75,
+            );
+            $summary['terminated'] += (bool)($startupResult['terminated'] ?? false) ? 1 : 0;
+            if ((bool)($startupResult['released'] ?? false)) {
+                ++$summary['released'];
+            } else {
+                ++$summary['unreleased'];
+                $summary['reasons'][] = \substr(
+                    (string)($startupResult['reason'] ?? 'startup_owner_retirement_unverified'),
+                    0,
+                    256,
+                );
+            }
+        }
+
+        return $this->recordExactRetirementSummary($summary);
+    }
+
+    /**
+     * @param array{terminated:int,released:int,unreleased:int,reasons:list<string>} $summary
+     * @return array{terminated:int,released:int,unreleased:int,reasons:list<string>}
+     */
+    private function recordExactRetirementSummary(array $summary): array
+    {
+        $this->lastExactRetirementUnreleased = \max(0, (int)$summary['unreleased']);
+        $this->lastExactRetirementReasons = \array_values(\array_slice(\array_map(
+            static fn(mixed $reason): string => \substr((string)$reason, 0, 256),
+            $summary['reasons'],
+        ), 0, 32));
+
+        return $summary;
+    }
+
+    protected function getMasterChildCredentialStore(): MasterChildCredentialStore
+    {
+        return new MasterChildCredentialStore();
+    }
+
+    protected function getMasterLeaseManager(): MasterLeaseManager
+    {
+        return new MasterLeaseManager($this->getMasterLeaseRuntimeIdentity());
+    }
+
+    protected function getMasterLeaseRuntimeIdentity(): MasterLeaseRuntimeIdentity
+    {
+        return new MasterLeaseRuntimeIdentity();
+    }
+
+    /** @return list<array<string,mixed>> */
+    protected function retireCredentialBoundGeneration(string $instance): array
+    {
+        return $this->getMasterChildCredentialStore()
+            ->retireGenerationProcesses($instance, timeoutSeconds: 2.0);
+    }
+
+    /** @return array<string,mixed>|null */
+    protected function readProtectedMasterLease(string $instance): ?array
+    {
+        return $this->getMasterLeaseManager()->readProtected(
+            MasterLeaseManager::pathForInstance($instance),
+        );
+    }
+
+    protected function currentStopHostBootId(): string
+    {
+        return $this->getMasterLeaseRuntimeIdentity()->hostBootId();
+    }
+
+    /** @return array<string,mixed> */
+    protected function terminateProtectedProcessIdentity(
+        int $pid,
+        string $birth,
+        string $pidNamespaceId,
+        float $graceSeconds,
+    ): array {
+        return $this->getMasterLeaseRuntimeIdentity()->terminateExactProcessIdentity(
+            $pid,
+            $birth,
+            $pidNamespaceId,
+            $graceSeconds,
+        );
+    }
     
     /**
      * 根据 ServerInstanceInfo 清理残留进程
      *
-     * 优化策略：优先使用已知 PID 直接杀（快速），随后把当前实例 scoped 前缀交给 Processer 批量树杀
+     * 策略：只按受保护 Master/子进程出生身份终止；PID、前缀与端口仅复核退出。
      *
      * @param bool $quiet 为 true 时不打印，仅返回终止/尝试数（供 runResidualCleanupPair 合并输出）
      * @return int 已发送终止信号的 PID 数（quiet）或同上；非 quiet 时与原先展示一致
@@ -952,10 +1108,12 @@ class Stop extends CommandAbstract
         $totalKilled = 0;
         $remainingPorts = [];
         $remainingPids = [];
+        $remainingExactRetirement = 0;
 
         while (++$attempt <= self::RESIDUAL_CLEANUP_MAX_ATTEMPTS) {
             $knownCandidatePids = $this->collectResidualCleanupCandidatePids($name, $info, $includeSharedState);
             $killedThisAttempt = $this->runResidualCleanupPass($name, $info, true, true, $includeSharedState);
+            $remainingExactRetirement = $this->lastExactRetirementUnreleased;
             $totalKilled += $killedThisAttempt;
             if ($killedThisAttempt > 0) {
                 $this->invalidateStopRuntimeState();
@@ -981,7 +1139,10 @@ class Stop extends CommandAbstract
             $candidatePids = $this->collectResidualVerificationPids($name, $info, $remainingPorts, true, $includeSharedState);
             $remainingPids = $this->collectRunningResidualPids($candidatePids);
 
-            if (empty($remainingPids) && empty($remainingPorts)) {
+            if (empty($remainingPids)
+                && empty($remainingPorts)
+                && $remainingExactRetirement === 0
+            ) {
                 $this->cleanupStaleRecoverableProcessPidFilesForPids($candidatePids);
                 if ($totalKilled > 0) {
                     $this->printer->success(__('  已清理 %{1} 个残留进程', [$totalKilled]));
@@ -1000,13 +1161,22 @@ class Stop extends CommandAbstract
             }
         }
 
-        if (!empty($remainingPids) || !empty($remainingPorts)) {
+        if (!empty($remainingPids)
+            || !empty($remainingPorts)
+            || $remainingExactRetirement > 0
+        ) {
             $this->printer->warning(
                 __('残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}', [
                     implode(',', $remainingPids),
                     implode(',', $remainingPorts),
                 ])
             );
+            if ($remainingExactRetirement > 0) {
+                $this->printer->warning(__('受保护进程身份仍有 %{1} 项未确认释放：%{2}', [
+                    $remainingExactRetirement,
+                    \implode(',', $this->lastExactRetirementReasons),
+                ]));
+            }
             $this->lastResidualCleanupComplete = false;
             return;
         }
@@ -1031,13 +1201,9 @@ class Stop extends CommandAbstract
             $this->printer->note(__('清理残留进程...'));
         }
 
-        $pids = $this->collectResidualCleanupCandidatePids($name, $info, $includeSharedState);
-        $killedByPid = $this->terminateResidualProcesses($pids, true);
-        $killedByPrefix = $allowPrefixFallback
-            ? $this->terminateCurrentInstanceProcessPrefixes($name, $includeSharedState)
-            : 0;
-
-        $totalKilled = $killedByPid + $killedByPrefix;
+        unset($allowPrefixFallback, $includeSharedState);
+        $retirement = $this->retireExactInstanceGeneration($name);
+        $totalKilled = (int)($retirement['terminated'] ?? 0);
         if (!$quiet) {
             if ($totalKilled > 0) {
                 $this->printer->success(__('  已处理 %{1} 个进程', [$totalKilled]));
@@ -1051,17 +1217,10 @@ class Stop extends CommandAbstract
 
     protected function terminateCurrentInstanceProcessPrefixes(string $name, bool $includeSharedState = false): int
     {
-        $pids = [];
-        foreach ($this->collectResidualCleanupPrefixes($name, $includeSharedState) as $prefix) {
-            foreach ($this->collectResidualPidsByPrefix($prefix) as $pid) {
-                $pid = (int) $pid;
-                if ($pid > 0) {
-                    $pids[$pid] = true;
-                }
-            }
-        }
-
-        return $this->terminateResidualProcesses(\array_map('intval', \array_keys($pids)), true);
+        // Prefixes are retained for bounded discovery/verification only. They
+        // are mutable and therefore cannot authorize process termination.
+        unset($name, $includeSharedState);
+        return 0;
     }
 
     /**
@@ -1302,11 +1461,9 @@ class Stop extends CommandAbstract
 
     protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
     {
-        $candidates = $this->collectDirectForceStopCandidatePids($info);
+        $retirement = $this->retireExactInstanceGeneration($info->name);
 
-        // Instance metadata only supplies candidates. Every PID must still prove
-        // its current OS command line identity before any destructive signal.
-        return $this->terminateResidualProcesses($candidates, false);
+        return (int)($retirement['terminated'] ?? 0);
     }
 
     /**
@@ -1344,9 +1501,17 @@ class Stop extends CommandAbstract
             static fn (int $pid): bool => $pid > 0 && $pid !== \getmypid()
         )));
 
-        $killed = $this->terminateResidualProcesses($candidatePids, false);
+        $retirement = $this->retireExactInstanceGeneration($name);
+        $killed = (int)($retirement['terminated'] ?? 0);
         if ($killed > 0) {
             SchedulerSystem::usleep(200000);
+        }
+        if ($this->lastExactRetirementUnreleased > 0) {
+            $this->printer->warning(__('  精确身份清理仍有 %{1} 项未确认释放：%{2}', [
+                $this->lastExactRetirementUnreleased,
+                \implode(',', $this->lastExactRetirementReasons),
+            ]));
+            return;
         }
 
         $remaining = $this->collectRunningResidualPids($candidatePids);
@@ -2518,29 +2683,11 @@ class Stop extends CommandAbstract
      */
     private function terminateResidualProcesses(array $pids, bool $skipCheck = true, array $trustedPids = []): int
     {
-        $currentPid = \getmypid();
-        $uniquePids = \array_values(\array_unique(\array_filter(
-            \array_map('intval', $pids),
-            static fn (int $pid): bool => $pid > 0 && $pid !== $currentPid
-        )));
-
-        if ($uniquePids === []) {
-            return 0;
-        }
-
-        // Historical metadata/trusted arrays are never destructive authority:
-        // Windows may reuse their PID for svchost or another unrelated process.
-        unset($skipCheck, $trustedPids);
-        $runningPids = $this->collectRunningResidualPids($uniquePids);
-        if ($runningPids === []) {
-            return 0;
-        }
-
-        // Processer repeats the live managed-identity check immediately before kill.
-        $result = Processer::dispatchBatchKillProcessTrees($runningPids, false);
-        $this->invalidateStopRuntimeState();
-
-        return (int) ($result['killed'] ?? 0);
+        // Kept as a compatibility extension point for older test doubles and
+        // downstream subclasses. A list of numeric PIDs can never authorize a
+        // signal; production retirement is retireExactInstanceGeneration().
+        unset($pids, $skipCheck, $trustedPids);
+        return 0;
     }
 
     /**
@@ -3143,11 +3290,9 @@ class Stop extends CommandAbstract
 
     protected function terminateWlsPortProcess(int $port, int $pid): bool
     {
-        $rootPid = $this->resolveManagedStopRootPid($pid);
-        $killPid = $rootPid > 0 ? $rootPid : $pid;
-        $this->logWlsPortTermination($port, $pid, $killPid);
-
-        return $this->killManagedProcessTreeForStop($killPid);
+        // Port/PID observations are mutable and remain verification-only.
+        unset($port, $pid);
+        return false;
     }
 
     protected function logWlsPortTermination(int $port, int $pid, int $killPid): void
@@ -3308,47 +3453,23 @@ class Stop extends CommandAbstract
 
     protected function queryKillManagedProcessTreeForStop(int $pid): bool
     {
-        if (!$this->isResidualPidStillOwnedByWls($pid)) {
-            return false;
-        }
-        if ($this->isWindowsPlatform()) {
-            return $this->killWindowsProcessForStop($pid, true, false);
-        }
-
-        return Processer::killProcessTreeByPid($pid, false);
+        unset($pid);
+        return false;
     }
 
     protected function killWindowsProcessForStop(int $pid, bool $tree, bool $skipCheck = true): bool
     {
-        if ($pid <= 0) {
-            return false;
-        }
-
-        unset($skipCheck);
-        if (!$this->isResidualPidStillOwnedByWls($pid)) {
-            return false;
-        }
-
-        $this->executeWindowsTaskkillForStop($pid, $tree);
-        unset($this->stopPidRunningCache[$pid]);
-
-        // Dispatching taskkill is sufficient on the stop hot path. If the PID
-        // is already gone, proving that via tasklist costs more than the kill.
-        return true;
+        // Windows termination must use the stable HANDLE path in
+        // MasterLeaseRuntimeIdentity, never a taskkill command assembled from
+        // a numeric PID.
+        unset($pid, $tree, $skipCheck);
+        return false;
     }
 
     protected function executeWindowsTaskkillForStop(int $pid, bool $tree): int
     {
-        $output = [];
-        $returnCode = 0;
-        $command = 'taskkill /F '
-            . ($tree ? '/T ' : '')
-            . '/PID '
-            . $pid
-            . ' 1>NUL 2>NUL';
-        Processer::execute($command, $output, $returnCode);
-
-        return $returnCode;
+        unset($pid, $tree);
+        return -1;
     }
 
     /**
@@ -3441,36 +3562,16 @@ class Stop extends CommandAbstract
 
     protected function killRecoverableProcessPrefix(string $prefix): int
     {
-        return Processer::killByProcessNamePrefix($prefix);
+        unset($prefix);
+        return 0;
     }
 
     protected function cleanupRecoverableConfiguredPort(int $port, ?ServerInstanceInfo $info = null): bool
     {
-        $inspect = $this->inspectRecoverablePortOccupant($port);
-        if ($this->isSharedStatePortOccupant($inspect)) {
-            return false;
-        }
-        $recoverableWlsPort = ((bool) ($inspect['in_use'] ?? false) && (bool) ($inspect['is_weline'] ?? false))
-            || $this->isRecoverableWlsPortResponder($port)
-            || $this->isRecoverableManagedPort($port, $inspect, $info);
-        if (!$recoverableWlsPort) {
-            return false;
-        }
-
-        if ($this->killWlsProcessOnPort($port)) {
-            SchedulerSystem::usleep(500000);
-
-            return !$this->isRecoverablePortInUse($port);
-        }
-
-        $pid = (int) ($inspect['pid'] ?? 0);
-        if ($pid <= 0) {
-            return false;
-        }
-
-        $this->killManagedProcessTreeForStop($pid);
-        SchedulerSystem::usleep(500000);
-
+        // The exact generation retirement runs before this verification pass.
+        // A remaining port is evidence of incomplete cleanup, never kill
+        // authority for its current owner.
+        unset($info);
         return !$this->isRecoverablePortInUse($port);
     }
 
@@ -3483,49 +3584,10 @@ class Stop extends CommandAbstract
         bool $includeSharedState = false
     ): int
     {
-        $candidates = $this->collectRecoverablePortKillCandidates($ports, $info, $includeSharedState);
-        if ($candidates === []) {
-            if ($ports !== []) {
-                $this->invalidateStopRuntimeState();
-                SchedulerSystem::usleep(100000);
-            } else {
-                return 0;
-            }
-            $candidates = $this->collectRecoverablePortKillCandidates($ports, $info, $includeSharedState);
-            if ($candidates === []) {
-                return 0;
-            }
-        }
-
-        $this->printer->note($this->translateStopMessage(
-            '检测到 %{1} 个端口被 WLS 进程占用，正在并发结束…',
-            [\count($candidates)]
-        ));
-
-        $killPids = [];
-        foreach ($candidates as $candidate) {
-            $port = (int) $candidate['port'];
-            $pid = (int) $candidate['pid'];
-            $killPid = (int) $candidate['kill_pid'];
-
-            $this->printer->note($this->translateStopMessage(
-                '  端口 %{1}: PID %{2}',
-                [$port, $pid]
-            ));
-            if ($killPid !== $pid) {
-                $this->printer->note($this->translateStopMessage('    ROOT PID: %{1}', [$killPid]));
-            }
-
-            $killPids[$killPid] = $killPid;
-        }
-
-        $processed = $this->terminateRecoverableProcessIds(\array_values($killPids));
-        if ($processed > 0) {
-            SchedulerSystem::usleep(500000);
-        }
-        $this->invalidateStopRuntimeState();
-
-        return $processed;
+        // Ports only verify that exact-lease retirement completed. Never turn
+        // their current owners into a termination candidate.
+        unset($ports, $info, $includeSharedState);
+        return 0;
     }
 
     /**
@@ -3659,47 +3721,32 @@ class Stop extends CommandAbstract
 
     private function cleanupRecoverableProcessesWithoutInstanceFile(string $name, bool $dryRun = false): int
     {
-        $prefixes = [
-            MasterProcess::getMasterProcessName($name),
-            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
-            MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
-            MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
-        ];
-
         $recoverablePids = \array_values(\array_unique(\array_filter(
             $this->collectRecoverableManagedPids($name),
             static fn (int $pid): bool => $pid > 0
         )));
-        $recoverable = 0;
-        foreach ($prefixes as $prefix) {
-            if ($dryRun) {
-                if (
-                    $this->hasRecoverableManagedProcessHint($name)
-                    || $this->hasRecoverableConfiguredPortHint($name)
-                    || $recoverablePids !== []
-                ) {
-                    return 1;
-                }
-                continue;
-            }
-            $recoverable += $this->killRecoverableProcessPrefix($prefix);
+        if ($dryRun) {
+            return $this->hasRecoverableManagedProcessHint($name)
+                || $this->hasRecoverableConfiguredPortHint($name)
+                || $recoverablePids !== []
+                ? 1
+                : 0;
         }
 
-        if (!$dryRun) {
-            if ($recoverablePids !== []) {
-                $recoverable += $this->terminateRecoverableProcessIds($recoverablePids);
+        $retirement = $this->retireExactInstanceGeneration($name);
+        $this->invalidateStopRuntimeState();
+        $remainingPids = $this->collectRunningResidualPids($recoverablePids);
+        $remainingPorts = [];
+        foreach ($this->getRecoverableConfiguredPorts($name) as $port) {
+            if ($this->isRecoverablePortInUse((int)$port)) {
+                $remainingPorts[] = (int)$port;
             }
-
-            foreach ($this->getRecoverableConfiguredPorts($name) as $port) {
-                if ($this->cleanupRecoverableConfiguredPort((int) $port)) {
-                    $recoverable++;
-                }
-            }
-
+        }
+        if ($remainingPids === [] && $remainingPorts === []) {
             $this->cleanupStaleRecoverableProcessPidFiles();
         }
 
-        return $recoverable;
+        return (int)($retirement['terminated'] ?? 0);
     }
     
     /**
@@ -3951,8 +3998,9 @@ class Stop extends CommandAbstract
                 '[name ...]' => __('一个或多个实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）'),
                 '-a, --all' => __('停止所有运行中的实例（含 Weline Server 与 CLI 服务器）'),
                 '-pre, --prefix <prefix>' => __('停止所有实例名以该前缀开头的 Weline Server 实例'),
-                '-f, --force' => __('强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc'),
-                '--ipc, --force-ipc' => __('与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略'),
+                '-f, --force' => __('强制停止：通过认证 IPC 跳过排水；IPC 失联时仅按受保护进程出生身份清理'),
+                '--fast-local' => __('显式跳过 IPC；仅允许受保护 Master/子进程出生身份清理，无法证明时拒绝终止'),
+                '--ipc, --force-ipc' => __('兼容参数：WLS 2.0 默认始终优先使用认证 IPC'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
@@ -3963,8 +4011,8 @@ class Stop extends CommandAbstract
                 __('按前缀停止实例') => 'php bin/w server:stop -pre=ai-test-login',
                 __('停止 PHP 内置服务器') => 'php bin/w server:stop cli-server',
                 __('停止所有实例') => 'php bin/w server:stop --all',
-                __('强制停止（本地快速清场）') => 'php bin/w server:stop -f',
-                __('强制但走 IPC（短超时）') => 'php bin/w server:stop -f --ipc',
+                __('强制停止（认证 IPC，失败后精确身份清理）') => 'php bin/w server:stop -f',
+                __('显式本地精确身份清理') => 'php bin/w server:stop --fast-local',
             ]
         );
     }

@@ -473,7 +473,7 @@ class Status extends CommandAbstract
         // A first-start auto fallback is independently authenticated by its
         // live lease and immutable serving manifest; it may never have had a
         // historical gateway runtime_project_proof.
-        $trustedFallback = GatewayRuntimeServingProjection::fallbackServingEndpoint($endpoint);
+        $trustedFallback = $this->runtimeFallbackServingEndpoint($endpoint);
         $metadata = [];
         $state = '';
         $port = 0;
@@ -503,6 +503,7 @@ class Status extends CommandAbstract
                 : $bindHost;
             $metadata['fallback_bind_host'] = $bindHost;
             $metadata['fallback_bind'] = $bindAuthority . ':' . $port;
+            $metadata['fallback_urls'] = [(string)$trustedFallback['origin']];
         } elseif (\strtoupper(\trim($state)) === 'DEGRADED_WLS') {
             // A service-role metadata row without a fresh lease proof is not
             // evidence that the public fallback listener is still serving.
@@ -546,6 +547,10 @@ class Status extends CommandAbstract
         }
 
         $urls = [];
+        $trustedScheme = $trustedFallback !== null
+            && ($trustedFallback['https'] ?? null) === false
+                ? 'http'
+                : 'https';
         foreach ((array)($metadata['fallback_urls'] ?? []) as $url) {
             if (!\is_scalar($url)) {
                 continue;
@@ -563,7 +568,7 @@ class Status extends CommandAbstract
                 ))
                 : '';
             if (!\is_array($parts)
-                || \strtolower((string)($parts['scheme'] ?? '')) !== 'https'
+                || \strtolower((string)($parts['scheme'] ?? '')) !== $trustedScheme
                 || \in_array(
                     $urlHost,
                     ['', '0.0.0.0', '::', '*'],
@@ -815,16 +820,21 @@ class Status extends CommandAbstract
     /** @param array<string,mixed> $raw */
     private function resolveGatewayFallbackPublicEndpoint(array $raw): ?string
     {
-        $fallbackEndpoint = GatewayRuntimeServingProjection::fallbackServingEndpoint($raw);
+        $fallbackEndpoint = $this->runtimeFallbackServingEndpoint($raw);
         if ($fallbackEndpoint !== null) {
-            $port = (int)$fallbackEndpoint['port'];
-            $host = (string)$fallbackEndpoint['authority_host'];
-            if (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
-                $host = '[' . $host . ']';
-            }
-            return 'https://' . $host . ':' . $port;
+            $origin = (string)$fallbackEndpoint['origin'];
+            return $origin !== '' ? $origin : null;
         }
         return null;
+    }
+
+    /**
+     * @param array<string,mixed> $raw
+     * @return array{origin:string,bind_host:string,connect_host:string,authority_host:string,port:int,https:bool}|null
+     */
+    protected function runtimeFallbackServingEndpoint(array $raw): ?array
+    {
+        return GatewayRuntimeServingProjection::fallbackServingEndpoint($raw);
     }
 
     /** @param array<string,mixed> $raw */

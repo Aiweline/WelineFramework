@@ -16,6 +16,13 @@
               icon="mdi mdi-web"
               order="10"/>
 
+        <menu source="Weline_Websites::website_acl_grant"
+              name="website_acl_grant"
+              title="&#32593;&#31449;&#21151;&#33021;&#25480;&#26435;"
+              action="websites/backend/website-acl-grant/index"
+              icon="mdi mdi-shield-key-outline"
+              order="11"/>
+
         <menu source="Weline_Websites::store_management"
               name="store_management"
               title="&#21830;&#24215;&#31649;&#29702;"

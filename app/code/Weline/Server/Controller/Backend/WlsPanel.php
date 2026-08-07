@@ -182,7 +182,18 @@ class WlsPanel extends BackendController
         $securityDataService = ObjectManager::getInstance(WlsPanelSecurityDataService::class);
         $post = (array)$this->request->getPost();
         $saveMode = \trim((string)($post['save_mode'] ?? ''));
-        if ($saveMode === 'domain_override') {
+        $expectedReceipt = [
+            'generation' => $post['rules_generation'] ?? null,
+            'digest' => $post['rules_digest'] ?? null,
+        ];
+        if (!\array_key_exists('rules_generation', $post)
+            || !\array_key_exists('rules_digest', $post)
+        ) {
+            $result = [
+                'success' => false,
+                'message' => (string)__('规则版本已缺失，请刷新页面后重试。'),
+            ];
+        } elseif ($saveMode === 'domain_override') {
             $result = $securityDataService->saveDomainOverrideFromPanel($post);
         } elseif (!empty($post['visual_rules'])) {
             $result = $securityDataService->saveRulesFromPanel($post);
@@ -193,12 +204,18 @@ class WlsPanel extends BackendController
                 'scope' => (string)($post['security_scope'] ?? 'all'),
                 'domain' => (string)($post['security_domain'] ?? ''),
                 'changed_sections' => ['rules_json'],
-            ]);
+            ], $expectedReceipt);
         }
 
         $params = !empty($result['success'])
             ? ['panel_notice' => 'security_rules_saved']
             : ['panel_error' => (string)($result['message'] ?? __('安全规则保存失败。'))];
+        if (!empty($result['success'])
+            && (!empty($result['notification_pending']) || !empty($result['audit_pending']))
+        ) {
+            $params['panel_error'] = (string)($result['message']
+                ?? __('安全规则已提交，但后置通知仍待重试。'));
+        }
         foreach (['security_scope', 'security_instance', 'security_ip', 'security_severity', 'security_type', 'security_blocked'] as $key) {
             $value = \trim((string)($post[$key] ?? ''));
             if ($value !== '') {

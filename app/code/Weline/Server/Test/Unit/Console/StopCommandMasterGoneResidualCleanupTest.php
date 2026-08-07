@@ -42,7 +42,7 @@ final class StopCommandMasterGoneResidualCleanupTest extends TestCase
         self::assertTrue($stop->resolve($info));
     }
 
-    public function testMasterGoneResidualPrefixesIncludeSessionAndMemory(): void
+    public function testMasterGoneVerificationPrefixesIncludeSessionAndMemory(): void
     {
         $stop = new Stop();
         $method = new \ReflectionMethod(Stop::class, 'collectResidualCleanupPrefixes');
@@ -56,17 +56,22 @@ final class StopCommandMasterGoneResidualCleanupTest extends TestCase
         self::assertContains('weline-wls-memory-default', $prefixes);
     }
 
-    public function testTerminateKnownSubprocessesAfterMasterGoneUsesDirectForceCandidates(): void
+    public function testTerminateKnownSubprocessesAfterMasterGoneUsesExactBirthLeases(): void
     {
         $stop = new class extends Stop {
-            public int $terminateCalls = 0;
+            /** @var list<string> */
+            public array $retiredInstances = [];
 
-            protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
+            protected function retireExactInstanceGeneration(string $name): array
             {
-                unset($info);
-                $this->terminateCalls++;
+                $this->retiredInstances[] = $name;
 
-                return 2;
+                return [
+                    'terminated' => 2,
+                    'released' => 2,
+                    'unreleased' => 0,
+                    'reasons' => [],
+                ];
             }
         };
 
@@ -99,6 +104,6 @@ final class StopCommandMasterGoneResidualCleanupTest extends TestCase
             \ob_end_clean();
         }
 
-        self::assertSame(1, $stop->terminateCalls);
+        self::assertSame(['default'], $stop->retiredInstances);
     }
 }

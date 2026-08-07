@@ -11,6 +11,7 @@ const source = fs.readFileSync(sourcePath, 'utf8');
 
 function bootI18n({pathname, search = '', hash = ''}) {
     const storage = new Map();
+    const sessionStorageMap = new Map();
     let reloadCount = 0;
     const listeners = new Map();
 
@@ -25,6 +26,17 @@ function bootI18n({pathname, search = '', hash = ''}) {
             storage.delete(String(key));
         },
     };
+    const sessionStorage = {
+        getItem(key) {
+            return sessionStorageMap.has(key) ? sessionStorageMap.get(key) : null;
+        },
+        setItem(key, value) {
+            sessionStorageMap.set(String(key), String(value));
+        },
+        removeItem(key) {
+            sessionStorageMap.delete(String(key));
+        },
+    };
     const location = {
         origin: 'https://p05113ef3.weline.test:9976',
         pathname,
@@ -34,13 +46,23 @@ function bootI18n({pathname, search = '', hash = ''}) {
         reload() {
             reloadCount += 1;
         },
+        assign(url) {
+            this.href = String(url);
+        },
+        replace(url) {
+            this.href = String(url);
+        },
     };
     const document = {
         readyState: 'loading',
         cookie: '',
         documentElement: {
             lang: 'ru-RU',
+            outerHTML: '<html><head></head><body></body></html>',
             setAttribute() {},
+        },
+        body: {
+            innerHTML: '',
         },
         addEventListener(type, listener) {
             listeners.set(type, listener);
@@ -56,6 +78,7 @@ function bootI18n({pathname, search = '', hash = ''}) {
         document,
         location,
         localStorage,
+        sessionStorage,
         site: {},
         DEV: false,
         __WelineThemeConfig: {
@@ -79,12 +102,16 @@ function bootI18n({pathname, search = '', hash = ''}) {
         document,
         location,
         localStorage,
+        sessionStorage,
         navigator: {language: 'ru-RU'},
         console,
         URL,
         URLSearchParams,
         Intl,
-        setTimeout() {
+        setTimeout(fn) {
+            if (typeof fn === 'function') {
+                fn();
+            }
             return 1;
         },
         clearTimeout() {},
@@ -125,7 +152,10 @@ test('switchLang navigates the server-rendered authoritative href without rebuil
 
     await runtime.api.switchLang('en_US', authoritativeHref);
 
-    assert.equal(runtime.location.href, authoritativeHref);
+    assert.equal(
+        runtime.location.href,
+        `https://p05113ef3.weline.test:9976${authoritativeHref}`
+    );
     assert.equal(runtime.storage.get('weline_user_lang'), 'en_US');
     assert.equal(runtime.getReloadCount(), 0);
 });

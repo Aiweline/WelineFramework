@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Gateway\Agent;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
+use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 
 final class GatewayAgentDrainCountersTest extends TestCase
 {
@@ -135,6 +136,40 @@ final class GatewayAgentDrainCountersTest extends TestCase
         self::assertFalse(Agent::canPreparePublicProbe(true, 'STALE'));
     }
 
+    public function testPublicProbeExpectationDigestUsesTheProtocolCanonicalizer(): void
+    {
+        $method = new \ReflectionMethod(Agent::class, 'publicProbeExpectationDigest');
+        $digest = $method->invoke(null, [
+            'project_generation' => 1,
+            'request_digest' => \str_repeat('a', 64),
+            'non_certificate_desired_digest' => \str_repeat('b', 64),
+            'routes' => [],
+        ], [
+            'active_route_ids' => [],
+        ], [
+            'active_config_generation' => 1,
+            'active_config_digest' => \str_repeat('c', 64),
+            'public_https' => 443,
+        ]);
+
+        self::assertMatchesRegularExpression('/\A[a-f0-9]{64}\z/D', $digest);
+    }
+
+    public function testFallbackLeaseObservationUsesAnyLiveListenerOwner(): void
+    {
+        $method = new \ReflectionMethod(Agent::class, 'observeFallbackLease');
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString('->liveServingLeaseForAnyOwner(', $source);
+        self::assertStringNotContainsString('->liveServingLease(', $source);
+    }
+
     public function testGatewayControlRecoveryDoesNotDependOnActivePublicRoutes(): void
     {
         $control = [
@@ -212,6 +247,15 @@ final class GatewayAgentDrainCountersTest extends TestCase
                 'route_id' => $routeId,
                 'domain' => $domain,
                 'certificate' => [
+                    'state' => 'active',
+                    'cert' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'snapshots/controller-outage.crt',
+                    ],
+                    'key' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'snapshots/controller-outage.key',
+                    ],
                     'pending' => false,
                     'generation' => 2,
                     'leaf_fingerprint_sha256' => \str_repeat('1', 64),
@@ -303,6 +347,130 @@ final class GatewayAgentDrainCountersTest extends TestCase
         }
     }
 
+    public function testControllerOutageUsesExactLocalCertificateRoutesToClassifyTheDataPlane(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174081';
+        $instanceName = 'controller-outage-fallback';
+        $domain = 'controller-outage-fallback.example.test';
+        $routeId = \substr(\hash('sha256', $projectUuid . "\0" . $domain), 0, 32);
+        $registration = [
+            'project_uuid' => $projectUuid,
+            'instance_id' => $instanceName,
+            'project_generation' => 7,
+            'instance_generation' => 11,
+            'instance_digest' => \str_repeat('a', 64),
+            'master_epoch' => 13,
+            'launch_id' => \str_repeat('b', 32),
+            'request_digest' => \str_repeat('c', 64),
+            'non_certificate_desired_digest' => \str_repeat('d', 64),
+            'routes' => [[
+                'route_id' => $routeId,
+                'domain' => $domain,
+                'certificate' => [
+                    'state' => 'active',
+                    'cert' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'snapshots/controller-outage.crt',
+                    ],
+                    'key' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'snapshots/controller-outage.key',
+                    ],
+                    'pending' => false,
+                    'generation' => 3,
+                    'leaf_fingerprint_sha256' => \str_repeat('e', 64),
+                    'source_digest' => \str_repeat('f', 64),
+                ],
+            ]],
+        ];
+
+        self::assertSame([$routeId], Agent::localFallbackCertificateReadyRouteIds(
+            $registration,
+            $projectUuid,
+            $instanceName,
+            11,
+            13,
+            \str_repeat('b', 32),
+        ));
+        self::assertSame([], Agent::localFallbackCertificateReadyRouteIds(
+            $registration,
+            $projectUuid,
+            $instanceName,
+            12,
+            13,
+            \str_repeat('b', 32),
+        ));
+        self::assertSame([], Agent::localFallbackCertificateReadyRouteIds(
+            [
+                ...$registration,
+                'routes' => [[
+                    ...$registration['routes'][0],
+                    'certificate' => [
+                        ...$registration['routes'][0]['certificate'],
+                        'pending' => true,
+                    ],
+                ]],
+            ],
+            $projectUuid,
+            $instanceName,
+            11,
+            13,
+            \str_repeat('b', 32),
+        ));
+
+        self::assertSame([
+            'data_plane_healthy' => true,
+            'data_plane_outage' => false,
+            'certificate_ready' => true,
+        ], Agent::fallbackDataPlaneObservation(
+            statusAuthenticated: false,
+            servingStatusAuthenticated: false,
+            projectServingReady: false,
+            allCertificateReadyRoutesActive: false,
+            routeActive: false,
+            publicProbeHealthy: true,
+            gatewayCoreDown: false,
+            routePublicationFailed: false,
+            certificateReadyRouteCount: 0,
+            certificateReadyUnavailableRouteCount: 0,
+            localCertificateReadyRouteCount: 1,
+        ));
+        self::assertSame([
+            'data_plane_healthy' => false,
+            'data_plane_outage' => true,
+            'certificate_ready' => true,
+        ], Agent::fallbackDataPlaneObservation(
+            statusAuthenticated: false,
+            servingStatusAuthenticated: false,
+            projectServingReady: false,
+            allCertificateReadyRoutesActive: false,
+            routeActive: false,
+            publicProbeHealthy: false,
+            gatewayCoreDown: false,
+            routePublicationFailed: false,
+            certificateReadyRouteCount: 0,
+            certificateReadyUnavailableRouteCount: 0,
+            localCertificateReadyRouteCount: 1,
+        ));
+        self::assertSame([
+            'data_plane_healthy' => false,
+            'data_plane_outage' => false,
+            'certificate_ready' => false,
+        ], Agent::fallbackDataPlaneObservation(
+            statusAuthenticated: false,
+            servingStatusAuthenticated: false,
+            projectServingReady: false,
+            allCertificateReadyRoutesActive: false,
+            routeActive: false,
+            publicProbeHealthy: false,
+            gatewayCoreDown: false,
+            routePublicationFailed: false,
+            certificateReadyRouteCount: 0,
+            certificateReadyUnavailableRouteCount: 0,
+            localCertificateReadyRouteCount: 0,
+        ));
+    }
+
     public function testPublicationKeepaliveUsesHeartbeatIntervalAndStopsOnShutdown(): void
     {
         self::assertTrue(Agent::publicationHeartbeatDue(110.0, 100.0, false));
@@ -343,7 +511,7 @@ final class GatewayAgentDrainCountersTest extends TestCase
             'state' => 'active',
             'live' => true,
         ]));
-        self::assertTrue(Agent::fallbackLeaseProvesLive([
+        self::assertFalse(Agent::fallbackLeaseProvesLive([
             'state' => 'DRAINING',
             'live' => true,
         ]));
@@ -355,6 +523,16 @@ final class GatewayAgentDrainCountersTest extends TestCase
         $otherBoot = \str_repeat('b', 64);
         self::assertSame(0.0, Agent::restoreFallbackDrainStartedAt(
             [
+                'state' => 'DRAINING',
+                'drain_acknowledged' => false,
+                'draining_host_boot_id' => null,
+                'draining_monotonic' => null,
+            ],
+            1000.0,
+            $boot,
+        ));
+        self::assertSame(0.0, Agent::restoreFallbackDrainStartedAt(
+            [
                 'state' => 'ACTIVE',
                 'draining_host_boot_id' => $boot,
                 'draining_monotonic' => 700.0,
@@ -362,85 +540,52 @@ final class GatewayAgentDrainCountersTest extends TestCase
             1000.0,
             $boot,
         ));
-        self::assertSame(1000.0, Agent::restoreFallbackDrainStartedAt(
+        self::assertSame(0.0, Agent::restoreFallbackDrainStartedAt(
             ['state' => 'DRAINING'],
             1000.0,
             $boot,
         ));
         self::assertSame(880.0, Agent::restoreFallbackDrainStartedAt(
-            [
-                'state' => 'draining',
-                'draining_host_boot_id' => $boot,
-                'draining_monotonic' => 880.0,
-            ],
+            $this->fallbackDrainAckObservation($boot, 880.0),
             1000.0,
             $boot,
         ));
         self::assertSame(700.0, Agent::restoreFallbackDrainStartedAt(
-            [
-                'state' => 'DRAINING',
-                'draining_host_boot_id' => $boot,
-                'draining_monotonic' => 100.0,
-            ],
+            $this->fallbackDrainAckObservation($boot, 100.0),
             1000.0,
             $boot,
         ));
         self::assertSame(1000.0, Agent::restoreFallbackDrainStartedAt(
-            [
-                'state' => 'DRAINING',
-                'draining_host_boot_id' => $otherBoot,
-                'draining_monotonic' => 100.0,
-                'draining_timestamp' => 1,
-            ],
+            $this->fallbackDrainAckObservation($otherBoot, 100.0),
             1000.0,
             $boot,
         ));
         self::assertSame(1000.0, Agent::restoreFallbackDrainStartedAt(
-            [
-                'state' => 'DRAINING',
-                'draining_host_boot_id' => $boot,
-                'draining_monotonic' => 1001.0,
-            ],
+            $this->fallbackDrainAckObservation($boot, 1001.0),
             1000.0,
             $boot,
         ));
         self::assertSame(910.0, Agent::reconcileFallbackDrainStartedAt(
             900.0,
-            [
-                'state' => 'DRAINING',
-                'draining_host_boot_id' => $boot,
-                'draining_monotonic' => 910.0,
-            ],
+            $this->fallbackDrainAckObservation($boot, 910.0),
             1000.0,
             $boot,
         ));
         self::assertSame(920.0, Agent::reconcileFallbackDrainStartedAt(
             920.0,
-            [
-                'state' => 'DRAINING',
-                'draining_host_boot_id' => $boot,
-                'draining_monotonic' => 910.0,
-            ],
+            $this->fallbackDrainAckObservation($boot, 910.0),
             1000.0,
             $boot,
         ));
         self::assertSame(1000.0, Agent::reconcileFallbackDrainStartedAt(
             1000.0,
-            [
-                'state' => 'DRAINING',
-                'draining_host_boot_id' => $otherBoot,
-                'draining_monotonic' => 100.0,
-            ],
+            $this->fallbackDrainAckObservation($otherBoot, 100.0),
             1001.0,
             $boot,
         ));
         self::assertSame(1000.0, Agent::reconcileFallbackDrainStartedAt(
             1000.0,
-            [
-                'state' => 'DRAINING',
-                'draining_host_boot_id' => $otherBoot,
-                'draining_monotonic' => 100.0,
-            ],
+            $this->fallbackDrainAckObservation($otherBoot, 100.0),
             1299.999,
             $boot,
         ));
@@ -455,12 +600,7 @@ final class GatewayAgentDrainCountersTest extends TestCase
                 downSince: 0.0,
                 activeSince: 900.0,
                 fallbackDrainStartedAt: Agent::restoreFallbackDrainStartedAt(
-                    [
-                        'state' => 'DRAINING',
-                        'live' => false,
-                        'draining_host_boot_id' => $boot,
-                        'draining_monotonic' => 100.0,
-                    ],
+                    $this->fallbackDrainAckObservation($boot, 100.0),
                     1000.0,
                     $boot,
                 ),
@@ -469,6 +609,69 @@ final class GatewayAgentDrainCountersTest extends TestCase
                 fallbackDrainRequested: true,
             ),
         );
+    }
+
+    public function testObservedSchemaSixDrainAckReachesTheReconcileClock(): void
+    {
+        $boot = \str_repeat('b', 64);
+        $expected = $this->fallbackDrainAckObservation($boot, 880.0);
+        $lease = [
+            'schema_version' => $expected['schema_version'],
+            'state' => $expected['state'],
+            'listener_phase' => $expected['listener_phase'],
+            'drain_acknowledged' => $expected['drain_acknowledged'],
+            'listener_transition_action' => $expected['listener_transition_action'],
+            'drain_transition_id' => $expected['drain_transition_id'],
+            'listener_transition_digest' => $expected['listener_transition_digest'],
+            'drain_action_digest' => $expected['drain_action_digest'],
+            'transition_identity' => $expected['transition_identity'],
+            'draining_timestamp' => $expected['draining_timestamp'],
+            'draining_host_boot_id' => $expected['draining_host_boot_id'],
+            'draining_monotonic' => $expected['draining_monotonic'],
+            'host_boot_id' => $expected['host_boot_id'],
+            'bind_host' => $expected['bind_host'],
+            'port' => $expected['port'],
+            'lease_id' => $expected['lease_id'],
+            'instance' => $expected['lease_instance_id'],
+            'project_uuid' => $expected['project_uuid'],
+            'master_pid' => $expected['master_pid'],
+            'launch_id' => $expected['worker_launch_id'],
+            'confirmed_timestamp' => $expected['confirmed_timestamp'],
+        ];
+        $projection = new \ReflectionMethod(
+            Agent::class,
+            'projectFallbackLeaseObservation',
+        );
+        $observed = $projection->invoke(
+            null,
+            $lease,
+            null,
+            'site-gateway-fallback',
+        );
+        self::assertIsArray($observed);
+        self::assertSame(
+            GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+            $observed['listener_phase'],
+        );
+        self::assertSame(880.0, Agent::restoreFallbackDrainStartedAt(
+            $observed,
+            1000.0,
+            $boot,
+        ));
+
+        $lease['listener_phase'] = GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED;
+        $lease['drain_acknowledged'] = false;
+        $pending = $projection->invoke(
+            null,
+            $lease,
+            null,
+            'site-gateway-fallback',
+        );
+        self::assertSame(0.0, Agent::restoreFallbackDrainStartedAt(
+            $pending,
+            1000.0,
+            $boot,
+        ));
     }
 
     public function testFallbackControlPortOnlyEchoesTheHostLeaseRange(): void
@@ -485,8 +688,8 @@ final class GatewayAgentDrainCountersTest extends TestCase
     {
         $now = 1200.0;
         $result = $this->statusResult($now, [
-            $this->worker(1, $now - 1.0, 2, 3, 1, 2),
-            $this->worker(2, $now - 2.0, 4, 5, 2, 1),
+            $this->worker(1, $now - 1.0, 2, 3, 1, 2, 2),
+            $this->worker(2, $now - 2.0, 4, 5, 2, 1, 1),
         ]);
 
         self::assertSame([
@@ -498,7 +701,38 @@ final class GatewayAgentDrainCountersTest extends TestCase
             'long_lived_connections' => 8,
             'sse_connections' => 3,
             'websocket_connections' => 3,
+            'http2_connections' => 3,
         ], Agent::aggregateMasterDrainCounters($result, $now));
+    }
+
+    public function testWorkersPublishHttp2CountsToMasterStatusAndDetailedHealth(): void
+    {
+        $agentFile = (string)(new \ReflectionClass(Agent::class))->getFileName();
+        $moduleRoot = \dirname($agentFile, 4);
+        $plainWorker = (string)\file_get_contents(
+            $moduleRoot . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'worker.php',
+        );
+        $sslWorker = (string)\file_get_contents(
+            $moduleRoot . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'worker_ssl.php',
+        );
+
+        self::assertStringContainsString("'http2_connections' => 0,", $plainWorker);
+        self::assertStringContainsString(
+            "'http2_connections' => \\max(0, \$http2ConnectionCount),",
+            $plainWorker,
+        );
+        self::assertStringContainsString(
+            '$http2StatusConnectionCount = wlsHttp2LiveConnectionCount(',
+            $sslWorker,
+        );
+        self::assertStringContainsString(
+            "'http2_connections' => \$http2StatusConnectionCount,",
+            $sslWorker,
+        );
+        self::assertStringContainsString(
+            "'http2_connections' => \\max(0, \$http2ConnectionCount),",
+            $sslWorker,
+        );
     }
 
     public function testStaleOrPartialWorkerReportsFailClosedAsUnknown(): void
@@ -523,6 +757,7 @@ final class GatewayAgentDrainCountersTest extends TestCase
                 'long_lived_connections' => 0,
                 'sse_connections' => 0,
                 'websocket_connections' => 0,
+                'http2_connections' => 0,
             ],
             Agent::aggregateMasterDrainCounters($partial, $now),
         );
@@ -540,6 +775,24 @@ final class GatewayAgentDrainCountersTest extends TestCase
         self::assertFalse($aggregate['counters_known']);
         self::assertSame(0, $aggregate['active_requests']);
         self::assertSame(0, $aggregate['long_lived_connections']);
+    }
+
+    public function testMissingOrUntypedWorkerHttp2CounterFailsClosed(): void
+    {
+        $now = 1200.0;
+        $missing = $this->worker(1, $now - 1.0, 0, 0, 0, 0);
+        unset($missing['metadata']['last_status_report']['http2_connections']);
+        $untyped = $this->worker(1, $now - 1.0, 0, 0, 0, 0);
+        $untyped['metadata']['last_status_report']['http2_connections'] = '0';
+
+        self::assertFalse(Agent::aggregateMasterDrainCounters(
+            $this->statusResult($now, [$missing], 1),
+            $now,
+        )['counters_known']);
+        self::assertFalse(Agent::aggregateMasterDrainCounters(
+            $this->statusResult($now, [$untyped], 1),
+            $now,
+        )['counters_known']);
     }
 
     public function testFallbackLifecycleUsesExactNinetyThirtyAndThreeHundredSecondGates(): void
@@ -589,6 +842,38 @@ final class GatewayAgentDrainCountersTest extends TestCase
         self::assertSame(
             ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
             Agent::decideFallbackLifecycleAction(...['now' => 530.0, ...$draining]),
+        );
+    }
+
+    public function testFallbackDrainDispatchIsNotAnAckAndRetriesOnlyAtHeartbeatCadence(): void
+    {
+        $recovered = [
+            'dataPlaneHealthy' => true,
+            'fallbackEligible' => true,
+            'controlAvailable' => true,
+            'downSince' => 0.0,
+            'activeSince' => 100.0,
+            'fallbackDrainStartedAt' => 0.0,
+            'lastFallbackCommandAt' => 200.0,
+            'fallbackRequested' => true,
+            'fallbackDrainRequested' => false,
+        ];
+        self::assertSame('', Agent::decideFallbackLifecycleAction(
+            ...['now' => 209.999, ...$recovered],
+        ));
+        self::assertSame(
+            ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN,
+            Agent::decideFallbackLifecycleAction(...['now' => 210.0, ...$recovered]),
+        );
+
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(Agent::class))->getFileName(),
+        );
+        self::assertStringContainsString('$lastFallbackCommandAt = $now;', $source);
+        self::assertStringContainsString('$fallbackDrainRequested = false;', $source);
+        self::assertStringNotContainsString(
+            '$fallbackDrainRequested = $kernel?->sendControlCommand(',
+            $source,
         );
     }
 
@@ -819,6 +1104,71 @@ final class GatewayAgentDrainCountersTest extends TestCase
         ));
     }
 
+    /** @return array<string,mixed> */
+    private function fallbackDrainAckObservation(
+        string $hostBootId,
+        float $drainingMonotonic,
+    ): array {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174099';
+        $leaseId = \str_repeat('1', 32);
+        $workerLaunchId = \str_repeat('2', 32);
+        $transitionId = \str_repeat('3', 32);
+        $actionDigest = \str_repeat('4', 64);
+        $pidNamespaceId = PHP_OS_FAMILY === 'Linux'
+            ? 'pid:[4026531836]'
+            : '';
+        $identity = [
+            'schema' => 'wls-gateway-fallback-listener/1',
+            'project_uuid' => $projectUuid,
+            'wls_instance' => 'site',
+            'role' => 'gateway_fallback',
+            'slot_id' => 'gateway_fallback#1',
+            'service_generation' => 7,
+            'service_lease_id' => \str_repeat('5', 32),
+            'worker_pid' => 22001,
+            'worker_process_birth' => \str_repeat('6', 64),
+            'worker_pid_namespace_id' => $pidNamespaceId,
+            'worker_launch_id' => $workerLaunchId,
+            'master_pid' => 22000,
+            'master_epoch' => 9,
+            'master_launch_id' => \str_repeat('7', 32),
+            'master_process_birth' => \str_repeat('8', 64),
+            'master_pid_namespace_id' => $pidNamespaceId,
+            'port' => 24567,
+            'host_lease_instance' => 'site-gateway-fallback',
+            'host_lease_id' => $leaseId,
+            'host_boot_id' => $hostBootId,
+            'bind_host' => '127.0.0.1',
+            'listener_proof_digest' => \str_repeat('9', 64),
+            'listener_transport' => 'posix_inherited_fd',
+            'listener_receipt_digest' => \str_repeat('a', 64),
+        ];
+        return [
+            'schema_version' => GatewayPortLeaseAllocator::SCHEMA_VERSION,
+            'state' => 'DRAINING',
+            'live' => false,
+            'listener_phase' => GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+            'drain_acknowledged' => true,
+            'listener_transition_action' => 'DRAIN',
+            'drain_transition_id' => $transitionId,
+            'listener_transition_digest' => $actionDigest,
+            'drain_action_digest' => $actionDigest,
+            'transition_identity' => $identity,
+            'draining_timestamp' => 1,
+            'draining_host_boot_id' => $hostBootId,
+            'draining_monotonic' => $drainingMonotonic,
+            'host_boot_id' => $hostBootId,
+            'bind_host' => '127.0.0.1',
+            'port' => 24567,
+            'lease_id' => $leaseId,
+            'lease_instance_id' => 'site-gateway-fallback',
+            'project_uuid' => $projectUuid,
+            'master_pid' => 22000,
+            'worker_launch_id' => $workerLaunchId,
+            'confirmed_timestamp' => 1,
+        ];
+    }
+
     /**
      * @param list<array<string,mixed>> $workers
      * @return array<string,mixed>
@@ -849,6 +1199,7 @@ final class GatewayAgentDrainCountersTest extends TestCase
         int $longLived,
         int $sse,
         int $webSocket,
+        int $http2 = 0,
     ): array {
         $pid = 5000 + $workerId;
         $lease = 'worker-' . $workerId . '-lease';
@@ -867,6 +1218,7 @@ final class GatewayAgentDrainCountersTest extends TestCase
                     'long_lived_connections' => $longLived,
                     'sse_connections' => $sse,
                     'websocket_connections' => $webSocket,
+                    'http2_connections' => $http2,
                     'source_role' => 'worker',
                     'source_pid' => $pid,
                     'source_worker_id' => $workerId,

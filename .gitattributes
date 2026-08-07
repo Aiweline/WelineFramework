@@ -3,3 +3,11 @@
 # Shell scripts must use LF (CRLF breaks bash on Linux)
 bin/install.sh text eol=lf
 bin/install.bash text eol=lf
+
+# WLS Gateway signer and package-controller inputs are hashed byte-for-byte.
+app/code/Weline/Server/bin/wls_gateway_controller.php text eol=lf
+app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php text eol=lf
+app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedTreeWalker.php text eol=lf
+app/code/Weline/Server/Service/Edge/Gateway/GatewayProjectStateFilesystem.php text eol=lf
+app/code/Weline/Server/env/gateway/trusted-release-keys.json text eol=lf
+dev/tools/wls-gateway-package.php text eol=lf

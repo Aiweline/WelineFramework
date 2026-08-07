@@ -530,7 +530,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             }
             $can_referer = $this->getCanReferer($referer, $request);
 
-            // 非超管角色统一通过 AclService 做权限判定（roleId 已在上方从 user/role 取得，无需再 load Role）
+            // 非超管：空权限直接拒绝。超管（role_id=1）的旁路由 AclService 内事件决定，不可在此硬跳过。
             if ($roleId !== 1) {
                 $t0 = microtime(true);
                 $hasAny = $this->aclService->hasAnyPermission($roleId);
@@ -556,35 +556,33 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     $request->getResponse()->noRouter(DEV ? 403 : 404);
                     return;
                 }
+            }
 
-                $t0 = microtime(true);
-                $allowed = $this->aclService->isRouteAllowed($roleId, $uri, $request->getMethod());
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::recordSpan('acl::RouteBefore::isRouteAllowed', (microtime(true) - $t0) * 1000, 'observer', $parent);
-                }
-                if (!$allowed) {
-                    w_auth_log('acl_no_permission_for_route', '角色无当前路由权限', ['uri' => $uri, 'role_id' => $roleId, 'method' => $request->getMethod()]);
-                    // 无权限访问当前路由的处理逻辑维持原有分支语义：返回错误或尝试寻找可跳转入口
-                    if ($request->isApiBackend()) {
-                        $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
-                        return;
-                    }
-
-                    // 使用现有的 fallback 行为：尝试根据角色权限找到可访问的菜单路由
-                    if (empty($access_sources)) {
-                        $access_sources = $this->aclService->getRoleAclEntries($roleId);
-                    }
-                    $this->findAccessUrlRouteToRedirect($request, $access_sources);
-
-                    /** @var EventsManager $eventsManager */
-                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
-                    $noAccessData = ['data' => ['reason' => 'no_permission_for_route']];
-                    $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
-                    if (!$request->isApiBackend()) {
-                        $request->getResponse()->noRouter(DEV ? 403 : 404);
-                    }
+            $t0 = microtime(true);
+            $allowed = $this->aclService->isRouteAllowed($roleId, $uri, $request->getMethod());
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::recordSpan('acl::RouteBefore::isRouteAllowed', (microtime(true) - $t0) * 1000, 'observer', $parent);
+            }
+            if (!$allowed) {
+                w_auth_log('acl_no_permission_for_route', '角色无当前路由权限', ['uri' => $uri, 'role_id' => $roleId, 'method' => $request->getMethod()]);
+                if ($request->isApiBackend()) {
+                    $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
                     return;
                 }
+
+                if (empty($access_sources)) {
+                    $access_sources = $this->aclService->getRoleAclEntries($roleId);
+                }
+                $this->findAccessUrlRouteToRedirect($request, $access_sources);
+
+                /** @var EventsManager $eventsManager */
+                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $noAccessData = ['data' => ['reason' => 'no_permission_for_route']];
+                $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
+                if (!$request->isApiBackend()) {
+                    $request->getResponse()->noRouter(DEV ? 403 : 404);
+                }
+                return;
             }
         w_auth_log('acl_allowed', '权限校验通过', ['uri' => $uri, 'role_id' => $roleId, 'user_id' => $sessionAclContext['user_id'] ?? ($user && method_exists($user, 'getId') ? $user->getId() : null)]);
     }

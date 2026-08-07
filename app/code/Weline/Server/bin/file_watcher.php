@@ -17,24 +17,55 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 
-$configPath = $argv[1] ?? '';
-if (empty($configPath) || !\is_file($configPath)) {
-    w_log_error('[FileWatcher] Config file required: php file_watcher.php <config_json_path>');
+$fail = static function (string $message): never {
+    \fwrite(STDERR, '[FileWatcher] ' . $message . PHP_EOL);
     exit(1);
+};
+
+$configPath = $argv[1] ?? '';
+if (empty($configPath) || !\is_file($configPath) || \is_link($configPath)) {
+    $fail('Config file required: php file_watcher.php <config_json_path>');
 }
 
-$config = \json_decode(\file_get_contents($configPath), true);
-if (!\is_array($config)) {
-    w_log_error('[FileWatcher] Invalid config JSON');
-    exit(1);
+\clearstatcache(true, $configPath);
+$configStatBefore = @\lstat($configPath);
+$configSize = \is_array($configStatBefore) ? (int)($configStatBefore['size'] ?? -1) : -1;
+if (!\is_array($configStatBefore) || $configSize < 1 || $configSize > 262144) {
+    $fail('Config file identity or size is invalid');
 }
+$configRaw = @\file_get_contents($configPath, false, null, 0, 262145);
+$configStatAfter = @\lstat($configPath);
+if (!\is_string($configRaw)
+    || \strlen($configRaw) !== $configSize
+    || !\is_array($configStatAfter)
+    || \is_link($configPath)
+    || (int)($configStatAfter['dev'] ?? -1) !== (int)($configStatBefore['dev'] ?? -2)
+    || (int)($configStatAfter['ino'] ?? -1) !== (int)($configStatBefore['ino'] ?? -2)
+    || (int)($configStatAfter['size'] ?? -1) !== $configSize
+) {
+    $fail('Config file changed while being read');
+}
+$config = \json_decode($configRaw, true);
+if (!\is_array($config)) {
+    $fail('Invalid config JSON');
+}
+$configExpectedDevice = (int)($configStatAfter['dev'] ?? -1);
+$configExpectedInode = (int)($configStatAfter['ino'] ?? -1);
+$configExpectedSize = (int)($configStatAfter['size'] ?? -1);
 
 $watchDirs = $config['watch_dirs'] ?? [];
 $checkInterval = (float) ($config['check_interval'] ?? 1);
+$parentPid = (int)($config['parent_pid'] ?? 0);
+$parentProcessBirth = \strtolower(\trim((string)($config['parent_process_birth'] ?? '')));
+$parentPidNamespaceId = \trim((string)($config['parent_pid_namespace_id'] ?? ''));
+$parentHostBootId = \trim((string)($config['parent_host_boot_id'] ?? ''));
 
-if (empty($watchDirs)) {
-    w_log_error('[FileWatcher] watch_dirs is required');
-    exit(1);
+if (empty($watchDirs)
+    || $parentPid <= 0
+    || \preg_match('/\A[a-f0-9]{64}\z/D', $parentProcessBirth) !== 1
+    || $parentHostBootId === ''
+) {
+    $fail('watch_dirs and exact parent identity are required');
 }
 
 // 检测根目录（DS 为 ServerInstanceManager -> Env 所需）
@@ -50,6 +81,54 @@ require_once BP . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 $watcher = new \Weline\Server\Service\FileWatcher($watchDirs);
 $watcher->setCheckInterval($checkInterval);
+$parentRuntimeIdentity = new \Weline\Server\Service\MasterLeaseRuntimeIdentity();
+try {
+    if (!\hash_equals($parentHostBootId, $parentRuntimeIdentity->hostBootId())
+        || $parentRuntimeIdentity->observeProcessIdentity(
+            $parentPid,
+            $parentProcessBirth,
+            $parentPidNamespaceId,
+        ) !== \Weline\Server\Service\MasterLeaseRuntimeIdentity::OWNER_MATCH
+    ) {
+        throw new \RuntimeException('parent identity is not current');
+    }
+} catch (\Throwable $throwable) {
+    w_log_error('[FileWatcher] Parent identity validation failed: ' . $throwable->getMessage());
+    exit(1);
+}
+$watcher->setRunGuard(static function () use (
+    $configPath,
+    $configExpectedDevice,
+    $configExpectedInode,
+    $configExpectedSize,
+    $parentRuntimeIdentity,
+    $parentPid,
+    $parentProcessBirth,
+    $parentPidNamespaceId,
+    $parentHostBootId,
+): bool {
+    \clearstatcache(true, $configPath);
+    $currentConfigStat = @\lstat($configPath);
+    if (!\is_array($currentConfigStat)
+        || \is_link($configPath)
+        || ((int)($currentConfigStat['mode'] ?? 0) & 0170000) !== 0100000
+        || (int)($currentConfigStat['dev'] ?? -1) !== $configExpectedDevice
+        || (int)($currentConfigStat['ino'] ?? -1) !== $configExpectedInode
+        || (int)($currentConfigStat['size'] ?? -1) !== $configExpectedSize
+    ) {
+        return false;
+    }
+    try {
+        return \hash_equals($parentHostBootId, $parentRuntimeIdentity->hostBootId())
+            && $parentRuntimeIdentity->observeProcessIdentity(
+                $parentPid,
+                $parentProcessBirth,
+                $parentPidNamespaceId,
+            ) === \Weline\Server\Service\MasterLeaseRuntimeIdentity::OWNER_MATCH;
+    } catch (\Throwable) {
+        return false;
+    }
+});
 
 if (\Weline\Server\Service\FileWatcher::supportsInotify()) {
     echo "[FileWatcher] 使用 inotify 模式（事件驱动）\n";
@@ -97,5 +176,4 @@ $watcher->onChange(function (array $changes) {
     \Weline\Server\Service\FileWatcher::notifyWorkersToReload($changes);
 });
 
-$watcher->init();
 $watcher->watch();

@@ -432,8 +432,10 @@ class ServerMonitor extends BackendController
 
     public function getSecurityRules(): string
     {
-        $rules = AttackDetector::getInstance()->getRules();
-        $this->assign('rulesJson', \json_encode($rules, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $state = AttackDetector::getInstance()->getRulesState();
+        $this->assign('rulesJson', \json_encode($state['rules'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $this->assign('rulesGeneration', $state['generation']);
+        $this->assign('rulesDigest', $state['digest']);
         $this->assign('title', __('安全规则'));
         return $this->fetch('security-rules');
     }
@@ -457,10 +459,32 @@ class ServerMonitor extends BackendController
             } else {
                 throw new \InvalidArgumentException((string)__('规则数据不能为空'));
             }
-            AttackDetector::getInstance()->updateRules($rules);
+            $expectedGenerationRaw = $body['expected_generation']
+                ?? $this->request->getPost('expected_generation', null);
+            $expectedDigest = \trim((string)($body['expected_digest']
+                ?? $this->request->getPost('expected_digest', '')));
+            if (\is_int($expectedGenerationRaw)) {
+                $expectedGeneration = $expectedGenerationRaw;
+            } elseif (\is_string($expectedGenerationRaw) && \ctype_digit($expectedGenerationRaw)) {
+                $expectedGeneration = (int)$expectedGenerationRaw;
+            } else {
+                throw new \InvalidArgumentException((string)__('规则版本已缺失，请刷新页面后重试。'));
+            }
+            $commit = AttackDetector::getInstance()->updateRules(
+                $rules,
+                $expectedGeneration,
+                $expectedDigest,
+            );
             return [
                 'success' => true,
-                'message' => __('安全规则已保存'),
+                'message' => !empty($commit['notification_pending'])
+                    ? __('安全规则已提交，但外部同步通知仍待重试。')
+                    : __('安全规则已保存'),
+                'data' => [
+                    'generation' => $commit['generation'],
+                    'digest' => $commit['digest'],
+                    'notification_pending' => (bool)($commit['notification_pending'] ?? false),
+                ],
             ];
         } catch (\Throwable $throwable) {
             return [

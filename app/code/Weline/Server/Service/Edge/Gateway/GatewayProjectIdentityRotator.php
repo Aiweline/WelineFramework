@@ -29,17 +29,89 @@ final class GatewayProjectIdentityRotator
         private readonly ProjectIdentityStore $identities = new ProjectIdentityStore(),
         private readonly GatewayCredentialStore $credentials = new GatewayCredentialStore(),
         private readonly GatewayClient $client = new GatewayClient(),
+        private readonly ?\Closure $projectRequestResolver = null,
+        private readonly ?\Closure $credentialRetirer = null,
     ) {
     }
 
     /** @return array<string,mixed> */
-    public function rotate(): array
-    {
+    public function rotate(
+        bool $allowSameRootTransfer = false,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $cloneConflict = $this->identities->clonedIdentityConflict(
+            $deadlineMonotonic,
+        );
+        if ($cloneConflict !== []) {
+            $oldProjectUuid = (string)$cloneConflict['old_project_uuid'];
+            // The credential file was copied with the clone. Remove only this
+            // clone-local capability before publishing its new UUID; the
+            // source project and its host credential are separate files.
+            $this->retireClonedCredential($oldProjectUuid);
+            $freshEnrollment = $this->identities->prepareFreshCloneEnrollment(
+                $cloneConflict,
+                $deadlineMonotonic,
+            );
+            return [
+                'state' => 'FRESH_ENROLLMENT_REQUIRED',
+                'previous_uuid' => $oldProjectUuid,
+                'project_uuid' => (string)$freshEnrollment['project_uuid'],
+                'source_project_root' => (string)(
+                    $freshEnrollment['source_project_root'] ?? ''
+                ),
+            ];
+        }
+
+        $freshEnrollment = $this->identities->freshEnrollmentState(
+            $deadlineMonotonic,
+        );
+        if ($freshEnrollment !== []) {
+            $this->retireClonedCredential(
+                (string)($freshEnrollment['previous_project_uuid'] ?? ''),
+                (string)($freshEnrollment['project_uuid'] ?? ''),
+            );
+            $projectUuid = $this->identities->projectUuid($deadlineMonotonic);
+            if (!\hash_equals(
+                (string)($freshEnrollment['project_uuid'] ?? ''),
+                $projectUuid,
+            )) {
+                throw new \RuntimeException(
+                    'WLS fresh clone enrollment identity changed during recovery.',
+                );
+            }
+            return [
+                'state' => 'FRESH_ENROLLMENT_REQUIRED',
+                'previous_uuid' => (string)$freshEnrollment['previous_project_uuid'],
+                'project_uuid' => $projectUuid,
+                'source_project_root' => (string)(
+                    $freshEnrollment['source_project_root'] ?? ''
+                ),
+            ];
+        }
+
         $rotation = $this->identities->rotationState();
+        $lastFreshEnrollment = $rotation === []
+            ? $this->identities->lastFreshEnrollmentState($deadlineMonotonic)
+            : [];
+        if ($lastFreshEnrollment !== [] && !$allowSameRootTransfer) {
+            return [
+                'state' => 'FRESH_ENROLLMENT_ALREADY_COMMITTED',
+                'previous_uuid' => (string)(
+                    $lastFreshEnrollment['previous_project_uuid'] ?? ''
+                ),
+                'project_uuid' => (string)(
+                    $lastFreshEnrollment['project_uuid'] ?? ''
+                ),
+                'completed_at' => (string)(
+                    $lastFreshEnrollment['completed_at'] ?? ''
+                ),
+            ];
+        }
+
         if ($rotation === []) {
             // This also snapshots the old same-host claim while the active UUID
             // and credential remain untouched.
-            $this->identities->projectUuid();
+            $this->identities->projectUuid($deadlineMonotonic);
             $rotation = $this->identities->prepareRotation();
         }
         $rotationId = (string)$rotation['rotation_id'];
@@ -47,7 +119,11 @@ final class GatewayProjectIdentityRotator
 
         if ($phase === 'LOCAL_PREPARED') {
             $request = self::prepareRequest($rotation);
-            $response = $this->client->projectRequest('rotate-prepare', $request);
+            $response = $this->projectRequest(
+                'rotate-prepare',
+                $request,
+                $deadlineMonotonic,
+            );
             $payload = self::successfulPayload($response, 'rotation prepare');
             $credential = \is_array($payload['credential'] ?? null)
                 ? $payload['credential']
@@ -82,16 +158,21 @@ final class GatewayProjectIdentityRotator
             );
             $commitRequest = self::commitRequest($rotation, $pending);
             try {
-                $response = $this->client->projectRequest('rotate-commit', $commitRequest);
+                $response = $this->projectRequest(
+                    'rotate-commit',
+                    $commitRequest,
+                    $deadlineMonotonic,
+                );
                 $payload = self::successfulPayload($response, 'rotation commit');
             } catch (\Throwable $commitFailure) {
                 // A lost commit acknowledgement is ambiguous. Query the
                 // durable host transaction and only roll forward when it
                 // returns the new-secret-signed COMMITTED receipt.
                 try {
-                    $statusResponse = $this->client->projectRequest(
+                    $statusResponse = $this->projectRequest(
                         'rotate-status',
                         self::rotationReference($rotation),
+                        $deadlineMonotonic,
                     );
                     $payload = self::successfulPayload(
                         $statusResponse,
@@ -143,6 +224,7 @@ final class GatewayProjectIdentityRotator
         }
 
         if ($phase === 'IDENTITY_COMMITTED') {
+            $credentialCommitFailure = null;
             try {
                 $activeCredential = $this->credentials->commitPending(
                     $rotationId,
@@ -155,20 +237,19 @@ final class GatewayProjectIdentityRotator
                 $activeCredential = $this->credentials->load(
                     (string)$rotation['new_project_uuid'],
                 );
-                if (!\hash_equals(
-                    (string)$rotation['new_credential_id'],
-                    (string)($activeCredential['credential_id'] ?? ''),
-                )) {
-                    throw $throwable;
-                }
+                $credentialCommitFailure = $throwable;
             }
-            if (!\hash_equals(
-                (string)$rotation['new_credential_id'],
-                (string)($activeCredential['credential_id'] ?? ''),
-            )) {
-                throw new \RuntimeException(
-                    'Committed project rotation credential does not match its journal.'
-                );
+            try {
+                self::validateCommittedCredential($rotation, $activeCredential);
+            } catch (\Throwable $proofFailure) {
+                if ($credentialCommitFailure instanceof \Throwable) {
+                    throw new \RuntimeException(
+                        $proofFailure->getMessage(),
+                        0,
+                        $credentialCommitFailure,
+                    );
+                }
+                throw $proofFailure;
             }
             $rotation = $this->identities->markRotationLocalCommitted($rotationId);
             $phase = 'LOCAL_COMMITTED';
@@ -177,7 +258,11 @@ final class GatewayProjectIdentityRotator
         if ($phase === 'LOCAL_COMMITTED') {
             $finalize = self::rotationReference($rotation, true);
             self::successfulPayload(
-                $this->client->projectRequest('rotate-finalize', $finalize),
+                $this->projectRequest(
+                    'rotate-finalize',
+                    $finalize,
+                    $deadlineMonotonic,
+                ),
                 'rotation finalize',
             );
             $finished = $this->identities->finalizeRotation($rotationId);
@@ -194,6 +279,12 @@ final class GatewayProjectIdentityRotator
 
     public function abort(): void
     {
+        if ($this->identities->freshEnrollmentState() !== []) {
+            throw new \RuntimeException(
+                'A fresh clone identity cannot be aborted into the copied project UUID; '
+                    . 'complete its new enrollment instead.',
+            );
+        }
         $rotation = $this->identities->rotationState();
         if ($rotation === []) {
             return;
@@ -214,11 +305,44 @@ final class GatewayProjectIdentityRotator
         // advanced. Controller abort is idempotent and fences a concurrent or
         // already committed transfer instead of orphaning it.
         self::successfulPayload(
-            $this->client->projectRequest('rotate-abort', $reference),
+            $this->projectRequest('rotate-abort', $reference),
             'rotation abort',
         );
         $this->credentials->abortPending((string)$rotation['rotation_id']);
         $this->identities->abortRotation((string)$rotation['rotation_id']);
+    }
+
+    private function retireClonedCredential(
+        string $oldProjectUuid,
+        ?string $preserveProjectUuid = null,
+    ): void
+    {
+        if ($this->credentialRetirer !== null) {
+            ($this->credentialRetirer)($oldProjectUuid);
+            return;
+        }
+        $this->credentials->purgeForFreshCloneIdentity($preserveProjectUuid);
+    }
+
+    /** @param array<string,mixed> $payload @return array<string,mixed> */
+    private function projectRequest(
+        string $operation,
+        array $payload,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $response = $this->projectRequestResolver !== null
+            ? ($this->projectRequestResolver)($operation, $payload)
+            : $this->client->projectRequest(
+                $operation,
+                $payload,
+                $deadlineMonotonic,
+            );
+        if (!\is_array($response)) {
+            throw new \RuntimeException(
+                'Gateway project identity rotation returned an invalid response.',
+            );
+        }
+        return $response;
     }
 
     /** @param array<string,mixed> $rotation @return array<string,mixed> */
@@ -435,6 +559,65 @@ final class GatewayProjectIdentityRotator
             || !\hash_equals($expected, $signature)
         ) {
             throw new \RuntimeException('Gateway rotation commit receipt is invalid.');
+        }
+    }
+
+    /**
+     * Prove the exact local active credential against the durable new-secret
+     * signed host commit before deleting the recovery phase from the journal.
+     * A matching credential ID alone is not an after-image proof: a corrupted
+     * or partially restored secret would strand the project after finalize.
+     *
+     * @param array<string,mixed> $rotation
+     * @param array<string,mixed> $credential
+     */
+    public static function validateCommittedCredential(
+        array $rotation,
+        array $credential,
+    ): void {
+        try {
+            if (($credential['schema_version'] ?? null) !== 1
+                || !\hash_equals(
+                    GatewayPaths::PROTOCOL,
+                    (string)($credential['protocol'] ?? ''),
+                )
+                || \preg_match('/\A[a-f0-9]{32}\z/D', (string)(
+                    $credential['host_id'] ?? ''
+                )) !== 1
+                || !\hash_equals(
+                    (string)($rotation['new_project_uuid'] ?? ''),
+                    (string)($credential['project_uuid'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($rotation['new_credential_id'] ?? ''),
+                    (string)($credential['credential_id'] ?? ''),
+                )
+                || !\is_int($credential['credential_generation'] ?? null)
+                || (int)$credential['credential_generation'] < 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                    $credential['secret'] ?? ''
+                )) !== 1
+                || !\is_string($credential['issued_at'] ?? null)
+                || \strlen((string)$credential['issued_at']) > 128
+                || \strtotime((string)$credential['issued_at']) === false
+            ) {
+                throw new \RuntimeException(
+                    'Committed project rotation credential shape is invalid.',
+                );
+            }
+            self::validateCommitReceipt(
+                \is_array($rotation['commit_receipt'] ?? null)
+                    ? $rotation['commit_receipt']
+                    : [],
+                $rotation,
+                $credential,
+            );
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'Committed project rotation credential does not prove the committed host rotation.',
+                0,
+                $throwable,
+            );
         }
     }
 }

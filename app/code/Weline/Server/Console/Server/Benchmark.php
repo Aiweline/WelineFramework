@@ -1036,12 +1036,13 @@ class Benchmark extends CommandAbstract
         if ($fallbackEndpoint !== null) {
             $connectHost = $this->normalizeConnectHost((string)$fallbackEndpoint['connect_host']);
             $authorityHost = (string)$fallbackEndpoint['authority_host'];
-            $fallbackHttpsPort = (int)$fallbackEndpoint['port'];
+            $fallbackPort = (int)$fallbackEndpoint['port'];
+            $fallbackHttps = (bool)$fallbackEndpoint['https'];
             return [
                 'host' => $connectHost,
                 'authority_host' => $authorityHost,
-                'port' => $fallbackHttpsPort,
-                'ssl' => true,
+                'port' => $fallbackPort,
+                'ssl' => $fallbackHttps,
                 'target_surface' => 'wls_endpoint',
                 'target_endpoint_role' => 'gateway_fallback_public',
                 'explicit_transport_resolve' => \strcasecmp($authorityHost, $connectHost) !== 0,
@@ -1054,8 +1055,8 @@ class Benchmark extends CommandAbstract
                 'managed_nginx' => [],
                 'wls_backend' => [
                     'host' => $connectHost,
-                    'port' => $fallbackHttpsPort,
-                    'ssl' => true,
+                    'port' => $fallbackPort,
+                    'ssl' => $fallbackHttps,
                 ],
             ];
         }
@@ -1226,7 +1227,7 @@ class Benchmark extends CommandAbstract
 
     /**
      * @param array<string,mixed> $endpoint
-     * @return array{bind_host:string,connect_host:string,authority_host:string,port:int}|null
+     * @return array{origin:string,bind_host:string,connect_host:string,authority_host:string,port:int,https:bool}|null
      */
     protected function runtimeFallbackServingEndpoint(array $endpoint): ?array
     {
@@ -1923,7 +1924,7 @@ class Benchmark extends CommandAbstract
             return 1;
         }
         $benchmarkContext['worker_runtime_before'] = $this->captureWorkerRuntimeSnapshot($benchmarkContext);
-        $startTime = \microtime(true);
+        $startTime = self::monotonicSeconds();
         
         $effectiveHttpVersion = (string)($benchmarkContext['http_version_effective'] ?? $httpVersion);
         $curlHttpVersion = ($httpVersion === 'auto' && $effectiveHttpVersion !== '')
@@ -2155,7 +2156,7 @@ class Benchmark extends CommandAbstract
         for ($i = 0; $i < $batchSize; $i++) {
             $ch = $handlePool[$i];
             $laneId = $handleLanes[$i];
-            $handleStartedAt = \microtime(true);
+            $handleStartedAt = self::monotonicSeconds();
             \curl_multi_add_handle($multiHandles[$laneId], $ch);
             $activeHandles[(int)$ch] = [
                 'handle' => $ch,
@@ -2169,7 +2170,7 @@ class Benchmark extends CommandAbstract
 
         $runningByLane = \array_fill(0, $physicalConnectionLaneCount, 0);
         $selectLaneCursor = 0;
-        $lastProgressReportAt = \microtime(true);
+        $lastProgressReportAt = self::monotonicSeconds();
         $progressReportInterval = 0.5;
         $reportProgress = function (bool $force = false) use (
             &$lastProgressReportAt,
@@ -2180,7 +2181,7 @@ class Benchmark extends CommandAbstract
             $startTime,
             $progressReportInterval,
         ): void {
-            $now = \microtime(true);
+            $now = self::monotonicSeconds();
             if (!$force && ($now - $lastProgressReportAt) < $progressReportInterval) {
                 return;
             }
@@ -2241,7 +2242,7 @@ class Benchmark extends CommandAbstract
                     $key = (int)$ch;
                 
                     if (isset($activeHandles[$key])) {
-                        $infoReadAt = \microtime(true);
+                        $infoReadAt = self::monotonicSeconds();
                         $elapsed = ($infoReadAt - $activeHandles[$key]['start']) * 1000; // ms
                         $poolIndex = $activeHandles[$key]['poolIndex'];
 
@@ -2383,7 +2384,7 @@ class Benchmark extends CommandAbstract
                         $headerBuffers[$key] = '';
 
                         if ($requestsSent < $totalRequests) {
-                            $handleStartedAt = \microtime(true);
+                            $handleStartedAt = self::monotonicSeconds();
                             \curl_multi_add_handle($laneMultiHandle, $ch);
                             $activeHandles[(int)$ch] = [
                                 'handle' => $ch,
@@ -2440,7 +2441,7 @@ class Benchmark extends CommandAbstract
             \curl_multi_close($laneMultiHandle);
         }
         
-        $endTime = \microtime(true);
+        $endTime = self::monotonicSeconds();
         $totalTime = $endTime - $startTime;
         $reusedRequestEstimate = \max(0, $connectionReuseEligible - $newConnectionCount);
         $benchmarkContext['curl_new_connections'] = $newConnectionCount;
@@ -3593,7 +3594,7 @@ class Benchmark extends CommandAbstract
     
     protected function buildReportFilePath(string $reportDir, string $targetUrl, ?float $now = null): string
     {
-        $now ??= \microtime(true);
+        $now ??= self::wallClockSeconds();
         $seconds = (int)$now;
         $micros = (int)\round(($now - $seconds) * 1000000);
         if ($micros >= 1000000) {
@@ -4599,5 +4600,15 @@ class Benchmark extends CommandAbstract
             return $headerName . '=' . $headers[$key];
         }
         return '';
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    private static function wallClockSeconds(): float
+    {
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
     }
 }

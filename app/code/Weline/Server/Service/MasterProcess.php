@@ -1233,7 +1233,15 @@ class MasterProcess
             return $record;
         };
 
-        ServerInstanceManager::updateJsonFileAtomically($instanceFile, $mergeMasterData, 10);
+        if (!ServerInstanceManager::updateJsonFileAtomically(
+            $instanceFile,
+            $mergeMasterData,
+            10,
+        )) {
+            throw new \RuntimeException(
+                'Failed to atomically publish WLS Master endpoint state.'
+            );
+        }
     }
 
     /**
@@ -1250,8 +1258,6 @@ class MasterProcess
         static $traceStartNs = null;
         static $tracePreviousNs = null;
         static $traceSequence = 0;
-        static $traceHandle = null;
-        static $tracePath = '';
 
         $nowNs = \hrtime(true);
         $traceStartNs ??= $nowNs;
@@ -1260,7 +1266,9 @@ class MasterProcess
         $context['mono_ns'] = $nowNs;
         $context['total_ms'] = \round(($nowNs - $traceStartNs) / 1_000_000, 3);
         $context['delta_ms'] = \round(($nowNs - $tracePreviousNs) / 1_000_000, 3);
-        $context['process_elapsed_ms'] = \round((\microtime(true) - (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? \microtime(true))) * 1000, 3);
+        $wallNow = self::diagnosticWallSeconds();
+        $requestStartedAt = (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? $wallNow);
+        $context['process_elapsed_ms'] = \round(\max(0.0, $wallNow - $requestStartedAt) * 1000, 3);
         $context['memory_mb'] = (int)\round(\memory_get_usage(true) / 1048576);
         $tracePreviousNs = $nowNs;
         $payload = ['ts' => \date('Y-m-d H:i:s'), 'pid' => (int)\getmypid(), 'instance' => $this->instanceName, 'phase' => $phase, 'context' => $context];
@@ -1270,19 +1278,127 @@ class MasterProcess
             @\mkdir($dir, 0755, true);
         }
         $path = $dir . 'wls-startup-trace.log';
-        if (!\is_resource($traceHandle) || $tracePath !== $path) {
-            $traceHandle = @\fopen($path, 'ab');
-            $tracePath = $path;
-        }
         $line = \json_encode($payload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . \PHP_EOL;
-        if (\is_resource($traceHandle)) {
-            @\flock($traceHandle, LOCK_EX);
-            @\fwrite($traceHandle, $line);
-            @\fflush($traceHandle);
-            @\flock($traceHandle, LOCK_UN);
+        self::appendStartupTraceLine($path, $line);
+    }
+
+    /**
+     * Diagnostic tracing must never become a startup mutex. Open only a
+     * single-link regular inode, verify the path/handle identity before and
+     * after the non-blocking lock, and drop the line on any contention/race.
+     */
+    private static function appendStartupTraceLine(string $path, string $line): void
+    {
+        if ($path === '' || \str_contains($path, "\0") || $line === '') {
             return;
         }
-        @\file_put_contents($path, $line, \FILE_APPEND | \LOCK_EX);
+        $directory = \dirname($path);
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || \is_link($directory)
+            || ((((int)($directoryBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            return;
+        }
+        $safeFile = static fn (array $status): bool =>
+            ((((int)($status['mode'] ?? 0)) & 0170000) === 0100000)
+            && (int)($status['nlink'] ?? 0) === 1;
+        $sameIdentity = static function (array $before, array $after): bool {
+            foreach (['dev', 'ino', 'mode', 'nlink'] as $field) {
+                if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $sameDirectoryIdentity = static function (array $before, array $after): bool {
+            foreach (['dev', 'ino', 'mode'] as $field) {
+                if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        $handle = false;
+        $before = false;
+        $created = false;
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            \clearstatcache(true, $path);
+            $before = @\lstat($path);
+            $created = false;
+            if (\is_array($before)) {
+                if (!$safeFile($before) || \is_link($path)) {
+                    return;
+                }
+                $handle = @\fopen($path, 'r+b');
+            } else {
+                if (\file_exists($path) || \is_link($path)) {
+                    return;
+                }
+                $handle = @\fopen($path, 'x+b');
+                $created = \is_resource($handle);
+            }
+            if (\is_resource($handle)) {
+                break;
+            }
+        }
+        if (!\is_resource($handle)) {
+            return;
+        }
+
+        $locked = false;
+        try {
+            \clearstatcache(true, $path);
+            $opened = @\fstat($handle);
+            $pathAfterOpen = @\lstat($path);
+            $directoryAfterOpen = @\lstat($directory);
+            if (!\is_array($opened)
+                || !\is_array($pathAfterOpen)
+                || !\is_array($directoryAfterOpen)
+                || !$safeFile($opened)
+                || !$safeFile($pathAfterOpen)
+                || (!$created && (!\is_array($before) || !$sameIdentity($before, $opened)))
+                || !$sameIdentity($opened, $pathAfterOpen)
+                || !$sameDirectoryIdentity($directoryBefore, $directoryAfterOpen)
+                || \is_link($path)
+            ) {
+                return;
+            }
+            $locked = @\flock($handle, LOCK_EX | LOCK_NB);
+            if (!$locked) {
+                return;
+            }
+            $lockedStatus = @\fstat($handle);
+            $lockedPathStatus = @\lstat($path);
+            $lockedDirectoryStatus = @\lstat($directory);
+            if (!\is_array($lockedStatus)
+                || !\is_array($lockedPathStatus)
+                || !\is_array($lockedDirectoryStatus)
+                || !$safeFile($lockedStatus)
+                || !$sameIdentity($opened, $lockedStatus)
+                || !$sameIdentity($lockedStatus, $lockedPathStatus)
+                || !$sameDirectoryIdentity($directoryBefore, $lockedDirectoryStatus)
+                || @\fseek($handle, 0, SEEK_END) !== 0
+            ) {
+                return;
+            }
+            $offset = 0;
+            $length = \strlen($line);
+            while ($offset < $length) {
+                $written = @\fwrite($handle, \substr($line, $offset));
+                if (!\is_int($written) || $written < 1) {
+                    return;
+                }
+                $offset += $written;
+            }
+            @\fflush($handle);
+        } finally {
+            if ($locked) {
+                @\flock($handle, LOCK_UN);
+            }
+            @\fclose($handle);
+        }
     }
 
     /**
@@ -2109,5 +2225,10 @@ class MasterProcess
         }
 
         return null;
+    }
+
+    private static function diagnosticWallSeconds(): float
+    {
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
     }
 }

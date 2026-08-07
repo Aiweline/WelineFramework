@@ -51,6 +51,8 @@ final class SessionClient
             'min_idle' => (int)($options['pool_min_idle'] ?? 0),
             'max_size' => (int)($options['pool_size'] ?? 8),
             'token_file_name' => $tokenFileName,
+            'token_authority_instance' => (string)($options['token_authority_instance'] ?? ''),
+            'service_type' => 'Session',
             'log_connect_fail' => (bool)($options['log_connect_fail'] ?? true),
             // Worker 常驻：拉长空闲 TCP 寿命，避免池健康检查频繁关连导致 Session 进程刷屏「Client disconnected」
             'idle_timeout' => (float)($options['idle_timeout'] ?? 86400.0),
