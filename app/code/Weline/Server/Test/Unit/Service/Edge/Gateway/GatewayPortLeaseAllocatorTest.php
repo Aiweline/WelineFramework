@@ -1334,6 +1334,17 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         $recoverable['workers'] = [];
         $recoverable['released_at'] = \gmdate(DATE_ATOM);
         $recoverable['released_timestamp'] = \time();
+        $recoverable['listener_phase'] = GatewayPortLeaseAllocator::LISTENER_PHASE_RELEASED;
+        $recoverable['drain_transition_id'] = null;
+        $recoverable['drain_acknowledged'] = false;
+        $recoverable['draining_at'] = null;
+        $recoverable['draining_timestamp'] = null;
+        $recoverable['draining_host_boot_id'] = null;
+        $recoverable['draining_monotonic'] = null;
+        $recoverable['listener_transition_action'] = null;
+        $recoverable['listener_transition_digest'] = null;
+        $recoverable['drain_action_digest'] = null;
+        $recoverable['transition_identity'] = null;
         $this->writeLeaseFixture($recoverableFile, $recoverable);
         self::assertSame(10001, $this->leaseFileCount($leaseDirectory));
 
