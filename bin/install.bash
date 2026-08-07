@@ -1100,43 +1100,50 @@ install_pgsql_linux() {
     echo "  Manual: sudo dnf install -y postgresql-server postgresql   # RHEL/CentOS" >&2
     return 1
   fi
-  local pg_bin
-  pg_bin=$(command -v psql 2>/dev/null)
-  [[ -z "$pg_bin" ]] && pg_bin=$(run_privileged which psql 2>/dev/null)
-  [[ -z "$pg_bin" ]] && pg_bin="/usr/bin/psql"
-  local pg_dir
-  pg_dir="$(dirname "$pg_bin")"
-  if [[ ! -x "$pg_dir/psql" ]] && [[ -x "/usr/bin/psql" ]]; then
-    pg_dir="/usr/bin"
+  # Debian/Ubuntu put real server tools under /usr/lib/postgresql/<ver>/bin.
+  # /usr/bin/psql is only a pg_wrapper shim and must NOT become extend/server/pgsql/bin.
+  local pg_bindir=""
+  for d in "/usr/lib/postgresql/${INSTALL_PGSQL_VERSION}/bin" "/usr/pgsql-${INSTALL_PGSQL_VERSION}/bin"; do
+    if [[ -x "$d/initdb" && -x "$d/postgres" && -x "$d/psql" && -x "$d/pg_ctl" ]]; then
+      pg_bindir="$d"
+      break
+    fi
+  done
+  if [[ -z "$pg_bindir" ]] && [[ -d /usr/lib/postgresql ]]; then
+    for sub in /usr/lib/postgresql/*/bin; do
+      if [[ -x "$sub/initdb" && -x "$sub/postgres" && -x "$sub/psql" && -x "$sub/pg_ctl" ]]; then
+        pg_bindir="$sub"
+        break
+      fi
+    done
   fi
-  if [[ ! -x "$pg_dir/psql" ]]; then
-    echo "ERROR: psql not found after install. Check PostgreSQL installation." >&2
+  if [[ -z "$pg_bindir" ]]; then
+    local initdb_path
+    initdb_path="$(command -v initdb 2>/dev/null || true)"
+    [[ -z "$initdb_path" ]] && initdb_path="$(run_privileged sh -c 'command -v initdb 2>/dev/null' || true)"
+    if [[ -n "$initdb_path" && -x "$initdb_path" ]]; then
+      local candidate
+      candidate="$(dirname "$initdb_path")"
+      if [[ -x "$candidate/postgres" && -x "$candidate/psql" && -x "$candidate/pg_ctl" ]]; then
+        pg_bindir="$candidate"
+      fi
+    fi
+  fi
+  if [[ -z "$pg_bindir" ]] || [[ "$pg_bindir" == "." ]] || [[ ! -x "$pg_bindir/initdb" ]]; then
+    echo "ERROR: initdb/postgres/psql/pg_ctl not found in a complete PostgreSQL bindir." >&2
+    echo "  Install postgresql-${INSTALL_PGSQL_VERSION} (apt) or postgresql${INSTALL_PGSQL_VERSION}-server (dnf)." >&2
+    echo "  On Debian/Ubuntu the complete set is usually /usr/lib/postgresql/<ver>/bin, not /usr/bin." >&2
     return 1
   fi
   mkdir -p "$dest"
   rm -rf "$dest/bin"
-  safe_ln_sf "$pg_dir" "$dest/bin"
+  safe_ln_sf "$pg_bindir" "$dest/bin"
   add_to_path "$dest/bin"
+  echo "Linked project PostgreSQL binaries: $dest/bin -> $pg_bindir"
 
   # 数据目录：extend/server/pgsql/data（与 Windows 同目录，var 易被删除不推荐）
   local pgsql_data="$dest/data"
   mkdir -p "$pgsql_data"
-  local pg_bindir=""
-  for d in "/usr/lib/postgresql/${INSTALL_PGSQL_VERSION}/bin" "/usr/pgsql-${INSTALL_PGSQL_VERSION}/bin" "$pg_dir"; do
-    [[ -n "$d" ]] && [[ -x "$d/initdb" ]] && { pg_bindir="$d"; break; }
-  done
-  if [[ -z "$pg_bindir" ]] && [[ -d /usr/lib/postgresql ]]; then
-    for sub in /usr/lib/postgresql/*/bin; do
-      [[ -x "$sub/initdb" ]] && { pg_bindir="$sub"; break; }
-    done
-  fi
-  if [[ -z "$pg_bindir" ]]; then
-    pg_bindir="$(run_privileged sh -c 'command -v initdb 2>/dev/null | xargs dirname 2>/dev/null')"
-  fi
-  if [[ -z "$pg_bindir" ]] || [[ "$pg_bindir" == "." ]] || [[ ! -x "$pg_bindir/initdb" ]]; then
-    echo "ERROR: initdb not found. Install postgresql-${INSTALL_PGSQL_VERSION} (apt) or postgresql${INSTALL_PGSQL_VERSION}-server (dnf)." >&2
-    return 1
-  fi
 
   echo "Leaving any system PostgreSQL service untouched; project data will use its own port."
 

@@ -888,7 +888,23 @@ class Register implements RegisterDataInterface
             foreach ($dependencies as &$dependency) {
                 $dependency = trim($dependency, '\'"');
             }
+            unset($dependency);
             $dependencies = array_unique(array_merge($dependencies, ($env['dependencies'] ?? [])));
+            // etc/module.php is authoritative for requires. register.php often
+            // omits them, which previously left modules like Weline_I18n unsorted
+            // and caused first-install bootstrap to register dependents too early.
+            $manifestPath = $base_path . 'etc' . DS . 'module.php';
+            if (is_file($manifestPath)) {
+                try {
+                    $manifest = (new ModuleManifestReader())->read($base_path);
+                    $dependencies = array_values(array_unique(array_merge(
+                        $dependencies,
+                        array_keys($manifest->requires),
+                    )));
+                } catch (\Throwable) {
+                    // Keep register/env dependencies when a manifest cannot be read.
+                }
+            }
             $pathArr = explode(DS, $base_path);
             $path = array_pop($pathArr);
             if (empty($path)) {
