@@ -15,7 +15,13 @@ use Weline\Websites\Model\WebsiteAclGrant;
  */
 final class WebsiteAclGrantService
 {
-    /** @var array<int, list<string>|null> */
+    /**
+     * Request-local memo only. Cleared by RequestResetter / ProcessCacheResetter.
+     * Never rely on this surviving across WLS worker requests: an empty [] entry
+     * must not outlive a concurrent save on another worker.
+     *
+     * @var array<int, list<string>>
+     */
     private static array $sourceIdCache = [];
 
     public function isDefaultWebsite(?int $websiteId = null): bool
@@ -41,7 +47,7 @@ final class WebsiteAclGrantService
         if ($websiteId === Website::ID_DEFAULT) {
             return [];
         }
-        if (\array_key_exists($websiteId, self::$sourceIdCache) && self::$sourceIdCache[$websiteId] !== null) {
+        if (\array_key_exists($websiteId, self::$sourceIdCache)) {
             return self::$sourceIdCache[$websiteId];
         }
 
@@ -122,9 +128,9 @@ final class WebsiteAclGrantService
             throw $e;
         }
 
-        self::$sourceIdCache[$websiteId] = $finalIds;
+        // Drop memo so this worker re-reads after write; other workers rely on
+        // RequestResetter / ProcessCacheResetter (and w_cache('acl')->clear()).
         unset(self::$sourceIdCache[$websiteId]);
-        self::$sourceIdCache[$websiteId] = $finalIds;
     }
 
     /**
