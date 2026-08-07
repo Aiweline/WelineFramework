@@ -1,0 +1,12 @@
+---
+description: Weline 核心改动必须与框架仓相互对齐（脏文件对比→决策→合入；禁止用 Git 覆盖丢脏改）
+alwaysApply: true
+---
+
+# 核心项目同步（强制）
+
+权威全文见 `dev/ai/global-constraints.md` §7。Cursor always-on：`.cursor/rules/core-project-sync.mdc`。
+
+回框架必须：两边**磁盘脏工作区** `diff` → 决策表（SAME / KEEP_FW / KEEP_SITE→FW / MERGE_HUNKS / SKIP）→ 用户确认 → 再动手。
+
+禁止：`git checkout` / `restore` / `reset` / `clean` / `git show … > file` 当合并手段（会冲掉未提交改动）；禁止只用干净树对比后整文件覆盖。`git status`/`diff` 仅可作路径清单。

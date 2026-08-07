@@ -308,6 +308,10 @@ class WelineEnv
 
     public static function getCookie(?string $key = null, mixed $default = null): mixed
     {
+        if ($key !== null && $key !== '') {
+            $key = \Weline\Framework\Http\WebsiteCookieScope::qualifyName($key);
+        }
+
         $context = Context::getCurrent();
         if ($context !== null) {
             return $key === null ? $context->cookie() : $context->cookie($key, $default);

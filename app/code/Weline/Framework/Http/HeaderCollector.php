@@ -155,6 +155,12 @@ class HeaderCollector implements HeaderCollectorInterface
         bool $httpOnly = true,
         string $sameSite = 'Lax'
     ): static {
+        $originalName = \trim($name);
+        // Storefront website isolation: qualify name by website_id and bind Path
+        // to the mount path so path-mounted sites do not share parent cookies.
+        $name = WebsiteCookieScope::qualifyName($originalName);
+        $path = WebsiteCookieScope::resolvePath($path);
+
         // TASK-P1D-001 / TEST-SEC-08：HTTPS 下强制 Secure，禁止明文 Cookie。
         if (!$secure && $this->isHttpsTransport()) {
             $secure = true;
@@ -163,6 +169,25 @@ class HeaderCollector implements HeaderCollectorInterface
         if ($sameSite === '') {
             $sameSite = 'Lax';
         }
+
+        // Expire legacy unscoped aliases (Path=/) so parent Path=/ cookies cannot
+        // keep leaking into child mounts after website qualification.
+        if (WebsiteCookieScope::isStorefrontIsolationActive()) {
+            foreach (self::legacyCookieAliases($originalName, $name) as $legacyName) {
+                $legacyKey = $this->getCookieStorageKey($legacyName, '/', $domain);
+                $this->cookies[$legacyKey] = [
+                    'name' => $legacyName,
+                    'value' => '',
+                    'expire' => \time() - 42000,
+                    'path' => '/',
+                    'domain' => $domain,
+                    'secure' => $secure,
+                    'httpOnly' => $httpOnly,
+                    'sameSite' => $sameSite,
+                ];
+            }
+        }
+
         $storageKey = $this->getCookieStorageKey($name, $path, $domain);
         $this->cookies[$storageKey] = [
             'name' => $name,
@@ -175,6 +200,33 @@ class HeaderCollector implements HeaderCollectorInterface
             'sameSite' => $sameSite,
         ];
         return $this;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function legacyCookieAliases(string $originalName, string $qualifiedName): array
+    {
+        $aliases = [];
+        if ($originalName !== '' && $originalName !== $qualifiedName) {
+            $aliases[] = $originalName;
+        }
+
+        if (\preg_match('/^(.*)_w\d+$/', $qualifiedName, $match) === 1) {
+            $withoutWebsite = (string)$match[1];
+            if ($withoutWebsite !== '' && $withoutWebsite !== $qualifiedName) {
+                $aliases[] = $withoutWebsite;
+            }
+            // WELINE_SESSID_27152 → also expire WELINE_SESSID
+            if (\preg_match('/^(.*)_([1-9]\d{1,4})$/', $withoutWebsite, $portMatch) === 1) {
+                $port = (int)$portMatch[2];
+                if ($port > 443 && $port <= 65535) {
+                    $aliases[] = (string)$portMatch[1];
+                }
+            }
+        }
+
+        return \array_values(\array_unique(\array_filter($aliases, static fn(string $alias): bool => $alias !== '' && $alias !== $qualifiedName)));
     }
 
     private function isHttpsTransport(): bool

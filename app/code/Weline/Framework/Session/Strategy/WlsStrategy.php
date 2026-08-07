@@ -78,6 +78,11 @@ final class WlsStrategy implements SessionStrategyInterface
         $this->cookieLifetime = (int)($config['cookie_lifetime'] ?? 86400 * 30);
     }
 
+    private function resolveCookiePath(): string
+    {
+        return \Weline\Framework\Session\SessionCookieNameResolver::resolvePath($this->cookiePath);
+    }
+
     /**
      * @inheritDoc
      */
@@ -191,7 +196,7 @@ final class WlsStrategy implements SessionStrategyInterface
             $cookieName,
             $sessionId,
             $expires,
-            $this->cookiePath,
+            $this->resolveCookiePath(),
             $this->cookieDomain,
             $secure,
             $this->cookieHttpOnly,
@@ -211,7 +216,7 @@ final class WlsStrategy implements SessionStrategyInterface
             \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
             '',
             \time() - 42000,
-            $this->cookiePath,
+            $this->resolveCookiePath(),
             $this->cookieDomain,
             $secure,
             $this->cookieHttpOnly,
