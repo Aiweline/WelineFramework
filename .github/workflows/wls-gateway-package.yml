@@ -152,6 +152,7 @@ on:
       - "composer.lock"
       - ".gitattributes"
       - ".github/workflows/wls-gateway-package.yml"
+      - ".github/workflows/wls-gateway-native.yml"
   pull_request:
     paths:
       - "app/code/Weline/Server/Console/Server/Gateway/**"
@@ -303,6 +304,7 @@ on:
       - "composer.lock"
       - ".gitattributes"
       - ".github/workflows/wls-gateway-package.yml"
+      - ".github/workflows/wls-gateway-native.yml"
   workflow_dispatch:
     inputs:
       assemble_release:
@@ -576,12 +578,20 @@ jobs:
           app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPlatformServiceInstallerSafetyTest.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPlatformRetirementRecoverySourceTest.php
 
+  native-gate:
+    name: Native runtime gate for this commit
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
+    uses: ./.github/workflows/wls-gateway-native.yml
+    permissions:
+      contents: read
+
   assemble-production:
     name: Signed ${{ inputs.target_profile }} package
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
     needs:
       - package-contract
       - platform-runtime-contract
+      - native-gate
     runs-on: ${{ inputs.target_profile == 'linux-x86_64' && 'ubuntu-24.04' || inputs.target_profile == 'linux-arm64' && 'ubuntu-24.04-arm' || inputs.target_profile == 'darwin-x86_64' && 'macos-15-intel' || inputs.target_profile == 'darwin-arm64' && 'macos-15' || inputs.target_profile == 'windows-x86_64' && 'windows-2025' || 'wls-invalid-target-profile' }}
     timeout-minutes: 45
     env:
@@ -755,14 +765,30 @@ jobs:
     needs: assemble-production
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    container:
-      image: ${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}
-      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       AUDITOR_IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}
       EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
       EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS_X86_64 || '' }}
     steps:
+      - name: Verify auditor image digest before any container start
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$AUDITOR_IMAGE_REFERENCE" =~ ^([^[:space:]@]+)@sha256:([a-f0-9]{64})$ ]]; then
+            echo "WLS_GATEWAY_AUDITOR_IMAGE must be an immutable digest reference." >&2
+            exit 1
+          fi
+          expected_digest="${BASH_REMATCH[2]}"
+          docker pull --quiet "$AUDITOR_IMAGE_REFERENCE"
+          resolved="$(docker image inspect --format '{{index .RepoDigests 0}}' "$AUDITOR_IMAGE_REFERENCE")"
+          if [[ ! "$resolved" =~ @sha256:([a-f0-9]{64})$ ]]; then
+            echo "Pulled auditor image did not resolve to a digest." >&2
+            exit 1
+          fi
+          if [[ "${BASH_REMATCH[1]}" != "$expected_digest" ]]; then
+            echo "Pulled auditor image digest does not match the allowlisted reference." >&2
+            exit 1
+          fi
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wls-gateway-candidate-${{ github.run_id }}-${{ github.run_attempt }}
@@ -771,14 +797,10 @@ jobs:
         with:
           name: wls-gateway-signer-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/wls-gateway-signer
-      - name: Verify immutable auditor image and signer bundle
+      - name: Verify immutable signer bundle
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! "$AUDITOR_IMAGE_REFERENCE" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; then
-            echo "WLS_GATEWAY_AUDITOR_IMAGE must be an immutable digest reference." >&2
-            exit 1
-          fi
           if [[ ! "$EXPECTED_SIGNER_BUNDLE_SHA256" =~ ^[a-f0-9]{64}$ ]] ||
              [[ ! "$EXPECTED_AUDIT_ENVIRONMENT_SHA256" =~ ^[a-f0-9]{64}$ ]]; then
             echo "Protected signer/auditor allowlist digests are required." >&2
@@ -808,15 +830,21 @@ jobs:
             echo "Signer implementation bundle does not match the protected digest." >&2
             exit 1
           fi
-      - name: Audit candidate and bind the complete component set
+      - name: Audit candidate inside the verified auditor image
         shell: bash
         run: |
           set -euo pipefail
-          php "$RUNNER_TEMP/wls-gateway-signer/dev/tools/wls-gateway-package.php" \
-            --mode=audit \
-            "--package=$RUNNER_TEMP/wls-gateway-package" \
-            "--receipt-output=$RUNNER_TEMP/wls-gateway-dependency-audit.json" \
-            "--expected-audit-environment-sha256=$EXPECTED_AUDIT_ENVIRONMENT_SHA256"
+          docker run --rm --network none \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$RUNNER_TEMP/wls-gateway-package:/package:ro" \
+            -v "$RUNNER_TEMP/wls-gateway-signer:/signer:ro" \
+            -v "$RUNNER_TEMP:/out" \
+            "$AUDITOR_IMAGE_REFERENCE" \
+            php /signer/dev/tools/wls-gateway-package.php \
+              --mode=audit \
+              --package=/package \
+              --receipt-output=/out/wls-gateway-dependency-audit.json \
+              "--expected-audit-environment-sha256=$EXPECTED_AUDIT_ENVIRONMENT_SHA256"
       - name: Upload candidate-bound dependency audit receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -831,12 +859,10 @@ jobs:
     needs:
       - assemble-production
       - audit-production
+      - native-gate
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: wls-gateway-release
-    container:
-      image: ${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}
-      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       RELEASE_KEY_ID: ${{ vars.WLS_GATEWAY_RELEASE_KEY_ID }}
       WLS_TARGET_PLATFORM: ${{ startsWith(inputs.target_profile, 'linux-') && 'Linux' || startsWith(inputs.target_profile, 'darwin-') && 'Darwin' || startsWith(inputs.target_profile, 'windows-') && 'Windows' || '' }}
@@ -845,6 +871,25 @@ jobs:
       EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS_X86_64 || '' }}
       PROTECTED_REF: ${{ github.ref_protected }}
     steps:
+      - name: Verify signer image digest before any container start
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$SIGNER_IMAGE_REFERENCE" =~ ^([^[:space:]@]+)@sha256:([a-f0-9]{64})$ ]]; then
+            echo "WLS_GATEWAY_SIGNER_IMAGE must be an immutable digest reference." >&2
+            exit 1
+          fi
+          expected_digest="${BASH_REMATCH[2]}"
+          docker pull --quiet "$SIGNER_IMAGE_REFERENCE"
+          resolved="$(docker image inspect --format '{{index .RepoDigests 0}}' "$SIGNER_IMAGE_REFERENCE")"
+          if [[ ! "$resolved" =~ @sha256:([a-f0-9]{64})$ ]]; then
+            echo "Pulled signer image did not resolve to a digest." >&2
+            exit 1
+          fi
+          if [[ "${BASH_REMATCH[1]}" != "$expected_digest" ]]; then
+            echo "Pulled signer image digest does not match the allowlisted reference." >&2
+            exit 1
+          fi
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wls-gateway-candidate-${{ github.run_id }}-${{ github.run_attempt }}
@@ -857,14 +902,10 @@ jobs:
         with:
           name: wls-gateway-signer-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/wls-gateway-signer
-      - name: Verify immutable signing image and implementation bundle
+      - name: Verify immutable signer bundle
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! "$SIGNER_IMAGE_REFERENCE" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; then
-            echo "WLS_GATEWAY_SIGNER_IMAGE must be an immutable digest reference." >&2
-            exit 1
-          fi
           if [[ ! "$EXPECTED_SIGNER_BUNDLE_SHA256" =~ ^[a-f0-9]{64}$ ]] ||
              [[ ! "$EXPECTED_AUDIT_ENVIRONMENT_SHA256" =~ ^[a-f0-9]{64}$ ]]; then
             echo "Protected signer/auditor allowlist digests are required." >&2
@@ -894,7 +935,7 @@ jobs:
             echo "Signer implementation bundle does not match the protected digest." >&2
             exit 1
           fi
-      - name: Sign verified hashes in an isolated job
+      - name: Sign verified hashes inside the verified signer image
         shell: bash
         env:
           WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64: ${{ secrets.WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64 }}
@@ -909,29 +950,42 @@ jobs:
             echo "The protected release key id and secret are required." >&2
             exit 1
           fi
-          signer_root="$RUNNER_TEMP/wls-gateway-signer"
-          package="$RUNNER_TEMP/wls-gateway-package"
-          set -- \
-            --mode=sign \
-            "--package=$package" \
-            "--audit-receipt=$RUNNER_TEMP/wls-gateway-audit/wls-gateway-dependency-audit.json" \
-            "--expected-audit-environment-sha256=$EXPECTED_AUDIT_ENVIRONMENT_SHA256" \
-            "--signing-key-id=$RELEASE_KEY_ID" \
-            --signing-key-environment=WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64 \
-            "--trusted-keys=$signer_root/app/code/Weline/Server/env/gateway/trusted-release-keys.json"
+          docker_args=(
+            --rm --network none
+            --cap-drop=ALL --security-opt=no-new-privileges
+            -e WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64
+            -e RELEASE_KEY_ID
+            -e WLS_TARGET_PLATFORM
+            -e EXPECTED_AUDIT_ENVIRONMENT_SHA256
+            -e PROTECTED_REF
+            -v "$RUNNER_TEMP/wls-gateway-package:/package"
+            -v "$RUNNER_TEMP/wls-gateway-audit:/audit:ro"
+            -v "$RUNNER_TEMP/wls-gateway-signer:/signer:ro"
+            -v "$RUNNER_TEMP:/out"
+            "$SIGNER_IMAGE_REFERENCE"
+          )
+          sign_args=(
+            php /signer/dev/tools/wls-gateway-package.php
+            --mode=sign
+            --package=/package
+            --audit-receipt=/audit/wls-gateway-dependency-audit.json
+            "--expected-audit-environment-sha256=$EXPECTED_AUDIT_ENVIRONMENT_SHA256"
+            "--signing-key-id=$RELEASE_KEY_ID"
+            --signing-key-environment=WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64
+            --trusted-keys=/signer/app/code/Weline/Server/env/gateway/trusted-release-keys.json
+          )
           if [[ "$WLS_TARGET_PLATFORM" == "Windows" ]]; then
-            set -- "$@" "--bootstrap-output=$RUNNER_TEMP/wls-windows-bounded-command-bootstrap"
+            sign_args+=(--bootstrap-output=/out/wls-windows-bounded-command-bootstrap)
           fi
-          php "$signer_root/dev/tools/wls-gateway-package.php" "$@"
+          docker run "${docker_args[@]}" "${sign_args[@]}"
           unset WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64
-          php -r '
-            $manifest = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
-            if (($manifest["release_ready"] ?? false) !== true
-                || ($manifest["package_profile"] ?? "") !== "production") {
-                fwrite(STDERR, "The isolated signing gate did not produce a release-ready package.\n");
-                exit(1);
-            }
-          ' "$package/manifest.json"
+          python3 -c '
+          import json, pathlib, sys
+          manifest = json.loads(pathlib.Path("'"$RUNNER_TEMP"'/wls-gateway-package/manifest.json").read_text(encoding="utf-8"))
+          if manifest.get("release_ready") is not True or manifest.get("package_profile") != "production":
+              print("The isolated signing gate did not produce a release-ready package.", file=sys.stderr)
+              raise SystemExit(1)
+          '
       - name: Upload signed package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

@@ -380,12 +380,72 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             ),
             'Both POSIX and Windows native jobs must install the locked PHP test dependencies.',
         );
+        self::assertStringContainsString('workflow_call:', $nativeWorkflow);
+        self::assertSame(
+            2,
+            \substr_count(
+                $nativeWorkflow,
+                'app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayReleaseWorkflowCoverageTest.php',
+            ),
+            'Native POSIX and Windows jobs must run the release-workflow guardian against themselves.',
+        );
+        self::assertStringContainsString(
+            'Guard native workflow contracts against self-bypass',
+            $nativeWorkflow,
+        );
+        self::assertSame(
+            2,
+            \substr_count(
+                $packageWorkflow,
+                '- ".github/workflows/wls-gateway-native.yml"',
+            ),
+            'Changing the native workflow must trigger both package push and pull-request gates.',
+        );
+        self::assertStringContainsString(
+            'uses: ./.github/workflows/wls-gateway-native.yml',
+            $packageWorkflow,
+        );
+        self::assertStringContainsString(
+            "name: Native runtime gate for this commit\n",
+            $packageWorkflow,
+        );
+        self::assertMatchesRegularExpression(
+            '/assemble-production:[\\s\\S]*?- native-gate/',
+            $packageWorkflow,
+        );
+        self::assertMatchesRegularExpression(
+            '/sign-production:[\\s\\S]*?- native-gate/',
+            $packageWorkflow,
+        );
+        self::assertStringNotContainsString(
+            "container:\n      image: \${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}",
+            $packageWorkflow,
+        );
+        self::assertStringNotContainsString(
+            "container:\n      image: \${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}",
+            $packageWorkflow,
+        );
+        self::assertStringContainsString(
+            'Verify auditor image digest before any container start',
+            $packageWorkflow,
+        );
+        self::assertStringContainsString(
+            'Verify signer image digest before any container start',
+            $packageWorkflow,
+        );
         self::assertStringContainsString(
             'wls_linux_reuseport_runtime.c',
             (string)\file_get_contents(
                 $root . '/app/code/Weline/Server/Service/Edge/Gateway/Native/CMakeLists.txt',
             ),
         );
+        $h3SelfTest = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Service/Edge/Gateway/Native/posix/wls_linux_reuseport_runtime_self_test.c',
+        );
+        self::assertStringContainsString('wls_test_argument_contracts', $h3SelfTest);
+        self::assertStringContainsString('wls_test_bind_lifecycle', $h3SelfTest);
+        self::assertStringContainsString('wls_linux_h3_route_bind', $h3SelfTest);
+        self::assertStringContainsString('wls_linux_h3_route_activate', $h3SelfTest);
     }
 
     /**
