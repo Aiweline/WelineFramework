@@ -502,6 +502,52 @@ class SslCertificateServiceTest extends TestCase
         $this->assertArrayNotHasKey('example.test', $map);
     }
 
+    public function testExpandLoopbackCertificateMapAliasesFromLocalhost(): void
+    {
+        $service = new SslCertificateService();
+        $expand = new ReflectionMethod($service, 'expandLoopbackCertificateMapAliases');
+        $expand->setAccessible(true);
+        $certificate = [
+            'cert' => '/tmp/localhost-fullchain.pem',
+            'key' => '/tmp/localhost-privkey.pem',
+            'chain' => '',
+            'cert_type' => SslCertificate::CERT_TYPE_EXACT,
+            'force_https' => 1,
+            'force_root_to_www' => 0,
+        ];
+        $map = ['localhost' => $certificate];
+
+        $expand->invokeArgs($service, [&$map, false]);
+
+        $this->assertSame($certificate, $map['localhost'] ?? null);
+        $this->assertSame($certificate, $map['127.0.0.1'] ?? null);
+        $this->assertSame($certificate, $map['::1'] ?? null);
+    }
+
+    public function testExpandLoopbackCertificateMapAliasesKeepsExistingEquivalentEntry(): void
+    {
+        $service = new SslCertificateService();
+        $expand = new ReflectionMethod($service, 'expandLoopbackCertificateMapAliases');
+        $expand->setAccessible(true);
+        $certificate = [
+            'cert' => '/tmp/localhost-fullchain.pem',
+            'key' => '/tmp/localhost-privkey.pem',
+            'chain' => '',
+            'cert_type' => SslCertificate::CERT_TYPE_EXACT,
+            'force_https' => 1,
+            'force_root_to_www' => 0,
+        ];
+        $map = [
+            'localhost' => $certificate,
+            '127.0.0.1' => $certificate,
+        ];
+
+        $expand->invokeArgs($service, [&$map, true]);
+
+        $this->assertSame($certificate, $map['::1'] ?? null);
+        $this->assertCount(3, $map);
+    }
+
     public function testWildcardPropagationReassignsExistingCertificateToDefaultWebsite(): void
     {
         $rootDomain = 'wls-default-' . \bin2hex(\random_bytes(4)) . '.example.test';

@@ -5857,8 +5857,86 @@ CNF;
         if (!$strictGatewayFacts && !empty($expiredCerts)) {
             $this->notifyExpiredCertificates($expiredCerts);
         }
-        
+
+        // 兼容 SNI map（非 Edge 严格事实）需要精确键：浏览器 https://127.0.0.1
+        // 的 ClientHello SNI=127.0.0.1。Gateway 严格事实不得自动制造 IP 路由——
+        // 可能撞上已 tombstone/disabled 的 127.0.0.1 证书记录并阻断启动。
+        // WLS 2.0 Worker 对 localhost↔127.0.0.1/::1 在 routeForHost 侧做回退。
+        if (!$strictGatewayFacts) {
+            $this->expandLoopbackCertificateMapAliases($map, false);
+        }
+
         return $map;
+    }
+
+    /**
+     * Ensure localhost / 127.0.0.1 / ::1 share one SNI map entry when any of them
+     * (or a covering leaf) is already published.
+     *
+     * @param array<string,array<string,mixed>> $map
+     */
+    private function expandLoopbackCertificateMapAliases(array &$map, bool $strictGatewayFacts): void
+    {
+        $aliases = self::PROTECTED_LOCAL_DOMAINS;
+        $sourceKey = null;
+        $source = null;
+
+        foreach ($aliases as $key) {
+            if (!isset($map[$key]) || !\is_array($map[$key])) {
+                continue;
+            }
+            $candidate = $map[$key];
+            $sourceKey = $key;
+            $source = $candidate;
+            if (\trim((string)($candidate['cert'] ?? '')) !== ''
+                && \trim((string)($candidate['key'] ?? '')) !== ''
+            ) {
+                break;
+            }
+        }
+
+        if ($source === null) {
+            foreach ($map as $domain => $entry) {
+                if (!\is_array($entry)) {
+                    continue;
+                }
+                $certPath = \trim((string)($entry['cert'] ?? ''));
+                $keyPath = \trim((string)($entry['key'] ?? ''));
+                if ($certPath === '' || $keyPath === '') {
+                    continue;
+                }
+                if ($this->certificateMatchesHost($certPath, '127.0.0.1')
+                    || $this->certificateMatchesHost($certPath, 'localhost')
+                    || $this->certificateMatchesHost($certPath, '::1')
+                ) {
+                    $sourceKey = (string)$domain;
+                    $source = $entry;
+                    break;
+                }
+            }
+        }
+
+        if ($source === null || $sourceKey === null) {
+            return;
+        }
+
+        foreach ($aliases as $alias) {
+            if ($alias === $sourceKey) {
+                continue;
+            }
+            if (!isset($map[$alias]) || !\is_array($map[$alias])) {
+                $map[$alias] = $source;
+                continue;
+            }
+            if ($this->certificateMapEntryEquivalent((array)$map[$alias], $source)) {
+                continue;
+            }
+            if ($strictGatewayFacts) {
+                throw new \RuntimeException(
+                    'Loopback certificate map aliases conflict for domain: ' . $alias
+                );
+            }
+        }
     }
 
     /**
