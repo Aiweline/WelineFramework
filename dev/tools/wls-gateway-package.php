@@ -414,10 +414,21 @@ final class WlsGatewayDependencyAuditor
             return;
         }
         $before = @\lstat($tool);
+        // Apple ships many /usr/bin auditors as multi-link Mach-O leaves under
+        // SIP. Content hashing still pins the exact inode bytes; rejecting
+        // nlink>1 falsely fails Darwin package dependency audits on otool.
+        $nlink = (int)($before['nlink'] ?? 0);
+        $darwinSystemAuditor = \PHP_OS_FAMILY === 'Darwin'
+            && $nlink >= 1
+            && (
+                \str_starts_with($tool, '/usr/bin/')
+                || \str_starts_with($tool, '/bin/')
+                || \str_starts_with($tool, '/usr/sbin/')
+            );
         if (!\is_array($before)
             || \is_link($tool)
             || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
-            || (int)($before['nlink'] ?? 0) !== 1
+            || ($nlink !== 1 && !$darwinSystemAuditor)
             || (int)($before['size'] ?? -1) < 1
             || (int)$before['size'] > self::MAX_AUDITOR_TOOL_BYTES
         ) {

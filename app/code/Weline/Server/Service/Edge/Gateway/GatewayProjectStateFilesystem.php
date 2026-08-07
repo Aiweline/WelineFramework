@@ -610,9 +610,17 @@ final class GatewayProjectStateFilesystem
         // to reconcile that evidence through cleanupAtomicWriteRecoveryBackups().
         // Refusing here keeps repeated retries from exhausting the directory
         // or obscuring a first-publication after-image with newer staging.
+        // Recovery artifacts may be a previous committed generation larger than
+        // the incoming write; size them against max(new, current), not only
+        // strlen($contents).
+        $artifactCeiling = \max(
+            1,
+            \strlen($contents),
+            \is_array($existing) ? (int)($existing['size'] ?? 0) : 0,
+        );
         if (self::atomicWriteRecoveryArtifacts(
             $path,
-            \max(1, \strlen($contents)),
+            $artifactCeiling,
             'WLS state target',
         ) !== []) {
             throw new \RuntimeException(
