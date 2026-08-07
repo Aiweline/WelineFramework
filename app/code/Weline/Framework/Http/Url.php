@@ -725,6 +725,8 @@ class Url implements UrlInterface
                     $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
+                // 挂载 path 已在 getBaseHost() 中；入参若仍带 mount，先剥掉再拼 currency/lang/站内路由
+                $path = self::peelWebsiteMountPathFromRelativePath($path);
                 $url = $this->getRequest()->getBaseHost() . self::getPrefix() . '/' . ltrim($path, '/');
             } else {
                 $url = $path;
@@ -771,6 +773,7 @@ class Url implements UrlInterface
                     $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
+                $path = self::peelWebsiteMountPathFromRelativePath($path);
                 $url = $this->getRequest()->getBaseHost() . '/' . ltrim($path, '/');
             } else {
                 $url = $path;
@@ -2193,6 +2196,80 @@ class Url implements UrlInterface
         }
 
         return ['matched' => true, 'remainder' => $remainder];
+    }
+
+    /**
+     * 出站相对 path：剥掉当前站点挂载前缀，避免 getBaseHost()（已含 mount）再拼一次。
+     * 例：website_url=…/aisite_accept_ok 且 path=/aisite_accept_ok/about → /about
+     */
+    public static function peelWebsiteMountPathFromRelativePath(string $path): string
+    {
+        $path = \trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        // 绝对链接不处理
+        if (\preg_match('#^[a-z][a-z0-9+.-]*:#i', $path) === 1) {
+            return $path;
+        }
+
+        $query = \str_contains($path, '?') ? ('?' . \explode('?', $path, 2)[1]) : '';
+        $pathOnly = \explode('?', $path, 2)[0];
+        if ($pathOnly === '' || $pathOnly[0] !== '/') {
+            $pathOnly = '/' . \ltrim($pathOnly, '/');
+        }
+
+        $mount = self::resolveCurrentWebsiteMountPath();
+        if ($mount === '') {
+            return $pathOnly . $query;
+        }
+
+        $normalized = '/' . \trim(\str_replace('\\', '/', $pathOnly), '/');
+        if ($normalized === '/') {
+            return '/' . \ltrim($query, '/');
+        }
+
+        $mountLower = \strtolower($mount);
+        $pathLower = \strtolower($normalized);
+        if ($pathLower === $mountLower) {
+            return '/' . \ltrim($query, '/');
+        }
+        if (\str_starts_with($pathLower, $mountLower . '/')) {
+            $remainder = (string)\substr($normalized, \strlen($mount));
+            if ($remainder === '') {
+                $remainder = '/';
+            }
+            if ($remainder[0] !== '/') {
+                $remainder = '/' . $remainder;
+            }
+            return $remainder . $query;
+        }
+
+        return $normalized . $query;
+    }
+
+    /**
+     * 当前请求站点挂载 path（/aisite_accept_ok），整域站返回空。
+     */
+    public static function resolveCurrentWebsiteMountPath(): string
+    {
+        $websiteUrl = '';
+        try {
+            $websiteUrl = (string)(\w_env('website_url', '') ?: (\w_env('website.url', '') ?: ''));
+        } catch (\Throwable) {
+            $websiteUrl = '';
+        }
+        if ($websiteUrl === '') {
+            $websiteUrl = (string)($_SERVER['WELINE_WEBSITE_URL'] ?? '');
+        }
+        if ($websiteUrl === '') {
+            return '';
+        }
+
+        $path = (string)(\parse_url($websiteUrl, \PHP_URL_PATH) ?: '');
+        $path = '/' . \trim(\str_replace('\\', '/', $path), '/');
+        return $path === '/' ? '' : \rtrim($path, '/');
     }
 
     private static function replaceUrlScheme(string $url, string $scheme): string

@@ -618,12 +618,67 @@
         return lang !== '' && !sameLang(lang, resolveDefaultLang(config));
     }
 
+    function resolveThemeWebsiteMountPath() {
+        const node = document.querySelector('[data-website-mount], [data-i18n-switcher][data-website-mount]');
+        const fromDom = node ? String(node.getAttribute('data-website-mount') || '').trim() : '';
+        const raw = String(fromDom || (window.site && (window.site.website_url || window.site.base_host)) || '').trim();
+        if (!raw) {
+            return '';
+        }
+        try {
+            let pathname = '';
+            if (/^https?:\/\//i.test(raw)) {
+                pathname = new URL(raw).pathname || '';
+            } else if (raw.charAt(0) === '/') {
+                pathname = raw.split('?')[0];
+            } else {
+                pathname = '/' + raw.replace(/^\/+|\/+$/g, '');
+            }
+            const mount = '/' + String(pathname || '').split('/').filter(Boolean).join('/');
+            return mount === '/' ? '' : mount.replace(/\/+$/, '');
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function peelThemeWebsiteMountPrefix(pathname, mountPath) {
+        let path = String(pathname || '/').split('?')[0] || '/';
+        if (path.charAt(0) !== '/') {
+            path = '/' + path;
+        }
+        const mount = String(mountPath || '').replace(/\/+$/, '');
+        if (!mount || mount === '/') {
+            return path;
+        }
+        const lower = path.toLowerCase();
+        const mountLower = mount.toLowerCase();
+        if (lower === mountLower) {
+            return '/';
+        }
+        if (lower.indexOf(mountLower + '/') === 0) {
+            const peeled = path.slice(mount.length) || '/';
+            return peeled.charAt(0) === '/' ? peeled : ('/' + peeled);
+        }
+        return path;
+    }
+
     function buildLocalizedFrontendPath(pathOnly, currency, lang) {
         const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-        const pathParts = String(pathOnly || '/').split('/').filter(Boolean);
+        const mountPath = resolveThemeWebsiteMountPath();
+        const relativePath = peelThemeWebsiteMountPrefix(pathOnly, mountPath);
+        const pathParts = String(relativePath || '/').split('/').filter(Boolean);
         const config = window.__WelineThemeConfig || runtimeConfig || {};
-        const filteredParts = pathParts.filter(part => !isValidCurrency(part, config) && !langPattern.test(part));
+        const mountSegment = mountPath ? mountPath.replace(/^\/+|\/+$/g, '').toLowerCase() : '';
+        const filteredParts = pathParts.filter(part => {
+            if (mountSegment && String(part).toLowerCase() === mountSegment) {
+                return false;
+            }
+            return !isValidCurrency(part, config) && !langPattern.test(part);
+        });
         const outputParts = [];
+        if (mountPath) {
+            outputParts.push(...mountPath.split('/').filter(Boolean));
+        }
         const targetCurrency = normalizeCurrencyCode(currency);
         const targetLang = normalizeLangCode(lang);
 
@@ -3301,8 +3356,10 @@
             }
 
             languageSwitchers.forEach(languageSwitcher => {
-                // header choice selector 的 href 由服务端 / WelineI18n 维护，勿用旧 inject_path 覆盖
-                if (languageSwitcher.getAttribute('data-weline-choice-switcher') === 'language') {
+                // header choice selector / I18n 权威 href 由服务端维护，勿用旧 inject_path 覆盖
+                if (languageSwitcher.getAttribute('data-weline-choice-switcher') === 'language'
+                    || languageSwitcher.hasAttribute('data-i18n-switcher')
+                ) {
                     return;
                 }
 
@@ -3310,6 +3367,10 @@
                 languageOptions.forEach(option => {
                     const langCode = option.getAttribute('data-lang') || option.dataset.lang;
                     if (!langCode) {
+                        return;
+                    }
+                    // 服务端已写出权威语言链时不要覆盖（path 挂载站顺序：mount → locale → page）
+                    if (option.hasAttribute('data-i18n-authoritative-href')) {
                         return;
                     }
 
