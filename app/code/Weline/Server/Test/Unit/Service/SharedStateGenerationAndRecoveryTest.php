@@ -1640,6 +1640,22 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
             $manager->chooseAuthority($role, $complete, $incomplete)['lifecycle_identity_digest'] ?? null,
         );
 
+        $skewedRuntime = $complete;
+        $skewedRuntime['started_at'] = '2026-08-07T09:00:01+00:00';
+        $skewedRuntime = SharedStateServiceRegistry::bindLifecycleGeneration(
+            $role,
+            $skewedRuntime,
+        );
+        $skewedRuntime['lifecycle_generation'] = 1;
+        self::assertNotSame(
+            $complete['lifecycle_identity_digest'] ?? null,
+            $skewedRuntime['lifecycle_identity_digest'] ?? null,
+        );
+        self::assertSame(
+            $complete['lifecycle_identity_digest'] ?? null,
+            $manager->chooseAuthority($role, $complete, $skewedRuntime)['lifecycle_identity_digest'] ?? null,
+        );
+
         $forked = $complete;
         $forked['pid'] = 7408;
         $forked = SharedStateServiceRegistry::bindLifecycleGeneration($role, $forked);
