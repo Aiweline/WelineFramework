@@ -12,5 +12,6 @@ final class RequestResetter implements RequestResetterInterface
     public function resetRequest(): void
     {
         WebsiteData::resetRequestState();
+        \Weline\Websites\Service\WebsiteAclGrantService::clearRequestCache();
     }
 }

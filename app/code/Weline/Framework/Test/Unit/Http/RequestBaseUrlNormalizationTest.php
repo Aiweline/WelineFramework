@@ -110,4 +110,30 @@ final class RequestBaseUrlNormalizationTest extends TestCase
 
         self::assertSame('http://127.0.0.1:9502', $request->getBaseHost());
     }
+
+    public function testBaseHostKeepsWebsiteMountSubPathAfterParserRewritesRequestUri(): void
+    {
+        $server = [
+            // parser 命中挂载站后，REQUEST_URI 收敛为站内路由 path
+            'REQUEST_URI' => '/',
+            'WELINE_ORIGIN_REQUEST_URI' => '/',
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_SCHEME' => 'https',
+            'HTTPS' => 'on',
+            'HTTP_HOST' => 'ai-test.example.weline.test:27152',
+            'SERVER_NAME' => 'ai-test.example.weline.test',
+            'SERVER_PORT' => '27152',
+            'WELINE_WEBSITE_URL' => 'https://ai-test.example.weline.test/aisite_accept_ok',
+        ];
+        $_SERVER = $server;
+        WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
+
+        $request = new class extends RequestAbstract {
+        };
+
+        self::assertSame(
+            'https://ai-test.example.weline.test:27152/aisite_accept_ok',
+            $request->getBaseHost()
+        );
+    }
 }

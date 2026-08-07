@@ -30,6 +30,19 @@ class TaglibTest extends TestCore
         self::assertTrue($parse_str === "(\$Request['param']['c_id']??'') ", '解析变量');
     }
 
+    public function testVarParserKeepsTranslationHelperCallable(): void
+    {
+        // Countries/Localization templates pass @var(__('...')) into w:form attrs.
+        self::assertSame("__('已停用')", $this->taglib->checkVar("__('已停用')"));
+        self::assertSame("__('已停用')", trim($this->taglib->varParser("__('已停用')")));
+        self::assertSame(
+            "__('确定停用 %{1} 吗？', [\$displayName])",
+            trim($this->taglib->varParser("__('确定停用 %{1} 吗？', [\$displayName])"))
+        );
+        self::assertSame('count($items)', $this->taglib->checkVar('count($items)'));
+        self::assertSame('$displayName', $this->taglib->checkVar('displayName'));
+    }
+
     public function testTagIf()
     {
         $template = new Template();

@@ -639,6 +639,8 @@ abstract class RequestAbstract extends RequestFilter
      * 净化 website_url 中的 path，避免 REST 区域前缀或跨请求路由残留进入 getBaseHost()。
      *
      * 若 path 被污染（例如 /api/CNY/zh_Hans_CN），window.url / getFrontendUrl 会在所有前台链接前带上 /api/。
+     * 合法的站点挂载 sub_path（如 /aisite_accept_ok）必须保留：Url::parser 命中后 REQUEST_URI
+     * 会收敛为站内相对路由，不能再要求「当前 URI 仍以挂载 path 开头」。
      */
     protected function sanitizeWebsiteUrlPathForBaseHost(string $pathPart): string
     {
@@ -670,16 +672,51 @@ abstract class RequestAbstract extends RequestFilter
 
         $normalizedPath = '/' . implode('/', $segments);
 
-        if (str_contains($normalizedPath, '/')) {
-            $currentUri = rtrim((string)($this->getUri() ?? '/'), '/') ?: '/';
-            if (!str_starts_with($currentUri, $normalizedPath)) {
-                return '';
+        // Url::parser 命中带 sub_path 的站点后，REQUEST_URI 会收敛为站内相对路由（首页常变成 /）。
+        // 旧逻辑要求「当前 URI 仍以挂载 path 开头」，会把合法挂载站 base 清成裸域名。
+        // 新逻辑：请求能证明挂载 path 则保留；否则仅在「像 parser 剥离后的前台请求」且非区域前缀时保留。
+        $currentUri = rtrim((string)($this->getUri() ?? '/'), '/') ?: '/';
+        $originUri = rtrim((string)($this->getOriginUri() ?: $currentUri), '/') ?: '/';
+        $fullRequest = trim((string)($this->getServer('WELINE_FULL_REQUEST_URI') ?? ''));
+        $fullPath = '/';
+        if ($fullRequest !== '') {
+            if (str_contains($fullRequest, '://')) {
+                $parsedFull = parse_url($fullRequest);
+                $fullPath = rtrim((string)($parsedFull['path'] ?? '/'), '/') ?: '/';
+            } else {
+                $fullPath = rtrim(explode('?', $fullRequest, 2)[0], '/') ?: '/';
+            }
+        }
+
+        $pathProvenByRequest = false;
+        foreach ([$currentUri, $originUri, $fullPath] as $candidate) {
+            if ($candidate === $normalizedPath || str_starts_with($candidate, $normalizedPath . '/')) {
+                $pathProvenByRequest = true;
+                break;
             }
         }
 
         $firstSegment = strtok(ltrim($normalizedPath, '/'), '/');
         if ($firstSegment !== false && $firstSegment !== '' && Env::isAreaRoutePathSegment((string)$firstSegment)) {
             return '';
+        }
+
+        if (!$pathProvenByRequest) {
+            // 未在请求 URI 中出现：可能是挂载前缀已被 parser 剥离，也可能是 website_url 污染。
+            // 区域/REST 前缀（api、api123、backend…）直接丢弃；其余在「站内相对 URI」场景下保留。
+            if ($firstSegment !== false && $firstSegment !== ''
+                && preg_match('/^(api|rest|backend|admin)([0-9].*|[_-].*)?$/i', (string)$firstSegment) === 1
+            ) {
+                return '';
+            }
+            $firstCurrent = strtok(ltrim($currentUri, '/'), '/');
+            $looksLikeStrippedStorefront = ($currentUri === '/')
+                || ($firstCurrent !== false && $firstCurrent !== ''
+                    && !Env::isAreaRoutePathSegment((string)$firstCurrent)
+                    && preg_match('/^(api|rest|backend|admin)([0-9].*|[_-].*)?$/i', (string)$firstCurrent) !== 1);
+            if (!$looksLikeStrippedStorefront) {
+                return '';
+            }
         }
 
         return $normalizedPath;

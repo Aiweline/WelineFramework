@@ -24,17 +24,19 @@ class Cookie
      */
     public static function set(string $key, string $value, int $expire = 3600 * 24 * 7, array $options = []): void
     {
-        // 同步到 WelineEnv 以支持 Fiber 隔离
-        \w_env_set("cookie.{$key}", $value);
+        $qualified = WebsiteCookieScope::qualifyName($key);
+
+        // 同步到 WelineEnv 以支持 Fiber 隔离（读侧也按网站限定名）
+        \w_env_set("cookie.{$qualified}", $value);
         
-        // 提取选项，设置默认值
-        $path = $options['path'] ?? '/';
+        // 提取选项；Path/Name 的网站隔离由 HeaderCollector 统一处理
+        $path = (string)($options['path'] ?? '/');
         $domain = $options['domain'] ?? '';
         $secure = $options['secure'] ?? false;
         $httpOnly = $options['httponly'] ?? true;
         $sameSite = $options['samesite'] ?? 'Lax';
         
-        // 使用 HeaderCollector 收集 Cookie
+        // 使用 HeaderCollector 收集 Cookie（传入逻辑名，由 Collector 做 qualify + 废止遗留 Path=/）
         $expires = $expire === 0 ? 0 : \time() + $expire;
 
         HeaderCollector::getInstance()->setCookie(
@@ -51,6 +53,18 @@ class Cookie
 
     public static function get(string $key, $default = null)
     {
+        $qualified = WebsiteCookieScope::qualifyName($key);
+        $value = \w_env_cookie($qualified, null);
+        if ($value !== null && $value !== '') {
+            return $value;
+        }
+
+        // Fallback: unqualified legacy name only when isolation is inactive
+        // (backend / pre-scope). Never fall back across websites.
+        if ($qualified !== $key) {
+            return $default;
+        }
+
         return \w_env_cookie($key, $default);
     }
 
