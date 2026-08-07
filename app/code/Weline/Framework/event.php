@@ -617,6 +617,20 @@ return [
             'keys' => ['type' => 'array', 'required' => true, 'description' => '用于解析真实IP的 $_SERVER keys，按优先级排序。观察者应 array_unshift 追加其 keys。'],
         ],
     ],
+    'Weline_Framework_Http::cookie_scope_resolve' => [
+        'name' => __('HTTP Cookie 作用域解析'),
+        'description' => __('在解析 Cookie 名/Path 作用域时触发。Framework 默认不做站点隔离；模块通过中立字段贡献 name_suffix、mount_path、expire_unscoped_aliases 等，禁止在 Framework 内硬编码 Website 业务语义。'),
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'active' => ['type' => 'bool', 'required' => true, 'description' => '是否启用 Cookie 作用域隔离'],
+            'name_suffix' => ['type' => 'string', 'required' => true, 'description' => 'Cookie 名后缀（如 _w44）；空表示不改名'],
+            'name_suffix_pattern' => ['type' => 'string', 'required' => false, 'description' => '可选 PCRE，用于把旧后缀替换为当前 name_suffix'],
+            'mount_path' => ['type' => 'string', 'required' => true, 'description' => '当请求 Path 为 / 时改写到的挂载 Path'],
+            'expire_unscoped_aliases' => ['type' => 'bool', 'required' => true, 'description' => '是否废止 Path=/ 的未限定同名 Cookie'],
+            'revision' => ['type' => 'string', 'required' => false, 'description' => '观察者提供的作用域修订标记，供排障'],
+        ],
+    ],
     'Weline_Framework_Http::process_area' => [
         'name' => __('处理区域'),
         'description' => __('在处理HTTP请求区域时触发，允许其他模块自定义区域处理逻辑。'),

@@ -16,6 +16,13 @@
                   shared="true" sort="0"/>
     </event>
 
+    <event name="Weline_Framework_Http::cookie_scope_resolve">
+        <observer name="Weline_Websites::cookie_scope_resolve"
+                  instance="Weline\Websites\Observer\CookieScopeResolve"
+                  disabled="false"
+                  shared="true" sort="0"/>
+    </event>
+
     <event name="Weline_Acl::role_acl_entries_after">
         <observer name="Weline_Websites::filter_role_acl_entries"
                   instance="Weline\Websites\Observer\FilterRoleAclEntriesByWebsiteGrant"

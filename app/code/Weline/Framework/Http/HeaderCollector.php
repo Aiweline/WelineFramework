@@ -156,13 +156,24 @@ class HeaderCollector implements HeaderCollectorInterface
         string $sameSite = 'Lax'
     ): static {
         $originalName = \trim($name);
-        // Storefront website isolation: qualify name by website_id and bind Path
-        // to the mount path so path-mounted sites do not share parent cookies.
-        $name = WebsiteCookieScope::qualifyName($originalName);
-        $path = WebsiteCookieScope::resolvePath($path);
+        // Cookie name/Path isolation is contributed by modules via CookieScope
+        // event. Protocol cookies keep Path=/ and the exact wire name.
+        $protocolCookie = CookieScope::isProtocolCookie($originalName);
+        if ($protocolCookie) {
+            $name = $originalName;
+            $path = '/';
+            $domain = '';
+        } else {
+            $name = CookieScope::qualifyName($originalName);
+            $path = CookieScope::resolvePath($path);
+        }
 
         // TASK-P1D-001 / TEST-SEC-08：HTTPS 下强制 Secure，禁止明文 Cookie。
         if (!$secure && $this->isHttpsTransport()) {
+            $secure = true;
+        }
+        // __Host- cookies are rejected unless Secure is set.
+        if (\str_starts_with($originalName, '__Host-') || \str_starts_with($originalName, '__Secure-')) {
             $secure = true;
         }
         $sameSite = \trim($sameSite);
@@ -170,9 +181,8 @@ class HeaderCollector implements HeaderCollectorInterface
             $sameSite = 'Lax';
         }
 
-        // Expire legacy unscoped aliases (Path=/) so parent Path=/ cookies cannot
-        // keep leaking into child mounts after website qualification.
-        if (WebsiteCookieScope::isStorefrontIsolationActive()) {
+        // Expire legacy unscoped aliases (Path=/) when a module asks for it.
+        if (!$protocolCookie && CookieScope::shouldExpireUnscopedAliases()) {
             foreach (self::legacyCookieAliases($originalName, $name) as $legacyName) {
                 $legacyKey = $this->getCookieStorageKey($legacyName, '/', $domain);
                 $this->cookies[$legacyKey] = [

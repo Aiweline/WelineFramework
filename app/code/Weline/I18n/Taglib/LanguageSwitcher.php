@@ -1190,6 +1190,20 @@ class LanguageSwitcher implements TaglibInterface
             (string)WelineEnv::get('website_url', ''),
             (string)($_SERVER['WELINE_WEBSITE_URL'] ?? ''),
         ];
+        try {
+            $fromUrl = \Weline\Framework\Http\Url::resolveCurrentWebsiteMountPath();
+            if ($fromUrl !== '') {
+                return trim($fromUrl, '/');
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            $cookie = (string)(\Weline\Framework\Http\Cookie::get('WELINE_WEBSITE_URL') ?? '');
+            if ($cookie !== '') {
+                $candidates[] = $cookie;
+            }
+        } catch (\Throwable) {
+        }
         foreach ($candidates as $websiteUrl) {
             $websiteUrl = trim((string)$websiteUrl);
             if ($websiteUrl === '') {
@@ -1201,10 +1215,46 @@ class LanguageSwitcher implements TaglibInterface
                 $path = is_string($parsed) ? $parsed : '';
             } elseif (str_starts_with($websiteUrl, '/')) {
                 $path = $websiteUrl;
+            } elseif (preg_match('/^[a-zA-Z0-9_-]{2,64}$/', $websiteUrl) === 1) {
+                return $websiteUrl;
             }
             $mount = trim(str_replace('\\', '/', $path), '/');
             if ($mount !== '') {
                 return $mount;
+            }
+        }
+
+        // Blog / reserved routes sometimes lose WELINE_WEBSITE_URL path; recover from
+        // the origin URI when the first segment is a mount followed by storefront tail.
+        $uri = $request instanceof Request
+            ? (string)($request->getServer('WELINE_ORIGIN_REQUEST_URI')
+                ?: $request->getServer('REQUEST_URI')
+                ?: '')
+            : (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '');
+        $uriPath = (string)(parse_url($uri, PHP_URL_PATH) ?: '');
+        $segments = array_values(array_filter(
+            explode('/', trim(str_replace('\\', '/', $uriPath), '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return '';
+        }
+        $first = (string)$segments[0];
+        $langPattern = '/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i';
+        if (preg_match($langPattern, $first) === 1 || preg_match('/^[A-Z]{3}$/', $first) === 1) {
+            return '';
+        }
+        if (preg_match('/^[a-zA-Z0-9_-]{2,64}$/', $first) !== 1) {
+            return '';
+        }
+        $rest = array_slice($segments, 1);
+        foreach ($rest as $segment) {
+            $seg = (string)$segment;
+            if (preg_match($langPattern, $seg) === 1
+                || preg_match('/^[A-Z]{3}$/', $seg) === 1
+                || in_array(strtolower($seg), ['blog', 'about', 'contact', 'privacy', 'terms'], true)
+            ) {
+                return $first;
             }
         }
 
