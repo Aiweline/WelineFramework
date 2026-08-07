@@ -1804,15 +1804,11 @@ function wlsServingManifestRouteForHost(string $host, array $routes): ?array
     if ($host === null) {
         return null;
     }
-    if (\is_array($routes[$host] ?? null)) {
-        return $routes[$host];
-    }
-    $dot = \strpos($host, '.');
-    if ($dot === false || $dot < 1) {
-        return null;
-    }
-    $wildcard = '*.' . \substr($host, $dot + 1);
-    return \is_array($routes[$wildcard] ?? null) ? $routes[$wildcard] : null;
+
+    return \Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore::routeForHost(
+        $host,
+        $routes,
+    );
 }
 
 function wlsServingManifestHostMatchesSni(
@@ -8922,6 +8918,21 @@ function wlsSslAdvancePeekState(
             $sniServerCerts,
             $servingRoutes,
         );
+        if (!\is_array($pair)
+            && ($effectiveHost === null || $effectiveHost === '')
+        ) {
+            // Browsers/clients opening https://127.0.0.1 often omit SNI for IP
+            // literals. Reuse only an explicit loopback tenant route
+            // (localhost/127.0.0.1/::1) — never a public wildcard default.
+            $pair = wlsSslPickCertificatePairForDeferSni(
+                '127.0.0.1',
+                $sniServerCerts,
+                $servingRoutes,
+            );
+            if (\is_array($pair)) {
+                $effectiveHost = '127.0.0.1';
+            }
+        }
         if (!\is_array($pair)) {
             // Empty or unknown SNI must not receive a default tenant
             // certificate. Close before OpenSSL sees any private-key context.
