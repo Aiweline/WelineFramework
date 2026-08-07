@@ -287,6 +287,406 @@ final class MemoryPressureIpcAndReclaimTest extends TestCase
         self::assertLessThan(1.5, $elapsedSeconds);
     }
 
+    public function testHostCoordinatorRecoversLegacyAndGenericFirstPublicationArtifacts(): void
+    {
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $artifacts = [
+            $target . '.tmp-' . \str_repeat('1', 16),
+            $target . '.tmp-' . \str_repeat('2', 24),
+            $target . '.wls-backup-' . \str_repeat('3', 16),
+        ];
+        foreach ($artifacts as $artifact) {
+            self::assertNotFalse(\file_put_contents($artifact, 'uncommitted'));
+        }
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('a', 64),
+        );
+        self::assertNotNull($coordinator->claim(
+            \str_repeat('b', 64),
+            'scale_down',
+            100.0,
+            20.0,
+        ));
+
+        self::assertFileExists($target);
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testValidCommittedStateWinsOverHardCrashArtifacts(): void
+    {
+        $directory = $this->sandbox();
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('a', 64),
+        );
+        self::assertNotNull($coordinator->claim(
+            \str_repeat('b', 64),
+            'scale_down',
+            100.0,
+            20.0,
+        ));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $committed = (string)\file_get_contents($target);
+        $artifacts = [
+            $target . '.tmp-' . \str_repeat('c', 16),
+            $target . '.tmp-' . \str_repeat('d', 24),
+            $target . '.wls-backup-' . \str_repeat('e', 16),
+        ];
+        foreach ($artifacts as $artifact) {
+            self::assertNotFalse(\file_put_contents($artifact, 'uncommitted'));
+        }
+
+        self::assertNull($coordinator->claim(
+            \str_repeat('f', 64),
+            'scale_down',
+            100.1,
+            20.0,
+        ));
+        self::assertSame($committed, (string)\file_get_contents($target));
+        foreach ($artifacts as $artifact) {
+            self::assertFileDoesNotExist($artifact);
+        }
+    }
+
+    public function testLegacyRandomCorruptDiagnosticsAreCollectedBoundedly(): void
+    {
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $legacyDiagnostics = [
+            $target . '.corrupt-20260731010101-' . \str_repeat('1', 8),
+            $target . '.corrupt-20260731010102-' . \str_repeat('2', 8),
+        ];
+        foreach ($legacyDiagnostics as $diagnostic) {
+            self::assertNotFalse(\file_put_contents($diagnostic, 'legacy'));
+        }
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('a', 64),
+        );
+        self::assertNotNull($coordinator->claim(
+            \str_repeat('b', 64),
+            'scale_down',
+            100.0,
+            20.0,
+        ));
+        foreach ($legacyDiagnostics as $diagnostic) {
+            self::assertFileDoesNotExist($diagnostic);
+        }
+    }
+
+    public function testUnsafeRecoveryHardLinkPreservesWholeArtifactSet(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The Windows test runner does not provide a portable hard-link contract.');
+        }
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $safe = $target . '.tmp-' . \str_repeat('1', 16);
+        $unsafe = $target . '.tmp-' . \str_repeat('2', 24);
+        self::assertNotFalse(\file_put_contents($safe, 'safe'));
+        self::assertNotFalse(\file_put_contents($unsafe, 'unsafe'));
+        self::assertTrue(\link($unsafe, $directory . DIRECTORY_SEPARATOR . 'outside-link'));
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('c', 64),
+        );
+        try {
+            $coordinator->claim(
+                \str_repeat('d', 64),
+                'scale_down',
+                100.0,
+                20.0,
+            );
+            self::fail('Expected an unsafe hard-linked recovery artifact to fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('regular non-linked', $exception->getMessage());
+        }
+        self::assertFileExists($safe);
+        self::assertFileExists($unsafe);
+    }
+
+    public function testUnsafeRecoverySymlinkPreservesWholeArtifactSet(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows' || !\function_exists('symlink')) {
+            self::markTestSkipped('This platform does not expose a portable symlink contract.');
+        }
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $safe = $target . '.tmp-' . \str_repeat('3', 16);
+        $unsafe = $target . '.tmp-' . \str_repeat('4', 24);
+        self::assertNotFalse(\file_put_contents($safe, 'safe'));
+        self::assertNotFalse(\file_put_contents(
+            $directory . DIRECTORY_SEPARATOR . 'symlink-target',
+            'unsafe',
+        ));
+        self::assertTrue(\symlink(
+            $directory . DIRECTORY_SEPARATOR . 'symlink-target',
+            $unsafe,
+        ));
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('e', 64),
+        );
+        try {
+            $coordinator->claim(
+                \str_repeat('f', 64),
+                'scale_down',
+                100.0,
+                20.0,
+            );
+            self::fail('Expected a symlink recovery artifact to fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('regular non-linked', $exception->getMessage());
+        }
+        self::assertFileExists($safe);
+        self::assertTrue(\is_link($unsafe));
+    }
+
+    public function testRecoveryCaseAliasFailsClosedWithoutPartialCleanup(): void
+    {
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $safe = $target . '.tmp-' . \str_repeat('5', 16);
+        $alias = $directory . DIRECTORY_SEPARATOR
+            . 'Capacity-mutation.json.tmp-' . \str_repeat('6', 24);
+        self::assertNotFalse(\file_put_contents($safe, 'safe'));
+        self::assertNotFalse(\file_put_contents($alias, 'alias'));
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('1', 64),
+        );
+        try {
+            $coordinator->claim(
+                \str_repeat('2', 64),
+                'scale_down',
+                100.0,
+                20.0,
+            );
+            self::fail('Expected a case-alias recovery artifact to fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('case alias', $exception->getMessage());
+        }
+        self::assertFileExists($safe);
+        self::assertFileExists($alias);
+    }
+
+    public function testMalformedRecoveryLeafFailsClosedWithoutPartialCleanup(): void
+    {
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $safe = $target . '.tmp-' . \str_repeat('8', 16);
+        $malformed = $target . '.tmp-not-a-generation';
+        self::assertNotFalse(\file_put_contents($safe, 'safe'));
+        self::assertNotFalse(\file_put_contents($malformed, 'malformed'));
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('a', 64),
+        );
+        try {
+            $coordinator->claim(
+                \str_repeat('b', 64),
+                'scale_down',
+                100.0,
+                20.0,
+            );
+            self::fail('Expected a malformed recovery leaf to fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('malformed reserved leaf', $exception->getMessage());
+        }
+        self::assertFileExists($safe);
+        self::assertFileExists($malformed);
+    }
+
+    public function testSpecialRecoveryLeafFailsClosedWithoutPartialCleanup(): void
+    {
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $safe = $target . '.tmp-' . \str_repeat('9', 16);
+        $special = $target . '.tmp-' . \str_repeat('a', 24);
+        self::assertNotFalse(\file_put_contents($safe, 'safe'));
+        self::assertTrue(\mkdir($special, 0700));
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('c', 64),
+        );
+        try {
+            $coordinator->claim(
+                \str_repeat('d', 64),
+                'scale_down',
+                100.0,
+                20.0,
+            );
+            self::fail('Expected a special recovery leaf to fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('regular non-linked', $exception->getMessage());
+        }
+        self::assertFileExists($safe);
+        self::assertDirectoryExists($special);
+    }
+
+    public function testRecoveryArtifactQuotaFailsClosedWithoutPartialCleanup(): void
+    {
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $artifacts = [];
+        for ($index = 0; $index < 9; ++$index) {
+            $artifact = $target . '.tmp-' . \str_pad(
+                \dechex($index),
+                16,
+                '0',
+                STR_PAD_LEFT,
+            );
+            self::assertNotFalse(\file_put_contents($artifact, 'orphan'));
+            $artifacts[] = $artifact;
+        }
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('3', 64),
+        );
+        try {
+            $coordinator->claim(
+                \str_repeat('4', 64),
+                'scale_down',
+                100.0,
+                20.0,
+            );
+            self::fail('Expected the recovery artifact quota to fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('quota', $exception->getMessage());
+        }
+        foreach ($artifacts as $artifact) {
+            self::assertFileExists($artifact);
+        }
+    }
+
+    public function testInvalidStateUsesOneBoundedCorruptDiagnosticSlot(): void
+    {
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        $legacy = $target . '.tmp-' . \str_repeat('7', 16);
+        self::assertNotFalse(\file_put_contents($target, '{invalid-json'));
+        self::assertNotFalse(\file_put_contents($legacy, 'orphan'));
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('5', 64),
+        );
+        self::assertNotNull($coordinator->claim(
+            \str_repeat('6', 64),
+            'scale_down',
+            100.0,
+            20.0,
+        ));
+        self::assertFileExists($target . '.corrupt-latest');
+        self::assertFileDoesNotExist($legacy);
+
+        self::assertNotFalse(\file_put_contents($target, '{invalid-again'));
+        self::assertNotNull($coordinator->claim(
+            \str_repeat('7', 64),
+            'scale_down',
+            200.0,
+            20.0,
+        ));
+        self::assertSame(
+            [$target . '.corrupt-latest'],
+            \glob($target . '.corrupt*') ?: [],
+        );
+    }
+
+    public function testOversizedInvalidStateProducesBoundedDiagnosticAndRecovers(): void
+    {
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json';
+        self::assertSame(
+            65537,
+            \file_put_contents($target, \str_repeat('x', 65537)),
+        );
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('e', 64),
+        );
+        self::assertNotNull($coordinator->claim(
+            \str_repeat('f', 64),
+            'scale_down',
+            100.0,
+            20.0,
+        ));
+        $diagnostic = $target . '.corrupt-latest';
+        self::assertFileExists($diagnostic);
+        self::assertLessThanOrEqual(65536, (int)\filesize($diagnostic));
+        self::assertStringContainsString(
+            'committed_state_exceeds_size_limit',
+            (string)\file_get_contents($diagnostic),
+        );
+        self::assertLessThanOrEqual(65536, (int)\filesize($target));
+    }
+
+    public function testHardLinkedStableLockFailsClosedBeforeStateMutation(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The Windows test runner does not provide a portable hard-link contract.');
+        }
+        $directory = $this->sandbox();
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $lock = $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.lock';
+        self::assertNotFalse(\file_put_contents($lock, 'lock'));
+        self::assertTrue(\link($lock, $directory . DIRECTORY_SEPARATOR . 'lock-alias'));
+
+        $coordinator = new HostMemoryPressureCoordinator(
+            $directory,
+            \str_repeat('8', 64),
+        );
+        $this->expectException(\RuntimeException::class);
+        try {
+            $coordinator->claim(
+                \str_repeat('9', 64),
+                'scale_down',
+                100.0,
+                20.0,
+            );
+        } finally {
+            self::assertFileDoesNotExist(
+                $directory . DIRECTORY_SEPARATOR . 'capacity-mutation.json',
+            );
+        }
+    }
+
+    public function testStatePublicationHasNoInPlaceTruncateFallback(): void
+    {
+        $reflection = new \ReflectionClass(HostMemoryPressureCoordinator::class);
+        $source = \file_get_contents((string)$reflection->getFileName());
+        self::assertIsString($source);
+        self::assertStringContainsString(
+            'GatewayProjectStateFilesystem::atomicWrite(',
+            $source,
+        );
+        self::assertStringNotContainsString('ftruncate(', $source);
+        self::assertStringContainsString("'.wls-backup-'", $source);
+    }
+
     public function testBootIdentityProbeTimeoutTerminatesChildBoundedly(): void
     {
         $coordinator = new HostMemoryPressureCoordinator(
@@ -313,8 +713,8 @@ final class MemoryPressureIpcAndReclaimTest extends TestCase
             );
             self::fail('Expected the boot identity probe to time out.');
         } catch (\RuntimeException $exception) {
-            self::assertStringContainsString(
-                'probe timed out',
+            self::assertMatchesRegularExpression(
+                '/probe (?:timed out|failed: .*isolated process group)/',
                 $exception->getMessage(),
             );
         }

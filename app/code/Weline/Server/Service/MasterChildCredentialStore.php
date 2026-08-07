@@ -104,10 +104,149 @@ final class MasterChildCredentialStore
     }
 
     /**
+     * Retire descendants of one persisted Master generation by their exact
+     * credential-bound PID/birth/namespace tuples.
+     *
+     * Prefixes, port ownership and numeric PIDs are deliberately absent from
+     * this API. A caller may exclude the currently running Master generation;
+     * if the ledger belongs to that exact PID+epoch no record is touched.
+     * Cross-boot records cannot identify a live process on this boot and are
+     * returned as already irrelevant without signalling.
+     *
+     * @return list<array{
+     *     pid:int,
+     *     process_birth:string,
+     *     pid_namespace_id:string,
+     *     kind:string,
+     *     role:string,
+     *     slot_id:string,
+     *     launch_id:string,
+     *     lease_id:string,
+     *     generation:int,
+     *     released:bool,
+     *     terminated:bool,
+     *     reason:string,
+     *     owner_state:string
+     * }>
+     */
+    public function retireGenerationProcesses(
+        string $instance,
+        int $excludedMasterPid = 0,
+        int $excludedMasterEpoch = 0,
+        float $timeoutSeconds = 2.0,
+    ): array {
+        self::assertInstance($instance);
+        if (($excludedMasterPid > 0) !== ($excludedMasterEpoch > 0)) {
+            throw new \InvalidArgumentException(
+                'Managed-child retirement exclusion requires both Master PID and epoch.'
+            );
+        }
+        $state = $this->readState($instance);
+        if ($state === null) {
+            return [];
+        }
+        if (!\hash_equals(
+            $this->runtimeIdentity->hostBootId(),
+            (string)$state['host_boot_id'],
+        )) {
+            return [];
+        }
+        if ($excludedMasterPid > 0
+            && $excludedMasterPid === (int)$state['master_pid']
+            && $excludedMasterEpoch === (int)$state['master_epoch']
+        ) {
+            return [];
+        }
+
+        $records = $state['records'];
+        \usort($records, static function (array $left, array $right): int {
+            $leftOrder = ($left['kind'] ?? '') === self::KIND_TASK ? 0 : 1;
+            $rightOrder = ($right['kind'] ?? '') === self::KIND_TASK ? 0 : 1;
+
+            return $leftOrder <=> $rightOrder
+                ?: ((int)($left['pid'] ?? 0) <=> (int)($right['pid'] ?? 0));
+        });
+        $deadline = $this->runtimeIdentity->monotonicNow()
+            + \max(0.05, \min(5.0, $timeoutSeconds));
+        $outcomes = [];
+        foreach ($records as $record) {
+            $remaining = $deadline - $this->runtimeIdentity->monotonicNow();
+            if ($remaining <= 0.0) {
+                $result = [
+                    'released' => false,
+                    'terminated' => false,
+                    'reason' => 'managed_child_retirement_budget_exhausted',
+                    'owner_state' => MasterLeaseRuntimeIdentity::OWNER_UNKNOWN,
+                ];
+            } else {
+                $result = $this->runtimeIdentity->terminateExactProcessIdentity(
+                    (int)$record['pid'],
+                    (string)$record['process_birth'],
+                    (string)$record['pid_namespace_id'],
+                    \min(0.25, $remaining),
+                );
+            }
+            $outcomes[] = [
+                'pid' => (int)$record['pid'],
+                'process_birth' => (string)$record['process_birth'],
+                'pid_namespace_id' => (string)$record['pid_namespace_id'],
+                'kind' => (string)$record['kind'],
+                'role' => (string)$record['role'],
+                'slot_id' => (string)$record['slot_id'],
+                'launch_id' => (string)$record['launch_id'],
+                'lease_id' => (string)$record['lease_id'],
+                'generation' => (int)$record['generation'],
+                'released' => (bool)($result['released'] ?? false),
+                'terminated' => (bool)($result['terminated'] ?? false),
+                'reason' => \substr((string)($result['reason'] ?? 'retirement_result_missing'), 0, 256),
+                'owner_state' => (string)(
+                    $result['owner_state']
+                    ?? MasterLeaseRuntimeIdentity::OWNER_UNKNOWN
+                ),
+            ];
+        }
+
+        return $outcomes;
+    }
+
+    /**
      * @param list<array{role:string,slot_id:string,launch_id:string,lease_id:string,generation:int,pid:int}> $children
      * @return array<string,string> slot_id => credential_id
      */
     public function authorizeServices(
+        string $leaseFile,
+        string $instance,
+        int $masterPid,
+        int $masterEpoch,
+        string $masterToken,
+        array $children,
+    ): array {
+        $authorized = $this->authorizeServicesWithIdentity(
+            $leaseFile,
+            $instance,
+            $masterPid,
+            $masterEpoch,
+            $masterToken,
+            $children,
+        );
+        $credentials = [];
+        foreach ($authorized as $slotId => $identity) {
+            $credentials[$slotId] = $identity['credential_id'];
+        }
+
+        return $credentials;
+    }
+
+    /**
+     * Authorize services and return the exact process identity committed in the
+     * credential ledger. Consumers which publish a second host-side ownership
+     * record must reuse this tuple; recapturing identity from the numeric PID
+     * would reopen a PID-reuse gap between the two publications.
+     *
+     * @param list<array{role:string,slot_id:string,launch_id:string,lease_id:string,generation:int,pid:int}> $children
+     * @return array<string,array{credential_id:string,pid:int,process_birth:string,pid_namespace_id:string}>
+     */
+    public function authorizeServicesWithIdentity(
         string $leaseFile,
         string $instance,
         int $masterPid,
@@ -160,7 +299,12 @@ final class MasterChildCredentialStore
                 $this->removeServiceSlotAndDescendants($records, $child['slot_id']);
                 $record = $this->buildRecord($child, $currentLease);
                 $records[] = $record;
-                $authorized[$record['slot_id']] = $record['credential_id'];
+                $authorized[$record['slot_id']] = [
+                    'credential_id' => (string)$record['credential_id'],
+                    'pid' => (int)$record['pid'],
+                    'process_birth' => (string)$record['process_birth'],
+                    'pid_namespace_id' => (string)$record['pid_namespace_id'],
+                ];
             }
             if (\count($records) > self::MAX_RECORDS) {
                 throw new \RuntimeException('WLS managed-child credential ledger is full.');
@@ -370,6 +514,7 @@ final class MasterChildCredentialStore
             $state = $this->stateForMaster($state, $lease);
             $records = $state['records'];
             $changed = false;
+            $matched = false;
             foreach ($records as $index => $record) {
                 if ($record['kind'] !== self::KIND_SERVICE
                     || !\hash_equals($role, $record['role'])
@@ -380,6 +525,7 @@ final class MasterChildCredentialStore
                 ) {
                     continue;
                 }
+                $matched = true;
                 if ($record['lifecycle_state'] !== 'draining') {
                     $records[$index]['lifecycle_state'] = 'draining';
                     $changed = true;
@@ -399,7 +545,77 @@ final class MasterChildCredentialStore
                 $this->advanceState($state, $lease);
             }
 
-            return [$state, $changed];
+            return [$state, $matched];
+        }, false);
+    }
+
+    public function resumeService(
+        string $leaseFile,
+        string $instance,
+        int $masterPid,
+        int $masterEpoch,
+        string $masterToken,
+        string $role,
+        string $slotId,
+        string $launchId,
+        string $leaseId,
+        int $generation,
+    ): bool {
+        $this->normalizeLaunchTuple([
+            'role' => $role,
+            'slot_id' => $slotId,
+            'launch_id' => $launchId,
+            'lease_id' => $leaseId,
+            'generation' => $generation,
+            'pid' => 1,
+        ]);
+
+        return $this->mutate($instance, function (?array $state) use (
+            $leaseFile,
+            $instance,
+            $masterPid,
+            $masterEpoch,
+            $masterToken,
+            $role,
+            $slotId,
+            $launchId,
+            $leaseId,
+            $generation,
+        ): array {
+            $lease = $this->requireRunningMaster(
+                $leaseFile,
+                $instance,
+                $masterPid,
+                $masterEpoch,
+                $masterToken,
+            );
+            $state = $this->stateForMaster($state, $lease);
+            $records = $state['records'];
+            $matched = false;
+            $changed = false;
+            foreach ($records as $index => $record) {
+                if ($record['kind'] !== self::KIND_SERVICE
+                    || !\hash_equals($role, $record['role'])
+                    || !\hash_equals($slotId, $record['slot_id'])
+                    || !\hash_equals($launchId, $record['launch_id'])
+                    || !\hash_equals($leaseId, $record['lease_id'])
+                    || $generation !== $record['generation']
+                ) {
+                    continue;
+                }
+                $matched = true;
+                if ($record['lifecycle_state'] === 'draining') {
+                    $records[$index]['lifecycle_state'] = 'active';
+                    $changed = true;
+                }
+                break;
+            }
+            if ($changed) {
+                $state['records'] = $this->sortRecords($records);
+                $this->advanceState($state, $lease);
+            }
+
+            return [$state, $matched];
         }, false);
     }
 
@@ -1224,6 +1440,19 @@ final class MasterChildCredentialStore
         return GatewayProjectStateFilesystem::withExclusiveLock(
             self::lockPathForInstance($instance),
             function () use ($path, $instance, $operation, $publishUnchanged): mixed {
+                GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                    $path,
+                    self::MAX_STATE_BYTES,
+                    'managed-child credential ledger',
+                    function (string $contents) use ($instance): void {
+                        unset($contents);
+                        if ($this->readState($instance) === null) {
+                            throw new \RuntimeException(
+                                'Managed-child credential recovery target is absent.',
+                            );
+                        }
+                    },
+                );
                 $before = $this->readState($instance);
                 [$state, $result] = $operation($before);
                 $state = $this->assertState($state);

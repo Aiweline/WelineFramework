@@ -62,10 +62,10 @@ final class RuntimeControlBroadcaster implements RuntimeControlBroadcasterInterf
             $pending[$targetInstance] = $operationId;
         }
 
-        $deadline = \microtime(true) + $timeout;
-        while ($pending !== [] && \microtime(true) < $deadline) {
+        $deadline = self::monotonicSeconds() + $timeout;
+        while ($pending !== [] && self::monotonicSeconds() < $deadline) {
             foreach ($pending as $targetInstance => $operationId) {
-                $remaining = $deadline - \microtime(true);
+                $remaining = $deadline - self::monotonicSeconds();
                 if ($remaining <= 0) {
                     break 2;
                 }
@@ -177,6 +177,11 @@ final class RuntimeControlBroadcaster implements RuntimeControlBroadcasterInterf
         }
 
         return self::DEFAULT_STATUS_TIMEOUT_SEC;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 
     private function isCurrentProcessMaintenanceWorker(): bool

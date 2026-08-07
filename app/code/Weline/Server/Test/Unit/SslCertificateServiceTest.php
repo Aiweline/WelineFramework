@@ -181,6 +181,51 @@ class SslCertificateServiceTest extends TestCase
         }
     }
 
+    public function testRevocationContainmentRunsBeforeLegacyCompatibilityMapFailure(): void
+    {
+        $service = new class extends SslCertificateService {
+            /** @var list<string> */
+            public array $events = [];
+
+            public function __construct()
+            {
+            }
+
+            protected function publishCertificateRuntimeUpdate(
+                string $domain,
+                array $revocationIntent,
+            ): void {
+                unset($domain, $revocationIntent);
+                $this->events[] = 'wls2-containment';
+            }
+
+            protected function writeLegacyCertificateCompatibilityMap(
+                ?float $deadlineMonotonic = null,
+            ): void {
+                unset($deadlineMonotonic);
+                $this->events[] = 'legacy-map';
+                throw new \RuntimeException('legacy map unavailable');
+            }
+        };
+        $intent = [
+            'domain' => 'retired.example.test',
+            'generation' => 7,
+            'source_digest' => \hash(
+                'sha256',
+                "wls-disabled-certificate\0retired.example.test\0" . 7,
+            ),
+            'intent_id' => \str_repeat('c', 64),
+        ];
+
+        try {
+            $service->regenerateCertificateMap(true, 'retired.example.test', $intent);
+            self::fail('The compatibility map failure must remain visible.');
+        } catch (\RuntimeException $throwable) {
+            self::assertSame('legacy map unavailable', $throwable->getMessage());
+        }
+        self::assertSame(['wls2-containment', 'legacy-map'], $service->events);
+    }
+
     public function testLogicalDomainFromStorageSegment(): void
     {
         $this->assertSame(
@@ -455,6 +500,62 @@ class SslCertificateServiceTest extends TestCase
 
         $this->assertSame($certificate, $map['*.example.test'] ?? null);
         $this->assertArrayNotHasKey('example.test', $map);
+    }
+
+    public function testWildcardPropagationReassignsExistingCertificateToDefaultWebsite(): void
+    {
+        $rootDomain = 'wls-default-' . \bin2hex(\random_bytes(4)) . '.example.test';
+        $wildcardDomain = '*.' . $rootDomain;
+        $subdomain = 'shop.' . $rootDomain;
+        $pair = $this->createSniCertificatePair(
+            $wildcardDomain,
+            [$wildcardDomain],
+            'default-website-wildcard',
+        );
+        $certificatePem = (string)\file_get_contents($pair['local_cert']);
+        $privateKeyPem = (string)\file_get_contents($pair['local_pk']);
+        $issuedAt = \date('Y-m-d H:i:s', \time() - 60);
+        $expiresAt = \date('Y-m-d H:i:s', \time() + 86400);
+
+        $wildcard = ObjectManager::getInstance(SslCertificate::class, [], false);
+        $subCertificate = ObjectManager::getInstance(SslCertificate::class, [], false);
+        try {
+            $wildcard->setDomain($wildcardDomain)
+                ->setCertType(SslCertificate::CERT_TYPE_WILDCARD)
+                ->setWebsiteId(42)
+                ->setCertPem($certificatePem)
+                ->setKeyPem($privateKeyPem)
+                ->setIssuer('WLS test issuer')
+                ->setProvider(SslCertificateService::PROVIDER_SELF_SIGNED)
+                ->setIssuedAt($issuedAt)
+                ->setExpiresAt($expiresAt)
+                ->setStatus(SslCertificate::STATUS_ACTIVE)
+                ->setAutoRenew(true)
+                ->setHttpsEnabled(true)
+                ->save();
+            $subCertificate->setDomain($subdomain)
+                ->setWebsiteId(91)
+                ->setStatus(SslCertificate::STATUS_PENDING)
+                ->setHttpsEnabled(false)
+                ->save();
+
+            $service = new WildcardDefaultWebsiteProbe($this->makeTempDir());
+            self::assertNotNull(
+                $service->applyWildcardToSubdomainIfExists($subdomain, 0),
+            );
+
+            $reloaded = ObjectManager::getInstance(SslCertificate::class, [], false)
+                ->loadByDomain($subdomain);
+            self::assertSame(0, $reloaded->getWebsiteId());
+        } finally {
+            foreach ([$subdomain, $wildcardDomain] as $domain) {
+                $record = ObjectManager::getInstance(SslCertificate::class, [], false)
+                    ->loadByDomain($domain);
+                if ($record->getCertId() > 0) {
+                    $record->delete();
+                }
+            }
+        }
     }
 
     public function testGatewayCertificateRootFenceRejectsAccessibleStaleHostPath(): void
@@ -794,8 +895,9 @@ class SslCertificateServiceTest extends TestCase
         $this->assertTrue((bool)($result['trusted'] ?? false));
         $this->assertNotEmpty($service->commands);
         $this->assertSame('/usr/bin/sudo', $service->commands[0][0]);
-        $this->assertContains('-p', $service->commands[0]);
-        $this->assertContains('[WLS] sudo password for CA trust: ', $service->commands[0]);
+        $this->assertContains('-n', $service->commands[0]);
+        $this->assertNotContains('-p', $service->commands[0]);
+        $this->assertNotContains('[WLS] sudo password for CA trust: ', $service->commands[0]);
         $this->assertNotContains('/bin/sh', $service->commands[0]);
         $this->assertContains('/usr/bin/install', $service->commands[0]);
         $this->assertContains('/usr/sbin/update-ca-certificates', $service->commands[1]);
@@ -1102,8 +1204,13 @@ class SslCertificateServiceTest extends TestCase
         $store = new ProjectAcmeHttp01ChallengeStore(
             $directory,
             static fn (): int => $now,
+            static fn (): float => 1_000.0,
         );
-        $service = new GatewayPublishingSslCertificateServiceDouble($store, false);
+        $service = new GatewayPublishingSslCertificateServiceDouble(
+            $store,
+            false,
+            1_000.0,
+        );
         $register = new ReflectionMethod($service, 'registerWlsHttp01Challenge');
         $register->setAccessible(true);
         $cleanup = new ReflectionMethod($service, 'cleanupWlsHttp01Challenge');
@@ -1124,9 +1231,345 @@ class SslCertificateServiceTest extends TestCase
         self::assertSame([], $service->publishedDesired[1]['challenges']);
     }
 
+    public function testCertificatePublicationCollectsPairedAtomicRecoveryBackup(): void
+    {
+        $domain = 'atomic-publication.example.test';
+        $pair = $this->createSniCertificatePair($domain, [$domain], 'atomic-publication');
+        $base = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'ssl';
+        self::assertTrue(\mkdir($base, 0700, true));
+        $directory = $base . DIRECTORY_SEPARATOR . $domain;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $contents = (string)\file_get_contents($pair['local_cert']);
+        self::assertNotSame('', $contents);
+        self::assertNotFalse(\file_put_contents($target, $contents));
+        self::assertTrue(\chmod($target, 0644));
+        $backup = $target . '.wls-backup-aaaaaaaaaaaaaaaa';
+        self::assertNotFalse(\file_put_contents($backup, $contents));
+
+        $service = new CertificateStatePublicationProbe($base);
+        $publish = new ReflectionMethod($service, 'writeCertificateFileAtomically');
+        $publish->setAccessible(true);
+        $publish->invoke($service, $target, $contents, 0644);
+
+        self::assertFileDoesNotExist($backup);
+        self::assertSame($contents, (string)\file_get_contents($target));
+    }
+
+    public function testCertificatePublicationPreservesRecoveryEvidenceForMalformedTarget(): void
+    {
+        $domain = 'atomic-corrupt.example.test';
+        $pair = $this->createSniCertificatePair($domain, [$domain], 'atomic-corrupt');
+        $base = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'ssl';
+        self::assertTrue(\mkdir($base, 0700, true));
+        $directory = $base . DIRECTORY_SEPARATOR . $domain;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        self::assertNotFalse(\file_put_contents($target, 'malformed certificate'));
+        self::assertTrue(\chmod($target, 0644));
+        $backup = $target . '.wls-backup-bbbbbbbbbbbbbbbb';
+        self::assertNotFalse(\file_put_contents($backup, 'previous committed generation'));
+        $next = (string)\file_get_contents($pair['local_cert']);
+
+        $service = new CertificateStatePublicationProbe($base);
+        $publish = new ReflectionMethod($service, 'writeCertificateFileAtomically');
+        $publish->setAccessible(true);
+        $failure = null;
+        try {
+            $publish->invoke($service, $target, $next, 0644);
+        } catch (\Throwable $throwable) {
+            $failure = $throwable;
+        }
+
+        self::assertInstanceOf(\RuntimeException::class, $failure);
+        self::assertSame('malformed certificate', (string)\file_get_contents($target));
+        self::assertFileExists($backup);
+    }
+
+    public function testCertificatePublicationRejectsCertificateForDifferentStorageDomain(): void
+    {
+        $domain = 'expected-san.example.test';
+        $other = $this->createSniCertificatePair(
+            'other-san.example.test',
+            ['other-san.example.test'],
+            'other-san',
+        );
+        $base = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'ssl';
+        self::assertTrue(\mkdir($base, 0700, true));
+        $directory = $base . DIRECTORY_SEPARATOR . $domain;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $service = new CertificateStatePublicationProbe($base);
+        $publish = new ReflectionMethod($service, 'writeCertificateFileAtomically');
+        $publish->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        try {
+            $publish->invoke(
+                $service,
+                $target,
+                (string)\file_get_contents($other['local_cert']),
+                0644,
+            );
+        } finally {
+            self::assertFileDoesNotExist($target);
+        }
+    }
+
+    public function testCertificatePublicationRejectsMultiplePrivateKeyPemBlocks(): void
+    {
+        $domain = 'single-private-key.example.test';
+        $pair = $this->createSniCertificatePair($domain, [$domain], 'single-private-key');
+        $base = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'ssl';
+        self::assertTrue(\mkdir($base, 0700, true));
+        $directory = $base . DIRECTORY_SEPARATOR . $domain;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'privkey.pem';
+        $privateKey = (string)\file_get_contents($pair['local_pk']);
+        self::assertNotSame('', $privateKey);
+        $service = new CertificateStatePublicationProbe($base);
+        $publish = new ReflectionMethod($service, 'writeCertificateFileAtomically');
+        $publish->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        try {
+            $publish->invoke(
+                $service,
+                $target,
+                \rtrim($privateKey) . "\n" . \ltrim($privateKey),
+                0600,
+            );
+        } finally {
+            self::assertFileDoesNotExist($target);
+        }
+    }
+
+    public function testCertificatePublicationRejectsMultipleCsrPemBlocks(): void
+    {
+        $domain = 'single-csr.example.test';
+        $pair = $this->createSniCertificatePair($domain, [$domain], 'single-csr');
+        $privateKey = \openssl_pkey_get_private(
+            (string)\file_get_contents($pair['local_pk']),
+        );
+        self::assertNotFalse($privateKey);
+        $csr = \openssl_csr_new(
+            ['commonName' => $domain],
+            $privateKey,
+            ['digest_alg' => 'sha256'],
+        );
+        self::assertNotFalse($csr);
+        self::assertTrue(\openssl_csr_export($csr, $csrPem));
+        $base = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'ssl';
+        self::assertTrue(\mkdir($base, 0700, true));
+        $directory = $base . DIRECTORY_SEPARATOR . $domain;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'csr.pem';
+        $service = new CertificateStatePublicationProbe($base);
+        $publish = new ReflectionMethod($service, 'writeCertificateFileAtomically');
+        $publish->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        try {
+            $publish->invoke(
+                $service,
+                $target,
+                \rtrim($csrPem) . "\n" . \ltrim($csrPem),
+                0600,
+            );
+        } finally {
+            self::assertFileDoesNotExist($target);
+        }
+    }
+
+    public function testLocalCaPublicationCollectsOnlySemanticallyValidPairedBackup(): void
+    {
+        $fixture = $this->createLocalCaSignedCertificateFixture('local-ca-leaf.example.test');
+        $directory = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'local-ca';
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'rootCA.pem';
+        self::assertNotFalse(\file_put_contents($target, $fixture['ca']));
+        self::assertTrue(\chmod($target, 0644));
+        $backup = $target . '.wls-backup-cccccccccccccccc';
+        self::assertNotFalse(\file_put_contents($backup, $fixture['ca']));
+
+        $service = new CertificateStatePublicationProbe($directory, $directory);
+        $publish = new ReflectionMethod($service, 'writeLocalCaStateAtomically');
+        $publish->setAccessible(true);
+        $publish->invoke($service, $target, $fixture['ca'], 0644);
+
+        self::assertFileDoesNotExist($backup);
+        self::assertFileExists(
+            $directory . DIRECTORY_SEPARATOR . '.wls-local-ca-state.lock',
+        );
+    }
+
+    public function testLocalCaPublicationRejectsTrailingNonCertificateData(): void
+    {
+        $fixture = $this->createLocalCaSignedCertificateFixture('local-ca-trailing.example.test');
+        $directory = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'local-ca-trailing';
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'rootCA.pem';
+        $service = new CertificateStatePublicationProbe($directory, $directory);
+        $publish = new ReflectionMethod($service, 'writeLocalCaStateAtomically');
+        $publish->setAccessible(true);
+
+        $this->expectException(\RuntimeException::class);
+        try {
+            $publish->invoke(
+                $service,
+                $target,
+                \rtrim($fixture['ca']) . "\nnot-certificate-data\n",
+                0644,
+            );
+        } finally {
+            self::assertFileDoesNotExist($target);
+        }
+    }
+
+    public function testWebrootChallengePublicationCollectsRecoveryBackupAndRejectsLinkCleanup(): void
+    {
+        $webroot = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'webroot';
+        self::assertTrue(\mkdir($webroot, 0700, true));
+        $service = new HttpChallengeStateProbe();
+        $token = 'TOKEN_atomic_state';
+        self::assertTrue($service->createChallenge($webroot, $token));
+        $target = $webroot . DIRECTORY_SEPARATOR . '.well-known'
+            . DIRECTORY_SEPARATOR . 'acme-challenge' . DIRECTORY_SEPARATOR . $token;
+        $backup = $target . '.wls-backup-dddddddddddddddd';
+        self::assertNotFalse(\file_put_contents(
+            $backup,
+            (string)\file_get_contents($target),
+        ));
+
+        self::assertTrue($service->createChallenge($webroot, $token));
+        self::assertFileDoesNotExist($backup);
+
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\unlink($target));
+            $victim = $webroot . DIRECTORY_SEPARATOR . 'must-remain.txt';
+            self::assertNotFalse(\file_put_contents($victim, 'must remain'));
+            self::assertTrue(\symlink($victim, $target));
+            $service->cleanupChallenge($webroot, $token);
+            self::assertTrue(\is_link($target));
+            self::assertSame('must remain', (string)\file_get_contents($victim));
+        }
+    }
+
+    public function testWebrootChallengePreservesBackupWhenPairedTargetIsMalformed(): void
+    {
+        $webroot = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'webroot-corrupt';
+        self::assertTrue(\mkdir($webroot, 0700, true));
+        $service = new HttpChallengeStateProbe();
+        $token = 'TOKEN_corrupt_state';
+        self::assertTrue($service->createChallenge($webroot, $token));
+        $target = $webroot . DIRECTORY_SEPARATOR . '.well-known'
+            . DIRECTORY_SEPARATOR . 'acme-challenge' . DIRECTORY_SEPARATOR . $token;
+        self::assertNotFalse(\file_put_contents($target, 'malformed challenge'));
+        self::assertTrue(\chmod($target, 0644));
+        $backup = $target . '.wls-backup-ffffffffffffffff';
+        self::assertNotFalse(\file_put_contents($backup, 'previous challenge generation'));
+
+        self::assertFalse($service->createChallenge($webroot, $token));
+        self::assertSame('malformed challenge', (string)\file_get_contents($target));
+        self::assertFileExists($backup);
+    }
+
+    public function testSslIssuanceReleaseCollectsRecoveryBackupBeforeRemovingMarker(): void
+    {
+        $domain = 'issuance-release.example.test';
+        $base = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'ssl';
+        self::assertTrue(\mkdir($base, 0700, true));
+        $directory = $base . DIRECTORY_SEPARATOR . $domain;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR
+            . SslCertificateService::SSL_ISSUANCE_LOCK_FILENAME;
+        $contents = (string)\getmypid() . "\n" . \date('c');
+        self::assertNotFalse(\file_put_contents($target, $contents));
+        self::assertTrue(\chmod($target, 0600));
+        $backup = $target . '.wls-backup-0123456789abcdef';
+        self::assertNotFalse(\file_put_contents($backup, $contents));
+        $service = new CertificateStatePublicationProbe($base);
+
+        $service->releaseIssuanceMarker($domain);
+
+        self::assertFileDoesNotExist($target);
+        self::assertFileDoesNotExist($backup);
+    }
+
+    public function testOptionalCertificateStateRemovalCollectsRecoveryBackupFirst(): void
+    {
+        $domain = 'optional-chain.example.test';
+        $pair = $this->createSniCertificatePair($domain, [$domain], 'optional-chain');
+        $base = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'ssl';
+        self::assertTrue(\mkdir($base, 0700, true));
+        $directory = $base . DIRECTORY_SEPARATOR . $domain;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $target = $directory . DIRECTORY_SEPARATOR . 'chain.pem';
+        $contents = (string)\file_get_contents($pair['local_cert']);
+        self::assertNotFalse(\file_put_contents($target, $contents));
+        self::assertTrue(\chmod($target, 0644));
+        $backup = $target . '.wls-backup-1234567890abcdef';
+        self::assertNotFalse(\file_put_contents($backup, $contents));
+        $service = new CertificateStatePublicationProbe($base);
+        $remove = new ReflectionMethod($service, 'removeCertificateStateLeafSafely');
+        $remove->setAccessible(true);
+
+        self::assertTrue($remove->invoke($service, $directory, 'chain.pem'));
+        self::assertFileDoesNotExist($target);
+        self::assertFileDoesNotExist($backup);
+    }
+
+    public function testLegacyCertificateMapCollectsValidPairedAtomicRecoveryBackup(): void
+    {
+        $mapFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
+        $hadMap = \is_file($mapFile);
+        $previousMap = $hadMap ? (string)\file_get_contents($mapFile) : null;
+        $backup = $mapFile . '.wls-backup-eeeeeeeeeeeeeeee';
+        $service = new class extends SslCertificateService {
+            public function __construct()
+            {
+            }
+
+            public function getCertificateMap(array $certificateRoots = []): array
+            {
+                unset($certificateRoots);
+                return [
+                    'legacy-map.example.test' => [
+                        'cert' => '/tmp/legacy-map.crt',
+                        'key' => '/tmp/legacy-map.key',
+                    ],
+                ];
+            }
+        };
+
+        try {
+            $service->regenerateCertificateMap(false);
+            self::assertNotFalse(\file_put_contents(
+                $backup,
+                (string)\file_get_contents($mapFile),
+            ));
+            $service->regenerateCertificateMap(false);
+            self::assertFileDoesNotExist($backup);
+        } finally {
+            if (\is_file($backup)) {
+                @\unlink($backup);
+            }
+            if ($hadMap) {
+                \file_put_contents($mapFile, (string)$previousMap);
+            } elseif (\is_file($mapFile)) {
+                @\unlink($mapFile);
+            }
+        }
+    }
+
     private function makeTempDir(): string
     {
-        $tempDir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-local-ca-' . \bin2hex(\random_bytes(4));
+        $tempRoot = \realpath(\sys_get_temp_dir());
+        if (!\is_string($tempRoot) || $tempRoot === '') {
+            self::fail('Unable to resolve the canonical test temporary directory.');
+        }
+        $tempDir = $tempRoot . DIRECTORY_SEPARATOR . 'wls-local-ca-'
+            . \bin2hex(\random_bytes(4));
         if (!\is_dir($tempDir)) {
             \mkdir($tempDir, 0700, true);
         }
@@ -1193,6 +1636,39 @@ final class LocalCertificateReuseProbe extends SslCertificateService
     }
 }
 
+final class WildcardDefaultWebsiteProbe extends SslCertificateService
+{
+    public function __construct(private readonly string $certificateDirectory)
+    {
+    }
+
+    public function getCertificateDir(string $domain): string
+    {
+        unset($domain);
+        return \rtrim($this->certificateDirectory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    }
+
+    protected function shouldUseTrustedLocalCertificateAuthority(string $domain): bool
+    {
+        unset($domain);
+        return false;
+    }
+
+    protected function restoreCertificateFilesFromData(array $cert): bool
+    {
+        unset($cert);
+        return true;
+    }
+
+    public function regenerateCertificateMap(
+        bool $broadcastReload = true,
+        string $changedDomain = '',
+        array $revocationIntent = [],
+    ): void {
+        unset($broadcastReload, $changedDomain, $revocationIntent);
+    }
+}
+
 final class GatewayPublishingSslCertificateServiceDouble extends SslCertificateService
 {
     /** @var list<array<string,mixed>> */
@@ -1202,7 +1678,9 @@ final class GatewayPublishingSslCertificateServiceDouble extends SslCertificateS
     public function __construct(
         private readonly ProjectAcmeHttp01ChallengeStore $challengeStore,
         public bool $publicationResult,
+        float $gatewayPublishNow = 0.0,
     ) {
+        $this->gatewayPublishNow = $gatewayPublishNow;
     }
 
     protected function acmeHttp01ChallengeStore(): ProjectAcmeHttp01ChallengeStore
@@ -1214,7 +1692,9 @@ final class GatewayPublishingSslCertificateServiceDouble extends SslCertificateS
     protected function publishGatewayAcmeDesired(
         array $desired,
         ?string $requiredDomain = null,
+        ?float $deadlineMonotonic = null,
     ): bool {
+        unset($requiredDomain, $deadlineMonotonic);
         $this->publishedDesired[] = $desired;
         return $this->publicationResult;
     }
@@ -1231,5 +1711,60 @@ final class GatewayPublishingSslCertificateServiceDouble extends SslCertificateS
     {
         unset($attempt);
         $this->gatewayPublishNow += $remainingSeconds;
+    }
+}
+
+final class CertificateStatePublicationProbe extends SslCertificateService
+{
+    public function __construct(
+        string $certificateBaseDirectory,
+        private readonly ?string $localCaDirectory = null,
+    ) {
+        $this->certBaseDir = \rtrim(
+            $certificateBaseDirectory,
+            '/\\',
+        ) . DIRECTORY_SEPARATOR;
+        $this->accountKeyPath = $this->certBaseDir . 'account.key';
+    }
+
+    protected function getLocalCaDir(): string
+    {
+        return \rtrim(
+            $this->localCaDirectory ?? $this->certBaseDir,
+            '/\\',
+        ) . DIRECTORY_SEPARATOR;
+    }
+
+    protected function getGlobalLocalCaDir(bool $create = true): string
+    {
+        unset($create);
+        return $this->getLocalCaDir();
+    }
+
+    public function releaseIssuanceMarker(string $domain): void
+    {
+        $this->releaseSslIssuanceLock($domain);
+    }
+}
+
+final class HttpChallengeStateProbe extends SslCertificateService
+{
+    public function __construct()
+    {
+    }
+
+    protected function getAccountThumbprint(): string
+    {
+        return \str_repeat('A', 43);
+    }
+
+    public function createChallenge(string $webroot, string $token): bool
+    {
+        return $this->createHttpChallenge($webroot, $token, $token);
+    }
+
+    public function cleanupChallenge(string $webroot, string $token): void
+    {
+        $this->cleanupHttpChallenge($webroot, $token);
     }
 }

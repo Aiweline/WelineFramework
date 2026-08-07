@@ -70,7 +70,7 @@ final class ControlCommandResult
         try {
             $suffix = \bin2hex(\random_bytes(6));
         } catch (\Throwable) {
-            $suffix = \str_replace('.', '', (string)\microtime(true));
+            $suffix = \str_replace('.', '', (string)\hrtime(true));
         }
 
         return 'wls-' . $action . '-' . \getmypid() . '-' . $suffix;

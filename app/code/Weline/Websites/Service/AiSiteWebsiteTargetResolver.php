@@ -13,13 +13,16 @@ use Weline\Websites\Model\WebsiteDomain;
  * Resolves the durable Website that owns one AI-site domain.
  *
  * Existing bindings retain their current semantics, including the valid
- * system default website_id=0. A new PageBuilder domain receives a
- * deterministic positive Website ID so sessions cannot overwrite each other.
+ * system default website_id=0. A new PageBuilder domain receives either the
+ * shell website allocated at requirements confirmation (requested_website_id)
+ * or — only as a legacy fallback — a deterministic positive Website ID so
+ * sessions cannot overwrite each other.
  */
 class AiSiteWebsiteTargetResolver
 {
     private const PAGEBUILDER_SOURCE_MODULE = 'GuoLaiRen_PageBuilder';
     private const PAGEBUILDER_SCOPE = 'pagebuilder_ai_site';
+    private const LEGACY_CODE_PREFIX = 'pagebuilder_ai_';
 
     public function __construct(
         private readonly Website $website,
@@ -28,9 +31,13 @@ class AiSiteWebsiteTargetResolver
     ) {
     }
 
-    public function resolve(AiSiteProvisioningRequest $request, string $domain): int
-    {
+    public function resolve(
+        AiSiteProvisioningRequest $request,
+        string $domain,
+        string $subPath = ''
+    ): int {
         $domain = \strtolower(\trim($domain));
+        $subPath = $this->normalizeSubPath($subPath);
         if ($domain === '') {
             throw new AiSiteProvisioningException(
                 'TARGET_DOMAIN_INVALID',
@@ -49,7 +56,7 @@ class AiSiteWebsiteTargetResolver
         $sourceModule = \trim((string)$request->getData(
             AiSiteProvisioningRequest::schema_fields_SOURCE_MODULE
         ));
-        $boundWebsiteId = $this->boundWebsiteId($domain);
+        $boundWebsiteId = $this->boundWebsiteId($domain, $subPath);
         if ($boundWebsiteId !== null
             && ($boundWebsiteId > Website::ID_DEFAULT
                 || $sourceModule !== self::PAGEBUILDER_SOURCE_MODULE)
@@ -58,6 +65,8 @@ class AiSiteWebsiteTargetResolver
                 ? $this->assertWebsiteExists($boundWebsiteId)
                 : Website::ID_DEFAULT;
         }
+        // Prefer the shell Website created at requirements confirmation.
+        // Never invent a second website_code for the same PageBuilder session.
         if ($requestedWebsiteId !== null
             && ($sourceModule !== self::PAGEBUILDER_SOURCE_MODULE
                 || $requestedWebsiteId > Website::ID_DEFAULT)
@@ -71,7 +80,7 @@ class AiSiteWebsiteTargetResolver
             return $this->assertWebsiteExists($requestedWebsiteId);
         }
 
-        $url = 'https://' . $domain;
+        $url = 'https://' . $domain . $subPath;
         if (\strlen($url) > 128) {
             throw new AiSiteProvisioningException(
                 'TARGET_DOMAIN_INVALID',
@@ -81,10 +90,11 @@ class AiSiteWebsiteTargetResolver
 
         $hash = \hash('sha256', \trim((string)$request->getData(
             AiSiteProvisioningRequest::schema_fields_SOURCE_PUBLIC_ID
-        )) . '|' . $domain);
-        $code = 'pagebuilder_ai_' . \substr($hash, 0, 20);
+        )) . '|' . $domain . '|' . $subPath);
+        // Legacy fallback only: new PageBuilder Starts must pass requested_website_id.
+        $code = self::LEGACY_CODE_PREFIX . \substr($hash, 0, 20);
 
-        $existingWebsiteId = $this->reusableWebsiteId($domain, $code);
+        $existingWebsiteId = $this->reusableWebsiteId($domain, $subPath, $code);
         if ($existingWebsiteId !== null) {
             return $existingWebsiteId;
         }
@@ -93,7 +103,7 @@ class AiSiteWebsiteTargetResolver
         $website = clone $this->website;
         $website->clearData()->clearQuery();
         $website->setName(
-            'PageBuilder AI ' . \substr($domain, 0, 80) . ' ' . \strtoupper(\substr($hash, 0, 6))
+            'PageBuilder AI ' . \substr($domain . $subPath, 0, 80) . ' ' . \strtoupper(\substr($hash, 0, 6))
         )
             ->setCode($code)
             ->setUrl($url)
@@ -111,7 +121,7 @@ class AiSiteWebsiteTargetResolver
         try {
             $website->save(true);
         } catch (\Throwable $throwable) {
-            $existingWebsiteId = $this->reusableWebsiteId($domain, $code);
+            $existingWebsiteId = $this->reusableWebsiteId($domain, $subPath, $code);
             if ($existingWebsiteId !== null) {
                 return $existingWebsiteId;
             }
@@ -130,10 +140,10 @@ class AiSiteWebsiteTargetResolver
         return $websiteId;
     }
 
-    private function boundWebsiteId(string $domain): ?int
+    private function boundWebsiteId(string $domain, string $subPath): ?int
     {
         $binding = clone $this->websiteDomain;
-        $binding->clearData()->clearQuery()->loadByDomainAndSubPath($domain, '');
+        $binding->clearData()->clearQuery()->loadByDomainAndSubPath($domain, $subPath);
         if ($binding->getDomainId() <= 0) {
             return null;
         }
@@ -163,9 +173,10 @@ class AiSiteWebsiteTargetResolver
         return $websiteId;
     }
 
-    private function reusableWebsiteId(string $domain, string $code): ?int
+    private function reusableWebsiteId(string $domain, string $subPath, string $code): ?int
     {
-        foreach (['https://' . $domain, 'http://' . $domain] as $url) {
+        $mount = $domain . $subPath;
+        foreach (['https://' . $mount, 'http://' . $mount] as $url) {
             $website = clone $this->website;
             $website->clearData()->clearQuery()
                 ->where(Website::schema_fields_URL, $url)
@@ -185,5 +196,16 @@ class AiSiteWebsiteTargetResolver
         return $website->getWebsiteId() > Website::ID_DEFAULT
             ? $website->getWebsiteId()
             : null;
+    }
+
+    private function normalizeSubPath(string $subPath): string
+    {
+        $subPath = \trim($subPath);
+        if ($subPath === '' || $subPath === '/') {
+            return '';
+        }
+        $subPath = '/' . \trim($subPath, '/');
+
+        return $subPath === '/' ? '' : $subPath;
     }
 }

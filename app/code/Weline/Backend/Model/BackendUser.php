@@ -54,9 +54,12 @@ class BackendUser extends Model implements AuthenticableInterface
     public const schema_fields_is_enabled = 'is_enabled';
     #[Col('int', 1, default: 0, comment: '是否沙盒账户')]
     public const schema_fields_is_sandbox = 'is_sandbox';
+    /** 0=仅默认站/平台后台；N=仅该站后端可登录（user_id=1 超管可跨站登录） */
+    #[Col('int', 0, default: 0, comment: '所属网站ID')]
+    public const schema_fields_website_id = 'website_id';
 
     public array $_unit_primary_keys = [self::schema_fields_ID];
-    public array $_index_sort_keys = ['user_id', 'email', 'username'];
+    public array $_index_sort_keys = ['user_id', 'email', 'username', 'website_id'];
 
     private bool $_is_new_user = false;
     /** 请求级 ACL 上下文缓存（user_id ⇒ context）；WLS 下由 StateManager 重置 */
@@ -178,6 +181,16 @@ class BackendUser extends Model implements AuthenticableInterface
     public function isSandboxAccount(): bool
     {
         return (bool)$this->getData(self::schema_fields_is_sandbox);
+    }
+
+    public function getWebsiteId(): int
+    {
+        return (int)$this->getData(self::schema_fields_website_id);
+    }
+
+    public function setWebsiteId(int $websiteId): static
+    {
+        return $this->setData(self::schema_fields_website_id, max(0, $websiteId));
     }
 
     public function setSandboxAccount(bool $flag): static

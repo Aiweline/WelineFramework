@@ -38,6 +38,12 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         // 创建新实例避免 WLS 环境下状态残留
         /** @var \Weline\Acl\Model\Role $roleModel */
         $roleModel = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+        $listingData = new \Weline\Framework\DataObject\DataObject([
+            'role_model' => $roleModel,
+            'website_id' => 0,
+        ]);
+        ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+            ->dispatch('Weline_Acl::role_listing_filter', $listingData);
         if ($search = $this->request->getGet('search')) {
             $aclModelFields = implode(',', $roleModel->getModelFields());
             $roleModel->where('CONCAT(' . $aclModelFields . ')', '%' . $search . '%', 'like');
@@ -98,9 +104,17 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
                 // 创建新实例保存，避免状态污染
                 /** @var \Weline\Acl\Model\Role $newRole */
                 $newRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+                $listingData = new \Weline\Framework\DataObject\DataObject([
+                    'role_model' => null,
+                    'website_id' => 0,
+                ]);
+                ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+                    ->dispatch('Weline_Acl::role_listing_filter', $listingData);
+                $websiteId = (int)$listingData->getData('website_id');
                 $save_result = $newRole->setData([
                     \Weline\Acl\Model\Role::schema_fields_ROLE_NAME => $role_name,
                     \Weline\Acl\Model\Role::schema_fields_ROLE_DESCRIPTION => trim((string)($postData['role_description'] ?? '')),
+                    \Weline\Acl\Model\Role::schema_fields_WEBSITE_ID => $websiteId,
                 ])->save();
                 $savedRole = $newRole->getId() ? $newRole : $this->findRoleByName($role_name);
                 $savedRoleId = (int)($savedRole->getId() ?: (is_numeric($save_result) ? $save_result : 0));
@@ -215,6 +229,17 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         /** @var \Weline\Acl\Model\Acl $aclModel */
         $aclModel = ObjectManager::getInstance(\Weline\Acl\Model\Acl::class);
         $allRows = $aclModel->reset()->select()->fetchArray();
+        $rowsEvent = new \Weline\Framework\DataObject\DataObject([
+            'role_id' => (int)$role->getId(),
+            'website_id' => (int)$role->getData(\Weline\Acl\Model\Role::schema_fields_WEBSITE_ID),
+            'rows' => $allRows,
+        ]);
+        ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+            ->dispatch('Weline_Acl::acl_assignment_rows_after', $rowsEvent);
+        $filteredRows = $rowsEvent->getData('rows');
+        if (\is_array($filteredRows)) {
+            $allRows = $filteredRows;
+        }
         $selected = [];
         $accessRows = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class)
             ->reset()
@@ -370,6 +395,21 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
             $allRows,
         );
 
+        $saveBefore = new \Weline\Framework\DataObject\DataObject([
+            'role_id' => (int)$role_id,
+            'website_id' => (int)$role->getData(\Weline\Acl\Model\Role::schema_fields_WEBSITE_ID),
+            'source_ids' => $finalIds,
+            'allowed' => true,
+            'reject_source_ids' => [],
+            'message' => '',
+        ]);
+        ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+            ->dispatch('Weline_Acl::role_access_save_before', $saveBefore);
+        if (!(bool)$saveBefore->getData('allowed')) {
+            $this->getMessageManager()->addError((string)($saveBefore->getData('message') ?: __('权限分配被站级授权包拒绝')));
+            $this->redirect('*/backend/acl/role/assign', ['id' => $role_id]);
+        }
+
         $acls = [];
         foreach ($finalIds as $acl_id) {
             $acls[] = [
@@ -432,12 +472,25 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         ]);
     }
 
+    private function currentRoleWebsiteId(): int
+    {
+        $listingData = new \Weline\Framework\DataObject\DataObject([
+            'role_model' => null,
+            'website_id' => 0,
+        ]);
+        ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+            ->dispatch('Weline_Acl::role_listing_filter', $listingData);
+
+        return (int)$listingData->getData('website_id');
+    }
+
     private function findRoleByName(string $roleName): \Weline\Acl\Model\Role
     {
         /** @var \Weline\Acl\Model\Role $role */
         $role = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
         return $role->clearQuery()
             ->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, $roleName)
+            ->where(\Weline\Acl\Model\Role::schema_fields_WEBSITE_ID, $this->currentRoleWebsiteId())
             ->find()
             ->fetch();
     }
@@ -451,6 +504,12 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         
         /** @var \Weline\Acl\Model\Role $roleModel */
         $roleModel = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+        $listingData = new \Weline\Framework\DataObject\DataObject([
+            'role_model' => $roleModel,
+            'website_id' => 0,
+        ]);
+        ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+            ->dispatch('Weline_Acl::role_listing_filter', $listingData);
         
         if ($id !== '') {
             $roleModel->where(\Weline\Acl\Model\Role::schema_fields_ROLE_ID, (int)$id);

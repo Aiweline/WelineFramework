@@ -9,6 +9,7 @@ description: Design Weline module services, extract business rules from controll
 
 - Services own business rules and orchestration; Controllers/commands translate input/output and Models own persistence.
 - Keep dependencies explicit and module-local unless a published cross-module contract is required.
+- **Hard**：禁止跨模块强制引用对方具体类；通知/副作用用 Event/Observer 解耦。见 `global-constraints.md` §4。
 - Do not move UI rendering into services or hide domain behavior in Controllers, templates, or raw SQL.
 
 ## Workflow

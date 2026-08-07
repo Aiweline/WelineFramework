@@ -25,9 +25,12 @@ final class ProjectCertificateRenewalIntentStore
     private readonly string $directory;
     private readonly int $projectOwner;
     private readonly int $projectGroup;
+    private readonly ?\Closure $monotonicClock;
 
-    public function __construct(?string $projectRoot = null)
-    {
+    public function __construct(
+        ?string $projectRoot = null,
+        ?\Closure $monotonicClock = null,
+    ) {
         $requested = $projectRoot ?? (string)BP;
         $real = $requested !== '' && !\str_contains($requested, "\0")
             ? \realpath($requested)
@@ -54,6 +57,7 @@ final class ProjectCertificateRenewalIntentStore
         $this->projectGroup = \is_int($status['gid'] ?? null)
             ? (int)$status['gid']
             : -1;
+        $this->monotonicClock = $monotonicClock;
     }
 
     /**
@@ -63,7 +67,11 @@ final class ProjectCertificateRenewalIntentStore
      * @param array<string,mixed> $registration
      * @return array<string,mixed>
      */
-    public function enqueueFromRegistration(array $registration): array
+    public function enqueueFromRegistration(
+        array $registration,
+        float $waitTimeoutSeconds = 300.0,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $facts = $this->registrationFacts($registration);
         return $this->withLock(function () use ($facts): array {
@@ -123,7 +131,7 @@ final class ProjectCertificateRenewalIntentStore
             $state['updated_at'] = $now;
             $this->writeState($state);
             return $state;
-        });
+        }, $waitTimeoutSeconds, $deadlineMonotonic);
     }
 
     /**
@@ -134,19 +142,21 @@ final class ProjectCertificateRenewalIntentStore
         if (!\is_dir($this->directory) && !\is_link($this->directory)) {
             return null;
         }
-        $state = $this->readState();
-        $pending = \is_array($state['pending'] ?? null)
-            ? $state['pending']
-            : null;
-        if ($pending === null) {
-            return null;
-        }
-        return [
-            'intent' => $pending,
-            'last_ack' => \is_array($state['last_ack'] ?? null)
-                ? $state['last_ack']
-                : null,
-        ];
+        return $this->withLock(function (): ?array {
+            $state = $this->readState();
+            $pending = \is_array($state['pending'] ?? null)
+                ? $state['pending']
+                : null;
+            if ($pending === null) {
+                return null;
+            }
+            return [
+                'intent' => $pending,
+                'last_ack' => \is_array($state['last_ack'] ?? null)
+                    ? $state['last_ack']
+                    : null,
+            ];
+        });
     }
 
     /**
@@ -233,6 +243,8 @@ final class ProjectCertificateRenewalIntentStore
         array $registration,
         string $instanceName,
         array $plan,
+        float $waitTimeoutSeconds = 300.0,
+        ?float $deadlineMonotonic = null,
     ): ?string {
         $facts = $this->registrationFacts($registration);
         $this->assertInstanceName($instanceName);
@@ -291,10 +303,15 @@ final class ProjectCertificateRenewalIntentStore
             $state['updated_at'] = \time();
             $this->writeState($state);
             return (string)$pending['intent_id'];
-        });
+        }, $waitTimeoutSeconds, $deadlineMonotonic);
     }
 
-    public function recordFailure(string $intentId, string $message): void
+    public function recordFailure(
+        string $intentId,
+        string $message,
+        float $waitTimeoutSeconds = 300.0,
+        ?float $deadlineMonotonic = null,
+    ): void
     {
         $intentId = \strtolower(\trim($intentId));
         if (\preg_match('/\A[a-f0-9]{64}\z/D', $intentId) !== 1) {
@@ -322,7 +339,7 @@ final class ProjectCertificateRenewalIntentStore
             $state['pending'] = $pending;
             $state['updated_at'] = \time();
             $this->writeState($state);
-        });
+        }, $waitTimeoutSeconds, $deadlineMonotonic);
     }
 
     /**
@@ -337,6 +354,8 @@ final class ProjectCertificateRenewalIntentStore
         string $instanceName,
         string $action,
         array $status,
+        float $waitTimeoutSeconds = 300.0,
+        ?float $deadlineMonotonic = null,
     ): bool {
         $facts = $this->registrationFacts($registration);
         $this->assertInstanceName($instanceName);
@@ -452,7 +471,7 @@ final class ProjectCertificateRenewalIntentStore
             $state['updated_at'] = $acknowledgedAt;
             $this->writeState($state);
             return true;
-        });
+        }, $waitTimeoutSeconds, $deadlineMonotonic);
     }
 
     /** @param array<string,mixed> $registration @return array<string,mixed> */
@@ -973,12 +992,38 @@ final class ProjectCertificateRenewalIntentStore
                 'updated_at' => 0,
             ];
         }
+        return $this->decodeState($encoded, $expectedProjectUuid);
+    }
+
+    /** @return array<string,mixed> */
+    private function decodeState(
+        string $encoded,
+        string $expectedProjectUuid = '',
+    ): array {
         $envelope = \json_decode($encoded, true, 64, JSON_THROW_ON_ERROR);
+        $expectedEnvelope = ['payload', 'sha256'];
+        $actualEnvelope = \is_array($envelope) ? \array_keys($envelope) : [];
+        \sort($expectedEnvelope, SORT_STRING);
+        \sort($actualEnvelope, SORT_STRING);
         $state = \is_array($envelope['payload'] ?? null)
             ? $envelope['payload']
             : null;
-        $digest = \strtolower(\trim((string)($envelope['sha256'] ?? '')));
-        if (!\is_array($state)
+        $expectedState = [
+            'schema_version',
+            'project_uuid',
+            'sequence',
+            'pending',
+            'last_ack',
+            'updated_at',
+        ];
+        $actualState = \is_array($state) ? \array_keys($state) : [];
+        \sort($expectedState, SORT_STRING);
+        \sort($actualState, SORT_STRING);
+        $rawDigest = \is_array($envelope) ? ($envelope['sha256'] ?? null) : null;
+        $digest = \is_string($rawDigest) ? \strtolower(\trim($rawDigest)) : '';
+        if ($actualEnvelope !== $expectedEnvelope
+            || !\is_array($state)
+            || $actualState !== $expectedState
             || ($state['schema_version'] ?? null) !== self::SCHEMA_VERSION
             || \preg_match(
                 '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
@@ -986,8 +1031,12 @@ final class ProjectCertificateRenewalIntentStore
             ) !== 1
             || ($expectedProjectUuid !== ''
                 && !\hash_equals($expectedProjectUuid, (string)$state['project_uuid']))
-            || (int)($state['sequence'] ?? -1) < 0
-            || (int)($state['updated_at'] ?? -1) < 0
+            || !\is_int($state['sequence'] ?? null)
+            || (int)$state['sequence'] < 0
+            || !\is_int($state['updated_at'] ?? null)
+            || (int)$state['updated_at'] < 0
+            || !\is_string($rawDigest)
+            || !\hash_equals($rawDigest, $digest)
             || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
             || !\hash_equals(
                 $digest,
@@ -1009,6 +1058,18 @@ final class ProjectCertificateRenewalIntentStore
             throw new \RuntimeException('Project certificate acknowledgement is invalid.');
         }
         return $state;
+    }
+
+    private function cleanupStateRecoveryBackups(): void
+    {
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $this->stateFile(),
+            self::MAX_STATE_BYTES,
+            'project certificate renewal intent state',
+            function (string $encoded): void {
+                $this->decodeState($encoded);
+            },
+        );
     }
 
     /** @param array<string,mixed> $ack */
@@ -1071,18 +1132,72 @@ final class ProjectCertificateRenewalIntentStore
         );
     }
 
-    /** @template TResult @param \Closure():TResult $callback @return TResult */
-    private function withLock(\Closure $callback): mixed
+    /**
+     * @template TResult
+     * @param \Closure():TResult $callback
+     * @return TResult
+     */
+    private function withLock(
+        \Closure $callback,
+        float $waitTimeoutSeconds = 300.0,
+        ?float $deadlineMonotonic = null,
+    ): mixed
     {
+        $deadlineWait = $deadlineMonotonic === null
+            ? null
+            : $this->deadlineRemaining($deadlineMonotonic);
         $this->ensureDirectory();
+        $boundedWait = $deadlineWait === null
+            ? $waitTimeoutSeconds
+            : \min(
+                $waitTimeoutSeconds,
+                $deadlineWait,
+            );
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $this->directory . DIRECTORY_SEPARATOR . self::LOCK_FILE,
-            $callback,
+            function () use ($callback, $deadlineMonotonic): mixed {
+                if ($deadlineMonotonic !== null) {
+                    $this->deadlineRemaining($deadlineMonotonic);
+                }
+                $this->cleanupStateRecoveryBackups();
+                // The callback can atomically persist the queue. The deadline
+                // prevents a not-yet-started mutation; it must not convert a
+                // completed durable commit into a timeout and unsafe replay.
+                return $callback();
+            },
             fn ($handle, string $path): mixed => $this->preserveProjectOwnership(
                 $path,
                 $handle,
             ),
+            waitTimeoutSeconds: $boundedWait,
         );
+    }
+
+    private function deadlineRemaining(float $deadlineMonotonic): float
+    {
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Certificate renewal intent deadline is invalid.',
+            );
+        }
+        $now = $this->monotonicClock !== null
+            ? ($this->monotonicClock)()
+            : (\hrtime(true) / 1_000_000_000);
+        if ((!\is_int($now) && !\is_float($now))
+            || !\is_finite((float)$now)
+            || (float)$now < 0.0
+        ) {
+            throw new \RuntimeException(
+                'Certificate renewal intent monotonic clock is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - (float)$now;
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Certificate renewal intent deadline was exhausted.',
+            );
+        }
+        return $remaining;
     }
 
     private function ensureDirectory(): void

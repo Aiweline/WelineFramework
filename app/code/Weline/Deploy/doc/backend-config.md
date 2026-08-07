@@ -16,11 +16,13 @@
 deploy/backend/config
 ```
 
-首次上线该菜单和控制器后，需要在安全环境执行：
+首次上线该菜单和控制器后，需要在安全环境执行完整系统升级：
 
 ```bash
-php bin/w setup:upgrade --route
+php bin/w setup:upgrade
 ```
+
+仅新增/变更 Controller、只需重建路由图时，才使用 `php bin/w setup:upgrade --route`；部署与系统更新默认不要加 `--route`。
 
 不要在有未提交代码的开发工作区里触发部署或 Webhook 测试。
 
@@ -375,7 +377,7 @@ curl -s 'https://你的域名/~wh~.../version?project_id=12'
 - `运行 Composer`
   - 开启后部署会执行 `Composer 命令`。
 - `部署后命令`
-  - 可写 `php bin/w setup:upgrade --route && php bin/w server:reload -r` 这类后置动作。
+  - 可写 `php bin/w setup:upgrade && php bin/w server:reload -r` 这类后置动作。系统更新用完整 `setup:upgrade`；不要默认加 `--route`。
 
 ## 7. 触发模式
 

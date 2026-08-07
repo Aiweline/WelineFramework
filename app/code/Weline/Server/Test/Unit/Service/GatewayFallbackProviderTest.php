@@ -211,6 +211,58 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertStringNotContainsString('--control-token=', $joined);
     }
 
+    public function testExplicitPureWlsRunsOnlyTheCertificateRetirementAgent(): void
+    {
+        $context = $this->context([], ['requested_mode' => 'wls'], 'wls');
+        $provider = new GatewayProvider();
+
+        self::assertTrue($provider->isEnabled($context));
+        $command = $provider->buildCommand(1, $context);
+        self::assertContains('--certificate-retirement-only', $command->arguments);
+        self::assertNotContains('--control-token=unit-control-token', $command->arguments);
+    }
+
+    public function testPersistedPureWlsWithoutRequestedModeCannotJoinAGateway(): void
+    {
+        $provider = new GatewayProvider();
+        $command = $provider->buildCommand(1, $this->context([], [], 'wls'));
+
+        self::assertContains('--certificate-retirement-only', $command->arguments);
+    }
+
+    public function testPureWlsRetirementAgentReplaysTheFullOutboxEveryHeartbeat(): void
+    {
+        $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . 'app/code/Weline/Server/Console/Server/Gateway/Agent.php';
+        $lines = \file($path);
+        self::assertIsArray($lines);
+        $loop = new \ReflectionMethod(Agent::class, 'runCertificateRetirementOnlyLoop');
+        $loopSource = \implode('', \array_slice(
+            $lines,
+            $loop->getStartLine() - 1,
+            $loop->getEndLine() - $loop->getStartLine() + 1,
+        ));
+        self::assertStringContainsString('self::HEARTBEAT_SECONDS', $loopSource);
+        self::assertStringContainsString(
+            'pendingRetirementIntents($now + 0.25)',
+            $loopSource,
+        );
+        self::assertStringContainsString("'retirements'", $loopSource);
+        self::assertStringContainsString('startDesiredStateJob(', $loopSource);
+
+        $worker = new \ReflectionMethod(Agent::class, 'executeDesiredStateWorker');
+        $workerSource = \implode('', \array_slice(
+            $lines,
+            $worker->getStartLine() - 1,
+            $worker->getEndLine() - $worker->getStartLine() + 1,
+        ));
+        self::assertStringContainsString(
+            'replayPendingCertificateRetirements(75.0, 8)',
+            $workerSource,
+        );
+        self::assertStringContainsString("if (\$action !== 'retirements')", $workerSource);
+    }
+
     public function testPromotionAgentWaitsForAuthenticatedJoinBackendBeforeRegistrationReplay(): void
     {
         self::assertFalse(Agent::canReplayRegistration(true, 'NOT_REQUIRED'));
@@ -601,6 +653,148 @@ final class GatewayFallbackProviderTest extends TestCase
             ],
         ));
         $server->close();
+    }
+
+    public function testFallbackReversibleDrainKeepsCredentialUntilFinalDisable(): void
+    {
+        $drain = new \ReflectionMethod(
+            ServiceOrchestrator::class,
+            'handleRunningGatewayFallbackDrain',
+        );
+        $lines = \file($drain->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $drain->getStartLine() - 1,
+            $drain->getEndLine() - $drain->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString('beginDrain(', $source);
+        self::assertStringContainsString('sendGatewayFallbackListenerTransition(', $source);
+        self::assertStringContainsString('restoreActiveAfterFailedDrain(', $source);
+        self::assertStringContainsString('LISTENER_PHASE_DRAIN_PREPARED', $source);
+        self::assertStringNotContainsString('suspendGatewayFallbackCredential(', $source);
+        self::assertStringNotContainsString('resumeGatewayFallbackCredential(', $source);
+        self::assertStringNotContainsString('markDraining(', $source);
+        self::assertStringNotContainsString('closeGatewayFallbackListener(', $source);
+        self::assertStringNotContainsString('$this->sendDrainToInstance($instance, 300.0);', $source);
+
+        $ack = new \ReflectionMethod(
+            ServiceOrchestrator::class,
+            'handleGatewayFallbackListenerAck',
+        );
+        $ackSource = \implode('', \array_slice(
+            $lines,
+            $ack->getStartLine() - 1,
+            $ack->getEndLine() - $ack->getStartLine() + 1,
+        ));
+        self::assertStringContainsString('validateGatewayFallbackListenerAck(', $ackSource);
+        self::assertStringContainsString('acknowledgeDrain(', $ackSource);
+        self::assertStringContainsString('gatewayFallbackServingFenceDigest(', $ackSource);
+        self::assertStringContainsString('compensateGatewayFallbackToDrain(', $ackSource);
+        self::assertStringContainsString('closeGatewayFallbackListener(', $ackSource);
+        self::assertStringNotContainsString('suspendGatewayFallbackCredential(', $ackSource);
+    }
+
+    public function testFallbackWorkerSupportsExactReversibleListenerTransition(): void
+    {
+        $transition = \str_repeat('a', 32);
+        $pidNamespaceId = PHP_OS_FAMILY === 'Linux'
+            ? 'pid:[4026531836]'
+            : '';
+        $identity = [
+            'schema' => 'wls-gateway-fallback-listener/1',
+            'project_uuid' => '123e4567-e89b-42d3-a456-426614174099',
+            'wls_instance' => 'fallback-worker-contract',
+            'role' => 'gateway_fallback',
+            'slot_id' => 'gateway_fallback#1',
+            'service_generation' => 9,
+            'service_lease_id' => \str_repeat('1', 32),
+            'worker_pid' => 22001,
+            'worker_process_birth' => \str_repeat('2', 64),
+            'worker_pid_namespace_id' => $pidNamespaceId,
+            'worker_launch_id' => \str_repeat('3', 32),
+            'master_pid' => 22000,
+            'master_epoch' => 7,
+            'master_launch_id' => \str_repeat('4', 32),
+            'master_process_birth' => \str_repeat('5', 64),
+            'master_pid_namespace_id' => $pidNamespaceId,
+            'port' => 24567,
+            'host_lease_instance' => 'fallback-worker-contract-gateway-fallback',
+            'host_lease_id' => \str_repeat('6', 32),
+            'host_boot_id' => \str_repeat('7', 64),
+            'bind_host' => '127.0.0.1',
+            'listener_proof_digest' => \str_repeat('8', 64),
+            'listener_transport' => 'posix_inherited_fd',
+            'listener_receipt_digest' => \str_repeat('9', 64),
+        ];
+        $digest = ControlMessage::gatewayFallbackListenerActionDigest(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+            $transition,
+            '',
+            $identity,
+        );
+        $encoded = ControlMessage::gatewayFallbackListenerTransition(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+            $transition,
+            $digest,
+            '',
+            $identity,
+            300,
+        );
+        $message = \json_decode(\trim($encoded), true, 32, JSON_THROW_ON_ERROR);
+        self::assertSame(ControlMessage::TYPE_DRAIN, $message['type']);
+        self::assertSame($transition, $message['transition_id']);
+        self::assertSame('DRAINING', $message['target_listener_state']);
+        self::assertSame($digest, $message['action_digest']);
+        self::assertSame($identity, $message['identity']);
+
+        $ack = ControlMessage::gatewayFallbackListenerAck(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+            $transition,
+            $digest,
+            '',
+            $identity,
+            true,
+        );
+        $receipt = \json_decode(\trim($ack), true, 32, JSON_THROW_ON_ERROR);
+        self::assertSame(
+            ControlMessage::TYPE_GATEWAY_FALLBACK_LISTENER_ACK,
+            $receipt['type'],
+        );
+        self::assertSame('DRAINING', $receipt['target_listener_state']);
+        self::assertSame('DRAINING', $receipt['listener_state']);
+
+        $worker = (string)\file_get_contents(BP . 'app/code/Weline/Server/bin/worker_ssl.php');
+        self::assertStringContainsString('case \\Weline\\Server\\IPC\\ControlMessage::TYPE_UNDRAIN:', $worker);
+        self::assertStringContainsString('$gatewayFallbackListenerDraining', $worker);
+        self::assertStringContainsString(
+            'rejectWithoutAdmission: $gatewayFallbackListenerDraining',
+            $worker,
+        );
+        self::assertStringContainsString('gatewayFallbackListenerAck(', $worker);
+        self::assertStringContainsString('if (!$isGatewayFallbackWorker)', $worker);
+        self::assertStringNotContainsString('$isGatewayFallbackWorker && $ipcDraining', $worker);
+        $reversibleStart = \strpos(
+            $worker,
+            'case \\Weline\\Server\\IPC\\ControlMessage::TYPE_DRAIN:',
+        );
+        $terminalStart = \strpos($worker, '// 排水模式：', $reversibleStart ?: 0);
+        self::assertIsInt($reversibleStart);
+        self::assertIsInt($terminalStart);
+        $reversibleBranch = \substr(
+            $worker,
+            $reversibleStart,
+            $terminalStart - $reversibleStart,
+        );
+        self::assertStringNotContainsString('$ipcDraining = true', $reversibleBranch);
+        self::assertStringNotContainsString('beginDrain()', $reversibleBranch);
+        self::assertStringNotContainsString('initiateGoaway()', $reversibleBranch);
+        self::assertStringNotContainsString('drainingComplete(', $reversibleBranch);
     }
 
     /**

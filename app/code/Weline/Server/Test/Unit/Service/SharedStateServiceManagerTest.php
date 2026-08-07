@@ -15,9 +15,50 @@ final class SharedStateServiceManagerTest extends TestCase
 {
     public function testEnsureReusesHealthySharedService(): void
     {
-        $manager = new class extends SharedStateServiceManager {
+        $registry = new class extends SharedStateServiceRegistry {
+            /** @var array<string,array<string,mixed>> */
+            public array $records = [];
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                $previous = $this->records[$role] ?? [];
+                $record = self::bindLifecycleGeneration(
+                    $role,
+                    $updater($previous),
+                    $previous,
+                );
+                $this->records[$role] = $record;
+
+                return $record;
+            }
+
+            public function getConsumers(string $role): array
+            {
+                return [];
+            }
+
+            public function touchConsumer(string $role, string $instanceName): void
+            {
+            }
+        };
+        $manager = new class($registry) extends SharedStateServiceManager {
             public array $runtimeFiles = [];
             public array $launchCalls = [];
+
+            public function __construct(
+                private readonly SharedStateServiceRegistry $registry,
+            ) {
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
 
             protected function readRuntimeFile(string $role): array
             {
@@ -159,6 +200,18 @@ final class SharedStateServiceManagerTest extends TestCase
             public function getRecord(string $role): array
             {
                 return [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                return self::bindLifecycleGeneration(
+                    $role,
+                    $updater([]),
+                );
+            }
+
+            public function touchConsumer(string $role, string $instanceName): void
+            {
             }
 
             public function getConsumers(string $role): array
@@ -486,11 +539,44 @@ final class SharedStateServiceManagerTest extends TestCase
     public function testEnsureAcceptsLegacyScopedReusableProcessesOwnedByCurrentProject(): void
     {
         $scope = MasterProcess::getProjectScopeToken();
-        $manager = new class($scope) extends SharedStateServiceManager {
+        $registry = new class extends SharedStateServiceRegistry {
+            /** @var array<string,array<string,mixed>> */
+            public array $records = [];
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                $previous = $this->records[$role] ?? [];
+                $record = self::bindLifecycleGeneration(
+                    $role,
+                    $updater($previous),
+                    $previous,
+                );
+                $this->records[$role] = $record;
+                return $record;
+            }
+
+            public function getConsumers(string $role): array
+            {
+                return [];
+            }
+        };
+        $manager = new class($scope, $registry) extends SharedStateServiceManager {
             public array $runtimeFiles = [];
 
-            public function __construct(private readonly string $scope)
+            public function __construct(
+                private readonly string $scope,
+                private readonly SharedStateServiceRegistry $registry,
+            ) {
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
             {
+                return $this->registry;
             }
 
             protected function readRuntimeFile(string $role): array
@@ -1092,6 +1178,472 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame(0, $result['local_ref_count'] ?? null);
         self::assertFalse((bool) ($result['shutdown_scheduled'] ?? true));
         self::assertSame(['port' => 19970], $result['runtime'] ?? null);
+    }
+
+    public function testGracefulShutdownRevalidatesTheSelectedLifecycleBeforeSending(): void
+    {
+        $role = ControlMessage::ROLE_SESSION_SERVER;
+        $selected = SharedStateServiceRegistry::bindLifecycleGeneration($role, [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'pid' => 4511,
+            'token_file_name' => 'session_server.token',
+            'started_at' => '2026-08-07T09:00:00+08:00',
+            'process_name' => 'weline-wls-session-shared-stop',
+            'instance_name' => 'shared-session-stop',
+            'service_instance_name' => 'shared-session-stop',
+        ]);
+        $replacement = $selected;
+        $replacement['pid'] = 4512;
+        $replacement['started_at'] = '2026-08-07T09:00:01+08:00';
+        unset(
+            $replacement['lifecycle_schema'],
+            $replacement['lifecycle_generation'],
+            $replacement['lifecycle_identity_digest'],
+        );
+        $replacement = SharedStateServiceRegistry::bindLifecycleGeneration(
+            $role,
+            $replacement,
+            $selected,
+        );
+        $reusedPidReplacement = $selected;
+        $reusedPidReplacement['started_at'] = '2026-08-07T09:00:02+08:00';
+        unset(
+            $reusedPidReplacement['lifecycle_schema'],
+            $reusedPidReplacement['lifecycle_generation'],
+            $reusedPidReplacement['lifecycle_identity_digest'],
+        );
+        $reusedPidReplacement = SharedStateServiceRegistry::bindLifecycleGeneration(
+            $role,
+            $reusedPidReplacement,
+            $selected,
+        );
+        $registry = new class($selected) extends SharedStateServiceRegistry {
+            /** @param array<string,mixed> $record */
+            public function __construct(public array $record)
+            {
+            }
+
+            public function getRecord(string $role): array
+            {
+                return $this->record;
+            }
+        };
+        $manager = new class($registry, $selected) extends SharedStateServiceManager {
+            public bool $shutdownSent = false;
+            /** @var array<string,mixed> */
+            public array $current;
+
+            /** @param array<string,mixed> $current */
+            public function __construct(
+                private readonly SharedStateServiceRegistry $registry,
+                array $current,
+            ) {
+                $this->current = $current;
+            }
+
+            /** @param array<string,mixed> $selected */
+            public function shutdownSelected(array $selected): bool
+            {
+                return $this->forceStopSharedService($selected);
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return $this->current;
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                return true;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                return [
+                    'in_use' => true,
+                    'reusable' => true,
+                    'pid' => (int)($this->current['pid'] ?? 0),
+                    'port' => (int)($this->current['port'] ?? 0),
+                    'role' => (string)($this->current['role'] ?? ''),
+                    'token_file_name' => (string)($this->current['token_file_name'] ?? ''),
+                    'process_name' => (string)($this->current['process_name'] ?? ''),
+                    'instance_name' => (string)($this->current['instance_name'] ?? ''),
+                ];
+            }
+
+            protected function sendSharedServiceServerShutdown(array $runtime): bool
+            {
+                $this->shutdownSent = true;
+                return false;
+            }
+
+            protected function probeTcpPortInUse(string $host, int $port, float $timeoutSec = 0.15): bool
+            {
+                return true;
+            }
+        };
+
+        self::assertFalse($manager->shutdownSelected($selected));
+        self::assertTrue($manager->shutdownSent, 'The unchanged selected generation should reach graceful shutdown.');
+
+        $manager->shutdownSent = false;
+        $manager->current = $replacement;
+        $registry->record = $replacement;
+
+        self::assertFalse($manager->shutdownSelected($selected));
+        self::assertFalse($manager->shutdownSent, 'A replacement generation must never receive the old shutdown command.');
+
+        $manager->shutdownSent = false;
+        $manager->current = $reusedPidReplacement;
+        $registry->record = $reusedPidReplacement;
+
+        self::assertFalse($manager->shutdownSelected($selected));
+        self::assertFalse(
+            $manager->shutdownSent,
+            'A replacement generation that reused the old numeric PID must still be rejected.',
+        );
+    }
+
+    public function testForceRestartSelectsAnExactLifecycleBeforeGracefulShutdown(): void
+    {
+        $role = ControlMessage::ROLE_SESSION_SERVER;
+        $registry = new class extends SharedStateServiceRegistry {
+            /** @var array<string,array<string,mixed>> */
+            public array $records = [];
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                $previous = $this->records[$role] ?? [];
+                $record = self::bindLifecycleGeneration(
+                    $role,
+                    $updater($previous),
+                    $previous,
+                );
+                $this->records[$role] = $record;
+                return $record;
+            }
+        };
+        $manager = new class($registry) extends SharedStateServiceManager {
+            /** @var array<string,array<string,mixed>> */
+            public array $runtimeFiles = [];
+            /** @var array<string,mixed> */
+            public array $selectedForStop = [];
+
+            public function __construct(private readonly SharedStateServiceRegistry $registry)
+            {
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return $this->runtimeFiles[$role] ?? [];
+            }
+
+            protected function writeRuntimeFile(string $role, array $runtime): void
+            {
+                $this->runtimeFiles[$role] = $runtime;
+            }
+
+            protected function forceStopReusedService(array $definition, array $runtime): bool
+            {
+                $this->selectedForStop = $runtime;
+                return SharedStateServiceRegistry::hasExactLifecycleBinding(
+                    (string)$definition['role'],
+                    $runtime,
+                );
+            }
+        };
+        $definition = [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'token_file_name' => 'session_server.token',
+            'process_name' => 'weline-wls-session-force-restart',
+            'service_instance_name' => 'shared-session-force-restart',
+        ];
+        $probe = [
+            'healthy' => true,
+            'runtime' => [
+                'role' => $role,
+                'host' => '127.0.0.1',
+                'port' => 19970,
+                'pid' => 4521,
+                'token_file_name' => 'session_server.token',
+                'process_name' => 'weline-wls-session-force-restart',
+                'instance_name' => 'shared-session-force-restart',
+                'service_instance_name' => 'shared-session-force-restart',
+            ],
+        ];
+
+        $prepared = $this->invokePrivateMethod(
+            $manager,
+            'prepareSharedService',
+            $definition,
+            'system',
+            false,
+            true,
+            $probe,
+            true,
+        );
+
+        self::assertSame('pending', $prepared['status'] ?? null);
+        self::assertTrue(SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $manager->selectedForStop,
+        ));
+        self::assertSame(
+            $manager->selectedForStop['lifecycle_identity_digest'] ?? null,
+            $registry->getRecord($role)['lifecycle_identity_digest'] ?? null,
+        );
+    }
+
+    public function testAuthenticatedInspectionAloneCannotAuthorizePidFallbackKill(): void
+    {
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('BP')) {
+            \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('IS_WIN')) {
+            \define('IS_WIN', PHP_OS_FAMILY === 'Windows');
+        }
+
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $process = \proc_open(
+            [PHP_BINARY, '-r', 'usleep(10000000);'],
+            [
+                0 => ['file', $null, 'r'],
+                1 => ['file', $null, 'a'],
+                2 => ['file', $null, 'a'],
+            ],
+            $pipes,
+            \getcwd(),
+            null,
+            ['bypass_shell' => true],
+        );
+        self::assertIsResource($process);
+        $status = \proc_get_status($process);
+        $pid = (int)($status['pid'] ?? 0);
+        self::assertGreaterThan(0, $pid);
+
+        $manager = new class extends SharedStateServiceManager {
+            public int $observedPid = 0;
+
+            public function forceStopForTest(array $record): bool
+            {
+                return $this->forceStopSharedService($record);
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                return true;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                return [
+                    'in_use' => true,
+                    'reusable' => true,
+                    'pid' => $this->observedPid,
+                    'role' => (string)($definition['role'] ?? ''),
+                    'process_name' => 'weline-wls-session-shared-ptest',
+                    'instance_name' => 'weline-shared-ptest',
+                ];
+            }
+
+            protected function sendSharedServiceServerShutdown(array $runtime): bool
+            {
+                return false;
+            }
+
+            protected function probeTcpPortInUse(string $host, int $port, float $timeoutSec = 0.15): bool
+            {
+                return true;
+            }
+        };
+        $manager->observedPid = $pid;
+
+        try {
+            self::assertFalse($manager->forceStopForTest([
+                'role' => ControlMessage::ROLE_SESSION_SERVER,
+                'host' => '127.0.0.1',
+                'port' => 29998,
+                'token_file_name' => 'session_server.token',
+            ]));
+            self::assertTrue(
+                (bool)(\proc_get_status($process)['running'] ?? false),
+                'A reusable-looking PID without process-birth proof must remain untouched.',
+            );
+        } finally {
+            $current = \proc_get_status($process);
+            if ((bool)($current['running'] ?? false)) {
+                @\proc_terminate($process);
+            }
+            @\proc_close($process);
+        }
+    }
+
+    public function testFailedSharedSidecarStopRetainsRuntimeIdentityForRepair(): void
+    {
+        $manager = new class extends SharedStateServiceManager {
+            public bool $runtimeRemoved = false;
+
+            public function stopReusedForTest(array $definition, array $runtime): bool
+            {
+                return $this->forceStopReusedService($definition, $runtime);
+            }
+
+            protected function forceStopSharedService(array $record): bool
+            {
+                return false;
+            }
+
+            protected function removeRuntimeFile(string $role): void
+            {
+                $this->runtimeRemoved = true;
+            }
+
+            protected function probeTcpPortInUse(string $host, int $port, float $timeoutSec = 0.15): bool
+            {
+                return true;
+            }
+        };
+
+        self::assertFalse($manager->stopReusedForTest(
+            [
+                'role' => ControlMessage::ROLE_SESSION_SERVER,
+                'host' => '127.0.0.1',
+                'port' => 19970,
+                'token_file_name' => 'session_server.token',
+            ],
+            [
+                'pid' => 4312,
+                'process_name' => 'weline-wls-session-shared-ptest',
+            ],
+        ));
+        self::assertFalse(
+            $manager->runtimeRemoved,
+            'A failed stop must retain the durable runtime identity for retry/repair.',
+        );
+    }
+
+    public function testFailedSharedSidecarStopRetainsRegistryRecordForRepair(): void
+    {
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('BP')) {
+            \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('APP_PATH')) {
+            \define('APP_PATH', BP . 'app' . DS);
+        }
+        if (!\defined('APP_CODE_PATH')) {
+            \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
+        }
+        if (!\defined('APP_ETC_PATH')) {
+            \define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
+        }
+        if (!\defined('DEV_PATH')) {
+            \define('DEV_PATH', BP . 'dev' . DS);
+        }
+        if (!\defined('PUB')) {
+            \define('PUB', BP . 'pub' . DS);
+        }
+        $registry = new class extends SharedStateServiceRegistry {
+            public bool $removed = false;
+            /** @var array<string,array<string,mixed>> */
+            public array $records = [];
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                $previous = $this->records[$role] ?? [];
+                $record = self::bindLifecycleGeneration(
+                    $role,
+                    $updater($previous),
+                    $previous,
+                );
+                $this->records[$role] = $record;
+
+                return $record;
+            }
+
+            public function getConsumers(string $role): array
+            {
+                return [];
+            }
+
+            public function removeRecord(string $role): void
+            {
+                $this->removed = true;
+            }
+        };
+        $manager = new class extends SharedStateServiceManager {
+            /** @var array<string,array<string,mixed>> */
+            public array $runtimeFiles = [];
+
+            public function shutdownForTest(
+                string $role,
+                array $options,
+                SharedStateServiceRegistry $registry,
+            ): bool {
+                return $this->shutdownIfUnusedNow($role, $options, $registry);
+            }
+
+            protected function forceStopReusedService(array $definition, array $runtime): bool
+            {
+                return false;
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return $this->runtimeFiles[$role] ?? [];
+            }
+
+            protected function writeRuntimeFile(string $role, array $runtime): void
+            {
+                $this->runtimeFiles[$role] = $runtime;
+            }
+        };
+
+        self::assertFalse($manager->shutdownForTest(
+            ControlMessage::ROLE_SESSION_SERVER,
+            [
+                'env_config' => self::sessionPortEnv(),
+                'runtime' => [
+                    'host' => '127.0.0.1',
+                    'port' => 19970,
+                    'pid' => 4312,
+                ],
+            ],
+            $registry,
+        ));
+        self::assertFalse(
+            $registry->removed,
+            'A live sidecar whose stop failed must remain discoverable for repair.',
+        );
     }
 
     /**

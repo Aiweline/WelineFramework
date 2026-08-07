@@ -11,7 +11,7 @@ use Weline\Server\Service\Contract\ServerInstanceInfo;
 
 final class StopCommandResidualCleanupRetryTest extends TestCase
 {
-    public function testResidualCleanupRetriesWhilePrefixOnlyWorkerStillRunning(): void
+    public function testResidualCleanupRetriesWhileVerificationStillFindsAResidualPid(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -116,7 +116,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
         self::assertNotSame('', trim($output));
     }
 
-    public function testResidualCleanupDoesNotDispatchKillForExitedHistoricalPids(): void
+    public function testCleanupPassUsesExactGenerationWithoutDispatchingHistoricalPids(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -135,46 +135,46 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
         );
 
         $stop = new class extends Stop {
-            public int $runningChecks = 0;
+            /** @var list<string> */
+            public array $retiredInstances = [];
 
             public function runCleanupPass(string $name, ServerInstanceInfo $info): int
             {
                 return $this->runResidualCleanupPass($name, $info, true);
             }
 
-            protected function collectResidualCleanupCandidatePids(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): array
+            protected function retireExactInstanceGeneration(string $name): array
             {
-                unset($name, $info, $includeSharedState);
+                $this->retiredInstances[] = $name;
 
-                return [701, 702];
+                return [
+                    'terminated' => 0,
+                    'released' => 0,
+                    'unreleased' => 0,
+                    'reasons' => [],
+                ];
             }
 
-            protected function collectRunningResidualPids(array $pids, array $trustedPids = []): array
+            protected function terminateRecoverableProcessIds(array $pids): int
             {
-                unset($trustedPids);
-                $this->runningChecks++;
-                \PHPUnit\Framework\Assert::assertSame([701, 702], \array_values($pids));
+                unset($pids);
 
-                return [];
+                throw new \RuntimeException('historical PID list must not authorize termination');
             }
 
             protected function terminateCurrentInstanceProcessPrefixes(string $name, bool $includeSharedState = false): int
             {
                 unset($name, $includeSharedState);
 
-                return 0;
-            }
-
-            protected function cleanupStaleRecoverableProcessPidFiles(): void
-            {
+                throw new \RuntimeException('process-name prefixes must not authorize termination');
             }
         };
 
         self::assertSame(0, $stop->runCleanupPass('default', $info));
-        self::assertSame(1, $stop->runningChecks);
+        self::assertSame(['default'], $stop->retiredInstances);
     }
 
-    public function testResidualCleanupUsesPrefixFallbackOnEveryAttempt(): void
+    public function testResidualCleanupRetriesWhilePortVerificationRemainsIncomplete(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -193,8 +193,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
         );
 
         $stop = new class extends Stop {
-            /** @var list<bool> */
-            public array $prefixFallbackFlags = [];
+            public int $attempts = 0;
 
             public function runResidualCleanup(string $name, ServerInstanceInfo $info): void
             {
@@ -229,8 +228,8 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 bool $allowPrefixFallback = true,
                 bool $includeSharedState = false
             ): int {
-                unset($name, $info, $quiet);
-                $this->prefixFallbackFlags[] = $allowPrefixFallback;
+                unset($name, $info, $quiet, $allowPrefixFallback, $includeSharedState);
+                ++$this->attempts;
 
                 return 0;
             }
@@ -239,7 +238,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
             {
                 unset($name, $info, $includeSharedState);
 
-                return \count($this->prefixFallbackFlags) === 1 ? [80] : [];
+                return $this->attempts === 1 ? [80] : [];
             }
 
             protected function cleanupRecoverableConfiguredPorts(array $ports, ?ServerInstanceInfo $info = null, bool $includeSharedState = false): int
@@ -283,10 +282,10 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
             }
         }
 
-        self::assertSame([true, true], $stop->prefixFallbackFlags);
+        self::assertSame(2, $stop->attempts);
     }
 
-    public function testResidualCleanupKeepsPrefixVerificationAfterPidCleanup(): void
+    public function testResidualCleanupKeepsPrefixDiscoveryForPostLeaseVerification(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -456,7 +455,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
         self::assertSame(0, $stop->portChecks);
     }
 
-    public function testResidualCleanupStillUsesPrefixVerificationWhenNoPidWasHandled(): void
+    public function testResidualCleanupUsesPrefixDiscoveryOnlyForVerificationWhenNothingWasTerminated(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -546,7 +545,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
         self::assertSame([true], $stop->prefixVerificationFlags);
     }
 
-    public function testResidualCleanupRefreshesPortOnlyResidueBeforeReportingFailure(): void
+    public function testPortOnlyResidueFailsClosedAndKeepsCleanupIncomplete(): void
     {
         $info = new ServerInstanceInfo(
             'default',
@@ -686,8 +685,8 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
             }
         }
 
-        self::assertTrue($completed);
-        self::assertGreaterThanOrEqual(2, $stop->portProbeCount);
-        self::assertStringNotContainsString('残留清理未完全完成', $output);
+        self::assertFalse($completed);
+        self::assertSame(1, $stop->portProbeCount);
+        self::assertStringContainsString('残留清理未完全完成', $output);
     }
 }

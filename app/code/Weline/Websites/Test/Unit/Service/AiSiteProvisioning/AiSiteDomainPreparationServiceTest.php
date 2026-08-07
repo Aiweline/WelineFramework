@@ -50,7 +50,7 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
         $websiteTargetResolver = $this->createMock(AiSiteWebsiteTargetResolver::class);
         $websiteTargetResolver->expects(self::once())
             ->method('resolve')
-            ->with(self::isInstanceOf(AiSiteProvisioningRequest::class), 'demo-site.weline.test')
+            ->with(self::isInstanceOf(AiSiteProvisioningRequest::class), 'demo-site.weline.test', '')
             ->willReturn(21);
 
         $beforeExternalPurchaseCalled = false;
@@ -63,6 +63,7 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
             $hostsSyncService,
             $certificateService,
             $websiteTargetResolver,
+            $this->unusedWebsite(),
         ))->prepare(
             $this->request(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, 'demo-site.weline.test'),
             static function () use (&$beforeExternalPurchaseCalled): void {
@@ -116,6 +117,7 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
             $hostsSyncService,
             $certificateService,
             $websiteTargetResolver,
+            $this->unusedWebsite(),
         ))->prepare(
             $this->request(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, 'demo-site.weline.test')
         );
@@ -249,6 +251,7 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
             $hostsSyncService,
             $certificateService,
             $websiteTargetResolver,
+            $this->unusedWebsite(),
         );
     }
 
@@ -353,6 +356,7 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
             ->onlyMethods([
                 'clearData',
                 'loadByDomainAndSubPath',
+                'findConflict',
                 'getDomainId',
                 'getWebsiteId',
                 'getStatus',
@@ -368,6 +372,7 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
             ->getMock();
         $binding->method('clearData')->willReturnSelf();
         $binding->method('loadByDomainAndSubPath')->willReturnSelf();
+        $binding->method('findConflict')->willReturn(null);
         $binding->method('getDomainId')->willReturnCallback(static function () use (&$persisted): int {
             return $persisted ? 1 : 0;
         });
@@ -390,6 +395,24 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
         });
 
         return $binding;
+    }
+
+    private function unusedWebsite(): Website|MockObject
+    {
+        $website = $this->getMockBuilder(Website::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['clearData', 'load', 'getWebsiteId', 'getUrl', 'setUrl', 'save'])
+            ->addMethods(['clearQuery'])
+            ->getMock();
+        $website->method('clearData')->willReturnSelf();
+        $website->method('clearQuery')->willReturnSelf();
+        $website->method('load')->willReturnSelf();
+        $website->method('getWebsiteId')->willReturn(0);
+        $website->method('getUrl')->willReturn('');
+        $website->method('setUrl')->willReturnSelf();
+        $website->method('save')->willReturn(1);
+
+        return $website;
     }
 
     private function accountService(DomainRegistrarInterface $adapter): AiSiteDomainPurchaseAccountService

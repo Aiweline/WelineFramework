@@ -367,16 +367,20 @@ return [
                 'context_epoch' => '1',
             ],
         ],
-        // 边缘协议终结适配器（整段可省略：默认纯 PHP WLS，零下载、零编译）。
-        // wls（默认）：自研 HTTP/2 与可用时自动协商的 native HTTP/3。
-        // nginx：显式安装并启用的可选性能边缘；Windows 官方构建仅作兼容验证。
+        // WLS 2.0 边缘模式（整段可省略：默认 auto）。
+        // auto：加入可信宿主级 Gateway；不存在时尝试建立，无法建立则退到纯 WLS 高端口。
+        // gateway：必须建立或加入宿主级 Gateway；wls：完全不操作 Gateway，直接运行纯 WLS。
+        // adapter 是运行时派生结果，不再作为 WLS 2.0 用户模式开关；旧 adapter=wls/nginx
+        // 仅用于兼容迁移，分别映射到显式纯 WLS 和待显式 promote 的 legacy Nginx。
         'edge' => [
-            'adapter' => 'wls', // 默认 wls；需要外部/托管 Nginx 时显式改为 nginx
-            // 证书续签后：托管 Nginx 优先自动 reload；宿主机 Nginx 请配置下方白名单命令。
-            // 白名单：nginx -s reload | systemctl reload nginx | /绝对路径/nginx -s reload
-            'reload_command' => '', // 宿主机 Nginx 示例：'systemctl reload nginx' 或 'nginx -s reload'
+            'mode' => 'auto', // auto|gateway|wls
+            // 仅 legacy 项目级 Nginx 的证书续签兼容项；WLS 2.0 不探测、停止、修改或
+            // reload 未知宿主进程。白名单：nginx -s reload | systemctl reload nginx |
+            // /绝对路径/nginx -s reload。
+            'reload_command' => '',
             'reload_timeout_sec' => 30,
-            // 托管 Nginx 必须显式安装并 opt-in；普通 server:start 从不下载或编译它。
+            // 以下是 WLS 1.x/显式项目级 managed-Nginx 兼容配置；WLS 2.0 共享 Gateway
+            // 使用宿主 A/B 包和锁定 Nginx，不从这里继承项目级 install/runtime 目录。
             'nginx' => [
                 // 只有 true 表示 WLS 拥有生命周期；auto/false 不把二进制存在当 live edge。
                 'managed' => false,
@@ -543,6 +547,8 @@ return [
             'worker_reload_min_ready' => 'auto',
             // drain_timeout_sec：滚动重启/单实例 DRAIN 时 Master 等待 draining_complete 的上限（秒）；下发给 Worker 作强制收尾上限。
             'drain_timeout_sec' => 5,
+            // stop_all_drain_wait_sec：实例主动停机的连接感知排空硬截止（秒）；默认 300，Master 额外保留 1 秒收取最终计数 ACK。
+            'stop_all_drain_wait_sec' => 300,
             // reload_drain_timeout_sec：代码重载专用 DRAIN 上限。长连接会主动断开重连，不允许把滚动重载拖到分钟级。
             'reload_drain_timeout_sec' => 1,
             // maintenance_connection_drain_timeout_sec：启用维护时，Dispatcher 已切至维护 Worker 后，等待各业务 Worker 排空存量 TCP 再 ACK 的上限（秒）。

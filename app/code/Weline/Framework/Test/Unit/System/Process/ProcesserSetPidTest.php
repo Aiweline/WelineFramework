@@ -20,6 +20,39 @@ final class ProcesserSetPidTest extends TestCase
         self::assertSame(7, (int) ($record['epoch'] ?? 0));
     }
 
+    public function testBuildProcessIdentityRecordPullsLaunchIdFromArgvForSelfRegistration(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'buildProcessIdentityRecord');
+        $method->setAccessible(true);
+
+        $launchId = \bin2hex(\random_bytes(16));
+        $previousArgv = $_SERVER['argv'] ?? null;
+        $_SERVER['argv'] = [
+            'dispatcher.php',
+            '--name=weline-wls-dispatcher-default-ptest',
+            '--launch-id=' . $launchId,
+            '--epoch=3',
+        ];
+        try {
+            $record = $method->invoke(
+                null,
+                '--name=weline-wls-dispatcher-default-ptest',
+                \getmypid(),
+                'weline-wls-dispatcher-default-ptest'
+            );
+        } finally {
+            if ($previousArgv === null) {
+                unset($_SERVER['argv']);
+            } else {
+                $_SERVER['argv'] = $previousArgv;
+            }
+        }
+
+        self::assertSame('weline-wls-dispatcher-default-ptest', (string)($record['process_name'] ?? ''));
+        self::assertSame($launchId, (string)($record['launch_id'] ?? ''));
+        self::assertSame(3, (int)($record['epoch'] ?? 0));
+    }
+
     public function testSetPidWritesPayloadIntoPidFilePath(): void
     {
         $pname = '--name=weline-test-setpid-' . \bin2hex(\random_bytes(4));
@@ -35,6 +68,99 @@ final class ProcesserSetPidTest extends TestCase
             self::assertSame($pid, (int) ($data['pid'] ?? 0));
             self::assertSame($pname, (string) ($data['pname'] ?? ''));
             self::assertGreaterThan(0, (int) \filesize($pidFile));
+        } finally {
+            Processer::removePidFile($pname);
+        }
+    }
+
+    public function testBatchManagedTerminationReturnsAnOutcomeForEveryFrozenLease(): void
+    {
+        $missingPid = 2_000_000_001;
+        $requests = [
+            'first' => [
+                'pid' => $missingPid,
+                'expected_process_name' => 'weline-test-missing-first',
+                'expected_launch_id' => \str_repeat('a', 32),
+                'expected_pname' => '--name=weline-test-missing-first',
+            ],
+            'malformed' => [
+                'pid' => 0,
+                'expected_process_name' => '',
+                'expected_launch_id' => '',
+                'expected_pname' => '',
+            ],
+            'second' => [
+                'pid' => $missingPid + 1,
+                'expected_process_name' => 'weline-test-missing-second',
+                'expected_launch_id' => \str_repeat('b', 32),
+                'expected_pname' => '--name=weline-test-missing-second',
+            ],
+        ];
+
+        $outcomes = Processer::terminateManagedProcessLeases($requests, true, 0.05);
+
+        self::assertSame(['first', 'malformed', 'second'], \array_keys($outcomes));
+        self::assertSame(Processer::PROCESS_STATE_EXITED, $outcomes['first']['state'] ?? '');
+        self::assertTrue((bool)($outcomes['first']['released'] ?? false));
+        self::assertFalse((bool)($outcomes['first']['terminated'] ?? true));
+        self::assertSame(Processer::PROCESS_STATE_UNKNOWN, $outcomes['malformed']['state'] ?? '');
+        self::assertSame('managed_termination_request_invalid', $outcomes['malformed']['reason'] ?? '');
+        self::assertFalse((bool)($outcomes['malformed']['released'] ?? true));
+        self::assertSame(Processer::PROCESS_STATE_EXITED, $outcomes['second']['state'] ?? '');
+        self::assertTrue((bool)($outcomes['second']['released'] ?? false));
+    }
+
+    public function testBatchManagedTerminationBudgetUsesMonotonicClock(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'terminateManagedProcessLeases');
+        $source = (array)\file($method->getFileName());
+        $body = \implode('', \array_slice(
+            $source,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString('\\hrtime(true)', $body);
+        self::assertStringNotContainsString('\\microtime(true)', $body);
+    }
+
+    public function testSingleManagedTerminationVerificationUsesMonotonicClock(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'terminateManagedProcessLease');
+        $source = (array)\file($method->getFileName());
+        $body = \implode('', \array_slice(
+            $source,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString('\\hrtime(true)', $body);
+        self::assertStringNotContainsString('\\microtime(true)', $body);
+    }
+
+    public function testStaleManagedIndexCannotAuthorizeOperationOnReusedLivePid(): void
+    {
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('BP')) {
+            \define('BP', \dirname(__DIR__, 8) . \DIRECTORY_SEPARATOR);
+        }
+        $name = 'weline-test-stale-index-' . \bin2hex(\random_bytes(4));
+        $launchId = \bin2hex(\random_bytes(16));
+        $pname = '--name=' . $name . ' --launch-id=' . $launchId;
+        $method = new \ReflectionMethod(Processer::class, 'canOperateOnRegisteredPid');
+
+        try {
+            Processer::setPid($pname, \getmypid());
+
+            self::assertFalse($method->invoke(
+                null,
+                \getmypid(),
+                $name,
+                $launchId,
+                $pname,
+            ));
         } finally {
             Processer::removePidFile($pname);
         }

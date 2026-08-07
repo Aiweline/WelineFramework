@@ -68,7 +68,8 @@ class MasterControlServer implements ControlPlaneServerInterface
      *   'peer_name' => string,      // 对端地址
      *   'message_count' => int,     // 已接收消息数
      *   'last_message_type' => string, // 最近一条消息类型
-     *   'last_pong_time' => float|null, // 最近一次 pong 响应时间戳
+     *   'last_pong_time' => float|null, // legacy wall 时间，仅用于审计
+     *   'last_pong_observation' => array|null, // 同 host boot 的 monotonic 健康证据
      *   'launch_id' => string,      // 启动 ID（用于唯一标识实例）
      * ]
      */
@@ -511,9 +512,9 @@ class MasterControlServer implements ControlPlaneServerInterface
 
         $peerHost = $this->normalizeLifecyclePeerHost((string) ($this->clients[$clientId]['peer_name'] ?? ''));
         $key = ($role !== '' ? $role : 'unregistered') . ':' . $reason . ':' . $peerHost;
-        $now = \microtime(true);
+        $now = ControlMessage::monotonicSeconds();
         $last = (float) ($this->transientClientLifecycleLoggedAt[$key] ?? 0.0);
-        if (($now - $last) < 5.0) {
+        if ($last > 0.0 && $last <= $now && ($now - $last) < 5.0) {
             return true;
         }
 
@@ -787,7 +788,23 @@ class MasterControlServer implements ControlPlaneServerInterface
         }
 
         if ($type === ControlMessage::TYPE_PONG) {
-            $this->clients[$clientId]['last_pong_time'] = $msg['pong_timestamp'] ?? \microtime(true);
+            $legacyWall = $msg['pong_timestamp'] ?? null;
+            if ((\is_int($legacyWall) || \is_float($legacyWall))
+                && \is_finite((float)$legacyWall)
+                && (float)$legacyWall > 0.0
+            ) {
+                $this->clients[$clientId]['last_pong_time'] = (float)$legacyWall;
+            }
+            $observation = ControlMessage::monotonicPongObservation($msg);
+            if ($observation !== null) {
+                $previous = $this->clients[$clientId]['last_pong_observation'] ?? null;
+                if (!\is_array($previous)
+                    || (float)($observation['ping_monotonic'] ?? 0.0)
+                        >= (float)($previous['ping_monotonic'] ?? 0.0)
+                ) {
+                    $this->clients[$clientId]['last_pong_observation'] = $observation;
+                }
+            }
         }
 
         if ($type === ControlMessage::TYPE_EXITED) {
@@ -1045,7 +1062,7 @@ class MasterControlServer implements ControlPlaneServerInterface
             return 0;
         }
 
-        $deadline = $timeBudgetSec > 0.0 ? (\microtime(true) + $timeBudgetSec) : 0.0;
+        $deadline = $timeBudgetSec > 0.0 ? (ControlMessage::monotonicSeconds() + $timeBudgetSec) : 0.0;
         $totalWritten = 0;
 
         do {
@@ -1053,7 +1070,7 @@ class MasterControlServer implements ControlPlaneServerInterface
             $write = [$socket];
             $except = [];
             if ($deadline > 0.0) {
-                $remaining = $deadline - \microtime(true);
+                $remaining = $deadline - ControlMessage::monotonicSeconds();
                 if ($remaining <= 0.0) {
                     break;
                 }
@@ -1090,7 +1107,7 @@ class MasterControlServer implements ControlPlaneServerInterface
                 return -1;
             }
             $this->clients[$clientId]['write_buffer'] = $writeBuffer;
-        } while ($writeBuffer !== '' && $deadline > 0.0 && \microtime(true) < $deadline);
+        } while ($writeBuffer !== '' && $deadline > 0.0 && ControlMessage::monotonicSeconds() < $deadline);
 
         return $totalWritten;
     }
@@ -1204,6 +1221,23 @@ class MasterControlServer implements ControlPlaneServerInterface
                 return $client['last_pong_time'] ?? null;
             }
         }
+        return null;
+    }
+
+    /**
+     * @return array{ping_monotonic:float,pong_monotonic:float,received_monotonic:float,rtt_seconds:float,host_boot_id:string}|null
+     */
+    public function getLastPongObservation(string $launchId): ?array
+    {
+        foreach ($this->clients as $client) {
+            if (($client['launch_id'] ?? '') !== $launchId) {
+                continue;
+            }
+            $observation = $client['last_pong_observation'] ?? null;
+
+            return \is_array($observation) ? $observation : null;
+        }
+
         return null;
     }
 
@@ -1349,8 +1383,8 @@ class MasterControlServer implements ControlPlaneServerInterface
      */
     public function flushPendingWrites(float $maxSeconds = 2.0): void
     {
-        $deadline = \microtime(true) + \max(0.05, $maxSeconds);
-        while (\microtime(true) < $deadline && $this->hasPendingWrites()) {
+        $deadline = ControlMessage::monotonicSeconds() + \max(0.05, $maxSeconds);
+        while (ControlMessage::monotonicSeconds() < $deadline && $this->hasPendingWrites()) {
             $this->poll(0, 50000);
         }
         if ($this->hasPendingWrites()) {

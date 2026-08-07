@@ -34,7 +34,20 @@ final class RoleTagGrantSyncService
         );
         /** @var RoleTagGrant $grantModel */
         $grantModel = ObjectManager::getInstance(RoleTagGrant::class);
-        $grants = $grantModel->reset()->select()->fetchArray();
+        try {
+            $grants = $grantModel->reset()->select()->fetchArray();
+        } catch (\Throwable $e) {
+            $message = $e->getMessage();
+            if (\str_contains($message, 'm_role_tag_grant')
+                && (\str_contains($message, 'does not exist')
+                    || \str_contains($message, 'Undefined table')
+                    || \str_contains($message, 'Base table or view not found'))
+            ) {
+                // Table is created by Acl model setup; skip sync until schema exists.
+                return 0;
+            }
+            throw $e;
+        }
         if ($grants === []) {
             return 0;
         }

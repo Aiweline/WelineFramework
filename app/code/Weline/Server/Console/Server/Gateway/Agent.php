@@ -18,6 +18,7 @@ use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Edge\Gateway\GatewayAutoDiscoveryBackoff;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedText;
+use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayFallbackOutageStore;
 use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
@@ -32,8 +33,10 @@ use Weline\Server\Service\Edge\Gateway\GatewayRuntimeEndpointPublisher;
 use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateRenewalIntentStore;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\MasterChildCredentialStore;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\SslCertificateService;
 
 /**
  * Project-owned wls-edge/2 lease agent.
@@ -43,6 +46,7 @@ final class Agent extends CommandAbstract
     private const TICK_MILLISECONDS = 1000;
     private const HEARTBEAT_SECONDS = 10;
     private const PUBLIC_PROBE_SECONDS = 1;
+    private const OUTAGE_OBSERVATION_FRESHNESS_SECONDS = 3.0;
     private const FALLBACK_AFTER_SECONDS = 90;
     private const RECOVERY_STABLE_SECONDS = 30;
     private const FALLBACK_DRAIN_SECONDS = 300;
@@ -57,6 +61,9 @@ final class Agent extends CommandAbstract
     private const DEFERRED_REAP_MAXIMUM = 8;
     private const DEFERRED_REAP_KILL_RETRY_SECONDS = 10.0;
     private const DEFERRED_REAP_MAXIMUM_AGE_SECONDS = 60.0;
+    private const DESIRED_STATE_WORK_GC_MAXIMUM = 128;
+    private const DESIRED_STATE_WORK_LOCK = '.desired-state.lock';
+    private const DESIRED_STATE_WORK_LOCK_WAIT_SECONDS = 1.0;
     private const DESIRED_STATE_TASK_ROLE = ControlMessage::ROLE_GATEWAY_AGENT;
     private const DESIRED_STATE_TASK_GENERATION = 1;
 
@@ -107,9 +114,29 @@ final class Agent extends CommandAbstract
                 'WLS Gateway Agent daemon requires an authenticated Master child capability.',
             );
         }
+        if ($this->enabled($args['certificate-retirement-only'] ?? false)) {
+            try {
+                return $this->runCertificateRetirementOnlyLoop(
+                    $instanceName,
+                    $parentSlotId,
+                    $this->integerArgument($args, 'master-pid'),
+                    $this->integerArgument($args, 'epoch'),
+                    $parentCredential,
+                    $masterLeaseFile,
+                    $kernel,
+                    $guard,
+                    $shutdown,
+                );
+            } finally {
+                $kernel->sendExited();
+                $kernel->close();
+            }
+        }
         $publicationHeartbeatAt = 0.0;
         $gateway = null;
-        $gateway = new GatewayHostManager(progressCallback: function () use (
+        $gateway = new GatewayHostManager(progressCallback: function (
+            ?float $deadlineMonotonic = null,
+        ) use (
             $kernel,
             $instanceName,
             &$shutdown,
@@ -141,7 +168,11 @@ final class Agent extends CommandAbstract
             // cannot turn the publication poll into a heartbeat busy loop.
             $publicationHeartbeatAt = $now;
             try {
-                $gateway?->heartbeat($instanceName);
+                $gateway?->heartbeat(
+                    $instanceName,
+                    [],
+                    $deadlineMonotonic,
+                );
             } catch (\Throwable) {
                 // The enclosing register/renew publication remains the desired
                 // state authority. Its next bounded progress tick retries lease
@@ -157,6 +188,7 @@ final class Agent extends CommandAbstract
         $projectUuid = $builder->projectUuid();
         $acmeChallenges = new ProjectAcmeHttp01ChallengeStore();
         $certificateRenewals = new ProjectCertificateRenewalIntentStore();
+        $certificateRetirements = new ProjectCertificateGenerationStore();
         $masterPid = $this->integerArgument($args, 'master-pid');
         $masterEpoch = $this->integerArgument($args, 'epoch');
         $launchEndpoint = (new GatewayProjectEndpointReader())->read($instanceName);
@@ -194,6 +226,9 @@ final class Agent extends CommandAbstract
         $observedFallback = [];
         $outageStateInitialized = false;
         $outageObservationId = '';
+        $outageObservationDigest = '';
+        $lastOutagePersistenceAt = 0.0;
+        $lastExplicitOutageObservationAt = 0.0;
         $projectDraining = false;
         $receiptReplayAttempted = false;
         $desiredStateJob = null;
@@ -201,6 +236,7 @@ final class Agent extends CommandAbstract
         $desiredStateRegisterPending = false;
         $lastDesiredStateLaunchFailureLogAt = 0.0;
         $lastCertificateReplayAt = 0.0;
+        $lastCertificateRetirementProbeAt = 0.0;
         $status = [];
         $lastAuthenticatedStatus = [];
         $routePublication = self::emptyRoutePublicationObservation();
@@ -282,6 +318,7 @@ final class Agent extends CommandAbstract
                         $heartbeatObservation = $gateway->heartbeat(
                             $instanceName,
                             $this->masterDrainCounters($instanceName),
+                            $tickDeadline,
                         );
                         $receiptReplayAttempted = false;
                     } catch (\Throwable $throwable) {
@@ -299,22 +336,27 @@ final class Agent extends CommandAbstract
                     ));
                     $fallbackPort = self::fallbackControlPort($observedFallback);
                     if ($observedFallbackState === 'DRAINING') {
-                        // DRAINING is a durable cleanup obligation even after
-                        // the child has closed its listener and exited. Restore
-                        // the boot-bound lease monotonic timestamp into this
-                        // Agent's timeline so self-heal cannot restart or
-                        // indefinitely extend the 300-second drain. A reboot
-                        // conservatively starts a fresh complete drain.
                         $fallbackRequested = true;
-                        $fallbackDrainRequested = true;
                         $fallbackStartedAt = $fallbackStartedAt > 0.0
                             ? $fallbackStartedAt
                             : $now;
-                        $fallbackDrainStartedAt = self::reconcileFallbackDrainStartedAt(
-                            $fallbackDrainStartedAt,
+                        $fallbackDrainRequested = self::fallbackDrainWasAcknowledged(
                             $observedFallback,
-                            $now,
                         );
+                        if ($fallbackDrainRequested) {
+                            $fallbackDrainStartedAt = self::reconcileFallbackDrainStartedAt(
+                                $fallbackDrainStartedAt,
+                                $observedFallback,
+                                $now,
+                            );
+                        } else {
+                            // PREPARED, UNDRAIN_PREPARED, terminal and malformed
+                            // observations never start or preserve the 300s
+                            // clock. The next command retries the exact pending
+                            // transition instead of silently disabling a child
+                            // that never acknowledged listener admission closed.
+                            $fallbackDrainStartedAt = 0.0;
+                        }
                     } elseif (self::fallbackLeaseProvesLive($observedFallback)) {
                         $fallbackRequested = true;
                         $fallbackStartedAt = $fallbackStartedAt > 0.0
@@ -347,7 +389,7 @@ final class Agent extends CommandAbstract
                 )) {
                     $statusAttempted = true;
                     try {
-                        $status = $gateway->status();
+                        $status = $gateway->status(0.0, $tickDeadline);
                         if (($status['ok'] ?? false) === true) {
                             $lastAuthenticatedStatus = $status;
                         }
@@ -404,6 +446,7 @@ final class Agent extends CommandAbstract
                     $trustedGatewayDiscovered = true;
                 }
                 $certificateReplay = null;
+                $certificateRetirementReplay = [];
                 if (!$projectDraining) {
                     try {
                         $certificateReplay = $certificateRenewals->pendingReplay();
@@ -416,6 +459,25 @@ final class Agent extends CommandAbstract
                                 'Certificate replay state is invalid.',
                             )
                         );
+                    }
+                    if ($lastCertificateRetirementProbeAt <= 0.0
+                        || $now - $lastCertificateRetirementProbeAt
+                            >= self::HEARTBEAT_SECONDS
+                    ) {
+                        $lastCertificateRetirementProbeAt = $now;
+                        try {
+                            $certificateRetirementReplay = $certificateRetirements
+                                ->pendingRetirementIntents($now + 0.25);
+                        } catch (\Throwable $throwable) {
+                            WlsLogger::error_(
+                                '[WlsGatewayAgent] certificate retirement replay state rejected: '
+                                . GatewayBoundedText::singleLine(
+                                    $throwable->getMessage(),
+                                    2048,
+                                    'Certificate retirement replay state is invalid.',
+                                )
+                            );
+                        }
                     }
                 }
                 if (!$projectDraining && $heartbeatDue) {
@@ -534,6 +596,20 @@ final class Agent extends CommandAbstract
                 }
                 $activeRouteIds = (array)($routePublication['active_route_ids'] ?? []);
                 $routeActive = $activeRouteIds !== [];
+                $localFallbackRouteIds = !$statusAuthenticated
+                    && \is_array($probeRegistration)
+                        ? self::localFallbackCertificateReadyRouteIds(
+                            $probeRegistration,
+                            $projectUuid,
+                            $instanceName,
+                            $instanceGeneration,
+                            $masterEpoch,
+                            $masterLaunchId,
+                        )
+                        : [];
+                $publicProbeRouteIds = $activeRouteIds !== []
+                    ? $activeRouteIds
+                    : $localFallbackRouteIds;
                 $certificateReadyRouteCount = (int)(
                     $routePublication['certificate_ready_route_count'] ?? 0
                 );
@@ -543,6 +619,12 @@ final class Agent extends CommandAbstract
                 $allCertificateReadyRoutesActive = $certificateReadyRouteCount > 0
                     && $certificateReadyUnavailableRouteCount === 0
                     && \count($activeRouteIds) === $certificateReadyRouteCount;
+                $publicProbeAttempted = false;
+                $publicHttpsPort = (int)(
+                    $status['public_https']
+                    ?? $lastAuthenticatedStatus['public_https']
+                    ?? $paths->publicHttpsPort()
+                );
                 if ($now - $lastPublicProbe >= self::PUBLIC_PROBE_SECONDS
                     && $this->tickHasBudget(
                         $tickDeadline,
@@ -550,17 +632,14 @@ final class Agent extends CommandAbstract
                     )
                 ) {
                     $lastPublicProbe = $now;
+                    $publicProbeAttempted = true;
                     try {
                         $publicProbeHealthy = \is_array($probeRegistration)
-                            && $activeRouteIds !== []
+                            && $publicProbeRouteIds !== []
                             && $publicProbe->registrationIsHealthy(
                                 $probeRegistration,
-                                (int)(
-                                    $status['public_https']
-                                    ?? $lastAuthenticatedStatus['public_https']
-                                    ?? $paths->publicHttpsPort()
-                                ),
-                                $activeRouteIds,
+                                $publicHttpsPort,
+                                $publicProbeRouteIds,
                             );
                     } catch (\Throwable) {
                         // A diagnostic probe is fail-closed for fallback
@@ -573,21 +652,6 @@ final class Agent extends CommandAbstract
                     && ($servingStatus['project_ready'] ?? false) === true
                     && (bool)($servingStatus['data_plane']['running'] ?? false)
                     && (string)($servingStatus['state'] ?? '') !== 'DATA_PLANE_DOWN';
-                $dataPlaneHealthy = $allCertificateReadyRoutesActive
-                    && $publicProbeHealthy
-                    && $projectServingReady;
-                if (!$statusAuthenticated
-                    && $servingStatusAuthenticated
-                    && $allCertificateReadyRoutesActive
-                    && $publicProbeHealthy
-                ) {
-                    // Control-plane loss alone must not trigger fallback. The
-                    // cached desired state is verified through real SNI, Host,
-                    // certificate, route markers and an authenticated backend
-                    // nonce instead of treating a listening TCP port as proof.
-                    $dataPlaneHealthy = $certificateReadyUnavailableRouteCount === 0
-                        && $publicProbeHealthy;
-                }
                 $gatewayCoreDown = $statusAuthenticated
                     && (!(bool)($status['data_plane']['running'] ?? false)
                         || (string)($status['state'] ?? '') === 'DATA_PLANE_DOWN');
@@ -599,21 +663,52 @@ final class Agent extends CommandAbstract
                         $projectUuid,
                         $instanceName,
                     )
-                    : 0;
-                $certificateReadyForFallback = $certificateReadyRouteCount > 0
-                    || $localFallbackCertificateReadyRouteCount > 0;
+                    : \count($localFallbackRouteIds);
                 $routePublicationFailed = ($routePublication['authenticated'] ?? false) === true
                     && !$routeActive
                     && ($routePublication['normal_wait'] ?? false) !== true;
-                $dataPlaneOutage = $certificateReadyUnavailableRouteCount > 0
-                    || ($routeActive && !$publicProbeHealthy)
-                    || ($certificateReadyForFallback
-                        && ($gatewayCoreDown || $routePublicationFailed));
+                $fallbackObservation = self::fallbackDataPlaneObservation(
+                    statusAuthenticated: $statusAuthenticated,
+                    servingStatusAuthenticated: $servingStatusAuthenticated,
+                    projectServingReady: $projectServingReady,
+                    allCertificateReadyRoutesActive: $allCertificateReadyRoutesActive,
+                    routeActive: $routeActive,
+                    publicProbeHealthy: $publicProbeHealthy,
+                    gatewayCoreDown: $gatewayCoreDown,
+                    routePublicationFailed: $routePublicationFailed,
+                    certificateReadyRouteCount: $certificateReadyRouteCount,
+                    certificateReadyUnavailableRouteCount:
+                        $certificateReadyUnavailableRouteCount,
+                    localCertificateReadyRouteCount:
+                        $localFallbackCertificateReadyRouteCount,
+                );
+                $dataPlaneHealthy = $fallbackObservation['data_plane_healthy'];
+                $dataPlaneOutage = $fallbackObservation['data_plane_outage'];
+                $certificateReadyForFallback = $fallbackObservation['certificate_ready'];
+                $currentOutageObservationDigest = self::gatewayOutageObservationDigest(
+                    dataPlaneOutage: $dataPlaneOutage,
+                    publicProbeAttempted: $publicProbeAttempted,
+                    publicProbeHealthy: $publicProbeHealthy,
+                    statusAuthenticated: $statusAuthenticated,
+                    gatewayCoreDown: $gatewayCoreDown,
+                    routePublicationFailed: $routePublicationFailed,
+                    publicProbeExpectationDigest: $publicProbeExpectationDigest,
+                    publicRouteIds: $publicProbeRouteIds,
+                    publicHttpsPort: $publicHttpsPort,
+                    projectUuid: $projectUuid,
+                    instanceName: $instanceName,
+                    instanceGeneration: $instanceGeneration,
+                    masterPid: $masterPid,
+                    masterEpoch: $masterEpoch,
+                    masterLaunchId: $masterLaunchId,
+                    activeConfigGeneration: (int)($status['active_config_generation'] ?? 0),
+                    activeConfigDigest: (string)($status['active_config_digest'] ?? ''),
+                );
 
                 if ($dataPlaneHealthy) {
                     if (!$outageStateInitialized || $downSince > 0.0) {
                         try {
-                            $fallbackOutages->clear($instanceName);
+                            $fallbackOutages->clear($instanceName, $tickDeadline);
                         } catch (\Throwable) {
                             // Persisted state is diagnostic/advisory only. The
                             // live Agent-local monotonic timer is authoritative.
@@ -622,6 +717,9 @@ final class Agent extends CommandAbstract
                     $outageStateInitialized = true;
                     $downSince = 0.0;
                     $outageObservationId = '';
+                    $outageObservationDigest = '';
+                    $lastOutagePersistenceAt = 0.0;
+                    $lastExplicitOutageObservationAt = 0.0;
                     if ($servingStatusAuthenticated && !$projectDraining) {
                         try {
                             $endpointPublisher->publishHealthy(
@@ -632,48 +730,116 @@ final class Agent extends CommandAbstract
                                     ? $probeRegistration
                                     : [],
                                 $activeRouteIds,
+                                $tickDeadline,
                             );
                         } catch (\Throwable) {
                             // The endpoint is an observation cache. A failed
                             // publication must not interrupt a healthy route.
                         }
                     }
-                } elseif ($dataPlaneOutage && $downSince === 0.0) {
-                    $downSince = $now;
-                    try {
+                } elseif ($dataPlaneOutage
+                    && \preg_match(
+                        '/\A[a-f0-9]{64}\z/D',
+                        $currentOutageObservationDigest,
+                    ) === 1
+                ) {
+                    if ($lastExplicitOutageObservationAt > 0.0
+                        && $now - $lastExplicitOutageObservationAt
+                            > self::OUTAGE_OBSERVATION_FRESHNESS_SECONDS
+                    ) {
+                        // A stalled Agent or missed probe is unknown time, not
+                        // a failed observation. Rotate the continuity id so a
+                        // later durable restore can preserve only previously
+                        // confirmed duration and pause this gap.
+                        $downSince = 0.0;
+                        $outageObservationId = '';
+                        $lastOutagePersistenceAt = 0.0;
+                    }
+                    $lastExplicitOutageObservationAt = $now;
+                    if ($outageObservationDigest !== ''
+                        && !\hash_equals(
+                            $outageObservationDigest,
+                            $currentOutageObservationDigest,
+                        )
+                    ) {
+                        // A changed route/config/probe identity cannot prove
+                        // continuity with the preceding outage window.
+                        $downSince = 0.0;
+                        $outageObservationId = '';
+                        $lastOutagePersistenceAt = 0.0;
+                    }
+                    $outageObservationDigest = $currentOutageObservationDigest;
+                    if ($downSince === 0.0) {
+                        $downSince = $now;
+                    }
+                    if ($outageObservationId === '') {
                         $outageObservationId = \bin2hex(\random_bytes(16));
-                        $outageObservation = $fallbackOutages->markDown(
-                            $instanceName,
-                            $masterPid,
-                            $masterEpoch,
-                            $masterLaunchId,
-                            $outageObservationId,
-                            $now,
-                        );
-                        $persistedDownSince = $outageObservation['down_since_monotonic']
-                            ?? null;
-                        if ((\is_int($persistedDownSince) || \is_float($persistedDownSince))
-                            && \is_finite((float)$persistedDownSince)
-                            && (float)$persistedDownSince >= 0.0
-                            && (float)$persistedDownSince <= $now
-                        ) {
-                            $downSince = (float)$persistedDownSince;
+                    }
+                    if (self::outagePersistenceDue($now, $lastOutagePersistenceAt)) {
+                        // Reserve cadence before I/O so a lock or disk failure
+                        // cannot turn the one-second Agent loop into a write storm.
+                        $lastOutagePersistenceAt = $now;
+                        try {
+                            $outageObservation = $fallbackOutages->markDown(
+                                $instanceName,
+                                $masterPid,
+                                $masterEpoch,
+                                $masterLaunchId,
+                                $outageObservationId,
+                                $outageObservationDigest,
+                                $now,
+                                $tickDeadline,
+                            );
+                            $persistedDownSince = $outageObservation['down_since_monotonic']
+                                ?? null;
+                            if ((\is_int($persistedDownSince) || \is_float($persistedDownSince))
+                                && \is_finite((float)$persistedDownSince)
+                                && (float)$persistedDownSince >= 0.0
+                                && (float)$persistedDownSince <= $now
+                            ) {
+                                // Persistence may extend an already observed
+                                // continuous outage, but never shorten it.
+                                $downSince = \min($downSince, (float)$persistedDownSince);
+                            }
+                        } catch (\Throwable) {
+                            // Failure to persist must not disable the current
+                            // Agent's live, explicitly observed timer.
                         }
-                    } catch (\Throwable) {
-                        // Failure to persist must not disable the live fallback
-                        // timer for the current Agent process.
+                    }
+                    $outageStateInitialized = true;
+                } elseif ($dataPlaneOutage) {
+                    // No current authenticated failure/probe evidence is an
+                    // unknown interval. At the heartbeat persistence boundary
+                    // it breaks continuity rather than inheriting stale time.
+                    $evidenceFresh = $lastExplicitOutageObservationAt > 0.0
+                        && $now - $lastExplicitOutageObservationAt
+                            <= self::OUTAGE_OBSERVATION_FRESHNESS_SECONDS;
+                    if (!$evidenceFresh) {
+                        $downSince = 0.0;
+                        $outageObservationId = '';
+                        $outageObservationDigest = '';
+                    }
+                    if (self::outagePersistenceDue($now, $lastOutagePersistenceAt)) {
+                        $lastOutagePersistenceAt = $now;
+                        try {
+                            $fallbackOutages->clear($instanceName, $tickDeadline);
+                        } catch (\Throwable) {
+                        }
                     }
                     $outageStateInitialized = true;
                 } elseif (!$dataPlaneOutage) {
                     if (!$outageStateInitialized || $downSince > 0.0) {
                         try {
-                            $fallbackOutages->clear($instanceName);
+                            $fallbackOutages->clear($instanceName, $tickDeadline);
                         } catch (\Throwable) {
                         }
                     }
                     $outageStateInitialized = true;
                     $downSince = 0.0;
                     $outageObservationId = '';
+                    $outageObservationDigest = '';
+                    $lastOutagePersistenceAt = 0.0;
+                    $lastExplicitOutageObservationAt = 0.0;
                 }
                 if (!$projectDraining
                     && $dataPlaneOutage
@@ -684,6 +850,7 @@ final class Agent extends CommandAbstract
                             $instanceName,
                             $observedFallback,
                             'GATEWAY_DATA_PLANE_UNAVAILABLE',
+                            $tickDeadline,
                         );
                     } catch (\Throwable) {
                         // The live fallback lease remains authoritative.
@@ -700,6 +867,7 @@ final class Agent extends CommandAbstract
                     try {
                         $desiredChallenges = $acmeChallenges->desired(
                             $this->acmeRouteDomains($probeRegistration),
+                            $tickDeadline,
                         );
                     } catch (\Throwable) {
                         $desiredChallenges = null;
@@ -720,6 +888,7 @@ final class Agent extends CommandAbstract
                                 (int)$desiredChallenges['generation'],
                                 (array)$desiredChallenges['challenges'],
                                 (string)$desiredChallenges['digest'],
+                                $tickDeadline,
                             );
                             $lastAcmeGeneration = (int)$desiredChallenges['generation'];
                             $lastAcmeDigest = (string)$desiredChallenges['digest'];
@@ -774,10 +943,15 @@ final class Agent extends CommandAbstract
                     // draining_timestamp; only that observation may start the
                     // 300-second release deadline.
                     $fallbackDrainStartedAt = 0.0;
-                    $fallbackDrainRequested = $kernel?->sendControlCommand(
+                    $lastFallbackCommandAt = $now;
+                    $kernel?->sendControlCommand(
                         ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN,
                         ['port' => $fallbackPort],
-                    ) ?? false;
+                    );
+                    // Dispatch is deliberately not an ACK.  Only an exact
+                    // schema-6 DRAIN_ACKED lease observation may set this
+                    // latch and start the final-disable clock.
+                    $fallbackDrainRequested = false;
                 } elseif ($fallbackAction === ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE) {
                     if ($kernel?->sendControlCommand(
                         ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
@@ -811,7 +985,16 @@ final class Agent extends CommandAbstract
                         < self::DEFERRED_REAP_MAXIMUM
                 ) {
                     $desiredStateAction = '';
-                    if (\is_array($certificateReplay)
+                    if ($certificateRetirementReplay !== []
+                        && ($lastCertificateReplayAt <= 0.0
+                            || $now - $lastCertificateReplayAt
+                                >= self::HEARTBEAT_SECONDS)
+                    ) {
+                        // Retirement can use the Controller-independent Native
+                        // guardian and therefore must not wait for ordinary
+                        // gateway discovery or registration readiness.
+                        $desiredStateAction = 'retirements';
+                    } elseif (\is_array($certificateReplay)
                         && $gatewayDiscoverable
                         && self::canReplayRegistration($joinRequired, $joinState)
                         && ($lastCertificateReplayAt <= 0.0
@@ -843,7 +1026,11 @@ final class Agent extends CommandAbstract
                             if ($desiredStateAction === 'register') {
                                 $desiredStateRegisterPending = false;
                                 $desiredStateBuildPending = false;
-                            } elseif ($desiredStateAction === 'certificates') {
+                            } elseif (\in_array(
+                                $desiredStateAction,
+                                ['certificates', 'retirements'],
+                                true,
+                            )) {
                                 $lastCertificateReplayAt = $now;
                                 $desiredStateBuildPending = false;
                             } else {
@@ -899,13 +1086,106 @@ final class Agent extends CommandAbstract
         return 0;
     }
 
+    private function runCertificateRetirementOnlyLoop(
+        string $instanceName,
+        string $parentSlotId,
+        int $masterPid,
+        int $masterEpoch,
+        string $parentCredential,
+        string $masterLeaseFile,
+        SubprocessControlKernel $kernel,
+        ChildMasterGuard $guard,
+        bool &$shutdown,
+    ): int {
+        $desiredStateJob = null;
+        $lastReplayProbeAt = 0.0;
+        $lastLaunchFailureLogAt = 0.0;
+        $retirementStore = new ProjectCertificateGenerationStore();
+        try {
+            while (!$shutdown) {
+                $this->reapDeferredDesiredStateJobs();
+                $kernel->tick();
+                $kernel->flushWrites();
+                if (!$kernel->isConnected()) {
+                    $kernel->reconnect();
+                }
+                if ($guard->shouldExit()) {
+                    break;
+                }
+                $now = $this->monotonicNow();
+                $result = $this->pollDesiredStateJob($desiredStateJob, $now);
+                if (\is_array($result) && ($result['ok'] ?? false) !== true) {
+                    WlsLogger::warning_(
+                        '[WlsCertificateRetirementAgent] replay remains pending: '
+                            . GatewayBoundedText::singleLine(
+                                (string)($result['error']['message'] ?? 'worker failed'),
+                                1024,
+                                'certificate retirement worker failed',
+                            )
+                    );
+                }
+                if ($desiredStateJob === null
+                    && ($lastReplayProbeAt <= 0.0
+                        || $now - $lastReplayProbeAt >= self::HEARTBEAT_SECONDS)
+                ) {
+                    $lastReplayProbeAt = $now;
+                    try {
+                        $pendingRetirements = $retirementStore
+                            ->pendingRetirementIntents($now + 0.25);
+                        if ($pendingRetirements !== []
+                            && \count($this->deferredDesiredStateReap)
+                                < self::DEFERRED_REAP_MAXIMUM
+                        ) {
+                            $desiredStateJob = $this->startDesiredStateJob(
+                                'retirements',
+                                $instanceName,
+                                $now,
+                                $masterLeaseFile,
+                                $masterPid,
+                                $masterEpoch,
+                                $parentCredential,
+                                $parentSlotId,
+                            );
+                        }
+                    } catch (\Throwable $throwable) {
+                        if ($lastLaunchFailureLogAt <= 0.0
+                            || $now - $lastLaunchFailureLogAt
+                                >= self::DESIRED_STATE_LAUNCH_FAILURE_LOG_SECONDS
+                        ) {
+                            $lastLaunchFailureLogAt = $now;
+                            WlsLogger::warning_(
+                                '[WlsCertificateRetirementAgent] replay probe or worker launch failed; '
+                                    . 'retry remains enabled: '
+                                    . GatewayBoundedText::singleLine(
+                                        $throwable->getMessage(),
+                                        1024,
+                                        'Unable to launch certificate retirement worker.',
+                                    )
+                            );
+                        }
+                    }
+                }
+                SchedulerSystem::yieldDelay(self::TICK_MILLISECONDS);
+            }
+        } catch (\Throwable $throwable) {
+            try {
+                $kernel->sendExitReason('certificate_retirement_agent_failure', 1);
+            } catch (\Throwable) {
+            }
+            throw $throwable;
+        } finally {
+            $this->terminateDesiredStateJob($desiredStateJob);
+        }
+        return 0;
+    }
+
     private function executeDesiredStateWorker(array $args, string $action): int
     {
         $action = \strtolower(\trim($action));
         $instanceName = $this->stringArgument($args, 'instance-name');
         $jobId = \strtolower($this->stringArgument($args, 'desired-state-job'));
         $resultFile = $this->stringArgument($args, 'desired-state-result');
-        if (!\in_array($action, ['build', 'register', 'certificates'], true)
+        if (!\in_array($action, ['build', 'register', 'certificates', 'retirements'], true)
             || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $instanceName) !== 1
             || \preg_match('/\A[a-f0-9]{32}\z/D', $jobId) !== 1
         ) {
@@ -933,7 +1213,12 @@ final class Agent extends CommandAbstract
                 $pending = $renewals->pendingReplay();
                 if (\is_array($pending)) {
                     $gateway = new GatewayHostManager();
-                    $status = $gateway->status(5.0);
+                    $mutationDeadline = $this->monotonicNow()
+                        + \max(
+                            1.0,
+                            self::DESIRED_STATE_JOB_TIMEOUT_SECONDS - 15.0,
+                        );
+                    $status = $gateway->status(5.0, $mutationDeadline);
                     $plan = $renewals->replayPlan($pending, $status);
                     $this->assertDesiredStateTaskAuthorized(
                         $taskGuard,
@@ -944,6 +1229,7 @@ final class Agent extends CommandAbstract
                             $instanceName,
                             (string)$plan['gateway_epoch'],
                             (array)$plan['expected_route_generations'],
+                            $mutationDeadline,
                         );
                     } else {
                         $gateway->register($instanceName);
@@ -952,11 +1238,23 @@ final class Agent extends CommandAbstract
                 } else {
                     $result['mutation_action'] = 'none';
                 }
+            } elseif ($action === 'retirements') {
+                $this->assertDesiredStateTaskAuthorized(
+                    $taskGuard,
+                    'certificate retirement replay',
+                );
+                $retirements = (new SslCertificateService())
+                    ->replayPendingCertificateRetirements(75.0, 8);
+                $result['mutation_action'] = (int)$retirements['completed'] > 0
+                    ? 'retirements'
+                    : 'none';
             }
-            $this->assertDesiredStateTaskAuthorized($taskGuard, 'desired-state build');
-            $registration = (new GatewayRegistrationBuilder())->build($instanceName);
+            if ($action !== 'retirements') {
+                $this->assertDesiredStateTaskAuthorized($taskGuard, 'desired-state build');
+                $registration = (new GatewayRegistrationBuilder())->build($instanceName);
+                $result['registration'] = self::redactDesiredStateResult($registration);
+            }
             $this->assertDesiredStateTaskAuthorized($taskGuard, 'result publication');
-            $result['registration'] = self::redactDesiredStateResult($registration);
             $result['ok'] = true;
         } catch (\Throwable $throwable) {
             $result['error'] = [
@@ -986,14 +1284,27 @@ final class Agent extends CommandAbstract
         ) {
             throw new \RuntimeException('Gateway desired-state worker result is too large.');
         }
-        // The parent may revoke the task while a slow Controller publication
-        // or certificate read is returning. Never publish even an error result
-        // after that irreversible lifecycle fence.
-        $this->assertDesiredStateTaskAuthorized($taskGuard, 'result commit');
-        GatewayProjectStateFilesystem::atomicWrite(
-            $resultFile,
-            $encoded . "\n",
-            0600,
+        $workDirectory = \dirname($resultFile);
+        GatewayProjectStateFilesystem::withExclusiveLock(
+            $workDirectory . DIRECTORY_SEPARATOR . self::DESIRED_STATE_WORK_LOCK,
+            function () use ($taskGuard, $resultFile, $encoded): void {
+                // Serialize the final authorization check with parent-side
+                // orphan collection/removal. A retired worker which was
+                // returning from a slow mutation cannot publish after the new
+                // Agent has acquired and cleaned the work namespace.
+                $this->assertDesiredStateTaskAuthorized($taskGuard, 'result commit');
+                if (\file_exists($resultFile) || \is_link($resultFile)) {
+                    throw new \RuntimeException(
+                        'Gateway desired-state result appeared before its exact commit.',
+                    );
+                }
+                GatewayProjectStateFilesystem::atomicWrite(
+                    $resultFile,
+                    $encoded . "\n",
+                    0600,
+                );
+            },
+            waitTimeoutSeconds: 5.0,
         );
         return ($result['ok'] ?? false) === true ? 0 : 1;
     }
@@ -1197,7 +1508,7 @@ final class Agent extends CommandAbstract
         string $parentCredential,
         string $taskSlotId,
     ): array {
-        if (!\in_array($action, ['build', 'register', 'certificates'], true)
+        if (!\in_array($action, ['build', 'register', 'certificates', 'retirements'], true)
             || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $instanceName) !== 1
             || $masterLeaseFile === ''
             || $masterPid <= 0
@@ -1211,7 +1522,11 @@ final class Agent extends CommandAbstract
         $taskLaunchId = $jobId;
         $taskLeaseId = \bin2hex(\random_bytes(16));
         $workDirectory = $this->desiredStateWorkDirectory($instanceName);
-        $this->collectDesiredStateWorkFiles($workDirectory);
+        if (!$this->collectDesiredStateWorkFiles($workDirectory)) {
+            throw new \RuntimeException(
+                'Gateway desired-state orphan result cleanup remains pending.'
+            );
+        }
         $resultFile = $workDirectory
             . DIRECTORY_SEPARATOR . 'job-' . $jobId . '.json';
         $command = [
@@ -1325,7 +1640,16 @@ final class Agent extends CommandAbstract
         ) === 1;
     }
 
-    private function collectDesiredStateWorkFiles(string $directory): void
+    private function collectDesiredStateWorkFiles(string $directory): bool
+    {
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $directory . DIRECTORY_SEPARATOR . self::DESIRED_STATE_WORK_LOCK,
+            fn (): bool => $this->collectDesiredStateWorkFilesLocked($directory),
+            waitTimeoutSeconds: self::DESIRED_STATE_WORK_LOCK_WAIT_SECONDS,
+        );
+    }
+
+    private function collectDesiredStateWorkFilesLocked(string $directory): bool
     {
         $handle = @\opendir($directory);
         if (!\is_resource($handle)) {
@@ -1333,49 +1657,58 @@ final class Agent extends CommandAbstract
                 'Unable to enumerate the Gateway Agent work directory.'
             );
         }
-        $entries = [];
+        $collected = 0;
         try {
             while (($leaf = @\readdir($handle)) !== false) {
-                $entries[] = $leaf;
-                if (\count($entries) > 258) {
+                if ($leaf === '.'
+                    || $leaf === '..'
+                    || $leaf === self::DESIRED_STATE_WORK_LOCK
+                ) {
+                    continue;
+                }
+                $committedResult = \preg_match(
+                    '/\Ajob-[a-f0-9]{32}\.json\z/D',
+                    $leaf,
+                ) === 1;
+                $atomicCandidate = \preg_match(
+                    '/\Ajob-[a-f0-9]{32}\.json\.tmp-[a-f0-9]{24}\z/D',
+                    $leaf,
+                ) === 1;
+                if (!$committedResult && !$atomicCandidate) {
                     throw new \RuntimeException(
-                        'Gateway Agent work directory exceeds its fixed raw entry limit.'
+                        'Gateway Agent work directory contains an unsafe entry.'
                     );
                 }
+                $file = $directory . DIRECTORY_SEPARATOR . $leaf;
+                $status = @\lstat($file);
+                if (!\is_array($status)
+                    || \is_link($file)
+                    || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0100000)
+                    || (int)($status['nlink'] ?? 0) !== 1
+                ) {
+                    throw new \RuntimeException(
+                        'Gateway Agent work directory contains a special result file.'
+                    );
+                }
+                // No active job owns these immutable result paths. Delete a
+                // fixed batch per Agent tick so arbitrarily many crash
+                // after-images cannot poison future launches or monopolize the
+                // heartbeat loop. A child is launched only after a later pass
+                // observes the directory completely empty.
+                GatewayProjectStateFilesystem::removeRegular(
+                    $file,
+                    $atomicCandidate
+                        ? 'orphan Gateway desired-state result candidate'
+                        : 'orphan Gateway desired-state result',
+                    $status,
+                );
+                if (++$collected >= self::DESIRED_STATE_WORK_GC_MAXIMUM) {
+                    return false;
+                }
             }
+            return true;
         } finally {
             @\closedir($handle);
-        }
-        foreach ($entries as $leaf) {
-            if ($leaf === '.' || $leaf === '..') {
-                continue;
-            }
-            if (\preg_match('/\Ajob-[a-f0-9]{32}\.json\z/D', $leaf) !== 1) {
-                throw new \RuntimeException(
-                    'Gateway Agent work directory contains an unsafe entry.'
-                );
-            }
-            $file = $directory . DIRECTORY_SEPARATOR . $leaf;
-            $status = @\lstat($file);
-            if (!\is_array($status)
-                || \is_link($file)
-                || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0100000)
-                || (int)($status['nlink'] ?? 0) !== 1
-            ) {
-                throw new \RuntimeException(
-                    'Gateway Agent work directory contains a special result file.'
-                );
-            }
-            // This collector runs only while no desired-state child is owned
-            // by the current Agent and before a new result path is allocated.
-            // Every complete immutable result already present is therefore an
-            // orphan. Lifecycle ownership is stronger than wall mtime and
-            // cannot be defeated by a host clock rollback filling the old
-            // 128-file retention cap forever.
-            GatewayProjectStateFilesystem::removeRegular(
-                $file,
-                'orphan Gateway desired-state result',
-            );
         }
     }
 
@@ -1392,6 +1725,9 @@ final class Agent extends CommandAbstract
         $pipes = \is_array($job['pipes'] ?? null) ? $job['pipes'] : [];
         if (!\is_resource($process)) {
             $action = (string)($job['action'] ?? '');
+            $resultFile = (string)($job['result_file'] ?? '');
+            $this->revokeDesiredStateTask($job);
+            $this->removeDesiredStateResult($resultFile);
             $job = null;
             return [
                 'ok' => false,
@@ -1663,9 +1999,13 @@ final class Agent extends CommandAbstract
                 $deferredAt = (float)$job['deferred_at'];
                 if ($now - $deferredAt >= self::DEFERRED_REAP_MAXIMUM_AGE_SECONDS) {
                     @\proc_terminate($process, 9);
-                    throw new \RuntimeException(
-                        'Gateway desired-state worker remained live or unobservable after SIGKILL.'
-                    );
+                    if (($job['maximum_age_reported'] ?? false) !== true) {
+                        $job['maximum_age_reported'] = true;
+                        WlsLogger::error_(
+                            '[WlsGatewayAgent] desired-state worker remains quarantined '
+                                . 'after its bounded SIGKILL reap deadline; heartbeat continues.'
+                        );
+                    }
                 }
                 $lastKill = (float)($job['deferred_kill_at']
                     ?? $job['kill_requested_at']
@@ -1736,9 +2076,25 @@ final class Agent extends CommandAbstract
             return;
         }
         try {
-            GatewayProjectStateFilesystem::removeRegular(
-                $file,
-                'Gateway desired-state result',
+            $leaf = \basename($file);
+            $directory = \dirname($file);
+            if (\preg_match('/\Ajob-[a-f0-9]{32}\.json\z/D', $leaf) !== 1
+                || !\is_dir($directory)
+                || \is_link($directory)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway desired-state result cleanup path is invalid.',
+                );
+            }
+            GatewayProjectStateFilesystem::withExclusiveLock(
+                $directory . DIRECTORY_SEPARATOR . self::DESIRED_STATE_WORK_LOCK,
+                static function () use ($file): void {
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $file,
+                        'Gateway desired-state result',
+                    );
+                },
+                waitTimeoutSeconds: self::DESIRED_STATE_WORK_LOCK_WAIT_SECONDS,
             );
         } catch (\Throwable) {
         }
@@ -2396,6 +2752,103 @@ final class Agent extends CommandAbstract
         ]));
     }
 
+    public static function outagePersistenceDue(float $now, float $lastPersistedAt): bool
+    {
+        if (!\is_finite($now) || $now < 0.0
+            || !\is_finite($lastPersistedAt) || $lastPersistedAt < 0.0
+        ) {
+            return false;
+        }
+        return $lastPersistedAt <= 0.0
+            || $now - $lastPersistedAt >= self::HEARTBEAT_SECONDS;
+    }
+
+    /**
+     * Persist only an explicit, replayable failure observation. An omitted
+     * probe is uncertainty, not a negative probe result.
+     *
+     * @param list<string> $publicRouteIds
+     */
+    private static function gatewayOutageObservationDigest(
+        bool $dataPlaneOutage,
+        bool $publicProbeAttempted,
+        bool $publicProbeHealthy,
+        bool $statusAuthenticated,
+        bool $gatewayCoreDown,
+        bool $routePublicationFailed,
+        string $publicProbeExpectationDigest,
+        array $publicRouteIds,
+        int $publicHttpsPort,
+        string $projectUuid,
+        string $instanceName,
+        int $instanceGeneration,
+        int $masterPid,
+        int $masterEpoch,
+        string $masterLaunchId,
+        int $activeConfigGeneration,
+        string $activeConfigDigest,
+    ): string {
+        if (!$dataPlaneOutage) {
+            return '';
+        }
+        $probeFailure = $publicProbeAttempted
+            && !$publicProbeHealthy
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $publicProbeExpectationDigest) === 1
+            && $publicRouteIds !== [];
+        $authenticatedFailure = $statusAuthenticated
+            && ($gatewayCoreDown || $routePublicationFailed);
+        if (!$probeFailure && !$authenticatedFailure) {
+            return '';
+        }
+        $routes = [];
+        foreach ($publicRouteIds as $routeId) {
+            $routeId = \strtolower(\trim((string)$routeId));
+            if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1) {
+                return '';
+            }
+            $routes[$routeId] = true;
+        }
+        $routes = \array_keys($routes);
+        \sort($routes, SORT_STRING);
+        if (\preg_match(
+                '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                $projectUuid,
+            ) !== 1
+            || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceName) !== 1
+            || $instanceGeneration < 1
+            || $masterPid < 1
+            || $masterEpoch < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $masterLaunchId) !== 1
+            || $publicHttpsPort < 1
+            || $publicHttpsPort > 65535
+            || $activeConfigGeneration < 0
+            || ($activeConfigDigest !== ''
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $activeConfigDigest) !== 1)
+        ) {
+            return '';
+        }
+        return \hash('sha256', GatewayClient::canonicalJson([
+            'schema' => 'wls-gateway-outage-observation/1',
+            'project_uuid' => $projectUuid,
+            'instance' => $instanceName,
+            'instance_generation' => $instanceGeneration,
+            'master_pid' => $masterPid,
+            'master_epoch' => $masterEpoch,
+            'master_launch_id' => $masterLaunchId,
+            'public_https' => $publicHttpsPort,
+            'route_ids' => $routes,
+            'probe_expectation_digest' => $probeFailure
+                ? $publicProbeExpectationDigest
+                : '',
+            'probe_failed' => $probeFailure,
+            'authenticated_gateway_core_down' => $statusAuthenticated && $gatewayCoreDown,
+            'authenticated_route_publication_failed' => $statusAuthenticated
+                && $routePublicationFailed,
+            'active_config_generation' => $activeConfigGeneration,
+            'active_config_digest' => $activeConfigDigest,
+        ]));
+    }
+
     /**
      * @return array{
      *   authenticated:bool,state:string,active_route_ids:list<string>,
@@ -2418,6 +2871,200 @@ final class Agent extends CommandAbstract
             'pending_backend_count' => 0,
             'unavailable_route_count' => 0,
             'normal_wait' => false,
+        ];
+    }
+
+    /**
+     * Recover the exact project-owned routes that are safe to use for a local
+     * public-data-plane proof when the Controller has no current or cached
+     * authenticated status. The desired envelope is bound to this Agent's
+     * Master launch; it proves only which routes may be probed or served by the
+     * high-port fallback, never that the shared gateway published them.
+     *
+     * @param array<string,mixed> $registration
+     * @return list<string>
+     */
+    public static function localFallbackCertificateReadyRouteIds(
+        array $registration,
+        string $projectUuid,
+        string $instanceName,
+        int $instanceGeneration,
+        int $masterEpoch,
+        string $launchId,
+    ): array {
+        $projectUuid = \strtolower(\trim($projectUuid));
+        $instanceName = \trim($instanceName);
+        $launchId = \strtolower(\trim($launchId));
+        if (\preg_match(
+                '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                $projectUuid,
+            ) !== 1
+            || $instanceName === ''
+            || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceName) !== 1
+            || $instanceGeneration < 1
+            || $masterEpoch < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+            || !\hash_equals(
+                $projectUuid,
+                \strtolower(\trim((string)($registration['project_uuid'] ?? ''))),
+            )
+            || !\hash_equals($instanceName, (string)($registration['instance_id'] ?? ''))
+            || (int)($registration['project_generation'] ?? 0) < 1
+            || (int)($registration['instance_generation'] ?? 0) !== $instanceGeneration
+            || (int)($registration['master_epoch'] ?? 0) !== $masterEpoch
+            || !\hash_equals($launchId, (string)($registration['launch_id'] ?? ''))
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $registration['instance_digest'] ?? ''
+            )) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $registration['request_digest'] ?? ''
+            )) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $registration['non_certificate_desired_digest'] ?? ''
+            )) !== 1
+        ) {
+            return [];
+        }
+        $routes = $registration['routes'] ?? null;
+        if (!\is_array($routes)
+            || !\array_is_list($routes)
+            || $routes === []
+            || \count($routes) > 256
+        ) {
+            return [];
+        }
+        $ready = [];
+        $seen = [];
+        foreach ($routes as $route) {
+            if (!\is_array($route)) {
+                return [];
+            }
+            $routeId = \strtolower(\trim((string)($route['route_id'] ?? '')));
+            $domain = \strtolower(\rtrim(\trim((string)($route['domain'] ?? '')), '.'));
+            if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
+                || $domain === ''
+                || \strlen($domain) > 255
+                || isset($seen[$routeId])
+                || !\hash_equals(
+                    \substr(\hash('sha256', $projectUuid . "\0" . $domain), 0, 32),
+                    $routeId,
+                )
+            ) {
+                return [];
+            }
+            $seen[$routeId] = true;
+            $certificate = \is_array($route['certificate'] ?? null)
+                ? $route['certificate']
+                : [];
+            if (!\hash_equals('active', (string)($certificate['state'] ?? ''))
+                || ($certificate['pending'] ?? true) !== false
+                || !\is_int($certificate['generation'] ?? null)
+                || (int)$certificate['generation'] < 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                    $certificate['leaf_fingerprint_sha256'] ?? ''
+                )) !== 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                    $certificate['source_digest'] ?? ''
+                )) !== 1
+                || !self::validLocalCertificateReference($certificate['cert'] ?? null)
+                || !self::validLocalCertificateReference($certificate['key'] ?? null)
+            ) {
+                continue;
+            }
+            $ready[] = $routeId;
+        }
+        return $ready;
+    }
+
+    private static function validLocalCertificateReference(mixed $reference): bool
+    {
+        if (!\is_array($reference)
+            || !\hash_equals(
+                (string)($reference['root_alias'] ?? ''),
+                \strtolower(\trim((string)($reference['root_alias'] ?? ''))),
+            )
+            || \preg_match(
+                '/\A[a-z][a-z0-9_]{0,31}\z/D',
+                (string)($reference['root_alias'] ?? ''),
+            ) !== 1
+        ) {
+            return false;
+        }
+        $relative = (string)($reference['relative_path'] ?? '');
+        if ($relative === ''
+            || \strlen($relative) > 4096
+            || \str_contains($relative, '\\')
+            || \str_starts_with($relative, '/')
+            || \str_ends_with($relative, '/')
+        ) {
+            return false;
+        }
+        $segments = \explode('/', $relative);
+        if (\count($segments) > 256) {
+            return false;
+        }
+        foreach ($segments as $segment) {
+            if ($segment === ''
+                || $segment === '.'
+                || $segment === '..'
+                || \strlen($segment) > 255
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Centralize the fallback decision facts so a fresh Agent can distinguish
+     * a Controller-only outage from a complete gateway outage by using the
+     * same exact SNI/certificate/Host/backend sentinel as normal operation.
+     *
+     * @return array{data_plane_healthy:bool,data_plane_outage:bool,certificate_ready:bool}
+     */
+    public static function fallbackDataPlaneObservation(
+        bool $statusAuthenticated,
+        bool $servingStatusAuthenticated,
+        bool $projectServingReady,
+        bool $allCertificateReadyRoutesActive,
+        bool $routeActive,
+        bool $publicProbeHealthy,
+        bool $gatewayCoreDown,
+        bool $routePublicationFailed,
+        int $certificateReadyRouteCount,
+        int $certificateReadyUnavailableRouteCount,
+        int $localCertificateReadyRouteCount,
+    ): array {
+        $certificateReadyRouteCount = \max(0, $certificateReadyRouteCount);
+        $certificateReadyUnavailableRouteCount = \max(
+            0,
+            $certificateReadyUnavailableRouteCount,
+        );
+        $localCertificateReadyRouteCount = \max(0, $localCertificateReadyRouteCount);
+        $certificateReady = $certificateReadyRouteCount > 0
+            || $localCertificateReadyRouteCount > 0;
+        $dataPlaneHealthy = $allCertificateReadyRoutesActive
+            && $publicProbeHealthy
+            && $projectServingReady;
+        if (!$statusAuthenticated
+            && $publicProbeHealthy
+            && (($servingStatusAuthenticated && $allCertificateReadyRoutesActive)
+                || $localCertificateReadyRouteCount > 0)
+        ) {
+            // A current local sentinel proves data-plane service without
+            // trusting a stale control response or a listening TCP port.
+            $dataPlaneHealthy = $certificateReadyUnavailableRouteCount === 0;
+        }
+        $dataPlaneOutage = $certificateReadyUnavailableRouteCount > 0
+            || ($routeActive && !$publicProbeHealthy)
+            || ($certificateReady
+                && ($gatewayCoreDown
+                    || $routePublicationFailed
+                    || (!$statusAuthenticated && !$publicProbeHealthy)));
+        return [
+            'data_plane_healthy' => $dataPlaneHealthy,
+            'data_plane_outage' => $dataPlaneOutage,
+            'certificate_ready' => $certificateReady,
         ];
     }
 
@@ -2539,51 +3186,14 @@ final class Agent extends CommandAbstract
             }
             $matchedInstance = true;
         }
-        $routes = $registration['routes'] ?? null;
-        if (!\is_array($routes)
-            || !\array_is_list($routes)
-            || $routes === []
-            || \count($routes) > 256
-        ) {
-            return 0;
-        }
-        $ready = 0;
-        $routeIds = [];
-        foreach ($routes as $route) {
-            if (!\is_array($route)) {
-                return 0;
-            }
-            $routeId = \strtolower(\trim((string)($route['route_id'] ?? '')));
-            $domain = \strtolower(\trim((string)($route['domain'] ?? '')));
-            $certificate = \is_array($route['certificate'] ?? null)
-                ? $route['certificate']
-                : [];
-            if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
-                || $domain === ''
-                || \strlen($domain) > 255
-                || isset($routeIds[$routeId])
-                || !\hash_equals(
-                    \substr(\hash('sha256', $projectUuid . "\0" . $domain), 0, 32),
-                    $routeId,
-                )
-            ) {
-                return 0;
-            }
-            $routeIds[$routeId] = true;
-            if (($certificate['pending'] ?? true) === false
-                && \is_int($certificate['generation'] ?? null)
-                && (int)$certificate['generation'] > 0
-                && \preg_match('/\A[a-f0-9]{64}\z/D', \strtolower(\trim((string)(
-                    $certificate['leaf_fingerprint_sha256'] ?? ''
-                )))) === 1
-                && \preg_match('/\A[a-f0-9]{64}\z/D', \strtolower(\trim((string)(
-                    $certificate['source_digest'] ?? ''
-                )))) === 1
-            ) {
-                $ready++;
-            }
-        }
-        return $ready;
+        return \count(self::localFallbackCertificateReadyRouteIds(
+            $registration,
+            $projectUuid,
+            $instanceName,
+            (int)$registration['instance_generation'],
+            (int)$registration['master_epoch'],
+            (string)$registration['launch_id'],
+        ));
     }
 
     /**
@@ -2606,10 +3216,9 @@ final class Agent extends CommandAbstract
     public static function fallbackLeaseProvesLive(array $observation): bool
     {
         return ($observation['live'] ?? false) === true
-            && \in_array(
+            && \hash_equals(
+                'ACTIVE',
                 \strtoupper(\trim((string)($observation['state'] ?? ''))),
-                ['ACTIVE', 'DRAINING'],
-                true,
             );
     }
 
@@ -2718,7 +3327,7 @@ final class Agent extends CommandAbstract
         float $monotonicNow,
         ?string $currentHostBootId,
     ): array {
-        if (\strtoupper(\trim((string)($observation['state'] ?? ''))) !== 'DRAINING'
+        if (!self::fallbackDrainWasAcknowledged($observation)
             || !\is_finite($monotonicNow)
             || $monotonicNow <= 0.0
         ) {
@@ -2751,6 +3360,157 @@ final class Agent extends CommandAbstract
             'started_at' => $monotonicNow - $elapsed,
             'comparable' => true,
         ];
+    }
+
+    /** @param array<string,mixed> $observation */
+    private static function fallbackDrainWasAcknowledged(array $observation): bool
+    {
+        $identity = $observation['transition_identity'] ?? null;
+        if (!\is_array($identity)) {
+            return false;
+        }
+        $canonicalIdentity = [
+            'schema' => (string)($identity['schema'] ?? ''),
+            'project_uuid' => (string)($identity['project_uuid'] ?? ''),
+            'wls_instance' => (string)($identity['wls_instance'] ?? ''),
+            'role' => (string)($identity['role'] ?? ''),
+            'slot_id' => (string)($identity['slot_id'] ?? ''),
+            'service_generation' => $identity['service_generation'] ?? null,
+            'service_lease_id' => (string)($identity['service_lease_id'] ?? ''),
+            'worker_pid' => $identity['worker_pid'] ?? null,
+            'worker_process_birth' => (string)($identity['worker_process_birth'] ?? ''),
+            'worker_pid_namespace_id' => (string)($identity['worker_pid_namespace_id'] ?? ''),
+            'worker_launch_id' => (string)($identity['worker_launch_id'] ?? ''),
+            'master_pid' => $identity['master_pid'] ?? null,
+            'master_epoch' => $identity['master_epoch'] ?? null,
+            'master_launch_id' => (string)($identity['master_launch_id'] ?? ''),
+            'master_process_birth' => (string)($identity['master_process_birth'] ?? ''),
+            'master_pid_namespace_id' => (string)($identity['master_pid_namespace_id'] ?? ''),
+            'port' => $identity['port'] ?? null,
+            'host_lease_instance' => (string)($identity['host_lease_instance'] ?? ''),
+            'host_lease_id' => (string)($identity['host_lease_id'] ?? ''),
+            'host_boot_id' => (string)($identity['host_boot_id'] ?? ''),
+            'bind_host' => (string)($identity['bind_host'] ?? ''),
+            'listener_proof_digest' => (string)($identity['listener_proof_digest'] ?? ''),
+            'listener_transport' => (string)($identity['listener_transport'] ?? ''),
+            'listener_receipt_digest' => (string)($identity['listener_receipt_digest'] ?? ''),
+        ];
+        $receivedIdentity = $identity;
+        \ksort($receivedIdentity, SORT_STRING);
+        $expectedIdentity = $canonicalIdentity;
+        \ksort($expectedIdentity, SORT_STRING);
+        $workerNamespace = (string)$canonicalIdentity['worker_pid_namespace_id'];
+        $masterNamespace = (string)$canonicalIdentity['master_pid_namespace_id'];
+        $namespaceValid = PHP_OS_FAMILY === 'Linux'
+            ? (\preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $workerNamespace) === 1
+                && \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $masterNamespace) === 1)
+            : ($workerNamespace === '' && $masterNamespace === '');
+        return (int)($observation['schema_version'] ?? 0)
+                === GatewayPortLeaseAllocator::SCHEMA_VERSION
+            && \strtoupper(\trim((string)($observation['state'] ?? ''))) === 'DRAINING'
+            && \hash_equals(
+                GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+                (string)($observation['listener_phase'] ?? ''),
+            )
+            && ($observation['drain_acknowledged'] ?? false) === true
+            && \hash_equals('DRAIN', (string)($observation['listener_transition_action'] ?? ''))
+            && \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)($observation['drain_transition_id'] ?? ''),
+            ) === 1
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($observation['listener_transition_digest'] ?? ''),
+            ) === 1
+            && \hash_equals(
+                (string)$observation['listener_transition_digest'],
+                (string)($observation['drain_action_digest'] ?? ''),
+            )
+            && $receivedIdentity === $expectedIdentity
+            && \hash_equals(
+                'wls-gateway-fallback-listener/1',
+                (string)$canonicalIdentity['schema'],
+            )
+            && \hash_equals(
+                (string)($observation['project_uuid'] ?? ''),
+                (string)$canonicalIdentity['project_uuid'],
+            )
+            && \preg_match(
+                '/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D',
+                (string)$canonicalIdentity['wls_instance'],
+            ) === 1
+            && \hash_equals(
+                ControlMessage::ROLE_GATEWAY_FALLBACK,
+                (string)$canonicalIdentity['role'],
+            )
+            && \preg_match(
+                '/\Agateway_fallback#[1-9][0-9]*\z/D',
+                (string)$canonicalIdentity['slot_id'],
+            ) === 1
+            && \is_int($canonicalIdentity['service_generation'])
+            && (int)$canonicalIdentity['service_generation'] > 0
+            && \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)$canonicalIdentity['service_lease_id'],
+            ) === 1
+            && \is_int($canonicalIdentity['worker_pid'])
+            && (int)$canonicalIdentity['worker_pid'] > 0
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)$canonicalIdentity['worker_process_birth'],
+            ) === 1
+            && \hash_equals(
+                (string)($observation['worker_launch_id'] ?? ''),
+                (string)$canonicalIdentity['worker_launch_id'],
+            )
+            && \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)$canonicalIdentity['worker_launch_id'],
+            ) === 1
+            && \is_int($canonicalIdentity['master_pid'])
+            && (int)$canonicalIdentity['master_pid']
+                === (int)($observation['master_pid'] ?? 0)
+            && \is_int($canonicalIdentity['master_epoch'])
+            && (int)$canonicalIdentity['master_epoch'] > 0
+            && \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)$canonicalIdentity['master_launch_id'],
+            ) === 1
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)$canonicalIdentity['master_process_birth'],
+            ) === 1
+            && \is_int($canonicalIdentity['port'])
+            && (int)$canonicalIdentity['port'] === (int)($observation['port'] ?? 0)
+            && \hash_equals(
+                (string)($observation['lease_instance_id'] ?? ''),
+                (string)$canonicalIdentity['host_lease_instance'],
+            )
+            && \hash_equals(
+                (string)($observation['lease_id'] ?? ''),
+                (string)$canonicalIdentity['host_lease_id'],
+            )
+            && \hash_equals(
+                (string)($observation['host_boot_id'] ?? ''),
+                (string)$canonicalIdentity['host_boot_id'],
+            )
+            && \hash_equals(
+                (string)($observation['bind_host'] ?? ''),
+                (string)$canonicalIdentity['bind_host'],
+            )
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)$canonicalIdentity['listener_proof_digest'],
+            ) === 1
+            && \in_array((string)$canonicalIdentity['listener_transport'], [
+                'posix_inherited_fd',
+                'windows_wsaprotocol_info',
+            ], true)
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)$canonicalIdentity['listener_receipt_digest'],
+            ) === 1
+            && $namespaceValid;
     }
 
     /**
@@ -2786,7 +3546,10 @@ final class Agent extends CommandAbstract
                 return '';
             }
             if (!$fallbackDrainRequested) {
-                return ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN;
+                return $lastFallbackCommandAt <= 0.0
+                    || $now - $lastFallbackCommandAt >= self::HEARTBEAT_SECONDS
+                    ? ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN
+                    : '';
             }
             if ($fallbackDrainStartedAt > 0.0
                 && $now - $fallbackDrainStartedAt >= self::FALLBACK_DRAIN_SECONDS
@@ -2801,7 +3564,10 @@ final class Agent extends CommandAbstract
             && $now - $activeSince >= self::RECOVERY_STABLE_SECONDS
         ) {
             if (!$fallbackDrainRequested) {
-                return ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN;
+                return $lastFallbackCommandAt <= 0.0
+                    || $now - $lastFallbackCommandAt >= self::HEARTBEAT_SECONDS
+                    ? ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN
+                    : '';
             }
             if ($fallbackDrainStartedAt > 0.0
                 && $now - $fallbackDrainStartedAt >= self::FALLBACK_DRAIN_SECONDS
@@ -2851,7 +3617,8 @@ final class Agent extends CommandAbstract
      *   active_requests:int,
      *   long_lived_connections:int,
      *   sse_connections:int,
-     *   websocket_connections:int
+     *   websocket_connections:int,
+     *   http2_connections:int
      * }
      */
     public static function aggregateMasterDrainCounters(
@@ -2870,6 +3637,7 @@ final class Agent extends CommandAbstract
             'long_lived_connections' => 0,
             'sse_connections' => 0,
             'websocket_connections' => 0,
+            'http2_connections' => 0,
         ];
         if (($result['success'] ?? false) !== true) {
             return $unknown();
@@ -2915,6 +3683,7 @@ final class Agent extends CommandAbstract
             'long_lived_connections' => 0,
             'sse_connections' => 0,
             'websocket_connections' => 0,
+            'http2_connections' => 0,
         ];
         foreach ($workers as $workerId => $instance) {
             $metadata = \is_array($instance['metadata'] ?? null)
@@ -2999,11 +3768,20 @@ final class Agent extends CommandAbstract
         }
         if (!\is_array($lease)) {
             return [
+                'schema_version' => 0,
                 'state' => '',
                 'live' => false,
+                'listener_phase' => '',
+                'drain_acknowledged' => false,
+                'listener_transition_action' => '',
+                'drain_transition_id' => '',
+                'listener_transition_digest' => '',
+                'drain_action_digest' => '',
+                'transition_identity' => null,
                 'draining_timestamp' => 0,
                 'draining_host_boot_id' => '',
                 'draining_monotonic' => 0.0,
+                'host_boot_id' => '',
                 'bind_host' => '',
                 'port' => 0,
                 'lease_id' => '',
@@ -3016,20 +3794,56 @@ final class Agent extends CommandAbstract
         }
         $state = \strtoupper(\trim((string)($lease['state'] ?? '')));
         try {
-            $live = \is_array($leases->liveServingLease(
+            $liveLease = $leases->liveServingLeaseForAnyOwner(
                 $leaseInstanceId,
                 (string)($lease['bind_host'] ?? ''),
                 (int)($lease['port'] ?? 0),
                 (string)($lease['lease_id'] ?? ''),
-                (string)($lease['launch_id'] ?? ''),
                 (int)($lease['master_pid'] ?? 0),
-            ));
+            );
         } catch (\Throwable) {
-            $live = false;
+            $liveLease = null;
         }
+        return self::projectFallbackLeaseObservation(
+            $lease,
+            \is_array($liveLease) ? $liveLease : null,
+            $leaseInstanceId,
+        );
+    }
+
+    /**
+     * Project only the bounded schema-6 fields consumed by the fallback
+     * lifecycle.  fallbackDrainWasAcknowledged() revalidates the complete
+     * transition tuple before any drain clock can consume this projection.
+     *
+     * @param array<string,mixed> $lease
+     * @param array<string,mixed>|null $liveLease
+     * @return array<string,mixed>
+     */
+    private static function projectFallbackLeaseObservation(
+        array $lease,
+        ?array $liveLease,
+        string $leaseInstanceId,
+    ): array {
+        $live = \is_array($liveLease);
+        $projection = $live ? $liveLease : $lease;
         return [
-            'state' => $state,
+            'schema_version' => (int)($lease['schema_version'] ?? 0),
+            'state' => \strtoupper(\trim((string)($lease['state'] ?? ''))),
             'live' => $live,
+            'listener_phase' => (string)($lease['listener_phase'] ?? ''),
+            'drain_acknowledged' => ($lease['drain_acknowledged'] ?? false) === true,
+            'listener_transition_action' => (string)(
+                $lease['listener_transition_action'] ?? ''
+            ),
+            'drain_transition_id' => (string)($lease['drain_transition_id'] ?? ''),
+            'listener_transition_digest' => (string)(
+                $lease['listener_transition_digest'] ?? ''
+            ),
+            'drain_action_digest' => (string)($lease['drain_action_digest'] ?? ''),
+            'transition_identity' => \is_array($lease['transition_identity'] ?? null)
+                ? $lease['transition_identity']
+                : null,
             'draining_timestamp' => (int)($lease['draining_timestamp'] ?? 0),
             'draining_host_boot_id' => (string)(
                 $lease['draining_host_boot_id'] ?? ''
@@ -3037,14 +3851,17 @@ final class Agent extends CommandAbstract
             'draining_monotonic' => (float)(
                 $lease['draining_monotonic'] ?? 0.0
             ),
+            'host_boot_id' => (string)($lease['host_boot_id'] ?? ''),
             'bind_host' => (string)($lease['bind_host'] ?? ''),
             'port' => (int)($lease['port'] ?? 0),
             'lease_id' => (string)($lease['lease_id'] ?? ''),
             'lease_instance_id' => $leaseInstanceId,
             'project_uuid' => (string)($lease['project_uuid'] ?? ''),
             'master_pid' => (int)($lease['master_pid'] ?? 0),
-            'worker_launch_id' => (string)($lease['launch_id'] ?? ''),
-            'confirmed_timestamp' => (int)($lease['confirmed_timestamp'] ?? 0),
+            'worker_launch_id' => (string)($projection['launch_id'] ?? ''),
+            'confirmed_timestamp' => (int)(
+                $projection['confirmed_timestamp'] ?? 0
+            ),
         ];
     }
 

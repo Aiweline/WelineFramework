@@ -9,6 +9,7 @@ description: Build or modify a bounded Weline business module, including registr
 
 - Keep controllers, views, menus, setup, services, and data ownership inside the owning module.
 - Use published contracts for cross-module collaboration; do not promote a module-local need into framework core without a shared defect.
+- **Hard**：禁止跨模块强制引用对方具体类；通知/副作用用 Event/Observer 解耦；读取用已发布 Interface 或 `w_query()`。见 `global-constraints.md` §4。
 - Browser business interactions use the Theme/weline-api chain; do not add direct browser HTTP clients.
 - If the user explicitly requests import/sync execution, completion includes running the owning command, not only editing its provider.
 

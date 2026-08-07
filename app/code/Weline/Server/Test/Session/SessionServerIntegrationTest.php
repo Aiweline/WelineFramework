@@ -75,7 +75,7 @@ class SessionServerIntegrationTest extends TestCase
 
         $this->stopServerProcess();
 
-        $tokenPath = BP . 'var/session/' . $this->tokenFileName;
+        $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($this->tokenFileName);
         if (\is_file($tokenPath)) {
             @\unlink($tokenPath);
         }
@@ -289,7 +289,7 @@ PHP;
 
     private function waitUntilServerReady(): bool
     {
-        $tokenPath = BP . 'var/session/' . $this->tokenFileName;
+        $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($this->tokenFileName);
         $deadline = \microtime(true) + 8.0;
 
         while (\microtime(true) < $deadline) {

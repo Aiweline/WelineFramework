@@ -119,7 +119,7 @@ final class GatewayProtocolReceiptContractTest extends TestCase
             $source,
         );
         self::assertStringContainsString(
-            '$heartbeat = $this->heartbeat($instanceName);',
+            '$heartbeat = $this->heartbeat(',
             $source,
         );
         self::assertStringContainsString(
@@ -200,6 +200,63 @@ final class GatewayProtocolReceiptContractTest extends TestCase
         self::assertArrayNotHasKey('unexpected', $sanitized['payload']['credential']);
     }
 
+    public function testRotationLocalAfterImageMustProveCommittedCredentialSecret(): void
+    {
+        $credential = [
+            'schema_version' => 1,
+            'protocol' => GatewayPaths::PROTOCOL,
+            'host_id' => \str_repeat('a', 32),
+            'project_uuid' => '123e4567-e89b-42d3-a456-426614174062',
+            'credential_id' => \str_repeat('b', 32),
+            'credential_generation' => 2,
+            'secret' => \str_repeat('c', 64),
+            'issued_at' => '2026-08-03T00:00:00+00:00',
+        ];
+        $rotation = [
+            'rotation_id' => \str_repeat('d', 32),
+            'old_project_uuid' => '123e4567-e89b-42d3-a456-426614174061',
+            'new_project_uuid' => $credential['project_uuid'],
+            'project_root' => '/project',
+            'request_digest' => \str_repeat('e', 64),
+            'idempotency_key' => \str_repeat('f', 40),
+            'new_credential_id' => $credential['credential_id'],
+        ];
+        $receipt = [
+            'schema_version' => 1,
+            'protocol' => GatewayPaths::PROTOCOL,
+            'host_id' => $credential['host_id'],
+            'gateway_epoch' => \str_repeat('1', 32),
+            'rotation_id' => $rotation['rotation_id'],
+            'old_project_uuid' => $rotation['old_project_uuid'],
+            'new_project_uuid' => $rotation['new_project_uuid'],
+            'project_root' => $rotation['project_root'],
+            'request_digest' => $rotation['request_digest'],
+            'idempotency_key' => $rotation['idempotency_key'],
+            'security_generation' => 7,
+            'new_credential_id' => $rotation['new_credential_id'],
+            'state' => 'CONTROLLER_COMMITTED',
+            'issued_at' => '2026-08-03T00:00:00+00:00',
+        ];
+        $receipt['signature'] = \hash_hmac(
+            'sha256',
+            GatewayClient::canonicalJson($receipt),
+            $credential['secret'],
+        );
+        $rotation['commit_receipt'] = $receipt;
+
+        GatewayProjectIdentityRotator::validateCommittedCredential(
+            $rotation,
+            $credential,
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('does not prove the committed host rotation');
+        GatewayProjectIdentityRotator::validateCommittedCredential(
+            $rotation,
+            [...$credential, 'secret' => \str_repeat('2', 64)],
+        );
+    }
+
     public function testLeaseReceiptMustMatchExactAuthenticatedPublicationFence(): void
     {
         $method = new \ReflectionMethod(
@@ -215,7 +272,11 @@ final class GatewayProtocolReceiptContractTest extends TestCase
         $launchId = \str_repeat('e', 32);
         $activeDigest = \str_repeat('f', 64);
         $routeId = \str_repeat('1', 32);
+        $routeGenerations = [$routeId => 3];
         $receipt = [
+            'schema_version' => GatewayHostManager::LEASE_RECEIPT_SCHEMA_VERSION,
+            'protocol' => GatewayPaths::PROTOCOL,
+            'host_id' => \str_repeat('8', 32),
             'project_uuid' => $projectUuid,
             'gateway_epoch' => $epoch,
             'project_generation' => 5,
@@ -224,12 +285,21 @@ final class GatewayProtocolReceiptContractTest extends TestCase
             'active_config_generation' => 11,
             'active_config_digest' => $activeDigest,
             'host_boot_id' => \str_repeat('9', 64),
+            'issued_monotonic' => 100.0,
+            'lease_sequence' => 1,
+            'lease_ttl_seconds' => 45,
             'instance_id' => $instanceId,
             'instance_generation' => 7,
             'instance_digest' => $instanceDigest,
             'master_epoch' => 9,
             'launch_id' => $launchId,
-            'route_generations' => [$routeId => 3],
+            'route_generations' => $routeGenerations,
+            'routes_digest' => \hash(
+                'sha256',
+                GatewayClient::canonicalJson($routeGenerations),
+            ),
+            'issued_at' => '2026-08-06T00:00:00+00:00',
+            'signature' => \str_repeat('7', 64),
         ];
         $status = [
             'ok' => true,
@@ -381,5 +451,53 @@ final class GatewayProtocolReceiptContractTest extends TestCase
             }
             self::assertTrue($rejected, 'An inverse receipt completion must fail closed.');
         }
+    }
+
+    public function testDurableLeaseReceiptCommitIsNotReclassifiedByExpiredBusinessDeadline(): void
+    {
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(GatewayHostManager::class))->getFileName(),
+        );
+        $start = \strpos($source, 'private function persistLeaseReceipt(');
+        $end = \strpos($source, 'private static function assertLeaseReceiptMayReplace(', $start ?: 0);
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+        $method = \substr($source, $start, $end - $start);
+
+        self::assertStringContainsString(
+            '$updated = ServerInstanceManager::updateJsonFileAtomically(',
+            $method,
+        );
+        self::assertStringContainsString('if (!$updated) {', $method);
+        self::assertStringNotContainsString(
+            '$this->remainingOperationDeadline($deadlineMonotonic);',
+            $method,
+            'A successful atomic publication is the durable commit result; a post-commit deadline gate creates a false failure.',
+        );
+    }
+
+    public function testExpiredRegistrationDeadlineIsNotReusedForFailureCompensation(): void
+    {
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(GatewayHostManager::class))->getFileName(),
+        );
+        $start = \strpos($source, 'private function submitRegistration(');
+        $end = \strpos($source, 'public static function controlPlaneAcceptsRegistration(', $start ?: 0);
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+        $method = \substr($source, $start, $end - $start);
+        $catch = \strpos($method, '} catch (\\Throwable $throwable) {');
+        self::assertIsInt($catch);
+        $compensation = \substr($method, $catch);
+
+        self::assertStringContainsString(
+            'FAILURE_COMPENSATION_DEADLINE_SECONDS',
+            $compensation,
+        );
+        self::assertStringNotContainsString(
+            '$deadlineMonotonic',
+            $compensation,
+            'Failure bookkeeping needs its own bounded deadline after the host mutation budget has expired.',
+        );
     }
 }

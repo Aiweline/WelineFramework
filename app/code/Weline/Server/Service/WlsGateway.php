@@ -50,7 +50,7 @@ class WlsGateway
      * Master PID
      */
     private int $masterPid = 0;
-    private int $lastMasterPidCheck = 0;
+    private float $lastMasterPidCheck = 0.0;
     private ?ChildMasterGuard $masterGuard = null;
 
     /**
@@ -401,7 +401,7 @@ class WlsGateway
             $this->ipcLaunchId
         );
         $this->ipcClient->flushPendingWrites(1.0);
-        $this->lastReadySentAt = \microtime(true);
+        $this->lastReadySentAt = self::monotonicSeconds();
     }
 
     private function resetIpcConnectionState(): void
@@ -464,7 +464,7 @@ class WlsGateway
             $this->readyAcknowledged = true;
         }
 
-        if (!$this->readyAcknowledged && (\microtime(true) - $this->lastReadySentAt) >= 1.0) {
+        if (!$this->readyAcknowledged && (self::monotonicSeconds() - $this->lastReadySentAt) >= 1.0) {
             $this->sendReady();
         }
     }
@@ -481,7 +481,7 @@ class WlsGateway
             return;
         }
 
-        $now = \time();
+        $now = self::monotonicSeconds();
         if (($now - $this->lastMasterPidCheck) < self::MASTER_PID_CHECK_INTERVAL_SEC) {
             return;
         }
@@ -705,10 +705,10 @@ class WlsGateway
         stream_set_blocking($backend, false);
 
         $timeout = 300; // 5分钟超时
-        $start = time();
+        $start = self::monotonicSeconds();
 
         while (true) {
-            if (time() - $start > $timeout || feof($client) || feof($backend)) {
+            if (self::monotonicSeconds() - $start > $timeout || feof($client) || feof($backend)) {
                 break;
             }
 
@@ -734,11 +734,16 @@ class WlsGateway
                 } else {
                     fwrite($client, $data);
                 }
-                $start = time();
+                $start = self::monotonicSeconds();
             }
         }
 
         fclose($client);
         fclose($backend);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

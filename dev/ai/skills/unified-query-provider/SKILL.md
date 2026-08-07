@@ -9,6 +9,7 @@ description: Implement and consume Weline w_query and cross-module QueryProvider
 
 - 新增稳定的跨模块读取契约时使用 QueryProvider / `w_query()`；已有发布接口时遵循其 owning contract。
 - 禁止为读取数据而跨模块 `use`、注入、`ObjectManager::getInstance` 或 `new` 对方 Service/Model/Helper。
+- **Hard（`global-constraints.md` §4）**：模块间禁止硬绑具体类；通知/副作用用 Event/Observer 解耦，不要用 Event 代替查询 API。
 - 浏览器传输仍使用 `Weline.Api.resource()`、`graph()` 或 `stream()`；不要把 `w_query()` 当成新的传输协议。
 - 调用前先查帮助：`php bin/w query:help <provider|WeShop_Product>` 或 `w_query('模块名')`
 

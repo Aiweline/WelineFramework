@@ -42,6 +42,26 @@ final class SubprocessControlKernelTest extends TestCase
         }
     }
 
+    public function testResolveControlPortRejectsFutureWallAuditTimestamp(): void
+    {
+        $instanceName = 'ut-kernel-port-future-' . \bin2hex(\random_bytes(4));
+        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        if (!\is_dir($instanceDir)) {
+            @\mkdir($instanceDir, 0777, true);
+        }
+
+        \file_put_contents($instanceFile, \json_encode([
+            'control_port' => 19093,
+            'updated_at' => \time() + 3600,
+        ]));
+        try {
+            self::assertSame(0, SubprocessControlKernel::resolveControlPort($instanceName, 0, 0));
+        } finally {
+            @\unlink($instanceFile);
+        }
+    }
+
     public function testResolveControlPortWaitsForFreshInstanceFileWhenCurrentInfoIsStale(): void
     {
         if (!\function_exists('proc_open')) {

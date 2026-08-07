@@ -76,7 +76,7 @@ class ServerBenchmarkService
         $errors = 0;
         $completed = 0;
         $sent = 0;
-        $startedAt = \microtime(true);
+        $startedAt = self::monotonicSeconds();
 
         $batch = \min($concurrency, $totalRequests);
         for ($i = 0; $i < $batch; $i++) {
@@ -96,7 +96,7 @@ class ServerBenchmarkService
 
         foreach ($handles as $ch) {
             \curl_multi_add_handle($mh, $ch);
-            $active[(int)$ch] = ['start' => \microtime(true), 'handle' => $ch];
+            $active[(int)$ch] = ['start' => self::monotonicSeconds(), 'handle' => $ch];
             $sent++;
         }
 
@@ -108,10 +108,10 @@ class ServerBenchmarkService
             while ($info = \curl_multi_info_read($mh)) {
                 $ch = $info['handle'];
                 $key = (int)$ch;
-                $start = (float)($active[$key]['start'] ?? \microtime(true));
+                $start = (float)($active[$key]['start'] ?? self::monotonicSeconds());
                 unset($active[$key]);
 
-                $lat = (\microtime(true) - $start) * 1000;
+                $lat = (self::monotonicSeconds() - $start) * 1000;
                 $httpCode = (int)\curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 if ($info['result'] !== CURLE_OK || $httpCode < 200 || $httpCode >= 500) {
                     $errors++;
@@ -123,7 +123,7 @@ class ServerBenchmarkService
                 \curl_multi_remove_handle($mh, $ch);
                 if ($sent < $totalRequests) {
                     \curl_multi_add_handle($mh, $ch);
-                    $active[(int)$ch] = ['start' => \microtime(true), 'handle' => $ch];
+                    $active[(int)$ch] = ['start' => self::monotonicSeconds(), 'handle' => $ch];
                     $sent++;
                 }
             }
@@ -138,7 +138,7 @@ class ServerBenchmarkService
         }
         \curl_multi_close($mh);
 
-        $elapsedSec = \max(0.001, \microtime(true) - $startedAt);
+        $elapsedSec = \max(0.001, self::monotonicSeconds() - $startedAt);
         \sort($latencies);
         $count = \count($latencies);
         $avg = $count > 0 ? (\array_sum($latencies) / $count) : 0;
@@ -160,5 +160,10 @@ class ServerBenchmarkService
                 'max' => \round((float)($count > 0 ? $latencies[$count - 1] : 0), 3),
             ],
         ];
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

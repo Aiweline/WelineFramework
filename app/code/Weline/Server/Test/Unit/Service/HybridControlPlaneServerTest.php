@@ -406,6 +406,89 @@ final class HybridControlPlaneServerTest extends TestCase
         }
     }
 
+    public function testSupervisorPingPongUsesLaunchBoundMonotonicObservation(): void
+    {
+        $resolver = new ControlEndpointResolver(BP, 28400, 1000);
+        $runtime = new SupervisorRuntime(
+            instanceName: 'ut-monotonic-pong',
+            channelId: 'channel-ut-monotonic-pong',
+            endpointResolver: $resolver,
+        );
+        $hybrid = new HybridControlPlaneServer(
+            controlServer: new MasterControlServer(),
+            endpointResolver: $resolver,
+            supervisorEnabled: true,
+            channelId: 'channel-ut-monotonic-pong',
+            supervisorRuntime: $runtime,
+        );
+        $hybrid->setExpectedInstanceCode('ut-monotonic-pong');
+        $hybrid->onMessage(static function (): void {});
+        $hybrid->onDisconnect(static function (): void {});
+        self::assertTrue($hybrid->start('127.0.0.1', 0));
+
+        $client = new SupervisorChildClient(
+            instanceName: 'ut-monotonic-pong',
+            channelId: 'channel-ut-monotonic-pong',
+            endpointResolver: $resolver,
+            progressCallback: static function () use ($hybrid): void {
+                $hybrid->poll(0, 10000);
+            },
+        );
+
+        try {
+            self::assertTrue($client->connect('127.0.0.1', 0));
+            self::assertTrue($client->register(
+                role: ControlMessage::ROLE_WORKER,
+                pid: 12004,
+                port: 18084,
+                workerId: 4,
+                launchId: 'launch-monotonic-supervisor',
+                instanceCode: 'ut-monotonic-pong',
+                msgId: 'hello-monotonic-supervisor',
+            ));
+
+            $pingMessage = ControlMessage::ping();
+            self::assertTrue($hybrid->sendToInstance('launch-monotonic-supervisor', $pingMessage));
+            $receivedPing = null;
+            $this->pollUntil(
+                static function () use ($client, &$receivedPing): bool {
+                    foreach ($client->handleReadable() as $message) {
+                        if (($message['type'] ?? '') === ControlMessage::TYPE_PING) {
+                            $receivedPing = $message;
+                            return true;
+                        }
+                    }
+                    return false;
+                },
+                $hybrid,
+            );
+            self::assertIsArray($receivedPing);
+            self::assertTrue($client->send(ControlMessage::pongForPing($receivedPing)));
+            self::assertTrue($client->flushPendingWrites(0.25));
+
+            $observation = null;
+            $this->pollUntil(
+                static function () use ($hybrid, &$observation): bool {
+                    $observation = $hybrid->getLastPongObservation('launch-monotonic-supervisor');
+                    return \is_array($observation);
+                },
+                $hybrid,
+            );
+            self::assertIsArray($observation);
+            self::assertSame(
+                (float)($receivedPing['monotonic_timestamp'] ?? 0.0),
+                $observation['ping_monotonic'],
+            );
+            self::assertSame(
+                (string)($receivedPing['host_boot_id'] ?? ''),
+                $observation['host_boot_id'],
+            );
+        } finally {
+            $client->close();
+            $hybrid->close();
+        }
+    }
+
     private function pollUntil(callable $assertion, HybridControlPlaneServer $server, float $timeoutSec = 2.0): void
     {
         $deadline = \microtime(true) + $timeoutSec;

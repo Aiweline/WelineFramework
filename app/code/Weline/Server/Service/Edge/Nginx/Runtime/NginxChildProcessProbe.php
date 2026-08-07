@@ -18,8 +18,12 @@ final class NginxChildProcessProbe
     private const PROCESS_TABLE_TIMEOUT_SECONDS = 2.0;
 
     /** @return list<int>|null */
-    public static function workerPids(int $masterPid): ?array
+    public static function workerPids(
+        int $masterPid,
+        ?float $deadlineMonotonic = null,
+    ): ?array
     {
+        self::remainingDeadline($deadlineMonotonic);
         if ($masterPid < 1) {
             return null;
         }
@@ -43,6 +47,7 @@ final class NginxChildProcessProbe
                 }
                 $workers = [];
                 foreach ($childPids as $childPid) {
+                    self::remainingDeadline($deadlineMonotonic);
                     $before = self::linuxStatIdentity($childPid);
                     if ($before === null || $before['ppid'] !== $masterPid) {
                         return null;
@@ -89,7 +94,11 @@ final class NginxChildProcessProbe
         if ($ps === null || $pgrep === null) {
             return null;
         }
-        $firstChildren = self::posixChildPids($pgrep, $masterPid);
+        $firstChildren = self::posixChildPids(
+            $pgrep,
+            $masterPid,
+            $deadlineMonotonic,
+        );
         if ($firstChildren === null) {
             return null;
         }
@@ -102,7 +111,7 @@ final class NginxChildProcessProbe
             \implode(',', $firstChildren),
             '-o',
             'pid=,ppid=,command=',
-        ], self::PROCESS_TABLE_TIMEOUT_SECONDS);
+        ], self::commandTimeout($deadlineMonotonic));
         if ((int)($result['code'] ?? 1) !== 0) {
             return null;
         }
@@ -113,6 +122,7 @@ final class NginxChildProcessProbe
         $workers = [];
         $seen = [];
         foreach ($lines as $line) {
+            self::remainingDeadline($deadlineMonotonic);
             if (\trim($line) === '') {
                 continue;
             }
@@ -127,7 +137,11 @@ final class NginxChildProcessProbe
                 $workers[$pid] = true;
             }
         }
-        $secondChildren = self::posixChildPids($pgrep, $masterPid);
+        $secondChildren = self::posixChildPids(
+            $pgrep,
+            $masterPid,
+            $deadlineMonotonic,
+        );
         if ($secondChildren === null
             || $secondChildren !== $firstChildren
             || self::sortedPids($seen) !== $firstChildren
@@ -144,6 +158,56 @@ final class NginxChildProcessProbe
             return null;
         }
         return self::linuxStatIdentity($pid)['start_ticks'] ?? null;
+    }
+
+    /** Return null when the bounded OS probe cannot prove either state. */
+    public static function processIsRunning(
+        int $pid,
+        ?float $deadlineMonotonic = null,
+    ): ?bool {
+        if ($pid < 1) {
+            return false;
+        }
+        self::remainingDeadline($deadlineMonotonic);
+        if (\PHP_OS_FAMILY === 'Linux') {
+            $directory = '/proc/' . $pid;
+            if (!\is_dir($directory)) {
+                return false;
+            }
+            $status = self::readPseudoFile(
+                $directory . '/status',
+                self::MAX_PROC_STAT_BYTES,
+            );
+            self::remainingDeadline($deadlineMonotonic);
+            if ($status === null) {
+                return null;
+            }
+            return \preg_match('/^State:\s+Z/m', $status) !== 1;
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return null;
+        }
+        $ps = self::processTableExecutable();
+        if ($ps === null) {
+            return null;
+        }
+        $result = GatewayBoundedCommandRunner::run([
+            $ps,
+            '-p',
+            (string)$pid,
+            '-o',
+            'state=',
+        ], self::commandTimeout($deadlineMonotonic));
+        self::remainingDeadline($deadlineMonotonic);
+        $state = \trim((string)($result['stdout'] ?? ''));
+        $code = (int)($result['code'] ?? 1);
+        if ($code === 1 && $state === '') {
+            return false;
+        }
+        if ($code !== 0 || \preg_match('/\A([A-Za-z])/', $state, $match) !== 1) {
+            return null;
+        }
+        return \strtoupper((string)$match[1]) !== 'Z';
     }
 
     /** @param array<int,bool> $pids @return list<int> */
@@ -178,12 +242,17 @@ final class NginxChildProcessProbe
     }
 
     /** @return list<int>|null */
-    private static function posixChildPids(string $pgrep, int $masterPid): ?array
+    private static function posixChildPids(
+        string $pgrep,
+        int $masterPid,
+        ?float $deadlineMonotonic,
+    ): ?array
     {
         $result = GatewayBoundedCommandRunner::run(
             [$pgrep, '-P', (string)$masterPid],
-            self::PROCESS_TABLE_TIMEOUT_SECONDS,
+            self::commandTimeout($deadlineMonotonic),
         );
+        self::remainingDeadline($deadlineMonotonic);
         $code = (int)($result['code'] ?? 1);
         if ($code === 1 && \trim((string)($result['output'] ?? '')) === '') {
             return [];
@@ -204,6 +273,29 @@ final class NginxChildProcessProbe
         }
 
         return self::sortedPids($pids);
+    }
+
+    private static function commandTimeout(?float $deadlineMonotonic): float
+    {
+        return \min(
+            self::PROCESS_TABLE_TIMEOUT_SECONDS,
+            self::remainingDeadline($deadlineMonotonic),
+        );
+    }
+
+    private static function remainingDeadline(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return self::PROCESS_TABLE_TIMEOUT_SECONDS;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('Nginx process probe deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException('Nginx process probe deadline was exhausted.');
+        }
+        return $remaining;
     }
 
     /** @return list<int>|null */

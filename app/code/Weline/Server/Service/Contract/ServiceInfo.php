@@ -41,6 +41,7 @@ class ServiceInfo
         public readonly array $metadata = [],
         public readonly int $rootPid = 0,
         public readonly int $launcherPid = 0,
+        public readonly float $startedMonotonic = 0.0,
     ) {}
 
     /**
@@ -202,10 +203,17 @@ class ServiceInfo
      */
     public function getUptime(): float
     {
-        if ($this->startedAt <= 0) {
+        $nowMonotonic = \hrtime(true) / 1_000_000_000;
+        if (\is_finite($this->startedMonotonic)
+            && $this->startedMonotonic > 0.0
+            && $this->startedMonotonic <= $nowMonotonic
+        ) {
+            return $nowMonotonic - $this->startedMonotonic;
+        }
+        if (!\is_finite($this->startedAt) || $this->startedAt <= 0.0) {
             return 0;
         }
-        return \microtime(true) - $this->startedAt;
+        return \max(0.0, self::wallClockSeconds() - $this->startedAt);
     }
 
     /**
@@ -246,6 +254,7 @@ class ServiceInfo
             metadata: $instance->metadata,
             rootPid: $instance->rootPid,
             launcherPid: $instance->launcherPid,
+            startedMonotonic: $instance->getStartedMonotonic(),
         );
     }
 
@@ -291,8 +300,14 @@ class ServiceInfo
             'epoch' => $this->epoch,
             'launch_id' => $this->launchId,
             'started_at' => $this->startedAt,
+            'started_monotonic' => $this->startedMonotonic,
             'ipc_client_id' => $this->ipcClientId,
             'metadata' => $this->metadata,
         ];
+    }
+
+    private static function wallClockSeconds(): float
+    {
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
     }
 }

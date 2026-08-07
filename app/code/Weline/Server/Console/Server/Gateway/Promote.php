@@ -42,13 +42,21 @@ final class Promote extends AbstractGatewayCommand
         try {
             return GatewayProjectStateFilesystem::withExclusiveLock(
                 $this->promotionLockFile(),
-                $recoverOnly
-                    ? fn (): int => $this->executeRecoveryOnlyLocked($json)
-                    : fn (): int => $this->executePromotionLocked(
-                        $json,
-                        $package,
-                        $profile,
-                    ),
+                function () use (
+                    $recoverOnly,
+                    $json,
+                    $package,
+                    $profile,
+                ): int {
+                    $this->cleanupPromotionJournalRecoveryBackups();
+                    return $recoverOnly
+                        ? $this->executeRecoveryOnlyLocked($json)
+                        : $this->executePromotionLocked(
+                            $json,
+                            $package,
+                            $profile,
+                        );
+                },
             );
         } catch (\Throwable $throwable) {
             return $this->failure(
@@ -147,20 +155,35 @@ final class Promote extends AbstractGatewayCommand
                 $legacyRuntimeOwnership,
                 $legacyPublicBaseline,
             );
+            $this->assertProjectRuntimeOwnershipUnchanged(
+                $legacyRuntimeRoot,
+                $legacyRuntimeOwnership,
+            );
             $journal = $this->advancePromotionJournal(
                 $journal,
                 'LEGACY_STOPPING',
                 ['legacy_stop_started' => true],
             );
             $stopped = $legacy->stopForInstance($owner);
-            if (!($stopped['ok'] ?? false)) {
+            if (!$this->legacyStopReleasedPublicOwnership($stopped)) {
+                if (($stopped['owner_matched'] ?? null) === false) {
+                    // The lifecycle lock proved that this transaction did not
+                    // stop the captured owner. Do not let compensating rollback
+                    // reconfigure a different instance that won the race.
+                    $journal['legacy_stop_started'] = false;
+                    $journal['legacy_stop_rejected'] = true;
+                    $journal = $this->advancePromotionJournal(
+                        $journal,
+                        'LEGACY_STOPPING',
+                    );
+                }
                 throw new \RuntimeException(
                     'Legacy Nginx did not release the public ports: '
                     . (string)($stopped['message'] ?? '')
                 );
             }
             $legacyStopped = true;
-            $downtimeStarted = \microtime(true);
+            $downtimeStarted = self::monotonicSeconds();
             $journal = $this->advancePromotionJournal($journal, 'LEGACY_STOPPED');
             $journal = $this->advancePromotionJournal(
                 $journal,
@@ -212,7 +235,7 @@ final class Promote extends AbstractGatewayCommand
             $journal = $this->advancePromotionJournal($journal, 'COMMITTED');
             $registration['agent'] = $agent;
             $registration['agent_commit'] = $commit;
-            $maintenanceWindow = \microtime(true) - $downtimeStarted;
+            $maintenanceWindow = self::monotonicSeconds() - $downtimeStarted;
             if (!$json) {
                 $this->printer->success(__('WLS 1.x 公共端口 owner 已显式提升为宿主级 WLS 2.0 Gateway。'));
                 $this->printer->note(__('实测维护窗：%{1} 秒。', [
@@ -324,7 +347,7 @@ final class Promote extends AbstractGatewayCommand
                     $this->printer->warning(__('已回滚并恢复原项目托管 Nginx。'));
                 }
                 if ($downtimeStarted > 0.0) {
-                    $recoveryWindow = \microtime(true) - $downtimeStarted;
+                    $recoveryWindow = self::monotonicSeconds() - $downtimeStarted;
                     $details['recovery_window_seconds'] = \round($recoveryWindow, 3);
                     if (!$json) {
                         $this->printer->note(__('失败恢复窗：%{1} 秒。', [
@@ -391,7 +414,7 @@ final class Promote extends AbstractGatewayCommand
     /**
      * @param array<string,mixed> $staged
      * @param list<string> $serverNames
-     * @param array{uid:int,gid:int}|null $runtimeOwnership
+     * @param array{uid:int,gid:int,device:string,inode:string}|null $runtimeOwnership
      * @param array<string,mixed> $baseline
      * @return array<string,mixed>
      */
@@ -561,6 +584,30 @@ final class Promote extends AbstractGatewayCommand
         if ($contents === null) {
             return null;
         }
+        return $this->decodePromotionJournal($contents);
+    }
+
+    /**
+     * The caller holds transaction.lock, which is also required by every
+     * promotion journal writer. A retained ReplaceFileW backup is the prior
+     * committed transaction generation; collect it only after the current
+     * paired journal has passed the same integrity contract used by recovery.
+     */
+    private function cleanupPromotionJournalRecoveryBackups(): void
+    {
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $this->promotionJournalFile(),
+            8 * 1024 * 1024,
+            'Promotion transaction journal',
+            function (string $contents): void {
+                $this->decodePromotionJournal($contents);
+            },
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private function decodePromotionJournal(string $contents): array
+    {
         $journal = \json_decode($contents, true, 64, JSON_THROW_ON_ERROR);
         if (!\is_array($journal)) {
             throw new \RuntimeException('Promotion transaction journal is invalid.');
@@ -787,6 +834,14 @@ final class Promote extends AbstractGatewayCommand
             throw new \RuntimeException('Promotion rollback journal facts are incomplete.');
         }
         $details = ['legacy_rollback' => 'not_required'];
+        if (($journal['legacy_stop_started'] ?? false) === true
+            && ($journal['legacy_restored'] ?? false) !== true
+        ) {
+            $this->assertRollbackLegacyOwnerNotReplaced(
+                $owner,
+                ManagedNginxService::fromEnv()->promotionRollbackOwnerSnapshot(),
+            );
+        }
         if (($journal['agent_attach_started'] ?? false) === true) {
             try {
                 $this->setProjectGatewayAgentEnabled($owner, false);
@@ -833,6 +888,8 @@ final class Promote extends AbstractGatewayCommand
                     (string)($legacy['runtime_root'] ?? ''),
                     (int)($runtimeOwnership['uid'] ?? -1),
                     (int)($runtimeOwnership['gid'] ?? -1),
+                    (string)($runtimeOwnership['device'] ?? ''),
+                    (string)($runtimeOwnership['inode'] ?? ''),
                 );
             }
             $rollback = $this->restoreLegacyNginxThroughProjectMaster(
@@ -1075,6 +1132,40 @@ final class Promote extends AbstractGatewayCommand
         return $data;
     }
 
+    /** @param array<string,mixed> $receipt */
+    private function legacyStopReleasedPublicOwnership(array $receipt): bool
+    {
+        return ($receipt['ok'] ?? false) === true
+            && ($receipt['stopped'] ?? false) === true
+            && ($receipt['owner_matched'] ?? false) === true;
+    }
+
+    /** @param array<string,mixed> $snapshot */
+    private function assertRollbackLegacyOwnerNotReplaced(
+        string $expectedOwner,
+        array $snapshot,
+    ): void {
+        if (($snapshot['ok'] ?? false) !== true) {
+            throw new \RuntimeException(
+                'Promotion rollback is fenced because legacy Nginx owner state '
+                    . 'could not be observed safely.'
+            );
+        }
+        if (($snapshot['running'] ?? false) !== true) {
+            return;
+        }
+        $observedOwner = \trim((string)($snapshot['owner_instance'] ?? ''));
+        if (($snapshot['runtime_owner_active'] ?? false) !== true
+            || $observedOwner === ''
+            || !\hash_equals($expectedOwner, $observedOwner)
+        ) {
+            throw new \RuntimeException(
+                'Promotion rollback is fenced because the active legacy Nginx owner '
+                    . 'does not match the transaction owner.'
+            );
+        }
+    }
+
     /**
      * Probe complete public responses before hand-off and after rollback.
      * libcurl is used deliberately: unlike a header-only health check it
@@ -1277,19 +1368,20 @@ final class Promote extends AbstractGatewayCommand
     }
 
     /**
-     * @return array{uid:int,gid:int}|null
+     * @return array{uid:int,gid:int,device:string,inode:string}|null
      */
     private function projectRuntimeOwnership(string $root): ?array
     {
         if (\PHP_OS_FAMILY === 'Windows') {
             return null;
         }
-        if (\is_link($root)) {
-            throw new \RuntimeException(
-                'Project Nginx runtime root cannot be a symbolic link.'
-            );
-        }
-        $status = @\lstat($root);
+        $canonical = $this->canonicalProjectRuntimeRoot($root);
+        // Prove before public cutover that rollback can enumerate the complete
+        // current tree without following links or touching special files. The
+        // same bounded walker is used again before any rollback mutation.
+        $entries = GatewayBoundedTreeWalker::collect($canonical, true, true);
+        $rootEntry = $this->runtimeRootEntry($entries);
+        $status = GatewayBoundedTreeWalker::revalidate($rootEntry);
         if (!\is_array($status)
             || !\is_int($status['uid'] ?? null)
             || !\is_int($status['gid'] ?? null)
@@ -1298,25 +1390,43 @@ final class Promote extends AbstractGatewayCommand
                 'Project Nginx runtime ownership cannot be established.'
             );
         }
-        return ['uid' => (int)$status['uid'], 'gid' => (int)$status['gid']];
+        return [
+            'uid' => (int)$status['uid'],
+            'gid' => (int)$status['gid'],
+            'device' => (string)$rootEntry['device'],
+            'inode' => (string)$rootEntry['inode'],
+        ];
     }
 
-    private function restoreProjectRuntimeOwnership(string $root, int $uid, int $gid): void
-    {
+    private function restoreProjectRuntimeOwnership(
+        string $root,
+        int $uid,
+        int $gid,
+        string $expectedDevice = '',
+        string $expectedInode = '',
+    ): void {
         if (\PHP_OS_FAMILY === 'Windows') {
             return;
         }
-        $canonical = \realpath($root);
-        if (!\is_string($canonical)
-            || \is_link($root)
-            || $uid < 0
+        if ($uid < 0
             || $gid < 0
+            || (($expectedDevice === '') !== ($expectedInode === ''))
         ) {
             throw new \RuntimeException(
                 'Project Nginx runtime ownership target is invalid.'
             );
         }
+        $canonical = $this->canonicalProjectRuntimeRoot($root);
         $entries = GatewayBoundedTreeWalker::collect($canonical, true, true);
+        $rootEntry = $this->runtimeRootEntry($entries);
+        if ($expectedDevice !== ''
+            && (!\hash_equals($expectedDevice, (string)$rootEntry['device'])
+                || !\hash_equals($expectedInode, (string)$rootEntry['inode']))
+        ) {
+            throw new \RuntimeException(
+                'Project Nginx runtime root identity changed after promotion preflight.'
+            );
+        }
         foreach ($entries as $entry) {
             GatewayBoundedTreeWalker::revalidate($entry);
         }
@@ -1329,6 +1439,90 @@ final class Promote extends AbstractGatewayCommand
                 );
             }
         }
+    }
+
+    /**
+     * @param array{uid:int,gid:int,device:string,inode:string}|null $expected
+     */
+    private function assertProjectRuntimeOwnershipUnchanged(
+        string $root,
+        ?array $expected,
+    ): void {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return;
+        }
+        $current = $this->projectRuntimeOwnership($root);
+        if (!\is_array($expected)
+            || !\is_array($current)
+            || (int)($expected['uid'] ?? -1) !== (int)($current['uid'] ?? -2)
+            || (int)($expected['gid'] ?? -1) !== (int)($current['gid'] ?? -2)
+            || !\hash_equals(
+                (string)($expected['device'] ?? ''),
+                (string)($current['device'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)($expected['inode'] ?? ''),
+                (string)($current['inode'] ?? ''),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Project Nginx runtime ownership changed before public cutover.'
+            );
+        }
+    }
+
+    private function canonicalProjectRuntimeRoot(string $root): string
+    {
+        $root = \rtrim($root, '/\\');
+        $canonical = $root !== '' && !\str_contains($root, "\0")
+            ? \realpath($root)
+            : false;
+        $expected = \str_replace('\\', '/', $root);
+        $actual = \is_string($canonical)
+            ? \str_replace('\\', '/', \rtrim($canonical, '/\\'))
+            : '';
+        if (!\is_string($canonical)
+            || $actual === ''
+            || !\hash_equals($expected, $actual)
+            || \is_link($root)
+        ) {
+            throw new \RuntimeException(
+                'Project Nginx runtime root is linked, missing, or non-canonical: ' . $root
+            );
+        }
+        return $canonical;
+    }
+
+    /**
+     * @param list<array{
+     *   path:string,
+     *   depth:int,
+     *   directory:bool,
+     *   executable:bool,
+     *   device:string,
+     *   inode:string
+     * }> $entries
+     * @return array{
+     *   path:string,
+     *   depth:int,
+     *   directory:bool,
+     *   executable:bool,
+     *   device:string,
+     *   inode:string
+     * }
+     */
+    private function runtimeRootEntry(array $entries): array
+    {
+        foreach ($entries as $entry) {
+            if ((int)($entry['depth'] ?? -1) === 0
+                && ($entry['directory'] ?? false) === true
+            ) {
+                return $entry;
+            }
+        }
+        throw new \RuntimeException(
+            'Project Nginx runtime root identity is unavailable.'
+        );
     }
 
     public function tip(): string
@@ -1351,5 +1545,10 @@ final class Promote extends AbstractGatewayCommand
             [__('回滚') => __('先在旧入口在线时完成影子预检；交接失败时先停宿主服务，再用冻结快照恢复旧 Nginx。')],
             [],
         );
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

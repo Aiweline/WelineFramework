@@ -210,7 +210,8 @@ Default policy:
 - PHP syntax: `php -l path/to/file.php`
 - Queue scan: `php bin/w queue:collect`
 - Schema sync: `php bin/w setup:upgrade`
-- Route sync: `php bin/w setup:upgrade --route`
+- System/deploy upgrade: `php bin/w setup:upgrade` (includes routes; do not default to `--route`)
+- Route-only sync (Controller graph only, no Schema): `php bin/w setup:upgrade --route`
 - Frontend route check: `php bin/w http:request /`
 - Backend route check: `php bin/w http:request admin -b`
 - API route check: `php bin/w http:request rest/v1/module/action -api`

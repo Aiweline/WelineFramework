@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Log\WlsLogger;
@@ -16,6 +17,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 {
     protected function setUp(): void
     {
+        if (!\defined('BP')) {
+            \define('BP', \getcwd() . DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('DS')) {
+            \define('DS', DIRECTORY_SEPARATOR);
+        }
         if (!\defined('IS_WIN')) {
             \define('IS_WIN', true);
         }
@@ -30,14 +37,88 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         WlsLogger::reset();
     }
 
+    public function testStopTerminationRoutesThroughCredentialBoundInstancesInsteadOfRawPids(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public bool $rawPidBatchCalled = false;
+            public array $credentialBoundInstancePids = [];
+
+            protected function forceStopRemainingProcesses(array $pids): array
+            {
+                $this->rawPidBatchCalled = true;
+
+                return [
+                    'killed' => 0,
+                    'failed' => \count($pids),
+                    'remaining' => \array_values($pids),
+                ];
+            }
+
+            protected function forceStopRemainingInstances(array $instances): array
+            {
+                foreach ($instances as $instance) {
+                    if ($instance instanceof ServiceInstance) {
+                        $this->credentialBoundInstancePids[] = $instance->getTrackingPid();
+                    }
+                }
+
+                return [
+                    'killed' => \count($this->credentialBoundInstancePids),
+                    'failed' => 0,
+                    'remaining' => [],
+                ];
+            }
+        };
+
+        $orchestrator->getRegistry()->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            pid: 202,
+            state: ServiceInstance::STATE_READY,
+        ));
+
+        $this->invokePrivate($orchestrator, 'terminateAllAfterDrain');
+
+        self::assertFalse($orchestrator->rawPidBatchCalled);
+        self::assertSame([202], $orchestrator->credentialBoundInstancePids);
+    }
+
+    public function testIncompleteInstanceIdentityCannotDeleteAnotherManagedPidLease(): void
+    {
+        $pid = 2_000_000_111;
+        $name = 'weline-stop-lease-' . \bin2hex(\random_bytes(4));
+        $launchId = \bin2hex(\random_bytes(16));
+        $pname = '--name=' . $name . ' --launch-id=' . $launchId;
+        $orchestrator = new ServiceOrchestrator();
+
+        try {
+            Processer::setPid($pname, $pid, false);
+            self::assertNotSame([], Processer::getProcessRecordByPid($pid));
+
+            $this->invokePrivate(
+                $orchestrator,
+                'cleanupInstancePidFile',
+                [new ServiceInstance(role: ControlMessage::ROLE_WORKER, instanceId: 1, pid: $pid)],
+            );
+
+            self::assertNotSame([], Processer::getProcessRecordByPid($pid));
+        } finally {
+            Processer::removePidFile($pname);
+        }
+    }
+
     public function testTerminateAllAfterDrainKillsAllNonSharedProcessTrees(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
             public array $forceKillCalls = [];
             public array $closedClientIds = [];
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceKillCalls[] = \array_values($pids);
 
                 return [
@@ -69,8 +150,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         $orchestrator = new class extends ServiceOrchestrator {
             public array $forceKillCalls = [];
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceKillCalls[] = \array_values($pids);
 
                 return [
@@ -157,8 +242,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             public array $forceStopCalls = [];
             public ?int $forcedExitCode = null;
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceStopCalls[] = \array_values($pids);
 
                 return [
@@ -215,8 +304,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
                 return 0.0;
             }
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceKillCalls[] = \array_values($pids);
                 return [
                     'killed' => \count($pids),
@@ -274,8 +367,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
                 return 0.0;
             }
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceKillCalls[] = \array_values($pids);
 
                 return [
@@ -329,8 +426,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
                 return 0.0;
             }
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceKillCalls[] = \array_values($pids);
 
                 return [
@@ -395,8 +496,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
                 $this->sleepCalls++;
             }
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceKillCalls[] = \array_values($pids);
 
                 return [
@@ -542,8 +647,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
                 return 0.0;
             }
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceKillCalls[] = \array_values($pids);
 
                 return [
@@ -614,11 +723,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             state: ServiceInstance::STATE_READY
         ));
 
-        $this->invokePrivate($orchestrator, 'broadcastDrainToAll');
+        $this->invokePrivate($orchestrator, 'broadcastDrainToAll', [300.0]);
 
         self::assertCount(1, $server->sentMessages[11] ?? []);
         self::assertSame(ControlMessage::TYPE_DRAIN, $server->sentMessages[11][0]['type'] ?? null);
         self::assertSame([], $server->sentMessages[11][0]['ports'] ?? null);
+        self::assertSame(300, $server->sentMessages[11][0]['drain_timeout_sec'] ?? null);
     }
 
     public function testStopAllDispatcherDrainSkipsWorkers(): void
@@ -662,11 +772,90 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             state: ServiceInstance::STATE_READY
         ));
 
-        $this->invokePrivate($orchestrator, 'broadcastDrainToDispatcherForStop');
+        $this->invokePrivate($orchestrator, 'broadcastDrainToDispatcherForStop', [300.0]);
 
         self::assertCount(1, $server->sentMessages[11] ?? []);
         self::assertArrayNotHasKey(22, $server->sentMessages);
         self::assertSame(ControlMessage::TYPE_DRAIN, $server->sentMessages[11][0]['type'] ?? null);
+        self::assertSame(300, $server->sentMessages[11][0]['drain_timeout_sec'] ?? null);
+    }
+
+    public function testPureWlsStopDrainsWorkerWhenNoDispatcherExists(): void
+    {
+        $server = new class extends MasterControlServer {
+            public array $sentMessages = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sentMessages[$clientId][] = ControlMessage::decode($message);
+                return true;
+            }
+        };
+        $workerProvider = $this->createMock(ServiceProviderInterface::class);
+        $workerProvider->method('getRole')->willReturn(ControlMessage::ROLE_WORKER);
+        $workerProvider->method('supportsDrain')->willReturn(true);
+
+        $orchestrator = new ServiceOrchestrator();
+        $this->setProperty($orchestrator, 'controlServer', $server);
+        $registry = $orchestrator->getRegistry();
+        $registry->registerProvider($workerProvider);
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            pid: 202,
+            port: 9983,
+            ipcClientId: 22,
+            state: ServiceInstance::STATE_READY,
+        ));
+
+        $targets = $this->invokePrivate($orchestrator, 'broadcastDrainToServingFrontsForStop', [300.0]);
+
+        self::assertSame(1, $targets);
+        self::assertSame(ControlMessage::TYPE_DRAIN, $server->sentMessages[22][0]['type'] ?? null);
+        self::assertSame([], $server->sentMessages[22][0]['ports'] ?? null);
+        self::assertSame(300, $server->sentMessages[22][0]['drain_timeout_sec'] ?? null);
+    }
+
+    public function testDataPlaneDrainCompletionRequiresVersionedCounterReport(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        self::assertNull($this->invokePrivate($orchestrator, 'validateDataPlaneDrainReport', [[]]));
+        self::assertNull($this->invokePrivate($orchestrator, 'validateDataPlaneDrainReport', [[
+            'schema' => 'wls-drain-report/1',
+            'outcome' => ControlMessage::DRAIN_OUTCOME_NATURAL,
+        ]]));
+
+        $report = ControlMessage::drainCompletionReport(
+            outcome: ControlMessage::DRAIN_OUTCOME_FORCED,
+            elapsedSeconds: 300.0,
+            softDeadlineSeconds: 299.0,
+            hardDeadlineSeconds: 300.0,
+            observed: ['connections' => 7, 'websocket_connections' => 2],
+            terminated: ['connections' => 3, 'websocket_connections' => 1],
+        );
+        self::assertSame($report, $this->invokePrivate(
+            $orchestrator,
+            'validateDataPlaneDrainReport',
+            [$report],
+        ));
+
+        $impossible = $report;
+        $impossible['terminated']['connections'] = 8;
+        self::assertNull($this->invokePrivate(
+            $orchestrator,
+            'validateDataPlaneDrainReport',
+            [$impossible],
+        ));
+
+        $permuted = \array_reverse($report, true);
+        $permuted['observed'] = \array_reverse($permuted['observed'], true);
+        $permuted['terminated'] = \array_reverse($permuted['terminated'], true);
+        self::assertSame($permuted, $this->invokePrivate(
+            $orchestrator,
+            'validateDataPlaneDrainReport',
+            [$permuted],
+        ));
     }
 
     public function testHandleIpcDisconnectMovesDrainingInstanceOutOfDrainStateDuringStopFlow(): void
@@ -772,7 +961,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
         $worker = $registry->getInstance('worker', 1);
         self::assertInstanceOf(ServiceInstance::class, $worker);
-        self::assertSame(ServiceInstance::STATE_STOPPED, $worker->state);
+        self::assertSame(ServiceInstance::STATE_STOPPING, $worker->state);
     }
 
     public function testStopAllForceSkipsIpcDisconnectWaitAndKillsConnectedWorker(): void
@@ -787,8 +976,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             public bool $finalizeCalled = false;
             public array $forceKillCalls = [];
 
-            protected function forceStopRemainingProcesses(array $pids): array
+            protected function forceStopRemainingInstances(array $instances): array
             {
+                $pids = \array_map(
+                    static fn (ServiceInstance $instance): int => $instance->getTrackingPid(),
+                    $instances,
+                );
                 $this->forceKillCalls[] = \array_values($pids);
 
                 return [

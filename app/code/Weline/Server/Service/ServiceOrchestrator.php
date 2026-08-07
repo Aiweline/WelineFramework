@@ -154,7 +154,7 @@ class ServiceOrchestrator
     private array $consumedWindowsListenerAdoptions = [];
     /** @var array<string,array<string,mixed>> supplemental role => handoff intent */
     private array $windowsSupplementalListenerIntents = [];
-    /** @var array<string,array<string,mixed>> supplemental role => schema-5 host lease */
+    /** @var array<string,array<string,mixed>> supplemental role => current host lease */
     private array $windowsSupplementalHostLeases = [];
     private ?DarwinDatagramRouterTransport $darwinHttp3DatagramRouter = null;
 
@@ -2594,10 +2594,30 @@ class ServiceOrchestrator
         }
 
         $instanceName = (string) ($context->instanceName ?: 'default');
-        $prefixes = $this->getInstanceScopedChildProcessPrefixes($instanceName);
         $startedAt = self::monotonicSeconds();
-
-        $killed = Processer::killByProcessNamePrefixes($prefixes);
+        $outcomes = (new MasterChildCredentialStore())->retireGenerationProcesses(
+            $instanceName,
+            (int)$context->masterPid,
+            (int)$context->epoch,
+        );
+        $killed = 0;
+        $unreleased = [];
+        foreach ($outcomes as $outcome) {
+            if ((bool)($outcome['terminated'] ?? false)) {
+                $killed++;
+            }
+            if (!(bool)($outcome['released'] ?? false)) {
+                $unreleased[] = (string)($outcome['role'] ?? 'unknown')
+                    . ':' . (int)($outcome['pid'] ?? 0)
+                    . ':' . (string)($outcome['reason'] ?? 'unknown');
+            }
+        }
+        if ($unreleased !== []) {
+            throw new \RuntimeException(
+                'Credential-bound startup interference could not be retired: '
+                . \implode(', ', \array_slice($unreleased, 0, 16))
+            );
+        }
 
         if ($killed > 0) {
             WlsLogger::warning_(
@@ -2643,9 +2663,19 @@ class ServiceOrchestrator
         }
 
         $instanceName = (string) ($this->context->instanceName ?: 'default');
-        $killed = Processer::killByProcessNamePrefixes($this->getInstanceScopedChildProcessPrefixes($instanceName));
+        $outcomes = (new MasterChildCredentialStore())
+            ->retireGenerationProcesses($instanceName);
+        $killed = \count(\array_filter(
+            $outcomes,
+            static fn (array $outcome): bool => (bool)($outcome['terminated'] ?? false),
+        ));
+        $unreleased = \count(\array_filter(
+            $outcomes,
+            static fn (array $outcome): bool => !(bool)($outcome['released'] ?? false),
+        ));
         WlsLogger::warning_(
-            "[Orchestrator] 当前实例子进程前缀扫尾完成: reason={$reason}, instance={$instanceName}, killed={$killed}"
+            "[Orchestrator] 当前实例凭据进程退役完成: reason={$reason}, instance={$instanceName},"
+            . " terminated={$killed}, unreleased={$unreleased}"
         );
     }
 
@@ -3502,7 +3532,7 @@ class ServiceOrchestrator
         $now = \time();
         $at = \date('Y-m-d H:i:s', $now);
 
-        ServerInstanceManager::updateJsonFileAtomically(
+        $diagnosticPublished = ServerInstanceManager::updateJsonFileAtomically(
             $instanceFile,
             function (array $data) use ($reason, $pendingLabels, $throwable, $now, $at): array {
                 $data['startup_failure_reason'] = $reason;
@@ -3528,6 +3558,13 @@ class ServiceOrchestrator
                 return self::filterEndpointRuntimeMetadata($data);
             }
         );
+        if (!$diagnosticPublished) {
+            // Startup failure detail is diagnostic-only: the original startup
+            // exception remains authoritative and must not be replaced here.
+            WlsLogger::warning_(
+                '[Orchestrator] WLS startup failure diagnostics could not be persisted.'
+            );
+        }
     }
 
     private function sanitizeStartupFailureContext(mixed $value): mixed
@@ -4944,6 +4981,21 @@ class ServiceOrchestrator
             return true;
         }
 
+        // Stale kernel/history observations must not block startup after the
+        // exact address is independently bindable. This is a liveness proof,
+        // not permission to trust advisory WLS names or signal any process.
+        if (($inspect['state'] ?? '') === 'orphan'
+            && !((bool)($inspect['pid_running'] ?? false))
+            && $this->isPortFreeByBindProbe($port)
+        ) {
+            Processer::clearPortCache($port);
+            WlsLogger::warning_(
+                '[Orchestrator] treating bindable orphan launch port as free: '
+                . $this->describeLaunchPortOccupant($role, $port, $inspect)
+            );
+            return true;
+        }
+
         if (!($inspect['is_weline'] ?? false)) {
             WlsLogger::error_(
                 '[Orchestrator] startup blocked: '
@@ -5025,63 +5077,17 @@ class ServiceOrchestrator
      */
     private function releaseCurrentInstancePortOwner(string $role, int $port, array $inspect): bool
     {
-        $pid = (int)($inspect['pid'] ?? 0);
-        if ($pid > 0 && (bool)($inspect['pid_running'] ?? false)) {
-            Processer::killProcessTreeByPid($pid, true);
-        } else {
-            Processer::killByProcessNamePrefixes($this->getInstanceScopedRoleProcessPrefixes(
-                $role,
-                $this->context?->instanceName ?: 'default'
-            ));
-        }
+        // Port inspection exposes a current kernel PID plus advisory name/scope
+        // data, but no credential-bound process birth or launch generation.
+        // Even a same-instance-looking result therefore cannot authorize a
+        // signal after PID reuse. Normal stop/recovery paths own exact leases;
+        // startup must fail closed until one of those paths releases the port.
+        WlsLogger::error_(
+            '[Orchestrator] refusing advisory port-owner cleanup without an exact child lease: '
+            . $this->describeLaunchPortOccupant($role, $port, $inspect)
+        );
 
-        $deadline = self::monotonicSeconds() + 3.0;
-        do {
-            Processer::clearPortCache($port);
-            if (!Processer::isPortInUse($port)) {
-                return true;
-            }
-            SchedulerSystem::usleep(100000);
-        } while (self::monotonicSeconds() < $deadline);
-
-        return !Processer::isPortInUse($port);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function getInstanceScopedRoleProcessPrefixes(string $role, string $instanceName): array
-    {
-        return match ($role) {
-            ControlMessage::ROLE_SESSION_SERVER => [
-                MasterProcess::buildScopedProcessName('weline-wls-session', $instanceName),
-            ],
-            ControlMessage::ROLE_MEMORY_SERVER => [
-                MasterProcess::buildScopedProcessName('weline-wls-memory', $instanceName),
-            ],
-            ControlMessage::ROLE_DISPATCHER => [
-                MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
-            ],
-            ControlMessage::ROLE_REDIRECT => [
-                MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
-            ],
-            ControlMessage::ROLE_WORKER => [
-                MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName) . '-',
-            ],
-            ControlMessage::ROLE_MAINTENANCE => [
-                MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName) . '-',
-            ],
-            ControlMessage::ROLE_GATEWAY_BACKEND => [
-                MasterProcess::buildScopedProcessName(
-                    GatewayJoinBackendProvider::PROCESS_NAME_PREFIX,
-                    $instanceName,
-                ),
-            ],
-            ProtocolEdgeRuntime::ROLE => [
-                MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $instanceName),
-            ],
-            default => [],
-        };
+        return false;
     }
 
     /**
@@ -5383,7 +5389,7 @@ class ServiceOrchestrator
                 'pid' => $pid,
             ];
         }
-        $authorized = (new MasterChildCredentialStore())->authorizeServices(
+        $authorized = (new MasterChildCredentialStore())->authorizeServicesWithIdentity(
             $context->masterLeaseFile,
             $context->instanceName,
             $context->masterPid,
@@ -5392,14 +5398,63 @@ class ServiceOrchestrator
             $children,
         );
         foreach ($instances as $instance) {
-            $credentialId = (string)($authorized[$this->getInstanceSlotId($instance)] ?? '');
-            if (\preg_match('/\A[a-f0-9]{64}\z/D', $credentialId) !== 1) {
+            $identity = $authorized[$this->getInstanceSlotId($instance)] ?? null;
+            $credentialId = \is_array($identity)
+                ? (string)($identity['credential_id'] ?? '')
+                : '';
+            $processBirth = \is_array($identity)
+                ? (string)($identity['process_birth'] ?? '')
+                : '';
+            $pidNamespaceId = \is_array($identity)
+                ? (string)($identity['pid_namespace_id'] ?? '')
+                : '';
+            $credentialPid = \is_array($identity)
+                ? (int)($identity['pid'] ?? 0)
+                : 0;
+            $namespaceValid = PHP_OS_FAMILY === 'Linux'
+                ? \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $pidNamespaceId) === 1
+                : $pidNamespaceId === '';
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $credentialId) !== 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $processBirth) !== 1
+                || !$namespaceValid
+                || $credentialPid < 1
+                || $credentialPid !== $instance->getTrackingPid()
+            ) {
                 throw new \RuntimeException(
                     "Managed child {$instance->role}#{$instance->instanceId} credential publication failed."
                 );
             }
             $instance->setMeta('child_credential_id', $credentialId);
+            $instance->setMeta('child_credential_pid', $credentialPid);
+            $instance->setMeta('child_process_birth', $processBirth);
+            $instance->setMeta('child_pid_namespace_id', $pidNamespaceId);
         }
+    }
+
+    /** @return array{birth:string,pid_namespace_id:string} */
+    private function authorizedInstanceProcessIdentity(ServiceInstance $instance): array
+    {
+        $pid = $instance->getTrackingPid();
+        $authorizedPid = (int)$instance->getMeta('child_credential_pid', 0);
+        $birth = (string)$instance->getMeta('child_process_birth', '');
+        $pidNamespaceId = (string)$instance->getMeta('child_pid_namespace_id', '');
+        $namespaceValid = PHP_OS_FAMILY === 'Linux'
+            ? \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $pidNamespaceId) === 1
+            : $pidNamespaceId === '';
+        if ($pid < 1
+            || $authorizedPid !== $pid
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $birth) !== 1
+            || !$namespaceValid
+        ) {
+            throw new \RuntimeException(
+                'Managed child listener lease has no exact credential-bound process identity.'
+            );
+        }
+
+        return [
+            'birth' => $birth,
+            'pid_namespace_id' => $pidNamespaceId,
+        ];
     }
 
     private function authorizeSpawnedInstanceCredential(ServiceInstance $instance, int $pid): void
@@ -5482,6 +5537,46 @@ class ServiceOrchestrator
                 . ': ' . $throwable->getMessage()
             );
         }
+    }
+
+    /**
+     * Final fallback disable is the only reversible-listener path allowed to
+     * suspend its credential. Unlike generic drain this is a hard commit
+     * prerequisite: a missing exact ledger record aborts the disable.
+     */
+    private function suspendGatewayFallbackCredential(
+        ServiceInstance $instance,
+        string $reason,
+    ): void {
+        $context = $this->context;
+        if ($instance->role !== ControlMessage::ROLE_GATEWAY_FALLBACK
+            || $context === null
+            || $context->masterLeaseFile === ''
+            || $context->masterToken === ''
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback credential suspension lacks its current Master fence.'
+            );
+        }
+        $matched = (new MasterChildCredentialStore())->suspendService(
+            $context->masterLeaseFile,
+            $context->instanceName,
+            $context->masterPid,
+            $context->epoch,
+            $context->masterToken,
+            $instance->role,
+            $this->getInstanceSlotId($instance),
+            $this->getInstanceLaunchId($instance),
+            $this->getInstanceLeaseId($instance),
+            $this->getInstanceGeneration($instance),
+        );
+        if (!$matched) {
+            throw new \RuntimeException(
+                'Gateway fallback credential ledger did not match the exact live child.'
+            );
+        }
+        $instance->setMeta('child_credential_suspended_reason', $reason);
+        $instance->setMeta('child_credential_suspended_at', self::monotonicSeconds());
     }
 
     private function appendLinuxHttp3RouteArgs(string $cmd, ServiceInstance $instance): string
@@ -5628,9 +5723,10 @@ class ServiceOrchestrator
     }
 
     /**
-     * Kill a child that was spawned but never received a published credential.
-     * Leaving it alive races HELLO against a missing ledger entry and leaks
-     * short-lived processes during Darwin birth-capture flakes.
+     * Quarantine a child that never received a stable credential. The child
+     * startup guard rejects the missing capability; final cleanup belongs to
+     * the enclosing Master/platform process tree because no PID-only signal is
+     * safe after identity capture failed.
      */
     private function terminateUnauthorizedSpawn(
         ServiceInstance $instance,
@@ -5643,12 +5739,16 @@ class ServiceOrchestrator
             . ' pid=' . $pid
             . ': ' . $throwable->getMessage()
         );
-        if ($pid > 0 && \function_exists('posix_kill')) {
-            @\posix_kill($pid, 15);
-            SchedulerSystem::usleep(50_000);
-            if (@\posix_kill($pid, 0)) {
-                @\posix_kill($pid, 9);
-            }
+        if ($pid > 0) {
+            // Credential capture failed before a stable process-birth tuple
+            // was committed. Processer's legacy PID/name cache is advisory
+            // and cannot authorize a signal after PID reuse, so never turn
+            // this cleanup path into a numeric-PID kill primitive. The child
+            // has no credential and its startup guard exits fail closed.
+            WlsLogger::warning_(
+                '[Orchestrator] unauthorized child was deliberately not signalled '
+                . 'because no stable process-birth credential exists: pid=' . $pid
+            );
         }
     }
 
@@ -5717,7 +5817,7 @@ class ServiceOrchestrator
         $this->directSharedListener->acquire($bindHost, $context->mainPort);
         if (!$this->directSharedListener->matches($bindHost, $context->mainPort)) {
             throw new \RuntimeException(
-                'Master listener does not match the inherited schema-5 host lease.'
+                'Master listener does not match the inherited schema-6 host lease.'
             );
         }
         if (!$wasListening) {
@@ -5809,8 +5909,27 @@ class ServiceOrchestrator
             }
         }
 
+        if ($this->context === null) {
+            return false;
+        }
+
+        // Pure-WLS Dispatcher/Redirect inherit the CLI-reserved public edge
+        // listener; the Master already owns that socket via DirectSharedListener
+        // before prepareCriticalPortForStart runs. Treat it as self-owned or the
+        // reserved listener is mis-reported as a pid-less orphan and startup dies.
+        if (\in_array($role, [
+            ControlMessage::ROLE_DISPATCHER,
+            ControlMessage::ROLE_REDIRECT,
+        ], true)
+            && $port === $this->context->mainPort
+            && $this->directSharedListener !== null
+            && $this->directSharedListener->isListening()
+            && $this->directSharedListener->getPort() === $port
+        ) {
+            return true;
+        }
+
         return $role === ControlMessage::ROLE_WORKER
-            && $this->context !== null
             && $this->context->isWorkerPublicListener()
             && $port === $this->context->mainPort;
     }
@@ -5837,7 +5956,8 @@ class ServiceOrchestrator
         if (!\is_array($lease) || $lease === []) {
             return [];
         }
-        if ((int)($lease['schema_version'] ?? 0) !== 5
+        if ((int)($lease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals(
                 $this->context->instanceName,
                 (string)($lease['instance'] ?? ''),
@@ -5862,25 +5982,40 @@ class ServiceOrchestrator
         int $port,
         string $managedProcessName,
         string $ownerLaunchId,
+        string $authorizedProcessBirth,
+        string $authorizedPidNamespaceId,
     ): void
     {
-        if ($this->publicEdgeLeaseConfirmed) {
-            return;
-        }
         $lease = $this->publicEdgeLease();
         if ($lease === [] || $this->context === null) {
             return;
         }
-        (new GatewayPortLeaseAllocator())->confirmTransferred(
-            $this->context->instanceName,
-            $port,
-            $ownerPid,
-            $ownerLaunchId,
-            (string)$lease['lease_id'],
-            (string)$lease['bind_host'],
-            $managedProcessName,
-            (string)$this->context->getConfig('wls.gateway.launch_id', ''),
-        );
+        $allocator = new GatewayPortLeaseAllocator();
+        if (!$this->publicEdgeLeaseConfirmed) {
+            $allocator->confirmTransferred(
+                $this->context->instanceName,
+                $port,
+                $ownerPid,
+                $ownerLaunchId,
+                (string)$lease['lease_id'],
+                (string)$lease['bind_host'],
+                $managedProcessName,
+                (string)$this->context->getConfig('wls.gateway.launch_id', ''),
+                $authorizedProcessBirth,
+                $authorizedPidNamespaceId,
+            );
+        } else {
+            $allocator->confirm(
+                $this->context->instanceName,
+                $port,
+                $ownerPid,
+                $ownerLaunchId,
+                (string)$lease['lease_id'],
+                $managedProcessName,
+                $authorizedProcessBirth,
+                $authorizedPidNamespaceId,
+            );
+        }
         $this->publicEdgeLeaseConfirmed = true;
     }
 
@@ -5921,7 +6056,8 @@ class ServiceOrchestrator
         if (!\is_array($lease) || $lease === []) {
             return [];
         }
-        if ((int)($lease['schema_version'] ?? 0) !== 5
+        if ((int)($lease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals(
                 GatewayLeaseIdentity::forRole(
                     $this->context->instanceName,
@@ -5946,24 +6082,39 @@ class ServiceOrchestrator
         int $port,
         string $managedProcessName,
         string $ownerLaunchId,
+        string $authorizedProcessBirth,
+        string $authorizedPidNamespaceId,
     ): void {
-        if ($this->gatewayInitialBackendLeaseConfirmed) {
-            return;
-        }
         $lease = $this->gatewayInitialBackendLease();
         if ($lease === [] || $this->context === null) {
             return;
         }
-        (new GatewayPortLeaseAllocator())->confirmTransferred(
-            (string)$lease['instance'],
-            $port,
-            $ownerPid,
-            $ownerLaunchId,
-            (string)$lease['lease_id'],
-            (string)$lease['bind_host'],
-            $managedProcessName,
-            (string)$this->context->getConfig('wls.gateway.launch_id', ''),
-        );
+        $allocator = new GatewayPortLeaseAllocator();
+        if (!$this->gatewayInitialBackendLeaseConfirmed) {
+            $allocator->confirmTransferred(
+                (string)$lease['instance'],
+                $port,
+                $ownerPid,
+                $ownerLaunchId,
+                (string)$lease['lease_id'],
+                (string)$lease['bind_host'],
+                $managedProcessName,
+                (string)$this->context->getConfig('wls.gateway.launch_id', ''),
+                $authorizedProcessBirth,
+                $authorizedPidNamespaceId,
+            );
+        } else {
+            $allocator->confirm(
+                (string)$lease['instance'],
+                $port,
+                $ownerPid,
+                $ownerLaunchId,
+                (string)$lease['lease_id'],
+                $managedProcessName,
+                $authorizedProcessBirth,
+                $authorizedPidNamespaceId,
+            );
+        }
         $this->gatewayInitialBackendLeaseConfirmed = true;
     }
 
@@ -6034,7 +6185,8 @@ class ServiceOrchestrator
                 }
                 $port = (int)($lease['port'] ?? 0);
                 $leaseId = (string)($lease['lease_id'] ?? '');
-                if ((int)($lease['schema_version'] ?? 0) !== 5
+                if ((int)($lease['schema_version'] ?? 0)
+                        !== GatewayPortLeaseAllocator::SCHEMA_VERSION
                     || !\hash_equals(
                         $leaseInstance,
                         (string)($lease['instance'] ?? ''),
@@ -6358,9 +6510,16 @@ class ServiceOrchestrator
                 (int)($expected['generation'] ?? 0),
             );
         } catch (\Throwable $throwable) {
-            if (Processer::isRunningByPid($pid)) {
-                Processer::killProcessTreeByPid($pid, true);
-            }
+            // The credential ledger is the only immutable child authority at
+            // this point. Revoke it before surfacing the failed handoff so the
+            // child guard exits fail-closed. A numeric PID/name observation is
+            // not sufficient authority for killProcessTreeByPid() after PID
+            // reuse, and the enclosing Master/platform job owns final tree
+            // cleanup if the child cannot observe the revocation promptly.
+            $this->revokeInstanceCredential(
+                $instance,
+                'windows_listener_handoff_publication_failed',
+            );
             throw new \RuntimeException(
                 'Windows Dispatcher listener adoption publication failed: '
                 . $throwable->getMessage(),
@@ -6412,6 +6571,7 @@ class ServiceOrchestrator
         try {
             $liveTargetBirth = WindowsListenerHandoff::processBirthIdentity($pid);
             $liveSourceBirth = WindowsListenerHandoff::processBirthIdentity((int)\getmypid());
+            $authorizedIdentity = $this->authorizedInstanceProcessIdentity($instance);
         } catch (\Throwable) {
             return false;
         }
@@ -6457,6 +6617,8 @@ class ServiceOrchestrator
             || (int)\getmypid() !== (int)($reported['source_pid'] ?? 0)
             || (int)\getmypid() !== (int)($receipt['source_pid'] ?? 0)
             || !\hash_equals($targetBirth, $liveTargetBirth)
+            || !\hash_equals($targetBirth, $authorizedIdentity['birth'])
+            || $authorizedIdentity['pid_namespace_id'] !== ''
             || !\hash_equals($sourceBirth, $liveSourceBirth)
             || !\hash_equals((string)($hostLease['lease_id'] ?? ''), (string)($reported['host_lease_id'] ?? ''))
             || !\hash_equals((string)($expected['handoff_id'] ?? ''), (string)($reported['handoff_id'] ?? ''))
@@ -6498,6 +6660,7 @@ class ServiceOrchestrator
             'lease_id' => (string)($hostLease['lease_id'] ?? ''),
             'owner_pid' => $pid,
             'owner_process_birth' => $targetBirth,
+            'owner_pid_namespace_id' => '',
             'owner_launch_id' => $instance->launchId,
             'slot_id' => $slotId,
             'generation' => $generation,
@@ -6528,11 +6691,12 @@ class ServiceOrchestrator
             );
         }
         $canonical = [
-            'schema' => 'wls-listener-adoption/1',
+            'schema' => 'wls-listener-adoption/2',
             'lease_id' => (string)$facts['lease_id'],
             'lease_state' => 'ACTIVE',
             'owner_pid' => (int)$facts['owner_pid'],
             'owner_process_birth' => (string)$facts['owner_process_birth'],
+            'owner_pid_namespace_id' => (string)$facts['owner_pid_namespace_id'],
             'owner_launch_id' => (string)$facts['owner_launch_id'],
             'slot_id' => (string)$facts['slot_id'],
             'generation' => (int)$facts['generation'],
@@ -6561,6 +6725,7 @@ class ServiceOrchestrator
         $listen = $instance->getMeta('listen_capabilities', []);
         $pid = $instance->getTrackingPid();
         $processBirth = '';
+        $pidNamespaceId = '';
         foreach ((array)($hostLease['workers'] ?? []) as $worker) {
             if (!\is_array($worker)
                 || (int)($worker['pid'] ?? 0) !== $pid
@@ -6572,16 +6737,28 @@ class ServiceOrchestrator
                 continue;
             }
             $processBirth = (string)($worker['process_birth'] ?? '');
+            $pidNamespaceId = (string)($worker['pid_namespace_id'] ?? '');
             break;
         }
+        $authorizedIdentity = $this->authorizedInstanceProcessIdentity($instance);
+        $namespaceValid = PHP_OS_FAMILY === 'Linux'
+            ? \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $pidNamespaceId) === 1
+            : $pidNamespaceId === '';
         if (!\is_array($listen)
-            || (int)($hostLease['schema_version'] ?? 0) !== 5
+            || (int)($hostLease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals('ACTIVE', (string)($hostLease['state'] ?? ''))
             || ($listen['bound'] ?? false) !== true
             || ($listen['shared_listener'] ?? false) !== true
             || (int)($listen['inherited_fd'] ?? 0) !== DirectSharedListener::INHERITED_FD
             || $pid <= 0
             || \preg_match('/\A[a-f0-9]{64}\z/D', $processBirth) !== 1
+            || !$namespaceValid
+            || !\hash_equals($authorizedIdentity['birth'], $processBirth)
+            || !\hash_equals(
+                $authorizedIdentity['pid_namespace_id'],
+                $pidNamespaceId,
+            )
             || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($hostLease['lease_id'] ?? '')) !== 1
             || (int)($hostLease['port'] ?? 0) !== (int)($instance->port ?? 0)
         ) {
@@ -6590,11 +6767,12 @@ class ServiceOrchestrator
             );
         }
         $canonical = [
-            'schema' => 'wls-listener-adoption/1',
+            'schema' => 'wls-listener-adoption/2',
             'lease_id' => (string)$hostLease['lease_id'],
             'lease_state' => 'ACTIVE',
             'owner_pid' => $pid,
             'owner_process_birth' => $processBirth,
+            'owner_pid_namespace_id' => $pidNamespaceId,
             'owner_launch_id' => $instance->launchId,
             'slot_id' => $this->getInstanceSlotId($instance),
             'generation' => $this->getInstanceGeneration($instance),
@@ -6605,6 +6783,7 @@ class ServiceOrchestrator
                 (string)$hostLease['lease_id'],
                 (string)$pid,
                 $processBirth,
+                $pidNamespaceId,
                 $instance->launchId,
                 (string)$this->getInstanceGeneration($instance),
                 (string)DirectSharedListener::INHERITED_FD,
@@ -7207,20 +7386,14 @@ class ServiceOrchestrator
             $this->setStopStage(self::STOP_STAGE_DRAIN);
             WlsLogger::info_('[Orchestrator] 阶段1: 冻结内部路由');
             $this->sendStopProgress('阶段1/5: 冻结内部路由 - 停止派发新请求');
-            $dispatcherDrainTargets = $this->broadcastDrainToDispatcherForStop();
+            $stopDrainWait = $this->resolveStopAllDrainTimeout();
+            $dispatcherDrainTargets = $this->broadcastDrainToServingFrontsForStop($stopDrainWait);
 
-            // ========== 阶段 2：确认内部路由排水（默认 10s，可配 wls.orchestrator.stop_all_drain_wait_sec）==========
+            // ========== 阶段 2：确认内部路由排水（默认 300s，可配 wls.orchestrator.stop_all_drain_wait_sec）==========
             $this->setStopStage(self::STOP_STAGE_WAIT_DRAIN);
             WlsLogger::info_('[Orchestrator] 阶段2: 确认内部路由排水');
             $this->sendStopProgress('阶段2/5: 确认内部路由排水');
-            $stopDrainWait = (float) ($this->context?->getConfig('wls.orchestrator.stop_all_drain_wait_sec', 2.0) ?? 2.0);
-            if ($stopDrainWait < 1.0) {
-                $stopDrainWait = 1.0;
-            }
-            if ($stopDrainWait > 30.0) {
-                $stopDrainWait = 30.0;
-            }
-            if ($dispatcherDrainTargets > 0 && $this->waitForAllDrained($stopDrainWait, true)) {
+            if ($dispatcherDrainTargets > 0 && $this->waitForAllDrained($stopDrainWait + 1.0, true)) {
                 $this->sendStopProgress('内部路由排水完成，进入实例终止阶段');
             } elseif ($dispatcherDrainTargets > 0) {
                 $this->sendStopProgress('内部路由排水等待结束（超时），进入实例终止阶段');
@@ -7315,11 +7488,11 @@ class ServiceOrchestrator
         } catch (\Throwable $throwable) {
             WlsLogger::warning_('[Orchestrator] 强制停机前共享服务令牌卸载异常: ' . $throwable->getMessage());
         }
-        $pids = [];
+        $instancesByPid = [];
         foreach ($this->registry->getAllInstances() as $instance) {
             $trackingPid = $this->getInstanceTrackingPid($instance);
             if ($trackingPid > 0 && !$this->isSharedStateServiceInstance($instance)) {
-                $pids[$trackingPid] = $trackingPid;
+                $instancesByPid[$trackingPid] = $instance;
             }
         }
 
@@ -7337,8 +7510,8 @@ class ServiceOrchestrator
             WlsLogger::info_('[Orchestrator] 强制停机前跳过 IPC 广播：无已连接的服务 IPC 客户端');
         }
 
-        if ($pids !== []) {
-            $killResult = $this->forceStopRemainingProcesses(\array_values($pids));
+        if ($instancesByPid !== []) {
+            $killResult = $this->forceStopRemainingInstances(\array_values($instancesByPid));
             if (!empty($killResult['remaining'])) {
                 WlsLogger::warning_(
                     '[Orchestrator] 强制停机仍有残留进程: ' . \implode(',', $killResult['remaining'])
@@ -7442,7 +7615,134 @@ class ServiceOrchestrator
             $row[$k] = $v;
         }
 
-        @\file_put_contents($file, \json_encode($row, JSON_UNESCAPED_UNICODE) . "\n", \FILE_APPEND | \LOCK_EX);
+        $encoded = \json_encode(
+            $row,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        );
+        if (!\is_string($encoded) || \strlen($encoded) > 262_144) {
+            return;
+        }
+        $line = $encoded . "\n";
+        self::appendStopTraceFileLine($file, $line);
+    }
+
+    /**
+     * Stop tracing is diagnostic only and must never become a stop mutex.
+     * Verify one single-link inode and its parent on both sides of a
+     * non-blocking lock; contention or any path race simply drops the line.
+     */
+    private static function appendStopTraceFileLine(string $path, string $line): void
+    {
+        if ($path === '' || \str_contains($path, "\0") || $line === '') {
+            return;
+        }
+        $directory = \dirname($path);
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || \is_link($directory)
+            || ((((int)($directoryBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            return;
+        }
+        $safeFile = static fn (array $status): bool =>
+            ((((int)($status['mode'] ?? 0)) & 0170000) === 0100000)
+            && (int)($status['nlink'] ?? 0) === 1;
+        $sameIdentity = static function (array $before, array $after): bool {
+            foreach (['dev', 'ino', 'mode', 'nlink'] as $field) {
+                if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $sameDirectoryIdentity = static function (array $before, array $after): bool {
+            foreach (['dev', 'ino', 'mode'] as $field) {
+                if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        $handle = false;
+        $before = false;
+        $created = false;
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            \clearstatcache(true, $path);
+            $before = @\lstat($path);
+            $created = false;
+            if (\is_array($before)) {
+                if (!$safeFile($before) || \is_link($path)) {
+                    return;
+                }
+                $handle = @\fopen($path, 'r+b');
+            } else {
+                if (\file_exists($path) || \is_link($path)) {
+                    return;
+                }
+                $handle = @\fopen($path, 'x+b');
+                $created = \is_resource($handle);
+            }
+            if (\is_resource($handle)) {
+                break;
+            }
+        }
+        if (!\is_resource($handle)) {
+            return;
+        }
+
+        $locked = false;
+        try {
+            \clearstatcache(true, $path);
+            $opened = @\fstat($handle);
+            $pathAfterOpen = @\lstat($path);
+            $directoryAfterOpen = @\lstat($directory);
+            if (!\is_array($opened)
+                || !\is_array($pathAfterOpen)
+                || !\is_array($directoryAfterOpen)
+                || !$safeFile($opened)
+                || !$safeFile($pathAfterOpen)
+                || (!$created && (!\is_array($before) || !$sameIdentity($before, $opened)))
+                || !$sameIdentity($opened, $pathAfterOpen)
+                || !$sameDirectoryIdentity($directoryBefore, $directoryAfterOpen)
+                || \is_link($path)
+            ) {
+                return;
+            }
+            $locked = @\flock($handle, LOCK_EX | LOCK_NB);
+            if (!$locked) {
+                return;
+            }
+            $lockedStatus = @\fstat($handle);
+            $lockedPathStatus = @\lstat($path);
+            $lockedDirectoryStatus = @\lstat($directory);
+            if (!\is_array($lockedStatus)
+                || !\is_array($lockedPathStatus)
+                || !\is_array($lockedDirectoryStatus)
+                || !$safeFile($lockedStatus)
+                || !$sameIdentity($opened, $lockedStatus)
+                || !$sameIdentity($lockedStatus, $lockedPathStatus)
+                || !$sameDirectoryIdentity($directoryBefore, $lockedDirectoryStatus)
+                || @\fseek($handle, 0, SEEK_END) !== 0
+            ) {
+                return;
+            }
+            $offset = 0;
+            $length = \strlen($line);
+            while ($offset < $length) {
+                $written = @\fwrite($handle, \substr($line, $offset));
+                if (!\is_int($written) || $written < 1) {
+                    return;
+                }
+                $offset += $written;
+            }
+            @\fflush($handle);
+        } finally {
+            if ($locked) {
+                @\flock($handle, LOCK_UN);
+            }
+            @\fclose($handle);
+        }
     }
     
     /**
@@ -7793,12 +8093,14 @@ class ServiceOrchestrator
     /**
      * 广播 DRAIN 给所有实例
      */
-    private function broadcastDrainToAll(): void
+    private function broadcastDrainToAll(float $timeoutSeconds = 0.0): int
     {
         $connectedClients = [];
         if ($this->controlServer === null) {
-            return;
+            return 0;
         }
+        $timeoutSeconds = $timeoutSeconds > 0.0 ? $timeoutSeconds : $this->drainTimeout;
+        $drainTimeoutSeconds = (int)\max(1, \min(7200, (int)\ceil($timeoutSeconds)));
         foreach ($this->registry->getAllInstances() as $instance) {
             if ($instance->ipcClientId === null) {
                 continue;
@@ -7817,24 +8119,30 @@ class ServiceOrchestrator
             // stopAll / stopChildProcesses use a global drain. Passing per-instance ports here
             // causes Dispatcher to interpret the request as a selective worker drain and never
             // report global draining_complete.
-            $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::drain([]));
+            $this->controlServer->sendTo(
+                $instance->ipcClientId,
+                ControlMessage::drain([], $drainTimeoutSeconds),
+            );
         }
         
         if (!empty($connectedClients)) {
             WlsLogger::info_('[IPC] DRAIN -> ' . \implode(', ', $connectedClients));
         }
+
+        return \count($connectedClients);
     }
 
     /**
      * stopAll 只让 Dispatcher 进入排水；业务 Worker 后续由进程树并发终止。
      */
-    private function broadcastDrainToDispatcherForStop(): int
+    private function broadcastDrainToDispatcherForStop(float $timeoutSeconds = 300.0): int
     {
         $connectedClients = [];
         if ($this->controlServer === null) {
             return 0;
         }
 
+        $drainTimeoutSeconds = (int)\max(1, \min(7200, (int)\ceil($timeoutSeconds)));
         foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER) as $instance) {
             if ($instance->ipcClientId === null) {
                 continue;
@@ -7847,7 +8155,10 @@ class ServiceOrchestrator
             $this->registry->updateInstance($instance);
             $this->suspendInstanceCredential($instance, 'dispatcher_stop_drain');
             $connectedClients[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
-            $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::drain([]));
+            $this->controlServer->sendTo(
+                $instance->ipcClientId,
+                ControlMessage::drain([], $drainTimeoutSeconds),
+            );
         }
 
         if ($connectedClients !== []) {
@@ -7857,6 +8168,31 @@ class ServiceOrchestrator
         }
 
         return \count($connectedClients);
+    }
+
+    /**
+     * Dispatcher is the serving front when present. Pure WLS has no
+     * Dispatcher, so its Worker/TLS front must receive the same global drain
+     * instead of being terminated immediately with live requests.
+     */
+    private function broadcastDrainToServingFrontsForStop(float $timeoutSeconds): int
+    {
+        $dispatcherTargets = $this->broadcastDrainToDispatcherForStop($timeoutSeconds);
+        if ($dispatcherTargets > 0) {
+            return $dispatcherTargets;
+        }
+
+        return $this->broadcastDrainToAll($timeoutSeconds);
+    }
+
+    private function resolveStopAllDrainTimeout(): float
+    {
+        $configured = (float)($this->context?->getConfig(
+            'wls.orchestrator.stop_all_drain_wait_sec',
+            300.0,
+        ) ?? 300.0);
+
+        return \max(1.0, \min(7200.0, $configured));
     }
 
     /**
@@ -7939,13 +8275,20 @@ class ServiceOrchestrator
 
         $this->sendStopProgress('已向非共享进程发送 SHUTDOWN: ' . \implode(', ', $pidListForLog));
         WlsLogger::warning_('[Orchestrator] SHUTDOWN dispatched to non-shared processes: ' . \implode(',', \array_values($candidatePids)));
-        $result = $this->forceStopRemainingProcesses(\array_values($candidatePids));
+        $result = $this->forceStopRemainingInstances(\array_values($pidToInstance));
+        $remaining = \array_fill_keys(
+            \array_map('intval', (array)($result['remaining'] ?? [])),
+            true,
+        );
         foreach ($pidToInstance as $instance) {
+            $trackingPid = $this->getInstanceTrackingPid($instance);
             if ($instance->ipcClientId !== null) {
                 $this->closeStopFlowClient($instance->ipcClientId);
                 $instance->ipcClientId = null;
             }
-            $instance->state = ServiceInstance::STATE_STOPPED;
+            $instance->state = isset($remaining[$trackingPid])
+                ? ServiceInstance::STATE_STOPPING
+                : ServiceInstance::STATE_STOPPED;
             $this->registry->updateInstance($instance);
         }
         if (($result['killed'] ?? 0) > 0) {
@@ -8110,6 +8453,7 @@ class ServiceOrchestrator
         $pidToInstance = [];
         $connectedVerificationPids = [];
         $immediateForceKillPids = [];
+        $releasedPids = [];
 
         foreach ($allInstances as $instance) {
             $trackingPid = $this->getInstanceTrackingPid($instance);
@@ -8154,6 +8498,7 @@ class ServiceOrchestrator
                         continue;
                     }
 
+                    $releasedPids[$pid] = true;
                     $instance = $pidToInstance[$pid] ?? null;
                     if ($instance?->ipcClientId !== null) {
                         $this->closeStopFlowClient($instance->ipcClientId);
@@ -8221,7 +8566,23 @@ class ServiceOrchestrator
 
             $this->sendStopProgress('强制终止残留进程: ' . \implode(', ', $pidList));
             WlsLogger::warning_('[Orchestrator] 强制终止残留子进程: ' . \implode(',', $runningPids));
-            $result = $this->forceStopRemainingProcesses($runningPids);
+            $remainingInstances = [];
+            foreach ($runningPids as $pid) {
+                $instance = $pidToInstance[$pid] ?? null;
+                if ($instance instanceof ServiceInstance) {
+                    $remainingInstances[$pid] = $instance;
+                }
+            }
+            $result = $this->forceStopRemainingInstances(\array_values($remainingInstances));
+            $reportedRemaining = \array_fill_keys(
+                \array_map('intval', (array)($result['remaining'] ?? [])),
+                true,
+            );
+            foreach ($runningPids as $pid) {
+                if (isset($remainingInstances[$pid]) && !isset($reportedRemaining[$pid])) {
+                    $releasedPids[$pid] = true;
+                }
+            }
 
             foreach ($runningPids as $pid) {
                 $instance = $pidToInstance[$pid] ?? null;
@@ -8243,16 +8604,8 @@ class ServiceOrchestrator
             }
         }
 
-        // 最终清理：确保所有实例都被正确清理，包括僵尸 IPC 连接
-        $finalTrackingPids = [];
-        foreach ($allInstances as $instance) {
-            $trackingPid = $this->getInstanceTrackingPid($instance);
-            if ($trackingPid > 0 && !$this->isSharedStateServiceInstance($instance)) {
-                $finalTrackingPids[$trackingPid] = $trackingPid;
-            }
-        }
-        $finalRunningStatus = [];
-
+        // 最终清理只消费本轮已获得的退出证明。未证明的 PID 必须
+        // 保留 STOPPING 与原始 lease，不得把一次信号派发当成进程已退出。
         foreach ($allInstances as $instance) {
             $trackingPid = $this->getInstanceTrackingPid($instance);
             $isSharedState = $this->isSharedStateServiceInstance($instance);
@@ -8266,8 +8619,20 @@ class ServiceOrchestrator
                 $instance->ipcClientId = null;
             }
 
+            $stillRunning = !$isSharedState
+                && $trackingPid > 0
+                && !isset($releasedPids[$trackingPid]);
+            if ($stillRunning) {
+                $instance->state = ServiceInstance::STATE_STOPPING;
+                $this->registry->updateInstance($instance);
+                WlsLogger::warning_(
+                    "[Orchestrator] 保留未获退出证明的进程 lease: {$instance->role}#{$instance->instanceId}, pid={$trackingPid}"
+                );
+                continue;
+            }
+
             // 如果进程已退出但未被清理，执行清理
-            if (!$isSharedState && $trackingPid > 0 && !($finalRunningStatus[$trackingPid] ?? false)) {
+            if (!$isSharedState && $trackingPid > 0) {
                 WlsLogger::info_(
                     "[Orchestrator] 检测到僵尸进程: {$instance->role}#{$instance->instanceId}, pid={$trackingPid} 已退出但未被回收"
                 );
@@ -8300,12 +8665,37 @@ class ServiceOrchestrator
     }
 
     /**
-     * @param int[] $pids
+     * @param ServiceInstance[] $instances
      * @return array{killed: int, failed: int, remaining: int[]}
      */
-    protected function forceStopRemainingProcesses(array $pids): array
+    protected function forceStopRemainingInstances(array $instances): array
     {
-        return Processer::dispatchBatchKillProcessTrees($pids, true);
+        $result = [
+            'killed' => 0,
+            'failed' => 0,
+            'remaining' => [],
+        ];
+        $seen = [];
+        foreach ($instances as $instance) {
+            if (!$instance instanceof ServiceInstance
+                || $this->isSharedStateServiceInstance($instance)
+            ) {
+                continue;
+            }
+            $pid = $this->getInstanceTrackingPid($instance);
+            if ($pid <= 0 || isset($seen[$pid])) {
+                continue;
+            }
+            $seen[$pid] = true;
+            if ($this->killInstanceProcess($instance)) {
+                $result['killed']++;
+                continue;
+            }
+            $result['failed']++;
+            $result['remaining'][] = $pid;
+        }
+
+        return $result;
     }
 
     protected function pollStopFlowIpc(int $timeoutSec = 0, int $timeoutUsec = 100000): int
@@ -8442,56 +8832,124 @@ class ServiceOrchestrator
     }
 
     /**
-     * 杀死实例进程（委托给进程管理类）
-     *
-     * 遵循 SOLID 原则：进程管理职责由 Processer 类承担，
-     * ServiceOrchestrator 只负责调度逻辑。
+     * 只终止由当前 Master 凭据授权的精确进程出生实例。
+     * PID、进程名、端口或历史 Processer 索引都不是发信号权限。
      */
-    private function killInstanceProcess(ServiceInstance $instance): void
+    protected function killInstanceProcess(ServiceInstance $instance): bool
     {
         if ($this->isSharedStateServiceInstance($instance)) {
             WlsLogger::info_("[Orchestrator] 跳过共享服务 {$instance->role}#{$instance->instanceId} 的进程终止");
 
-            return;
+            return true;
         }
 
         $this->revokeInstanceCredential($instance, 'process_kill');
 
-        $processName = $this->getInstanceProcessName($instance);
-        $launchId = $this->getInstanceLaunchId($instance);
-        $servicePid = $instance->pid;
-        $trackingPid = $this->getInstanceTrackingPid($instance);
-
-        if ($trackingPid > 0 && $trackingPid !== $servicePid) {
-            if (Processer::killProcessTreeByPid($trackingPid, true)) {
-                return;
-            }
+        $lease = $this->buildCredentialBoundTerminationLease($instance);
+        if ($lease === null) {
+            WlsLogger::error_(
+                "[Orchestrator] 拒绝按 PID 强制终止 {$instance->role}#{$instance->instanceId}："
+                . '缺少 credential-bound process-birth lease；等待子进程自毁或平台进程树回收'
+            );
+            return false;
         }
 
-        if ($servicePid > 0 && ($processName !== '' || $launchId !== '')) {
-            if (Processer::killManagedProcessTree(
-                $servicePid,
-                $processName !== '' ? $processName : null,
-                $launchId,
-                $processName !== '' ? '--name=' . $processName : null
-            )) {
-                return;
-            }
+        try {
+            $ownerState = (new MasterLeaseRuntimeIdentity())->observeProcessIdentity(
+                $lease['pid'],
+                $lease['process_birth'],
+                $lease['pid_namespace_id'],
+            );
+        } catch (\Throwable $throwable) {
+            $ownerState = MasterLeaseRuntimeIdentity::OWNER_UNKNOWN;
+            WlsLogger::error_(
+                '[Orchestrator] credential-bound process-birth probe failed: '
+                . $throwable->getMessage()
+            );
+        }
+        if ($ownerState !== MasterLeaseRuntimeIdentity::OWNER_MATCH) {
+            WlsLogger::warning_(
+                "[Orchestrator] 未向 {$instance->role}#{$instance->instanceId} 发送强制信号："
+                . 'process_birth_state=' . $ownerState
+            );
+            return \in_array($ownerState, [
+                MasterLeaseRuntimeIdentity::OWNER_MISSING,
+                MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
+            ], true);
         }
 
-        if ($processName !== '') {
-            Processer::destroy('--name=' . $processName);
-            return;
+        $result = (new MasterLeaseRuntimeIdentity())->terminateExactProcessIdentity(
+            $lease['pid'],
+            $lease['process_birth'],
+            $lease['pid_namespace_id'],
+            0.5,
+        );
+        if (!(bool)($result['released'] ?? false)) {
+            WlsLogger::error_(
+                "[Orchestrator] {$instance->role}#{$instance->instanceId} 强制终止未获退出证明："
+                . 'owner_state=' . (string)(
+                    $result['owner_state']
+                    ?? MasterLeaseRuntimeIdentity::OWNER_UNKNOWN
+                )
+                . ', reason=' . (string)($result['reason'] ?? 'termination_result_missing')
+            );
         }
 
-        if ($trackingPid > 0) {
-            Processer::killProcessTreeByPid($trackingPid, true);
-            return;
+        return (bool)($result['released'] ?? false);
+    }
+
+    /**
+     * Freeze the only process tuple that may authorize forced termination.
+     * Registry PIDs, process names and launch IDs are insufficient without the
+     * child credential's host-boot-bound process birth identity.
+     *
+     * @return array{
+     *     pid:int,
+     *     process_birth:string,
+     *     pid_namespace_id:string,
+     *     expected_identity:string,
+     *     launch_id:string,
+     *     expected_pname:string
+     * }|null
+     */
+    private function buildCredentialBoundTerminationLease(ServiceInstance $instance): ?array
+    {
+        $pid = $this->getInstanceTrackingPid($instance);
+        $credentialId = \trim((string)$instance->getMeta('child_credential_id', ''));
+        $credentialPid = (int)$instance->getMeta('child_credential_pid', 0);
+        $processBirth = \strtolower(\trim(
+            (string)$instance->getMeta('child_process_birth', '')
+        ));
+        $pidNamespaceId = \trim(
+            (string)$instance->getMeta('child_pid_namespace_id', '')
+        );
+        $processName = \trim($this->getInstanceProcessName($instance));
+        $launchId = \trim($this->getInstanceLaunchId($instance));
+        $expectedIdentity = $this->buildExpectedResurrectionProcessIdentity($instance);
+        $namespaceValid = PHP_OS_FAMILY === 'Linux'
+            ? \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $pidNamespaceId) === 1
+            : $pidNamespaceId === '';
+
+        if ($pid < 1
+            || $credentialPid !== $pid
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $credentialId) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $processBirth) !== 1
+            || !$namespaceValid
+            || $processName === ''
+            || $launchId === ''
+            || $expectedIdentity === ''
+        ) {
+            return null;
         }
 
-        if ($servicePid > 0) {
-            Processer::killByPid($servicePid);
-        }
+        return [
+            'pid' => $pid,
+            'process_birth' => $processBirth,
+            'pid_namespace_id' => $pidNamespaceId,
+            'expected_identity' => $expectedIdentity,
+            'launch_id' => $launchId,
+            'expected_pname' => '--name=' . $processName,
+        ];
     }
 
     private function getInstanceProcessName(ServiceInstance $instance): string
@@ -8536,30 +8994,10 @@ class ServiceOrchestrator
             return;
         }
 
-        // Legacy records may not contain a launch id. Keep their historical
-        // exact-key cleanup path without widening it to a process-name scan.
-        if ($registeredPname === '' && $managedPid > 0) {
-            $record = Processer::getProcessRecordByPid($managedPid);
-            $recordLaunchId = \trim((string)($record['launch_id'] ?? ''));
-            $recordProcessName = \trim((string)($record['process_name'] ?? ''));
-            if ($record !== []
-                && ($launchId === '' || $recordLaunchId === $launchId)
-                && ($processName === '' || $recordProcessName === $processName)) {
-                $registeredPname = \trim((string)($record['pname'] ?? ''));
-            }
-        }
-        if ($registeredPname === '' && $processName !== '') {
-            $registeredPname = '--name=' . $processName;
-            if ($launchId !== '') {
-                $registeredPname .= ' --launch-id=' . $launchId;
-            }
-            if ($instance->epoch > 0) {
-                $registeredPname .= ' --epoch=' . $instance->epoch;
-            }
-        }
-        if ($registeredPname !== '') {
-            Processer::removePidFile($registeredPname);
-        }
+        // Missing generation identity is not cleanup authority. In particular,
+        // resolving a current record from a stale numeric PID could delete a
+        // replacement process's lease after PID reuse. Legacy entries without
+        // launch_id remain for bounded GC/explicit compatibility retirement.
     }
 
     /**
@@ -14259,10 +14697,12 @@ class ServiceOrchestrator
             return;
         }
 
-        $prefixes = $this->getInstanceScopedChildProcessPrefixes($instanceName);
-
-        $killed = Processer::killByProcessNamePrefixes($prefixes);
-
+        // A process-name prefix is discovery evidence only. Current-generation
+        // records are active services and uncredentialed leftovers have no
+        // authority for a signal, so an aggressive orphan sweep is reduced to
+        // stale-index collection. Exact instances are retired by their
+        // credential birth leases in stop/restart paths.
+        $killed = 0;
         $staleRemoved = Processer::cleanupStalePidFiles();
         $this->lastSweepKilled = $killed;
         $this->lastSweepStalePidFiles = $staleRemoved;
@@ -15384,6 +15824,10 @@ class ServiceOrchestrator
 
         // 通用消息处理
         switch ($type) {
+            case ControlMessage::TYPE_GATEWAY_FALLBACK_LISTENER_ACK:
+                $this->handleGatewayFallbackListenerAck($msg, $clientId);
+                return;
+
             case ControlMessage::TYPE_SSL_CERT_RELOAD_ACK:
                 $this->handleSslCertReloadAck($msg, $clientId);
                 return;
@@ -15725,49 +16169,21 @@ class ServiceOrchestrator
         }
 
         WlsLogger::warning_("[Orchestrator] 未找到匹配的实例: role={$role}, pid={$pid}, port={$port}, workerId={$workerId}, epoch={$epoch}, launch_id={$launchId}");
-        if (\in_array($role, [
-            ControlMessage::ROLE_WORKER,
-            ControlMessage::ROLE_MAINTENANCE,
-            ControlMessage::ROLE_GATEWAY_BACKEND,
-        ], true)) {
-            $this->rejectUntrustedChild($clientId, $role, $workerId, $port, 'no_matching_slot', (string)($msg['msg_id'] ?? ''));
-            return;
-        }
-        if ($pid > 0 && $this->shouldTerminateUnmatchedRegisterPid($role, $pid, $port, $launchId)) {
-            $killed = Processer::killByPid($pid);
-            if ($killed) {
-                WlsLogger::warning_("[Orchestrator] 已终止未匹配 register 进程: role={$role}, pid={$pid}");
-            }
-        }
-        $this->controlServer?->closeClient($clientId);
-    }
-
-    private function shouldTerminateUnmatchedRegisterPid(string $role, int $pid = 0, int $port = 0, string $launchId = ''): bool
-    {
-        if (!\in_array(
+        // REGISTER fields are peer-controlled until a slot lease and child
+        // credential have both matched. Never turn the reported PID into a
+        // host signal target: reject over the authenticated control protocol
+        // and let the credential-gated child exit itself.
+        $this->rejectUntrustedChild(
+            $clientId,
             $role,
-            [
-                ControlMessage::ROLE_WORKER,
-                ControlMessage::ROLE_MAINTENANCE,
-                ControlMessage::ROLE_GATEWAY_FALLBACK,
-                ControlMessage::ROLE_GATEWAY_BACKEND,
-                ControlMessage::ROLE_DISPATCHER,
-                ControlMessage::ROLE_REDIRECT,
-                ProtocolEdgeRuntime::ROLE,
-            ],
-            true
-        )) {
-            return false;
-        }
-
-        if ($this->shouldSuppressUnmatchedRegisterTermination($role, $pid, $port, $launchId)) {
-            return false;
-        }
-
-        return (bool) ($this->context?->getConfig(
-            'wls.orchestrator.kill_unmatched_register_processes',
-            true
-        ) ?? true);
+            $workerId,
+            $port,
+            'no_matching_slot',
+            (string)($msg['msg_id'] ?? ''),
+            $slotId,
+            $leaseId,
+            $generation,
+        );
     }
 
     /**
@@ -16205,18 +16621,6 @@ class ServiceOrchestrator
             ) {
                 $readyRejection = 'policy_digest_mismatch';
             }
-            if ($readyRejection === ''
-                && $instance->role === ControlMessage::ROLE_WORKER
-                && ($warmupState !== 'hot' || !$homepageProcessFpcReady)
-                && $this->shouldFailOpenHomepageReadyGate()
-            ) {
-                WlsLogger::error_(
-                    '[Orchestrator] Worker READY admitted via homepage fail-open: warmup='
-                    . $warmupState
-                    . ', homepage_fpc=' . $homepageFpcStatus . '/' . $homepageFpcSource
-                    . ', http_status=' . $homepageFpcHttpStatus
-                );
-            }
             if ($readyRejection !== '') {
                 $this->rejectUntrustedChild(
                     $clientId,
@@ -16409,6 +16813,18 @@ class ServiceOrchestrator
             ) {
                 $readyRejection = 'runtime_engine_capability_missing';
             }
+            if ($readyRejection === ''
+                && $instance->role === ControlMessage::ROLE_WORKER
+                && ($warmupState !== 'hot' || !$homepageProcessFpcReady)
+                && $this->shouldFailOpenHomepageReadyGate()
+            ) {
+                WlsLogger::error_(
+                    '[Orchestrator] Worker READY admitted via homepage fail-open: warmup='
+                    . $warmupState
+                    . ', homepage_fpc=' . $homepageFpcStatus . '/' . $homepageFpcSource
+                    . ', http_status=' . $homepageFpcHttpStatus
+                );
+            }
             if ($readyRejection !== '') {
                 $this->rejectUntrustedChild(
                     $clientId,
@@ -16528,145 +16944,6 @@ class ServiceOrchestrator
                 );
                 return;
             }
-            if (($publicLease !== [] && $this->publicEdgeLeaseConfirmed)
-                || ($initialBackendLease !== [] && $this->gatewayInitialBackendLeaseConfirmed)
-            ) {
-                $this->markWindowsListenerAdoptionActive($instance, $windowsHostLease);
-            }
-        }
-        if ($publicLease !== []
-            && !$this->publicEdgeLeaseConfirmed
-            && $instance->role === $publicLeaseRole
-            && $reportedPort === (int)($this->context?->mainPort ?? 0)
-        ) {
-            $reportedListen = \is_array($msg['listen_capabilities'] ?? null)
-                ? $msg['listen_capabilities']
-                : [];
-            $reportedHostLeaseId = \strtolower(\trim((string)(
-                $msg['host_lease_id']
-                ?? ($reportedListen['host_lease_id'] ?? '')
-            )));
-            $expectedHostLeaseId = (string)($publicLease['lease_id'] ?? '');
-            $continuousOwnershipProof = $this->isWindowsRuntime()
-                ? $windowsListenerAdoptionVerified
-                : ($instance->role === ControlMessage::ROLE_DISPATCHER
-                    ? ($reportedListen['inherited'] ?? false) === true
-                    : (($reportedListen['shared_listener'] ?? false) === true
-                        && (int)($reportedListen['inherited_fd'] ?? 0)
-                            === DirectSharedListener::INHERITED_FD));
-            if (($reportedListen['bound'] ?? false) !== true
-                || !\hash_equals($expectedHostLeaseId, $reportedHostLeaseId)
-                || !$continuousOwnershipProof
-            ) {
-                $this->rejectUntrustedChild(
-                    $clientId,
-                    $instance->role,
-                    (int)($msg['worker_id'] ?? $instance->instanceId),
-                    $reportedPort,
-                    'public_lease_listener_proof_missing',
-                    (string)($msg['msg_id'] ?? ''),
-                    $this->getInstanceSlotId($instance),
-                    $this->getInstanceLeaseId($instance),
-                    $this->getInstanceGeneration($instance),
-                );
-                return;
-            }
-            try {
-                $this->confirmPublicEdgeLease(
-                    $instance->getTrackingPid(),
-                    $reportedPort,
-                    $this->getInstanceProcessName($instance),
-                    $this->getInstanceLaunchId($instance),
-                );
-                if ($this->isWindowsRuntime()) {
-                    $this->markWindowsListenerAdoptionActive($instance, $publicLease);
-                }
-            } catch (\Throwable $throwable) {
-                $this->rejectUntrustedChild(
-                    $clientId,
-                    $instance->role,
-                    (int)($msg['worker_id'] ?? $instance->instanceId),
-                    $reportedPort,
-                    'public_lease_confirmation_failed',
-                    (string)($msg['msg_id'] ?? ''),
-                    $this->getInstanceSlotId($instance),
-                    $this->getInstanceLeaseId($instance),
-                    $this->getInstanceGeneration($instance),
-                );
-                WlsLogger::error_(
-                    '[Orchestrator] WLS public listener READY lease rejected: '
-                    . $throwable->getMessage()
-                );
-                return;
-            }
-        }
-        if ($initialBackendLease !== []
-            && !$this->gatewayInitialBackendLeaseConfirmed
-            && $instance->role === $publicLeaseRole
-            && $reportedPort === (int)($this->context?->mainPort ?? 0)
-        ) {
-            $reportedListen = \is_array($msg['listen_capabilities'] ?? null)
-                ? $msg['listen_capabilities']
-                : [];
-            $managedProcessName = \trim($this->getInstanceProcessName($instance));
-            $reportedHostLeaseId = \strtolower(\trim((string)(
-                $msg['host_lease_id']
-                ?? ($reportedListen['host_lease_id'] ?? '')
-            )));
-            $expectedHostLeaseId = (string)($initialBackendLease['lease_id'] ?? '');
-            $continuousOwnershipProof = $this->isWindowsRuntime()
-                ? $windowsListenerAdoptionVerified
-                : ($instance->role === ControlMessage::ROLE_DISPATCHER
-                    ? ($reportedListen['inherited'] ?? false) === true
-                    : (($reportedListen['shared_listener'] ?? false) === true
-                        && (int)($reportedListen['inherited_fd'] ?? 0)
-                            === DirectSharedListener::INHERITED_FD));
-            if (($reportedListen['bound'] ?? false) !== true
-                || $managedProcessName === ''
-                || !\hash_equals($expectedHostLeaseId, $reportedHostLeaseId)
-                || !$continuousOwnershipProof
-            ) {
-                $this->rejectUntrustedChild(
-                    $clientId,
-                    $instance->role,
-                    (int)($msg['worker_id'] ?? $instance->instanceId),
-                    $reportedPort,
-                    'gateway_initial_backend_identity_proof_missing',
-                    (string)($msg['msg_id'] ?? ''),
-                    $this->getInstanceSlotId($instance),
-                    $this->getInstanceLeaseId($instance),
-                    $this->getInstanceGeneration($instance),
-                );
-                return;
-            }
-            try {
-                $this->confirmGatewayInitialBackendLease(
-                    $instance->getTrackingPid(),
-                    $reportedPort,
-                    $managedProcessName,
-                    $this->getInstanceLaunchId($instance),
-                );
-                if ($this->isWindowsRuntime()) {
-                    $this->markWindowsListenerAdoptionActive($instance, $initialBackendLease);
-                }
-            } catch (\Throwable $throwable) {
-                $this->rejectUntrustedChild(
-                    $clientId,
-                    $instance->role,
-                    (int)($msg['worker_id'] ?? $instance->instanceId),
-                    $reportedPort,
-                    'gateway_initial_backend_lease_confirmation_failed',
-                    (string)($msg['msg_id'] ?? ''),
-                    $this->getInstanceSlotId($instance),
-                    $this->getInstanceLeaseId($instance),
-                    $this->getInstanceGeneration($instance),
-                );
-                WlsLogger::error_(
-                    '[Orchestrator] Initial gateway backend READY lease rejected: '
-                    . $throwable->getMessage()
-                );
-                return;
-            }
         }
         if ($instance->role === ControlMessage::ROLE_GATEWAY_FALLBACK) {
             $fallbackPort = (int)($instance->port ?? 0);
@@ -16712,6 +16989,7 @@ class ServiceOrchestrator
                 return;
             }
             try {
+                $ownerIdentity = $this->authorizedInstanceProcessIdentity($instance);
                 $lease = (new GatewayPortLeaseAllocator())->confirm(
                     GatewayLeaseIdentity::forRole(
                         (string)($this->context?->instanceName ?? ''),
@@ -16722,6 +17000,8 @@ class ServiceOrchestrator
                     $instance->launchId,
                     (string)($msg['host_lease_id'] ?? ''),
                     $this->getInstanceProcessName($instance),
+                    $ownerIdentity['birth'],
+                    $ownerIdentity['pid_namespace_id'],
                 );
                 $instance->setMeta('fallback_lease_id', (string)($lease['lease_id'] ?? ''));
                 $instance->setMeta('fallback_lease_state', (string)($lease['state'] ?? ''));
@@ -16843,6 +17123,148 @@ class ServiceOrchestrator
             }
         }
 
+        // A primary public/backend host lease is an externally observable
+        // serving commit. Keep it RESERVED until HTTP/3 ownership and the
+        // final namespace clock have both accepted this exact READY message.
+        if ($publicLease !== []
+            && $instance->role === $publicLeaseRole
+            && $reportedPort === (int)($this->context?->mainPort ?? 0)
+        ) {
+            $reportedListen = \is_array($msg['listen_capabilities'] ?? null)
+                ? $msg['listen_capabilities']
+                : [];
+            $reportedHostLeaseId = \strtolower(\trim((string)(
+                $msg['host_lease_id']
+                ?? ($reportedListen['host_lease_id'] ?? '')
+            )));
+            $expectedHostLeaseId = (string)($publicLease['lease_id'] ?? '');
+            $continuousOwnershipProof = $this->isWindowsRuntime()
+                ? $windowsListenerAdoptionVerified
+                : ($instance->role === ControlMessage::ROLE_DISPATCHER
+                    ? ($reportedListen['inherited'] ?? false) === true
+                    : (($reportedListen['shared_listener'] ?? false) === true
+                        && (int)($reportedListen['inherited_fd'] ?? 0)
+                            === DirectSharedListener::INHERITED_FD));
+            if (($reportedListen['bound'] ?? false) !== true
+                || !\hash_equals($expectedHostLeaseId, $reportedHostLeaseId)
+                || !$continuousOwnershipProof
+            ) {
+                $this->rejectUntrustedChild(
+                    $clientId,
+                    $instance->role,
+                    (int)($msg['worker_id'] ?? $instance->instanceId),
+                    $reportedPort,
+                    'public_lease_listener_proof_missing',
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                );
+                return;
+            }
+            try {
+                $ownerIdentity = $this->authorizedInstanceProcessIdentity($instance);
+                $this->confirmPublicEdgeLease(
+                    $instance->getTrackingPid(),
+                    $reportedPort,
+                    $this->getInstanceProcessName($instance),
+                    $this->getInstanceLaunchId($instance),
+                    $ownerIdentity['birth'],
+                    $ownerIdentity['pid_namespace_id'],
+                );
+                if ($this->isWindowsRuntime()) {
+                    $this->markWindowsListenerAdoptionActive($instance, $publicLease);
+                }
+            } catch (\Throwable $throwable) {
+                $this->rejectUntrustedChild(
+                    $clientId,
+                    $instance->role,
+                    (int)($msg['worker_id'] ?? $instance->instanceId),
+                    $reportedPort,
+                    'public_lease_confirmation_failed',
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                );
+                WlsLogger::error_(
+                    '[Orchestrator] WLS public listener READY lease rejected: '
+                    . $throwable->getMessage()
+                );
+                return;
+            }
+        }
+        if ($initialBackendLease !== []
+            && $instance->role === $publicLeaseRole
+            && $reportedPort === (int)($this->context?->mainPort ?? 0)
+        ) {
+            $reportedListen = \is_array($msg['listen_capabilities'] ?? null)
+                ? $msg['listen_capabilities']
+                : [];
+            $managedProcessName = \trim($this->getInstanceProcessName($instance));
+            $reportedHostLeaseId = \strtolower(\trim((string)(
+                $msg['host_lease_id']
+                ?? ($reportedListen['host_lease_id'] ?? '')
+            )));
+            $expectedHostLeaseId = (string)($initialBackendLease['lease_id'] ?? '');
+            $continuousOwnershipProof = $this->isWindowsRuntime()
+                ? $windowsListenerAdoptionVerified
+                : ($instance->role === ControlMessage::ROLE_DISPATCHER
+                    ? ($reportedListen['inherited'] ?? false) === true
+                    : (($reportedListen['shared_listener'] ?? false) === true
+                        && (int)($reportedListen['inherited_fd'] ?? 0)
+                            === DirectSharedListener::INHERITED_FD));
+            if (($reportedListen['bound'] ?? false) !== true
+                || $managedProcessName === ''
+                || !\hash_equals($expectedHostLeaseId, $reportedHostLeaseId)
+                || !$continuousOwnershipProof
+            ) {
+                $this->rejectUntrustedChild(
+                    $clientId,
+                    $instance->role,
+                    (int)($msg['worker_id'] ?? $instance->instanceId),
+                    $reportedPort,
+                    'gateway_initial_backend_identity_proof_missing',
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                );
+                return;
+            }
+            try {
+                $ownerIdentity = $this->authorizedInstanceProcessIdentity($instance);
+                $this->confirmGatewayInitialBackendLease(
+                    $instance->getTrackingPid(),
+                    $reportedPort,
+                    $managedProcessName,
+                    $this->getInstanceLaunchId($instance),
+                    $ownerIdentity['birth'],
+                    $ownerIdentity['pid_namespace_id'],
+                );
+                if ($this->isWindowsRuntime()) {
+                    $this->markWindowsListenerAdoptionActive($instance, $initialBackendLease);
+                }
+            } catch (\Throwable $throwable) {
+                $this->rejectUntrustedChild(
+                    $clientId,
+                    $instance->role,
+                    (int)($msg['worker_id'] ?? $instance->instanceId),
+                    $reportedPort,
+                    'gateway_initial_backend_lease_confirmation_failed',
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                );
+                WlsLogger::error_(
+                    '[Orchestrator] Initial gateway backend READY lease rejected: '
+                    . $throwable->getMessage()
+                );
+                return;
+            }
+        }
+
         // Listener confirmation changes the durable host lease to ACTIVE and
         // endpoint publication makes the backend externally registerable.
         // Both side effects must happen only after every final READY gate has
@@ -16851,6 +17273,7 @@ class ServiceOrchestrator
         if ($instance->role === ControlMessage::ROLE_GATEWAY_BACKEND) {
             $backendPort = (int)($instance->port ?? 0);
             try {
+                $ownerIdentity = $this->authorizedInstanceProcessIdentity($instance);
                 $lease = (new GatewayPortLeaseAllocator())->confirm(
                     GatewayLeaseIdentity::forRole(
                         (string)($this->context?->instanceName ?? ''),
@@ -16861,6 +17284,8 @@ class ServiceOrchestrator
                     $instance->launchId,
                     (string)($msg['host_lease_id'] ?? ''),
                     $this->getInstanceProcessName($instance),
+                    $ownerIdentity['birth'],
+                    $ownerIdentity['pid_namespace_id'],
                 );
                 $instance->setMeta(
                     'gateway_backend_lease_id',
@@ -17564,7 +17989,7 @@ class ServiceOrchestrator
     protected function markStartupPhaseRunning(ServiceContext $context, int $totalServices): void
     {
         $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
-        ServerInstanceManager::updateJsonFileAtomically(
+        $published = ServerInstanceManager::updateJsonFileAtomically(
             $instanceFile,
             static function (array $data) use ($context, $totalServices): array {
                 $data = self::hydrateStartupRuntimeMetadata($data, $context);
@@ -17576,6 +18001,14 @@ class ServiceOrchestrator
                 return self::filterEndpointRuntimeMetadata($data);
             }
         );
+        if (!$published) {
+            // checkAndNotifyServerReady() sets this flag immediately before the
+            // durable commit. Re-arm it so a later health cycle may retry.
+            $this->serverReadyNotified = false;
+            throw new \RuntimeException(
+                'Failed to atomically publish WLS running readiness.'
+            );
+        }
     }
 
     /**
@@ -17608,7 +18041,7 @@ class ServiceOrchestrator
             'timestamp' => $now,
         ], $details);
 
-        ServerInstanceManager::updateJsonFileAtomically(
+        $diagnosticPublished = ServerInstanceManager::updateJsonFileAtomically(
             $instanceFile,
             static function (array $data) use ($context, $event, $now): array {
                 $data = self::hydrateStartupRuntimeMetadata($data, $context);
@@ -17632,12 +18065,19 @@ class ServiceOrchestrator
                 return self::filterEndpointRuntimeMetadata($data);
             }
         );
+        if (!$diagnosticPublished) {
+            // Progress events are observability-only and must never turn a
+            // healthy startup transition into a failed one.
+            WlsLogger::warning_(
+                '[Orchestrator] WLS startup progress event could not be persisted.'
+            );
+        }
     }
 
     private function persistMasterEpoch(ServiceContext $context): void
     {
         $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
-        ServerInstanceManager::updateJsonFileAtomically(
+        $published = ServerInstanceManager::updateJsonFileAtomically(
             $instanceFile,
             static function (array $data) use ($context): array {
                 $data = self::hydrateStartupRuntimeMetadata($data, $context);
@@ -17648,6 +18088,11 @@ class ServiceOrchestrator
                 return self::filterEndpointRuntimeMetadata($data);
             }
         );
+        if (!$published) {
+            throw new \RuntimeException(
+                'Failed to atomically publish WLS Master epoch.'
+            );
+        }
     }
 
     /**
@@ -18039,13 +18484,6 @@ class ServiceOrchestrator
         $this->workerEmergencyRestartInProgress = true;
         try {
             $this->killKnownWorkerProcessesForEmergencyRestart();
-            // 按实例作用域前缀清理 name_index / 系统可解析的 Worker，避免仅 kill 注册表 PID 后仍有逃逸子进程。
-            // 使用 buildScopedProcessName 与 Worker 实际 --name 一致（含实例名规范化）。
-            $scopedPrefix = MasterProcess::buildScopedProcessName(
-                WorkerProvider::PROCESS_NAME_PREFIX,
-                $this->context->instanceName
-            ) . '-';
-            Processer::killByProcessNamePrefix($scopedPrefix);
             if (!$this->sleepInterruptiblyForPeriodicWork(600000)) {
                 return;
             }
@@ -18090,14 +18528,7 @@ class ServiceOrchestrator
             if ($this->shouldYieldPeriodicWork(true)) {
                 return;
             }
-            $pid = (int) ($worker->pid ?? 0);
-            if ($pid > 0) {
-                $this->killProcess($pid);
-            }
-            $port = (int) ($worker->port ?? 0);
-            if ($port > 0 && !$this->isMasterOwnedSharedListenerPort(ControlMessage::ROLE_WORKER, $port)) {
-                Processer::forceReleasePort($port);
-            }
+            $this->killInstanceProcess($worker);
         }
     }
 
@@ -18510,6 +18941,22 @@ class ServiceOrchestrator
             return;
         }
 
+        $drainReport = $this->validateDataPlaneDrainReport(
+            \is_array($msg['drain'] ?? null) ? $msg['drain'] : [],
+        );
+        if ($instance->state === ServiceInstance::STATE_DRAINING
+            && \in_array($instance->role, [
+                ControlMessage::ROLE_DISPATCHER,
+                ControlMessage::ROLE_WORKER,
+            ], true)
+            && $drainReport === null
+        ) {
+            WlsLogger::warning_(
+                "[Orchestrator] 拒绝无连接计数证明的排水完成: {$instance->role}#{$instance->instanceId}"
+            );
+            return;
+        }
+
         $reason = \trim((string)($msg['reason'] ?? ''));
         $reloadDrainCompletionPending = (bool)$instance->getMeta(
             'reload_drain_completion_pending',
@@ -18524,6 +18971,16 @@ class ServiceOrchestrator
         $instance->setMeta('reload_drain_completion_reason', null);
         if ($reason !== '') {
             $instance->setMeta('exit_reason', $reason);
+        }
+        if ($drainReport !== null) {
+            $instance->setMeta('last_drain_report', $drainReport);
+            if (($drainReport['forced'] ?? false) === true) {
+                $terminatedConnections = (int)($drainReport['terminated']['connections'] ?? 0);
+                $this->sendStopProgress(
+                    "  ! {$instance->role}#{$instance->instanceId} 排空达到硬截止，"
+                    . "强制终止连接 {$terminatedConnections} 个"
+                );
+            }
         }
         $this->registry->updateInstance($instance);
         $this->revokeInstanceCredential($instance, 'draining_complete');
@@ -18577,6 +19034,81 @@ class ServiceOrchestrator
                 $this->getInstanceTrackingPid($instance)
             );
         }
+    }
+
+    /** @return array<string,mixed>|null */
+    private function validateDataPlaneDrainReport(array $report): ?array
+    {
+        $expectedTopLevelKeys = [
+            'schema',
+            'outcome',
+            'forced',
+            'elapsed_ms',
+            'soft_deadline_ms',
+            'hard_deadline_ms',
+            'observed',
+            'terminated',
+        ];
+        $actualTopLevelKeys = \array_keys($report);
+        \sort($actualTopLevelKeys);
+        $sortedExpectedTopLevelKeys = $expectedTopLevelKeys;
+        \sort($sortedExpectedTopLevelKeys);
+        if ($actualTopLevelKeys !== $sortedExpectedTopLevelKeys
+            || ($report['schema'] ?? null) !== 'wls-drain-report/1'
+            || !\in_array($report['outcome'] ?? null, [
+                ControlMessage::DRAIN_OUTCOME_NATURAL,
+                ControlMessage::DRAIN_OUTCOME_IDLE_CLEANUP,
+                ControlMessage::DRAIN_OUTCOME_FORCED,
+            ], true)
+            || !\is_bool($report['forced'] ?? null)
+            || ($report['forced'] ?? null)
+                !== (($report['outcome'] ?? null) === ControlMessage::DRAIN_OUTCOME_FORCED)
+        ) {
+            return null;
+        }
+
+        foreach (['elapsed_ms', 'soft_deadline_ms', 'hard_deadline_ms'] as $key) {
+            if (!\is_int($report[$key] ?? null) || $report[$key] < 0) {
+                return null;
+            }
+        }
+        if ($report['soft_deadline_ms'] > $report['hard_deadline_ms']) {
+            return null;
+        }
+
+        $countKeys = [
+            'connections',
+            'active_requests',
+            'long_lived_connections',
+            'sse_connections',
+            'websocket_connections',
+            'http2_connections',
+        ];
+        foreach (['observed', 'terminated'] as $section) {
+            $counts = $report[$section] ?? null;
+            if (!\is_array($counts)) {
+                return null;
+            }
+            $actualCountKeys = \array_keys($counts);
+            \sort($actualCountKeys);
+            $sortedCountKeys = $countKeys;
+            \sort($sortedCountKeys);
+            if ($actualCountKeys !== $sortedCountKeys) {
+                return null;
+            }
+            foreach ($counts as $count) {
+                if (!\is_int($count) || $count < 0) {
+                    return null;
+                }
+            }
+        }
+        foreach ($countKeys as $countKey) {
+            if ($report['terminated'][$countKey] > $report['observed'][$countKey]) {
+                return null;
+            }
+        }
+
+        return $report;
     }
 
     /**
@@ -18726,34 +19258,12 @@ class ServiceOrchestrator
                 return;
             }
             if ($instance !== null && $instance->isRunning()) {
-                $samePort = $port === 0 || (int)($instance->port ?? 0) === $port;
-                $accepted = $samePort && $instance->state !== ServiceInstance::STATE_DRAINING;
-                $bindHost = (string)$instance->getMeta(
-                    'fallback_bind_host',
-                    $this->gatewayFallbackBindHost(),
-                );
-                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
-                    $accepted,
-                    [
-                        'state' => $instance->state,
-                        'port' => (int)($instance->port ?? 0),
-                        'pid' => $instance->getTrackingPid(),
-                        'bind' => $bindHost,
-                        'bind_endpoint' => (string)$instance->getMeta(
-                            'fallback_bind',
-                            $this->formatGatewayFallbackBind($bindHost, (int)($instance->port ?? 0)),
-                        ),
-                        'urls' => (array)$instance->getMeta('fallback_urls', []),
-                        'limitations' => (array)$instance->getMeta(
-                            'fallback_limitations',
-                            [],
-                        ),
-                    ],
-                    $accepted
-                        ? 'Gateway fallback is already active under this Master.'
-                        : 'Gateway fallback is already occupied or draining.',
+                $this->handleRunningGatewayFallbackEnable(
+                    $instance,
+                    $port,
+                    $clientId,
                     $messageId,
-                ));
+                );
                 return;
             }
             if ($instance !== null) {
@@ -19186,55 +19696,39 @@ class ServiceOrchestrator
             return;
         }
         if ($action === ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN) {
-            if ($instance->state !== ServiceInstance::STATE_DRAINING) {
-                try {
-                    $leases = new GatewayPortLeaseAllocator();
-                    $leaseName = GatewayLeaseIdentity::forRole(
-                        $this->context->instanceName,
-                        GatewayLeaseIdentity::ROLE_FALLBACK,
-                    );
-                    $lease = $leases->status($leaseName);
-                    $leases->markDraining(
-                        $leaseName,
-                        $port,
-                        (string)($lease['lease_id'] ?? ''),
-                    );
-                } catch (\Throwable $throwable) {
-                    $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
-                        false,
-                        ['state' => $instance->state, 'port' => $port],
-                        'Gateway fallback drain lease rejected: ' . $throwable->getMessage(),
-                        $messageId,
-                    ));
-                    return;
-                }
-                $this->sendDrainToInstance($instance, 300.0);
-                $this->persistServicesInfo($this->context);
-            }
-            // The child owns accepted connections after FD inheritance or a
-            // target-bound WSAPROTOCOL import. Once drain starts, Master must
-            // release its duplicate or new clients can enter an unserved queue.
-            $this->closeGatewayFallbackListener();
+            $this->handleRunningGatewayFallbackDrain(
+                $instance,
+                $port,
+                $clientId,
+                $messageId,
+            );
+            return;
+        }
+        try {
+            $this->suspendGatewayFallbackCredential($instance, 'fallback_final_disable');
+            $leases = new GatewayPortLeaseAllocator();
+            $leaseName = GatewayLeaseIdentity::forRole(
+                $this->context->instanceName,
+                GatewayLeaseIdentity::ROLE_FALLBACK,
+            );
+            $lease = $leases->status($leaseName);
+            $leases->markDraining(
+                $leaseName,
+                $port,
+                (string)($lease['lease_id'] ?? ''),
+            );
+        } catch (\Throwable $throwable) {
             $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
-                true,
-                ['state' => ServiceInstance::STATE_DRAINING, 'port' => $port],
-                'Gateway fallback listener is draining.',
+                false,
+                ['state' => $instance->state, 'port' => $port],
+                'Gateway fallback final-disable fence failed: ' . $throwable->getMessage(),
                 $messageId,
             ));
             return;
         }
         $this->desiredState[ControlMessage::ROLE_GATEWAY_FALLBACK] = 0;
-        $leases = new GatewayPortLeaseAllocator();
-        $leaseName = GatewayLeaseIdentity::forRole(
-            $this->context->instanceName,
-            GatewayLeaseIdentity::ROLE_FALLBACK,
-        );
-        $lease = $leases->status($leaseName);
-        $leases->markDraining(
-            $leaseName,
-            $port,
-            (string)($lease['lease_id'] ?? ''),
-        );
+        $instance->state = ServiceInstance::STATE_STOPPING;
+        $this->registry->updateInstance($instance);
         $this->stopInstance($instance);
         $this->closeGatewayFallbackListener();
         // The target-bound child may still own accepted connections while it
@@ -19247,6 +19741,1360 @@ class ServiceOrchestrator
             'Gateway fallback listener stop was requested.',
             $messageId,
         ));
+    }
+
+    private function handleRunningGatewayFallbackDrain(
+        ServiceInstance $instance,
+        int $port,
+        int $clientId,
+        string $messageId,
+    ): void {
+        try {
+            $leases = new GatewayPortLeaseAllocator();
+            $leaseName = GatewayLeaseIdentity::forRole(
+                (string)$this->context?->instanceName,
+                GatewayLeaseIdentity::ROLE_FALLBACK,
+            );
+            $lease = $leases->status($leaseName);
+            if (!\is_array($lease)) {
+                throw new \RuntimeException('Gateway fallback host lease is missing.');
+            }
+            $phase = (string)($lease['listener_phase'] ?? '');
+            if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED) {
+                $instance->state = ServiceInstance::STATE_DRAINING;
+                $this->registry->updateInstance($instance);
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    [
+                        'state' => ServiceInstance::STATE_DRAINING,
+                        'listener_phase' => $phase,
+                        'port' => $port,
+                    ],
+                    'Gateway fallback listener drain was acknowledged.',
+                    $messageId,
+                ));
+                return;
+            }
+
+            $identity = $this->gatewayFallbackTransitionIdentity($instance, $lease);
+            $transitionId = (string)($lease['drain_transition_id'] ?? '');
+            $actionDigest = (string)($lease['listener_transition_digest'] ?? '');
+            $newTransition = false;
+            $compensatingUndrain = false;
+            if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_ACTIVE
+                && \hash_equals('ACTIVE', (string)($lease['state'] ?? ''))
+            ) {
+                $transitionId = \bin2hex(\random_bytes(16));
+                $actionDigest = self::gatewayFallbackActionDigest(
+                    'DRAIN',
+                    'DRAINING',
+                    $transitionId,
+                    '',
+                    $identity,
+                );
+                try {
+                    $lease = $leases->beginDrain(
+                        $leaseName,
+                        $port,
+                        (string)$lease['lease_id'],
+                        $instance->launchId,
+                        $transitionId,
+                        $actionDigest,
+                        $identity,
+                    );
+                } catch (\Throwable $publicationFailure) {
+                    $afterImage = $leases->status($leaseName);
+                    if (!self::gatewayFallbackDurableTransitionMatches(
+                        $afterImage,
+                        $instance,
+                        GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED,
+                        ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+                        $transitionId,
+                        $actionDigest,
+                        $identity,
+                    )) {
+                        throw $publicationFailure;
+                    }
+                    $lease = $afterImage;
+                }
+                $newTransition = true;
+            } elseif ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED) {
+                $oldTransitionId = $transitionId;
+                $oldDigest = $actionDigest;
+                $transitionId = \bin2hex(\random_bytes(16));
+                $actionDigest = self::gatewayFallbackActionDigest(
+                    'DRAIN',
+                    'DRAINING',
+                    $transitionId,
+                    '',
+                    $identity,
+                );
+                $lease = $leases->compensateUndrainAckToPreparedDrain(
+                    $leaseName,
+                    $port,
+                    (string)$lease['lease_id'],
+                    $instance->launchId,
+                    $oldTransitionId,
+                    $oldDigest,
+                    $identity,
+                    $transitionId,
+                    $actionDigest,
+                );
+                $newTransition = true;
+                $compensatingUndrain = true;
+            } elseif ($phase !== GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED) {
+                throw new \RuntimeException(
+                    'Gateway fallback listener phase cannot enter reversible drain: ' . $phase,
+                );
+            }
+
+            $sent = $this->sendGatewayFallbackListenerTransition(
+                $instance,
+                'DRAIN',
+                'DRAINING',
+                $transitionId,
+                $actionDigest,
+                '',
+                $identity,
+            );
+            if (!$sent && $newTransition && !$compensatingUndrain) {
+                $leases->restoreActiveAfterFailedDrain(
+                    $leaseName,
+                    $port,
+                    (string)$lease['lease_id'],
+                    $instance->launchId,
+                    $transitionId,
+                    $actionDigest,
+                    $identity,
+                );
+                $instance->state = ServiceInstance::STATE_READY;
+                $this->registry->updateInstance($instance);
+            } elseif (!$sent && $compensatingUndrain) {
+                $this->quarantineGatewayFallbackTransition(
+                    $instance,
+                    'fallback_compensation_drain_send_failed',
+                );
+            } else {
+                // DRAIN_PREPARED is a reversible listener transaction, not a
+                // generic service drain.  Keeping the process READY prevents
+                // the existing terminal-drain/reconcile paths from stopping a
+                // child which must retain its listener for a later UNDRAIN.
+                $instance->state = ServiceInstance::STATE_READY;
+                $instance->setMeta('fallback_listener_phase', (string)(
+                    $lease['listener_phase']
+                    ?? GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED
+                ));
+                $this->registry->updateInstance($instance);
+                $this->persistServicesInfo($this->context);
+            }
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [
+                    'state' => $instance->state,
+                    'listener_phase' => (string)($lease['listener_phase'] ?? ''),
+                    'transition_id' => $transitionId,
+                    'port' => $port,
+                ],
+                $sent
+                    ? 'Gateway fallback drain is waiting for its exact child acknowledgement.'
+                    : 'Gateway fallback drain command was not delivered.',
+                $messageId,
+            ));
+        } catch (\Throwable $throwable) {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                ['state' => $instance->state, 'port' => $port],
+                'Gateway fallback drain rejected: ' . $throwable->getMessage(),
+                $messageId,
+            ));
+        }
+    }
+
+    /**
+     * Commit one child-authenticated reversible fallback listener transition.
+     *
+     * The IPC client, process generation, host lease, listener adoption proof,
+     * transition identity and action digest are all matched before a durable
+     * phase can move.  A replay therefore observes a phase mismatch and cannot
+     * extend a drain clock or reactivate an older child generation.
+     *
+     * @param array<string,mixed> $message
+     */
+    private function handleGatewayFallbackListenerAck(
+        array $message,
+        int $clientId,
+    ): void {
+        $instance = $this->registry->getInstanceByIpcClient($clientId);
+        if ($this->context === null
+            || $this->controlServer === null
+            || $instance === null
+            || $instance->role !== ControlMessage::ROLE_GATEWAY_FALLBACK
+            || $instance->ipcClientId !== $clientId
+            || !$this->controlServer->clientExists($clientId)
+            || $this->registry->getInstance(
+                $instance->role,
+                $instance->instanceId,
+            ) !== $instance
+        ) {
+            WlsLogger::warning_(
+                '[Orchestrator] Rejected fallback listener ACK from a stale IPC client.'
+            );
+            return;
+        }
+
+        try {
+            $ack = ControlMessage::validateGatewayFallbackListenerAck($message);
+            $leases = new GatewayPortLeaseAllocator();
+            $leaseName = GatewayLeaseIdentity::forRole(
+                $this->context->instanceName,
+                GatewayLeaseIdentity::ROLE_FALLBACK,
+            );
+            $lease = $leases->status($leaseName);
+            if (!\is_array($lease)
+                || (int)($lease['schema_version'] ?? 0)
+                    !== GatewayPortLeaseAllocator::SCHEMA_VERSION
+                || !\hash_equals(
+                    $leaseName,
+                    (string)($lease['instance'] ?? ''),
+                )
+                || (int)($lease['port'] ?? 0) !== (int)($instance->port ?? 0)
+                || !\hash_equals(
+                    (string)($lease['launch_id'] ?? ''),
+                    $instance->launchId,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Fallback listener ACK has no current schema-6 host lease.'
+                );
+            }
+            $identity = $this->gatewayFallbackTransitionIdentity($instance, $lease);
+            if (!self::canonicalGatewayFallbackIdentityMatches(
+                $ack['identity'] ?? null,
+                $identity,
+            ) || !self::canonicalGatewayFallbackIdentityMatches(
+                $lease['transition_identity'] ?? null,
+                $identity,
+            )) {
+                throw new \RuntimeException(
+                    'Fallback listener ACK identity differs from its durable transition.'
+                );
+            }
+
+            $action = (string)$ack['action'];
+            $targetState = (string)$ack['target_listener_state'];
+            $actualState = (string)$ack['listener_state'];
+            $transitionId = (string)$ack['transition_id'];
+            $actionDigest = (string)$ack['action_digest'];
+            $predecessorDigest = (string)$ack['predecessor_action_digest'];
+            if (!\hash_equals(
+                self::gatewayFallbackActionDigest(
+                    $action,
+                    $targetState,
+                    $transitionId,
+                    $predecessorDigest,
+                    $identity,
+                ),
+                $actionDigest,
+            ) || !\hash_equals(
+                $transitionId,
+                (string)($lease['drain_transition_id'] ?? ''),
+            ) || !\hash_equals(
+                $actionDigest,
+                (string)($lease['listener_transition_digest'] ?? ''),
+            ) || !\hash_equals(
+                $action,
+                (string)($lease['listener_transition_action'] ?? ''),
+            )) {
+                throw new \RuntimeException(
+                    'Fallback listener ACK action or digest is stale.'
+                );
+            }
+
+            $isDrain = \hash_equals(
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+                $action,
+            );
+            $expectedPhase = $isDrain
+                ? GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED
+                : GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED;
+            $expectedTarget = $isDrain
+                ? ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING
+                : ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE;
+            $drainDigest = (string)($lease['drain_action_digest'] ?? '');
+            if (!\hash_equals(
+                $expectedPhase,
+                (string)($lease['listener_phase'] ?? ''),
+            ) || !\hash_equals($expectedTarget, $targetState)
+                || ($isDrain
+                    ? ($predecessorDigest !== ''
+                        || !\hash_equals($actionDigest, $drainDigest))
+                    : (!\hash_equals($predecessorDigest, $drainDigest)
+                        || \preg_match('/\A[a-f0-9]{64}\z/D', $drainDigest) !== 1))
+            ) {
+                throw new \RuntimeException(
+                    'Fallback listener ACK does not match the pending durable phase.'
+                );
+            }
+
+            if (($ack['success'] ?? false) !== true) {
+                $this->handleFailedGatewayFallbackListenerAck(
+                    $instance,
+                    $leases,
+                    $lease,
+                    $identity,
+                    $action,
+                    $actualState,
+                    (string)($ack['reason'] ?? 'listener_transition_failed'),
+                );
+                return;
+            }
+
+            if ($isDrain) {
+                try {
+                    $lease = $leases->acknowledgeDrain(
+                        $leaseName,
+                        (int)$lease['port'],
+                        (string)$lease['lease_id'],
+                        $instance->launchId,
+                        $transitionId,
+                        $actionDigest,
+                        $identity,
+                    );
+                } catch (\Throwable $publicationFailure) {
+                    $afterImage = $leases->status($leaseName);
+                    if (!self::gatewayFallbackDurableTransitionMatches(
+                        $afterImage,
+                        $instance,
+                        GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+                        ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+                        $transitionId,
+                        $actionDigest,
+                        $identity,
+                    ) || ($afterImage['drain_acknowledged'] ?? false) !== true
+                        || !\is_numeric($afterImage['draining_monotonic'] ?? null)
+                    ) {
+                        throw $publicationFailure;
+                    }
+                    $lease = $afterImage;
+                }
+                // Only an exact durable DRAIN_ACKED phase starts the 300-second
+                // clock and authorizes releasing the Master's duplicate FD.
+                $instance->state = ServiceInstance::STATE_DRAINING;
+                $instance->setMeta(
+                    'fallback_listener_phase',
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+                );
+                $instance->setMeta('fallback_listener_transition_id', $transitionId);
+                $this->registry->updateInstance($instance);
+                try {
+                    $this->persistServicesInfo($this->context);
+                } finally {
+                    $this->closeGatewayFallbackListener();
+                }
+                return;
+            }
+
+            $preparedFenceDigest = (string)$instance->getMeta(
+                'fallback_undrain_fence_digest',
+                '',
+            );
+            try {
+                $currentFenceDigest = $this->gatewayFallbackServingFenceDigest($instance);
+                $undrainAllowed = $this->gatewayFallbackUndrainCommitAllowed($instance);
+            } catch (\Throwable) {
+                $currentFenceDigest = '';
+                $undrainAllowed = false;
+            }
+            if (!$undrainAllowed
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $preparedFenceDigest) !== 1
+                || !\hash_equals($preparedFenceDigest, $currentFenceDigest)
+            ) {
+                $this->compensateGatewayFallbackToDrain(
+                    $instance,
+                    $leases,
+                    $lease,
+                    $identity,
+                    'fallback_undrain_commit_fenced',
+                );
+                return;
+            }
+
+            // This is the final ACTIVE barrier.  Re-run the complete
+            // certificate/manifest proof immediately before the lease commit.
+            try {
+                $commitFenceDigest = $this->gatewayFallbackServingFenceDigest($instance);
+            } catch (\Throwable) {
+                $commitFenceDigest = '';
+            }
+            if (!\hash_equals($preparedFenceDigest, $commitFenceDigest)) {
+                $this->compensateGatewayFallbackToDrain(
+                    $instance,
+                    $leases,
+                    $lease,
+                    $identity,
+                    'fallback_undrain_fence_changed_at_commit',
+                );
+                return;
+            }
+            try {
+                $activeLease = $leases->restoreActiveAfterUndrainAck(
+                    $leaseName,
+                    (int)$lease['port'],
+                    (string)$lease['lease_id'],
+                    $instance->launchId,
+                    $transitionId,
+                    $actionDigest,
+                    $identity,
+                );
+            } catch (\Throwable $publicationFailure) {
+                $afterImage = $leases->status($leaseName);
+                if (!$this->gatewayFallbackDurableLeaseIsExactActive(
+                    $afterImage,
+                    $instance,
+                    $identity,
+                )) {
+                    throw $publicationFailure;
+                }
+                $activeLease = $afterImage;
+            }
+            try {
+                $instance->state = ServiceInstance::STATE_READY;
+                $instance->setMeta(
+                    'fallback_listener_phase',
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_ACTIVE,
+                );
+                $instance->setMeta('fallback_undrain_fence_digest', null);
+                $instance->setMeta('fallback_listener_transition_id', null);
+                $this->registry->updateInstance($instance);
+                $this->persistServicesInfo($this->context);
+            } catch (\Throwable $commitFailure) {
+                $activeLease = $leases->status($leaseName);
+                if (!\is_array($activeLease)) {
+                    $this->quarantineGatewayFallbackTransition(
+                        $instance,
+                        'fallback_undrain_commit_state_lost',
+                    );
+                    return;
+                }
+                $this->compensateGatewayFallbackToDrain(
+                    $instance,
+                    $leases,
+                    $activeLease,
+                    $identity,
+                    'fallback_undrain_commit_failed',
+                );
+            }
+        } catch (\Throwable $throwable) {
+            WlsLogger::warning_(
+                '[Orchestrator] Rejected fallback listener ACK: '
+                . GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    512,
+                    'invalid fallback listener acknowledgement',
+                ),
+            );
+            // A malformed/replayed ACK is harmless after a terminal phase,
+            // but while a reversible action is merely PREPARED the child may
+            // already have changed admission.  Replace that ambiguity with an
+            // exact DRAIN or isolate the exact current child generation.
+            try {
+                $leaseName = GatewayLeaseIdentity::forRole(
+                    (string)$this->context?->instanceName,
+                    GatewayLeaseIdentity::ROLE_FALLBACK,
+                );
+                $leases = new GatewayPortLeaseAllocator();
+                $lease = $leases->status($leaseName);
+                $phase = \is_array($lease)
+                    ? (string)($lease['listener_phase'] ?? '')
+                    : '';
+                if (\is_array($lease) && \in_array($phase, [
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED,
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED,
+                ], true)) {
+                    $identity = $this->gatewayFallbackTransitionIdentity(
+                        $instance,
+                        $lease,
+                    );
+                    $this->compensateGatewayFallbackToDrain(
+                        $instance,
+                        $leases,
+                        $lease,
+                        $identity,
+                        'fallback_listener_ack_unproven',
+                    );
+                }
+            } catch (\Throwable $containmentFailure) {
+                WlsLogger::error_(
+                    '[Orchestrator] Fallback ACK containment failed: '
+                    . GatewayBoundedText::singleLine(
+                        $containmentFailure->getMessage(),
+                        512,
+                        'fallback ACK containment failed',
+                    ),
+                );
+                $this->quarantineGatewayFallbackTransition(
+                    $instance,
+                    'fallback_listener_ack_containment_failed',
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $lease
+     * @param array<string,mixed> $identity
+     */
+    private function handleFailedGatewayFallbackListenerAck(
+        ServiceInstance $instance,
+        GatewayPortLeaseAllocator $leases,
+        array $lease,
+        array $identity,
+        string $action,
+        string $actualState,
+        string $reason,
+    ): void {
+        $isDrain = \hash_equals(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+            $action,
+        );
+        if ($isDrain
+            && \hash_equals(
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE,
+                $actualState,
+            )
+        ) {
+            if ($this->gatewayFallbackUndrainCommitAllowed($instance)) {
+                $leases->restoreActiveAfterFailedDrain(
+                    (string)$lease['instance'],
+                    (int)$lease['port'],
+                    (string)$lease['lease_id'],
+                    $instance->launchId,
+                    (string)$lease['drain_transition_id'],
+                    (string)$lease['listener_transition_digest'],
+                    $identity,
+                );
+                $instance->state = ServiceInstance::STATE_READY;
+                $instance->setMeta(
+                    'fallback_listener_phase',
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_ACTIVE,
+                );
+                $this->registry->updateInstance($instance);
+                $this->persistServicesInfo($this->context);
+            } else {
+                $this->compensateGatewayFallbackToDrain(
+                    $instance,
+                    $leases,
+                    $lease,
+                    $identity,
+                    'fallback_drain_negative_ack_stop_fenced',
+                );
+            }
+            return;
+        }
+        if (!$isDrain
+            && \hash_equals(
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+                $actualState,
+            )
+        ) {
+            $leases->restoreDrainAckedAfterFailedUndrain(
+                (string)$lease['instance'],
+                (int)$lease['port'],
+                (string)$lease['lease_id'],
+                $instance->launchId,
+                (string)$lease['drain_transition_id'],
+                (string)$lease['listener_transition_digest'],
+                $identity,
+            );
+            $instance->state = ServiceInstance::STATE_DRAINING;
+            $instance->setMeta(
+                'fallback_listener_phase',
+                GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+            );
+            $instance->setMeta('fallback_undrain_fence_digest', null);
+            $this->registry->updateInstance($instance);
+            $this->persistServicesInfo($this->context);
+            return;
+        }
+        if (($isDrain && \hash_equals(
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+                $actualState,
+            )) || (!$isDrain && \hash_equals(
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE,
+                $actualState,
+            ))
+        ) {
+            $this->compensateGatewayFallbackToDrain(
+                $instance,
+                $leases,
+                $lease,
+                $identity,
+                'fallback_listener_negative_ack:' . GatewayBoundedText::singleLine(
+                    $reason,
+                    128,
+                    'listener transition failed',
+                ),
+            );
+            return;
+        }
+        $this->quarantineGatewayFallbackTransition(
+            $instance,
+            'fallback_listener_state_unproven_after_negative_ack',
+        );
+    }
+
+    /**
+     * Replace an ACTIVE or in-flight UNDRAIN state with one new exact DRAIN.
+     * Failure to durably prove and deliver that compensation isolates only the
+     * matching fallback child generation.
+     *
+     * @param array<string,mixed> $lease
+     * @param array<string,mixed> $identity
+     */
+    private function compensateGatewayFallbackToDrain(
+        ServiceInstance $instance,
+        GatewayPortLeaseAllocator $leases,
+        array $lease,
+        array $identity,
+        string $reason,
+    ): bool {
+        try {
+            $phase = (string)($lease['listener_phase'] ?? '');
+            if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED) {
+                $instance->state = ServiceInstance::STATE_DRAINING;
+                $instance->setMeta('fallback_listener_phase', $phase);
+                $instance->setMeta('fallback_undrain_fence_digest', null);
+                $this->registry->updateInstance($instance);
+                $this->persistServicesInfo($this->context);
+                return true;
+            }
+
+            $transitionId = (string)($lease['drain_transition_id'] ?? '');
+            $actionDigest = (string)($lease['listener_transition_digest'] ?? '');
+            if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_ACTIVE) {
+                $transitionId = \bin2hex(\random_bytes(16));
+                $actionDigest = self::gatewayFallbackActionDigest(
+                    ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+                    ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+                    $transitionId,
+                    '',
+                    $identity,
+                );
+                $lease = $leases->beginDrain(
+                    (string)$lease['instance'],
+                    (int)$lease['port'],
+                    (string)$lease['lease_id'],
+                    $instance->launchId,
+                    $transitionId,
+                    $actionDigest,
+                    $identity,
+                );
+            } elseif ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED) {
+                $oldTransitionId = $transitionId;
+                $oldDigest = $actionDigest;
+                $transitionId = \bin2hex(\random_bytes(16));
+                $actionDigest = self::gatewayFallbackActionDigest(
+                    ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+                    ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+                    $transitionId,
+                    '',
+                    $identity,
+                );
+                $lease = $leases->compensateUndrainAckToPreparedDrain(
+                    (string)$lease['instance'],
+                    (int)$lease['port'],
+                    (string)$lease['lease_id'],
+                    $instance->launchId,
+                    $oldTransitionId,
+                    $oldDigest,
+                    $identity,
+                    $transitionId,
+                    $actionDigest,
+                );
+            } elseif ($phase !== GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED) {
+                throw new \RuntimeException(
+                    'Fallback compensation has no reversible listener phase.'
+                );
+            }
+
+            $instance->state = ServiceInstance::STATE_READY;
+            $instance->setMeta(
+                'fallback_listener_phase',
+                GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED,
+            );
+            $instance->setMeta('fallback_listener_transition_id', $transitionId);
+            $instance->setMeta('fallback_undrain_fence_digest', null);
+            $this->registry->updateInstance($instance);
+            $this->persistServicesInfo($this->context);
+            if (!$this->sendGatewayFallbackListenerTransition(
+                $instance,
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+                $transitionId,
+                $actionDigest,
+                '',
+                $identity,
+            )) {
+                throw new \RuntimeException(
+                    'Exact fallback compensation DRAIN could not be delivered.'
+                );
+            }
+            return true;
+        } catch (\Throwable $throwable) {
+            WlsLogger::error_(
+                '[Orchestrator] Gateway fallback compensation failed (' . $reason . '): '
+                . GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    512,
+                    'fallback compensation failed',
+                ),
+            );
+            $this->quarantineGatewayFallbackTransition($instance, $reason);
+            return false;
+        }
+    }
+
+    private function handleRunningGatewayFallbackEnable(
+        ServiceInstance $instance,
+        int $requestedPort,
+        int $clientId,
+        string $messageId,
+    ): void {
+        $port = (int)($instance->port ?? 0);
+        $bindHost = (string)$instance->getMeta(
+            'fallback_bind_host',
+            $this->gatewayFallbackBindHost(),
+        );
+        try {
+            $servingFenceDigest = $this->gatewayFallbackServingFenceDigest($instance);
+            if (($requestedPort !== 0 && $requestedPort !== $port)
+                || !$this->gatewayFallbackUndrainCommitAllowed($instance)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway fallback enable is fenced by port, stop or certificate state.'
+                );
+            }
+            $leases = new GatewayPortLeaseAllocator();
+            $leaseName = GatewayLeaseIdentity::forRole(
+                (string)$this->context?->instanceName,
+                GatewayLeaseIdentity::ROLE_FALLBACK,
+            );
+            $lease = $leases->status($leaseName);
+            if (!\is_array($lease)) {
+                throw new \RuntimeException('Gateway fallback host lease is missing.');
+            }
+            $phase = (string)($lease['listener_phase'] ?? '');
+            if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_ACTIVE
+                && \hash_equals('ACTIVE', (string)($lease['state'] ?? ''))
+            ) {
+                $instance->state = ServiceInstance::STATE_READY;
+                $this->registry->updateInstance($instance);
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    $this->gatewayFallbackCommandStatus($instance, $bindHost),
+                    'Gateway fallback is already active under this Master.',
+                    $messageId,
+                ));
+                return;
+            }
+            $identity = $this->gatewayFallbackTransitionIdentity($instance, $lease);
+            $transitionId = (string)($lease['drain_transition_id'] ?? '');
+            if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED) {
+                // DRAIN may already have been applied while its ACK was lost.
+                // Re-send that exact action first; never guess that admission
+                // remained open and skip directly to ACTIVE.
+                if (!$this->sendGatewayFallbackListenerTransition(
+                    $instance,
+                    ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+                    ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+                    $transitionId,
+                    (string)$lease['listener_transition_digest'],
+                    '',
+                    $identity,
+                )) {
+                    $this->quarantineGatewayFallbackTransition(
+                        $instance,
+                        'fallback_pending_drain_replay_failed',
+                    );
+                }
+                throw new \RuntimeException(
+                    'Gateway fallback enable is waiting for the exact drain acknowledgement.'
+                );
+            }
+            $predecessorDigest = (string)($lease['drain_action_digest'] ?? '');
+            $actionDigest = (string)($lease['listener_transition_digest'] ?? '');
+            if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED) {
+                // Persist the exact project certificate/manifest generation
+                // before making UNDRAIN_PREPARED durable.  A crash can leave a
+                // harmless stale meta value, but never a prepared UNDRAIN with
+                // no recoverable certificate fence.
+                $instance->setMeta(
+                    'fallback_undrain_fence_digest',
+                    $servingFenceDigest,
+                );
+                $this->registry->updateInstance($instance);
+                $this->persistServicesInfo($this->context);
+                $actionDigest = self::gatewayFallbackActionDigest(
+                    ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN,
+                    ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE,
+                    $transitionId,
+                    $predecessorDigest,
+                    $identity,
+                );
+                try {
+                    $lease = $leases->prepareUndrain(
+                        $leaseName,
+                        $port,
+                        (string)$lease['lease_id'],
+                        $instance->launchId,
+                        $transitionId,
+                        $predecessorDigest,
+                        $actionDigest,
+                        $identity,
+                    );
+                } catch (\Throwable $publicationFailure) {
+                    $afterImage = $leases->status($leaseName);
+                    if (!self::gatewayFallbackDurableTransitionMatches(
+                        $afterImage,
+                        $instance,
+                        GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED,
+                        ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN,
+                        $transitionId,
+                        $actionDigest,
+                        $identity,
+                    ) || !\hash_equals(
+                        $predecessorDigest,
+                        (string)($afterImage['drain_action_digest'] ?? ''),
+                    )) {
+                        throw $publicationFailure;
+                    }
+                    $lease = $afterImage;
+                }
+            } elseif ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED) {
+                $preparedFenceDigest = (string)$instance->getMeta(
+                    'fallback_undrain_fence_digest',
+                    '',
+                );
+                if (\preg_match('/\A[a-f0-9]{64}\z/D', $preparedFenceDigest) !== 1
+                    || !\hash_equals($preparedFenceDigest, $servingFenceDigest)
+                ) {
+                    $this->compensateGatewayFallbackToDrain(
+                        $instance,
+                        $leases,
+                        $lease,
+                        $identity,
+                        'fallback_undrain_prepare_fence_changed',
+                    );
+                    throw new \RuntimeException(
+                        'Gateway fallback certificate generation changed during undrain.'
+                    );
+                }
+            } else {
+                throw new \RuntimeException(
+                    'Gateway fallback listener phase cannot be resumed: ' . $phase,
+                );
+            }
+            $sent = $this->sendGatewayFallbackListenerTransition(
+                $instance,
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN,
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE,
+                $transitionId,
+                $actionDigest,
+                $predecessorDigest,
+                $identity,
+            );
+            if (!$sent) {
+                $leases->restoreDrainAckedAfterFailedUndrain(
+                    $leaseName,
+                    $port,
+                    (string)$lease['lease_id'],
+                    $instance->launchId,
+                    $transitionId,
+                    $actionDigest,
+                    $identity,
+                );
+                $instance->setMeta('fallback_undrain_fence_digest', null);
+                $instance->setMeta(
+                    'fallback_listener_phase',
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+                );
+                $this->registry->updateInstance($instance);
+                $this->persistServicesInfo($this->context);
+            }
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                \array_merge($this->gatewayFallbackCommandStatus($instance, $bindHost), [
+                    'listener_phase' => $sent
+                        ? GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED
+                        : GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+                    'transition_id' => $transitionId,
+                ]),
+                $sent
+                    ? 'Gateway fallback enable is waiting for its exact child acknowledgement.'
+                    : 'Gateway fallback undrain command was not delivered.',
+                $messageId,
+            ));
+        } catch (\Throwable $throwable) {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                $this->gatewayFallbackCommandStatus($instance, $bindHost),
+                'Gateway fallback cannot resume: ' . $throwable->getMessage(),
+                $messageId,
+            ));
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function gatewayFallbackCommandStatus(
+        ServiceInstance $instance,
+        string $bindHost,
+    ): array {
+        return [
+            'state' => $instance->state,
+            'port' => (int)($instance->port ?? 0),
+            'pid' => $instance->getTrackingPid(),
+            'bind' => $bindHost,
+            'bind_endpoint' => (string)$instance->getMeta(
+                'fallback_bind',
+                $this->formatGatewayFallbackBind($bindHost, (int)($instance->port ?? 0)),
+            ),
+            'urls' => (array)$instance->getMeta('fallback_urls', []),
+            'limitations' => (array)$instance->getMeta('fallback_limitations', []),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $lease
+     * @return array<string,mixed>
+     */
+    private function gatewayFallbackTransitionIdentity(
+        ServiceInstance $instance,
+        array $lease,
+    ): array {
+        $context = $this->context;
+        $adoption = $instance->getMeta('listener_adoption', []);
+        $projectUuid = \strtolower(\trim((string)$context?->getConfig(
+            'wls.gateway.project_uuid',
+            '',
+        )));
+        $masterLaunchId = \strtolower(\trim((string)$context?->getConfig(
+            'wls.gateway.launch_id',
+            '',
+        )));
+        $adoption = \is_array($adoption) ? $adoption : [];
+        $unsignedAdoption = $adoption;
+        $proofDigest = \strtolower(\trim((string)(
+            $unsignedAdoption['proof_digest'] ?? ''
+        )));
+        unset($unsignedAdoption['proof_digest']);
+        $identity = [
+            'schema' => 'wls-gateway-fallback-listener/1',
+            'project_uuid' => $projectUuid,
+            'wls_instance' => (string)($context?->instanceName ?? ''),
+            'role' => $instance->role,
+            'slot_id' => $this->getInstanceSlotId($instance),
+            'service_generation' => $this->getInstanceGeneration($instance),
+            'service_lease_id' => $this->getInstanceLeaseId($instance),
+            'worker_pid' => $instance->getTrackingPid(),
+            'worker_process_birth' => (string)($adoption['owner_process_birth'] ?? ''),
+            'worker_pid_namespace_id' => (string)(
+                $adoption['owner_pid_namespace_id'] ?? ''
+            ),
+            'worker_launch_id' => $instance->launchId,
+            'master_pid' => (int)($context?->masterPid ?? 0),
+            'master_epoch' => (int)($context?->epoch ?? 0),
+            'master_launch_id' => $masterLaunchId,
+            'master_process_birth' => (string)($lease['master_process_birth'] ?? ''),
+            'master_pid_namespace_id' => (string)(
+                $lease['master_pid_namespace_id'] ?? ''
+            ),
+            'port' => (int)($instance->port ?? 0),
+            'host_lease_instance' => (string)($lease['instance'] ?? ''),
+            'host_lease_id' => (string)($lease['lease_id'] ?? ''),
+            'host_boot_id' => (string)($lease['host_boot_id'] ?? ''),
+            'bind_host' => (string)($lease['bind_host'] ?? ''),
+            'listener_proof_digest' => $proofDigest,
+            'listener_transport' => (string)($adoption['transport'] ?? ''),
+            'listener_receipt_digest' => (string)($adoption['receipt_digest'] ?? ''),
+        ];
+        $namespaceValid = PHP_OS_FAMILY === 'Linux'
+            ? (\preg_match(
+                '/\Apid:\[[1-9][0-9]{0,19}\]\z/D',
+                (string)$identity['worker_pid_namespace_id'],
+            ) === 1
+                && \preg_match(
+                    '/\Apid:\[[1-9][0-9]{0,19}\]\z/D',
+                    (string)$identity['master_pid_namespace_id'],
+                ) === 1)
+            : ($identity['worker_pid_namespace_id'] === ''
+                && $identity['master_pid_namespace_id'] === '');
+        if ($context === null
+            || $instance->role !== ControlMessage::ROLE_GATEWAY_FALLBACK
+            || (int)($lease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
+            || !\hash_equals($projectUuid, (string)($lease['project_uuid'] ?? ''))
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $masterLaunchId) !== 1
+            || !\hash_equals('wls-listener-adoption/2', (string)($adoption['schema'] ?? ''))
+            || !\hash_equals('ACTIVE', (string)($adoption['lease_state'] ?? ''))
+            || !\hash_equals(
+                (string)$lease['lease_id'],
+                (string)($adoption['lease_id'] ?? ''),
+            )
+            || (int)$identity['worker_pid'] !== (int)($adoption['owner_pid'] ?? 0)
+            || !\hash_equals(
+                (string)$identity['worker_launch_id'],
+                (string)($adoption['owner_launch_id'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)$identity['slot_id'],
+                (string)($adoption['slot_id'] ?? ''),
+            )
+            || (int)$identity['service_generation']
+                !== (int)($adoption['generation'] ?? 0)
+            || (int)$identity['port'] !== (int)($lease['port'] ?? 0)
+            || (int)$identity['port'] !== (int)($adoption['port'] ?? 0)
+            || !\hash_equals(
+                (string)$identity['bind_host'],
+                (string)($adoption['host'] ?? ''),
+            )
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $proofDigest) !== 1
+            || !\hash_equals(
+                $proofDigest,
+                \hash('sha256', GatewayClient::canonicalJson($unsignedAdoption)),
+            )
+            || \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)$identity['worker_process_birth'],
+            ) !== 1
+            || !\hash_equals(
+                (string)$identity['worker_process_birth'],
+                (string)$instance->getMeta('child_process_birth', ''),
+            )
+            || !\hash_equals(
+                (string)$identity['worker_pid_namespace_id'],
+                (string)$instance->getMeta('child_pid_namespace_id', ''),
+            )
+            || !$namespaceValid
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback transition lacks an exact credential/listener adoption identity.'
+            );
+        }
+        return $identity;
+    }
+
+    /** @param array<string,mixed> $identity */
+    private static function gatewayFallbackActionDigest(
+        string $action,
+        string $targetListenerState,
+        string $transitionId,
+        string $predecessorActionDigest,
+        array $identity,
+    ): string {
+        return ControlMessage::gatewayFallbackListenerActionDigest(
+            $action,
+            $targetListenerState,
+            $transitionId,
+            $predecessorActionDigest,
+            $identity,
+        );
+    }
+
+    /** @param array<string,mixed> $identity */
+    private function sendGatewayFallbackListenerTransition(
+        ServiceInstance $instance,
+        string $action,
+        string $targetListenerState,
+        string $transitionId,
+        string $actionDigest,
+        string $predecessorActionDigest,
+        array $identity,
+    ): bool {
+        if ($this->controlServer === null
+            || $instance->ipcClientId === null
+            || $instance->role !== ControlMessage::ROLE_GATEWAY_FALLBACK
+            || !$this->controlServer->clientExists($instance->ipcClientId)
+        ) {
+            return false;
+        }
+        $expectedDigest = self::gatewayFallbackActionDigest(
+            $action,
+            $targetListenerState,
+            $transitionId,
+            $predecessorActionDigest,
+            $identity,
+        );
+        if (!\hash_equals($expectedDigest, $actionDigest)) {
+            throw new \RuntimeException(
+                'Gateway fallback transition digest diverged before IPC dispatch.'
+            );
+        }
+        return $this->controlServer->sendTo(
+            $instance->ipcClientId,
+            ControlMessage::gatewayFallbackListenerTransition(
+                $action,
+                $targetListenerState,
+                $transitionId,
+                $actionDigest,
+                $predecessorActionDigest,
+                $identity,
+                $action === 'DRAIN' ? 300 : 0,
+            ),
+        );
+    }
+
+    private function gatewayFallbackUndrainCommitAllowed(ServiceInstance $instance): bool
+    {
+        if ($this->context === null
+            || $this->isStopFlowActive()
+            || (int)($this->desiredState[ControlMessage::ROLE_GATEWAY_FALLBACK] ?? 0) < 1
+            || \in_array($instance->state, [
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+                ServiceInstance::STATE_FAILED,
+            ], true)
+        ) {
+            return false;
+        }
+        try {
+            return \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                $this->gatewayFallbackServingFenceDigest($instance),
+            ) === 1;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Prove the exact immutable TLS generation currently loaded by the child.
+     * ProjectCertificateGenerationStore::active() revalidates the private-key
+     * match, SAN, current validity, permissions and snapshot digest.  The
+     * serving-manifest comparison then fences those facts to this Master and
+     * to the generation acknowledged by this exact fallback child.
+     */
+    private function gatewayFallbackServingFenceDigest(
+        ServiceInstance $instance,
+    ): string {
+        if ($this->context === null
+            || $instance->role !== ControlMessage::ROLE_GATEWAY_FALLBACK
+            || $instance->ipcClientId === null
+            || $this->controlServer === null
+            || !$this->controlServer->clientExists($instance->ipcClientId)
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback TLS serving process is not current.'
+            );
+        }
+        $runtimeFence = ServingManifestRuntimeFence::fromContext($this->context);
+        $manifest = (new ProjectServingManifestStore((string)BP))->currentForFence([
+            'instance_id' => $this->context->instanceName,
+            'instance_generation' => $runtimeFence['instance_generation'],
+            'master_pid' => $this->context->masterPid,
+            'master_epoch' => $this->context->epoch,
+        ]);
+        $routeCount = (int)($manifest['route_count'] ?? -1);
+        if ($routeCount < 1
+            || !\hash_equals($runtimeFence['path'], (string)($manifest['path'] ?? ''))
+            || (int)$runtimeFence['generation'] !== (int)($manifest['generation'] ?? 0)
+            || !\hash_equals($runtimeFence['digest'], (string)($manifest['digest'] ?? ''))
+            || (int)$instance->getMeta('serving_manifest_generation', 0)
+                !== (int)$manifest['generation']
+            || !\hash_equals(
+                (string)$manifest['digest'],
+                (string)$instance->getMeta('serving_manifest_digest', ''),
+            )
+            || (int)$instance->getMeta('serving_manifest_route_count', -1)
+                !== $routeCount
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback child has not acknowledged the authoritative serving manifest.'
+            );
+        }
+
+        $routes = (array)($manifest['payload']['routes'] ?? []);
+        if (\count($routes) !== $routeCount) {
+            throw new \RuntimeException(
+                'Gateway fallback serving manifest route count changed.'
+            );
+        }
+        $generations = new ProjectCertificateGenerationStore((string)BP);
+        $certificateFacts = [];
+        foreach ($routes as $route) {
+            if (!\is_array($route)) {
+                throw new \RuntimeException(
+                    'Gateway fallback serving route is malformed.'
+                );
+            }
+            $domain = (string)($route['domain'] ?? '');
+            $generation = (int)($route['certificate_generation'] ?? 0);
+            $sourceDigest = (string)($route['certificate_source_digest'] ?? '');
+            $certificate = \is_array($route['certificate'] ?? null)
+                ? $route['certificate']
+                : [];
+            $privateKey = \is_array($route['private_key'] ?? null)
+                ? $route['private_key']
+                : [];
+            $snapshot = \is_array($route['certificate_snapshot'] ?? null)
+                ? $route['certificate_snapshot']
+                : [];
+            $active = $generations->active($domain);
+            if (!\is_array($active)
+                || $generation < 1
+                || (int)($active['generation'] ?? 0) !== $generation
+                || !\hash_equals(
+                    $sourceDigest,
+                    (string)($active['source_digest'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($certificate['path'] ?? ''),
+                    (string)($active['cert_path'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($privateKey['path'] ?? ''),
+                    (string)($active['key_path'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($snapshot['leaf_fingerprint_sha256'] ?? ''),
+                    (string)($active['leaf_fingerprint_sha256'] ?? ''),
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Gateway fallback certificate generation is no longer authoritative.'
+                );
+            }
+            $certificateFacts[] = [
+                'domain' => $domain,
+                'generation' => $generation,
+                'source_digest' => $sourceDigest,
+                'leaf_fingerprint_sha256' => (string)(
+                    $active['leaf_fingerprint_sha256'] ?? ''
+                ),
+            ];
+        }
+        \usort(
+            $certificateFacts,
+            static fn (array $left, array $right): int =>
+                (string)$left['domain'] <=> (string)$right['domain'],
+        );
+        return \hash('sha256', GatewayClient::canonicalJson([
+            'schema' => 'wls-gateway-fallback-serving-fence/1',
+            'project_uuid' => (string)($manifest['payload']['project_uuid'] ?? ''),
+            'instance' => $this->context->instanceName,
+            'instance_generation' => $runtimeFence['instance_generation'],
+            'master_pid' => $this->context->masterPid,
+            'master_epoch' => $this->context->epoch,
+            'manifest_path' => $runtimeFence['path'],
+            'manifest_generation' => $runtimeFence['generation'],
+            'manifest_digest' => $runtimeFence['digest'],
+            'route_count' => $routeCount,
+            'certificates' => $certificateFacts,
+        ]));
+    }
+
+    private function quarantineGatewayFallbackTransition(
+        ServiceInstance $instance,
+        string $reason,
+    ): void {
+        $this->desiredState[ControlMessage::ROLE_GATEWAY_FALLBACK] = 0;
+        $instance->state = ServiceInstance::STATE_STOPPING;
+        $instance->setMeta('fallback_listener_quarantine_reason', $reason);
+        $instance->setMeta('fallback_listener_quarantined_at', self::monotonicSeconds());
+        $this->registry->updateInstance($instance);
+        $this->revokeInstanceCredential($instance, $reason);
+        $this->stopInstance($instance);
+        $this->closeGatewayFallbackListener();
+        if ($this->context !== null) {
+            $this->persistServicesInfo($this->context);
+        }
+    }
+
+    private static function canonicalGatewayFallbackIdentityMatches(
+        mixed $left,
+        mixed $right,
+    ): bool {
+        return \is_array($left)
+            && \is_array($right)
+            && \hash_equals(
+                GatewayClient::canonicalJson($left),
+                GatewayClient::canonicalJson($right),
+            );
+    }
+
+    /**
+     * @param array<string,mixed>|null $lease
+     * @param array<string,mixed> $identity
+     */
+    private static function gatewayFallbackDurableTransitionMatches(
+        ?array $lease,
+        ServiceInstance $instance,
+        string $phase,
+        string $action,
+        string $transitionId,
+        string $actionDigest,
+        array $identity,
+    ): bool {
+        return \is_array($lease)
+            && (int)($lease['schema_version'] ?? 0)
+                === GatewayPortLeaseAllocator::SCHEMA_VERSION
+            && \hash_equals('DRAINING', (string)($lease['state'] ?? ''))
+            && \hash_equals($phase, (string)($lease['listener_phase'] ?? ''))
+            && \hash_equals(
+                $action,
+                (string)($lease['listener_transition_action'] ?? ''),
+            )
+            && \hash_equals(
+                $transitionId,
+                (string)($lease['drain_transition_id'] ?? ''),
+            )
+            && \hash_equals(
+                $actionDigest,
+                (string)($lease['listener_transition_digest'] ?? ''),
+            )
+            && \hash_equals(
+                $instance->launchId,
+                (string)($lease['launch_id'] ?? ''),
+            )
+            && (int)($instance->port ?? 0) === (int)($lease['port'] ?? 0)
+            && self::canonicalGatewayFallbackIdentityMatches(
+                $identity,
+                $lease['transition_identity'] ?? null,
+            );
+    }
+
+    /**
+     * @param array<string,mixed>|null $lease
+     * @param array<string,mixed> $identity
+     */
+    private function gatewayFallbackDurableLeaseIsExactActive(
+        ?array $lease,
+        ServiceInstance $instance,
+        array $identity,
+    ): bool {
+        if (!\is_array($lease)
+            || (int)($lease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
+            || !\hash_equals('ACTIVE', (string)($lease['state'] ?? ''))
+            || !\hash_equals(
+                GatewayPortLeaseAllocator::LISTENER_PHASE_ACTIVE,
+                (string)($lease['listener_phase'] ?? ''),
+            )
+            || !\hash_equals(
+                $instance->launchId,
+                (string)($lease['launch_id'] ?? ''),
+            )
+            || (int)($instance->port ?? 0) !== (int)($lease['port'] ?? 0)
+        ) {
+            return false;
+        }
+        try {
+            return self::canonicalGatewayFallbackIdentityMatches(
+                $identity,
+                $this->gatewayFallbackTransitionIdentity($instance, $lease),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -19611,7 +21459,8 @@ class ServiceOrchestrator
             }
             $listenerLease = \is_array($listenerLease) ? $listenerLease : [];
             $listenerLeaseValid = $listenerLease !== []
-                && (int)($listenerLease['schema_version'] ?? 0) === 5
+                && (int)($listenerLease['schema_version'] ?? 0)
+                    === GatewayPortLeaseAllocator::SCHEMA_VERSION
                 && \hash_equals(
                     'ACTIVE',
                     (string)($listenerLease['state'] ?? ''),
@@ -20745,7 +22594,8 @@ class ServiceOrchestrator
                         && $port >= 20000
                         && $port <= 29999);
                 $leaseId = \strtolower(\trim((string)($lease['lease_id'] ?? '')));
-                if ((int)($lease['schema_version'] ?? 0) !== 5
+                if ((int)($lease['schema_version'] ?? 0)
+                        !== GatewayPortLeaseAllocator::SCHEMA_VERSION
                     || !\hash_equals(
                         $leaseInstance,
                         (string)($lease['instance'] ?? ''),
@@ -20893,7 +22743,7 @@ class ServiceOrchestrator
             }
             if (isset($leaseStatusFailed[$role])) {
                 // The listener source is closed, but without an exact durable
-                // schema-5 identity this generation must remain retained for
+                // schema-6 identity this generation must remain retained for
                 // doctor/next-Master recovery. Never guess a lease ID or mark
                 // an unknown record RELEASED.
                 continue;
@@ -21534,10 +23384,19 @@ class ServiceOrchestrator
 
     /**
      * @param list<ServiceInstance> $readyBackends
+     * @param (callable(ServiceInstance):bool)|null $publicationProof
      */
     private static function gatewayJoinBackendPublicationInstance(
         array $readyBackends,
+        ?callable $publicationProof = null,
     ): ?ServiceInstance {
+        if ($publicationProof !== null) {
+            $readyBackends = \array_values(\array_filter(
+                $readyBackends,
+                static fn (ServiceInstance $instance): bool =>
+                    (bool)$publicationProof($instance),
+            ));
+        }
         if ($readyBackends === []) {
             return null;
         }
@@ -21552,7 +23411,7 @@ class ServiceOrchestrator
 
     /**
      * Return only a receipt-backed adoption projection that still matches the
-     * exact ACTIVE schema-5 host lease and the selected live child identity.
+     * exact ACTIVE schema-6 host lease and the selected live child identity.
      * Empty means the endpoint must not be consumed as an active backend.
      *
      * @param array<string,mixed> $lease
@@ -21562,6 +23421,22 @@ class ServiceOrchestrator
         ServiceInstance $instance,
         array $lease,
     ): array {
+        try {
+            $liveLease = (new GatewayPortLeaseAllocator())->liveServingLease(
+                (string)($lease['instance'] ?? ''),
+                (string)($lease['bind_host'] ?? ''),
+                (int)($lease['port'] ?? 0),
+                (string)($lease['lease_id'] ?? ''),
+                $instance->launchId,
+                (int)($lease['master_pid'] ?? 0),
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+        if (!\is_array($liveLease)) {
+            return [];
+        }
+        $lease = $liveLease;
         $adoption = $instance->getMeta('listener_adoption', []);
         if (!\is_array($adoption) || $adoption === []) {
             return [];
@@ -21583,6 +23458,14 @@ class ServiceOrchestrator
         }
         $ownerPid = $instance->getTrackingPid();
         $ownerBirth = (string)($adoption['owner_process_birth'] ?? '');
+        $ownerPidNamespaceId = (string)(
+            $adoption['owner_pid_namespace_id'] ?? ''
+        );
+        $authorizedBirth = (string)$instance->getMeta('child_process_birth', '');
+        $authorizedPidNamespaceId = (string)$instance->getMeta(
+            'child_pid_namespace_id',
+            '',
+        );
         $leaseWorkerMatches = false;
         foreach ((array)($lease['workers'] ?? []) as $worker) {
             if (\is_array($worker)
@@ -21595,12 +23478,24 @@ class ServiceOrchestrator
                     $ownerBirth,
                     (string)($worker['process_birth'] ?? ''),
                 )
+                && \hash_equals(
+                    $ownerPidNamespaceId,
+                    (string)($worker['pid_namespace_id'] ?? ''),
+                )
             ) {
                 $leaseWorkerMatches = true;
                 break;
             }
         }
-        if (!\hash_equals('wls-listener-adoption/1', (string)($adoption['schema'] ?? ''))
+        $namespaceValid = PHP_OS_FAMILY === 'Linux'
+            ? \preg_match(
+                '/\Apid:\[[1-9][0-9]{0,19}\]\z/D',
+                $ownerPidNamespaceId,
+            ) === 1
+            : $ownerPidNamespaceId === '';
+        if (!\hash_equals('wls-listener-adoption/2', (string)($adoption['schema'] ?? ''))
+            || (int)($lease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals('ACTIVE', (string)($lease['state'] ?? ''))
             || !\hash_equals('ACTIVE', (string)($adoption['lease_state'] ?? ''))
             || !\hash_equals(
@@ -21631,6 +23526,9 @@ class ServiceOrchestrator
                 (string)($lease['lease_id'] ?? ''),
             )
             || \preg_match('/\A[a-f0-9]{64}\z/D', $ownerBirth) !== 1
+            || !$namespaceValid
+            || !\hash_equals($authorizedBirth, $ownerBirth)
+            || !\hash_equals($authorizedPidNamespaceId, $ownerPidNamespaceId)
             || \preg_match('/\A[a-f0-9]{64}\z/D', $reportedDigest) !== 1
             || !\hash_equals($reportedDigest, $calculatedDigest)
             || !$leaseWorkerMatches
@@ -21727,7 +23625,8 @@ class ServiceOrchestrator
         $listenerLease = (new GatewayPortLeaseAllocator())->status($listenerLeaseName);
         $listenerLease = \is_array($listenerLease) ? $listenerLease : [];
         $listenerLeaseValid = $listenerLease !== []
-            && (int)($listenerLease['schema_version'] ?? 0) === 5
+            && (int)($listenerLease['schema_version'] ?? 0)
+                === GatewayPortLeaseAllocator::SCHEMA_VERSION
             && \hash_equals(
                 $listenerLeaseName,
                 (string)($listenerLease['instance'] ?? ''),
@@ -21757,7 +23656,7 @@ class ServiceOrchestrator
                     )))
         ) {
             throw new \RuntimeException(
-                'Gateway join endpoint cannot publish without its exact schema-5 listener lease.',
+                'Gateway join endpoint cannot publish without its exact schema-6 listener lease.',
             );
         }
         if (!$listenerLeaseValid) {
@@ -22175,7 +24074,8 @@ class ServiceOrchestrator
         $allocator = new GatewayPortLeaseAllocator();
         $current = $allocator->status($this->context->instanceName);
         if (!\is_array($current)
-            || (int)($current['schema_version'] ?? 0) !== 5
+            || (int)($current['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals($leaseId, (string)($current['lease_id'] ?? ''))
             || !\hash_equals(
                 $this->context->instanceName,
@@ -22828,6 +24728,7 @@ class ServiceOrchestrator
             'waiting' => $waiting,
             'replies' => [],
             'created_at' => \time(),
+            'created_monotonic' => self::monotonicSeconds(),
         ];
     }
 
@@ -22871,7 +24772,13 @@ class ServiceOrchestrator
             return;
         }
         $req = $this->pendingFiberStatsRequest;
-        if (\time() - $req['created_at'] < self::FIBER_STATS_TIMEOUT_SEC) {
+        $now = self::monotonicSeconds();
+        $created = (float)($req['created_monotonic'] ?? NAN);
+        if (\is_finite($created)
+            && $created > 0.0
+            && $created <= $now
+            && ($now - $created) < self::FIBER_STATS_TIMEOUT_SEC
+        ) {
             return;
         }
         $this->pendingFiberStatsRequest = null;
@@ -28965,10 +30872,23 @@ class ServiceOrchestrator
                     && ($this->controlServer?->clientExists($backend->ipcClientId) ?? false)
                     && $this->isInstanceServiceAlive($backend),
             ));
-            $publicationInstance = self::gatewayJoinBackendPublicationInstance(
-                $remainingReady,
-            );
             try {
+                $listenerLeaseName = GatewayLeaseIdentity::forRole(
+                    (string)($this->context?->instanceName ?? ''),
+                    GatewayLeaseIdentity::ROLE_BACKEND,
+                );
+                $listenerLease = (new GatewayPortLeaseAllocator())->status(
+                    $listenerLeaseName,
+                );
+                $listenerLease = \is_array($listenerLease) ? $listenerLease : [];
+                $publicationInstance = self::gatewayJoinBackendPublicationInstance(
+                    $remainingReady,
+                    fn (ServiceInstance $backend): bool => $listenerLease !== []
+                        && $this->validatedListenerAdoptionForPublication(
+                            $backend,
+                            $listenerLease,
+                        ) !== [],
+                );
                 $this->publishGatewayJoinBackendState(
                     $publicationInstance !== null ? 'ACTIVE' : 'DEGRADED',
                     $publicationInstance,
@@ -29439,17 +31359,6 @@ class ServiceOrchestrator
     }
 
     /**
-     * 委托给 Processer 杀死进程
-     */
-    private function killProcess(int $pid): bool
-    {
-        if ($pid <= 0) {
-            return false;
-        }
-        return Processer::killByPid($pid);
-    }
-
-    /**
      * 委托给 Processer 检查进程存活
      */
     private function isProcessRunning(int $pid): bool
@@ -29486,40 +31395,6 @@ class ServiceOrchestrator
 
         // 仅在启动早期启用保护，避免永久掩盖真实故障。
         return $instance->getUptime() <= ($this->startupGracePeriod * 2);
-    }
-
-    private function shouldSuppressUnmatchedRegisterTermination(
-        string $role,
-        int $pid,
-        int $port,
-        string $launchId
-    ): bool {
-        if (!\in_array($role, [
-            ControlMessage::ROLE_WORKER,
-            ControlMessage::ROLE_MAINTENANCE,
-            ControlMessage::ROLE_GATEWAY_BACKEND,
-        ], true)) {
-            return false;
-        }
-
-        foreach ($this->registry->getInstancesByRole($role) as $candidate) {
-            if ($port > 0 && (int) ($candidate->port ?? 0) !== $port) {
-                continue;
-            }
-            if (!$this->shouldSkipEarlyPidDeathResurrectionCheck($candidate)) {
-                continue;
-            }
-            if ($launchId !== '' && $candidate->launchId === $launchId) {
-                continue;
-            }
-            WlsLogger::warning_(
-                "[Orchestrator] 前台启动早期保护：跳过终止未匹配 register 进程 role={$role}, pid={$pid}, port={$port}, launch_id={$launchId}"
-            );
-
-            return true;
-        }
-
-        return false;
     }
 
     /**
@@ -29971,7 +31846,7 @@ class ServiceOrchestrator
 
     private static function diagnosticWallSeconds(): float
     {
-        return \microtime(true);
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
     }
 
     /**

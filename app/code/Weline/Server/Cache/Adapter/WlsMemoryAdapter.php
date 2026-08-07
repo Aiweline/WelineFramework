@@ -573,7 +573,7 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
             return false;
         }
 
-        if ($until > \microtime(true)) {
+        if ($until > self::monotonicSeconds()) {
             return true;
         }
 
@@ -584,7 +584,7 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
     private function markRemoteUnavailable(\Throwable $throwable): void
     {
         unset($throwable);
-        self::$remoteUnavailableUntil[$this->identity] = \microtime(true) + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        self::$remoteUnavailableUntil[$this->identity] = self::monotonicSeconds() + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
         if ($this->memoryFacade !== null) {
             $this->memoryFacade->disconnect();
             $this->memoryFacade = null;
@@ -594,5 +594,10 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
     private function markRemoteAvailable(): void
     {
         unset(self::$remoteUnavailableUntil[$this->identity]);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

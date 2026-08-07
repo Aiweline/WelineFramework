@@ -13,16 +13,20 @@ namespace Weline\Server\Service\Edge\Gateway;
  */
 final class ProjectAcmeHttp01ChallengeStore
 {
-    private const SCHEMA_VERSION = 1;
+    private const SCHEMA_VERSION = 2;
     private const LEASE_SECONDS = 900;
+    private const MAX_WALL_EXPIRY = 253_402_300_799;
     private const MAX_LEASES = 32;
     private const MAX_LEGACY_DIRECTORY_ENTRIES = 256;
     private const STATE_FILE = '.desired.json';
     private const LOCK_FILE = '.desired.lock';
+    private readonly string $hostBootId;
 
     public function __construct(
         private readonly ?string $directory = null,
         private readonly ?\Closure $clock = null,
+        private readonly ?\Closure $monotonicClock = null,
+        ?string $hostBootId = null,
     ) {
         if ($this->directory !== null
             && (\str_contains($this->directory, "\0")
@@ -40,6 +44,9 @@ final class ProjectAcmeHttp01ChallengeStore
                 throw new \RuntimeException('ACME HTTP-01 project root is unsafe.');
             }
         }
+        $this->hostBootId = GatewayHostBootIdentity::validate(
+            $hostBootId ?? GatewayHostBootIdentity::current(),
+        );
     }
 
     public static function projectionFilename(string $domain): string
@@ -63,12 +70,16 @@ final class ProjectAcmeHttp01ChallengeStore
     /**
      * Resolve one exact Host/token pair from the digest-protected project fact.
      * Compatibility projections are deliberately never consulted here.
+     * `$now` remains only for source compatibility; wall time never authorizes
+     * or prolongs a challenge lease.
      */
     public static function resolvePublishedChallenge(
         string $directory,
         string $host,
         string $token,
         ?int $now = null,
+        ?float $monotonicNow = null,
+        ?string $hostBootId = null,
     ): ?string {
         if (\preg_match('/\A[A-Za-z0-9_-]{1,256}\z/D', $token) !== 1) {
             return null;
@@ -119,12 +130,23 @@ final class ProjectAcmeHttp01ChallengeStore
         ) {
             return null;
         }
+        try {
+            $hostBootId = GatewayHostBootIdentity::validate(
+                $hostBootId ?? GatewayHostBootIdentity::current(),
+            );
+            $monotonicNow ??= \hrtime(true) / 1_000_000_000;
+            if (!\is_finite($monotonicNow) || $monotonicNow <= 0.0) {
+                return null;
+            }
+        } catch (\Throwable) {
+            return null;
+        }
         $lease = $payload['challenges'][$host] ?? null;
         if (!\is_array($lease)
             || !\hash_equals($host, (string)($lease['domain'] ?? ''))
             || !\hash_equals($token, (string)($lease['token'] ?? ''))
-            || (int)($lease['expires_at'] ?? 0) <= ($now ?? \time())
-            || (int)($lease['generation'] ?? 0) < 1
+            || !self::validPersistedLeaseCore($lease)
+            || !self::leaseFenceActive($lease, $monotonicNow, $hostBootId)
         ) {
             return null;
         }
@@ -140,7 +162,12 @@ final class ProjectAcmeHttp01ChallengeStore
     /**
      * @return array{generation:int,digest:string,challenges:list<array{domain:string,token:string,key_authorization:string,expires_at:int}>}
      */
-    public function register(string $domain, string $token, string $keyAuthorization): array
+    public function register(
+        string $domain,
+        string $token,
+        string $keyAuthorization,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $domain = $this->normalizeExactDomain($domain);
         $token = \trim($token);
@@ -157,22 +184,46 @@ final class ProjectAcmeHttp01ChallengeStore
             );
         }
 
-        return $this->withLock(function () use ($domain, $token, $keyAuthorization): array {
-            $state = $this->readStateOrMigrate();
-            $state = $this->pruneExpired($state, false);
+        return $this->withLock(function () use (
+            $domain,
+            $token,
+            $keyAuthorization,
+            $deadlineMonotonic,
+        ): array {
+            $this->assertOperationDeadline($deadlineMonotonic);
+            $state = $this->readStateOrMigrate(null, $deadlineMonotonic);
+            $state = $this->pruneExpired($state, false, $deadlineMonotonic);
             $challenges = (array)($state['challenges'] ?? []);
             if (!isset($challenges[$domain]) && \count($challenges) >= self::MAX_LEASES) {
                 throw new \RuntimeException(
                     'A project may hold at most 32 ACME HTTP-01 challenges.'
                 );
             }
-            $generation = \max(0, (int)($state['generation'] ?? 0)) + 1;
+            $generation = self::nextGeneration($state['generation'] ?? 0);
+            $wallNow = $this->now();
+            if ($wallNow <= 0
+                || $wallNow > self::MAX_WALL_EXPIRY - self::LEASE_SECONDS
+            ) {
+                throw new \RuntimeException(
+                    'ACME HTTP-01 wall-clock display expiry is invalid.',
+                );
+            }
+            $issuedMonotonic = $this->monotonicNow();
+            $leaseDeadlineMonotonic = $issuedMonotonic + self::LEASE_SECONDS;
+            if (!\is_finite($leaseDeadlineMonotonic)) {
+                throw new \RuntimeException(
+                    'ACME HTTP-01 monotonic lease deadline is invalid.',
+                );
+            }
             $lease = [
                 'domain' => $domain,
                 'token' => $token,
                 'key_authorization' => $keyAuthorization,
-                'expires_at' => $this->now() + self::LEASE_SECONDS,
+                'expires_at' => $wallNow + self::LEASE_SECONDS,
                 'generation' => $generation,
+                'host_boot_id' => $this->hostBootId,
+                'issued_monotonic' => $issuedMonotonic,
+                'deadline_monotonic' => $leaseDeadlineMonotonic,
             ];
             $challenges[$domain] = $lease;
             \ksort($challenges, SORT_STRING);
@@ -180,8 +231,9 @@ final class ProjectAcmeHttp01ChallengeStore
                 'schema_version' => self::SCHEMA_VERSION,
                 'generation' => $generation,
                 'challenges' => $challenges,
-                'updated_at' => \gmdate(DATE_ATOM, $this->now()),
+                'updated_at' => \gmdate(DATE_ATOM, $wallNow),
             ];
+            $this->assertOperationDeadline($deadlineMonotonic);
             $this->writeState($next);
             try {
                 $this->publishLegacyProjection($lease);
@@ -190,54 +242,77 @@ final class ProjectAcmeHttp01ChallengeStore
                 // both current pure-WLS workers and gateway replay. A stale
                 // compatibility projection must never roll back that fact.
             }
-            return $this->projectDesired($next, null);
-        });
+            return $this->projectDesired($next, null, $deadlineMonotonic);
+        }, $deadlineMonotonic);
     }
 
     /**
      * @return array{generation:int,digest:string,challenges:list<array{domain:string,token:string,key_authorization:string,expires_at:int}>}
      */
-    public function remove(string $domain): array
+    public function remove(
+        string $domain,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $domain = $this->normalizeExactDomain($domain);
-        return $this->withLock(function () use ($domain): array {
-            $state = $this->pruneExpired($this->readStateOrMigrate(), true);
+        return $this->withLock(function () use (
+            $domain,
+            $deadlineMonotonic,
+        ): array {
+            $this->assertOperationDeadline($deadlineMonotonic);
+            $state = $this->pruneExpired(
+                $this->readStateOrMigrate(null, $deadlineMonotonic),
+                true,
+                $deadlineMonotonic,
+            );
             $challenges = (array)($state['challenges'] ?? []);
             if (!isset($challenges[$domain])) {
                 try {
                     $this->removeLegacyProjection($domain);
                 } catch (\Throwable) {
                 }
-                return $this->projectDesired($state, null);
+                return $this->projectDesired($state, null, $deadlineMonotonic);
             }
             unset($challenges[$domain]);
-            $generation = \max(0, (int)($state['generation'] ?? 0)) + 1;
+            $generation = self::nextGeneration($state['generation'] ?? 0);
             $next = [
                 'schema_version' => self::SCHEMA_VERSION,
                 'generation' => $generation,
                 'challenges' => $challenges,
                 'updated_at' => \gmdate(DATE_ATOM, $this->now()),
             ];
+            $this->assertOperationDeadline($deadlineMonotonic);
             $this->writeState($next);
             try {
                 $this->removeLegacyProjection($domain);
             } catch (\Throwable) {
                 // Current runtimes consult only the authoritative envelope.
             }
-            return $this->projectDesired($next, null);
-        });
+            return $this->projectDesired($next, null, $deadlineMonotonic);
+        }, $deadlineMonotonic);
     }
 
     /**
      * @param list<string>|null $allowedDomains
      * @return array{generation:int,digest:string,challenges:list<array{domain:string,token:string,key_authorization:string,expires_at:int}>}
      */
-    public function desired(?array $allowedDomains = null): array
+    public function desired(
+        ?array $allowedDomains = null,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        return $this->withLock(function () use ($allowedDomains): array {
-            $state = $this->readStateOrMigrate($allowedDomains);
-            $next = $this->pruneExpired($state, true);
+        return $this->withLock(function () use (
+            $allowedDomains,
+            $deadlineMonotonic,
+        ): array {
+            $this->assertOperationDeadline($deadlineMonotonic);
+            $state = $this->readStateOrMigrate(
+                $allowedDomains,
+                $deadlineMonotonic,
+            );
+            $next = $this->pruneExpired($state, true, $deadlineMonotonic);
             foreach ((array)($next['challenges'] ?? []) as $lease) {
+                $this->assertOperationDeadline($deadlineMonotonic);
                 if (\is_array($lease)) {
                     try {
                         $this->publishLegacyProjection($lease);
@@ -245,8 +320,12 @@ final class ProjectAcmeHttp01ChallengeStore
                     }
                 }
             }
-            return $this->projectDesired($next, $allowedDomains);
-        });
+            return $this->projectDesired(
+                $next,
+                $allowedDomains,
+                $deadlineMonotonic,
+            );
+        }, $deadlineMonotonic);
     }
 
     /**
@@ -254,12 +333,17 @@ final class ProjectAcmeHttp01ChallengeStore
      * @param list<string>|null $allowedDomains
      * @return array{generation:int,digest:string,challenges:list<array{domain:string,token:string,key_authorization:string,expires_at:int}>}
      */
-    private function projectDesired(array $state, ?array $allowedDomains): array
+    private function projectDesired(
+        array $state,
+        ?array $allowedDomains,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $allowed = null;
         if ($allowedDomains !== null) {
             $allowed = [];
             foreach ($allowedDomains as $domain) {
+                $this->assertOperationDeadline($deadlineMonotonic);
                 try {
                     $allowed[$this->normalizeExactDomain((string)$domain)] = true;
                 } catch (\InvalidArgumentException) {
@@ -268,6 +352,7 @@ final class ProjectAcmeHttp01ChallengeStore
         }
         $challenges = [];
         foreach ((array)($state['challenges'] ?? []) as $domain => $lease) {
+            $this->assertOperationDeadline($deadlineMonotonic);
             if (!\is_array($lease)
                 || ($allowed !== null && !isset($allowed[(string)$domain]))
             ) {
@@ -280,6 +365,7 @@ final class ProjectAcmeHttp01ChallengeStore
                 'expires_at' => (int)$lease['expires_at'],
             ];
         }
+        $this->assertOperationDeadline($deadlineMonotonic);
         \usort(
             $challenges,
             static fn (array $left, array $right): int => [
@@ -302,22 +388,34 @@ final class ProjectAcmeHttp01ChallengeStore
     }
 
     /** @param list<string>|null $legacyDomains @return array<string,mixed> */
-    private function readStateOrMigrate(?array $legacyDomains = null): array
+    private function readStateOrMigrate(
+        ?array $legacyDomains = null,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
+        $this->assertOperationDeadline($deadlineMonotonic);
         $file = $this->stateFile();
         $encoded = GatewayProjectStateFilesystem::readOptional(
             $file,
             131_072,
             'ACME HTTP-01 desired state',
         );
+        $this->assertOperationDeadline($deadlineMonotonic);
         if ($encoded === null) {
-            return $this->migrateLegacyState($legacyDomains);
+            return $this->migrateLegacyState(
+                $legacyDomains,
+                $deadlineMonotonic,
+            );
         }
         $envelope = \json_decode($encoded, true);
-        $payload = \is_array($envelope['payload'] ?? null) ? $envelope['payload'] : null;
-        $digest = \strtolower(\trim((string)($envelope['sha256'] ?? '')));
+        $payload = \is_array($envelope)
+            && \is_array($envelope['payload'] ?? null)
+                ? $envelope['payload']
+                : null;
+        $digest = \is_array($envelope)
+            ? \strtolower(\trim((string)($envelope['sha256'] ?? '')))
+            : '';
         if (!\is_array($payload)
-            || (int)($payload['schema_version'] ?? 0) !== self::SCHEMA_VERSION
             || (int)($payload['generation'] ?? 0) < 0
             || !\is_array($payload['challenges'] ?? null)
             || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
@@ -328,10 +426,20 @@ final class ProjectAcmeHttp01ChallengeStore
         ) {
             throw new \RuntimeException('ACME HTTP-01 desired state integrity check failed.');
         }
+        $schemaVersion = (int)($payload['schema_version'] ?? 0);
+        if ($schemaVersion === 1) {
+            return $this->retireLegacyState($payload, $deadlineMonotonic);
+        }
+        if ($schemaVersion !== self::SCHEMA_VERSION) {
+            throw new \RuntimeException(
+                'ACME HTTP-01 desired state schema is unsupported.',
+            );
+        }
         foreach ($payload['challenges'] as $domain => $lease) {
+            $this->assertOperationDeadline($deadlineMonotonic);
             if (!\is_array($lease)
                 || !\hash_equals((string)$domain, (string)($lease['domain'] ?? ''))
-                || !$this->validPersistedLease($lease)
+                || !self::validPersistedLeaseCore($lease)
             ) {
                 throw new \RuntimeException('ACME HTTP-01 desired lease is invalid.');
             }
@@ -339,12 +447,54 @@ final class ProjectAcmeHttp01ChallengeStore
         return $payload;
     }
 
+    /** @param array<string,mixed> $legacy @return array<string,mixed> */
+    private function retireLegacyState(
+        array $legacy,
+        ?float $deadlineMonotonic = null,
+    ): array
+    {
+        $generationFloor = \max(0, (int)($legacy['generation'] ?? 0));
+        foreach ((array)($legacy['challenges'] ?? []) as $lease) {
+            $this->assertOperationDeadline($deadlineMonotonic);
+            if (\is_array($lease)) {
+                $generationFloor = \max(
+                    $generationFloor,
+                    (int)($lease['generation'] ?? 0),
+                );
+            }
+        }
+        $generation = self::nextGeneration($generationFloor);
+        $next = [
+            'schema_version' => self::SCHEMA_VERSION,
+            'generation' => $generation,
+            'challenges' => [],
+            'updated_at' => \gmdate(DATE_ATOM, $this->now()),
+        ];
+        $this->assertOperationDeadline($deadlineMonotonic);
+        $this->writeState($next);
+        foreach ((array)($legacy['challenges'] ?? []) as $domain => $lease) {
+            $this->assertOperationDeadline($deadlineMonotonic);
+            if (!\is_string($domain) || $domain === '' || !\is_array($lease)) {
+                continue;
+            }
+            try {
+                $this->removeLegacyProjection($domain);
+            } catch (\Throwable) {
+            }
+        }
+        return $next;
+    }
+
     /** @param list<string>|null $legacyDomains @return array<string,mixed> */
-    private function migrateLegacyState(?array $legacyDomains): array
+    private function migrateLegacyState(
+        ?array $legacyDomains,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         /** @var array<string,string|null> $legacyFileDomains */
         $legacyFileDomains = [];
         foreach ($legacyDomains ?? [] as $legacyDomain) {
+            $this->assertOperationDeadline($deadlineMonotonic);
             try {
                 $normalized = $this->normalizeExactDomain((string)$legacyDomain);
                 $legacyName = self::legacyProjectionFilename($normalized) . '.json';
@@ -361,10 +511,14 @@ final class ProjectAcmeHttp01ChallengeStore
             } catch (\InvalidArgumentException) {
             }
         }
-        $challenges = [];
         $stateGeneration = 0;
+        $foundLegacyLease = false;
         $directory = $this->resolvedDirectory();
-        foreach ($this->boundedLegacyProjectionFiles($directory) as $file) {
+        foreach ($this->boundedLegacyProjectionFiles(
+            $directory,
+            $deadlineMonotonic,
+        ) as $file) {
+            $this->assertOperationDeadline($deadlineMonotonic);
             if (\str_starts_with(\basename($file), '.')) {
                 continue;
             }
@@ -406,19 +560,21 @@ final class ProjectAcmeHttp01ChallengeStore
                 'expires_at' => $expiresAt,
                 'generation' => $leaseGeneration,
             ];
-            if ($expiresAt > $this->now() && $this->validPersistedLease($lease)) {
-                $challenges[$domain] = $lease;
+            if (self::validPersistedLeaseCore($lease)) {
+                $foundLegacyLease = true;
                 $stateGeneration = \max($stateGeneration, $leaseGeneration);
             }
         }
-        \ksort($challenges, SORT_STRING);
         $state = [
             'schema_version' => self::SCHEMA_VERSION,
-            'generation' => $stateGeneration,
-            'challenges' => $challenges,
+            'generation' => $foundLegacyLease
+                ? self::nextGeneration($stateGeneration)
+                : 0,
+            'challenges' => [],
             'updated_at' => \gmdate(DATE_ATOM, $this->now()),
         ];
-        if ($challenges !== []) {
+        if ($foundLegacyLease) {
+            $this->assertOperationDeadline($deadlineMonotonic);
             $this->writeState($state);
         }
         return $state;
@@ -432,7 +588,10 @@ final class ProjectAcmeHttp01ChallengeStore
      *
      * @return list<string>
      */
-    private function boundedLegacyProjectionFiles(string $directory): array
+    private function boundedLegacyProjectionFiles(
+        string $directory,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $handle = @\opendir($directory);
         if (!\is_resource($handle)) {
@@ -444,6 +603,7 @@ final class ProjectAcmeHttp01ChallengeStore
         $entries = 0;
         try {
             while (($entry = @\readdir($handle)) !== false) {
+                $this->assertOperationDeadline($deadlineMonotonic);
                 if ($entry === '.' || $entry === '..') {
                     continue;
                 }
@@ -454,7 +614,7 @@ final class ProjectAcmeHttp01ChallengeStore
                     );
                 }
                 if (\str_starts_with($entry, '.')
-                    || \preg_match('/\A[^\x00\\\/]{1,255}\.json\z/D', $entry) !== 1
+                    || \preg_match('~\A[^\x00/\\\\]{1,255}\.json\z~D', $entry) !== 1
                 ) {
                     continue;
                 }
@@ -482,12 +642,24 @@ final class ProjectAcmeHttp01ChallengeStore
      * @param array<string,mixed> $state
      * @return array<string,mixed>
      */
-    private function pruneExpired(array $state, bool $persist): array
+    private function pruneExpired(
+        array $state,
+        bool $persist,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $challenges = (array)($state['challenges'] ?? []);
         $changed = false;
+        $monotonicNow = $this->monotonicNow();
         foreach ($challenges as $domain => $lease) {
-            if (!\is_array($lease) || (int)($lease['expires_at'] ?? 0) <= $this->now()) {
+            $this->assertOperationDeadline($deadlineMonotonic);
+            if (!\is_array($lease)
+                || !self::leaseFenceActive(
+                    $lease,
+                    $monotonicNow,
+                    $this->hostBootId,
+                )
+            ) {
                 unset($challenges[$domain]);
                 $changed = true;
             }
@@ -497,13 +669,15 @@ final class ProjectAcmeHttp01ChallengeStore
         }
         $next = [
             'schema_version' => self::SCHEMA_VERSION,
-            'generation' => \max(0, (int)($state['generation'] ?? 0)) + 1,
+            'generation' => self::nextGeneration($state['generation'] ?? 0),
             'challenges' => $challenges,
             'updated_at' => \gmdate(DATE_ATOM, $this->now()),
         ];
         if ($persist) {
+            $this->assertOperationDeadline($deadlineMonotonic);
             $this->writeState($next);
             foreach (\array_keys($challenges + (array)($state['challenges'] ?? [])) as $domain) {
+                $this->assertOperationDeadline($deadlineMonotonic);
                 if (isset($challenges[$domain]) || !\is_string($domain) || $domain === '') {
                     continue;
                 }
@@ -517,13 +691,13 @@ final class ProjectAcmeHttp01ChallengeStore
     }
 
     /** @param array<string,mixed> $lease */
-    private function validPersistedLease(array $lease): bool
+    private static function validPersistedLeaseCore(array $lease): bool
     {
         $domain = (string)($lease['domain'] ?? '');
         $token = (string)($lease['token'] ?? '');
         $authorization = (string)($lease['key_authorization'] ?? '');
         try {
-            if (!\hash_equals($domain, $this->normalizeExactDomain($domain))) {
+            if (!\hash_equals($domain, self::normalizeExactDomain($domain))) {
                 return false;
             }
         } catch (\InvalidArgumentException) {
@@ -535,14 +709,69 @@ final class ProjectAcmeHttp01ChallengeStore
                 $authorization,
             ) === 1
             && \str_starts_with($authorization, $token . '.')
-            && (int)($lease['expires_at'] ?? 0) > 0
-            && (int)($lease['generation'] ?? 0) > 0;
+            && \is_int($lease['expires_at'] ?? null)
+            && $lease['expires_at'] > 0
+            && \is_int($lease['generation'] ?? null)
+            && $lease['generation'] > 0;
+    }
+
+    /** @param array<string,mixed> $lease */
+    private static function leaseFenceWellFormed(array $lease): bool
+    {
+        $bootId = \strtolower(\trim((string)($lease['host_boot_id'] ?? '')));
+        $issued = self::finitePositiveMonotonic($lease['issued_monotonic'] ?? null);
+        $deadline = self::finitePositiveMonotonic($lease['deadline_monotonic'] ?? null);
+        return \preg_match('/\A[a-f0-9]{64}\z/D', $bootId) === 1
+            && $issued !== null
+            && $deadline !== null
+            && $deadline === $issued + self::LEASE_SECONDS;
+    }
+
+    /** @param array<string,mixed> $lease */
+    private static function leaseFenceActive(
+        array $lease,
+        float $monotonicNow,
+        string $hostBootId,
+    ): bool {
+        if (!self::leaseFenceWellFormed($lease)
+            || !\hash_equals(
+                $hostBootId,
+                \strtolower((string)($lease['host_boot_id'] ?? '')),
+            )
+        ) {
+            return false;
+        }
+        $issued = (float)$lease['issued_monotonic'];
+        $deadline = (float)$lease['deadline_monotonic'];
+        return $monotonicNow >= $issued && $monotonicNow < $deadline;
+    }
+
+    private static function finitePositiveMonotonic(mixed $value): ?float
+    {
+        if (!\is_int($value) && !\is_float($value)) {
+            return null;
+        }
+        $value = (float)$value;
+        return \is_finite($value) && $value > 0.0 ? $value : null;
+    }
+
+    private static function nextGeneration(mixed $current): int
+    {
+        $current = \max(0, (int)$current);
+        if ($current >= \PHP_INT_MAX) {
+            throw new \RuntimeException(
+                'ACME HTTP-01 generation exhausted its integer range.',
+            );
+        }
+        return $current + 1;
     }
 
     /** @param array<string,mixed> $lease */
     private function publishLegacyProjection(array $lease): void
     {
-        if (!$this->validPersistedLease($lease)) {
+        if (!self::validPersistedLeaseCore($lease)
+            || !self::leaseFenceWellFormed($lease)
+        ) {
             throw new \RuntimeException('Cannot publish an invalid ACME HTTP-01 projection.');
         }
         $payload = [
@@ -553,6 +782,9 @@ final class ProjectAcmeHttp01ChallengeStore
             'key_authorization' => (string)$lease['key_authorization'],
             'expires_at' => (int)$lease['expires_at'],
             'generation' => (int)$lease['generation'],
+            'host_boot_id' => (string)$lease['host_boot_id'],
+            'issued_monotonic' => (float)$lease['issued_monotonic'],
+            'deadline_monotonic' => (float)$lease['deadline_monotonic'],
         ];
         $this->atomicWrite(
             $this->projectionFile((string)$lease['domain']),
@@ -586,12 +818,231 @@ final class ProjectAcmeHttp01ChallengeStore
         GatewayProjectStateFilesystem::atomicWrite($file, $content, 0600);
     }
 
-    /** @template T @param \Closure():T $callback @return T */
-    private function withLock(\Closure $callback): mixed
+    /**
+     * @template T
+     * @param \Closure():T $callback
+     * @return T
+     */
+    private function withLock(
+        \Closure $callback,
+        ?float $deadlineMonotonic = null,
+    ): mixed
     {
+        $waitTimeout = $this->operationLockWaitTimeout($deadlineMonotonic);
         $directory = $this->resolvedDirectory();
         $lockFile = $directory . DIRECTORY_SEPARATOR . self::LOCK_FILE;
-        return GatewayProjectStateFilesystem::withExclusiveLock($lockFile, $callback);
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockFile,
+            function () use ($callback, $deadlineMonotonic): mixed {
+                $this->assertOperationDeadline($deadlineMonotonic);
+                $this->cleanupAtomicRecoveryBackups($deadlineMonotonic);
+                return $callback();
+            },
+            waitTimeoutSeconds: $waitTimeout,
+        );
+    }
+
+    private function cleanupAtomicRecoveryBackups(
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $directory = $this->resolvedDirectory();
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException(
+                'Unable to enumerate the ACME HTTP-01 recovery directory.'
+            );
+        }
+        $targets = [];
+        $visited = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                $this->assertOperationDeadline($deadlineMonotonic);
+                if (++$visited > self::MAX_LEGACY_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        'ACME HTTP-01 recovery directory exceeds its fixed raw entry quota.'
+                    );
+                }
+                if (!\str_contains($leaf, '.wls-backup-')) {
+                    continue;
+                }
+                $match = [];
+                if (\preg_match(
+                    '/\A(.+)\.wls-backup-[a-f0-9]{16}\z/D',
+                    $leaf,
+                    $match,
+                ) !== 1) {
+                    throw new \RuntimeException(
+                        'ACME HTTP-01 recovery directory contains a malformed reserved leaf.'
+                    );
+                }
+                $targetLeaf = (string)$match[1];
+                if ($targetLeaf !== self::STATE_FILE
+                    && \preg_match(
+                        '/\Adomain-[a-f0-9]{64}\.json\z/D',
+                        $targetLeaf,
+                    ) !== 1
+                ) {
+                    throw new \RuntimeException(
+                        'ACME HTTP-01 recovery artifact target is not a current semantic file.'
+                    );
+                }
+                $targets[$directory . DIRECTORY_SEPARATOR . $targetLeaf] = true;
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        $targets = \array_keys($targets);
+        \sort($targets, SORT_STRING);
+
+        // Validate every paired target before deleting any prior generation.
+        // This preserves the complete recovery set when one target is missing
+        // or damaged, instead of partially erasing crash evidence.
+        foreach ($targets as $target) {
+            $this->assertOperationDeadline($deadlineMonotonic);
+            $maximum = \hash_equals($this->stateFile(), $target) ? 131_072 : 16_384;
+            GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
+                $target,
+                $maximum,
+                'ACME HTTP-01 desired state',
+            );
+            $raw = GatewayProjectStateFilesystem::read(
+                $target,
+                $maximum,
+                'ACME HTTP-01 recovery backup paired target',
+            );
+            $this->validateRecoveryTargetContents($target, $raw);
+        }
+        foreach ($targets as $target) {
+            $this->assertOperationDeadline($deadlineMonotonic);
+            $maximum = \hash_equals($this->stateFile(), $target) ? 131_072 : 16_384;
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                $target,
+                $maximum,
+                'ACME HTTP-01 desired state',
+                function (string $raw) use ($target): void {
+                    $this->validateRecoveryTargetContents($target, $raw);
+                },
+            );
+        }
+    }
+
+    private function validateRecoveryTargetContents(string $target, string $raw): void
+    {
+        if (\hash_equals($this->stateFile(), $target)) {
+            $envelope = \json_decode($raw, true);
+            $expectedEnvelope = ['payload', 'sha256'];
+            $actualEnvelope = \is_array($envelope) ? \array_keys($envelope) : [];
+            \sort($expectedEnvelope, SORT_STRING);
+            \sort($actualEnvelope, SORT_STRING);
+            $payload = \is_array($envelope)
+                && \is_array($envelope['payload'] ?? null)
+                    ? $envelope['payload']
+                    : null;
+            $digest = \is_array($envelope)
+                ? \strtolower((string)($envelope['sha256'] ?? ''))
+                : '';
+            $expectedPayload = [
+                'schema_version',
+                'generation',
+                'challenges',
+                'updated_at',
+            ];
+            $actualPayload = \is_array($payload) ? \array_keys($payload) : [];
+            \sort($expectedPayload, SORT_STRING);
+            \sort($actualPayload, SORT_STRING);
+            $schema = \is_array($payload) ? ($payload['schema_version'] ?? null) : null;
+            if ($actualEnvelope !== $expectedEnvelope
+                || !\is_array($payload)
+                || $actualPayload !== $expectedPayload
+                || !\in_array($schema, [1, self::SCHEMA_VERSION], true)
+                || !\is_int($payload['generation'] ?? null)
+                || (int)$payload['generation'] < 0
+                || !\is_array($payload['challenges'] ?? null)
+                || \count($payload['challenges']) > self::MAX_LEASES
+                || !\is_string($payload['updated_at'] ?? null)
+                || \strlen((string)$payload['updated_at']) > 128
+                || \strtotime((string)$payload['updated_at']) === false
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+                || !\hash_equals(
+                    $digest,
+                    \hash('sha256', GatewayClient::canonicalJson($payload)),
+                )
+            ) {
+                throw new \RuntimeException(
+                    'ACME HTTP-01 desired recovery target is invalid.'
+                );
+            }
+            foreach ($payload['challenges'] as $domain => $lease) {
+                if (!\is_array($lease)
+                    || !\hash_equals((string)$domain, (string)($lease['domain'] ?? ''))
+                    || !self::validPersistedLeaseCore($lease)
+                    || ($schema === self::SCHEMA_VERSION
+                        && !self::leaseFenceWellFormed($lease))
+                ) {
+                    throw new \RuntimeException(
+                        'ACME HTTP-01 desired recovery lease is invalid.'
+                    );
+                }
+            }
+            return;
+        }
+
+        $projection = \json_decode($raw, true);
+        $expected = [
+            'schema_version',
+            'domain',
+            'token',
+            'keyAuth',
+            'key_authorization',
+            'expires_at',
+            'generation',
+            'host_boot_id',
+            'issued_monotonic',
+            'deadline_monotonic',
+        ];
+        $actual = \is_array($projection) ? \array_keys($projection) : [];
+        \sort($expected, SORT_STRING);
+        \sort($actual, SORT_STRING);
+        $domain = \is_array($projection) ? (string)($projection['domain'] ?? '') : '';
+        $expectedFile = $this->projectionFile($domain);
+        if (!\is_array($projection)
+            || $actual !== $expected
+            || ($projection['schema_version'] ?? null) !== self::SCHEMA_VERSION
+            || !\hash_equals($expectedFile, $target)
+            || !\hash_equals(
+                (string)($projection['keyAuth'] ?? ''),
+                (string)($projection['key_authorization'] ?? ''),
+            )
+            || !self::validPersistedLeaseCore($projection)
+            || !self::leaseFenceWellFormed($projection)
+        ) {
+            throw new \RuntimeException(
+                'ACME HTTP-01 projection recovery target is invalid.'
+            );
+        }
+    }
+
+    private function operationLockWaitTimeout(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        return \min(0.25, $this->assertOperationDeadline($deadlineMonotonic));
+    }
+
+    private function assertOperationDeadline(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        if (!\is_finite($deadlineMonotonic) || $deadlineMonotonic < 0.0) {
+            throw new \RuntimeException('ACME HTTP-01 state deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - $this->monotonicNow();
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException('ACME HTTP-01 state deadline was exhausted.');
+        }
+        return $remaining;
     }
 
     private function resolvedDirectory(): string
@@ -755,5 +1206,17 @@ final class ProjectAcmeHttp01ChallengeStore
     private function now(): int
     {
         return $this->clock !== null ? (int)($this->clock)() : \time();
+    }
+
+    private function monotonicNow(): float
+    {
+        $now = $this->monotonicClock !== null
+            ? ($this->monotonicClock)()
+            : \hrtime(true) / 1_000_000_000;
+        $now = self::finitePositiveMonotonic($now);
+        if ($now === null) {
+            throw new \RuntimeException('ACME HTTP-01 monotonic clock is invalid.');
+        }
+        return $now;
     }
 }

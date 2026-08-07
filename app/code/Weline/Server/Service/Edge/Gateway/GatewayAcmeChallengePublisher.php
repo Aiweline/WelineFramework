@@ -31,8 +31,14 @@ final class GatewayAcmeChallengePublisher
     /**
      * @param array{generation:int,digest:string,challenges:list<array<string,mixed>>} $desired
      */
-    public function publish(array $desired, ?string $requiredDomain = null): bool
-    {
+    public function publish(
+        array $desired,
+        ?string $requiredDomain = null,
+        ?float $deadlineMonotonic = null,
+    ): bool {
+        if (!$this->deadlineAvailable($deadlineMonotonic)) {
+            return false;
+        }
         $generation = (int)($desired['generation'] ?? 0);
         $challenges = \is_array($desired['challenges'] ?? null)
             ? \array_values($desired['challenges'])
@@ -59,21 +65,28 @@ final class GatewayAcmeChallengePublisher
         } catch (\Throwable) {
             return false;
         }
-        if (!\is_array($endpoints)) {
+        if (!\is_array($endpoints) || !$this->deadlineAvailable($deadlineMonotonic)) {
             return false;
         }
 
         $gatewayIntentObserved = false;
+        $participatingInstances = [];
+        $completeCandidateInstances = [];
         $projectUuid = '';
         $candidates = [];
         $hostManager = null;
         foreach ($endpoints as $instanceName => $endpoint) {
+            if (!$this->deadlineAvailable($deadlineMonotonic)) {
+                return false;
+            }
             if (!\is_array($endpoint)) {
                 continue;
             }
             if (!GatewayRuntimeServingProjection::participatesInGateway($endpoint)) {
                 continue;
             }
+            $instanceName = (string)$instanceName;
+            $participatingInstances[$instanceName] = true;
             if ($requiredDomain === null
                 || $this->endpointAdvertisesDomain($endpoint, $requiredDomain)
             ) {
@@ -85,20 +98,27 @@ final class GatewayAcmeChallengePublisher
             }
             try {
                 if ($this->leaseReceiptProvider !== null) {
-                    $receipt = ($this->leaseReceiptProvider)((string)$instanceName);
+                    $receipt = ($this->leaseReceiptProvider)($instanceName);
                 } else {
                     $hostManager ??= new GatewayHostManager();
                     $receipt = $hostManager->validatedLeaseReceiptForInstance(
-                        (string)$instanceName,
+                        $instanceName,
+                        $deadlineMonotonic,
                     );
                 }
                 $registration = $this->registrationProvider !== null
-                    ? ($this->registrationProvider)((string)$instanceName)
-                    : (new GatewayRegistrationBuilder())->build((string)$instanceName);
+                    ? ($this->registrationProvider)($instanceName)
+                    : (new GatewayRegistrationBuilder())->build(
+                        $instanceName,
+                        $deadlineMonotonic,
+                    );
             } catch (\Throwable) {
                 continue;
             }
-            if (!\is_array($registration) || !\is_array($receipt)) {
+            if (!\is_array($registration)
+                || !\is_array($receipt)
+                || !$this->deadlineAvailable($deadlineMonotonic)
+            ) {
                 continue;
             }
             $registrationProjectUuid = \strtolower(\trim((string)(
@@ -111,7 +131,7 @@ final class GatewayAcmeChallengePublisher
                 || !$this->receiptMatchesRegistration(
                     $receipt,
                     $registration,
-                    (string)$instanceName,
+                    $instanceName,
                 )
             ) {
                 continue;
@@ -122,6 +142,9 @@ final class GatewayAcmeChallengePublisher
             $projectUuid = $registrationProjectUuid;
             $routes = [];
             foreach ((array)($registration['routes'] ?? []) as $route) {
+                if (!$this->deadlineAvailable($deadlineMonotonic)) {
+                    return false;
+                }
                 if (!\is_array($route)) {
                     continue;
                 }
@@ -143,28 +166,49 @@ final class GatewayAcmeChallengePublisher
             }
             if ($routes !== []) {
                 $candidates[] = [
-                    'instance_id' => (string)$instanceName,
+                    'instance_id' => $instanceName,
                     'receipt' => $receipt,
                     'registration' => $registration,
                     'routes' => $routes,
                 ];
+                $completeCandidateInstances[$instanceName] = true;
             }
         }
 
-        if ($candidates === [] || $projectUuid === '') {
-            return !$gatewayIntentObserved;
+        // A required domain that belongs only to pure WLS must not be blocked
+        // by an unrelated gateway tenant. Once any endpoint advertises the
+        // domain, however, publication is a full project replay: accepting a
+        // partial endpoint view could delete another instance's challenges.
+        if ($requiredDomain !== null && !$gatewayIntentObserved) {
+            return true;
+        }
+        if ($participatingInstances === []) {
+            return true;
+        }
+        if ($candidates === []
+            || $projectUuid === ''
+            || \array_diff_key(
+                $participatingInstances,
+                $completeCandidateInstances,
+            ) !== []
+        ) {
+            return false;
         }
         try {
             if ($this->statusProvider !== null) {
                 $status = ($this->statusProvider)();
             } else {
                 $hostManager ??= new GatewayHostManager();
-                $status = $hostManager->status(5.0);
+                $status = $hostManager->status(
+                    5.0,
+                    $deadlineMonotonic,
+                );
             }
         } catch (\Throwable) {
             return false;
         }
-        if (!\is_array($status)
+        if (!$this->deadlineAvailable($deadlineMonotonic)
+            || !\is_array($status)
             || !GatewayHostManager::controlPlaneAcceptsRegistration($status)
             || !\hash_equals(
                 $projectUuid,
@@ -179,15 +223,22 @@ final class GatewayAcmeChallengePublisher
             return false;
         }
         $allowedDomains = [];
+        $expectedRemoteRoutes = [];
         foreach ($candidates as $candidate) {
+            if (!$this->deadlineAvailable($deadlineMonotonic)) {
+                return false;
+            }
             $receipt = (array)$candidate['receipt'];
             if (!\hash_equals(
                 $statusEpoch,
                 \strtolower((string)($receipt['gateway_epoch'] ?? '')),
             )) {
-                continue;
+                return false;
             }
             foreach ((array)$candidate['routes'] as $routeId => $route) {
+                if (!$this->deadlineAvailable($deadlineMonotonic)) {
+                    return false;
+                }
                 $remote = $remoteRoutes[(string)$routeId] ?? null;
                 if (!\is_array($route)
                     || !\is_array($remote)
@@ -198,15 +249,18 @@ final class GatewayAcmeChallengePublisher
                         $projectUuid,
                     )
                 ) {
-                    continue;
+                    return false;
                 }
+                $expectedRemoteRoutes[(string)$routeId] = true;
                 $domain = $this->normalizeDomain((string)($route['domain'] ?? ''));
                 if ($domain !== '' && !\str_starts_with($domain, '*.')) {
                     $allowedDomains[$domain] = true;
                 }
             }
         }
-        if ($allowedDomains === []) {
+        if ($allowedDomains === []
+            || \array_diff_key($remoteRoutes, $expectedRemoteRoutes) !== []
+        ) {
             return false;
         }
         if ($requiredDomain !== null && !isset($allowedDomains[$requiredDomain])) {
@@ -216,6 +270,9 @@ final class GatewayAcmeChallengePublisher
         $filtered = [];
         $requiredLeaseFound = $requiredDomain === null;
         foreach ($challenges as $challenge) {
+            if (!$this->deadlineAvailable($deadlineMonotonic)) {
+                return false;
+            }
             if (!\is_array($challenge)) {
                 return false;
             }
@@ -245,23 +302,33 @@ final class GatewayAcmeChallengePublisher
         $filteredDigest = \hash('sha256', GatewayClient::canonicalJson($filtered));
         try {
             if ($this->sync !== null) {
-                return (bool)($this->sync)(
+                $synced = (bool)($this->sync)(
                     $projectUuid,
                     $generation,
                     $filtered,
                     $filteredDigest,
                 );
+                return $synced && $this->deadlineAvailable($deadlineMonotonic);
             }
             (new GatewayHostManager())->syncAcmeChallenges(
                 $projectUuid,
                 $generation,
                 $filtered,
                 $filteredDigest,
+                $deadlineMonotonic,
             );
-            return true;
+            return $this->deadlineAvailable($deadlineMonotonic);
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    private function deadlineAvailable(?float $deadlineMonotonic): bool
+    {
+        return $deadlineMonotonic === null
+            || (\is_finite($deadlineMonotonic)
+                && $deadlineMonotonic >= 0.0
+                && (\hrtime(true) / 1_000_000_000) < $deadlineMonotonic);
     }
 
     /** @param array<string,mixed> $endpoint */

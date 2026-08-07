@@ -44,7 +44,8 @@ class WlsPanelSecurityDataService
         try {
             $normalizedFilters = $this->normalizeFilters($filters);
             $detector = AttackDetector::getInstance();
-            $rules = $detector->getRules();
+            $rulesState = $detector->getRulesState();
+            $rules = $rulesState['rules'];
             $instance = (string)$normalizedFilters['instance'];
             $stats = $this->getFilteredStatistics($normalizedFilters, 7);
             $logResult = $this->getFilteredAttacks($normalizedFilters);
@@ -60,6 +61,8 @@ class WlsPanelSecurityDataService
                 'type_options' => $this->getTypeOptions(),
                 'rules' => $rules,
                 'rules_json' => (string)\json_encode($rules, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+                'rules_generation' => $rulesState['generation'],
+                'rules_digest' => $rulesState['digest'],
                 'rule_editor' => $this->buildRuleEditor($rules),
                 'domain_override_editor' => $this->buildDomainOverrideEditor($rules, $normalizedFilters),
                 'rule_change_preview' => $this->buildRuleChangePreview($rules, $rules),
@@ -82,6 +85,8 @@ class WlsPanelSecurityDataService
                 'type_options' => $this->getTypeOptions(),
                 'rules' => [],
                 'rules_json' => '{}',
+                'rules_generation' => 0,
+                'rules_digest' => '',
                 'rule_editor' => $this->buildRuleEditor([]),
                 'domain_override_editor' => $this->buildDomainOverrideEditor([], $this->normalizeFilters($filters)),
                 'rule_change_preview' => $this->buildRuleChangePreview([], []),
@@ -98,7 +103,11 @@ class WlsPanelSecurityDataService
     /**
      * @return array<string, mixed>
      */
-    public function saveRulesJson(string $rulesJson, array $auditContext = []): array
+    public function saveRulesJson(
+        string $rulesJson,
+        array $auditContext = [],
+        ?array $expectedReceipt = null,
+    ): array
     {
         $rulesJson = \trim($rulesJson);
         if ($rulesJson === '') {
@@ -117,19 +126,45 @@ class WlsPanelSecurityDataService
         }
 
         try {
-            AttackDetector::getInstance()->updateRules($decoded);
-            $this->appendPolicyAudit($this->buildPolicyAuditRecord($auditContext, $decoded));
-
-            return [
-                'success' => true,
-                'message' => (string)__('Security rules saved. WLS workers will reload rules from the update flag.'),
-            ];
+            $detector = AttackDetector::getInstance();
+            $expectedReceipt ??= $detector->getRulesReceipt();
+            $commit = $detector->updateRules(
+                $decoded,
+                (int)($expectedReceipt['generation'] ?? -1),
+                (string)($expectedReceipt['digest'] ?? ''),
+            );
         } catch (\Throwable $throwable) {
             return [
                 'success' => false,
                 'message' => $throwable->getMessage(),
             ];
         }
+
+        $auditPending = false;
+        $auditError = '';
+        try {
+            $this->appendPolicyAudit($this->buildPolicyAuditRecord($auditContext, $decoded));
+        } catch (\Throwable $throwable) {
+            $auditPending = true;
+            $auditError = $throwable->getMessage();
+        }
+
+        $notificationPending = (bool)($commit['notification_pending'] ?? false);
+        $message = (string)__('Security rules saved. WLS workers will reload the committed generation.');
+        if ($notificationPending || $auditPending) {
+            $message .= ' ' . (string)__('The rules are committed, but one post-commit notification is pending.');
+        }
+
+        return [
+            'success' => true,
+            'message' => $message,
+            'generation' => (int)$commit['generation'],
+            'digest' => (string)$commit['digest'],
+            'notification_pending' => $notificationPending,
+            'notification_error' => (string)($commit['notification_error'] ?? ''),
+            'audit_pending' => $auditPending,
+            'audit_error' => $auditError,
+        ];
     }
 
     /**
@@ -159,7 +194,7 @@ class WlsPanelSecurityDataService
                 'scope' => (string)($post['security_scope'] ?? 'all'),
                 'domain' => (string)($post['security_domain'] ?? ''),
                 'changed_sections' => ['rules_json'],
-            ]);
+            ], $this->rulesReceiptFromInput($post));
         }
 
         $merged = $this->mergeVisualRules($decoded, $visualRules);
@@ -173,7 +208,7 @@ class WlsPanelSecurityDataService
             'domain' => (string)($post['security_domain'] ?? ''),
             'changed_sections' => $this->summarizeChangedSections($changes),
             'change_count' => \count($changes),
-        ]);
+        ], $this->rulesReceiptFromInput($post));
     }
 
     /**
@@ -221,7 +256,7 @@ class WlsPanelSecurityDataService
                 'label' => (string)($input['label'] ?? $domain),
                 'changed_sections' => ['domain_overrides'],
                 'override_enabled' => false,
-            ]);
+            ], $this->rulesReceiptFromInput($post));
             if (!empty($result['success'])) {
                 $result['message'] = (string)__('Project security policy removed.');
             }
@@ -247,7 +282,7 @@ class WlsPanelSecurityDataService
             'label' => (string)($input['label'] ?? $domain),
             'changed_sections' => \array_keys($domainOverrideRules),
             'override_enabled' => $this->sanitizeCheckbox($input['enabled'] ?? '0'),
-        ]);
+        ], $this->rulesReceiptFromInput($post));
         if (!empty($result['success'])) {
             $result['message'] = (string)__('Project security policy saved.');
         }
@@ -288,6 +323,33 @@ class WlsPanelSecurityDataService
             'change_count' => \count($changes),
             'merged_json' => (string)\json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
         ];
+    }
+
+    /** @param array<string,mixed> $input @return array{generation:int,digest:string}|null */
+    private function rulesReceiptFromInput(array $input): ?array
+    {
+        if (!\array_key_exists('rules_generation', $input)
+            && !\array_key_exists('rules_digest', $input)
+        ) {
+            return null;
+        }
+        $generationRaw = $input['rules_generation'] ?? null;
+        $digest = \trim((string)($input['rules_digest'] ?? ''));
+        if (\is_int($generationRaw)) {
+            $generation = $generationRaw;
+        } elseif (\is_string($generationRaw) && \ctype_digit($generationRaw)) {
+            $generation = (int)$generationRaw;
+        } else {
+            return ['generation' => -1, 'digest' => $digest];
+        }
+        if ($generation < 0
+            || ($generation === 0 && $digest !== '')
+            || ($generation > 0 && \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1)
+        ) {
+            return ['generation' => -1, 'digest' => $digest];
+        }
+
+        return ['generation' => $generation, 'digest' => $digest];
     }
 
     /**

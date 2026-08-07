@@ -233,9 +233,9 @@ class WorkerScaler
     private function waitForWorkersReady(array $instances, int $timeoutSec): array
     {
         $pending = $instances;
-        $deadline = \microtime(true) + $timeoutSec;
+        $deadline = ControlMessage::monotonicSeconds() + $timeoutSec;
 
-        while ($pending !== [] && \microtime(true) < $deadline) {
+        while ($pending !== [] && ControlMessage::monotonicSeconds() < $deadline) {
             foreach ($pending as $id => $instance) {
                 if ($instance->state === ServiceInstance::STATE_READY) {
                     unset($pending[$id]);
@@ -265,9 +265,9 @@ class WorkerScaler
     private function waitForWorkersExit(array $instances, int $timeoutSec): array
     {
         $pending = $instances;
-        $deadline = \microtime(true) + $timeoutSec;
+        $deadline = ControlMessage::monotonicSeconds() + $timeoutSec;
 
-        while ($pending !== [] && \microtime(true) < $deadline) {
+        while ($pending !== [] && ControlMessage::monotonicSeconds() < $deadline) {
             foreach ($pending as $id => $instance) {
                 if (!$this->isProcessAlive($this->getTrackingPid($instance))) {
                     unset($pending[$id]);
@@ -313,9 +313,23 @@ class WorkerScaler
             return true;
         }
 
-        // 发送 ping 消息
-        $pingTimestamp = \microtime(true);
-        $pingMsg = \Weline\Server\IPC\ControlMessage::ping($pingTimestamp);
+        // 发送同 host boot 的 monotonic ping；wall 字段只作诊断。
+        $pingMsg = ControlMessage::ping();
+        $ping = ControlMessage::decode(\rtrim($pingMsg, "\n"));
+        if (!\is_array($ping)) {
+            return false;
+        }
+        $pingMonotonic = $ping['monotonic_timestamp'] ?? null;
+        $pingHostBootId = $ping['host_boot_id'] ?? null;
+        if ((!\is_int($pingMonotonic) && !\is_float($pingMonotonic))
+            || !\is_finite((float)$pingMonotonic)
+            || (float)$pingMonotonic <= 0.0
+            || !\is_string($pingHostBootId)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $pingHostBootId) !== 1
+        ) {
+            return false;
+        }
+        $pingMonotonic = (float)$pingMonotonic;
 
         try {
             $sent = $controlServer->sendToInstance($instance->launchId, $pingMsg);
@@ -323,12 +337,15 @@ class WorkerScaler
                 return false;
             }
 
-            // 等待 pong 响应（简化实现：检查最近的 pong 时间戳）
-            $deadline = \microtime(true) + $timeoutSec;
-            while (\microtime(true) < $deadline) {
-                $lastPong = $controlServer->getLastPongTime($instance->launchId);
-                if ($lastPong !== null && $lastPong >= $pingTimestamp) {
-                    // 收到有效的 pong 响应
+            $deadline = ControlMessage::monotonicSeconds() + \max(0.0, $timeoutSec);
+            while (ControlMessage::monotonicSeconds() < $deadline) {
+                $observation = $controlServer->getLastPongObservation($instance->launchId);
+                if ($this->matchesMonotonicPongObservation(
+                    $observation,
+                    $pingMonotonic,
+                    $pingHostBootId,
+                    ControlMessage::monotonicSeconds(),
+                )) {
                     return true;
                 }
                 SchedulerSystem::usleep(50000); // 50ms
@@ -336,10 +353,53 @@ class WorkerScaler
 
             // 超时未收到 pong
             return false;
-        } catch (\Throwable $e) {
-            // IPC 异常，降级为进程存在性检查
-            return true;
+        } catch (\Throwable) {
+            // 已存在 IPC 控制面时，任何协议/时钟异常都必须 fail-safe。
+            return false;
         }
+    }
+
+    /**
+     * The interface boundary is validated again even though the built-in
+     * Master/Hybrid implementations already validate the raw pong. This keeps
+     * an alternate control-plane implementation from turning malformed,
+     * cross-boot or future evidence into a healthy Worker.
+     */
+    private function matchesMonotonicPongObservation(
+        mixed $observation,
+        float $expectedPingMonotonic,
+        string $expectedHostBootId,
+        float $nowMonotonic,
+    ): bool {
+        if (!\is_array($observation)
+            || !\is_finite($expectedPingMonotonic)
+            || $expectedPingMonotonic <= 0.0
+            || !\is_finite($nowMonotonic)
+            || $nowMonotonic <= 0.0
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedHostBootId) !== 1
+        ) {
+            return false;
+        }
+        foreach (['ping_monotonic', 'pong_monotonic', 'received_monotonic'] as $field) {
+            if (!\is_int($observation[$field] ?? null) && !\is_float($observation[$field] ?? null)) {
+                return false;
+            }
+            if (!\is_finite((float)$observation[$field]) || (float)$observation[$field] <= 0.0) {
+                return false;
+            }
+        }
+        $pingMonotonic = (float)$observation['ping_monotonic'];
+        $pongMonotonic = (float)$observation['pong_monotonic'];
+        $receivedMonotonic = (float)$observation['received_monotonic'];
+        $hostBootId = $observation['host_boot_id'] ?? null;
+
+        return $pingMonotonic === $expectedPingMonotonic
+            && $pongMonotonic >= $pingMonotonic
+            && $receivedMonotonic >= $pongMonotonic
+            && $receivedMonotonic <= $nowMonotonic
+            && \is_string($hostBootId)
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $hostBootId) === 1
+            && \hash_equals($expectedHostBootId, $hostBootId);
     }
 
     /**

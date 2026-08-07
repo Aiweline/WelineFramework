@@ -50,10 +50,13 @@ class AiSiteProvisioningJobHandler
 
         $status = (string)$request->getData(AiSiteProvisioningRequest::schema_fields_STATUS);
         $domain = (string)$request->getData(AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN);
+        $subPath = $this->normalizeSubPath(
+            (string)$request->getData(AiSiteProvisioningRequest::schema_fields_SUB_PATH)
+        );
         $websiteId = (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_ID);
         if ($status === AiSiteProvisioningRequest::STATUS_DONE
             && (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_BOUND) === 1
-            && $this->domainPreparationService->isBound($domain, $websiteId)
+            && $this->domainPreparationService->isBound($domain, $websiteId, $subPath)
         ) {
             return $this->project($request);
         }
@@ -117,7 +120,7 @@ class AiSiteProvisioningJobHandler
                 ]);
             }
             $websiteId = (int)($prepared['website_id'] ?? 0);
-            if (!$this->domainPreparationService->isBound($domain, $websiteId)) {
+            if (!$this->domainPreparationService->isBound($domain, $websiteId, $subPath)) {
                 throw new AiSiteProvisioningException(
                     'WEBSITE_DOMAIN_BINDING_FAILED',
                     (string)__('域名准备完成，但没有找到有效的站点绑定记录。')
@@ -163,10 +166,24 @@ class AiSiteProvisioningJobHandler
             'website_id' => (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_ID),
             'domain_mode' => (string)$request->getData(AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE),
             'target_domain' => (string)$request->getData(AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN),
+            'sub_path' => $this->normalizeSubPath(
+                (string)$request->getData(AiSiteProvisioningRequest::schema_fields_SUB_PATH)
+            ),
             'registrar_account_id' => $request->getData(AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID) === null
                 ? null
                 : (int)$request->getData(AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID),
             'purchase_order_id' => (int)$request->getData(AiSiteProvisioningRequest::schema_fields_PURCHASE_ORDER_ID),
         ];
+    }
+
+    private function normalizeSubPath(string $subPath): string
+    {
+        $subPath = \trim($subPath);
+        if ($subPath === '' || $subPath === '/') {
+            return '';
+        }
+        $subPath = '/' . \trim($subPath, '/');
+
+        return $subPath === '/' ? '' : $subPath;
     }
 }

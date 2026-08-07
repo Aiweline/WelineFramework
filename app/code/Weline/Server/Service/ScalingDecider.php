@@ -196,7 +196,7 @@ class ScalingDecider
             return false;
         }
 
-        return (\microtime(true) - $this->lastScalingTime) < $cooldown;
+        return (self::monotonicSeconds() - $this->lastScalingTime) < $cooldown;
     }
 
     /**
@@ -204,7 +204,7 @@ class ScalingDecider
      */
     private function recordScaling(): void
     {
-        $this->lastScalingTime = \microtime(true);
+        $this->lastScalingTime = self::monotonicSeconds();
     }
 
     /**
@@ -225,5 +225,10 @@ class ScalingDecider
     public function resetCooldown(): void
     {
         $this->lastScalingTime = 0.0;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

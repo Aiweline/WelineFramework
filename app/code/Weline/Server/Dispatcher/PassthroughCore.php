@@ -51,7 +51,7 @@ class PassthroughCore
     /**
      * Keep the historical minimum of three attempts, then continue scanning
      * additional loopback Workers while the phase remains inside this bounded
-     * wall-clock budget. A fixed three-port cap produced false 503 responses
+     * monotonic elapsed-time budget. A fixed three-port cap produced false 503 responses
      * after scaling beyond three Workers even when later ports were healthy.
      */
     private const WORKER_CONNECT_PHASE_BUDGET_SECONDS = 0.020;
@@ -480,6 +480,14 @@ class PassthroughCore
         // 这确保了多项目部署时不会出现跨项目的 Worker 端口干扰。
         // 启动期间如果 workerPorts 为空，Dispatcher 会进入自旋等待（spinWaitForWorkerPorts）。
     }
+
+    /**
+     * Process-local deadlines and lease ages must not follow wall-clock jumps.
+     */
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
     
     /**
      * 配置透传核心
@@ -691,7 +699,7 @@ class PassthroughCore
             'port' => $this->httpRedirectPort,
             'clientIp' => $clientIp,
             'sni' => '',
-            'open_time' => \microtime(true),
+            'open_time' => self::monotonicSeconds(),
             'request_sent_at' => 0.0,
             'last_client_to_worker_at' => 0.0,
             'last_worker_to_client_at' => 0.0,
@@ -1067,7 +1075,7 @@ class PassthroughCore
             'port' => $workerPort,
             'clientIp' => $clientIp,
             'sni' => $sni,
-            'open_time' => \microtime(true),
+            'open_time' => self::monotonicSeconds(),
             'request_sent_at' => 0.0,
             'worker_responded' => false,
             'request_line' => '',
@@ -1106,7 +1114,7 @@ class PassthroughCore
 
         // 如果没有可用 Worker，直接返回（节流 stderr，避免启动期刷屏）
         if (empty($this->workerPorts)) {
-            $now = \microtime(true);
+            $now = self::monotonicSeconds();
             if ($now - $this->lastEmptyWorkerPortsStderrAt >= 10.0) {
                 $this->writeStderr("[PassthroughCore] 没有可用 Worker 端口！workerPorts 为空\n");
                 $this->lastEmptyWorkerPortsStderrAt = $now;
@@ -1129,7 +1137,7 @@ class PassthroughCore
             : $this->orderWorkerPortsRoundRobin($startIndex);
 
         $attempts = 0;
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAt = self::monotonicSeconds();
         foreach ($candidatePorts as $port) {
 
             // 跳过已尝试的端口
@@ -1191,7 +1199,7 @@ class PassthroughCore
         $startIndex = $this->connectionCounter > 0 ? (($this->connectionCounter - 1) % $count) : 0;
 
         $attempts = 0;
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAt = self::monotonicSeconds();
         for ($i = 0; $i < $count; $i++) {
             $index = ($startIndex + $i) % $count;
             $port = $this->workerPorts[$index];
@@ -1239,7 +1247,7 @@ class PassthroughCore
 
         $attempts = 0;
         $candidateCount = \count($this->workerPorts);
-        $phaseStartedAt = \microtime(true);
+        $phaseStartedAt = self::monotonicSeconds();
         foreach ($this->workerPorts as $port) {
             if ($port === $excludePort) {
                 continue;
@@ -1280,7 +1288,7 @@ class PassthroughCore
             return false;
         }
 
-        return (\microtime(true) - $phaseStartedAt) >= self::WORKER_CONNECT_PHASE_BUDGET_SECONDS;
+        return (self::monotonicSeconds() - $phaseStartedAt) >= self::WORKER_CONNECT_PHASE_BUDGET_SECONDS;
     }
 
     /**
@@ -1460,7 +1468,7 @@ class PassthroughCore
         }
 
         // 检查是否到了恢复时间
-        $elapsed = \microtime(true) - $health['blacklisted_at'];
+        $elapsed = self::monotonicSeconds() - $health['blacklisted_at'];
         if ($elapsed >= self::WORKER_BLACKLIST_RECOVERY_SECONDS) {
             // 到恢复时间，自动移出黑名单，重置失败计数
             $this->workerHealth[$port]['blacklisted_at'] = 0.0;
@@ -1482,7 +1490,7 @@ class PassthroughCore
             $this->workerHealth[$port] = [
                 'failures' => 0,
                 'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true),
+                'last_success' => self::monotonicSeconds(),
                 'total_failures' => 0,
             ];
             return;
@@ -1490,7 +1498,7 @@ class PassthroughCore
         
         $this->workerHealth[$port]['failures'] = 0;
         $this->workerHealth[$port]['blacklisted_at'] = 0.0;
-        $this->workerHealth[$port]['last_success'] = \microtime(true);
+        $this->workerHealth[$port]['last_success'] = self::monotonicSeconds();
     }
     
     /**
@@ -1529,7 +1537,7 @@ class PassthroughCore
         // 达到阈值，加入黑名单
         if ($this->workerHealth[$port]['failures'] >= self::WORKER_FAIL_THRESHOLD
             && $this->workerHealth[$port]['blacklisted_at'] <= 0) {
-            $this->workerHealth[$port]['blacklisted_at'] = \microtime(true);
+            $this->workerHealth[$port]['blacklisted_at'] = self::monotonicSeconds();
         }
     }
 
@@ -1540,7 +1548,7 @@ class PassthroughCore
             return false;
         }
 
-        return (\microtime(true) - $lastSuccessAt) <= self::RECENT_CONNECT_FAILURE_GRACE_SEC;
+        return (self::monotonicSeconds() - $lastSuccessAt) <= self::RECENT_CONNECT_FAILURE_GRACE_SEC;
     }
 
     /**
@@ -1564,7 +1572,7 @@ class PassthroughCore
     public function probeBlacklistedWorkers(): array
     {
         $recovered = [];
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         
         // 维护模式快速恢复：若当前只有 1 个 Worker 且在黑名单中，立即探活
         if ($this->workerCount === 1) {
@@ -1663,7 +1671,7 @@ class PassthroughCore
         if ($lastSuccessAt <= 0.0) {
             return false;
         }
-        if ((\microtime(true) - $lastSuccessAt) > self::HEALTH_AUDIT_RECENT_SUCCESS_GRACE_SEC) {
+        if ((self::monotonicSeconds() - $lastSuccessAt) > self::HEALTH_AUDIT_RECENT_SUCCESS_GRACE_SEC) {
             return false;
         }
 
@@ -1679,7 +1687,7 @@ class PassthroughCore
             return false;
         }
 
-        return $blacklistedAt > (\microtime(true) + self::WORKER_BLACKLIST_RECOVERY_SECONDS);
+        return $blacklistedAt > (self::monotonicSeconds() + self::WORKER_BLACKLIST_RECOVERY_SECONDS);
     }
 
     private function probeWorkerApplicationHealth(int $port): bool
@@ -1706,13 +1714,13 @@ class PassthroughCore
         if (!isset($this->workerHealth[$port])) {
             $this->workerHealth[$port] = [
                 'failures' => self::WORKER_FAIL_THRESHOLD,
-                'blacklisted_at' => \microtime(true) + 86400 * 365, // 远未来：不自动恢复，等 undrain 命令
+                'blacklisted_at' => self::monotonicSeconds() + 86400 * 365, // 远未来：不自动恢复，等 undrain 命令
                 'last_success' => 0.0,
                 'total_failures' => 0,
             ];
         } else {
             // 设置为远未来时间，阻止自动恢复
-            $this->workerHealth[$port]['blacklisted_at'] = \microtime(true) + 86400 * 365;
+            $this->workerHealth[$port]['blacklisted_at'] = self::monotonicSeconds() + 86400 * 365;
             $this->workerHealth[$port]['failures'] = self::WORKER_FAIL_THRESHOLD;
         }
     }
@@ -1744,7 +1752,7 @@ class PassthroughCore
         $this->workerSaturation[$port] = [
             'long_lived_count' => $longLivedCount,
             'long_lived_max' => $longLivedMax,
-            'saturated_at' => \microtime(true),
+            'saturated_at' => self::monotonicSeconds(),
         ];
     }
 
@@ -1775,7 +1783,7 @@ class PassthroughCore
         }
         $sat = $this->workerSaturation[$port];
         // 饱和超时：超过 60 秒自动解除（假设 Worker 会重新上报）
-        if ($sat['saturated_at'] > 0 && (\microtime(true) - $sat['saturated_at']) > 60.0) {
+        if ($sat['saturated_at'] > 0 && (self::monotonicSeconds() - $sat['saturated_at']) > 60.0) {
             unset($this->workerSaturation[$port]);
             return false;
         }
@@ -1807,7 +1815,7 @@ class PassthroughCore
         $this->workerHealth[$port] = [
             'failures' => 0,
             'blacklisted_at' => 0.0,
-            'last_success' => \microtime(true),
+            'last_success' => self::monotonicSeconds(),
             'total_failures' => 0,
         ];
         $this->writeStderr("[PassthroughCore] 添加 Worker 端口: {$port}, 当前列表: " . \implode(',', $this->workerPorts) . "\n");
@@ -1828,7 +1836,7 @@ class PassthroughCore
             static fn(int $port): bool => $port > 0
         ));
         $acceptedHealth = [];
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         foreach ($candidatePorts as $port) {
             $acceptedHealth[$port] = [
                 'failures' => 0,
@@ -1892,7 +1900,7 @@ class PassthroughCore
             }
         }
 
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         foreach ($candidatePorts as $port) {
             $this->workerHealth[$port] = [
                 'failures' => 0,
@@ -1976,7 +1984,7 @@ class PassthroughCore
             \min($configured > 0 ? $configured : self::IPC_READY_WARMUP_CONNECT_MAX, self::IPC_READY_WARMUP_CONNECT_MAX)
         );
         $responseTimeout = self::IPC_READY_WARMUP_RESPONSE_SEC;
-        $startedAt = \microtime(true);
+        $startedAt = self::monotonicSeconds();
 
         $this->logWarmup(
             "IPC 入池探活 Worker:{$port} path=" . self::WORKER_HEALTH_PATH
@@ -1996,7 +2004,7 @@ class PassthroughCore
                     'INFO'
                 );
                 if (isset($this->workerHealth[$port])) {
-                    $this->workerHealth[$port]['last_success'] = \microtime(true);
+                    $this->workerHealth[$port]['last_success'] = self::monotonicSeconds();
                 }
                 if ($this->shouldAdmitWorkerAfterHealthProbeOnly()) {
                     $this->logWarmup(
@@ -2064,7 +2072,7 @@ class PassthroughCore
             return false;
         }
 
-        return (\microtime(true) - $startedAt) < self::IPC_READY_WARMUP_RETRY_GRACE_SEC;
+        return (self::monotonicSeconds() - $startedAt) < self::IPC_READY_WARMUP_RETRY_GRACE_SEC;
     }
 
     private function buildWorkerHomepageWarmupRequest(string $host = 'localhost', string $path = '/', string $cookieHeader = ''): string
@@ -2446,7 +2454,7 @@ class PassthroughCore
 
                 \stream_set_blocking($conn, false);
 
-                $connectDeadline = \microtime(true) + \max(0.2, $connectTimeoutSeconds);
+                $connectDeadline = self::monotonicSeconds() + \max(0.2, $connectTimeoutSeconds);
                 $connected = $this->waitForStreamReady($conn, false, true, $connectDeadline);
                 if ($connected === false) {
                     $lastError = 'connect wait select failed';
@@ -2470,9 +2478,9 @@ class PassthroughCore
                 }
 
                 if ($this->workerSslEnabled) {
-                    $tlsDeadline = \microtime(true) + \max(0.3, $tlsTimeoutSeconds);
+                    $tlsDeadline = self::monotonicSeconds() + \max(0.3, $tlsTimeoutSeconds);
                     $tlsOk = false;
-                    while (\microtime(true) < $tlsDeadline) {
+                    while (self::monotonicSeconds() < $tlsDeadline) {
                         $this->warmupYield();
                         $crypto = @\stream_socket_enable_crypto(
                             $conn,
@@ -2512,7 +2520,7 @@ class PassthroughCore
                 // 这样可以预热框架、数据库连接、缓存等，避免第一个用户请求过慢
                 $request = $this->buildWorkerHomepageWarmupRequest($hostHeader, $path, $cookieHeader);
                 $writeOffset = 0;
-                $writeDeadline = \microtime(true) + \max(0.2, $writeTimeoutSeconds);
+                $writeDeadline = self::monotonicSeconds() + \max(0.2, $writeTimeoutSeconds);
                 while ($writeOffset < \strlen($request)) {
                     $this->warmupYield();
                     $written = @\fwrite($conn, \substr($request, $writeOffset));
@@ -2543,9 +2551,9 @@ class PassthroughCore
                 // 读取响应头（检查 HTTP 状态码）
                 // 注意：这里只读取响应头，不读取完整的 HTML 内容，以节省时间
                 $response = '';
-                $startTime = \microtime(true);
+                $startTime = self::monotonicSeconds();
                 $readDeadline = $startTime + \max(0.3, $readTimeoutSeconds);
-                while (!\str_contains($response, "\r\n\r\n") && \microtime(true) < $readDeadline) {
+                while (!\str_contains($response, "\r\n\r\n") && self::monotonicSeconds() < $readDeadline) {
                     $this->warmupYield();
                     $chunk = @\fread($conn, 1024);
                     if (\is_string($chunk) && $chunk !== '') {
@@ -2570,7 +2578,7 @@ class PassthroughCore
                 if ($response && \preg_match('/HTTP\/1\.[01]\s+(?:2\d{2}|503)\b/', $response)) {
                     $bodyDrainDeadline = \min(
                         $readDeadline,
-                        \microtime(true) + self::HOMEPAGE_WARMUP_BODY_DRAIN_SEC
+                        self::monotonicSeconds() + self::HOMEPAGE_WARMUP_BODY_DRAIN_SEC
                     );
                     $bodyBytes = $this->drainWarmupResponseBody(
                         $conn,
@@ -2578,10 +2586,10 @@ class PassthroughCore
                         $bodyDrainDeadline,
                         self::HOMEPAGE_WARMUP_BODY_DRAIN_BYTES
                     );
-                    $elapsed = \round(\microtime(true) - $startTime, 2);
+                    $elapsed = \round(self::monotonicSeconds() - $startTime, 2);
                     $this->writeStderr("[PassthroughCore] Worker:{$port} 预热成功 ✓ (耗时 {$elapsed}s, 尝试 {$attempt}/{$maxRetries})\n");
                     if (isset($this->workerHealth[$port])) {
-                        $this->workerHealth[$port]['last_success'] = \microtime(true);
+                        $this->workerHealth[$port]['last_success'] = self::monotonicSeconds();
                     }
                     return ['success' => true, 'error' => ''];
                 }
@@ -2644,7 +2652,7 @@ class PassthroughCore
 
         while (\is_resource($conn)
             && !\feof($conn)
-            && \microtime(true) < $deadline
+            && self::monotonicSeconds() < $deadline
             && ($contentLength === null || $bodyBytes < $contentLength)
             && $bodyBytes < $maxBodyBytes
         ) {
@@ -2668,7 +2676,7 @@ class PassthroughCore
     {
         while (true) {
             $this->warmupYield();
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining <= 0) {
                 return 0;
             }
@@ -2728,7 +2736,7 @@ class PassthroughCore
     {
         $this->warmupYield();
         $target = "tcp://{$this->workerHost}:{$port}";
-        $startedAt = \microtime(true);
+        $startedAt = self::monotonicSeconds();
         $conn = @\stream_socket_client(
             $target,
             $errno,
@@ -2739,7 +2747,7 @@ class PassthroughCore
         );
 
         if (!\is_resource($conn)) {
-            $elapsed = \round(\microtime(true) - $startedAt, 2);
+            $elapsed = \round(self::monotonicSeconds() - $startedAt, 2);
             $errorDetail = \trim((string)$errstr);
             if ($errorDetail === '') {
                 $errorDetail = $elapsed >= ($connectTimeout - 0.1)
@@ -2757,27 +2765,27 @@ class PassthroughCore
             \stream_set_blocking($conn, false);
 
             $overallDeadline = $startedAt + \max(0.5, $connectTimeout + $responseTimeout);
-            $connectDeadline = \min($overallDeadline, \microtime(true) + \max(0.2, $connectTimeout));
+            $connectDeadline = \min($overallDeadline, self::monotonicSeconds() + \max(0.2, $connectTimeout));
             $connected = $this->waitForStreamReady($conn, false, true, $connectDeadline);
             if ($connected === false) {
                 return [
                     'success' => false,
                     'error' => 'health connect select failed',
-                    'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                    'elapsed' => \round(self::monotonicSeconds() - $startedAt, 2),
                 ];
             }
             if ($connected === 0) {
                 return [
                     'success' => false,
                     'error' => 'health connect timeout after ' . \max(0.2, $connectTimeout) . 's',
-                    'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                    'elapsed' => \round(self::monotonicSeconds() - $startedAt, 2),
                 ];
             }
 
             if ($this->workerSslEnabled) {
-                $tlsDeadline = \min($overallDeadline, \microtime(true) + \max(0.3, $responseTimeout));
+                $tlsDeadline = \min($overallDeadline, self::monotonicSeconds() + \max(0.3, $responseTimeout));
                 $tlsOk = false;
-                while (\microtime(true) < $tlsDeadline) {
+                while (self::monotonicSeconds() < $tlsDeadline) {
                     $this->warmupYield();
                     $crypto = @\stream_socket_enable_crypto(
                         $conn,
@@ -2806,15 +2814,15 @@ class PassthroughCore
                 if (!$tlsOk) {
                     return [
                         'success' => false,
-                        'error' => 'health tls handshake timeout after ' . \round(\microtime(true) - $startedAt, 2) . 's',
-                        'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                        'error' => 'health tls handshake timeout after ' . \round(self::monotonicSeconds() - $startedAt, 2) . 's',
+                        'elapsed' => \round(self::monotonicSeconds() - $startedAt, 2),
                     ];
                 }
             }
 
             $request = $this->buildWorkerHealthRequest();
             $writeOffset = 0;
-            $writeDeadline = \min($overallDeadline, \microtime(true) + \max(0.2, $responseTimeout / 2));
+            $writeDeadline = \min($overallDeadline, self::monotonicSeconds() + \max(0.2, $responseTimeout / 2));
             $requestLen = \strlen($request);
             while ($writeOffset < $requestLen) {
                 $this->warmupYield();
@@ -2828,14 +2836,14 @@ class PassthroughCore
                     return [
                         'success' => false,
                         'error' => 'health request write select failed',
-                        'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                        'elapsed' => \round(self::monotonicSeconds() - $startedAt, 2),
                     ];
                 }
                 if ($ready === 0) {
                     return [
                         'success' => false,
                         'error' => 'health request write timeout',
-                        'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                        'elapsed' => \round(self::monotonicSeconds() - $startedAt, 2),
                     ];
                 }
             }
@@ -2843,7 +2851,7 @@ class PassthroughCore
             $response = '';
             $closedWithoutResponse = false;
             $readDeadline = $overallDeadline;
-            while (!\feof($conn) && \strlen($response) < 512 && \microtime(true) < $readDeadline) {
+            while (!\feof($conn) && \strlen($response) < 512 && self::monotonicSeconds() < $readDeadline) {
                 $this->warmupYield();
                 $chunk = @\fread($conn, 256);
                 if (\is_string($chunk) && $chunk !== '') {
@@ -2862,7 +2870,7 @@ class PassthroughCore
                     return [
                         'success' => false,
                         'error' => 'health response read select failed',
-                        'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                        'elapsed' => \round(self::monotonicSeconds() - $startedAt, 2),
                     ];
                 }
                 if ($ready === 0) {
@@ -2870,7 +2878,7 @@ class PassthroughCore
                 }
             }
 
-            $elapsed = \round(\microtime(true) - $startedAt, 2);
+            $elapsed = \round(self::monotonicSeconds() - $startedAt, 2);
             if ($response === '') {
                 return [
                     'success' => false,
@@ -2907,7 +2915,7 @@ class PassthroughCore
             return [
                 'success' => false,
                 'error' => 'health probe exception: ' . $e->getMessage(),
-                'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                'elapsed' => \round(self::monotonicSeconds() - $startedAt, 2),
             ];
         } finally {
             @\fclose($conn);
@@ -3008,7 +3016,7 @@ class PassthroughCore
         float $throttleSec = 10.0
     ): void
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         $lastLoggedAt = (float) ($this->maintenanceDecisionLoggedAt[$key] ?? 0.0);
         if ($throttleSec > 0.0 && ($now - $lastLoggedAt) < $throttleSec) {
             return;
@@ -3142,7 +3150,7 @@ class PassthroughCore
             }
             $lastWarmedAt = (float)($this->workerHomepageWarmupCompletedAt[$port] ?? 0.0);
             if ($lastWarmedAt > 0.0
-                && \microtime(true) - $lastWarmedAt < self::HOMEPAGE_WARMUP_RECENT_SUCCESS_GRACE_SEC
+                && self::monotonicSeconds() - $lastWarmedAt < self::HOMEPAGE_WARMUP_RECENT_SUCCESS_GRACE_SEC
             ) {
                 continue;
             }
@@ -3207,7 +3215,7 @@ class PassthroughCore
             }
 
             $warmed[] = $port;
-            $this->workerHomepageWarmupCompletedAt[$port] = \microtime(true);
+            $this->workerHomepageWarmupCompletedAt[$port] = self::monotonicSeconds();
             $this->clearJoinedWorkerHomepageWarmupTicket($port);
         }
 
@@ -3296,7 +3304,7 @@ class PassthroughCore
             $acceptedHealth[$port] = [
                 'failures' => 0,
                 'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true),
+                'last_success' => self::monotonicSeconds(),
                 'total_failures' => 0,
             ];
             // 每成功预热一个端口立即发布池状态，避免「等整表 Worker 全好」才转发；维护 Worker 可第一时间接流
@@ -3324,7 +3332,7 @@ class PassthroughCore
                 $acceptedHealth[$port] = [
                     'failures' => 0,
                     'blacklisted_at' => 0.0,
-                    'last_success' => \microtime(true),
+                    'last_success' => self::monotonicSeconds(),
                     'total_failures' => 0,
                 ];
                 unset($rejectedPorts[$port]);
@@ -3534,14 +3542,14 @@ class PassthroughCore
                 'failures' => $health['failures'],
                 'total_failures' => $health['total_failures'],
                 'last_success' => $health['last_success'] > 0
-                    ? \round(\microtime(true) - $health['last_success'], 1) . 's ago'
+                    ? \round(self::monotonicSeconds() - $health['last_success'], 1) . 's ago'
                     : 'never',
             ];
             if ($satInfo !== null) {
                 $details[$port]['long_lived_count'] = $satInfo['long_lived_count'];
                 $details[$port]['long_lived_max'] = $satInfo['long_lived_max'];
                 $details[$port]['saturated_at'] = $satInfo['saturated_at'] > 0
-                    ? \round(\microtime(true) - $satInfo['saturated_at'], 1) . 's ago'
+                    ? \round(self::monotonicSeconds() - $satInfo['saturated_at'], 1) . 's ago'
                     : 'now';
             }
         }
@@ -3652,7 +3660,7 @@ class PassthroughCore
         }
 
         if ($totalWritten > 0 && isset($this->connections[$connId])) {
-            $now = \microtime(true);
+            $now = self::monotonicSeconds();
             $this->connections[$connId]['last_client_to_worker_at'] = $now;
             $requestSentAt = (float)($this->connections[$connId]['request_sent_at'] ?? 0.0);
             if ($requestSentAt <= 0.0) {
@@ -3713,7 +3721,7 @@ class PassthroughCore
         }
 
         if ($totalWritten > 0 && isset($this->connections[$connId])) {
-            $now = \microtime(true);
+            $now = self::monotonicSeconds();
             $this->connections[$connId]['last_client_to_worker_at'] = $now;
             $requestSentAt = (float)($this->connections[$connId]['request_sent_at'] ?? 0.0);
             if ($requestSentAt <= 0.0) {
@@ -3808,7 +3816,7 @@ class PassthroughCore
             }
             
             $length = \strlen($data);
-            $this->connections[$connId]['last_worker_to_client_at'] = \microtime(true);
+            $this->connections[$connId]['last_worker_to_client_at'] = self::monotonicSeconds();
             if (!$this->workerSslEnabled) {
                 $this->trackHttpResponseProgress($connId, $data);
                 $this->recordWorkerResponseIngress($connId, $data, $workerPort);
@@ -3897,7 +3905,7 @@ class PassthroughCore
             return false;
         }
 
-        return (\microtime(true) - $requestSentAt) >= $this->firstByteTimeoutSeconds;
+        return (self::monotonicSeconds() - $requestSentAt) >= $this->firstByteTimeoutSeconds;
     }
 
     private function markWorkerResponsive(int $connId, int $workerPort): void
@@ -3917,7 +3925,7 @@ class PassthroughCore
         }
 
         $requestSentAt = (float)($this->connections[$connId]['request_sent_at'] ?? 0.0);
-        $ttfbMs = $requestSentAt > 0.0 ? \round((\microtime(true) - $requestSentAt) * 1000, 1) : null;
+        $ttfbMs = $requestSentAt > 0.0 ? \round((self::monotonicSeconds() - $requestSentAt) * 1000, 1) : null;
         $clientIp = (string)($this->connections[$connId]['clientIp'] ?? '');
         $message = "Worker 开始响应请求: conn={$connId}, client={$clientIp}, worker={$workerPort}";
         if ($ttfbMs !== null) {
@@ -4625,7 +4633,7 @@ class PassthroughCore
             $counts[(int)$port] = 0;
         }
 
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         foreach ($this->connections as $connection) {
             $port = (int)($connection['port'] ?? 0);
             if ($port <= 0 || !\array_key_exists($port, $counts)) {
@@ -4721,7 +4729,7 @@ class PassthroughCore
 
             $this->idleWorkerPool[$workerPort][] = [
                 'socket' => $socket,
-                'expires_at' => \microtime(true) + $ttl,
+                'expires_at' => self::monotonicSeconds() + $ttl,
             ];
             $current++;
             $created++;
@@ -4764,7 +4772,7 @@ class PassthroughCore
 
         $this->idleWorkerPool[$workerPort][] = [
             'socket' => $socket,
-            'expires_at' => \microtime(true) + $this->backendPoolIdleTtl,
+            'expires_at' => self::monotonicSeconds() + $this->backendPoolIdleTtl,
         ];
         return true;
     }
@@ -4772,7 +4780,7 @@ class PassthroughCore
     private function cleanupIdleWorkerSockets(?int $targetPort = null): void
     {
         $ports = $targetPort === null ? \array_keys($this->idleWorkerPool) : [$targetPort];
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         foreach ($ports as $port) {
             $port = (int)$port;
             if (empty($this->idleWorkerPool[$port])) {

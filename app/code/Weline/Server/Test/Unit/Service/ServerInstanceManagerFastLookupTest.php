@@ -216,6 +216,7 @@ final class ServerInstanceManagerFastLookupTest extends TestCase
             $manager = new class($dir) extends ServerInstanceManager {
                 public function __construct(private readonly string $dir)
                 {
+                    parent::__construct();
                 }
 
                 public function getInstanceDir(): string
@@ -255,6 +256,7 @@ final class ServerInstanceManagerFastLookupTest extends TestCase
         return new class($rawData) extends ServerInstanceManager {
             public function __construct(private readonly array $rawData)
             {
+                parent::__construct();
             }
 
             public function getAllInstanceInfo(bool $validateStale = true): array

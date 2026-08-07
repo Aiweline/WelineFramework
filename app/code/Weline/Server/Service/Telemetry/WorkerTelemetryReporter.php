@@ -100,7 +100,7 @@ final class WorkerTelemetryReporter
             return;
         }
 
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (!$force
             && $this->lastImmediateSentAt > 0.0
             && ($now - $this->lastImmediateSentAt) < self::IMMEDIATE_MIN_INTERVAL_SECONDS) {
@@ -134,5 +134,10 @@ final class WorkerTelemetryReporter
             // must never tear down the authoritative child control connection.
             $client->send(ControlMessage::telemetryBatch($this->instanceName, $chunk), false);
         }
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

@@ -10,11 +10,11 @@ use Weline\Server\Console\Server\Stop;
 
 final class StopCommandRecoverableMasterPidCleanupTest extends TestCase
 {
-    public function testCleanupRecoverableProcessesWithoutInstanceFileAlsoTerminatesInferredMasterPid(): void
+    public function testMissingInstanceCleanupUsesExactGenerationInsteadOfInferredPidsOrPrefixes(): void
     {
         $stop = new class extends Stop {
-            public array $terminatedPids = [];
-            public array $killedPrefixes = [];
+            /** @var list<string> */
+            public array $retiredInstances = [];
 
             protected function collectRecoverableManagedPids(string $name): array
             {
@@ -23,18 +23,37 @@ final class StopCommandRecoverableMasterPidCleanupTest extends TestCase
                 return [48372, 52084, 48372];
             }
 
+            protected function retireExactInstanceGeneration(string $name): array
+            {
+                $this->retiredInstances[] = $name;
+
+                return [
+                    'terminated' => 2,
+                    'released' => 2,
+                    'unreleased' => 0,
+                    'reasons' => [],
+                ];
+            }
+
             protected function terminateRecoverableProcessIds(array $pids): int
             {
-                $this->terminatedPids = $pids;
+                unset($pids);
 
-                return \count($pids);
+                throw new \RuntimeException('numeric PID list must not authorize termination');
             }
 
             protected function killRecoverableProcessPrefix(string $prefix): int
             {
-                $this->killedPrefixes[] = $prefix;
+                unset($prefix);
 
-                return 0;
+                throw new \RuntimeException('process-name prefix must not authorize termination');
+            }
+
+            protected function collectRunningResidualPids(array $pids, array $trustedPids = []): array
+            {
+                unset($pids, $trustedPids);
+
+                return [];
             }
 
             protected function hasRecoverableManagedProcessHint(string $name): bool
@@ -57,8 +76,7 @@ final class StopCommandRecoverableMasterPidCleanupTest extends TestCase
         };
 
         self::assertSame(2, $this->invokeCleanup($stop, 'default', false));
-        self::assertSame([48372, 52084], $stop->terminatedPids);
-        self::assertNotSame([], $stop->killedPrefixes);
+        self::assertSame(['default'], $stop->retiredInstances);
     }
 
     private function invokeCleanup(Stop $stop, string $instanceName, bool $dryRun): int

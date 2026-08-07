@@ -49,6 +49,7 @@ final class ServerInstanceManagerIpcControlTest extends TestCase
         $manager = new class($rawData) extends ServerInstanceManager {
             public function __construct(private readonly array $rawData)
             {
+                parent::__construct();
             }
 
             public function getRawInstanceData(string $name): ?array

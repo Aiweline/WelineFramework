@@ -247,6 +247,41 @@ final class StartCommandArgsSolidificationTest extends TestCase
         );
     }
 
+    public function testRetiredCertificateTombstoneStartsWithoutPemInHttpOnlyMode(): void
+    {
+        $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . 'app/code/Weline/Server/Console/Server/Start.php';
+        $lines = \file($path);
+        self::assertIsArray($lines);
+        $method = new \ReflectionMethod(Start::class, 'ensureSslCertificate');
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString(
+            "'code' => 'TLS_CERTIFICATE_RETIRED_HTTP_ONLY'",
+            $source,
+        );
+        self::assertStringContainsString("'success' => true", $source);
+        self::assertStringContainsString("'cert_path' => ''", $source);
+        self::assertStringContainsString("'key_path' => ''", $source);
+        self::assertStringContainsString("'ssl_enabled' => false", $source);
+    }
+
+    public function testRetiredHttpOnlyExceptionIsLimitedToTheSharedGateway(): void
+    {
+        $source = (string)\file_get_contents(
+            \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+                . 'app/code/Weline/Server/Console/Server/Start.php',
+        );
+        self::assertStringContainsString(
+            '&& !($gatewayMode && $retiredHttpOnly)',
+            $source,
+        );
+    }
+
     public function testGatewayDefaultBackendUsesDistinctHostCoordinatedLease(): void
     {
         $probe = $this->createProbe();

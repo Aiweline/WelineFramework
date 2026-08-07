@@ -16,6 +16,11 @@ use Weline\Server\Session\Server\SessionProtocol;
  */
 final class TlsSessionCacheClient
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private const MAX_PENDING_RESPONSES = 1024;
     private const LATENCY_BUCKET_UPPER_BOUNDS_US = [50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000];
     private const CONNECT_IDLE = 'idle';
@@ -103,7 +108,7 @@ final class TlsSessionCacheClient
     public function maintain(float $maximumSeconds = 0.01, bool $allowTokenReload = false): bool
     {
         $maximumSeconds = \max(0.0001, $maximumSeconds);
-        $deadline = \microtime(true) + $maximumSeconds;
+        $deadline = self::monotonicSeconds() + $maximumSeconds;
         if ($this->configurationValidated) {
             if ($this->isConnected()) {
                 return true;
@@ -117,7 +122,7 @@ final class TlsSessionCacheClient
         }
         if ($this->connectPhase !== self::CONNECT_IDLE
             && $this->connectAttemptDeadline > 0.0
-            && \microtime(true) >= $this->connectAttemptDeadline
+            && self::monotonicSeconds() >= $this->connectAttemptDeadline
         ) {
             $this->tripCircuit();
             return false;
@@ -126,7 +131,7 @@ final class TlsSessionCacheClient
             $this->tripCircuit();
             return false;
         }
-        if (!$this->isConnected() && \microtime(true) < $this->nextReconnectAt) {
+        if (!$this->isConnected() && self::monotonicSeconds() < $this->nextReconnectAt) {
             return false;
         }
         if (!$this->isConnected() && $this->cachedToken === null) {
@@ -144,7 +149,7 @@ final class TlsSessionCacheClient
                 $this->tripCircuit();
                 return false;
             }
-            if (\microtime(true) >= $deadline) {
+            if (self::monotonicSeconds() >= $deadline) {
                 return false;
             }
         }
@@ -259,7 +264,7 @@ final class TlsSessionCacheClient
         $results = [];
         $lost = $this->takeLostResponseCount();
         $maximumResponses = \max(1, \min(self::MAX_PENDING_RESPONSES, $maximumResponses));
-        $deadline = \microtime(true) + \max(0.0001, $maximumSeconds);
+        $deadline = self::monotonicSeconds() + \max(0.0001, $maximumSeconds);
         if ($this->pendingResponses > 0 && !$this->isConnected()) {
             $this->disconnect();
             $lost += $this->takeLostResponseCount();
@@ -267,7 +272,7 @@ final class TlsSessionCacheClient
         while (\count($results) < $maximumResponses
             && $this->pendingResponses > 0
             && $this->isConnected()
-            && \microtime(true) < $deadline
+            && self::monotonicSeconds() < $deadline
         ) {
             $messages = SessionProtocol::extractTlsMessages(
                 $this->readBuffer,
@@ -283,12 +288,12 @@ final class TlsSessionCacheClient
                 $results[] = SessionProtocol::isSuccess($message);
                 $this->pendingResponses = \max(0, $this->pendingResponses - 1);
                 $this->pendingResponseDeadline = $this->pendingResponses > 0
-                    ? \microtime(true) + $this->pendingResponseTimeoutSeconds()
+                    ? self::monotonicSeconds() + $this->pendingResponseTimeoutSeconds()
                     : 0.0;
             }
             if (\count($results) >= $maximumResponses
                 || $this->pendingResponses <= 0
-                || \microtime(true) >= $deadline
+                || self::monotonicSeconds() >= $deadline
             ) {
                 break;
             }
@@ -314,7 +319,7 @@ final class TlsSessionCacheClient
         // stall. Maintenance may resume after the ACK already arrived.
         if ($this->pendingResponses > 0
             && $this->pendingResponseDeadline > 0.0
-            && \microtime(true) >= $this->pendingResponseDeadline
+            && self::monotonicSeconds() >= $this->pendingResponseDeadline
         ) {
             $this->tripCircuit();
             $lost += $this->takeLostResponseCount();
@@ -380,11 +385,11 @@ final class TlsSessionCacheClient
 
     private function beginConnection(float $deadline): bool
     {
-        if ($deadline <= \microtime(true)) {
+        if ($deadline <= self::monotonicSeconds()) {
             return false;
         }
         $this->disconnect();
-        $this->connectAttemptDeadline = \microtime(true) + \max(0.001, $this->readyTimeoutSeconds);
+        $this->connectAttemptDeadline = self::monotonicSeconds() + \max(0.001, $this->readyTimeoutSeconds);
         if ($this->port <= 0 || $this->host === '' || $this->tokenFilePath === '') {
             $this->tripCircuit();
             return false;
@@ -433,7 +438,7 @@ final class TlsSessionCacheClient
 
     private function advanceConnection(float $deadline): bool
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if ($this->connectAttemptDeadline > 0.0 && $now >= $this->connectAttemptDeadline) {
             $this->tripCircuit();
             return false;
@@ -444,7 +449,7 @@ final class TlsSessionCacheClient
         if ($deadline <= $now) {
             return false;
         }
-        for ($steps = 0; $steps < 8 && \microtime(true) < $deadline; $steps++) {
+        for ($steps = 0; $steps < 8 && self::monotonicSeconds() < $deadline; $steps++) {
             if ($this->connectPhase === self::CONNECT_TCP) {
                 $connected = $this->progressConnectTcp($deadline);
                 if ($connected === null) {
@@ -630,7 +635,7 @@ final class TlsSessionCacheClient
 
     private function progressConnectTcp(float $deadline): ?bool
     {
-        $remaining = $deadline - \microtime(true);
+        $remaining = $deadline - self::monotonicSeconds();
         if ($remaining <= 0.0) {
             return false;
         }
@@ -675,7 +680,7 @@ final class TlsSessionCacheClient
     {
         $length = \strlen($this->connectWriteBuffer);
         while ($this->connectWriteOffset < $length) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining <= 0.0) {
                 return false;
             }
@@ -717,7 +722,7 @@ final class TlsSessionCacheClient
             if ($messages !== []) {
                 return \is_array($messages[0] ?? null) ? $messages[0] : null;
             }
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining <= 0.0) {
                 return false;
             }
@@ -766,7 +771,7 @@ final class TlsSessionCacheClient
                 ['cmd' => $command] + $params,
                 \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
             ) . "\n";
-            $deadline = \microtime(true) + \max(0.0005, $timeoutSeconds);
+            $deadline = self::monotonicSeconds() + \max(0.0005, $timeoutSeconds);
             if (!$this->writeAll($payload, $deadline)) {
                 $this->lastRequestOutcome = $this->lastIoOutcome;
                 if ($tripOnFailure) {
@@ -836,14 +841,14 @@ final class TlsSessionCacheClient
                 ['cmd' => $command] + $params,
                 \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
             ) . "\n";
-            $deadline = \microtime(true) + \max(0.0001, $timeoutSeconds);
+            $deadline = self::monotonicSeconds() + \max(0.0001, $timeoutSeconds);
             if (!$this->writeAll($payload, $deadline)) {
                 $this->tripCircuit();
                 return false;
             }
             $this->pendingResponses++;
             if ($this->pendingResponses === 1) {
-                $this->pendingResponseDeadline = \microtime(true) + $this->pendingResponseTimeoutSeconds();
+                $this->pendingResponseDeadline = self::monotonicSeconds() + $this->pendingResponseTimeoutSeconds();
             }
 
             return true;
@@ -858,7 +863,7 @@ final class TlsSessionCacheClient
         $offset = 0;
         $length = \strlen($payload);
         while ($offset < $length) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining <= 0.0) {
                 $this->lastIoOutcome = 'deadline_exceeded';
                 return false;
@@ -898,7 +903,7 @@ final class TlsSessionCacheClient
         while (true) {
             $messages = SessionProtocol::extractTlsMessages($this->readBuffer, 1, $deadline);
             if ($messages === null) {
-                $this->lastIoOutcome = \microtime(true) >= $deadline
+                $this->lastIoOutcome = self::monotonicSeconds() >= $deadline
                     ? 'deadline_exceeded'
                     : 'fail_fast';
                 return null;
@@ -912,7 +917,7 @@ final class TlsSessionCacheClient
                 $this->lastIoOutcome = 'fail_fast';
                 return null;
             }
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining <= 0.0) {
                 $this->lastIoOutcome = 'deadline_exceeded';
                 return null;
@@ -951,7 +956,7 @@ final class TlsSessionCacheClient
     private function tripCircuit(): void
     {
         $this->disconnect();
-        $this->nextReconnectAt = \microtime(true) + $this->reconnectCooldownSeconds;
+        $this->nextReconnectAt = self::monotonicSeconds() + $this->reconnectCooldownSeconds;
     }
 
     private function loadToken(): ?string

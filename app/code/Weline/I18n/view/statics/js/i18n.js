@@ -535,6 +535,11 @@
             console.warn('[WelineI18n] switchLang: 语言代码不能为空');
             return;
         }
+        // Guard against double-fired handlers (header+footer switchers / raced
+        // click rewriters) cancelling the in-flight navigation into a blank doc.
+        if (window.__WelineI18nNavigating) {
+            return;
+        }
 
         // 服务端渲染的 href 是权威结果；无 href 的旧编程调用才使用兼容重建。
         const configuredHref = typeof authoritativeHref === 'string' ? authoritativeHref.trim() : '';
@@ -548,24 +553,65 @@
 
         // 保存语言偏好
         writeLanguagePreference(lang);
-
-        // 前台切到默认语言时 URL 往往不含语言段，与当前 pathname+search 相同；
-        // 仅赋值 location.href 不会触发导航，必须强制 reload。
-        // 后台 buildLanguageUrl 始终带语言段，走下方 href（路由语言段最高优先）。
+        window.__WelineI18nNavigating = true;
         try {
-            const target = new URL(langUrl, window.location.origin);
-            const samePath = target.pathname === (window.location.pathname || '/')
-                && target.search === (window.location.search || '')
-                && target.hash === (window.location.hash || '');
-            if (samePath) {
-                window.location.reload();
-                return;
-            }
-        } catch (e) {
-            // ignore URL parse errors and fall through to href assign
+            sessionStorage.setItem('__weline_i18n_recover', '1');
+        } catch (error) {
+            // sessionStorage can be unavailable in privacy modes.
         }
 
-        window.location.href = langUrl;
+        // Defer navigation out of the click stack. Synchronous location changes
+        // during <a data-lang> activation can race the cancelled default action
+        // and leave Chromium with an empty document (200 + decodedBodySize 0)
+        // until a manual reload. setTimeout(0) keeps a single completed navigate.
+        const navigate = () => {
+            // 前台切到默认语言时 URL 往往不含语言段，与当前 pathname+search 相同；
+            // 仅赋值 location.href 不会触发导航，必须强制 reload。
+            // 后台 buildLanguageUrl 始终带语言段，走下方 href（路由语言段最高优先）。
+            try {
+                const target = new URL(langUrl, window.location.origin);
+                const samePath = target.pathname === (window.location.pathname || '/')
+                    && target.search === (window.location.search || '')
+                    && target.hash === (window.location.hash || '');
+                if (samePath) {
+                    window.location.reload();
+                    return;
+                }
+                // Absolute replace avoids relative-assign races in Electron webviews.
+                window.location.replace(target.href);
+            } catch (e) {
+                window.location.assign(langUrl);
+            }
+        };
+        setTimeout(navigate, 0);
+    }
+
+    /**
+     * Recover from Chromium cancelled navigations that leave an empty document
+     * after language switching (responseStatus 200 + decodedBodySize 0).
+     */
+    function installBlankDocumentRecovery() {
+        if (window.__WelineI18nBlankRecovery) {
+            return;
+        }
+        window.__WelineI18nBlankRecovery = true;
+        window.addEventListener('pageshow', function () {
+            try {
+                if (sessionStorage.getItem('__weline_i18n_recover') !== '1') {
+                    return;
+                }
+                sessionStorage.removeItem('__weline_i18n_recover');
+                const htmlLen = document.documentElement
+                    ? document.documentElement.outerHTML.length
+                    : 0;
+                const bodyLen = document.body ? document.body.innerHTML.length : 0;
+                if (htmlLen < 200 || bodyLen < 20) {
+                    window.location.reload();
+                }
+            } catch (error) {
+                // ignore recovery failures
+            }
+        });
     }
 
     /**
@@ -734,6 +780,7 @@
     };
 
     // 自动初始化
+    installBlankDocumentRecovery();
     initLanguageSwitcher();
 
 })(window, document);

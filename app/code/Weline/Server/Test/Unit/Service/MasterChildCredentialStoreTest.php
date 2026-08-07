@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Service;
 
+\defined('BP') || \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+\defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);
+
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
@@ -15,27 +18,36 @@ final class MasterChildCredentialStoreTest extends TestCase
 {
     /** @var list<string> */
     private array $instances = [];
+    /** @var list<string> */
+    private array $recoveryBackups = [];
     /** @var array<int,bool> */
     private array $processAlive = [];
     /** @var array<int,string> */
     private array $processStart = [];
     /** @var array<int,string> */
     private array $processNamespace = [];
+    /** @var list<array{0:int,1:string,2:string}> */
+    private array $terminationCalls = [];
     private float $now = 7_000.0;
     private string $bootId = '';
 
     protected function setUp(): void
     {
         $this->instances = [];
+        $this->recoveryBackups = [];
         $this->processAlive = [];
         $this->processStart = [];
         $this->processNamespace = [];
+        $this->terminationCalls = [];
         $this->now = 7_000.0;
         $this->bootId = \str_repeat('7', 64);
     }
 
     protected function tearDown(): void
     {
+        foreach ($this->recoveryBackups as $backup) {
+            @\unlink($backup);
+        }
         foreach ($this->instances as $instance) {
             $lease = MasterLeaseManager::pathForInstance($instance);
             @\unlink(MasterChildCredentialStore::pathForInstance($instance));
@@ -43,6 +55,63 @@ final class MasterChildCredentialStoreTest extends TestCase
             @\unlink($lease);
             @\unlink(MasterLeaseManager::lockPathForInstance($instance));
             @\rmdir(\dirname($lease));
+        }
+    }
+
+    public function testMutationCollectsBackupPairedWithValidCredentialLedger(): void
+    {
+        [$instance, $token, $manager, $store, $lease] = $this->fixture('child-backup-valid');
+        unset($manager);
+        $masterPid = (int)\getmypid();
+        $child = [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => ControlMessage::ROLE_WORKER . '#1',
+            'launch_id' => 'backup-valid-launch',
+            'lease_id' => 'backup-valid-lease',
+            'generation' => 1,
+            'pid' => $masterPid,
+        ]];
+        $store->authorizeServices($lease, $instance, $masterPid, 3, $token, $child);
+        $path = MasterChildCredentialStore::pathForInstance($instance);
+        $backup = $path . '.wls-backup-' . \str_repeat('e', 16);
+        self::assertNotFalse(@\copy($path, $backup));
+        @\chmod($backup, 0600);
+        $this->recoveryBackups[] = $backup;
+
+        $this->now += 1.0;
+        $store->authorizeServices($lease, $instance, $masterPid, 3, $token, $child);
+
+        self::assertFileDoesNotExist($backup);
+        self::assertCount(1, $this->ledger($instance)['records'] ?? []);
+    }
+
+    public function testMutationPreservesBackupWhenCredentialLedgerIsMalformed(): void
+    {
+        [$instance, $token, $manager, $store, $lease] = $this->fixture('child-backup-invalid');
+        unset($manager);
+        $masterPid = (int)\getmypid();
+        $child = [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => ControlMessage::ROLE_WORKER . '#1',
+            'launch_id' => 'backup-invalid-launch',
+            'lease_id' => 'backup-invalid-lease',
+            'generation' => 1,
+            'pid' => $masterPid,
+        ]];
+        $store->authorizeServices($lease, $instance, $masterPid, 3, $token, $child);
+        $path = MasterChildCredentialStore::pathForInstance($instance);
+        $backup = $path . '.wls-backup-' . \str_repeat('f', 16);
+        self::assertNotFalse(@\copy($path, $backup));
+        @\chmod($backup, 0600);
+        $this->recoveryBackups[] = $backup;
+        GatewayProjectStateFilesystem::atomicWrite($path, "{}\n", 0600);
+
+        try {
+            $store->authorizeServices($lease, $instance, $masterPid, 3, $token, $child);
+            self::fail('Malformed paired ledger must veto retained-backup cleanup.');
+        } catch (\RuntimeException) {
+            self::assertFileExists($backup);
+            self::assertSame("{}\n", (string)\file_get_contents($path));
         }
     }
 
@@ -251,6 +320,21 @@ final class MasterChildCredentialStoreTest extends TestCase
             $instance,
         ));
 
+        self::assertTrue($store->resumeService(
+            $lease,
+            $instance,
+            $masterPid,
+            3,
+            $token,
+            $role,
+            $slot,
+            $launch,
+            $leaseId,
+            1,
+        ));
+        $resumed = $this->ledger($instance);
+        self::assertSame('active', $resumed['records'][0]['lifecycle_state']);
+
         self::assertTrue($store->revokeService(
             $lease,
             $instance,
@@ -393,10 +477,63 @@ final class MasterChildCredentialStoreTest extends TestCase
         self::assertSame('new-boot-launch', $rebuilt['records'][0]['launch_id']);
     }
 
+    public function testRetirementUsesCredentialBirthsAndNeverTargetsExcludedMasterGeneration(): void
+    {
+        [$instance, $token, $manager, $store, $lease] = $this->fixture(
+            'child-retirement',
+            function (
+                int $pid,
+                string $birth,
+                string $pidNamespaceId,
+                float $graceSeconds,
+            ): array {
+                $this->terminationCalls[] = [$pid, $birth, $pidNamespaceId];
+
+                return [
+                    'released' => true,
+                    'terminated' => true,
+                    'reason' => 'test_stable_handle_released',
+                ];
+            },
+        );
+        $masterPid = (int)\getmypid();
+        $childPid = $masterPid + 40_000;
+        $this->registerProcess($childPid, 'retired-child-start');
+        $store->authorizeServices($lease, $instance, $masterPid, 3, $token, [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => ControlMessage::ROLE_WORKER . '#1',
+            'launch_id' => 'retired-child-launch',
+            'lease_id' => 'retired-child-lease',
+            'generation' => 1,
+            'pid' => $childPid,
+        ]]);
+        $record = $this->ledger($instance)['records'][0];
+
+        self::assertSame([], $store->retireGenerationProcesses(
+            $instance,
+            $masterPid,
+            3,
+        ));
+        self::assertSame([], $this->terminationCalls);
+
+        $outcomes = $store->retireGenerationProcesses($instance);
+
+        self::assertCount(1, $outcomes);
+        self::assertTrue($outcomes[0]['released']);
+        self::assertTrue($outcomes[0]['terminated']);
+        self::assertSame('test_stable_handle_released', $outcomes[0]['reason']);
+        self::assertSame($childPid, $outcomes[0]['pid']);
+        self::assertSame('retired-child-launch', $outcomes[0]['launch_id']);
+        self::assertCount(1, $this->terminationCalls);
+        self::assertSame($childPid, $this->terminationCalls[0][0]);
+        self::assertSame($record['process_birth'], $this->terminationCalls[0][1]);
+        self::assertSame($record['pid_namespace_id'], $this->terminationCalls[0][2]);
+    }
+
     /**
      * @return array{0:string,1:string,2:MasterLeaseManager,3:MasterChildCredentialStore,4:string}
      */
-    private function fixture(string $prefix): array
+    private function fixture(string $prefix, ?\Closure $stableProcessTerminator = null): array
     {
         $instance = $prefix . '-' . \bin2hex(\random_bytes(5));
         $this->instances[] = $instance;
@@ -418,6 +555,7 @@ final class MasterChildCredentialStoreTest extends TestCase
             pidNamespaceResolver: fn (int $pid): ?string => ($this->processAlive[$pid] ?? false)
                 ? ($this->processNamespace[$pid] ?? null)
                 : null,
+            stableProcessTerminator: $stableProcessTerminator,
         );
         $manager = new MasterLeaseManager($identity);
         $store = new MasterChildCredentialStore($manager, $identity);

@@ -60,6 +60,7 @@ final class GatewayBackendCapabilityStateStore
             return GatewayProjectStateFilesystem::withExclusiveLock(
                 $lockFile,
                 function () use ($file, $observation): array {
+                    $this->cleanupStateRecoveryBackups($file);
                     $state = $this->readState($file);
                     [$next, $result] = $this->transition($state, $observation);
                     if ($state !== $next) {
@@ -170,10 +171,48 @@ final class GatewayBackendCapabilityStateStore
         if ($raw === null) {
             return [];
         }
+        $state = $this->decodeValidState($raw);
+        if ($state !== null) {
+            return $state;
+        }
+        // The recovery path itself must remain bounded. A random quarantine
+        // name would copy the same unreadable state on every retry when the
+        // original cannot be removed, eventually turning one corrupt derived
+        // file into a disk-exhaustion loop. The lock serializes replacement of
+        // this diagnostic slot and keeps only the latest rejected payload.
+        $quarantine = $file . '.corrupt-latest';
+        GatewayProjectStateFilesystem::atomicWrite($quarantine, $raw, 0600);
+        GatewayProjectStateFilesystem::removeRegular(
+            $file,
+            'corrupt gateway backend capability state',
+        );
+        return [];
+    }
+
+    /** @return array<string,mixed>|null */
+    private function decodeValidState(string $raw): ?array
+    {
         $state = \json_decode($raw, true);
-        if (\is_array($state)
-            && (int)($state['schema_version'] ?? 0) === self::SCHEMA_VERSION
-            && \in_array((string)($state['mode'] ?? ''), ['isolated', 'stateless', 'shared_session'], true)
+        $expected = [
+            'schema_version',
+            'mode',
+            'raw_evidence_digest',
+            'host_boot_id',
+            'healthy_since_monotonic',
+            'updated_monotonic',
+            'updated_unix',
+        ];
+        $actual = \is_array($state) ? \array_keys($state) : [];
+        \sort($expected, SORT_STRING);
+        \sort($actual, SORT_STRING);
+        return \is_array($state)
+            && $actual === $expected
+            && ($state['schema_version'] ?? null) === self::SCHEMA_VERSION
+            && \in_array((string)($state['mode'] ?? ''), [
+                'isolated',
+                'stateless',
+                'shared_session',
+            ], true)
             && \preg_match(
                 '/\A[a-f0-9]{64}\z/D',
                 (string)($state['raw_evidence_digest'] ?? ''),
@@ -183,23 +222,45 @@ final class GatewayBackendCapabilityStateStore
                 (string)($state['host_boot_id'] ?? ''),
             ) === 1
             && \is_int($state['updated_unix'] ?? null)
-            && (int)($state['updated_unix'] ?? -1) >= 0
-            && \is_numeric($state['healthy_since_monotonic'] ?? null)
+            && (int)$state['updated_unix'] >= 0
+            && (\is_int($state['healthy_since_monotonic'] ?? null)
+                || \is_float($state['healthy_since_monotonic'] ?? null))
             && \is_finite((float)$state['healthy_since_monotonic'])
             && (float)$state['healthy_since_monotonic'] >= 0.0
-            && \is_numeric($state['updated_monotonic'] ?? null)
+            && (\is_int($state['updated_monotonic'] ?? null)
+                || \is_float($state['updated_monotonic'] ?? null))
             && \is_finite((float)$state['updated_monotonic'])
             && (float)$state['updated_monotonic'] >= 0.0
-        ) {
-            return $state;
-        }
-        $quarantine = $file . '.corrupt-' . $this->wallNow() . '-' . \bin2hex(\random_bytes(4));
-        GatewayProjectStateFilesystem::atomicWrite($quarantine, $raw, 0600);
-        GatewayProjectStateFilesystem::removeRegular(
+                ? $state
+                : null;
+    }
+
+    private function cleanupStateRecoveryBackups(string $file): void
+    {
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
             $file,
-            'corrupt gateway backend capability state',
+            65_536,
+            'gateway backend capability state',
+            function (string $raw): void {
+                if ($this->decodeValidState($raw) === null) {
+                    throw new \RuntimeException(
+                        'Gateway backend capability recovery target is invalid.'
+                    );
+                }
+            },
         );
-        return [];
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $file . '.corrupt-latest',
+            65_536,
+            'gateway backend capability diagnostic',
+            static function (string $raw): void {
+                if ($raw === '') {
+                    throw new \RuntimeException(
+                        'Gateway backend capability diagnostic recovery target is empty.'
+                    );
+                }
+            },
+        );
     }
 
     /** @param array<string,mixed> $state */

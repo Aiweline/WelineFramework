@@ -127,10 +127,10 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         self::assertSame([443, 16895, 26895], $ports);
     }
 
-    public function testKillWlsProcessOnPortAcceptsIndexedWlsOwner(): void
+    public function testKillWlsProcessOnPortRejectsEvenIndexedWlsOwner(): void
     {
         $stop = new class extends Stop {
-            public array $killed = [];
+            public int $killQueries = 0;
 
             protected function getPortProcessId(int $port): int
             {
@@ -179,9 +179,10 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
 
             protected function queryKillManagedProcessTreeForStop(int $pid): bool
             {
-                $this->killed[] = $pid;
+                unset($pid);
+                ++$this->killQueries;
 
-                return true;
+                throw new \RuntimeException('port/PID evidence must not reach a kill primitive');
             }
 
             protected function logWlsPortTermination(int $port, int $pid, int $killPid): void
@@ -190,11 +191,11 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             }
         };
 
-        self::assertTrue($stop->killWlsProcessOnPort(26895));
-        self::assertSame([300], $stop->killed);
+        self::assertFalse($stop->killWlsProcessOnPort(26895));
+        self::assertSame(0, $stop->killQueries);
     }
 
-    public function testCleanupRecoverableConfiguredPortsTerminatesAllCandidatesInOneBatch(): void
+    public function testCleanupRecoverableConfiguredPortsIsVerificationOnly(): void
     {
         $stop = new class extends Stop {
             /** @var list<list<int>> */
@@ -296,8 +297,8 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             throw $exception;
         }
 
-        self::assertSame(3, $processed);
-        self::assertSame([[101, 202, 103]], $stop->terminatedBatches);
+        self::assertSame(0, $processed);
+        self::assertSame([], $stop->terminatedBatches);
     }
 
     public function testCollectRecoverablePortsFromInstanceUsesWorkerBasePort(): void
@@ -381,7 +382,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         self::assertSame([443, 80, 26895, 16895], $stop->collectPorts($info));
     }
 
-    public function testDirectForceStopCandidatesSkipRootPromotionOnFirstPass(): void
+    public function testDirectForceVerificationCandidatesSkipRootPromotion(): void
     {
         $info = new ServerInstanceInfo(
             'unit-direct-candidates-4f7b',
@@ -443,7 +444,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         self::assertSame([33780, 2604, 7704], $stop->collectCandidates($info));
     }
 
-    public function testForceStopCandidatesIncludePrefixPidsOnFirstPass(): void
+    public function testResidualVerificationCandidatesMayIncludePrefixHintsButDirectSetDoesNot(): void
     {
         if (!\defined('DS')) {
             \define('DS', DIRECTORY_SEPARATOR);
@@ -502,7 +503,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
         self::assertSame([101, 202, 303], $stop->collectCleanupCandidates($info->name, $info));
     }
 
-    public function testForceStopTerminationAlsoDelegatesScopedPrefixesToProcesser(): void
+    public function testDirectForceTerminationUsesExactGenerationAndNeverPrefixCleanup(): void
     {
         $info = new ServerInstanceInfo(
             'unit-prefix-terminate-4f7b',
@@ -522,17 +523,23 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
 
         $stop = new class extends Stop {
             public array $prefixCleanupNames = [];
+            public array $retiredInstances = [];
 
             public function terminate(ServerInstanceInfo $info): int
             {
                 return $this->terminateDirectForceStopCandidatePids($info);
             }
 
-            protected function collectDirectForceStopCandidatePids(ServerInstanceInfo $info): array
+            protected function retireExactInstanceGeneration(string $name): array
             {
-                unset($info);
+                $this->retiredInstances[] = $name;
 
-                return [];
+                return [
+                    'terminated' => 1,
+                    'released' => 1,
+                    'unreleased' => 0,
+                    'reasons' => [],
+                ];
             }
 
             protected function terminateCurrentInstanceProcessPrefixes(string $name, bool $includeSharedState = false): int
@@ -544,7 +551,8 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             }
         };
 
-        self::assertSame(0, $stop->terminate($info));
+        self::assertSame(1, $stop->terminate($info));
+        self::assertSame([$info->name], $stop->retiredInstances);
         self::assertSame([], $stop->prefixCleanupNames);
     }
 

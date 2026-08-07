@@ -60,74 +60,20 @@ HOSTS;
         self::assertSame('127.0.0.1', HostsFileManager::resolveIpForDomain('demo.local.test', '203.0.113.9'));
     }
 
-    public function testUnixAdminCommandUsesHostsCommandEntryPoint(): void
+    public function testPermissionDeniedResultRequiresManualOsEditWithoutExecutableCommand(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \getcwd() . DIRECTORY_SEPARATOR);
-        }
-
-        $method = new ReflectionMethod(HostsFileManager::class, 'getAdminCommandForOs');
+        self::assertTrue(\method_exists(HostsFileManager::class, 'permissionDeniedResult'));
+        $method = new ReflectionMethod(HostsFileManager::class, 'permissionDeniedResult');
         $method->setAccessible(true);
 
-        $command = $method->invoke(null, 'shop-a.weline.test', '127.0.0.1', 'Linux');
-
-        self::assertStringContainsString('sudo', $command);
-        self::assertStringContainsString('server:hosts:add', $command);
-        self::assertStringContainsString('shop-a.weline.test', $command);
-        self::assertStringContainsString('127.0.0.1', $command);
-    }
-
-    public function testMacAdminCommandUsesAuthopenInsteadOfOsascript(): void
-    {
-        if (!\defined('BP')) {
-            \define('BP', \getcwd() . DIRECTORY_SEPARATOR);
-        }
-
-        $method = new ReflectionMethod(HostsFileManager::class, 'getAdminCommandForOs');
-        $method->setAccessible(true);
-
-        $command = $method->invoke(null, 'shop-a.weline.test', '127.0.0.1', 'Darwin');
-
-        self::assertStringContainsString('/usr/libexec/authopen', $command);
-        self::assertStringContainsString('-w -a', $command);
-        self::assertStringContainsString('shop-a.weline.test', $command);
-        self::assertStringNotContainsString('osascript', $command);
-    }
-
-    public function testAppleScriptDoubleQuotedPathEscapesQuotesAndBackslashes(): void
-    {
-        $method = new ReflectionMethod(HostsFileManager::class, 'escapeAppleScriptDoubleQuotedPath');
-        $method->setAccessible(true);
-
-        self::assertSame(
-            '/tmp/plain-hosts',
-            $method->invoke(null, '/tmp/plain-hosts')
-        );
-        self::assertSame(
-            '/tmp/has\\"quote',
-            $method->invoke(null, '/tmp/has"quote')
-        );
-        self::assertSame(
-            '/tmp/has\\\\slash',
-            $method->invoke(null, '/tmp/has\\slash')
-        );
-    }
-
-    public function testMacOsOsascriptBodyDoesNotNestShellEscapesInsideAppleScript(): void
-    {
-        $method = new ReflectionMethod(HostsFileManager::class, 'escapeAppleScriptDoubleQuotedPath');
-        $method->setAccessible(true);
-        $payload = '/private/var/folders/x/wls-hosts-abc';
-        $hosts = '/etc/hosts';
-        $body = 'do shell script "/bin/cat '
-            . $method->invoke(null, $payload)
-            . ' > '
-            . $method->invoke(null, $hosts)
-            . '" with administrator privileges';
-
-        self::assertStringNotContainsString("'\\''", $body);
-        self::assertStringContainsString('/bin/cat /private/var/folders/x/wls-hosts-abc > /etc/hosts', $body);
-        self::assertStringStartsWith('do shell script "', $body);
-        self::assertStringEndsWith('" with administrator privileges', $body);
+        $result = $method->invoke(null, 'shop-a.weline.test', '127.0.0.1');
+        self::assertIsArray($result);
+        self::assertFalse($result['success'] ?? true);
+        self::assertTrue($result['needs_admin'] ?? false);
+        self::assertArrayNotHasKey('command', $result);
+        self::assertStringContainsString('127.0.0.1 shop-a.weline.test', (string)$result['message']);
+        self::assertStringContainsString('manually', \strtolower((string)$result['message']));
+        self::assertStringNotContainsString('php', \strtolower((string)$result['message']));
+        self::assertStringNotContainsString('bin/w', \strtolower((string)$result['message']));
     }
 }

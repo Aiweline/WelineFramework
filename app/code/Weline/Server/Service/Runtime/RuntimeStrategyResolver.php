@@ -218,7 +218,7 @@ final class RuntimeStrategyResolver
     /**
      * Resolve the platform topology contract without probing optional runtime
      * dependencies. This is the single pre-install source used by server:start:
-     * POSIX uses a verified shared listener. A Windows schema-5 startup lease
+     * POSIX uses a verified shared listener. A Windows schema-6 startup lease
      * is duplicated into one Dispatcher so the reserved socket remains owned
      * continuously; legacy managed Nginx without that marker may still use one
      * loopback port per Worker.
@@ -272,7 +272,7 @@ final class RuntimeStrategyResolver
                     'effective' => EffectiveTopology::Dispatcher,
                     'source' => $source,
                     'reason' => $requiresWindowsDispatcher
-                        ? 'Windows schema-5 listener ownership selected the single Dispatcher endpoint'
+                        ? 'Windows schema-6 listener ownership selected the single Dispatcher endpoint'
                         : ($pureWls && $requested === RequestedTopology::Auto
                             ? 'pure WLS on Windows selected the single public Dispatcher endpoint'
                             : 'explicit Dispatcher topology'),

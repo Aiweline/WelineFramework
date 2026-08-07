@@ -24,6 +24,7 @@ final class GatewayRegistrationRetirementCoordinator
         private readonly ?\Closure $statusResolver = null,
         private readonly ?\Closure $receiptValidator = null,
         private readonly ?\Closure $drainResolver = null,
+        private readonly ?\Closure $staleDrainResolver = null,
         private readonly string $currentHostBootId = '',
     ) {
         $this->host = $host ?? new GatewayHostManager();
@@ -51,9 +52,10 @@ final class GatewayRegistrationRetirementCoordinator
             $endpoint = \is_array($retirement['endpoint'] ?? null)
                 ? $retirement['endpoint']
                 : [];
+            $status = $this->status();
             $decision = GatewayStopRegistrationPolicy::decide(
                 $endpoint,
-                $this->status(),
+                $status,
                 $this->currentHostBootId,
             );
             $action = (string)($decision['action'] ?? 'block');
@@ -75,36 +77,68 @@ final class GatewayRegistrationRetirementCoordinator
             $drain = [];
             $reason = (string)($decision['reason'] ?? 'gateway_state_absent');
             if ($action === GatewayStopRegistrationPolicy::ACTION_DRAIN) {
-                $this->validateReceipt($instanceName);
-                $drain = $this->drain(
-                    $instanceName,
-                    \max(1, \min(300, $drainSeconds)),
-                    $waitForConnections,
-                );
-                if (($drain['unregistered'] ?? false) !== true) {
-                    if (($drain['already_removed'] ?? false) !== true) {
-                        throw new \RuntimeException(
-                            'Gateway did not return a committed unregister result.',
-                        );
-                    }
-                    // `already_removed` can originate from an idempotent error
-                    // response without a signed publication body. Require a
-                    // fresh authenticated own-status absence before accepting
-                    // it as authority to tear down the local backend.
-                    $confirmation = GatewayStopRegistrationPolicy::decide(
-                        $endpoint,
-                        $this->status(),
-                        $this->currentHostBootId,
+                $seconds = \max(1, \min(300, $drainSeconds));
+                $hostInstanceStatus = \strtoupper(\trim((string)(
+                    $decision['host_instance_status'] ?? ''
+                )));
+                if (\in_array($hostInstanceStatus, ['STALE', 'DRAINING'], true)) {
+                    // A STALE/DRAINING launch no longer has a fresh lease receipt
+                    // by definition. The host path must instead authenticate a
+                    // fresh own-status snapshot with the current project
+                    // credential and submit the same exact launch fence. Its
+                    // irreversible drain is sufficient authority for local
+                    // retirement; the Controller owns the terminal removal.
+                    $drain = $this->staleDrain(
+                        $instanceName,
+                        $seconds,
+                        $waitForConnections,
                     );
-                    if (($confirmation['action'] ?? '')
-                        !== GatewayStopRegistrationPolicy::ACTION_LOCAL_ONLY
+                    if (($drain['stale_drain_committed'] ?? false) !== true
+                        || ($drain['irreversible'] ?? false) !== true
+                        || ($waitForConnections
+                            && ($drain['unregistered'] ?? false) !== true)
+                        || !\hash_equals(
+                            'authenticated_own_status',
+                            (string)($drain['retirement_authority'] ?? ''),
+                        )
                     ) {
                         throw new \RuntimeException(
-                            'Gateway already-removed result lacks authenticated launch absence.',
+                            'Gateway did not return an irreversible authenticated stale drain.',
                         );
                     }
+                    $reason = 'gateway_stale_drain_committed';
+                } else {
+                    $this->validateReceipt($instanceName);
+                    $drain = $this->drain(
+                        $instanceName,
+                        $seconds,
+                        $waitForConnections,
+                    );
+                    if (($drain['unregistered'] ?? false) !== true) {
+                        if (($drain['already_removed'] ?? false) !== true) {
+                            throw new \RuntimeException(
+                                'Gateway did not return a committed unregister result.',
+                            );
+                        }
+                        // `already_removed` can originate from an idempotent error
+                        // response without a signed publication body. Require a
+                        // fresh authenticated own-status absence before accepting
+                        // it as authority to tear down the local backend.
+                        $confirmation = GatewayStopRegistrationPolicy::decide(
+                            $endpoint,
+                            $this->status(),
+                            $this->currentHostBootId,
+                        );
+                        if (($confirmation['action'] ?? '')
+                            !== GatewayStopRegistrationPolicy::ACTION_LOCAL_ONLY
+                        ) {
+                            throw new \RuntimeException(
+                                'Gateway already-removed result lacks authenticated launch absence.',
+                            );
+                        }
+                    }
+                    $reason = 'gateway_unregister_committed';
                 }
-                $reason = 'gateway_unregister_committed';
             }
 
             if (!$this->lifecycle->completeRetirement(
@@ -187,6 +221,29 @@ final class GatewayRegistrationRetirementCoordinator
             : $this->host->drain($instanceName, $seconds, $waitForConnections);
         if (!\is_array($drain)) {
             throw new \RuntimeException('Gateway drain returned an invalid result.');
+        }
+        return $drain;
+    }
+
+    /** @return array<string,mixed> */
+    private function staleDrain(
+        string $instanceName,
+        int $seconds,
+        bool $waitForConnections,
+    ): array {
+        $drain = $this->staleDrainResolver !== null
+            ? ($this->staleDrainResolver)(
+                $instanceName,
+                $seconds,
+                $waitForConnections,
+            )
+            : $this->host->drainStaleRegistration(
+                $instanceName,
+                $seconds,
+                $waitForConnections,
+            );
+        if (!\is_array($drain)) {
+            throw new \RuntimeException('Gateway stale drain returned an invalid result.');
         }
         return $drain;
     }

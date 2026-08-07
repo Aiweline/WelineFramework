@@ -21,6 +21,9 @@ final class ManagedNginxService
     private const LIFECYCLE_LOCK_TIMEOUT_SECONDS = 90.0;
     private const MAX_HEALTH_RESPONSE_BYTES = 65536;
     private const MAX_HEALTH_HEADERS_BYTES = 65536;
+    private const MAX_OWNER_RECOVERY_DIRECTORY_ENTRIES = 8192;
+    private const MAX_OWNER_ATOMIC_TEMPORARIES_PER_TARGET = 8;
+    private const MAX_OWNER_ATOMIC_TEMPORARIES_PER_DIRECTORY = 16;
 
     public function __construct(
         private readonly ManagedNginxPaths $paths = new ManagedNginxPaths(),
@@ -416,9 +419,9 @@ final class ManagedNginxService
     /**
      * @return array{ok:bool,message:string}
      */
-    public function stop(): array
+    public function stop(?float $deadlineMonotonic = null): array
     {
-        return $this->withLifecycleLock(function (): array {
+        return $this->withLifecycleLock(function () use ($deadlineMonotonic): array {
             $status = $this->processManager->status();
             if (!($status['ok'] ?? false)) {
                 return [
@@ -433,15 +436,15 @@ final class ManagedNginxService
                 }
                 return ['ok' => true, 'message' => 'managed nginx is not running'];
             }
-            $result = $this->processManager->stop();
+            $result = $this->processManager->stop($deadlineMonotonic);
             if ($result['ok'] ?? false) {
                 $this->clearOwner();
             }
             return $result;
-        });
+        }, $deadlineMonotonic);
     }
 
-    /** @return array{ok:bool,message:string} */
+    /** @return array{ok:bool,message:string,stopped?:bool,owner_matched?:bool} */
     public function stopForInstance(string $instanceName): array
     {
         return $this->withLifecycleLock(function () use ($instanceName): array {
@@ -450,6 +453,8 @@ final class ManagedNginxService
                 return [
                     'ok' => false,
                     'message' => 'refusing instance stop because managed nginx PID identity is unsafe',
+                    'stopped' => false,
+                    'owner_matched' => false,
                 ];
             }
             $owner = $this->readOwner();
@@ -459,18 +464,95 @@ final class ManagedNginxService
                         'ok' => false,
                         'message' => 'managed nginx is running without a verifiable owner; '
                             . 'use explicit server:nginx:stop after identity review',
+                        'stopped' => false,
+                        'owner_matched' => false,
                     ]
-                    : ['ok' => true, 'message' => 'managed nginx is not running'];
+                    : [
+                        'ok' => true,
+                        'message' => 'managed nginx is not running',
+                        'stopped' => true,
+                        'owner_matched' => false,
+                    ];
             }
             if (!\hash_equals((string)$owner['instance_name'], \trim($instanceName))) {
-                return ['ok' => true, 'message' => 'managed nginx is owned by another WLS instance; left running'];
+                return [
+                    'ok' => true,
+                    'message' => 'managed nginx is owned by another WLS instance; left running',
+                    'stopped' => false,
+                    'owner_matched' => false,
+                ];
             }
             $result = $this->processManager->stop();
             if ($result['ok'] ?? false) {
                 $this->clearOwner();
             }
+            $result['stopped'] = ($result['ok'] ?? false) === true;
+            $result['owner_matched'] = true;
             return $result;
         });
+    }
+
+    /**
+     * Minimal exact-owner observation used to fence promotion rollback.
+     *
+     * @return array{
+     *   ok:bool,
+     *   running:bool,
+     *   runtime_owner_active:bool,
+     *   owner_instance:string,
+     *   message:string
+     * }
+     */
+    public function promotionRollbackOwnerSnapshot(): array
+    {
+        $snapshot = $this->withLifecycleLock(function (): array {
+            $status = $this->processManager->status();
+            if (($status['ok'] ?? false) !== true) {
+                return [
+                    'ok' => false,
+                    'running' => (bool)($status['running'] ?? false),
+                    'runtime_owner_active' => false,
+                    'owner_instance' => '',
+                    'message' => 'managed nginx PID identity is unsafe',
+                ];
+            }
+            $owner = $this->readOwner();
+            $activeConfigSha256 = $this->stableManagedFileSha256(
+                $this->paths->confFile(),
+                'Managed Nginx active config',
+            );
+            $ownerConfigBound = \is_array($owner)
+                && \is_string($activeConfigSha256)
+                && \preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    (string)($owner['config_sha256'] ?? ''),
+                ) === 1
+                && \hash_equals(
+                    (string)$owner['config_sha256'],
+                    \strtolower($activeConfigSha256),
+                );
+            $running = (bool)($status['running'] ?? false);
+            return [
+                'ok' => true,
+                'running' => $running,
+                'runtime_owner_active' => $running && $ownerConfigBound,
+                'owner_instance' => \is_array($owner)
+                    ? (string)($owner['instance_name'] ?? '')
+                    : '',
+                'message' => 'managed nginx rollback ownership observed',
+            ];
+        });
+        return [
+            'ok' => ($snapshot['ok'] ?? false) === true,
+            'running' => (bool)($snapshot['running'] ?? false),
+            'runtime_owner_active' => (bool)(
+                $snapshot['runtime_owner_active'] ?? false
+            ),
+            'owner_instance' => (string)($snapshot['owner_instance'] ?? ''),
+            'message' => (string)(
+                $snapshot['message'] ?? 'managed nginx rollback ownership is unavailable'
+            ),
+        ];
     }
 
     /**
@@ -1675,7 +1757,7 @@ final class ManagedNginxService
         return $this->readOwnerFile($this->paths->ownerFile());
     }
 
-    /** @return array{instance_name:string,upstream_host:string,upstream_port:int,server_names:list<string>,config_generation:string,updated_at:string}|null */
+    /** @return array<string,mixed>|null */
     private function readOwnerFile(string $file): ?array
     {
         if (!\file_exists($file) && !\is_link($file)) {
@@ -2176,7 +2258,7 @@ final class ManagedNginxService
         ];
     }
 
-    /** @param array{instance_name:string,upstream_host:string,upstream_port:int,server_names?:list<string>,config_generation:string,updated_at:string} $owner */
+    /** @param array<string,mixed> $owner */
     private function writeOwner(array $owner): void
     {
         $file = $this->paths->ownerFile();
@@ -2195,7 +2277,7 @@ final class ManagedNginxService
         GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
     }
 
-    /** @param array{instance_name:string,upstream_host:string,upstream_port:int,server_names?:list<string>,config_generation:string,updated_at:string} $owner */
+    /** @param array<string,mixed> $owner */
     private function writeOwnerIntent(array $owner): void
     {
         $file = $this->paths->ownerIntentFile();
@@ -2203,7 +2285,7 @@ final class ManagedNginxService
         GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
     }
 
-    /** @param array{instance_name:string,upstream_host:string,upstream_port:int,server_names?:list<string>,config_generation:string,updated_at:string} $expected */
+    /** @param array<string,mixed> $expected */
     private function commitOwnerIntent(array $expected): void
     {
         $intent = $this->readOwnerFile($this->paths->ownerIntentFile());
@@ -2239,7 +2321,10 @@ final class ManagedNginxService
         $this->writeOwner($intent);
     }
 
-    /** @param array<string,mixed> $expected @param array<string,mixed> $intent */
+    /**
+     * @param array<string,mixed> $expected
+     * @param array<string,mixed> $intent
+     */
     private function http3EvidenceMatches(array $expected, array $intent): bool
     {
         $fields = [
@@ -2267,7 +2352,10 @@ final class ManagedNginxService
         return true;
     }
 
-    /** @param array<string,mixed> $expected @param array<string,mixed> $intent */
+    /**
+     * @param array<string,mixed> $expected
+     * @param array<string,mixed> $intent
+     */
     private function tlsSessionEvidenceMatches(array $expected, array $intent): bool
     {
         $fields = [
@@ -2322,7 +2410,7 @@ final class ManagedNginxService
         return true;
     }
 
-    /** @param array{transaction_id:string,instance_name:string,config_generation:string} $expected */
+    /** @param array<string,mixed> $expected */
     private function finalizeOwnerIntent(array $expected): void
     {
         $intentFile = $this->paths->ownerIntentFile();
@@ -2335,6 +2423,10 @@ final class ManagedNginxService
         ) {
             throw new \RuntimeException('Managed nginx owner intent could not be finalized.');
         }
+        $this->cleanupOwnerStateAtomicWriteRecoveryBackups(
+            $intentFile,
+            'Managed Nginx owner intent',
+        );
         GatewayProjectStateFilesystem::removeRegular(
             $intentFile,
             'Managed Nginx owner intent',
@@ -2353,6 +2445,7 @@ final class ManagedNginxService
             return;
         }
         $transactionId = (string)($intent['transaction_id'] ?? '');
+        $rollbackExpected = (bool)($intent['config_rollback_expected'] ?? false);
         if (!\is_file($ownerFile) && $transactionId !== '') {
             $ownerRollback = $ownerFile . '.rollback.' . $transactionId;
             if (\file_exists($ownerRollback) || \is_link($ownerRollback)) {
@@ -2377,6 +2470,10 @@ final class ManagedNginxService
             $this->paths->confFile(),
             'Managed Nginx active config',
         );
+        $intentConfigSha256 = \strtolower(\trim((string)($intent['config_sha256'] ?? '')));
+        $committedOwnerConfigSha256 = \is_array($committedOwner)
+            ? \strtolower(\trim((string)($committedOwner['config_sha256'] ?? '')))
+            : '';
         $committedOwnerIdentityMatches = \is_array($committedOwner)
             && $transactionId !== ''
             && \hash_equals($transactionId, (string)($committedOwner['transaction_id'] ?? ''))
@@ -2387,11 +2484,21 @@ final class ManagedNginxService
             )
             && $this->http3EvidenceMatches($intent, $committedOwner)
             && $this->tlsSessionEvidenceMatches($intent, $committedOwner);
+        $committedOwnerConfigMatchesActive = \is_array($committedOwner)
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                $committedOwnerConfigSha256,
+            ) === 1
+            && \is_string($activeConfigSha256)
+            && \hash_equals(
+                $committedOwnerConfigSha256,
+                \strtolower($activeConfigSha256),
+            );
         if ($committedOwnerIdentityMatches
-            && (\preg_match('/\A[a-f0-9]{64}\z/D', (string)($intent['config_sha256'] ?? '')) !== 1
-                || !\hash_equals((string)$intent['config_sha256'], (string)$committedOwner['config_sha256'])
+            && (\preg_match('/\A[a-f0-9]{64}\z/D', $intentConfigSha256) !== 1
+                || !\hash_equals($intentConfigSha256, $committedOwnerConfigSha256)
                 || !\is_string($activeConfigSha256)
-                || !\hash_equals((string)$intent['config_sha256'], \strtolower($activeConfigSha256)))
+                || !\hash_equals($intentConfigSha256, \strtolower($activeConfigSha256)))
         ) {
             throw new \RuntimeException(
                 'Committed managed nginx owner no longer matches the active config digest; preserving rollback evidence.'
@@ -2399,8 +2506,21 @@ final class ManagedNginxService
         }
         if ($committedOwnerIdentityMatches) {
             $configRollback = $this->configWriter->rollbackPathForTransaction($transactionId);
-            if (!$this->configWriter->commitPublished($configRollback)) {
-                throw new \RuntimeException('Unable to finish committed owner/config bookkeeping.');
+            $rollbackExists = \file_exists($configRollback) || \is_link($configRollback);
+            if ($rollbackExpected && $rollbackExists) {
+                if (!$this->configWriter->commitPublished($configRollback)) {
+                    throw new \RuntimeException('Unable to finish committed owner/config bookkeeping.');
+                }
+            } elseif (!$rollbackExpected && $rollbackExists) {
+                throw new \RuntimeException(
+                    'Committed first managed nginx publication has unexpected rollback evidence.',
+                );
+            } else {
+                // commitPublished() removes the rollback before the owner
+                // intent can be finalized. A crash in that window is safe to
+                // finish because owner identity and the active config digest
+                // were proven above.
+                $this->configWriter->cleanupResolvedRollbackTemporaries($configRollback);
             }
             GatewayProjectStateFilesystem::removeRegular(
                 $intentFile,
@@ -2410,13 +2530,12 @@ final class ManagedNginxService
         }
 
         $status = $this->processManager->status();
-        if (!($status['ok'] ?? false)) {
+        if (!$status['ok']) {
             throw new \RuntimeException('Cannot recover owner intent while nginx PID identity is unsafe.');
         }
         $configRollback = $transactionId !== ''
             ? $this->configWriter->rollbackPathForTransaction($transactionId)
             : null;
-        $rollbackExpected = (bool)($intent['config_rollback_expected'] ?? false);
         try {
             $config = GatewayProjectStateFilesystem::read(
                 $this->paths->confFile(),
@@ -2434,9 +2553,9 @@ final class ManagedNginxService
             ) === 1;
         if (\is_string($configRollback) && \is_file($configRollback)) {
             $this->configWriter->rollbackPublished($configRollback);
-            if ($status['running'] ?? false) {
+            if ($status['running']) {
                 $reloaded = $this->processManager->reload();
-                if (!($reloaded['ok'] ?? false)
+                if (!$reloaded['ok']
                     || !\is_array($committedOwner)
                     || !$this->committedOwnerGenerationIsLive($committedOwner)
                 ) {
@@ -2446,17 +2565,20 @@ final class ManagedNginxService
                 }
             }
         } elseif ($rollbackExpected) {
-            if ($uncommittedConfigPublished || !\is_file($this->paths->confFile())) {
+            if ($uncommittedConfigPublished
+                || !\is_file($this->paths->confFile())
+                || !\is_array($committedOwner)
+                || !$committedOwnerConfigMatchesActive
+            ) {
                 throw new \RuntimeException(
-                    'Managed nginx transaction expected a rollback file, but its recovery evidence is missing.'
+                    'Managed nginx transaction expected a rollback file, but the committed config cannot be proven.'
                 );
             }
-            if ($status['running'] ?? false) {
-                $committedGenerationLive = \is_array($committedOwner)
-                    && $this->committedOwnerGenerationIsLive($committedOwner);
-                if (!$committedGenerationLive && \is_array($committedOwner)) {
+            if ($status['running']) {
+                $committedGenerationLive = $this->committedOwnerGenerationIsLive($committedOwner);
+                if (!$committedGenerationLive) {
                     $reloaded = $this->processManager->reload();
-                    $committedGenerationLive = ($reloaded['ok'] ?? false)
+                    $committedGenerationLive = $reloaded['ok']
                         && $this->committedOwnerGenerationIsLive($committedOwner);
                 }
                 if (!$committedGenerationLive) {
@@ -2465,6 +2587,12 @@ final class ManagedNginxService
                     );
                 }
             }
+            if (!\is_string($configRollback)) {
+                throw new \RuntimeException(
+                    'Managed nginx rollback transaction identity is missing.',
+                );
+            }
+            $this->configWriter->cleanupResolvedRollbackTemporaries($configRollback);
             if (!GatewayProjectStateFilesystem::removeRegular(
                 $intentFile,
                 'Recovered managed Nginx owner intent',
@@ -2473,13 +2601,13 @@ final class ManagedNginxService
             }
             return;
         } elseif ($uncommittedConfigPublished || !\is_file($this->paths->confFile())) {
-            if ($status['running'] ?? false) {
+            if ($status['running']) {
                 $this->stopManagedNginxFailClosed(
                     'unable to stop an interrupted first managed nginx publication',
                 );
             }
             $this->configWriter->rollbackPublished(null);
-        } elseif ($status['running'] ?? false) {
+        } elseif ($status['running']) {
             $this->stopManagedNginxFailClosed(
                 'uncommitted managed nginx intent has no trustworthy rollback identity',
             );
@@ -2514,38 +2642,434 @@ final class ManagedNginxService
         }
     }
 
-    /** @param callable():array<string,mixed> $operation @return array<string,mixed> */
-    private function withLifecycleLock(callable $operation): array
+    /**
+     * @param callable():array<string,mixed> $operation
+     * @return array<string,mixed>
+     */
+    private function withLifecycleLock(
+        callable $operation,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         try {
             $this->paths->ensureRuntimeDirectories();
-            $handle = @\fopen($this->paths->lifecycleLockFile(), 'c+');
-            if (!\is_resource($handle)) {
-                return ['ok' => false, 'message' => 'unable to open managed nginx lifecycle lock'];
-            }
-            $deadline = (\hrtime(true) / 1_000_000_000)
-                + self::LIFECYCLE_LOCK_TIMEOUT_SECONDS;
-            $locked = false;
-            do {
-                $locked = @\flock($handle, LOCK_EX | LOCK_NB);
-                if (!$locked) {
-                    SchedulerSystem::usleep(50_000);
+            if ($deadlineMonotonic !== null) {
+                if (!\is_finite($deadlineMonotonic)) {
+                    return [
+                        'ok' => false,
+                        'message' => 'managed nginx lifecycle deadline is invalid',
+                    ];
                 }
-            } while (!$locked && (\hrtime(true) / 1_000_000_000) < $deadline);
-            if (!$locked) {
-                @\fclose($handle);
-                return ['ok' => false, 'message' => 'managed nginx lifecycle lock timed out'];
             }
-            try {
-                $this->recoverOwnerPublication();
-                $this->configWriter->recoverInterruptedPublication();
-                return $operation();
-            } finally {
-                @\flock($handle, LOCK_UN);
-                @\fclose($handle);
+            $waitTimeoutSeconds = self::LIFECYCLE_LOCK_TIMEOUT_SECONDS;
+            if ($deadlineMonotonic !== null) {
+                $remaining = $deadlineMonotonic
+                    - (\hrtime(true) / 1_000_000_000);
+                if ($remaining <= 0.0) {
+                    return [
+                        'ok' => false,
+                        'message' => 'managed nginx lifecycle deadline was exhausted',
+                    ];
+                }
+                $waitTimeoutSeconds = \min($waitTimeoutSeconds, $remaining);
             }
+
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $this->paths->lifecycleLockFile(),
+                function () use ($operation, $deadlineMonotonic): array {
+                    // Safe lock opening is part of the acquisition path. Keep
+                    // the caller's absolute monotonic deadline authoritative
+                    // before any lifecycle recovery or mutation may begin.
+                    if ($deadlineMonotonic !== null
+                        && (\hrtime(true) / 1_000_000_000) >= $deadlineMonotonic
+                    ) {
+                        return [
+                            'ok' => false,
+                            'message' => 'managed nginx lifecycle deadline was exhausted',
+                        ];
+                    }
+                    $this->cleanupOwnerAtomicWriteRecoveryBackups();
+                    $this->cleanupConfigAtomicWriteRecoveryBackups();
+                    $this->recoverOwnerPublication();
+                    $this->configWriter->recoverInterruptedPublication();
+                    return $operation();
+                },
+                null,
+                $waitTimeoutSeconds,
+            );
         } catch (\Throwable $exception) {
-            return ['ok' => false, 'message' => $exception->getMessage()];
+            $message = $exception->getMessage();
+            if ($message === 'Timed out acquiring the WLS state lock.') {
+                $message = 'managed nginx lifecycle lock timed out';
+            }
+            return ['ok' => false, 'message' => $message];
+        }
+    }
+
+    /**
+     * owner.json and owner.intent.json have one writer namespace: this
+     * service while managed-nginx.lifecycle.lock is held.
+     */
+    private function cleanupOwnerAtomicWriteRecoveryBackups(): void
+    {
+        $targets = [
+            [
+                'file' => $this->paths->ownerFile(),
+                'label' => 'Managed Nginx owner state',
+            ],
+            [
+                'file' => $this->paths->ownerIntentFile(),
+                'label' => 'Managed Nginx owner intent',
+            ],
+        ];
+        $temporaryClosure = $this->ownerAtomicWriteRecoveryTemporaries($targets);
+        $retained = [];
+        foreach ($targets as $target) {
+            $hasBackups = GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
+                $target['file'],
+                4 * 1024 * 1024,
+                $target['label'],
+            );
+            $temporaries = $temporaryClosure['temporaries'][$target['file']] ?? [];
+            if ($hasBackups || $temporaries !== []) {
+                $retained[] = [
+                    ...$target,
+                    'has_backups' => $hasBackups,
+                    'temporaries' => $temporaries,
+                ];
+            }
+        }
+
+        foreach ($retained as $index => $target) {
+            $retained[$index]['digest'] = $this
+                ->validateOwnerStateAtomicRecoveryTarget(
+                    $target['file'],
+                    $target['label'],
+                );
+        }
+        foreach ($retained as $target) {
+            foreach ($target['temporaries'] as $temporary) {
+                $current = @\lstat($temporary['path']);
+                if (!\is_array($current)
+                    || !$this->sameOwnerArtifactState($temporary['identity'], $current)
+                ) {
+                    throw new \RuntimeException(
+                        $target['label'] . ' atomic temporary changed before cleanup.',
+                    );
+                }
+            }
+        }
+        $directoryCurrent = @\lstat($temporaryClosure['directory']);
+        if (!\is_array($directoryCurrent)
+            || !$this->sameOwnerArtifactState(
+                $temporaryClosure['directory_identity'],
+                $directoryCurrent,
+            )
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx owner atomic temporary directory changed before cleanup.',
+            );
+        }
+
+        foreach ($retained as $target) {
+            if ($target['has_backups']) {
+                $this->cleanupOwnerStateAtomicWriteRecoveryBackups(
+                    $target['file'],
+                    $target['label'],
+                    $target['digest'],
+                );
+            }
+            foreach ($target['temporaries'] as $temporary) {
+                $currentDigest = $this->validateOwnerStateAtomicRecoveryTarget(
+                    $target['file'],
+                    $target['label'],
+                );
+                if (!\hash_equals($target['digest'], $currentDigest)) {
+                    throw new \RuntimeException(
+                        $target['label'] . ' recovery target changed before temporary cleanup.',
+                    );
+                }
+                if (!GatewayProjectStateFilesystem::removeRegular(
+                    $temporary['path'],
+                    $target['label'] . ' atomic temporary',
+                    $temporary['identity'],
+                )) {
+                    throw new \RuntimeException(
+                        'Unable to collect ' . $target['label'] . ' atomic temporary.',
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * @param list<array{file:string,label:string}> $targets
+     * @return array{
+     *   directory:string,
+     *   directory_identity:array<string|int,mixed>,
+     *   temporaries:array<string,list<array{path:string,identity:array<string|int,mixed>}>>
+     * }
+     */
+    private function ownerAtomicWriteRecoveryTemporaries(array $targets): array
+    {
+        $directory = \dirname($this->paths->ownerFile());
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || \is_link($directory)
+            || ((((int)$directoryBefore['mode']) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx owner atomic temporary directory is unsafe.',
+            );
+        }
+        foreach ($targets as $target) {
+            if (!\hash_equals($directory, \dirname($target['file']))) {
+                throw new \RuntimeException(
+                    'Managed Nginx owner recovery target escaped its runtime directory.',
+                );
+            }
+        }
+
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException(
+                'Unable to enumerate managed Nginx owner atomic temporaries.',
+            );
+        }
+        $temporaries = [];
+        $rawEntries = 0;
+        $total = 0;
+        try {
+            while (($leaf = \readdir($handle)) !== false) {
+                if ($leaf === '.' || $leaf === '..') {
+                    continue;
+                }
+                if (++$rawEntries > self::MAX_OWNER_RECOVERY_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        'Managed Nginx owner atomic temporary directory quota is exhausted.',
+                    );
+                }
+                foreach ($targets as $target) {
+                    $prefix = \basename(\str_replace('\\', '/', $target['file']))
+                        . '.tmp-';
+                    $reserved = \str_starts_with($leaf, $prefix)
+                        || (\PHP_OS_FAMILY === 'Windows'
+                            && \strncasecmp($leaf, $prefix, \strlen($prefix)) === 0);
+                    if (!$reserved) {
+                        continue;
+                    }
+                    $suffix = \substr($leaf, \strlen($prefix));
+                    if (!\str_starts_with($leaf, $prefix)
+                        || \preg_match('/\A[a-f0-9]{24}\z/D', $suffix) !== 1
+                    ) {
+                        throw new \RuntimeException(
+                            $target['label'] . ' atomic temporary reserved leaf is malformed.',
+                        );
+                    }
+                    if (\count($temporaries[$target['file']] ?? [])
+                            >= self::MAX_OWNER_ATOMIC_TEMPORARIES_PER_TARGET
+                        || ++$total > self::MAX_OWNER_ATOMIC_TEMPORARIES_PER_DIRECTORY
+                    ) {
+                        throw new \RuntimeException(
+                            $target['label'] . ' atomic temporary quota is exhausted.',
+                        );
+                    }
+                    $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                    GatewayProjectStateFilesystem::read(
+                        $path,
+                        4 * 1024 * 1024,
+                        $target['label'] . ' atomic temporary',
+                        true,
+                    );
+                    $identity = @\lstat($path);
+                    if (!\is_array($identity)) {
+                        throw new \RuntimeException(
+                            $target['label'] . ' atomic temporary disappeared during discovery.',
+                        );
+                    }
+                    $temporaries[$target['file']][] = [
+                        'path' => $path,
+                        'identity' => $identity,
+                    ];
+                    continue 2;
+                }
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        $directoryAfter = @\lstat($directory);
+        if (!\is_array($directoryAfter)
+            || !$this->sameOwnerArtifactState($directoryBefore, $directoryAfter)
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx owner atomic temporary directory changed during discovery.',
+            );
+        }
+        return [
+            'directory' => $directory,
+            'directory_identity' => $directoryAfter,
+            'temporaries' => $temporaries,
+        ];
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameOwnerArtifactState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function cleanupOwnerStateAtomicWriteRecoveryBackups(
+        string $file,
+        string $label,
+        ?string $expectedDigest = null,
+    ): void {
+        $expectedDigest ??= $this->validateOwnerStateAtomicRecoveryTarget(
+            $file,
+            $label,
+        );
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $file,
+            4 * 1024 * 1024,
+            $label,
+            function (string $contents) use ($file, $label, $expectedDigest): void {
+                $stableDigest = $this->validateOwnerStateAtomicRecoveryTarget(
+                    $file,
+                    $label,
+                );
+                if (!\hash_equals($expectedDigest, $stableDigest)
+                    || !\hash_equals(
+                        $expectedDigest,
+                        \hash('sha256', $contents),
+                    )
+                ) {
+                    throw new \RuntimeException(
+                        $label . ' recovery target changed after complete validation.',
+                    );
+                }
+            },
+        );
+    }
+
+    private function validateOwnerStateAtomicRecoveryTarget(
+        string $file,
+        string $label,
+    ): string {
+        $contents = GatewayProjectStateFilesystem::read(
+            $file,
+            4 * 1024 * 1024,
+            $label . ' recovery backup paired target',
+        );
+        $decoded = \json_decode(
+            $contents,
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        if (!\is_array($decoded) || !\is_array($this->readOwnerFile($file))) {
+            throw new \RuntimeException($label . ' recovery target is invalid.');
+        }
+        return \hash('sha256', $contents);
+    }
+
+    /**
+     * Config publication also shares managed-nginx.lifecycle.lock. A retained
+     * backup is collected only after the current paired config passes the
+     * real isolated nginx -t path; missing or invalid targets keep evidence.
+     */
+    private function cleanupConfigAtomicWriteRecoveryBackups(): void
+    {
+        $this->configWriter->cleanupAtomicWriteRecoveryBackups(
+            function (string $path, string $contents, string $kind): void {
+                if ($contents === '') {
+                    throw new \RuntimeException(
+                        'Managed Nginx ' . $kind . ' recovery target is empty.',
+                    );
+                }
+                $test = $this->processManager->testConfig($path);
+                if ((int)($test['code'] ?? 1) !== 0) {
+                    throw new \RuntimeException(
+                        'Managed Nginx ' . $kind
+                            . ' recovery target failed nginx -t: '
+                            . \substr(\trim((string)($test['output'] ?? '')), 0, 1024),
+                    );
+                }
+            },
+        );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function retirementSnapshot(float $deadlineMonotonic): array
+    {
+        // Windows process identity may consume a ten-second child timeout plus
+        // the bounded runner's documented twelve-second Job cleanup tail.
+        $this->assertRetirementDeadline($deadlineMonotonic, 23.0);
+        $status = $this->processManager->status();
+        $owner = $this->readOwner();
+        $activeConfigSha256 = $this->stableManagedFileSha256(
+            $this->paths->confFile(),
+            'Managed Nginx active config',
+        );
+        $ownerConfigBound = \is_array($owner)
+            && \is_string($activeConfigSha256)
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($owner['config_sha256'] ?? ''),
+            ) === 1
+            && \hash_equals(
+                (string)$owner['config_sha256'],
+                \strtolower($activeConfigSha256),
+            );
+        $ownerListenHttp = (int)($owner['listen_http'] ?? 0);
+        $ownerListenHttps = (int)($owner['listen_https'] ?? 0);
+        $ownerPortsBound = $ownerListenHttp > 0 && $ownerListenHttp <= 65535
+            && $ownerListenHttps > 0 && $ownerListenHttps <= 65535;
+        $runtimeOwnerActive = ($status['ok'] ?? false) === true
+            && ($status['running'] ?? false) === true
+            && \is_array($owner)
+            && $ownerPortsBound
+            && $ownerConfigBound;
+        $this->assertRetirementDeadline($deadlineMonotonic, 0.01);
+        return [
+            'running' => (bool)($status['running'] ?? false),
+            'runtime_owner_active' => $runtimeOwnerActive,
+            'pid' => (int)($status['pid'] ?? 0),
+            'listen_https' => $ownerListenHttps,
+            'owner_listen_https' => $ownerListenHttps,
+            'owner_instance' => (string)($owner['instance_name'] ?? ''),
+            'owner_config_sha256' => (string)($owner['config_sha256'] ?? ''),
+            'owner_ssl_certificate_sha256' => (string)(
+                $owner['ssl_certificate_sha256'] ?? ''
+            ),
+        ];
+    }
+
+    private function assertRetirementDeadline(
+        float $deadlineMonotonic,
+        float $minimumSeconds,
+    ): void
+    {
+        if (!\is_finite($deadlineMonotonic)
+            || !\is_finite($minimumSeconds)
+            || $minimumSeconds <= 0.0
+            || $deadlineMonotonic - (\hrtime(true) / 1_000_000_000)
+                < $minimumSeconds
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx retirement snapshot deadline was exhausted.',
+            );
         }
     }
 

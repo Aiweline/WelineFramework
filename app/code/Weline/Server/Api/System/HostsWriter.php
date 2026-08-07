@@ -11,7 +11,7 @@ use Weline\Server\Service\HostsFileManager;
 final class HostsWriter
 {
     /**
-     * @return array{success: bool, message: string, needs_admin?: bool, command?: string, already_exists?: bool, elevated?: bool, repaired?: bool, ip?: string}
+     * @return array{success: bool, message: string, needs_admin?: bool, already_exists?: bool, repaired?: bool, ip?: string, status?: string, error_code?: string}
      */
     public static function addDomain(string $domain, string $ip = '127.0.0.1'): array
     {

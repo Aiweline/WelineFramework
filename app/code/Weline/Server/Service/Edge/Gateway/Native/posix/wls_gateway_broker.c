@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <limits.h>
+#include <dirent.h>
 #include <sodium.h>
 #include <time.h>
 #if defined(__APPLE__)
@@ -67,6 +68,26 @@
 #define WLS_PREVIOUS_CONTROLLER_EXIT_POLL_US 100000U
 #define WLS_CONTROLLER_IDENTITY_ATTEMPTS 500U
 #define WLS_CONTROLLER_IDENTITY_POLL_US 10000U
+#define WLS_PROCESS_TREE_BUDGET_MAXIMUM_MS 12000ULL
+#define WLS_ROLLBACK_RECOVERY_BACKUPS_MAXIMUM 4U
+#define WLS_ROLLBACK_STATE_DIRECTORY_ENTRIES_MAXIMUM 8192U
+#define WLS_ATOMIC_RECOVERY_TARGET_COUNT 9U
+#define WLS_ATOMIC_RECOVERY_CANDIDATES_MAXIMUM 64U
+#define WLS_ATOMIC_RECOVERY_DIRECTORY_ENTRIES_MAXIMUM 8192U
+#define WLS_ATOMIC_RECOVERY_PAYLOAD_MAXIMUM 4096U
+#define WLS_FILE_LOCK_TIMEOUT_MILLISECONDS 250ULL
+#define WLS_FILE_LOCK_POLL_MILLISECONDS 10ULL
+#define WLS_COMPLETION_LOCK_TIMEOUT_MILLISECONDS 250ULL
+
+#if defined(__GNUC__) || defined(__clang__)
+#define WLS_MAYBE_UNUSED __attribute__((unused))
+#else
+#define WLS_MAYBE_UNUSED
+#endif
+
+#define WLS_PROCESS_TREE_RESULT_OK 0
+#define WLS_PROCESS_TREE_RESULT_FAILED 1
+#define WLS_PROCESS_TREE_RESULT_INDETERMINATE 2
 
 static volatile sig_atomic_t wls_running = 1;
 static volatile sig_atomic_t wls_bootstrap_maintenance_failed = 0;
@@ -75,6 +96,7 @@ static char wls_admin_socket[PATH_MAX];
 static char wls_project_socket[PATH_MAX];
 static pthread_mutex_t wls_handler_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t wls_bootstrap_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t wls_process_lifecycle_mutex = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int wls_active_handlers = 0U;
 static unsigned int wls_active_project_handlers = 0U;
 
@@ -116,6 +138,16 @@ struct wls_upgrade_binding {
     long long observation_started;
     long long observation_deadline;
     long long total_deadline;
+};
+
+struct wls_rollback_request {
+    char intent_sha256[65];
+    char intent_nonce[33];
+    char from;
+    char to;
+    long long requested_at;
+    char request_nonce[33];
+    char request_sha256[65];
 };
 
 struct wls_bootstrap_receipt {
@@ -162,6 +194,35 @@ struct wls_bootstrap_maintenance_context {
 
 static int wls_write_all(int fd, const char *buffer, size_t length);
 static void wls_release_controller_socket(const char *controller_socket);
+static int wls_monotonic_milliseconds(unsigned long long *milliseconds);
+static int wls_json_string(
+    const char *json,
+    const char *name,
+    char *output,
+    size_t capacity
+);
+
+static int wls_hmac_sha256(
+    unsigned char output[crypto_auth_hmacsha256_BYTES],
+    const unsigned char *message,
+    unsigned long long message_length,
+    const unsigned char *key,
+    size_t key_length
+) {
+    crypto_auth_hmacsha256_state state;
+    int result = -1;
+    sodium_memzero(&state, sizeof(state));
+    if (output == NULL || message == NULL || key == NULL || key_length == 0U
+        || crypto_auth_hmacsha256_init(&state, key, key_length) != 0
+        || crypto_auth_hmacsha256_update(&state, message, message_length) != 0
+        || crypto_auth_hmacsha256_final(&state, output) != 0) {
+        goto cleanup;
+    }
+    result = 0;
+cleanup:
+    sodium_memzero(&state, sizeof(state));
+    return result;
+}
 
 static int wls_read_exact(int fd, char *buffer, size_t length)
 {
@@ -726,7 +787,8 @@ static int wls_read_hex_file(
         || fstat(fd, &status) != 0
         || !S_ISREG(status.st_mode)
         || status.st_nlink != 1
-        || status.st_uid != 0
+        || (status.st_uid != 0
+            && !(geteuid() != 0 && status.st_uid == geteuid()))
         || (status.st_mode & 0022) != 0
         || hex_length + 2U > 256U
         || (status.st_size != (off_t)hex_length
@@ -752,6 +814,75 @@ static int wls_read_hex_file(
     return wls_is_hex(text, hex_length) ? 0 : -1;
 }
 
+static int wls_read_file(
+    const char *path,
+    size_t maximum,
+    unsigned char **contents,
+    size_t *length
+) {
+    int fd = -1;
+    int result = -1;
+    int saved_errno = EINVAL;
+    struct stat before;
+    struct stat after;
+    unsigned char *buffer = NULL;
+    if (path == NULL || contents == NULL || length == NULL || maximum == 0U) {
+        errno = EINVAL;
+        return -1;
+    }
+    *contents = NULL;
+    *length = 0U;
+    fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) goto cleanup;
+    if (fstat(fd, &before) != 0) goto cleanup;
+    if (!S_ISREG(before.st_mode) || before.st_nlink != 1) {
+        errno = EPERM;
+        goto cleanup;
+    }
+    if (before.st_size < 0 || (uint64_t)before.st_size > maximum) {
+        errno = EFBIG;
+        goto cleanup;
+    }
+    buffer = calloc((size_t)before.st_size + 1U, 1U);
+    if (buffer == NULL
+        || wls_read_exact(fd, (char *)buffer, (size_t)before.st_size) != 0
+        || fstat(fd, &after) != 0
+        || after.st_dev != before.st_dev
+        || after.st_ino != before.st_ino
+        || after.st_size != before.st_size
+        || after.st_mode != before.st_mode
+        || after.st_nlink != before.st_nlink
+        || after.st_uid != before.st_uid
+        || after.st_gid != before.st_gid
+#if defined(__APPLE__) || defined(__FreeBSD__)
+        || after.st_mtimespec.tv_sec != before.st_mtimespec.tv_sec
+        || after.st_mtimespec.tv_nsec != before.st_mtimespec.tv_nsec
+        || after.st_ctimespec.tv_sec != before.st_ctimespec.tv_sec
+        || after.st_ctimespec.tv_nsec != before.st_ctimespec.tv_nsec
+#else
+        || after.st_mtim.tv_sec != before.st_mtim.tv_sec
+        || after.st_mtim.tv_nsec != before.st_mtim.tv_nsec
+        || after.st_ctim.tv_sec != before.st_ctim.tv_sec
+        || after.st_ctim.tv_nsec != before.st_ctim.tv_nsec
+#endif
+    ) {
+        goto cleanup;
+    }
+    *contents = buffer;
+    *length = (size_t)before.st_size;
+    buffer = NULL;
+    result = 0;
+cleanup:
+    saved_errno = errno;
+    if (buffer != NULL) {
+        sodium_memzero(buffer, (size_t)before.st_size + 1U);
+        free(buffer);
+    }
+    if (fd >= 0) close(fd);
+    if (result != 0) errno = saved_errno;
+    return result;
+}
+
 static int wls_atomic_root_write(
     const char *path,
     const char *contents,
@@ -775,7 +906,7 @@ static int wls_atomic_root_write(
     if (fd < 0
         || wls_write_all(fd, contents, length) != 0
         || fchmod(fd, 0600) != 0
-        || fchown(fd, 0, 0) != 0
+        || (geteuid() == 0 && fchown(fd, 0, 0) != 0)
         || fsync(fd) != 0) {
         if (fd >= 0) close(fd);
         unlink(temporary);
@@ -788,6 +919,8 @@ static int wls_atomic_root_write(
     }
     return 0;
 }
+
+static int wls_package_install_lock_acquire(const char *home, int *lock_fd);
 
 static int wls_write_admin_stopped(
     const char *home,
@@ -808,8 +941,12 @@ static int wls_write_admin_stopped(
     size_t decoded = 0U;
     int payload_length;
     int intent_length;
+    int lock_fd = -1;
+    int lock_status;
+    int saved_errno = EIO;
     int result = -1;
     if (home == NULL
+        || peer == NULL
         || epoch == NULL
         || !wls_is_hex(epoch, 32U)
         || (peer->uid != 0U && !(geteuid() != 0 && peer->uid == (unsigned long)geteuid()))
@@ -818,8 +955,16 @@ static int wls_write_admin_stopped(
         || snprintf(host_path, sizeof(host_path), "%s/trust/host-id", home)
             >= (int)sizeof(host_path)
         || snprintf(intent_path, sizeof(intent_path), "%s/trust/admin-stopped.intent", home)
-            >= (int)sizeof(intent_path)
-        || wls_read_hex_file(token_path, token, 64U) != 0
+            >= (int)sizeof(intent_path)) {
+        errno = EINVAL;
+        goto cleanup;
+    }
+    lock_status = wls_package_install_lock_acquire(home, &lock_fd);
+    if (lock_status != 0) {
+        errno = lock_status == 1 ? EBUSY : EPERM;
+        goto cleanup;
+    }
+    if (wls_read_hex_file(token_path, token, 64U) != 0
         || wls_read_hex_file(host_path, host, 32U) != 0
         || wls_random_token(nonce) != 0
         || sodium_hex2bin(
@@ -869,9 +1014,15 @@ static int wls_write_admin_stopped(
     }
     result = 0;
 cleanup:
+    saved_errno = errno;
+    if (lock_fd >= 0) {
+        (void)flock(lock_fd, LOCK_UN);
+        close(lock_fd);
+    }
     sodium_memzero(key, sizeof(key));
     sodium_memzero(signature, sizeof(signature));
     sodium_memzero(token, sizeof(token));
+    if (result != 0) errno = saved_errno;
     return result;
 }
 
@@ -946,13 +1097,21 @@ static int wls_upgrade_binding_read(
 ) {
     char intent_path[PATH_MAX];
     char state_path[PATH_MAX];
+    char host_path[PATH_MAX];
+    char token_path[PATH_MAX];
     unsigned char *intent = NULL;
     unsigned char *state = NULL;
     size_t intent_length = 0U;
     size_t state_length = 0U;
     unsigned char digest[crypto_hash_sha256_BYTES];
+    unsigned char key[crypto_auth_hmacsha256_KEYBYTES];
+    unsigned char expected_signature[crypto_auth_hmacsha256_BYTES];
+    unsigned char actual_signature[crypto_auth_hmacsha256_BYTES];
+    size_t decoded = 0U;
     char host[33], from[2], to[2], signature[65];
+    char expected_host[33], token[65];
     char state_digest[65], state_nonce[33], state_runtime[65];
+    const unsigned char *signature_boundary = NULL;
     long long legacy_deadline = 0;
     long long expected_legacy_deadline = 0;
     long long expected_total_deadline = 0;
@@ -960,10 +1119,17 @@ static int wls_upgrade_binding_read(
     int state_consumed = 0;
     int fields;
     memset(binding, 0, sizeof(*binding));
+    sodium_memzero(key, sizeof(key));
+    sodium_memzero(expected_signature, sizeof(expected_signature));
+    sodium_memzero(actual_signature, sizeof(actual_signature));
     if (snprintf(intent_path, sizeof(intent_path), "%s/trust/upgrade.intent", home)
             >= (int)sizeof(intent_path)
         || snprintf(state_path, sizeof(state_path), "%s/trust/upgrade-state", home)
-            >= (int)sizeof(state_path)) return -1;
+            >= (int)sizeof(state_path)
+        || snprintf(host_path, sizeof(host_path), "%s/trust/host-id", home)
+            >= (int)sizeof(host_path)
+        || snprintf(token_path, sizeof(token_path), "%s/trust/admin.token", home)
+            >= (int)sizeof(token_path)) return -1;
     if (wls_read_file(intent_path, 2048U, &intent, &intent_length) != 0) {
         if (errno != ENOENT) return -1;
         return 0;
@@ -976,6 +1142,10 @@ static int wls_upgrade_binding_read(
         host, from, to, &binding->prepared_at, &legacy_deadline,
         binding->runtime_generation, binding->nonce, signature, &intent_consumed
     );
+    signature_boundary = (const unsigned char *)strstr(
+        (const char *)intent,
+        "signature="
+    );
     if (fields != 8 || intent_consumed != (int)intent_length || from[0] == to[0]
         || binding->prepared_at < 1
         || wls_checked_add_ll(
@@ -984,12 +1154,41 @@ static int wls_upgrade_binding_read(
             &expected_legacy_deadline
         ) != 0
         || legacy_deadline != expected_legacy_deadline
+        || signature_boundary == NULL
+        || (size_t)(signature_boundary - intent) >= intent_length
+        || wls_read_hex_file(host_path, expected_host, 32U) != 0
+        || strcmp(host, expected_host) != 0
+        || wls_read_hex_file(token_path, token, 64U) != 0
+        || sodium_hex2bin(
+            key, sizeof(key), token, 64U, NULL, &decoded, NULL
+        ) != 0
+        || decoded != sizeof(key)
+        || sodium_hex2bin(
+            actual_signature, sizeof(actual_signature),
+            signature, 64U, NULL, &decoded, NULL
+        ) != 0
+        || decoded != sizeof(actual_signature)
+        || crypto_auth_hmacsha256(
+            expected_signature,
+            intent,
+            (unsigned long long)(signature_boundary - intent),
+            key
+        ) != 0
+        || sodium_memcmp(
+            expected_signature,
+            actual_signature,
+            sizeof(expected_signature)
+        ) != 0
         || crypto_hash_sha256(digest, intent, (unsigned long long)intent_length) != 0
         || sodium_bin2hex(binding->intent_sha256, sizeof(binding->intent_sha256),
             digest, sizeof(digest)) == NULL
         || wls_read_file(state_path, 1024U, &state, &state_length) != 0) {
         free(intent);
         sodium_memzero(digest, sizeof(digest));
+        sodium_memzero(key, sizeof(key));
+        sodium_memzero(expected_signature, sizeof(expected_signature));
+        sodium_memzero(actual_signature, sizeof(actual_signature));
+        sodium_memzero(token, sizeof(token));
         return -1;
     }
     binding->from = from[0];
@@ -1010,6 +1209,10 @@ static int wls_upgrade_binding_read(
     free(intent);
     free(state);
     sodium_memzero(digest, sizeof(digest));
+    sodium_memzero(key, sizeof(key));
+    sodium_memzero(expected_signature, sizeof(expected_signature));
+    sodium_memzero(actual_signature, sizeof(actual_signature));
+    sodium_memzero(token, sizeof(token));
     if (fields != 11 || state_consumed != (int)state_length
         || strcmp(state_digest, binding->intent_sha256) != 0
         || strcmp(state_nonce, binding->nonce) != 0
@@ -1642,6 +1845,94 @@ static int wls_repair_trust_access(
     return mode == 0750 ? 0 : chmod(trust, 0750);
 }
 
+static int wls_flock_bounded(
+    int fd,
+    int operation,
+    unsigned long long timeout_ms
+) {
+    unsigned long long now_ms;
+    unsigned long long deadline_ms;
+    if (fd < 0
+        || (operation != LOCK_EX && operation != LOCK_SH)
+        || timeout_ms == 0ULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (wls_monotonic_milliseconds(&now_ms) != 0) return -1;
+    if (now_ms > ULLONG_MAX - timeout_ms) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    deadline_ms = now_ms + timeout_ms;
+    for (;;) {
+        int lock_error;
+        unsigned long long remaining_ms;
+        unsigned long long delay_ms;
+        struct timespec delay;
+        if (flock(fd, operation | LOCK_NB) == 0) return 0;
+        lock_error = errno;
+        if (lock_error != EWOULDBLOCK
+            && lock_error != EAGAIN
+            && lock_error != EINTR) {
+            errno = lock_error;
+            return -1;
+        }
+        if (wls_monotonic_milliseconds(&now_ms) != 0) return -1;
+        if (now_ms >= deadline_ms) {
+            errno = ETIMEDOUT;
+            return -1;
+        }
+        remaining_ms = deadline_ms - now_ms;
+        delay_ms = remaining_ms < WLS_FILE_LOCK_POLL_MILLISECONDS
+            ? remaining_ms
+            : WLS_FILE_LOCK_POLL_MILLISECONDS;
+        delay.tv_sec = 0;
+        delay.tv_nsec = (long)(delay_ms * 1000000ULL);
+        if (nanosleep(&delay, NULL) != 0 && errno != EINTR) return -1;
+    }
+}
+
+static int wls_mutex_lock_bounded(
+    pthread_mutex_t *mutex,
+    unsigned long long timeout_ms
+) {
+    unsigned long long now_ms;
+    unsigned long long deadline_ms;
+    if (mutex == NULL || timeout_ms == 0ULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (wls_monotonic_milliseconds(&now_ms) != 0) return -1;
+    if (now_ms > ULLONG_MAX - timeout_ms) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    deadline_ms = now_ms + timeout_ms;
+    for (;;) {
+        int lock_error = pthread_mutex_trylock(mutex);
+        unsigned long long remaining_ms;
+        unsigned long long delay_ms;
+        struct timespec delay;
+        if (lock_error == 0) return 0;
+        if (lock_error != EBUSY) {
+            errno = lock_error;
+            return -1;
+        }
+        if (wls_monotonic_milliseconds(&now_ms) != 0) return -1;
+        if (now_ms >= deadline_ms) {
+            errno = ETIMEDOUT;
+            return -1;
+        }
+        remaining_ms = deadline_ms - now_ms;
+        delay_ms = remaining_ms < WLS_FILE_LOCK_POLL_MILLISECONDS
+            ? remaining_ms
+            : WLS_FILE_LOCK_POLL_MILLISECONDS;
+        delay.tv_sec = 0;
+        delay.tv_nsec = (long)(delay_ms * 1000000ULL);
+        if (nanosleep(&delay, NULL) != 0 && errno != EINTR) return -1;
+    }
+}
+
 static int wls_registry_append(const char *home, const char *record)
 {
     char path[PATH_MAX];
@@ -1662,9 +1953,17 @@ static int wls_registry_append(const char *home, const char *record)
         return -1;
     }
     fd = open(path, O_RDWR | O_APPEND | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
-    if (fd < 0
-        || flock(fd, LOCK_EX) != 0
-        || fstat(fd, &status) != 0
+    if (fd < 0) goto cleanup;
+    if (wls_flock_bounded(
+            fd, LOCK_EX, WLS_FILE_LOCK_TIMEOUT_MILLISECONDS
+        ) != 0) {
+        int lock_error = errno;
+        close(fd);
+        errno = lock_error;
+        return -1;
+    }
+    locked = 1;
+    if (fstat(fd, &status) != 0
         || !S_ISREG(status.st_mode)
         || status.st_nlink != 1
         || status.st_uid != geteuid()
@@ -1674,7 +1973,6 @@ static int wls_registry_append(const char *home, const char *record)
         errno = EPERM;
         goto cleanup;
     }
-    locked = 1;
     original_size = status.st_size;
     if (original_size > 0) {
         char tail;
@@ -1722,9 +2020,16 @@ static int wls_registry_lookup(
     unsigned long revoked_generation = 0U;
     if (wls_registry_path(path, sizeof(path), home) != 0) return -1;
     fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0
-        || flock(fd, LOCK_SH) != 0
-        || fstat(fd, &status) != 0
+    if (fd < 0) goto cleanup;
+    if (wls_flock_bounded(
+            fd, LOCK_SH, WLS_FILE_LOCK_TIMEOUT_MILLISECONDS
+        ) != 0) {
+        int lock_error = errno;
+        close(fd);
+        errno = lock_error;
+        return -1;
+    }
+    if (fstat(fd, &status) != 0
         || !S_ISREG(status.st_mode)
         || status.st_nlink != 1
         || status.st_uid != geteuid()
@@ -2049,6 +2354,7 @@ static int wls_handle_action_v2(
     const char *channel,
     const struct wls_peer *peer,
     const char *home,
+    const char *fencing,
     const struct wls_controller_identity *controller_identity,
     char *reply,
     size_t reply_capacity
@@ -2101,9 +2407,17 @@ static int wls_security_open_locked(
     *fd = open(
         path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600
     );
-    if (*fd < 0
-        || flock(*fd, LOCK_EX) != 0
-        || fstat(*fd, &status) != 0
+    if (*fd < 0) return -1;
+    if (wls_flock_bounded(
+            *fd, LOCK_EX, WLS_FILE_LOCK_TIMEOUT_MILLISECONDS
+        ) != 0) {
+        int lock_error = errno;
+        close(*fd);
+        *fd = -1;
+        errno = lock_error;
+        return -1;
+    }
+    if (fstat(*fd, &status) != 0
         || !S_ISREG(status.st_mode)
         || status.st_nlink != 1
         || status.st_uid != geteuid()
@@ -2438,11 +2752,12 @@ static int wls_security_operation(
     unsigned long requested = 0U;
     struct wls_security_summary summary;
     int result = -1;
-    if (!wls_is_hex(tx, 32U) || !wls_is_hex(intent, 64U)
+    if (opcode == NULL
+        || !wls_is_hex(tx, 32U) || !wls_is_hex(intent, 64U)
         || !wls_security_value(kind)
         || wls_parse_unsigned(generation_text, 1, &requested) != 0
         || (strcmp(opcode, "SECURITY_COMMIT") == 0
-            && !wls_is_hex(anchor, 64U))) {
+            && (anchor == NULL || !wls_is_hex(anchor, 64U)))) {
         return wls_security_reply_error(
             reply, reply_capacity, "INVALID", opcode, tx, intent
         );
@@ -4471,6 +4786,1190 @@ denied:
     );
 }
 
+/* 0=acquired, 1=busy, -1=invalid/error. */
+static int wls_package_install_lock_acquire(const char *home, int *lock_fd)
+{
+    char trust_path[PATH_MAX];
+    struct stat trust_status;
+    struct stat opened_trust_status;
+    struct stat lock_status;
+    struct stat path_status;
+    int trust_fd = -1;
+    int fd = -1;
+    if (home == NULL || lock_fd == NULL
+        || snprintf(trust_path, sizeof(trust_path), "%s/trust", home)
+            >= (int)sizeof(trust_path)
+        || lstat(trust_path, &trust_status) != 0
+        || !S_ISDIR(trust_status.st_mode)
+        || S_ISLNK(trust_status.st_mode)) return -1;
+    trust_fd = open(
+        trust_path,
+        O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+    );
+    if (trust_fd < 0
+        || fstat(trust_fd, &opened_trust_status) != 0
+        || !S_ISDIR(opened_trust_status.st_mode)
+        || opened_trust_status.st_dev != trust_status.st_dev
+        || opened_trust_status.st_ino != trust_status.st_ino) goto denied;
+    fd = openat(
+        trust_fd,
+        "package-install.lock",
+        O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW,
+        0600
+    );
+    if (fd < 0
+        || fstat(fd, &lock_status) != 0
+        || fstatat(
+            trust_fd,
+            "package-install.lock",
+            &path_status,
+            AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || !S_ISREG(lock_status.st_mode)
+        || !S_ISREG(path_status.st_mode)
+        || lock_status.st_nlink != 1
+        || path_status.st_nlink != 1
+        || lock_status.st_dev != path_status.st_dev
+        || lock_status.st_ino != path_status.st_ino
+        || fchown(fd, trust_status.st_uid, trust_status.st_gid) != 0
+        || fchmod(fd, 0600) != 0
+        || fsync(fd) != 0
+        || fsync(trust_fd) != 0) goto denied;
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        int busy = errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR;
+        close(fd);
+        close(trust_fd);
+        return busy ? 1 : -1;
+    }
+    if (fstat(fd, &lock_status) != 0
+        || fstatat(
+            trust_fd,
+            "package-install.lock",
+            &path_status,
+            AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || !S_ISREG(lock_status.st_mode)
+        || !S_ISREG(path_status.st_mode)
+        || lock_status.st_nlink != 1
+        || path_status.st_nlink != 1
+        || lock_status.st_dev != path_status.st_dev
+        || lock_status.st_ino != path_status.st_ino) {
+        (void)flock(fd, LOCK_UN);
+        goto denied;
+    }
+    close(trust_fd);
+    *lock_fd = fd;
+    return 0;
+denied:
+    if (fd >= 0) close(fd);
+    if (trust_fd >= 0) close(trust_fd);
+    return -1;
+}
+
+enum wls_atomic_recovery_value_kind {
+    WLS_ATOMIC_VALUE_HEX32 = 1,
+    WLS_ATOMIC_VALUE_HEX64 = 2,
+    WLS_ATOMIC_VALUE_POSITIVE_DECIMAL = 3,
+    WLS_ATOMIC_VALUE_SLOT = 4,
+    WLS_ATOMIC_VALUE_CHOICE = 5,
+    WLS_ATOMIC_VALUE_HEX32_OR_DASH = 6,
+    WLS_ATOMIC_VALUE_HEX_DASH = 7,
+    WLS_ATOMIC_VALUE_LOWER_DASH = 8
+};
+
+struct wls_atomic_recovery_field {
+    const char *name;
+    enum wls_atomic_recovery_value_kind kind;
+    const char *choices;
+    size_t maximum;
+};
+
+struct wls_atomic_recovery_target {
+    const char *leaf;
+    const char *magic;
+    const struct wls_atomic_recovery_field *fields;
+    size_t field_count;
+    const char *alternate_magic;
+    const struct wls_atomic_recovery_field *alternate_fields;
+    size_t alternate_field_count;
+    size_t maximum;
+};
+
+struct wls_atomic_recovery_candidate {
+    char leaf[NAME_MAX + 1U];
+    size_t target_index;
+    int fd;
+    struct stat status;
+};
+
+#define WLS_ATOMIC_FIELD(name, kind) {name, kind, NULL, 0U}
+#define WLS_ATOMIC_CHOICE(name, choices) \
+    {name, WLS_ATOMIC_VALUE_CHOICE, choices, 0U}
+#define WLS_ATOMIC_BOUNDED(name, kind, maximum) {name, kind, NULL, maximum}
+
+static const struct wls_atomic_recovery_field wls_atomic_admin_stopped_fields[] = {
+    WLS_ATOMIC_FIELD("host_id", WLS_ATOMIC_VALUE_HEX32),
+    WLS_ATOMIC_FIELD("epoch", WLS_ATOMIC_VALUE_HEX32),
+    WLS_ATOMIC_FIELD("at", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("nonce", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("signature", WLS_ATOMIC_VALUE_HEX64)
+};
+
+static const struct wls_atomic_recovery_field wls_atomic_upgrade_observing_fields[] = {
+    WLS_ATOMIC_FIELD("intent_sha256", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("intent_nonce", WLS_ATOMIC_VALUE_HEX32),
+    WLS_ATOMIC_FIELD("from", WLS_ATOMIC_VALUE_SLOT),
+    WLS_ATOMIC_FIELD("to", WLS_ATOMIC_VALUE_SLOT),
+    WLS_ATOMIC_FIELD("runtime_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("boot_id", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("started_monotonic_ms", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("deadline_monotonic_ms", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL)
+};
+
+static const struct wls_atomic_recovery_field wls_atomic_upgrade_healthy_fields[] = {
+    WLS_ATOMIC_FIELD("intent_sha256", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("intent_nonce", WLS_ATOMIC_VALUE_HEX32),
+    WLS_ATOMIC_FIELD("from", WLS_ATOMIC_VALUE_SLOT),
+    WLS_ATOMIC_FIELD("to", WLS_ATOMIC_VALUE_SLOT),
+    WLS_ATOMIC_FIELD("runtime_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("boot_id", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("observation_deadline_monotonic_ms", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("healthy_monotonic_ms", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL)
+};
+
+static const struct wls_atomic_recovery_field wls_atomic_rollback_healthy_fields[] = {
+    WLS_ATOMIC_FIELD("intent_sha256", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("intent_nonce", WLS_ATOMIC_VALUE_HEX32),
+    WLS_ATOMIC_FIELD("from", WLS_ATOMIC_VALUE_SLOT),
+    WLS_ATOMIC_FIELD("to", WLS_ATOMIC_VALUE_SLOT),
+    WLS_ATOMIC_FIELD("active_runtime_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("boot_id", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("started_monotonic_ms", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("healthy_monotonic_ms", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL)
+};
+
+static const struct wls_atomic_recovery_field wls_atomic_controller_identity_fields[] = {
+    WLS_ATOMIC_FIELD("pid", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("start_id", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("slot", WLS_ATOMIC_VALUE_SLOT),
+    WLS_ATOMIC_FIELD("runtime_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("fencing_digest", WLS_ATOMIC_VALUE_HEX64)
+};
+
+static const struct wls_atomic_recovery_field wls_atomic_candidate_fence_fields[] = {
+    WLS_ATOMIC_CHOICE("status", "ARMED|CLEARED"),
+    WLS_ATOMIC_FIELD("controller_fencing_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("transaction_id", WLS_ATOMIC_VALUE_HEX32),
+    WLS_ATOMIC_FIELD("candidate_generation", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("config_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("config_path_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("active_slot", WLS_ATOMIC_VALUE_SLOT),
+    WLS_ATOMIC_FIELD("runtime_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_CHOICE(
+        "allowed_phase",
+        "ACTIVATING|SERVICE_TREE_RETIREMENT_PENDING"
+    ),
+    WLS_ATOMIC_FIELD("gateway_epoch", WLS_ATOMIC_VALUE_HEX32)
+};
+
+static const struct wls_atomic_recovery_field wls_atomic_process_attestation_fields[] = {
+    WLS_ATOMIC_FIELD("pid", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("start_id", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("binary_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("runtime_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("config_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("config_path_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("publication_generation", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_CHOICE("fence_kind", "ACTIVE|CANDIDATE"),
+    WLS_ATOMIC_FIELD("candidate_transaction_id", WLS_ATOMIC_VALUE_HEX32_OR_DASH),
+    WLS_ATOMIC_CHOICE(
+        "candidate_phase",
+        "ACTIVE|ACTIVATING|SERVICE_TREE_RETIREMENT_PENDING"
+    ),
+    WLS_ATOMIC_FIELD("candidate_fence_digest", WLS_ATOMIC_VALUE_HEX64)
+};
+
+static const struct wls_atomic_recovery_field wls_atomic_retirement_v1_fields[] = {
+    WLS_ATOMIC_CHOICE("status", "COMPLETE|INDETERMINATE"),
+    WLS_ATOMIC_FIELD("retirement_id", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("pid", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("start_id", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("attestation_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("binary_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("runtime_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("host_boot_id", WLS_ATOMIC_VALUE_HEX64)
+};
+
+static const struct wls_atomic_recovery_field wls_atomic_retirement_v2_fields[] = {
+    WLS_ATOMIC_CHOICE("status", "COMPLETE|INDETERMINATE"),
+    WLS_ATOMIC_FIELD("retirement_id", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("pid", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("start_id", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_FIELD("attestation_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("binary_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("runtime_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("host_boot_id", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("config_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("config_path_digest", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("publication_generation", WLS_ATOMIC_VALUE_POSITIVE_DECIMAL),
+    WLS_ATOMIC_BOUNDED("platform", WLS_ATOMIC_VALUE_LOWER_DASH, 15U),
+    WLS_ATOMIC_FIELD("service_id", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("requested_launcher_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("completed_launcher_generation", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("completed_host_boot_id", WLS_ATOMIC_VALUE_HEX64),
+    WLS_ATOMIC_FIELD("completed_runtime_generation", WLS_ATOMIC_VALUE_HEX64)
+};
+
+static const struct wls_atomic_recovery_target wls_atomic_recovery_targets[
+    WLS_ATOMIC_RECOVERY_TARGET_COUNT
+] = {
+    {
+        "admin-stopped.intent", "WLS-ADMIN-STOPPED/1",
+        wls_atomic_admin_stopped_fields,
+        sizeof(wls_atomic_admin_stopped_fields) / sizeof(wls_atomic_admin_stopped_fields[0]),
+        NULL, NULL, 0U, 640U
+    },
+    {
+        "upgrade-observing", "WLS-UPGRADE-OBSERVING/2",
+        wls_atomic_upgrade_observing_fields,
+        sizeof(wls_atomic_upgrade_observing_fields) / sizeof(wls_atomic_upgrade_observing_fields[0]),
+        NULL, NULL, 0U, 768U
+    },
+    {
+        "upgrade-healthy", "WLS-UPGRADE-HEALTHY/2",
+        wls_atomic_upgrade_healthy_fields,
+        sizeof(wls_atomic_upgrade_healthy_fields) / sizeof(wls_atomic_upgrade_healthy_fields[0]),
+        NULL, NULL, 0U, 768U
+    },
+    {
+        "upgrade-rollback-healthy", "WLS-UPGRADE-ROLLBACK-HEALTHY/2",
+        wls_atomic_rollback_healthy_fields,
+        sizeof(wls_atomic_rollback_healthy_fields) / sizeof(wls_atomic_rollback_healthy_fields[0]),
+        NULL, NULL, 0U, 768U
+    },
+    {
+        "controller-process.identity", "WLS-CONTROLLER-PROCESS/2",
+        wls_atomic_controller_identity_fields,
+        sizeof(wls_atomic_controller_identity_fields) / sizeof(wls_atomic_controller_identity_fields[0]),
+        NULL, NULL, 0U, 1024U
+    },
+    {
+        "process-attestation-candidate.fence", "WLS-PROCESS-ATTEST-CANDIDATE/1",
+        wls_atomic_candidate_fence_fields,
+        sizeof(wls_atomic_candidate_fence_fields) / sizeof(wls_atomic_candidate_fence_fields[0]),
+        NULL, NULL, 0U, 2048U
+    },
+    {
+        "process-attestation.receipt", "WLS-PROCESS-ATTEST/3",
+        wls_atomic_process_attestation_fields,
+        sizeof(wls_atomic_process_attestation_fields) / sizeof(wls_atomic_process_attestation_fields[0]),
+        NULL, NULL, 0U, 2048U
+    },
+    {
+        "process-tree-retirement.receipt", "WLS-PROCESS-TREE-RETIRE/1",
+        wls_atomic_retirement_v1_fields,
+        sizeof(wls_atomic_retirement_v1_fields) / sizeof(wls_atomic_retirement_v1_fields[0]),
+        "WLS-PROCESS-TREE-RETIRE/2", wls_atomic_retirement_v2_fields,
+        sizeof(wls_atomic_retirement_v2_fields) / sizeof(wls_atomic_retirement_v2_fields[0]),
+        2048U
+    },
+    {"broker-fencing-token", NULL, NULL, 0U, NULL, NULL, 0U, 65U}
+};
+
+static int wls_atomic_recovery_choice_valid(
+    const char *value,
+    size_t length,
+    const char *choices
+) {
+    const char *choice = choices;
+    if (value == NULL || length == 0U || choices == NULL) return 0;
+    while (*choice != '\0') {
+        const char *separator = strchr(choice, '|');
+        size_t choice_length = separator == NULL
+            ? strlen(choice)
+            : (size_t)(separator - choice);
+        if (choice_length == length && memcmp(choice, value, length) == 0) {
+            return 1;
+        }
+        if (separator == NULL) break;
+        choice = separator + 1U;
+    }
+    return 0;
+}
+
+static int wls_atomic_recovery_value_valid(
+    const char *value,
+    size_t length,
+    const struct wls_atomic_recovery_field *field
+) {
+    size_t index;
+    if (value == NULL || field == NULL || length == 0U) return 0;
+    switch (field->kind) {
+        case WLS_ATOMIC_VALUE_HEX32:
+        case WLS_ATOMIC_VALUE_HEX64: {
+            size_t expected = field->kind == WLS_ATOMIC_VALUE_HEX32 ? 32U : 64U;
+            if (length != expected) return 0;
+            for (index = 0U; index < length; index++) {
+                if (!((value[index] >= '0' && value[index] <= '9')
+                        || (value[index] >= 'a' && value[index] <= 'f'))) return 0;
+            }
+            return 1;
+        }
+        case WLS_ATOMIC_VALUE_POSITIVE_DECIMAL:
+            if (length > 20U || value[0] == '0') return 0;
+            for (index = 0U; index < length; index++) {
+                if (value[index] < '0' || value[index] > '9') return 0;
+            }
+            return 1;
+        case WLS_ATOMIC_VALUE_SLOT:
+            return length == 1U && (value[0] == 'A' || value[0] == 'B');
+        case WLS_ATOMIC_VALUE_CHOICE:
+            return wls_atomic_recovery_choice_valid(value, length, field->choices);
+        case WLS_ATOMIC_VALUE_HEX32_OR_DASH:
+            if (length == 1U && value[0] == '-') return 1;
+            if (length != 32U) return 0;
+            for (index = 0U; index < length; index++) {
+                if (!((value[index] >= '0' && value[index] <= '9')
+                        || (value[index] >= 'a' && value[index] <= 'f'))) return 0;
+            }
+            return 1;
+        case WLS_ATOMIC_VALUE_HEX_DASH:
+        case WLS_ATOMIC_VALUE_LOWER_DASH:
+            if (field->maximum == 0U || length > field->maximum) return 0;
+            for (index = 0U; index < length; index++) {
+                int allowed = field->kind == WLS_ATOMIC_VALUE_HEX_DASH
+                    ? ((value[index] >= '0' && value[index] <= '9')
+                        || (value[index] >= 'a' && value[index] <= 'f')
+                        || value[index] == '-')
+                    : ((value[index] >= 'a' && value[index] <= 'z')
+                        || value[index] == '-');
+                if (!allowed) return 0;
+            }
+            return 1;
+    }
+    return 0;
+}
+
+static int wls_atomic_recovery_schema_valid(
+    const unsigned char *contents,
+    size_t length,
+    const char *magic,
+    const struct wls_atomic_recovery_field *fields,
+    size_t field_count
+) {
+    size_t cursor;
+    size_t index;
+    size_t magic_length;
+    if (contents == NULL || magic == NULL || fields == NULL || field_count == 0U) {
+        return 0;
+    }
+    magic_length = strlen(magic);
+    if (length <= magic_length
+        || memcmp(contents, magic, magic_length) != 0
+        || contents[magic_length] != '\n') return 0;
+    cursor = magic_length + 1U;
+    for (index = 0U; index < field_count; index++) {
+        size_t name_length = strlen(fields[index].name);
+        const unsigned char *newline;
+        size_t value_start;
+        if (cursor + name_length + 2U > length
+            || memcmp(contents + cursor, fields[index].name, name_length) != 0
+            || contents[cursor + name_length] != '=') return 0;
+        value_start = cursor + name_length + 1U;
+        newline = memchr(contents + value_start, '\n', length - value_start);
+        if (newline == NULL
+            || !wls_atomic_recovery_value_valid(
+                (const char *)contents + value_start,
+                (size_t)(newline - (contents + value_start)),
+                &fields[index]
+            )) return 0;
+        cursor = (size_t)(newline - contents) + 1U;
+    }
+    return cursor == length;
+}
+
+static int wls_atomic_recovery_payload_valid(
+    const struct wls_atomic_recovery_target *target,
+    const unsigned char *contents,
+    size_t length
+) {
+    if (target == NULL || contents == NULL || length == 0U
+        || length > target->maximum || memchr(contents, '\0', length) != NULL) {
+        return 0;
+    }
+    if (target->magic == NULL) {
+        size_t hex_length = length == 65U && contents[64] == '\n' ? 64U : length;
+        size_t index;
+        if (hex_length != 64U) return 0;
+        for (index = 0U; index < hex_length; index++) {
+            if (!((contents[index] >= '0' && contents[index] <= '9')
+                    || (contents[index] >= 'a' && contents[index] <= 'f'))) return 0;
+        }
+        return 1;
+    }
+    if (wls_atomic_recovery_schema_valid(
+            contents, length, target->magic, target->fields, target->field_count
+        )) return 1;
+    return target->alternate_magic != NULL
+        && wls_atomic_recovery_schema_valid(
+            contents,
+            length,
+            target->alternate_magic,
+            target->alternate_fields,
+            target->alternate_field_count
+        );
+}
+
+static int wls_atomic_recovery_candidate_name(
+    const char *leaf,
+    size_t *target_index,
+    int *reserved_prefix
+) {
+    size_t target_count = WLS_ATOMIC_RECOVERY_TARGET_COUNT;
+    size_t index;
+    if (leaf == NULL || target_index == NULL || reserved_prefix == NULL) return -1;
+    *target_index = target_count;
+    *reserved_prefix = 0;
+    for (index = 0U; index < target_count; index++) {
+        const char *cursor;
+        size_t pid_length = 0U;
+        size_t suffix_index;
+        size_t prefix_length;
+        char prefix[NAME_MAX + 1U];
+        int written = snprintf(
+            prefix,
+            sizeof(prefix),
+            "%s.candidate.",
+            wls_atomic_recovery_targets[index].leaf
+        );
+        if (written <= 0 || written >= (int)sizeof(prefix)) return -1;
+        prefix_length = (size_t)written;
+        if (strncmp(leaf, prefix, prefix_length) != 0) continue;
+        *reserved_prefix = 1;
+        cursor = leaf + prefix_length;
+        if (*cursor < '1' || *cursor > '9') return 0;
+        while (cursor[pid_length] >= '0' && cursor[pid_length] <= '9') {
+            if (++pid_length > 10U) return 0;
+        }
+        if (cursor[pid_length] != '.') return 0;
+        cursor += pid_length + 1U;
+        for (suffix_index = 0U; suffix_index < 16U; suffix_index++) {
+            if (!((cursor[suffix_index] >= '0' && cursor[suffix_index] <= '9')
+                    || (cursor[suffix_index] >= 'a' && cursor[suffix_index] <= 'f'))) return 0;
+        }
+        if (cursor[16] != '\0') return 0;
+        *target_index = index;
+        return 1;
+    }
+    return 0;
+}
+
+static int wls_atomic_recovery_status_same(
+    const struct stat *left,
+    const struct stat *right
+) {
+    if (left == NULL || right == NULL) return 0;
+    return left->st_dev == right->st_dev
+        && left->st_ino == right->st_ino
+        && left->st_size == right->st_size
+        && left->st_mode == right->st_mode
+        && left->st_nlink == right->st_nlink
+        && left->st_uid == right->st_uid
+        && left->st_gid == right->st_gid
+#if defined(__APPLE__) || defined(__FreeBSD__)
+        && left->st_mtimespec.tv_sec == right->st_mtimespec.tv_sec
+        && left->st_mtimespec.tv_nsec == right->st_mtimespec.tv_nsec
+        && left->st_ctimespec.tv_sec == right->st_ctimespec.tv_sec
+        && left->st_ctimespec.tv_nsec == right->st_ctimespec.tv_nsec
+#else
+        && left->st_mtim.tv_sec == right->st_mtim.tv_sec
+        && left->st_mtim.tv_nsec == right->st_mtim.tv_nsec
+        && left->st_ctim.tv_sec == right->st_ctim.tv_sec
+        && left->st_ctim.tv_nsec == right->st_ctim.tv_nsec
+#endif
+        ;
+}
+
+static int wls_atomic_recovery_acl_safe(int fd)
+{
+#if defined(__APPLE__)
+    acl_t acl;
+    acl_entry_t entry;
+    int entry_status;
+    int saved_errno;
+    int free_status;
+    errno = 0;
+    acl = acl_get_fd_np(fd, ACL_TYPE_EXTENDED);
+    if (acl == NULL) return errno == ENOENT || errno == EINVAL;
+    errno = 0;
+    entry_status = acl_get_entry(acl, ACL_FIRST_ENTRY, &entry);
+    saved_errno = errno;
+    free_status = acl_free(acl);
+    return entry_status < 0
+        && (saved_errno == ENOENT || saved_errno == EINVAL)
+        && free_status == 0;
+#else
+    (void)fd;
+    return 1;
+#endif
+}
+
+static int wls_atomic_recovery_private_file_valid(
+    int fd,
+    const struct stat *status,
+    size_t maximum,
+    int allow_empty
+) {
+    mode_t permissions;
+    if (fd < 0 || status == NULL || maximum == 0U
+        || !S_ISREG(status->st_mode)
+        || status->st_nlink != 1
+        || (status->st_uid != 0 && status->st_uid != geteuid())
+        || status->st_size < (allow_empty ? 0 : 1)
+        || (uint64_t)status->st_size > maximum
+        || !wls_atomic_recovery_acl_safe(fd)) return 0;
+    permissions = status->st_mode & 0777;
+    return permissions == 0600 || permissions == 0640;
+}
+
+static int wls_atomic_recovery_committed_valid(
+    int trust_fd,
+    const struct wls_atomic_recovery_target *target
+) {
+    int fd = -1;
+    unsigned char *contents = NULL;
+    struct stat before;
+    struct stat after;
+    struct stat path_status;
+    int result = 0;
+    if (trust_fd < 0 || target == NULL
+        || target->maximum > WLS_ATOMIC_RECOVERY_PAYLOAD_MAXIMUM) return 0;
+    fd = openat(trust_fd, target->leaf, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0
+        || fstat(fd, &before) != 0
+        || !wls_atomic_recovery_private_file_valid(fd, &before, target->maximum, 0)) {
+        goto cleanup;
+    }
+    contents = calloc((size_t)before.st_size + 1U, 1U);
+    if (contents == NULL
+        || wls_read_exact(fd, (char *)contents, (size_t)before.st_size) != 0
+        || fstat(fd, &after) != 0
+        || fstatat(trust_fd, target->leaf, &path_status, AT_SYMLINK_NOFOLLOW) != 0
+        || !wls_atomic_recovery_status_same(&before, &after)
+        || !wls_atomic_recovery_status_same(&before, &path_status)
+        || !wls_atomic_recovery_payload_valid(
+            target, contents, (size_t)before.st_size
+        )) goto cleanup;
+    result = 1;
+cleanup:
+    if (contents != NULL) {
+        sodium_memzero(contents, (size_t)before.st_size + 1U);
+        free(contents);
+    }
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+static int wls_atomic_recovery_candidate_unchanged(
+    int trust_fd,
+    const struct wls_atomic_recovery_candidate *candidate
+) {
+    struct stat opened_status;
+    struct stat path_status;
+    return trust_fd >= 0 && candidate != NULL && candidate->fd >= 0
+        && fstat(candidate->fd, &opened_status) == 0
+        && fstatat(
+            trust_fd,
+            candidate->leaf,
+            &path_status,
+            AT_SYMLINK_NOFOLLOW
+        ) == 0
+        && wls_atomic_recovery_status_same(&candidate->status, &opened_status)
+        && wls_atomic_recovery_status_same(&candidate->status, &path_status);
+}
+
+static int wls_recover_atomic_write_candidates_locked(const char *home)
+{
+    char trust_path[PATH_MAX];
+    struct stat trust_before;
+    struct stat trust_opened;
+    struct wls_atomic_recovery_candidate candidates[
+        WLS_ATOMIC_RECOVERY_CANDIDATES_MAXIMUM
+    ];
+    unsigned char target_has_candidates[WLS_ATOMIC_RECOVERY_TARGET_COUNT];
+    int trust_fd = -1;
+    int directory_fd = -1;
+    DIR *directory = NULL;
+    struct dirent *entry;
+    size_t raw_entries = 0U;
+    size_t candidate_count = 0U;
+    size_t target_count = WLS_ATOMIC_RECOVERY_TARGET_COUNT;
+    size_t index;
+    int result = -1;
+    memset(candidates, 0, sizeof(candidates));
+    memset(target_has_candidates, 0, sizeof(target_has_candidates));
+    for (index = 0U; index < WLS_ATOMIC_RECOVERY_CANDIDATES_MAXIMUM; index++) {
+        candidates[index].fd = -1;
+    }
+    if (home == NULL
+        || snprintf(trust_path, sizeof(trust_path), "%s/trust", home)
+            >= (int)sizeof(trust_path)
+        || lstat(trust_path, &trust_before) != 0
+        || !S_ISDIR(trust_before.st_mode)
+        || S_ISLNK(trust_before.st_mode)
+        || (trust_before.st_uid != 0 && trust_before.st_uid != geteuid())
+        || (trust_before.st_mode & 0022) != 0) {
+        errno = EPERM;
+        goto cleanup;
+    }
+    trust_fd = open(
+        trust_path,
+        O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+    );
+    if (trust_fd < 0
+        || fstat(trust_fd, &trust_opened) != 0
+        || trust_opened.st_dev != trust_before.st_dev
+        || trust_opened.st_ino != trust_before.st_ino) goto cleanup;
+    directory_fd = fcntl(trust_fd, F_DUPFD_CLOEXEC, 0);
+    if (directory_fd < 0 || (directory = fdopendir(directory_fd)) == NULL) {
+        if (directory_fd >= 0) close(directory_fd);
+        directory_fd = -1;
+        goto cleanup;
+    }
+    directory_fd = -1;
+
+    /* Phase 1: discover and validate every exact candidate and committed pair. */
+    for (;;) {
+        size_t target_index = target_count;
+        int reserved_prefix = 0;
+        int name_status;
+        struct stat candidate_status;
+        struct stat path_status;
+        int candidate_fd;
+        errno = 0;
+        entry = readdir(directory);
+        if (entry == NULL) {
+            if (errno != 0) goto cleanup;
+            break;
+        }
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        if (++raw_entries > WLS_ATOMIC_RECOVERY_DIRECTORY_ENTRIES_MAXIMUM) {
+            errno = E2BIG;
+            goto cleanup;
+        }
+        name_status = wls_atomic_recovery_candidate_name(
+            entry->d_name, &target_index, &reserved_prefix
+        );
+        if (name_status < 0 || (reserved_prefix && name_status != 1)) {
+            errno = EPROTO;
+            goto cleanup;
+        }
+        if (target_index == target_count) continue;
+        if (candidate_count >= WLS_ATOMIC_RECOVERY_CANDIDATES_MAXIMUM) {
+            errno = E2BIG;
+            goto cleanup;
+        }
+        candidate_fd = openat(
+            trust_fd,
+            entry->d_name,
+            O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+        );
+        if (candidate_fd < 0
+            || fstat(candidate_fd, &candidate_status) != 0
+            || fstatat(
+                trust_fd,
+                entry->d_name,
+                &path_status,
+                AT_SYMLINK_NOFOLLOW
+            ) != 0
+            || !S_ISREG(candidate_status.st_mode)
+            || candidate_status.st_nlink != 1
+            || (candidate_status.st_uid != 0
+                && candidate_status.st_uid != geteuid())
+            || ((candidate_status.st_mode & 0777) != 0600
+                && (candidate_status.st_mode & 0777) != 0640)
+            || candidate_status.st_size < 0
+            || (uint64_t)candidate_status.st_size
+                > wls_atomic_recovery_targets[target_index].maximum
+            || !wls_atomic_recovery_acl_safe(candidate_fd)
+            || !wls_atomic_recovery_status_same(
+                &candidate_status, &path_status
+            )) {
+            if (candidate_fd >= 0) close(candidate_fd);
+            errno = EPERM;
+            goto cleanup;
+        }
+        if (strlen(entry->d_name) >= sizeof(candidates[candidate_count].leaf)) {
+            close(candidate_fd);
+            errno = ENAMETOOLONG;
+            goto cleanup;
+        }
+        memcpy(
+            candidates[candidate_count].leaf,
+            entry->d_name,
+            strlen(entry->d_name) + 1U
+        );
+        candidates[candidate_count].target_index = target_index;
+        candidates[candidate_count].fd = candidate_fd;
+        candidates[candidate_count].status = candidate_status;
+        target_has_candidates[target_index] = 1U;
+        candidate_count++;
+    }
+    closedir(directory);
+    directory = NULL;
+    for (index = 0U; index < target_count; index++) {
+        if (target_has_candidates[index]
+            && !wls_atomic_recovery_committed_valid(
+                trust_fd, &wls_atomic_recovery_targets[index]
+            )) {
+            errno = EPROTO;
+            goto cleanup;
+        }
+    }
+
+    /* Phase 2: revalidate the complete closure before the first unlink. */
+    for (index = 0U; index < candidate_count; index++) {
+        if (!wls_atomic_recovery_candidate_unchanged(
+                trust_fd, &candidates[index]
+            )) {
+            errno = ESTALE;
+            goto cleanup;
+        }
+    }
+    for (index = 0U; index < target_count; index++) {
+        if (target_has_candidates[index]
+            && !wls_atomic_recovery_committed_valid(
+                trust_fd, &wls_atomic_recovery_targets[index]
+            )) {
+            errno = EPROTO;
+            goto cleanup;
+        }
+    }
+
+    /* Phase 3: delete only after every candidate and committed target passed. */
+    for (index = 0U; index < candidate_count; index++) {
+        if (unlinkat(trust_fd, candidates[index].leaf, 0) != 0) goto cleanup;
+    }
+    if (candidate_count > 0U && fsync(trust_fd) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (directory != NULL) closedir(directory);
+    else if (directory_fd >= 0) close(directory_fd);
+    for (index = 0U; index < WLS_ATOMIC_RECOVERY_CANDIDATES_MAXIMUM; index++) {
+        if (candidates[index].fd >= 0) close(candidates[index].fd);
+    }
+    if (trust_fd >= 0) close(trust_fd);
+    return result;
+}
+
+static int wls_recover_atomic_write_candidates(const char *home)
+{
+    int lock_fd = -1;
+    int lock_status;
+    int saved_errno = EIO;
+    int result = -1;
+    lock_status = wls_package_install_lock_acquire(home, &lock_fd);
+    if (lock_status != 0) {
+        errno = lock_status == 1 ? EBUSY : EPERM;
+        return -1;
+    }
+    result = wls_recover_atomic_write_candidates_locked(home);
+    saved_errno = errno;
+    (void)flock(lock_fd, LOCK_UN);
+    close(lock_fd);
+    if (result != 0) errno = saved_errno;
+    return result;
+}
+
+static int wls_parse_positive_decimal_ll(const char *value, long long *parsed)
+{
+    char *end = NULL;
+    unsigned long long number;
+    size_t length;
+    if (value == NULL || parsed == NULL
+        || (length = strlen(value)) < 1U || length > 19U
+        || value[0] == '0') return -1;
+    errno = 0;
+    number = strtoull(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0'
+        || number == 0ULL || number > (unsigned long long)LLONG_MAX) return -1;
+    *parsed = (long long)number;
+    return 0;
+}
+
+static int wls_rollback_request_parse(
+    const unsigned char *contents,
+    size_t length,
+    const struct wls_upgrade_binding *binding,
+    struct wls_rollback_request *request
+) {
+    char from[2];
+    char to[2];
+    unsigned char digest[crypto_hash_sha256_BYTES];
+    int consumed = 0;
+    int fields;
+    if (contents == NULL || binding == NULL || request == NULL
+        || length < 1U || length > 512U) return -1;
+    memset(request, 0, sizeof(*request));
+    fields = sscanf(
+        (const char *)contents,
+        "WLS-UPGRADE-ROLLBACK/2\n"
+        "intent_sha256=%64[0-9a-f]\n"
+        "intent_nonce=%32[0-9a-f]\n"
+        "from=%1[AB]\nto=%1[AB]\nat=%lld\n"
+        "request_nonce=%32[0-9a-f]\n%n",
+        request->intent_sha256,
+        request->intent_nonce,
+        from,
+        to,
+        &request->requested_at,
+        request->request_nonce,
+        &consumed
+    );
+    if (fields != 6 || consumed != (int)length
+        || strcmp(request->intent_sha256, binding->intent_sha256) != 0
+        || strcmp(request->intent_nonce, binding->nonce) != 0
+        || from[0] != binding->to || to[0] != binding->from
+        || request->requested_at < binding->prepared_at
+        || request->requested_at > binding->total_deadline
+        || !wls_is_hex(request->request_nonce, 32U)
+        || crypto_hash_sha256(
+            digest,
+            contents,
+            (unsigned long long)length
+        ) != 0
+        || sodium_bin2hex(
+            request->request_sha256,
+            sizeof(request->request_sha256),
+            digest,
+            sizeof(digest)
+        ) == NULL) {
+        sodium_memzero(digest, sizeof(digest));
+        return -1;
+    }
+    request->from = from[0];
+    request->to = to[0];
+    sodium_memzero(digest, sizeof(digest));
+    return 0;
+}
+
+/*
+ * Inspect and collect retained ReplaceFileW evidence for the exact rollback
+ * request. Missing or malformed current state fails before any backup is
+ * removed. The caller must hold trust/package-install.lock.
+ */
+static int wls_rollback_request_reconcile_existing(
+    const char *home,
+    const struct wls_upgrade_binding *binding,
+    struct wls_rollback_request *request,
+    int *present,
+    int *cleaned
+) {
+    static const char target_leaf[] = "upgrade-rollback.request";
+    static const char backup_prefix[] = "upgrade-rollback.request.wls-backup-";
+    char state_path[PATH_MAX];
+    char target_path[PATH_MAX];
+    char backups[WLS_ROLLBACK_RECOVERY_BACKUPS_MAXIMUM][sizeof(backup_prefix) + 16U];
+    struct stat state_status;
+    struct stat opened_state_status;
+    struct stat target_before;
+    struct stat target_after;
+    int state_fd = -1;
+    int directory_fd = -1;
+    DIR *directory = NULL;
+    struct dirent *entry;
+    unsigned char *contents = NULL;
+    size_t length = 0U;
+    size_t backup_count = 0U;
+    size_t visited = 0U;
+    size_t index;
+    int target_exists = 0;
+    int result = -1;
+    if (home == NULL || binding == NULL || request == NULL
+        || present == NULL || cleaned == NULL
+        || snprintf(state_path, sizeof(state_path), "%s/state", home)
+            >= (int)sizeof(state_path)
+        || snprintf(target_path, sizeof(target_path), "%s/%s", state_path, target_leaf)
+            >= (int)sizeof(target_path)
+        || lstat(state_path, &state_status) != 0
+        || !S_ISDIR(state_status.st_mode)
+        || S_ISLNK(state_status.st_mode)) return -1;
+    *present = 0;
+    *cleaned = 0;
+    state_fd = open(state_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    if (state_fd < 0 || fstat(state_fd, &opened_state_status) != 0
+        || !S_ISDIR(opened_state_status.st_mode)
+        || opened_state_status.st_dev != state_status.st_dev
+        || opened_state_status.st_ino != state_status.st_ino) goto cleanup;
+    directory_fd = dup(state_fd);
+    if (directory_fd < 0 || (directory = fdopendir(directory_fd)) == NULL) goto cleanup;
+    directory_fd = -1;
+    errno = 0;
+    while ((entry = readdir(directory)) != NULL) {
+        size_t leaf_length;
+        struct stat backup_status;
+        if (++visited > WLS_ROLLBACK_STATE_DIRECTORY_ENTRIES_MAXIMUM) goto cleanup;
+        if (strncmp(entry->d_name, backup_prefix, sizeof(backup_prefix) - 1U) != 0) {
+            continue;
+        }
+        leaf_length = strlen(entry->d_name);
+        if (leaf_length != sizeof(backup_prefix) - 1U + 16U
+            || !wls_is_hex(entry->d_name + sizeof(backup_prefix) - 1U, 16U)
+            || backup_count >= WLS_ROLLBACK_RECOVERY_BACKUPS_MAXIMUM
+            || fstatat(
+                state_fd,
+                entry->d_name,
+                &backup_status,
+                AT_SYMLINK_NOFOLLOW
+            ) != 0
+            || !S_ISREG(backup_status.st_mode)
+            || backup_status.st_nlink != 1
+            || backup_status.st_size < 1
+            || backup_status.st_size > 512) goto cleanup;
+        memcpy(backups[backup_count], entry->d_name, leaf_length + 1U);
+        backup_count++;
+    }
+    if (errno != 0) goto cleanup;
+    closedir(directory);
+    directory = NULL;
+
+    if (fstatat(state_fd, target_leaf, &target_before, AT_SYMLINK_NOFOLLOW) == 0) {
+        target_exists = 1;
+        if (!S_ISREG(target_before.st_mode) || target_before.st_nlink != 1
+            || target_before.st_size < 1 || target_before.st_size > 512
+            || wls_read_file(target_path, 512U, &contents, &length) != 0
+            || wls_rollback_request_parse(contents, length, binding, request) != 0
+            || fstatat(state_fd, target_leaf, &target_after, AT_SYMLINK_NOFOLLOW) != 0
+            || target_after.st_dev != target_before.st_dev
+            || target_after.st_ino != target_before.st_ino
+            || target_after.st_size != target_before.st_size) goto cleanup;
+        *present = 1;
+    } else if (errno != ENOENT || backup_count > 0U) {
+        goto cleanup;
+    }
+    if (!target_exists && backup_count == 0U) {
+        result = 0;
+        goto cleanup;
+    }
+    for (index = 0U; index < backup_count; index++) {
+        if (fstatat(state_fd, target_leaf, &target_after, AT_SYMLINK_NOFOLLOW) != 0
+            || target_after.st_dev != target_before.st_dev
+            || target_after.st_ino != target_before.st_ino
+            || target_after.st_size != target_before.st_size
+            || unlinkat(state_fd, backups[index], 0) != 0) goto cleanup;
+    }
+    if (backup_count > 0U && fsync(state_fd) != 0) goto cleanup;
+    *cleaned = backup_count > 0U;
+    result = 0;
+cleanup:
+    if (contents != NULL) {
+        sodium_memzero(contents, length);
+        free(contents);
+    }
+    if (directory != NULL) closedir(directory);
+    if (directory_fd >= 0) close(directory_fd);
+    if (state_fd >= 0) close(state_fd);
+    return result;
+}
+
+static int wls_rollback_request_publish_new(
+    const char *home,
+    const char *contents,
+    size_t length
+) {
+    char state_path[PATH_MAX];
+    char temporary[96];
+    struct stat state_status;
+    struct stat opened_state_status;
+    unsigned long long nonce = 0ULL;
+    int state_fd = -1;
+    int temporary_fd = -1;
+    int linked = 0;
+    int result = -1;
+    randombytes_buf(&nonce, sizeof(nonce));
+    if (home == NULL || contents == NULL || length < 1U || length > 512U
+        || snprintf(state_path, sizeof(state_path), "%s/state", home)
+            >= (int)sizeof(state_path)
+        || snprintf(
+            temporary,
+            sizeof(temporary),
+            "upgrade-rollback.request.candidate.%ld.%016llx",
+            (long)getpid(),
+            nonce
+        ) >= (int)sizeof(temporary)
+        || lstat(state_path, &state_status) != 0
+        || !S_ISDIR(state_status.st_mode)
+        || S_ISLNK(state_status.st_mode)) return -1;
+    state_fd = open(state_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    if (state_fd < 0 || fstat(state_fd, &opened_state_status) != 0
+        || opened_state_status.st_dev != state_status.st_dev
+        || opened_state_status.st_ino != state_status.st_ino) goto cleanup;
+    temporary_fd = openat(
+        state_fd,
+        temporary,
+        O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+        0600
+    );
+    if (temporary_fd < 0
+        || wls_write_all(temporary_fd, contents, length) != 0
+        || fchown(temporary_fd, state_status.st_uid, state_status.st_gid) != 0
+        || fchmod(temporary_fd, 0600) != 0
+        || fsync(temporary_fd) != 0
+        || linkat(
+            state_fd,
+            temporary,
+            state_fd,
+            "upgrade-rollback.request",
+            0
+        ) != 0) goto cleanup;
+    linked = 1;
+    if (fsync(state_fd) != 0
+        || unlinkat(state_fd, temporary, 0) != 0
+        || fsync(state_fd) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (temporary_fd >= 0) close(temporary_fd);
+    if (state_fd >= 0) {
+        if (result != 0 && !linked) (void)unlinkat(state_fd, temporary, 0);
+        close(state_fd);
+    }
+    return result;
+}
+
+static int wls_rollback_request_action_v2(
+    const char *home,
+    const char *request_nonce,
+    const char *intent_digest,
+    const char *intent_nonce,
+    const char *from,
+    const char *to,
+    const char *requested_at_text,
+    char *reply,
+    size_t reply_capacity
+) {
+    struct wls_upgrade_binding binding;
+    struct wls_rollback_request request;
+    char active_path[PATH_MAX];
+    unsigned char *active_contents = NULL;
+    size_t active_length = 0U;
+    char record[512];
+    long long requested_at = 0;
+    long long now = (long long)time(NULL);
+    int record_length;
+    int lock_fd = -1;
+    int lock_status;
+    int present = 0;
+    int cleaned = 0;
+    int written;
+    const char *error_code = "ROLLBACK_REQUEST_REJECTED";
+    if (home == NULL || reply == NULL || reply_capacity < 256U
+        || !wls_is_hex(request_nonce, 32U)
+        || !wls_is_hex(intent_digest, 64U)
+        || !wls_is_hex(intent_nonce, 32U)
+        || from == NULL || to == NULL
+        || strlen(from) != 1U || strlen(to) != 1U
+        || (from[0] != 'A' && from[0] != 'B')
+        || (to[0] != 'A' && to[0] != 'B')
+        || from[0] == to[0]
+        || wls_parse_positive_decimal_ll(requested_at_text, &requested_at) != 0
+        || now < 1) goto denied;
+    lock_status = wls_package_install_lock_acquire(home, &lock_fd);
+    if (lock_status != 0) {
+        error_code = lock_status > 0
+            ? "ROLLBACK_REQUEST_BUSY"
+            : "ROLLBACK_REQUEST_LOCK_FAILED";
+        goto denied;
+    }
+    if (wls_upgrade_binding_read(home, &binding) != 1
+        || !binding.present
+        || strcmp(intent_digest, binding.intent_sha256) != 0
+        || strcmp(intent_nonce, binding.nonce) != 0
+        || from[0] != binding.to || to[0] != binding.from
+        || requested_at < binding.prepared_at
+        || requested_at > binding.total_deadline
+        || requested_at > now
+        || snprintf(active_path, sizeof(active_path), "%s/trust/active-slot", home)
+            >= (int)sizeof(active_path)
+        || wls_read_file(active_path, 4U, &active_contents, &active_length) != 0
+        || !((active_length == 1U || active_length == 2U)
+            && active_contents[0] == (unsigned char)from[0]
+            && (active_length == 1U || active_contents[1] == '\n'))
+        || wls_rollback_request_reconcile_existing(
+            home,
+            &binding,
+            &request,
+            &present,
+            &cleaned
+        ) != 0) goto denied;
+    if (!present) {
+        record_length = snprintf(
+            record,
+            sizeof(record),
+            "WLS-UPGRADE-ROLLBACK/2\n"
+            "intent_sha256=%s\nintent_nonce=%s\n"
+            "from=%c\nto=%c\nat=%lld\nrequest_nonce=%s\n",
+            binding.intent_sha256,
+            binding.nonce,
+            binding.to,
+            binding.from,
+            requested_at,
+            request_nonce
+        );
+        if (record_length <= 0 || record_length >= (int)sizeof(record)
+            || wls_rollback_request_publish_new(
+                home,
+                record,
+                (size_t)record_length
+            ) != 0
+            || wls_rollback_request_reconcile_existing(
+                home,
+                &binding,
+                &request,
+                &present,
+                &cleaned
+            ) != 0
+            || !present) goto denied;
+    }
+    (void)flock(lock_fd, LOCK_UN);
+    close(lock_fd);
+    lock_fd = -1;
+    written = snprintf(
+        reply,
+        reply_capacity,
+        "WLS-ACTION/2\tOK\tROLLBACK_REQUEST\t%s\t%s\t%s\t%c\t%c\t%lld\t%s\t%s\n",
+        request.request_nonce,
+        request.intent_sha256,
+        request.intent_nonce,
+        request.from,
+        request.to,
+        request.requested_at,
+        request.request_sha256,
+        cleaned ? "deleted" : "not_applicable"
+    );
+    if (active_contents != NULL) free(active_contents);
+    sodium_memzero(&binding, sizeof(binding));
+    sodium_memzero(&request, sizeof(request));
+    return written > 0 && written < (int)reply_capacity ? 0 : -1;
+denied:
+    if (active_contents != NULL) free(active_contents);
+    if (lock_fd >= 0) {
+        (void)flock(lock_fd, LOCK_UN);
+        close(lock_fd);
+    }
+    sodium_memzero(&binding, sizeof(binding));
+    sodium_memzero(&request, sizeof(request));
+    return wls_security_reply_error(
+        reply,
+        reply_capacity,
+        error_code,
+        "ROLLBACK_REQUEST",
+        request_nonce,
+        intent_digest
+    );
+}
+
 static int wls_process_identity(
     pid_t pid,
     char *executable,
@@ -5163,8 +6662,458 @@ cleanup:
     return result;
 }
 
+struct wls_candidate_attestation_fence {
+    char status[8];
+    char controller_fencing_digest[65];
+    char transaction_id[33];
+    unsigned long candidate_generation;
+    char config_digest[65];
+    char config_path_digest[65];
+    char active_slot[2];
+    char runtime_generation[65];
+    char allowed_phase[40];
+    char gateway_epoch[33];
+    char receipt_digest[65];
+};
+
+static int wls_candidate_attestation_phase_valid(const char *phase)
+{
+    return phase != NULL
+        && (strcmp(phase, "ACTIVATING") == 0
+            || strcmp(phase, "SERVICE_TREE_RETIREMENT_PENDING") == 0);
+}
+
+/*
+ * Return 0 for a canonical root-owned fence, 1 when absent, and -1 for an
+ * unsafe or malformed artifact. The Controller intentionally cannot read
+ * this file after dropping privilege; every use is mediated by the inherited
+ * Broker action channel.
+ */
+static int wls_read_candidate_attestation_fence(
+    const char *home,
+    struct wls_candidate_attestation_fence *fence
+) {
+    char path[PATH_MAX];
+    char contents[2049];
+    struct stat before;
+    struct stat after;
+    int fd = -1;
+    int consumed = 0;
+    int result = -1;
+    int saved_errno = EINVAL;
+    size_t length;
+    if (home == NULL || fence == NULL
+        || snprintf(
+            path, sizeof(path),
+            "%s/trust/process-attestation-candidate.fence", home
+        ) >= (int)sizeof(path)) {
+        errno = EINVAL;
+        return -1;
+    }
+    memset(fence, 0, sizeof(*fence));
+    memset(contents, 0, sizeof(contents));
+    fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        if (errno == ENOENT) return 1;
+        return -1;
+    }
+    if (fstat(fd, &before) != 0
+        || !S_ISREG(before.st_mode)
+        || before.st_nlink != 1
+        || before.st_uid != 0
+        || before.st_gid != 0
+        || (before.st_mode & 0777) != 0600
+        || before.st_size <= 0
+        || before.st_size > 2048) goto cleanup;
+    length = (size_t)before.st_size;
+    if (wls_read_exact(fd, contents, length) != 0
+        || fstat(fd, &after) != 0
+        || after.st_dev != before.st_dev
+        || after.st_ino != before.st_ino
+        || after.st_size != before.st_size
+        || after.st_mode != before.st_mode
+        || after.st_nlink != before.st_nlink
+        || after.st_uid != before.st_uid
+        || after.st_gid != before.st_gid
+#if defined(__APPLE__) || defined(__FreeBSD__)
+        || after.st_mtimespec.tv_sec != before.st_mtimespec.tv_sec
+        || after.st_mtimespec.tv_nsec != before.st_mtimespec.tv_nsec
+        || after.st_ctimespec.tv_sec != before.st_ctimespec.tv_sec
+        || after.st_ctimespec.tv_nsec != before.st_ctimespec.tv_nsec
+#else
+        || after.st_mtim.tv_sec != before.st_mtim.tv_sec
+        || after.st_mtim.tv_nsec != before.st_mtim.tv_nsec
+        || after.st_ctim.tv_sec != before.st_ctim.tv_sec
+        || after.st_ctim.tv_nsec != before.st_ctim.tv_nsec
+#endif
+        || memchr(contents, '\0', length) != NULL
+        || sscanf(
+            contents,
+            "WLS-PROCESS-ATTEST-CANDIDATE/1\nstatus=%7[A-Z]\n"
+            "controller_fencing_digest=%64[0-9a-f]\n"
+            "transaction_id=%32[0-9a-f]\ncandidate_generation=%lu\n"
+            "config_digest=%64[0-9a-f]\n"
+            "config_path_digest=%64[0-9a-f]\nactive_slot=%1[AB]\n"
+            "runtime_generation=%64[0-9a-f]\nallowed_phase=%39[A-Z_]\n"
+            "gateway_epoch=%32[0-9a-f]\n%n",
+            fence->status,
+            fence->controller_fencing_digest,
+            fence->transaction_id,
+            &fence->candidate_generation,
+            fence->config_digest,
+            fence->config_path_digest,
+            fence->active_slot,
+            fence->runtime_generation,
+            fence->allowed_phase,
+            fence->gateway_epoch,
+            &consumed
+        ) != 10
+        || consumed != (int)length
+        || (strcmp(fence->status, "ARMED") != 0
+            && strcmp(fence->status, "CLEARED") != 0)
+        || !wls_is_hex(fence->controller_fencing_digest, 64U)
+        || !wls_is_hex(fence->transaction_id, 32U)
+        || fence->candidate_generation == 0U
+        || !wls_is_hex(fence->config_digest, 64U)
+        || !wls_is_hex(fence->config_path_digest, 64U)
+        || (fence->active_slot[0] != 'A' && fence->active_slot[0] != 'B')
+        || fence->active_slot[1] != '\0'
+        || !wls_is_hex(fence->runtime_generation, 64U)
+        || !wls_candidate_attestation_phase_valid(fence->allowed_phase)
+        || !wls_is_hex(fence->gateway_epoch, 32U)) {
+        errno = EPROTO;
+        goto cleanup;
+    }
+    wls_sha256_hex(
+        (const unsigned char *)contents, length, fence->receipt_digest
+    );
+    result = 0;
+cleanup:
+    saved_errno = errno;
+    sodium_memzero(contents, sizeof(contents));
+    if (fd >= 0) close(fd);
+    if (result != 0) {
+        sodium_memzero(fence, sizeof(*fence));
+        errno = saved_errno;
+    }
+    return result;
+}
+
+static int wls_format_candidate_attestation_fence(
+    const char *status,
+    const char *fencing_digest,
+    const char *transaction_id,
+    unsigned long candidate_generation,
+    const char *config_digest,
+    const char *config_path_digest,
+    const char *active_slot,
+    const char *runtime_generation,
+    const char *allowed_phase,
+    const char *gateway_epoch,
+    char *contents,
+    size_t contents_capacity
+) {
+    int written;
+    if (status == NULL || fencing_digest == NULL
+        || transaction_id == NULL || config_digest == NULL
+        || config_path_digest == NULL || active_slot == NULL
+        || runtime_generation == NULL || allowed_phase == NULL
+        || gateway_epoch == NULL || contents == NULL
+        || contents_capacity == 0U) return -1;
+    written = snprintf(
+        contents, contents_capacity,
+        "WLS-PROCESS-ATTEST-CANDIDATE/1\nstatus=%s\n"
+        "controller_fencing_digest=%s\ntransaction_id=%s\n"
+        "candidate_generation=%lu\nconfig_digest=%s\n"
+        "config_path_digest=%s\nactive_slot=%s\nruntime_generation=%s\n"
+        "allowed_phase=%s\ngateway_epoch=%s\n",
+        status, fencing_digest, transaction_id, candidate_generation,
+        config_digest, config_path_digest, active_slot, runtime_generation,
+        allowed_phase, gateway_epoch
+    );
+    return written > 0 && (size_t)written < contents_capacity ? written : -1;
+}
+
+static int wls_write_candidate_attestation_fence(
+    const char *home,
+    const char *status,
+    const char *fencing_digest,
+    const char *transaction_id,
+    unsigned long candidate_generation,
+    const char *config_digest,
+    const char *config_path_digest,
+    const char *active_slot,
+    const char *runtime_generation,
+    const char *allowed_phase,
+    const char *gateway_epoch,
+    char receipt_digest[65]
+) {
+    char path[PATH_MAX];
+    char contents[2048];
+    int written;
+    if (home == NULL || receipt_digest == NULL) return -1;
+    written = wls_format_candidate_attestation_fence(
+        status, fencing_digest, transaction_id, candidate_generation,
+        config_digest, config_path_digest, active_slot, runtime_generation,
+        allowed_phase, gateway_epoch, contents, sizeof(contents)
+    );
+    if (written <= 0
+        || snprintf(
+            path, sizeof(path),
+            "%s/trust/process-attestation-candidate.fence", home
+        ) >= (int)sizeof(path)
+        || wls_atomic_root_write(path, contents, (size_t)written) != 0) {
+        sodium_memzero(contents, sizeof(contents));
+        return -1;
+    }
+    wls_sha256_hex(
+        (const unsigned char *)contents, (size_t)written, receipt_digest
+    );
+    sodium_memzero(contents, sizeof(contents));
+    return 0;
+}
+
+static int wls_candidate_attestation_prepare_v2(
+    const char *home,
+    const char *fencing,
+    const char *transaction_id,
+    const char *generation_text,
+    const char *config_digest,
+    const char *config_path_digest,
+    const char *active_slot,
+    const char *runtime_generation,
+    const char *allowed_phase,
+    const char *gateway_epoch,
+    char *reply,
+    size_t reply_capacity
+) {
+    struct wls_candidate_attestation_fence existing;
+    unsigned long generation = 0U;
+    char fencing_digest[65];
+    char receipt_digest[65];
+    int existing_state;
+    int written;
+    int result = -1;
+    if (home == NULL || fencing == NULL || !wls_is_hex(fencing, 64U)
+        || !wls_is_hex(transaction_id, 32U)
+        || wls_parse_unsigned(generation_text, 1, &generation) != 0
+        || !wls_is_hex(config_digest, 64U)
+        || !wls_is_hex(config_path_digest, 64U)
+        || active_slot == NULL || strlen(active_slot) != 1U
+        || (active_slot[0] != 'A' && active_slot[0] != 'B')
+        || !wls_is_hex(runtime_generation, 64U)
+        || !wls_candidate_attestation_phase_valid(allowed_phase)
+        || !wls_is_hex(gateway_epoch, 32U)) goto denied;
+    wls_sha256_hex(
+        (const unsigned char *)fencing, strlen(fencing), fencing_digest
+    );
+    existing_state = wls_read_candidate_attestation_fence(home, &existing);
+    if (existing_state < 0) goto denied;
+    if (existing_state == 0) {
+        if (strcmp(existing.status, "ARMED") == 0) {
+            /*
+             * A live fence may evolve only inside the same publication.
+             * A replacement Controller may take over that exact transaction,
+             * but can never trample an unrelated in-flight publication.
+             */
+            if (strcmp(existing.transaction_id, transaction_id) != 0
+                || existing.candidate_generation != generation
+                || strcmp(
+                    existing.config_path_digest,
+                    config_path_digest
+                ) != 0
+                || strcmp(existing.active_slot, active_slot) != 0
+                || strcmp(
+                    existing.runtime_generation,
+                    runtime_generation
+                ) != 0
+                || (strcmp(
+                        existing.allowed_phase,
+                        "SERVICE_TREE_RETIREMENT_PENDING"
+                    ) == 0
+                    && strcmp(allowed_phase, "ACTIVATING") == 0)
+                || (strcmp(existing.config_digest, config_digest) != 0
+                    && (strcmp(
+                            existing.allowed_phase,
+                            "SERVICE_TREE_RETIREMENT_PENDING"
+                        ) == 0
+                        || strcmp(
+                            allowed_phase,
+                            "SERVICE_TREE_RETIREMENT_PENDING"
+                        ) == 0))
+                || strcmp(existing.gateway_epoch, gateway_epoch) != 0) goto denied;
+        } else {
+            if (strcmp(existing.transaction_id, transaction_id) == 0
+                || (strcmp(existing.gateway_epoch, gateway_epoch) == 0
+                    && generation < existing.candidate_generation)) {
+                /* A consumed transaction and a lower generation are terminal. */
+                goto denied;
+            }
+        }
+    }
+    if (wls_write_candidate_attestation_fence(
+            home, "ARMED", fencing_digest, transaction_id, generation,
+            config_digest, config_path_digest, active_slot,
+            runtime_generation, allowed_phase, gateway_epoch,
+            receipt_digest
+        ) != 0) goto denied;
+    written = snprintf(
+        reply, reply_capacity,
+        "WLS-ACTION/2\tOK\tPROCESS_ATTEST_CANDIDATE_PREPARE\t"
+        "%s\t%lu\t%s\t%s\t%s\n",
+        transaction_id, generation, config_digest, allowed_phase,
+        receipt_digest
+    );
+    result = written > 0 && written < (int)reply_capacity ? 0 : -1;
+    goto cleanup;
+denied:
+    result = wls_security_reply_error(
+        reply, reply_capacity, "PROCESS_ATTEST_CANDIDATE_FAILED",
+        "PROCESS_ATTEST_CANDIDATE_PREPARE",
+        wls_is_hex(transaction_id, 32U) ? transaction_id : NULL,
+        wls_is_hex(config_digest, 64U) ? config_digest : NULL
+    );
+cleanup:
+    sodium_memzero(&existing, sizeof(existing));
+    sodium_memzero(fencing_digest, sizeof(fencing_digest));
+    sodium_memzero(receipt_digest, sizeof(receipt_digest));
+    return result;
+}
+
+static int wls_candidate_attestation_clear_v2(
+    const char *home,
+    const char *fencing,
+    const char *transaction_id,
+    const char *generation_text,
+    const char *config_digest,
+    const char *allowed_phase,
+    const char *expected_fence_digest,
+    char *reply,
+    size_t reply_capacity
+) {
+    struct wls_candidate_attestation_fence existing;
+    unsigned long generation = 0U;
+    char armed_contents[2048];
+    char expected_armed_digest[65];
+    char cleared_digest[65];
+    int armed_length = -1;
+    int existing_state;
+    int written;
+    int result = -1;
+    if (home == NULL || fencing == NULL || !wls_is_hex(fencing, 64U)
+        || !wls_is_hex(transaction_id, 32U)
+        || wls_parse_unsigned(generation_text, 1, &generation) != 0
+        || !wls_is_hex(config_digest, 64U)
+        || !wls_candidate_attestation_phase_valid(allowed_phase)
+        || !wls_is_hex(expected_fence_digest, 64U)) goto denied;
+    existing_state = wls_read_candidate_attestation_fence(home, &existing);
+    if (existing_state != 0
+        || strcmp(existing.transaction_id, transaction_id) != 0
+        || existing.candidate_generation != generation
+        || strcmp(existing.config_digest, config_digest) != 0
+        || strcmp(existing.allowed_phase, allowed_phase) != 0) goto denied;
+    if (strcmp(existing.status, "CLEARED") == 0) {
+        armed_length = wls_format_candidate_attestation_fence(
+            "ARMED", existing.controller_fencing_digest,
+            existing.transaction_id, existing.candidate_generation,
+            existing.config_digest, existing.config_path_digest,
+            existing.active_slot, existing.runtime_generation,
+            existing.allowed_phase, existing.gateway_epoch,
+            armed_contents, sizeof(armed_contents)
+        );
+        if (armed_length <= 0) goto denied;
+        wls_sha256_hex(
+            (const unsigned char *)armed_contents,
+            (size_t)armed_length,
+            expected_armed_digest
+        );
+        if (strcmp(expected_armed_digest, expected_fence_digest) != 0) goto denied;
+        memcpy(cleared_digest, existing.receipt_digest, 65U);
+    } else {
+        if (strcmp(existing.receipt_digest, expected_fence_digest) != 0) goto denied;
+        if (wls_write_candidate_attestation_fence(
+                home, "CLEARED", existing.controller_fencing_digest,
+                existing.transaction_id,
+                existing.candidate_generation, existing.config_digest,
+                existing.config_path_digest, existing.active_slot,
+                existing.runtime_generation, existing.allowed_phase,
+                existing.gateway_epoch, cleared_digest
+            ) != 0) goto denied;
+    }
+    written = snprintf(
+        reply, reply_capacity,
+        "WLS-ACTION/2\tOK\tPROCESS_ATTEST_CANDIDATE_CLEAR\t"
+        "%s\t%lu\t%s\t%s\t%s\n",
+        transaction_id, generation, config_digest, allowed_phase,
+        cleared_digest
+    );
+    result = written > 0 && written < (int)reply_capacity ? 0 : -1;
+    goto cleanup;
+denied:
+    result = wls_security_reply_error(
+        reply, reply_capacity, "PROCESS_ATTEST_CANDIDATE_FAILED",
+        "PROCESS_ATTEST_CANDIDATE_CLEAR",
+        wls_is_hex(transaction_id, 32U) ? transaction_id : NULL,
+        wls_is_hex(config_digest, 64U) ? config_digest : NULL
+    );
+cleanup:
+    sodium_memzero(&existing, sizeof(existing));
+    sodium_memzero(armed_contents, sizeof(armed_contents));
+    sodium_memzero(expected_armed_digest, sizeof(expected_armed_digest));
+    sodium_memzero(cleared_digest, sizeof(cleared_digest));
+    return result;
+}
+
+static int wls_candidate_attestation_action_serialized(
+    int prepare,
+    const char *home,
+    const char *fencing,
+    char **fields,
+    char *reply,
+    size_t reply_capacity
+) {
+    int result;
+    int lock_error = pthread_mutex_trylock(&wls_process_lifecycle_mutex);
+    if (lock_error != 0) {
+        return wls_security_reply_error(
+            reply, reply_capacity,
+            lock_error == EBUSY
+                ? "PROCESS_LIFECYCLE_BUSY"
+                : "PROCESS_ATTEST_CANDIDATE_FAILED",
+            prepare
+                ? "PROCESS_ATTEST_CANDIDATE_PREPARE"
+                : "PROCESS_ATTEST_CANDIDATE_CLEAR",
+            fields != NULL && wls_is_hex(fields[2], 32U) ? fields[2] : NULL,
+            fields != NULL && wls_is_hex(fields[4], 64U) ? fields[4] : NULL
+        );
+    }
+    result = prepare
+        ? wls_candidate_attestation_prepare_v2(
+            home, fencing, fields[2], fields[3], fields[4], fields[5],
+            fields[6], fields[7], fields[8], fields[9], reply, reply_capacity
+        )
+        : wls_candidate_attestation_clear_v2(
+            home, fencing, fields[2], fields[3], fields[4], fields[5],
+            fields[6], reply, reply_capacity
+        );
+    lock_error = pthread_mutex_unlock(&wls_process_lifecycle_mutex);
+    if (lock_error != 0) {
+        errno = lock_error;
+        return wls_security_reply_error(
+            reply, reply_capacity, "PROCESS_ATTEST_CANDIDATE_FAILED",
+            prepare
+                ? "PROCESS_ATTEST_CANDIDATE_PREPARE"
+                : "PROCESS_ATTEST_CANDIDATE_CLEAR",
+            fields != NULL && wls_is_hex(fields[2], 32U) ? fields[2] : NULL,
+            fields != NULL && wls_is_hex(fields[4], 64U) ? fields[4] : NULL
+        );
+    }
+    return result;
+}
+
 static int wls_process_attest_v2(
     const char *home,
+    const char *fencing,
     const char *pid_text,
     const char *start_text,
     const char *expected_binary_digest,
@@ -5172,6 +7121,10 @@ static int wls_process_attest_v2(
     const char *expected_config_digest,
     const char *expected_config_path_digest,
     const char *publication_text,
+    const char *fence_kind,
+    const char *candidate_transaction_id,
+    const char *candidate_phase,
+    const char *candidate_fence_digest,
     char *reply,
     size_t reply_capacity
 ) {
@@ -5197,6 +7150,8 @@ static int wls_process_attest_v2(
     char manifest_runtime_generation[65];
     char config_path_digest[65];
     char receipt_digest[65];
+    char current_fencing_digest[65];
+    char zero_digest[65];
     char receipt[2048];
     char *state = NULL;
     char *manifest = NULL;
@@ -5211,15 +7166,36 @@ static int wls_process_attest_v2(
     struct stat config_before;
     struct stat config_after;
     struct stat config_path_status;
+    struct wls_candidate_attestation_fence candidate_fence;
+    int candidate_mode;
     int written;
     const char *slot;
-    if (wls_parse_unsigned(pid_text, 0, &parsed_pid) != 0
+    memset(&candidate_fence, 0, sizeof(candidate_fence));
+    memset(zero_digest, '0', 64U);
+    zero_digest[64] = '\0';
+    candidate_mode = fence_kind != NULL
+        && strcmp(fence_kind, "CANDIDATE") == 0;
+    if (fencing == NULL || !wls_is_hex(fencing, 64U)
+        || wls_parse_unsigned(pid_text, 0, &parsed_pid) != 0
         || parsed_pid > (unsigned long)INT_MAX
         || !wls_is_hex(expected_binary_digest, 64U)
         || !wls_is_hex(runtime_generation, 64U)
         || !wls_is_hex(expected_config_digest, 64U)
         || !wls_is_hex(expected_config_path_digest, 64U)
-        || wls_parse_unsigned(publication_text, 1, &publication) != 0) goto denied;
+        || wls_parse_unsigned(publication_text, 1, &publication) != 0
+        || (candidate_mode
+            ? (!wls_is_hex(candidate_transaction_id, 32U)
+                || !wls_candidate_attestation_phase_valid(candidate_phase)
+                || !wls_is_hex(candidate_fence_digest, 64U)
+                || strcmp(candidate_fence_digest, zero_digest) == 0)
+            : (fence_kind == NULL
+                || strcmp(fence_kind, "ACTIVE") != 0
+                || candidate_transaction_id == NULL
+                || strcmp(candidate_transaction_id, "-") != 0
+                || candidate_phase == NULL
+                || strcmp(candidate_phase, "ACTIVE") != 0
+                || candidate_fence_digest == NULL
+                || strcmp(candidate_fence_digest, zero_digest) != 0))) goto denied;
     expected_start_known = strcmp(start_text, "-") != 0;
     expected_start = 0ULL;
     start_end = NULL;
@@ -5297,8 +7273,9 @@ static int wls_process_attest_v2(
         || config_path_status.st_ino != config_before.st_ino
         || wls_file_digest_fd(config_fd, config_digest, &config_size) != 0
         || config_size == 0U
-        || strcmp(config_digest, expected_config_digest) != 0
-        || wls_read_regular_at(
+        || strcmp(config_digest, expected_config_digest) != 0) goto denied;
+    if (!candidate_mode) {
+        if (wls_read_regular_at(
             home_fd, "state/gateway-state.json", WLS_MAX_REQUEST,
             &state, &state_length
         ) != 0
@@ -5312,8 +7289,43 @@ static int wls_process_attest_v2(
             64U,
             state_config_digest
         ) != 0
-        || strcmp(state_config_digest, config_digest) != 0
-        || snprintf(
+        || strcmp(state_config_digest, config_digest) != 0) goto denied;
+    } else {
+        wls_sha256_hex(
+            (const unsigned char *)fencing, strlen(fencing),
+            current_fencing_digest
+        );
+        if (wls_read_candidate_attestation_fence(
+                home, &candidate_fence
+            ) != 0
+            || strcmp(candidate_fence.status, "ARMED") != 0
+            || strcmp(
+                candidate_fence.controller_fencing_digest,
+                current_fencing_digest
+            ) != 0
+            || strcmp(
+                candidate_fence.transaction_id,
+                candidate_transaction_id
+            ) != 0
+            || candidate_fence.candidate_generation != publication
+            || strcmp(candidate_fence.config_digest, config_digest) != 0
+            || strcmp(
+                candidate_fence.config_path_digest,
+                config_path_digest
+            ) != 0
+            || strcmp(candidate_fence.active_slot, slot) != 0
+            || strcmp(
+                candidate_fence.runtime_generation,
+                runtime_generation
+            ) != 0
+            || strcmp(candidate_fence.allowed_phase, candidate_phase) != 0
+            || strcmp(
+                candidate_fence.receipt_digest,
+                candidate_fence_digest
+            ) != 0) goto denied;
+        actual_publication = publication;
+    }
+    if (snprintf(
             manifest_relative, sizeof(manifest_relative),
             "slots/%s/manifest.json", slot
         ) >= (int)sizeof(manifest_relative)
@@ -5369,11 +7381,14 @@ static int wls_process_attest_v2(
         ) != 0) goto denied;
     written = snprintf(
         receipt, sizeof(receipt),
-        "WLS-PROCESS-ATTEST/2\npid=%lu\nstart_id=%llu\n"
+        "WLS-PROCESS-ATTEST/3\npid=%lu\nstart_id=%llu\n"
         "binary_digest=%s\nruntime_generation=%s\nconfig_digest=%s\n"
-        "config_path_digest=%s\npublication_generation=%lu\n",
+        "config_path_digest=%s\npublication_generation=%lu\n"
+        "fence_kind=%s\ncandidate_transaction_id=%s\n"
+        "candidate_phase=%s\ncandidate_fence_digest=%s\n",
         parsed_pid, actual_start, binary_digest, runtime_generation,
-        config_digest, config_path_digest, actual_publication
+        config_digest, config_path_digest, actual_publication, fence_kind,
+        candidate_transaction_id, candidate_phase, candidate_fence_digest
     );
     if (written <= 0 || written >= (int)sizeof(receipt)
         || snprintf(
@@ -5384,9 +7399,14 @@ static int wls_process_attest_v2(
     wls_sha256_hex((const unsigned char *)receipt, (size_t)written, receipt_digest);
     written = snprintf(
         reply, reply_capacity,
-        "WLS-ACTION/2\tOK\tPROCESS_ATTEST\t%s\t%lu\t%llu\t%s\t%s\t%s\t%s\t%lu\n",
+        "WLS-ACTION/2\tOK\tPROCESS_ATTEST\t%s\t%lu\t%llu\t%s\t%s\t%s\t%s\t%lu"
+        "\t%s\t%s\t%s\t%s\n",
         receipt_digest, parsed_pid, actual_start, binary_digest,
-        runtime_generation, config_digest, config_path_digest, actual_publication
+        runtime_generation, config_digest, config_path_digest, actual_publication,
+        candidate_mode ? "CANDIDATE" : "ACTIVE",
+        candidate_mode ? candidate_transaction_id : "-",
+        candidate_mode ? candidate_phase : "ACTIVE",
+        candidate_mode ? candidate_fence_digest : zero_digest
     );
     if (written <= 0 || written >= (int)reply_capacity) goto denied;
     if (manifest != NULL) { sodium_memzero(manifest, manifest_length); free(manifest); }
@@ -5394,6 +7414,9 @@ static int wls_process_attest_v2(
     if (config_fd >= 0) close(config_fd);
     if (binary_fd >= 0) close(binary_fd);
     if (home_fd >= 0) close(home_fd);
+    sodium_memzero(&candidate_fence, sizeof(candidate_fence));
+    sodium_memzero(current_fencing_digest, sizeof(current_fencing_digest));
+    sodium_memzero(zero_digest, sizeof(zero_digest));
     return 0;
 denied:
     if (manifest != NULL) { sodium_memzero(manifest, manifest_length); free(manifest); }
@@ -5401,18 +7424,77 @@ denied:
     if (config_fd >= 0) close(config_fd);
     if (binary_fd >= 0) close(binary_fd);
     if (home_fd >= 0) close(home_fd);
+    sodium_memzero(&candidate_fence, sizeof(candidate_fence));
+    sodium_memzero(current_fencing_digest, sizeof(current_fencing_digest));
+    sodium_memzero(zero_digest, sizeof(zero_digest));
     return wls_security_reply_error(
         reply, reply_capacity, "PROCESS_ATTEST_FAILED", "PROCESS_ATTEST", NULL, NULL
     );
 #else
-    (void)home; (void)pid_text; (void)start_text;
+    (void)home; (void)fencing; (void)pid_text; (void)start_text;
     (void)expected_binary_digest; (void)runtime_generation;
     (void)expected_config_digest; (void)expected_config_path_digest;
-    (void)publication_text;
+    (void)publication_text; (void)fence_kind;
+    (void)candidate_transaction_id; (void)candidate_phase;
+    (void)candidate_fence_digest;
     return wls_security_reply_error(
         reply, reply_capacity, "UNSUPPORTED_PLATFORM", "PROCESS_ATTEST", NULL, NULL
     );
 #endif
+}
+
+static int wls_process_attest_v2_serialized(
+    const char *home,
+    const char *fencing,
+    const char *pid_text,
+    const char *start_text,
+    const char *expected_binary_digest,
+    const char *runtime_generation,
+    const char *expected_config_digest,
+    const char *expected_config_path_digest,
+    const char *publication_text,
+    const char *fence_kind,
+    const char *candidate_transaction_id,
+    const char *candidate_phase,
+    const char *candidate_fence_digest,
+    char *reply,
+    size_t reply_capacity
+) {
+    int result;
+    int lock_error = pthread_mutex_trylock(&wls_process_lifecycle_mutex);
+    if (lock_error != 0) {
+        return wls_security_reply_error(
+            reply, reply_capacity,
+            lock_error == EBUSY ? "PROCESS_LIFECYCLE_BUSY" : "PROCESS_ATTEST_FAILED",
+            "PROCESS_ATTEST", NULL, NULL
+        );
+    }
+    result = wls_process_attest_v2(
+        home,
+        fencing,
+        pid_text,
+        start_text,
+        expected_binary_digest,
+        runtime_generation,
+        expected_config_digest,
+        expected_config_path_digest,
+        publication_text,
+        fence_kind,
+        candidate_transaction_id,
+        candidate_phase,
+        candidate_fence_digest,
+        reply,
+        reply_capacity
+    );
+    lock_error = pthread_mutex_unlock(&wls_process_lifecycle_mutex);
+    if (lock_error != 0) {
+        errno = lock_error;
+        return wls_security_reply_error(
+            reply, reply_capacity,
+            "PROCESS_ATTEST_FAILED", "PROCESS_ATTEST", NULL, NULL
+        );
+    }
+    return result;
 }
 
 static int wls_owned_nginx_alive(
@@ -5433,8 +7515,15 @@ static int wls_owned_nginx_alive(
     char runtime_generation[65];
     char config_digest[65];
     char config_path_digest[65];
+    char fence_kind[10];
+    char candidate_transaction_id[33];
+    char candidate_phase[40];
+    char candidate_fence_digest[65];
+    char zero_digest[65];
     int consumed = 0;
     int result = 0;
+    memset(zero_digest, '0', 64U);
+    zero_digest[64] = '\0';
     if (home == NULL || health == NULL
         || snprintf(
             path, sizeof(path), "%s/trust/process-attestation.receipt", home
@@ -5451,10 +7540,13 @@ static int wls_owned_nginx_alive(
     }
     if (sscanf(
             (const char *)contents,
-            "WLS-PROCESS-ATTEST/2\npid=%lu\nstart_id=%llu\n"
+            "WLS-PROCESS-ATTEST/3\npid=%lu\nstart_id=%llu\n"
             "binary_digest=%64[0-9a-f]\nruntime_generation=%64[0-9a-f]\n"
             "config_digest=%64[0-9a-f]\nconfig_path_digest=%64[0-9a-f]\n"
-            "publication_generation=%lu\n%n",
+            "publication_generation=%lu\nfence_kind=%9[A-Z]\n"
+            "candidate_transaction_id=%32[0-9a-f-]\n"
+            "candidate_phase=%39[A-Z_]\n"
+            "candidate_fence_digest=%64[0-9a-f]\n%n",
             &pid,
             &start_id,
             binary_digest,
@@ -5462,13 +7554,27 @@ static int wls_owned_nginx_alive(
             config_digest,
             config_path_digest,
             &publication,
+            fence_kind,
+            candidate_transaction_id,
+            candidate_phase,
+            candidate_fence_digest,
             &consumed
-        ) == 7
+        ) == 11
         && consumed == (int)length
         && pid > 0U
         && pid <= (unsigned long)INT_MAX
+        && publication > 0U
         && publication == health->active_config_generation
         && strcmp(runtime_generation, health->runtime_generation) == 0
+        && (strcmp(fence_kind, "ACTIVE") == 0
+            ? (strcmp(candidate_transaction_id, "-") == 0
+                && strcmp(candidate_phase, "ACTIVE") == 0
+                && strcmp(candidate_fence_digest, zero_digest) == 0)
+            : (strcmp(fence_kind, "CANDIDATE") == 0
+                && wls_is_hex(candidate_transaction_id, 32U)
+                && wls_candidate_attestation_phase_valid(candidate_phase)
+                && wls_is_hex(candidate_fence_digest, 64U)
+                && strcmp(candidate_fence_digest, zero_digest) != 0))
         && wls_process_identity(
             (pid_t)pid,
             observed_binary,
@@ -5481,6 +7587,11 @@ static int wls_owned_nginx_alive(
     }
     sodium_memzero(contents, length);
     free(contents);
+    sodium_memzero(fence_kind, sizeof(fence_kind));
+    sodium_memzero(candidate_transaction_id, sizeof(candidate_transaction_id));
+    sodium_memzero(candidate_phase, sizeof(candidate_phase));
+    sodium_memzero(candidate_fence_digest, sizeof(candidate_fence_digest));
+    sodium_memzero(zero_digest, sizeof(zero_digest));
     return result;
 #else
     (void)home;
@@ -5540,7 +7651,16 @@ static int wls_emergency_file_open_locked(
     written = snprintf(path, path_capacity, "%s/%s", home, relative);
     if (written <= 0 || written >= (int)path_capacity) return -1;
     *fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, mode);
-    if (*fd < 0 || flock(*fd, LOCK_EX) != 0) goto denied;
+    if (*fd < 0) return -1;
+    if (wls_flock_bounded(
+            *fd, LOCK_EX, WLS_FILE_LOCK_TIMEOUT_MILLISECONDS
+        ) != 0) {
+        int lock_error = errno;
+        close(*fd);
+        *fd = -1;
+        errno = lock_error;
+        return -1;
+    }
     if (controller_identity != NULL && geteuid() == 0
         && fchown(*fd, geteuid(), controller_identity->gid) != 0) goto denied;
     if (fchmod(*fd, mode) != 0 || fstat(*fd, &status) != 0
@@ -5618,7 +7738,7 @@ static int wls_emergency_collect_binding(
     return 0;
 }
 
-static int wls_emergency_bind_v1(
+static int WLS_MAYBE_UNUSED wls_emergency_bind_v1(
     const char *home,
     const char *project,
     const char *tx,
@@ -5779,109 +7899,921 @@ static int wls_emergency_domain(const char *domain)
     return length > 0U && cursor[length - 1U] != '.';
 }
 
-static int wls_stop_attested_nginx(
-    const char *home,
-    unsigned long *stopped_pid,
-    unsigned long long *stopped_start
-) {
-    char receipt_path[PATH_MAX];
-    char pid_path[PATH_MAX];
-    char expected_a[PATH_MAX];
-    char expected_b[PATH_MAX];
-    char observed[PATH_MAX];
-    unsigned char *contents = NULL;
-    size_t length = 0U;
-    unsigned long pid = 0U;
-    unsigned long publication = 0U;
-    unsigned long long start_id = 0ULL;
-    unsigned long long observed_start = 0ULL;
+struct wls_process_attestation_receipt {
+    unsigned long pid;
+    unsigned long publication;
+    unsigned long long start_id;
     char binary_digest[65];
     char runtime_generation[65];
     char config_digest[65];
     char config_path_digest[65];
+    char fence_kind[10];
+    char candidate_transaction_id[33];
+    char candidate_phase[40];
+    char candidate_fence_digest[65];
+};
+
+struct wls_process_tree_retirement_receipt {
+    int schema_version;
+    char status[16];
+    char retirement_id[65];
+    unsigned long pid;
+    unsigned long long start_id;
+    char attestation_digest[65];
+    char binary_digest[65];
+    char runtime_generation[65];
+    char host_boot_id[65];
+    char config_digest[65];
+    char config_path_digest[65];
+    unsigned long publication_generation;
+    char platform[16];
+    char service_id[65];
+    char requested_launcher_generation[65];
+    char completed_launcher_generation[65];
+    char completed_host_boot_id[65];
+    char completed_runtime_generation[65];
+    char receipt_digest[65];
+};
+
+static int wls_process_tree_zero_generation(const char *value)
+{
+    size_t index;
+    if (!wls_is_hex(value, 64U)) return 0;
+    for (index = 0U; index < 64U; index++) {
+        if (value[index] != '0') return 0;
+    }
+    return 1;
+}
+
+static int wls_process_tree_platform_identity_valid(
+    const struct wls_process_tree_retirement_receipt *receipt
+) {
+#if defined(__linux__)
+    static const char platform[] = "systemd";
+    static const unsigned char canonical[] =
+        "wls-platform-service/1\0systemd\0com.weline.wls-gateway-v2";
+#elif defined(__APPLE__)
+    static const char platform[] = "launchd";
+    static const unsigned char canonical[] =
+        "wls-platform-service/1\0launchd\0com.weline.wls-gateway-v2";
+#else
+    (void)receipt;
+    return 0;
+#endif
+#if defined(__linux__) || defined(__APPLE__)
+    char service_id[65];
+    if (receipt == NULL) return 0;
+    wls_sha256_hex(canonical, sizeof(canonical) - 1U, service_id);
+    return strcmp(receipt->platform, platform) == 0
+        && strcmp(receipt->service_id, service_id) == 0;
+#endif
+}
+
+static int wls_monotonic_milliseconds(unsigned long long *milliseconds)
+{
+    struct timespec now;
+    unsigned long long seconds;
+    unsigned long long remainder;
+    if (milliseconds == NULL || clock_gettime(CLOCK_MONOTONIC, &now) != 0
+        || now.tv_sec < 0 || now.tv_nsec < 0 || now.tv_nsec >= 1000000000L) {
+        return -1;
+    }
+    seconds = (unsigned long long)now.tv_sec;
+    remainder = (unsigned long long)now.tv_nsec / 1000000ULL;
+    if (seconds > (ULLONG_MAX - remainder) / 1000ULL) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    *milliseconds = seconds * 1000ULL + remainder;
+    return 0;
+}
+
+static int wls_process_lifecycle_lock_until(unsigned long long deadline_ms)
+{
+    for (;;) {
+        int lock_error = pthread_mutex_trylock(&wls_process_lifecycle_mutex);
+        unsigned long long now_ms;
+        unsigned long long remaining_ms;
+        useconds_t delay;
+        if (lock_error == 0) return 0;
+        if (lock_error != EBUSY) {
+            errno = lock_error;
+            return -1;
+        }
+        if (wls_monotonic_milliseconds(&now_ms) != 0
+            || now_ms >= deadline_ms) {
+            errno = ETIMEDOUT;
+            return -1;
+        }
+        remaining_ms = deadline_ms - now_ms;
+        delay = (useconds_t)(
+            (remaining_ms > 10ULL ? 10ULL : remaining_ms) * 1000ULL
+        );
+        if (delay == 0U) delay = 1U;
+        if (usleep(delay) != 0 && errno != EINTR) return -1;
+    }
+}
+
+static int wls_read_root_process_attestation(
+    const char *home,
+    struct wls_process_attestation_receipt *receipt,
+    char receipt_digest[65]
+) {
+    int home_fd = -1;
+    int receipt_fd = -1;
     int consumed = 0;
-    unsigned int attempt;
-    pid_t group;
+    int result = -1;
+    int saved_errno = EINVAL;
+    struct stat before;
+    struct stat after;
+    char contents[2049];
+    size_t length;
+    if (home == NULL || receipt == NULL || receipt_digest == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    memset(receipt, 0, sizeof(*receipt));
+    memset(contents, 0, sizeof(contents));
+    home_fd = wls_open_absolute_directory(home);
+    if (home_fd < 0) goto cleanup;
+    receipt_fd = wls_open_relative(
+        home_fd, "trust/process-attestation.receipt", O_RDONLY
+    );
+    if (receipt_fd < 0) goto cleanup;
+    if (fstat(receipt_fd, &before) != 0
+        || !S_ISREG(before.st_mode)
+        || before.st_nlink != 1
+        || before.st_uid != 0
+        || before.st_gid != 0
+        || (before.st_mode & 0777) != 0600
+        || before.st_size <= 0
+        || before.st_size > 2048) {
+        errno = EPERM;
+        goto cleanup;
+    }
+    length = (size_t)before.st_size;
+    if (wls_read_exact(receipt_fd, contents, length) != 0
+        || fstat(receipt_fd, &after) != 0
+        || after.st_dev != before.st_dev
+        || after.st_ino != before.st_ino
+        || after.st_size != before.st_size
+        || after.st_mode != before.st_mode
+        || after.st_nlink != before.st_nlink
+        || after.st_uid != before.st_uid
+        || after.st_gid != before.st_gid
+#if defined(__APPLE__) || defined(__FreeBSD__)
+        || after.st_mtimespec.tv_sec != before.st_mtimespec.tv_sec
+        || after.st_mtimespec.tv_nsec != before.st_mtimespec.tv_nsec
+        || after.st_ctimespec.tv_sec != before.st_ctimespec.tv_sec
+        || after.st_ctimespec.tv_nsec != before.st_ctimespec.tv_nsec
+#else
+        || after.st_mtim.tv_sec != before.st_mtim.tv_sec
+        || after.st_mtim.tv_nsec != before.st_mtim.tv_nsec
+        || after.st_ctim.tv_sec != before.st_ctim.tv_sec
+        || after.st_ctim.tv_nsec != before.st_ctim.tv_nsec
+#endif
+        || memchr(contents, '\0', length) != NULL
+        || sscanf(
+            contents,
+            "WLS-PROCESS-ATTEST/3\npid=%lu\nstart_id=%llu\n"
+            "binary_digest=%64[0-9a-f]\nruntime_generation=%64[0-9a-f]\n"
+            "config_digest=%64[0-9a-f]\nconfig_path_digest=%64[0-9a-f]\n"
+            "publication_generation=%lu\nfence_kind=%9[A-Z]\n"
+            "candidate_transaction_id=%32[0-9a-f-]\n"
+            "candidate_phase=%39[A-Z_]\n"
+            "candidate_fence_digest=%64[0-9a-f]\n%n",
+            &receipt->pid,
+            &receipt->start_id,
+            receipt->binary_digest,
+            receipt->runtime_generation,
+            receipt->config_digest,
+            receipt->config_path_digest,
+            &receipt->publication,
+            receipt->fence_kind,
+            receipt->candidate_transaction_id,
+            receipt->candidate_phase,
+            receipt->candidate_fence_digest,
+            &consumed
+        ) != 11
+        || consumed != (int)length
+        || receipt->pid == 0U
+        || receipt->pid > (unsigned long)INT_MAX
+        || receipt->start_id == 0ULL
+        || receipt->publication == 0U
+        || !wls_is_hex(receipt->binary_digest, 64U)
+        || !wls_is_hex(receipt->runtime_generation, 64U)
+        || !wls_is_hex(receipt->config_digest, 64U)
+        || !wls_is_hex(receipt->config_path_digest, 64U)
+        || (strcmp(receipt->fence_kind, "ACTIVE") == 0
+            ? (strcmp(receipt->candidate_transaction_id, "-") != 0
+                || strcmp(receipt->candidate_phase, "ACTIVE") != 0
+                || !wls_process_tree_zero_generation(
+                    receipt->candidate_fence_digest
+                ))
+            : (strcmp(receipt->fence_kind, "CANDIDATE") != 0
+                || !wls_is_hex(receipt->candidate_transaction_id, 32U)
+                || !wls_candidate_attestation_phase_valid(
+                    receipt->candidate_phase
+                )
+                || !wls_is_hex(receipt->candidate_fence_digest, 64U)
+                || wls_process_tree_zero_generation(
+                    receipt->candidate_fence_digest
+                )))) {
+        errno = EPROTO;
+        goto cleanup;
+    }
+    /*
+     * PROCESS_TREE_RETIRE proof_digest is canonically the SHA-256 of the
+     * exact root-owned PROCESS_ATTEST receipt bytes already cached by the
+     * caller. It is not a digest of a newly synthesized retirement payload.
+     */
+    wls_sha256_hex((const unsigned char *)contents, length, receipt_digest);
+    result = 0;
+cleanup:
+    saved_errno = errno;
+    sodium_memzero(contents, sizeof(contents));
+    if (receipt_fd >= 0) close(receipt_fd);
+    if (home_fd >= 0) close(home_fd);
+    if (result != 0) {
+        sodium_memzero(receipt, sizeof(*receipt));
+        sodium_memzero(receipt_digest, 65U);
+        errno = saved_errno;
+    }
+    return result;
+}
+
+static int wls_process_attestation_authority_current(
+    const char *home,
+    const char *fencing,
+    const struct wls_process_attestation_receipt *receipt
+) {
+    int home_fd = -1;
+    char *state = NULL;
+    size_t state_length = 0U;
+    unsigned long active_generation = 0U;
+    char active_digest[65];
+    char current_fencing_digest[65];
+    struct wls_candidate_attestation_fence candidate;
+    int valid = 0;
+    memset(active_digest, 0, sizeof(active_digest));
+    memset(current_fencing_digest, 0, sizeof(current_fencing_digest));
+    memset(&candidate, 0, sizeof(candidate));
+    if (home == NULL || fencing == NULL || receipt == NULL
+        || !wls_is_hex(fencing, 64U)) goto cleanup;
+    if (strcmp(receipt->fence_kind, "CANDIDATE") == 0) {
+        wls_sha256_hex(
+            (const unsigned char *)fencing,
+            strlen(fencing),
+            current_fencing_digest
+        );
+        if (wls_read_candidate_attestation_fence(home, &candidate) != 0
+            || strcmp(candidate.status, "ARMED") != 0
+            || strcmp(
+                candidate.controller_fencing_digest,
+                current_fencing_digest
+            ) != 0
+            || strcmp(
+                candidate.transaction_id,
+                receipt->candidate_transaction_id
+            ) != 0
+            || candidate.candidate_generation != receipt->publication
+            || strcmp(candidate.config_digest, receipt->config_digest) != 0
+            || strcmp(
+                candidate.config_path_digest,
+                receipt->config_path_digest
+            ) != 0
+            || strcmp(
+                candidate.runtime_generation,
+                receipt->runtime_generation
+            ) != 0
+            || strcmp(candidate.allowed_phase, receipt->candidate_phase) != 0
+            || strcmp(
+                candidate.receipt_digest,
+                receipt->candidate_fence_digest
+            ) != 0) goto cleanup;
+        valid = 1;
+        goto cleanup;
+    }
+    if (strcmp(receipt->fence_kind, "ACTIVE") != 0) goto cleanup;
+    home_fd = wls_open_absolute_directory(home);
+    if (home_fd < 0
+        || wls_read_regular_at(
+            home_fd,
+            "state/gateway-state.json",
+            WLS_MAX_REQUEST,
+            &state,
+            &state_length
+        ) != 0
+        || wls_json_unsigned(
+            state,
+            "active_config_generation",
+            &active_generation
+        ) != 0
+        || active_generation != receipt->publication
+        || wls_json_hex_field(
+            state,
+            "active_config_digest",
+            64U,
+            active_digest
+        ) != 0
+        || strcmp(active_digest, receipt->config_digest) != 0) goto cleanup;
+    valid = 1;
+cleanup:
+    if (state != NULL) {
+        sodium_memzero(state, state_length);
+        free(state);
+    }
+    if (home_fd >= 0) close(home_fd);
+    sodium_memzero(active_digest, sizeof(active_digest));
+    sodium_memzero(current_fencing_digest, sizeof(current_fencing_digest));
+    sodium_memzero(&candidate, sizeof(candidate));
+    return valid;
+}
+
+/*
+ * Canonical durable result (UTF-8/ASCII, LF only, no trailing fields):
+ * WLS-PROCESS-TREE-RETIRE/1
+ * status=COMPLETE|INDETERMINATE
+ * retirement_id=<64 lowercase hex>
+ * pid=<decimal>
+ * start_id=<decimal>
+ * attestation_digest=<64 lowercase hex>
+ * binary_digest=<64 lowercase hex>
+ * runtime_generation=<64 lowercase hex>
+ * host_boot_id=<64 lowercase hex>
+ */
+static int wls_read_root_process_tree_retirement(
+    const char *home,
+    struct wls_process_tree_retirement_receipt *receipt
+) {
+    int home_fd = -1;
+    int receipt_fd = -1;
+    int consumed = 0;
+    int result = -1;
+    int saved_errno = EINVAL;
+    struct stat before;
+    struct stat after;
+    char contents[2049];
+    size_t length;
+    if (home == NULL || receipt == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    memset(receipt, 0, sizeof(*receipt));
+    memset(contents, 0, sizeof(contents));
+    home_fd = wls_open_absolute_directory(home);
+    if (home_fd < 0) goto cleanup;
+    receipt_fd = wls_open_relative(
+        home_fd, "trust/process-tree-retirement.receipt", O_RDONLY
+    );
+    if (receipt_fd < 0) {
+        if (errno == ENOENT) result = 1;
+        goto cleanup;
+    }
+    if (fstat(receipt_fd, &before) != 0
+        || !S_ISREG(before.st_mode)
+        || before.st_nlink != 1
+        || before.st_uid != 0
+        || before.st_gid != 0
+        || (before.st_mode & 0777) != 0600
+        || before.st_size <= 0
+        || before.st_size > 2048) {
+        errno = EPERM;
+        goto cleanup;
+    }
+    length = (size_t)before.st_size;
+    if (wls_read_exact(receipt_fd, contents, length) != 0
+        || fstat(receipt_fd, &after) != 0
+        || after.st_dev != before.st_dev
+        || after.st_ino != before.st_ino
+        || after.st_size != before.st_size
+        || after.st_mode != before.st_mode
+        || after.st_nlink != before.st_nlink
+        || after.st_uid != before.st_uid
+        || after.st_gid != before.st_gid
+#if defined(__APPLE__) || defined(__FreeBSD__)
+        || after.st_mtimespec.tv_sec != before.st_mtimespec.tv_sec
+        || after.st_mtimespec.tv_nsec != before.st_mtimespec.tv_nsec
+        || after.st_ctimespec.tv_sec != before.st_ctimespec.tv_sec
+        || after.st_ctimespec.tv_nsec != before.st_ctimespec.tv_nsec
+#else
+        || after.st_mtim.tv_sec != before.st_mtim.tv_sec
+        || after.st_mtim.tv_nsec != before.st_mtim.tv_nsec
+        || after.st_ctim.tv_sec != before.st_ctim.tv_sec
+        || after.st_ctim.tv_nsec != before.st_ctim.tv_nsec
+#endif
+        || memchr(contents, '\0', length) != NULL) {
+        errno = EPROTO;
+        goto cleanup;
+    }
+    if (strncmp(contents, "WLS-PROCESS-TREE-RETIRE/2\n", 26U) == 0) {
+        receipt->schema_version = 2;
+        if (sscanf(
+                contents,
+                "WLS-PROCESS-TREE-RETIRE/2\nstatus=%15[A-Z]\n"
+                "retirement_id=%64[0-9a-f]\npid=%lu\nstart_id=%llu\n"
+                "attestation_digest=%64[0-9a-f]\n"
+                "binary_digest=%64[0-9a-f]\n"
+                "runtime_generation=%64[0-9a-f]\n"
+                "host_boot_id=%64[0-9a-f]\n"
+                "config_digest=%64[0-9a-f]\n"
+                "config_path_digest=%64[0-9a-f]\n"
+                "publication_generation=%lu\nplatform=%15[a-z-]\n"
+                "service_id=%64[0-9a-f]\n"
+                "requested_launcher_generation=%64[0-9a-f]\n"
+                "completed_launcher_generation=%64[0-9a-f]\n"
+                "completed_host_boot_id=%64[0-9a-f]\n"
+                "completed_runtime_generation=%64[0-9a-f]\n%n",
+                receipt->status,
+                receipt->retirement_id,
+                &receipt->pid,
+                &receipt->start_id,
+                receipt->attestation_digest,
+                receipt->binary_digest,
+                receipt->runtime_generation,
+                receipt->host_boot_id,
+                receipt->config_digest,
+                receipt->config_path_digest,
+                &receipt->publication_generation,
+                receipt->platform,
+                receipt->service_id,
+                receipt->requested_launcher_generation,
+                receipt->completed_launcher_generation,
+                receipt->completed_host_boot_id,
+                receipt->completed_runtime_generation,
+                &consumed
+            ) != 17) {
+            errno = EPROTO;
+            goto cleanup;
+        }
+    } else {
+        receipt->schema_version = 1;
+        if (sscanf(
+                contents,
+                "WLS-PROCESS-TREE-RETIRE/1\nstatus=%15[A-Z]\n"
+                "retirement_id=%64[0-9a-f]\npid=%lu\nstart_id=%llu\n"
+                "attestation_digest=%64[0-9a-f]\n"
+                "binary_digest=%64[0-9a-f]\n"
+                "runtime_generation=%64[0-9a-f]\n"
+                "host_boot_id=%64[0-9a-f]\n%n",
+                receipt->status,
+                receipt->retirement_id,
+                &receipt->pid,
+                &receipt->start_id,
+                receipt->attestation_digest,
+                receipt->binary_digest,
+                receipt->runtime_generation,
+                receipt->host_boot_id,
+                &consumed
+            ) != 8) {
+            errno = EPROTO;
+            goto cleanup;
+        }
+    }
+    if (consumed != (int)length
+        || (strcmp(receipt->status, "COMPLETE") != 0
+            && strcmp(receipt->status, "INDETERMINATE") != 0)
+        || !wls_is_hex(receipt->retirement_id, 64U)
+        || receipt->pid == 0U || receipt->pid > (unsigned long)INT_MAX
+        || receipt->start_id == 0ULL
+        || !wls_is_hex(receipt->attestation_digest, 64U)
+        || !wls_is_hex(receipt->binary_digest, 64U)
+        || !wls_is_hex(receipt->runtime_generation, 64U)
+        || !wls_is_hex(receipt->host_boot_id, 64U)
+        || (receipt->schema_version == 2
+            && (!wls_is_hex(receipt->config_digest, 64U)
+                || !wls_is_hex(receipt->config_path_digest, 64U)
+                || !wls_is_hex(receipt->service_id, 64U)
+                || !wls_process_tree_platform_identity_valid(receipt)
+                || !wls_is_hex(
+                    receipt->requested_launcher_generation,
+                    64U
+                )
+                || !wls_is_hex(
+                    receipt->completed_launcher_generation,
+                    64U
+                )
+                || !wls_is_hex(receipt->completed_host_boot_id, 64U)
+                || !wls_is_hex(
+                    receipt->completed_runtime_generation,
+                    64U
+                )
+                || wls_process_tree_zero_generation(
+                    receipt->requested_launcher_generation
+                )
+                || (strcmp(receipt->status, "COMPLETE") == 0
+                    ? (wls_process_tree_zero_generation(
+                            receipt->completed_launcher_generation
+                        )
+                        || strcmp(
+                            receipt->requested_launcher_generation,
+                            receipt->completed_launcher_generation
+                        ) == 0
+                        || wls_process_tree_zero_generation(
+                            receipt->completed_host_boot_id
+                        )
+                        || wls_process_tree_zero_generation(
+                            receipt->completed_runtime_generation
+                        ))
+                    : (!wls_process_tree_zero_generation(
+                            receipt->completed_launcher_generation
+                        )
+                        || !wls_process_tree_zero_generation(
+                            receipt->completed_host_boot_id
+                        )
+                        || !wls_process_tree_zero_generation(
+                            receipt->completed_runtime_generation
+                        )))))) {
+        errno = EPROTO;
+        goto cleanup;
+    }
+    wls_sha256_hex((const unsigned char *)contents, length, receipt->receipt_digest);
+    if (wls_process_tree_zero_generation(receipt->receipt_digest)) {
+        errno = EIO;
+        goto cleanup;
+    }
+    result = 0;
+cleanup:
+    saved_errno = errno;
+    sodium_memzero(contents, sizeof(contents));
+    if (receipt_fd >= 0) close(receipt_fd);
+    if (home_fd >= 0) close(home_fd);
+    if (result < 0) {
+        sodium_memzero(receipt, sizeof(*receipt));
+        errno = saved_errno;
+    }
+    return result;
+}
+
+static int wls_write_root_process_tree_retirement(
+    const char *home,
+    const char *status,
+    const char *retirement_id,
+    const struct wls_process_attestation_receipt *attestation,
+    const char *attestation_digest
+) {
+    char path[PATH_MAX];
+    char host_boot_id[65];
+    char payload[1024];
+    int written;
+    if (home == NULL || status == NULL || retirement_id == NULL
+        || attestation == NULL || attestation_digest == NULL
+        || (strcmp(status, "COMPLETE") != 0
+            && strcmp(status, "INDETERMINATE") != 0)
+        || !wls_is_hex(retirement_id, 64U)
+        || !wls_is_hex(attestation_digest, 64U)
+        || !wls_is_hex(attestation->binary_digest, 64U)
+        || !wls_is_hex(attestation->runtime_generation, 64U)
+        || wls_upgrade_boot_id(host_boot_id) != 0
+        || !wls_is_hex(host_boot_id, 64U)
+        || snprintf(
+            path, sizeof(path),
+            "%s/trust/process-tree-retirement.receipt", home
+        ) >= (int)sizeof(path)) {
+        errno = EINVAL;
+        return -1;
+    }
+    written = snprintf(
+        payload,
+        sizeof(payload),
+        "WLS-PROCESS-TREE-RETIRE/1\nstatus=%s\nretirement_id=%s\n"
+        "pid=%lu\nstart_id=%llu\nattestation_digest=%s\n"
+        "binary_digest=%s\nruntime_generation=%s\nhost_boot_id=%s\n",
+        status,
+        retirement_id,
+        attestation->pid,
+        attestation->start_id,
+        attestation_digest,
+        attestation->binary_digest,
+        attestation->runtime_generation,
+        host_boot_id
+    );
+    if (written <= 0 || written >= (int)sizeof(payload)) {
+        sodium_memzero(payload, sizeof(payload));
+        errno = EOVERFLOW;
+        return -1;
+    }
+    if (wls_atomic_root_write(path, payload, (size_t)written) != 0) {
+        sodium_memzero(payload, sizeof(payload));
+        return -1;
+    }
+    sodium_memzero(payload, sizeof(payload));
+    return 0;
+}
+
+static int wls_process_tree_retirement_matches(
+    const struct wls_process_tree_retirement_receipt *receipt,
+    unsigned long pid,
+    unsigned long long start_id,
+    const char *attestation_digest,
+    const char *retirement_id
+) {
+    return receipt != NULL
+        && receipt->pid == pid
+        && receipt->start_id == start_id
+        && strcmp(receipt->attestation_digest, attestation_digest) == 0
+        && strcmp(receipt->retirement_id, retirement_id) == 0;
+}
+
+static int wls_stop_attested_nginx(
+    const char *home,
+    unsigned long expected_pid,
+    unsigned long long expected_start,
+    int require_exact_request,
+    unsigned long *stopped_pid,
+    unsigned long long *stopped_start,
+    char *proof_digest,
+    unsigned long long deadline_ms
+) {
+    char pid_path[PATH_MAX];
+    char expected_a[PATH_MAX];
+    char expected_b[PATH_MAX];
+    char expected_prefix[PATH_MAX];
+    char expected_config[PATH_MAX];
+    char observed[PATH_MAX];
+    unsigned long long observed_start = 0ULL;
+    char attestation_digest[65];
+    struct wls_process_attestation_receipt receipt;
     struct stat pid_status;
+    int receipt_errno;
+    unsigned long long now_ms;
+    if (home == NULL || stopped_pid == NULL || stopped_start == NULL) {
+        return WLS_PROCESS_TREE_RESULT_FAILED;
+    }
     *stopped_pid = 0U;
     *stopped_start = 0ULL;
+    if (proof_digest != NULL) proof_digest[0] = '\0';
     if (snprintf(
-            receipt_path, sizeof(receipt_path),
-            "%s/trust/process-attestation.receipt", home
-        ) >= (int)sizeof(receipt_path)
-        || snprintf(pid_path, sizeof(pid_path), "%s/runtime/nginx.pid", home)
-            >= (int)sizeof(pid_path)
+            pid_path, sizeof(pid_path), "%s/runtime/nginx.pid", home
+        ) >= (int)sizeof(pid_path)
         || snprintf(expected_a, sizeof(expected_a), "%s/slots/A/bin/nginx", home)
             >= (int)sizeof(expected_a)
         || snprintf(expected_b, sizeof(expected_b), "%s/slots/B/bin/nginx", home)
-            >= (int)sizeof(expected_b)) return -1;
-    if (wls_read_file(receipt_path, 2048U, &contents, &length) != 0) {
-        if (lstat(pid_path, &pid_status) != 0 && errno == ENOENT) return 0;
-        return -1;
-    }
-    if (sscanf(
-            (const char *)contents,
-            "WLS-PROCESS-ATTEST/2\npid=%lu\nstart_id=%llu\n"
-            "binary_digest=%64[0-9a-f]\nruntime_generation=%64[0-9a-f]\n"
-            "config_digest=%64[0-9a-f]\nconfig_path_digest=%64[0-9a-f]\n"
-            "publication_generation=%lu\n%n",
-            &pid, &start_id, binary_digest, runtime_generation, config_digest,
-            config_path_digest, &publication, &consumed
-        ) != 7 || consumed != (int)length || pid == 0U
-        || pid > (unsigned long)INT_MAX) goto denied;
-    sodium_memzero(contents, length); free(contents); contents = NULL;
-    if (wls_process_identity(
-            (pid_t)pid, observed, sizeof(observed), &observed_start
+            >= (int)sizeof(expected_b)
+        || snprintf(expected_prefix, sizeof(expected_prefix), "%s/runtime/", home)
+            >= (int)sizeof(expected_prefix)
+        || snprintf(
+            expected_config, sizeof(expected_config),
+            "%s/runtime/conf/nginx.conf", home
+        ) >= (int)sizeof(expected_config)) return WLS_PROCESS_TREE_RESULT_FAILED;
+    if (wls_read_root_process_attestation(
+            home, &receipt, attestation_digest
         ) != 0) {
-        if (errno == ESRCH) {
-            *stopped_pid = pid; *stopped_start = start_id; return 0;
+        receipt_errno = errno;
+        if (!require_exact_request && receipt_errno == ENOENT
+            && lstat(pid_path, &pid_status) != 0 && errno == ENOENT) {
+            return WLS_PROCESS_TREE_RESULT_INDETERMINATE;
         }
-        return -1;
+        errno = receipt_errno;
+        return WLS_PROCESS_TREE_RESULT_FAILED;
     }
-    if (observed_start != start_id
-        || (strcmp(observed, expected_a) != 0 && strcmp(observed, expected_b) != 0)) {
-        return -1;
+    if (require_exact_request
+        && (receipt.pid != expected_pid || receipt.start_id != expected_start)) {
+        goto denied;
     }
-    *stopped_pid = pid;
-    *stopped_start = start_id;
-    group = getpgid((pid_t)pid);
-    if (group == (pid_t)pid) {
-        if (kill(-(pid_t)pid, SIGTERM) != 0 && errno != ESRCH) return -1;
-    } else if (kill((pid_t)pid, SIGTERM) != 0 && errno != ESRCH) {
-        return -1;
+    *stopped_pid = receipt.pid;
+    *stopped_start = receipt.start_id;
+    if (proof_digest != NULL) memcpy(proof_digest, attestation_digest, 65U);
+    errno = 0;
+    if (wls_process_identity(
+            (pid_t)receipt.pid, observed, sizeof(observed), &observed_start
+        ) != 0) {
+        int identity_errno = errno;
+        errno = 0;
+        if (kill((pid_t)receipt.pid, 0) != 0 && errno == ESRCH) {
+            errno = 0;
+            if (kill(-(pid_t)receipt.pid, 0) != 0 && errno == ESRCH) {
+                sodium_memzero(&receipt, sizeof(receipt));
+                sodium_memzero(attestation_digest, sizeof(attestation_digest));
+                return WLS_PROCESS_TREE_RESULT_INDETERMINATE;
+            }
+        }
+        errno = identity_errno;
+        goto denied;
     }
-    for (attempt = 0U; attempt < 100U; attempt++) {
-        int master_gone = wls_process_identity(
-            (pid_t)pid, observed, sizeof(observed), &observed_start
-        ) != 0 && errno == ESRCH;
-        int group_gone = group != (pid_t)pid
-            || (kill(-(pid_t)pid, 0) != 0 && errno == ESRCH);
-        if (master_gone && group_gone) return 0;
-        (void)usleep(50000U);
+    if (observed_start != receipt.start_id) {
+        errno = 0;
+        if (kill(-(pid_t)receipt.pid, 0) != 0 && errno == ESRCH) {
+            sodium_memzero(&receipt, sizeof(receipt));
+            sodium_memzero(attestation_digest, sizeof(attestation_digest));
+            return WLS_PROCESS_TREE_RESULT_INDETERMINATE;
+        }
+        goto denied;
     }
-    if (group == (pid_t)pid) {
-        if (kill(-(pid_t)pid, SIGKILL) != 0 && errno != ESRCH) return -1;
-    } else if (kill((pid_t)pid, SIGKILL) != 0 && errno != ESRCH) {
-        return -1;
+    if ((strcmp(observed, expected_a) != 0 && strcmp(observed, expected_b) != 0)
+        || wls_process_command_matches(
+            (pid_t)receipt.pid, observed, expected_prefix, expected_config
+        ) != 0) goto denied;
+    /* Revalidate the live master immediately before returning the proof. */
+    if (wls_process_command_matches(
+            (pid_t)receipt.pid, observed, expected_prefix, expected_config
+        ) != 0
+        || wls_process_identity(
+            (pid_t)receipt.pid, observed, sizeof(observed), &observed_start
+        ) != 0
+        || observed_start != receipt.start_id
+        || (strcmp(observed, expected_a) != 0 && strcmp(observed, expected_b) != 0)
+        || getpgid((pid_t)receipt.pid) != (pid_t)receipt.pid) goto denied;
+    if (wls_monotonic_milliseconds(&now_ms) != 0 || now_ms >= deadline_ms) {
+        goto denied;
     }
-    for (attempt = 0U; attempt < 100U; attempt++) {
-        int master_gone = wls_process_identity(
-            (pid_t)pid, observed, sizeof(observed), &observed_start
-        ) != 0 && errno == ESRCH;
-        int group_gone = group != (pid_t)pid
-            || (kill(-(pid_t)pid, 0) != 0 && errno == ESRCH);
-        if (master_gone && group_gone) return 0;
-        (void)usleep(50000U);
-    }
-    return -1;
+    /*
+     * POSIX process groups are not durable ownership handles: the master can
+     * exit after revalidation, its PGID can be reused, and a descendant can
+     * escape with setsid(2).  A negative-PGID signal would therefore risk
+     * killing an unrelated group while still being unable to prove complete
+     * tree retirement.  Return the bound proof as INDETERMINATE and require
+     * the platform service manager (systemd cgroup / launchd service) to
+     * perform the ownership-safe service-tree restart.
+     */
+    sodium_memzero(&receipt, sizeof(receipt));
+    sodium_memzero(attestation_digest, sizeof(attestation_digest));
+    return WLS_PROCESS_TREE_RESULT_INDETERMINATE;
 denied:
-    if (contents != NULL) {
-        sodium_memzero(contents, length); free(contents);
-    }
-    return -1;
+    sodium_memzero(&receipt, sizeof(receipt));
+    sodium_memzero(attestation_digest, sizeof(attestation_digest));
+    return WLS_PROCESS_TREE_RESULT_FAILED;
 }
 
-static int wls_handle_emergency_revocation(
+static int wls_parse_process_start_id(
+    const char *text,
+    unsigned long long *value
+) {
+    unsigned long long parsed = 0ULL;
+    size_t index;
+    if (text == NULL || value == NULL || text[0] == '\0') return -1;
+    for (index = 0U; text[index] != '\0'; index++) {
+        unsigned long long digit;
+        if (text[index] < '0' || text[index] > '9') return -1;
+        digit = (unsigned long long)(text[index] - '0');
+        if (parsed > (ULLONG_MAX - digit) / 10ULL) return -1;
+        parsed = parsed * 10ULL + digit;
+    }
+    if (parsed == 0ULL) return -1;
+    *value = parsed;
+    return 0;
+}
+
+static int wls_process_tree_retire_v2(
+    const char *home,
+    const char *fencing,
+    const char *pid_text,
+    const char *start_text,
+    const char *expected_attestation_digest,
+    const char *retirement_id,
+    const char *budget_text,
+    char *reply,
+    size_t reply_capacity
+) {
+    unsigned long pid = 0U;
+    unsigned long stopped_pid = 0U;
+    unsigned long long start_id = 0ULL;
+    unsigned long long stopped_start = 0ULL;
+    unsigned long long budget_ms = 0ULL;
+    unsigned long long now_ms = 0ULL;
+    unsigned long long deadline_ms = 0ULL;
+    char proof_digest[65];
+    struct wls_process_attestation_receipt attestation;
+    struct wls_process_tree_retirement_receipt completed;
+    int completion_state;
+    int stop_result = WLS_PROCESS_TREE_RESULT_FAILED;
+    int locked = 0;
+    int written;
+    memset(&attestation, 0, sizeof(attestation));
+    memset(&completed, 0, sizeof(completed));
+    memset(proof_digest, 0, sizeof(proof_digest));
+    if (fencing == NULL || !wls_is_hex(fencing, 64U)
+        || wls_parse_unsigned(pid_text, 0, &pid) != 0
+        || pid == 0U
+        || pid > (unsigned long)INT_MAX
+        || wls_parse_process_start_id(start_text, &start_id) != 0
+        || !wls_is_hex(expected_attestation_digest, 64U)
+        || !wls_is_hex(retirement_id, 64U)
+        || wls_parse_process_start_id(budget_text, &budget_ms) != 0
+        || budget_ms > WLS_PROCESS_TREE_BUDGET_MAXIMUM_MS
+        || wls_monotonic_milliseconds(&now_ms) != 0
+        || now_ms > ULLONG_MAX - budget_ms) {
+        return wls_security_reply_error(
+            reply, reply_capacity,
+            "PROCESS_TREE_RETIRE_FAILED", "PROCESS_TREE_RETIRE", NULL, NULL
+        );
+    }
+    deadline_ms = now_ms + budget_ms;
+    if (wls_process_lifecycle_lock_until(deadline_ms) != 0) {
+        return wls_security_reply_error(
+            reply, reply_capacity,
+            "PROCESS_TREE_RETIRE_FAILED", "PROCESS_TREE_RETIRE",
+            retirement_id, expected_attestation_digest
+        );
+    }
+    locked = 1;
+    completion_state = wls_read_root_process_tree_retirement(home, &completed);
+    if (completion_state < 0) {
+        stop_result = WLS_PROCESS_TREE_RESULT_INDETERMINATE;
+        goto finish;
+    }
+    if (completion_state == 0
+        && wls_process_tree_retirement_matches(
+            &completed,
+            pid,
+            start_id,
+            expected_attestation_digest,
+            retirement_id
+        )) {
+        if (strcmp(completed.status, "COMPLETE") == 0) {
+            written = snprintf(
+                reply,
+                reply_capacity,
+                "WLS-ACTION/2\tOK\tPROCESS_TREE_RETIRE\t%lu\t%llu\t%s\t%s\t%s\t%s\n",
+                pid,
+                start_id,
+                expected_attestation_digest,
+                retirement_id,
+                completed.receipt_digest,
+                completed.schema_version == 2
+                    ? "platform_service_tree_receipt"
+                    : "native_process_tree_receipt"
+            );
+            stop_result = written > 0 && written < (int)reply_capacity
+                ? WLS_PROCESS_TREE_RESULT_OK
+                : WLS_PROCESS_TREE_RESULT_INDETERMINATE;
+            goto finish;
+        }
+        stop_result = WLS_PROCESS_TREE_RESULT_INDETERMINATE;
+        goto finish;
+    }
+    if (wls_read_root_process_attestation(
+            home, &attestation, proof_digest
+        ) != 0
+        || attestation.pid != pid
+        || attestation.start_id != start_id
+        || strcmp(proof_digest, expected_attestation_digest) != 0
+        || !wls_process_attestation_authority_current(
+            home,
+            fencing,
+            &attestation
+        )
+        || wls_monotonic_milliseconds(&now_ms) != 0
+        || now_ms >= deadline_ms) {
+        stop_result = WLS_PROCESS_TREE_RESULT_FAILED;
+        goto finish;
+    }
+    stop_result = wls_stop_attested_nginx(
+        home,
+        pid,
+        start_id,
+        1,
+        &stopped_pid,
+        &stopped_start,
+        proof_digest,
+        deadline_ms
+    );
+    if (stop_result != WLS_PROCESS_TREE_RESULT_FAILED
+        && (stopped_pid != pid
+            || stopped_start != start_id
+            || strcmp(proof_digest, expected_attestation_digest) != 0
+            || wls_write_root_process_tree_retirement(
+                home,
+                "INDETERMINATE",
+                retirement_id,
+                &attestation,
+                expected_attestation_digest
+            ) != 0)) {
+        stop_result = WLS_PROCESS_TREE_RESULT_INDETERMINATE;
+    }
+    /*
+     * A POSIX process-group disappearance cannot prove that a descendant did
+     * not call setsid(2) before retirement. Never publish COMPLETE from this
+     * primitive; the platform service-tree restart is the proof boundary.
+     */
+    if (stop_result != WLS_PROCESS_TREE_RESULT_FAILED) {
+        stop_result = WLS_PROCESS_TREE_RESULT_INDETERMINATE;
+    }
+finish:
+    if (locked) {
+        int unlock_error = pthread_mutex_unlock(&wls_process_lifecycle_mutex);
+        if (unlock_error != 0) {
+            errno = unlock_error;
+            stop_result = WLS_PROCESS_TREE_RESULT_INDETERMINATE;
+        }
+    }
+    sodium_memzero(&attestation, sizeof(attestation));
+    sodium_memzero(&completed, sizeof(completed));
+    sodium_memzero(proof_digest, sizeof(proof_digest));
+    if (stop_result == WLS_PROCESS_TREE_RESULT_OK) return 0;
+    return wls_security_reply_error(
+        reply,
+        reply_capacity,
+        stop_result == WLS_PROCESS_TREE_RESULT_INDETERMINATE
+            ? "PROCESS_TREE_RETIRE_INDETERMINATE"
+            : "PROCESS_TREE_RETIRE_FAILED",
+        "PROCESS_TREE_RETIRE",
+        retirement_id,
+        expected_attestation_digest
+    );
+}
+
+static int WLS_MAYBE_UNUSED wls_handle_emergency_revocation(
     char *line,
     const char *home,
     const char *fencing,
@@ -5919,6 +8851,9 @@ static int wls_handle_emergency_revocation(
     size_t revocation_length = 0U;
     int binding_fd = -1;
     int revocation_fd = -1;
+    int process_lifecycle_locked = 0;
+    unsigned long long retirement_now_ms = 0ULL;
+    unsigned long long retirement_deadline_ms = 0ULL;
     int written;
     time_t now = time(NULL);
     if (line == NULL || peer == NULL || reply == NULL || fencing == NULL) return -1;
@@ -6070,9 +9005,23 @@ static int wls_handle_emergency_revocation(
         if (controller > 0 && kill(controller, SIGTERM) != 0 && errno != ESRCH) {
             goto denied;
         }
+        if (wls_monotonic_milliseconds(&retirement_now_ms) != 0
+            || retirement_now_ms
+                > ULLONG_MAX - WLS_PROCESS_TREE_BUDGET_MAXIMUM_MS) {
+            goto denied;
+        }
+        retirement_deadline_ms = retirement_now_ms
+            + WLS_PROCESS_TREE_BUDGET_MAXIMUM_MS;
+        if (wls_process_lifecycle_lock_until(retirement_deadline_ms) != 0) {
+            goto denied;
+        }
+        process_lifecycle_locked = 1;
         if (wls_stop_attested_nginx(
-                home, &stopped_pid, &stopped_start
-            ) != 0) goto denied;
+                home, 0U, 0ULL, 0,
+                &stopped_pid, &stopped_start, NULL, retirement_deadline_ms
+            ) != WLS_PROCESS_TREE_RESULT_OK) goto denied;
+        if (pthread_mutex_unlock(&wls_process_lifecycle_mutex) != 0) goto denied;
+        process_lifecycle_locked = 0;
         written = snprintf(
             canonical, sizeof(canonical), "A\t%lu\t%s\t%lu\t%llu\t%s\n",
             sequence, fields[8], stopped_pid, stopped_start, fencing
@@ -6111,6 +9060,9 @@ static int wls_handle_emergency_revocation(
     (void)flock(revocation_fd, LOCK_UN); close(revocation_fd);
     return 0;
 denied:
+    if (process_lifecycle_locked) {
+        (void)pthread_mutex_unlock(&wls_process_lifecycle_mutex);
+    }
     sodium_memzero(&binding, sizeof(binding));
     if (binding_contents != NULL) {
         sodium_memzero(binding_contents, binding_length); free(binding_contents);
@@ -6132,6 +9084,7 @@ static int wls_handle_action_v2(
     const char *channel,
     const struct wls_peer *peer,
     const char *home,
+    const char *fencing,
     const struct wls_controller_identity *controller_identity,
     char *reply,
     size_t reply_capacity
@@ -6140,7 +9093,8 @@ static int wls_handle_action_v2(
     size_t count = 0U;
     size_t length;
     (void)controller_identity;
-    if (line == NULL || reply == NULL || reply_capacity < 128U) return -1;
+    if (line == NULL || reply == NULL || reply_capacity < 128U
+        || fencing == NULL) return -1;
     length = strlen(line);
     if (length < 2U || line[length - 1U] != '\n'
         || memchr(line, '\r', length) != NULL
@@ -6148,6 +9102,30 @@ static int wls_handle_action_v2(
     line[length - 1U] = '\0';
     if (wls_split_tsv(line, fields, 16U, &count) != 0
         || count < 2U || strcmp(fields[0], "WLS-ACTION/2") != 0) return -1;
+    if (strcmp(fields[1], "STOP") == 0) {
+        int written;
+        if (strcmp(channel, "admin") != 0 || count != 3U) {
+            return wls_security_reply_error(
+                reply, reply_capacity, "DENIED", fields[1], NULL, NULL
+            );
+        }
+        if (wls_write_admin_stopped(home, peer, fields[2]) != 0) {
+            return wls_security_reply_error(
+                reply,
+                reply_capacity,
+                errno == EBUSY ? "BUSY" : "STOP_FAILED",
+                fields[1],
+                NULL,
+                NULL
+            );
+        }
+        written = snprintf(
+            reply,
+            reply_capacity,
+            "WLS-ACTION/2\tOK\tSTOP\t-\t-\n"
+        );
+        return written > 0 && written < (int)reply_capacity ? 0 : -1;
+    }
     if (strcmp(fields[1], "SNAP") == 0) {
         if (strcmp(channel, "project") != 0 || count != 9U) {
             return wls_security_reply_error(
@@ -6171,10 +9149,69 @@ static int wls_handle_action_v2(
     }
     if (strcmp(fields[1], "PROCESS_ATTEST") == 0
         && (strcmp(channel, "admin") == 0 || strcmp(channel, "project") == 0)
-        && count == 9U) {
-        return wls_process_attest_v2(
-            home, fields[2], fields[3], fields[4], fields[5],
-            fields[6], fields[7], fields[8], reply, reply_capacity
+        && count == 13U) {
+        return wls_process_attest_v2_serialized(
+            home, fencing, fields[2], fields[3], fields[4], fields[5],
+            fields[6], fields[7], fields[8], fields[9], fields[10],
+            fields[11], fields[12], reply, reply_capacity
+        );
+    }
+    if (strcmp(fields[1], "PROCESS_ATTEST_CANDIDATE_PREPARE") == 0
+        && (strcmp(channel, "admin") == 0 || strcmp(channel, "project") == 0)
+        && count == 10U) {
+        return wls_candidate_attestation_action_serialized(
+            1, home, fencing, fields, reply, reply_capacity
+        );
+    }
+    if (strcmp(fields[1], "PROCESS_ATTEST_CANDIDATE_CLEAR") == 0
+        && (strcmp(channel, "admin") == 0 || strcmp(channel, "project") == 0)
+        && count == 7U) {
+        return wls_candidate_attestation_action_serialized(
+            0, home, fencing, fields, reply, reply_capacity
+        );
+    }
+    if (strcmp(fields[1], "PROCESS_TREE_RETIRE") == 0) {
+        if ((strcmp(channel, "admin") != 0 && strcmp(channel, "project") != 0)
+            || count != 7U) {
+            return wls_security_reply_error(
+                reply, reply_capacity,
+                "PROCESS_TREE_RETIRE_FAILED", "PROCESS_TREE_RETIRE", NULL, NULL
+            );
+        }
+        return wls_process_tree_retire_v2(
+            home,
+            fencing,
+            fields[2],
+            fields[3],
+            fields[4],
+            fields[5],
+            fields[6],
+            reply,
+            reply_capacity
+        );
+    }
+    if (strcmp(fields[1], "ROLLBACK_REQUEST") == 0) {
+        if ((strcmp(channel, "admin") != 0 && strcmp(channel, "project") != 0)
+            || count != 8U) {
+            return wls_security_reply_error(
+                reply,
+                reply_capacity,
+                "ROLLBACK_REQUEST_REJECTED",
+                "ROLLBACK_REQUEST",
+                count > 2U ? fields[2] : NULL,
+                count > 3U ? fields[3] : NULL
+            );
+        }
+        return wls_rollback_request_action_v2(
+            home,
+            fields[2],
+            fields[3],
+            fields[4],
+            fields[5],
+            fields[6],
+            fields[7],
+            reply,
+            reply_capacity
         );
     }
     if (strcmp(fields[1], "AUTH_TRANSFER_PREPARE") == 0 && count == 8U) {
@@ -6343,7 +9380,8 @@ static int wls_json_unsigned_long_long(
 static int wls_verify_bootstrap_response(
     const char *response,
     const char *expected_request_id,
-    const unsigned char key[crypto_auth_hmacsha256_KEYBYTES],
+    const unsigned char *key,
+    size_t key_length,
     struct wls_bootstrap_receipt *receipt
 ) {
     char protocol[32];
@@ -6437,11 +9475,12 @@ static int wls_verify_bootstrap_response(
         request_id
     );
     if (canonical_length <= 0 || canonical_length >= (int)sizeof(canonical)
-        || crypto_auth_hmacsha256(
+        || wls_hmac_sha256(
             digest,
             (const unsigned char *)canonical,
             (unsigned long long)canonical_length,
-            key
+            key,
+            key_length
         ) != 0) {
         goto cleanup;
     }
@@ -6492,10 +9531,8 @@ static int wls_bootstrap_once(
     char request[1280];
     char header[512];
     char *response = NULL;
-    unsigned char key[crypto_auth_hmacsha256_KEYBYTES];
     unsigned char digest[crypto_hash_sha256_BYTES];
     unsigned char signature_bytes[crypto_auth_hmacsha256_BYTES];
-    size_t decoded = 0U;
     struct timespec monotonic;
     struct wls_peer peer;
     time_t wall_time;
@@ -6506,11 +9543,13 @@ static int wls_bootstrap_once(
     int header_length;
     ssize_t response_length;
     int result = -1;
-    memset(key, 0, sizeof(key));
     memset(digest, 0, sizeof(digest));
     memset(signature_bytes, 0, sizeof(signature_bytes));
     if (controller_socket == NULL || fencing == NULL || home == NULL
-        || controller_identity == NULL || geteuid() != 0
+        || controller_identity == NULL
+        || (geteuid() != 0
+            && (controller_identity->uid != geteuid()
+                || controller_identity->gid != getegid()))
         || io_timeout_seconds < 1
         || snprintf(token_path, sizeof(token_path), "%s/trust/admin.token", home)
             >= (int)sizeof(token_path)
@@ -6518,8 +9557,6 @@ static int wls_bootstrap_once(
             >= (int)sizeof(host_path)
         || wls_read_hex_file(token_path, token, 64U) != 0
         || wls_read_hex_file(host_path, host, 32U) != 0
-        || sodium_hex2bin(key, sizeof(key), token, 64U, NULL, &decoded, NULL) != 0
-        || decoded != sizeof(key)
         || wls_random_token(request_id) != 0
         || wls_random_token(nonce) != 0
         || clock_gettime(CLOCK_MONOTONIC, &monotonic) != 0) {
@@ -6564,11 +9601,12 @@ static int wls_bootstrap_once(
     );
     if (signature_canonical_length <= 0
         || signature_canonical_length >= (int)sizeof(signature_canonical)
-        || crypto_auth_hmacsha256(
+        || wls_hmac_sha256(
             signature_bytes,
             (const unsigned char *)signature_canonical,
             (unsigned long long)signature_canonical_length,
-            key
+            (const unsigned char *)token,
+            64U
         ) != 0) {
         goto cleanup;
     }
@@ -6627,7 +9665,8 @@ static int wls_bootstrap_once(
             if (response[11] == '2') {
                 action_response[0] = '\0';
                 action_result = wls_handle_action_v2(
-                    response, "admin", &peer, home, controller_identity,
+                    response, "admin", &peer, home, fencing,
+                    controller_identity,
                     action_response, sizeof(action_response)
                 );
                 action_length = (action_result == 0
@@ -6658,7 +9697,13 @@ static int wls_bootstrap_once(
             }
             continue;
         }
-        result = wls_verify_bootstrap_response(response, request_id, key, receipt);
+        result = wls_verify_bootstrap_response(
+            response,
+            request_id,
+            (const unsigned char *)token,
+            64U,
+            receipt
+        );
         break;
     }
 cleanup:
@@ -6667,7 +9712,6 @@ cleanup:
         sodium_memzero(response, WLS_MAX_REQUEST + 1U);
         free(response);
     }
-    sodium_memzero(key, sizeof(key));
     sodium_memzero(token, sizeof(token));
     sodium_memzero(signature_bytes, sizeof(signature_bytes));
     sodium_memzero(signature, sizeof(signature));
@@ -6705,6 +9749,12 @@ static int wls_bootstrap_once_serialized(
     }
     return result;
 }
+
+static int wls_bootstrap_health_record(
+    struct wls_bootstrap_maintenance_context *context,
+    int bootstrap_result,
+    const struct wls_bootstrap_receipt *receipt
+);
 
 static int wls_bootstrap_controller(
     const char *controller_socket,
@@ -6869,11 +9919,30 @@ static int wls_bootstrap_health_record(
     const struct wls_bootstrap_receipt *receipt
 ) {
     int valid;
-    if (context == NULL || pthread_mutex_lock(&context->completion_mutex) != 0) {
-        return -1;
-    }
+    int previous_cancel_state;
+    int cancel_error;
+    int unlock_error;
+    int restore_error;
+    if (context == NULL) return -1;
     valid = bootstrap_result == 0
         && wls_bootstrap_receipt_matches(context, receipt);
+    cancel_error = pthread_setcancelstate(
+        PTHREAD_CANCEL_DISABLE,
+        &previous_cancel_state
+    );
+    if (cancel_error != 0) {
+        errno = cancel_error;
+        return -1;
+    }
+    if (wls_mutex_lock_bounded(
+            &context->completion_mutex,
+            WLS_COMPLETION_LOCK_TIMEOUT_MILLISECONDS
+        ) != 0) {
+        int lock_error = errno;
+        (void)pthread_setcancelstate(previous_cancel_state, NULL);
+        errno = lock_error;
+        return -1;
+    }
     if (!valid) {
         context->continuous_since_ms = 0;
         context->last_success_ms = 0;
@@ -6889,7 +9958,12 @@ static int wls_bootstrap_health_record(
         context->last_success_ms = receipt->observed_monotonic_ms;
         context->receipt = *receipt;
     }
-    (void)pthread_mutex_unlock(&context->completion_mutex);
+    unlock_error = pthread_mutex_unlock(&context->completion_mutex);
+    restore_error = pthread_setcancelstate(previous_cancel_state, NULL);
+    if (unlock_error != 0 || restore_error != 0) {
+        errno = unlock_error != 0 ? unlock_error : restore_error;
+        return -1;
+    }
     return valid ? 0 : -1;
 }
 
@@ -6900,7 +9974,11 @@ static void wls_bootstrap_health_arm(
 ) {
     long long freshness_floor;
     long long freshness_ceiling;
-    if (context == NULL || pthread_mutex_lock(&context->completion_mutex) != 0) return;
+    if (context == NULL
+        || wls_mutex_lock_bounded(
+            &context->completion_mutex,
+            WLS_COMPLETION_LOCK_TIMEOUT_MILLISECONDS
+        ) != 0) return;
     context->observation_mode = observation_mode;
     context->observation_failed = 0;
     if (wls_checked_add_ll(
@@ -6931,7 +10009,14 @@ static int wls_bootstrap_health_ready(
     struct wls_bootstrap_receipt *receipt
 ) {
     int ready = 0;
-    if (context == NULL || pthread_mutex_lock(&context->completion_mutex) != 0) return 0;
+    int candidate = 0;
+    struct wls_bootstrap_receipt snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+    if (context == NULL
+        || wls_mutex_lock_bounded(
+            &context->completion_mutex,
+            WLS_COMPLETION_LOCK_TIMEOUT_MILLISECONDS
+        ) != 0) return 0;
     if (context->observation_mode == observation_mode
         && !context->observation_failed
         && context->continuous_since_ms > 0
@@ -6940,12 +10025,15 @@ static int wls_bootstrap_health_ready(
         && context->last_success_ms > 0
         && now_ms >= context->last_success_ms
         && now_ms - context->last_success_ms
-            <= WLS_MAINTENANCE_HEALTH_FRESHNESS_MILLISECONDS
-        && wls_bootstrap_receipt_matches(context, &context->receipt)) {
-        if (receipt != NULL) *receipt = context->receipt;
-        ready = 1;
+            <= WLS_MAINTENANCE_HEALTH_FRESHNESS_MILLISECONDS) {
+        snapshot = context->receipt;
+        candidate = 1;
     }
     (void)pthread_mutex_unlock(&context->completion_mutex);
+    if (candidate && wls_bootstrap_receipt_matches(context, &snapshot)) {
+        if (receipt != NULL) *receipt = snapshot;
+        ready = 1;
+    }
     return ready;
 }
 
@@ -6953,7 +10041,11 @@ static int wls_bootstrap_observation_failed(
     struct wls_bootstrap_maintenance_context *context
 ) {
     int failed = 1;
-    if (context != NULL && pthread_mutex_lock(&context->completion_mutex) == 0) {
+    if (context != NULL
+        && wls_mutex_lock_bounded(
+            &context->completion_mutex,
+            WLS_COMPLETION_LOCK_TIMEOUT_MILLISECONDS
+        ) == 0) {
         failed = context->observation_mode == 1 && context->observation_failed;
         (void)pthread_mutex_unlock(&context->completion_mutex);
     }
@@ -6963,10 +10055,24 @@ static int wls_bootstrap_observation_failed(
 static void wls_bootstrap_maintenance_completed(void *argument)
 {
     struct wls_bootstrap_maintenance_context *context = argument;
+    int cancel_error;
     if (context == NULL) return;
-    if (pthread_mutex_lock(&context->completion_mutex) == 0) {
+    cancel_error = pthread_setcancelstate(
+        PTHREAD_CANCEL_DISABLE,
+        NULL
+    );
+    if (cancel_error != 0) {
+        wls_bootstrap_maintenance_failed = 1;
+        return;
+    }
+    if (wls_mutex_lock_bounded(
+            &context->completion_mutex,
+            WLS_COMPLETION_LOCK_TIMEOUT_MILLISECONDS
+        ) == 0) {
         context->completed = 1;
         (void)pthread_mutex_unlock(&context->completion_mutex);
+    } else {
+        wls_bootstrap_maintenance_failed = 1;
     }
 }
 
@@ -7039,20 +10145,22 @@ static int wls_stop_bootstrap_maintenance_bounded(
         return -1;
     }
     for (attempt = 0U; attempt < WLS_MAINTENANCE_STOP_ATTEMPTS; attempt++) {
-        int lock_error = pthread_mutex_lock(&context->completion_mutex);
-        if (lock_error != 0) {
+        int lock_error = pthread_mutex_trylock(&context->completion_mutex);
+        if (lock_error != 0 && lock_error != EBUSY) {
             (void)pthread_detach(thread);
             *context_pointer = NULL;
             errno = lock_error;
             return -1;
         }
-        completed = context->completed;
-        lock_error = pthread_mutex_unlock(&context->completion_mutex);
-        if (lock_error != 0) {
-            (void)pthread_detach(thread);
-            *context_pointer = NULL;
-            errno = lock_error;
-            return -1;
+        if (lock_error == 0) {
+            completed = context->completed;
+            lock_error = pthread_mutex_unlock(&context->completion_mutex);
+            if (lock_error != 0) {
+                (void)pthread_detach(thread);
+                *context_pointer = NULL;
+                errno = lock_error;
+                return -1;
+            }
         }
         if (completed) break;
         if (usleep(WLS_MAINTENANCE_STOP_POLL_US) != 0 && errno != EINTR) {
@@ -7155,7 +10263,8 @@ static void wls_handle(
             if (response[11] == '2') {
                 action_response[0] = '\0';
                 action_result = wls_handle_action_v2(
-                    response, channel, peer, home, controller_identity,
+                    response, channel, peer, home, fencing,
+                    controller_identity,
                     action_response, sizeof(action_response)
                 );
                 action_length = (action_result == 0
@@ -7524,18 +10633,21 @@ static pid_t wls_start_controller(
     if (wls_wait_for_handlers() != 0) return -1;
     child = fork();
     if (child != 0) {
-        if (child > 0 && wls_write_controller_process_identity(
-                home,
-                child,
-                php,
-                active_slot,
-                runtime_generation,
-                fencing
-            ) != 0) {
-            int identity_error = errno != 0 ? errno : EIO;
-            (void)wls_stop_controller_bounded(child, controller_socket);
-            errno = identity_error;
-            return -1;
+        if (child > 0) {
+            errno = 0;
+            if (wls_write_controller_process_identity(
+                    home,
+                    child,
+                    php,
+                    active_slot,
+                    runtime_generation,
+                    fencing
+                ) != 0) {
+                int identity_error = errno != 0 ? errno : EIO;
+                (void)wls_stop_controller_bounded(child, controller_socket);
+                errno = identity_error;
+                return -1;
+            }
         }
         return child;
     }
@@ -7709,6 +10821,14 @@ static int wls_serve(
                 goto failed;
             }
         }
+    }
+    if (wls_recover_atomic_write_candidates(home) != 0) {
+        fprintf(
+            stderr,
+            "broker atomic candidate recovery refused startup: %s\n",
+            strerror(errno)
+        );
+        goto failed;
     }
     if (wls_random_token(fencing) != 0
         || wls_write_fencing(fencing_file, fencing, controller_identity) != 0) {
@@ -8130,15 +11250,56 @@ static int wls_self_test(void)
     char directory[] = "/tmp/wls-gateway-broker-selftest-XXXXXX";
     char source[PATH_MAX];
     char link_path[PATH_MAX];
+    char trust_path[PATH_MAX] = {0};
+    char fencing_path[PATH_MAX] = {0};
+    char candidate_path[PATH_MAX] = {0};
+    char second_candidate_path[PATH_MAX] = {0};
+    char malformed_path[PATH_MAX] = {0};
+    char unknown_path[PATH_MAX] = {0};
+    char quota_paths[WLS_ATOMIC_RECOVERY_CANDIDATES_MAXIMUM + 1U][PATH_MAX];
+    char fencing_contents[66];
     int root_fd = -1;
     int file_fd = -1;
     int linked_fd = -1;
     int sockets[2] = {-1, -1};
     struct wls_peer peer;
+    size_t quota_count = 0U;
+    size_t index;
     int result = 1;
+    memset(quota_paths, 0, sizeof(quota_paths));
+    memset(fencing_contents, 'a', 64U);
+    fencing_contents[64] = '\n';
+    fencing_contents[65] = '\0';
     if (mkdtemp(directory) == NULL) return 1;
     if (snprintf(source, sizeof(source), "%s/source.pem", directory) >= (int)sizeof(source)
-        || snprintf(link_path, sizeof(link_path), "%s/link.pem", directory) >= (int)sizeof(link_path)) {
+        || snprintf(link_path, sizeof(link_path), "%s/link.pem", directory) >= (int)sizeof(link_path)
+        || snprintf(trust_path, sizeof(trust_path), "%s/trust", directory) >= (int)sizeof(trust_path)
+        || snprintf(fencing_path, sizeof(fencing_path), "%s/broker-fencing-token", trust_path)
+            >= (int)sizeof(fencing_path)
+        || snprintf(
+            candidate_path,
+            sizeof(candidate_path),
+            "%s/broker-fencing-token.candidate.123.0000000000000001",
+            trust_path
+        ) >= (int)sizeof(candidate_path)
+        || snprintf(
+            second_candidate_path,
+            sizeof(second_candidate_path),
+            "%s/upgrade-healthy.candidate.124.0000000000000002",
+            trust_path
+        ) >= (int)sizeof(second_candidate_path)
+        || snprintf(
+            malformed_path,
+            sizeof(malformed_path),
+            "%s/broker-fencing-token.candidate.bad",
+            trust_path
+        ) >= (int)sizeof(malformed_path)
+        || snprintf(
+            unknown_path,
+            sizeof(unknown_path),
+            "%s/foreign-program.candidate.125.0000000000000003",
+            trust_path
+        ) >= (int)sizeof(unknown_path)) {
         goto cleanup;
     }
     file_fd = open(source, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
@@ -8156,6 +11317,117 @@ static int wls_self_test(void)
         || peer.uid != (unsigned long)geteuid()) {
         goto cleanup;
     }
+    if (mkdir(trust_path, 0700) != 0) goto cleanup;
+    file_fd = open(
+        fencing_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+    if (file_fd < 0
+        || wls_write_all(file_fd, fencing_contents, 65U) != 0
+        || fsync(file_fd) != 0) goto cleanup;
+    close(file_fd);
+    file_fd = -1;
+
+    /* A bounded partial candidate is removable only beside a valid commit. */
+    file_fd = open(
+        candidate_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+    if (file_fd < 0) goto cleanup;
+    close(file_fd);
+    file_fd = -1;
+    if (wls_recover_atomic_write_candidates(directory) != 0
+        || access(candidate_path, F_OK) == 0
+        || access(fencing_path, F_OK) != 0) goto cleanup;
+
+    /* Unknown leaves remain outside the WLS recovery namespace. */
+    file_fd = open(
+        unknown_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+    if (file_fd < 0) goto cleanup;
+    close(file_fd);
+    file_fd = -1;
+    if (wls_recover_atomic_write_candidates(directory) != 0
+        || access(unknown_path, F_OK) != 0) goto cleanup;
+
+    /* A malformed reserved leaf is evidence, not something to ignore/delete. */
+    file_fd = open(
+        malformed_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+    if (file_fd < 0) goto cleanup;
+    close(file_fd);
+    file_fd = -1;
+    if (wls_recover_atomic_write_candidates(directory) == 0
+        || access(malformed_path, F_OK) != 0) goto cleanup;
+    if (unlink(malformed_path) != 0) goto cleanup;
+
+    /* Validate the entire target closure before deleting an earlier candidate. */
+    file_fd = open(
+        candidate_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+    if (file_fd < 0) goto cleanup;
+    close(file_fd);
+    file_fd = open(
+        second_candidate_path,
+        O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+        0600
+    );
+    if (file_fd < 0) goto cleanup;
+    close(file_fd);
+    file_fd = -1;
+    if (wls_recover_atomic_write_candidates(directory) == 0
+        || access(candidate_path, F_OK) != 0
+        || access(second_candidate_path, F_OK) != 0) goto cleanup;
+    if (unlink(candidate_path) != 0 || unlink(second_candidate_path) != 0) goto cleanup;
+
+    /* A corrupt committed pair is retained as repair evidence. */
+    file_fd = open(
+        candidate_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+    if (file_fd < 0) goto cleanup;
+    close(file_fd);
+    file_fd = open(
+        fencing_path, O_WRONLY | O_TRUNC | O_CLOEXEC | O_NOFOLLOW
+    );
+    if (file_fd < 0 || wls_write_all(file_fd, "bad\n", 4U) != 0
+        || fsync(file_fd) != 0) goto cleanup;
+    close(file_fd);
+    file_fd = -1;
+    if (wls_recover_atomic_write_candidates(directory) == 0
+        || access(candidate_path, F_OK) != 0) goto cleanup;
+    file_fd = open(
+        fencing_path, O_WRONLY | O_TRUNC | O_CLOEXEC | O_NOFOLLOW
+    );
+    if (file_fd < 0
+        || wls_write_all(file_fd, fencing_contents, 65U) != 0
+        || fsync(file_fd) != 0) goto cleanup;
+    close(file_fd);
+    file_fd = -1;
+    if (unlink(candidate_path) != 0) goto cleanup;
+
+    /* The sixty-fifth exact candidate fails closed without deleting the first. */
+    for (index = 0U; index < WLS_ATOMIC_RECOVERY_CANDIDATES_MAXIMUM + 1U; index++) {
+        if (snprintf(
+                quota_paths[index],
+                sizeof(quota_paths[index]),
+                "%s/broker-fencing-token.candidate.%lu.%016llx",
+                trust_path,
+                (unsigned long)(1000U + index),
+                (unsigned long long)(index + 16U)
+            ) >= (int)sizeof(quota_paths[index])) goto cleanup;
+        file_fd = open(
+            quota_paths[index],
+            O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+            0600
+        );
+        if (file_fd < 0) goto cleanup;
+        close(file_fd);
+        file_fd = -1;
+        quota_count++;
+    }
+    if (wls_recover_atomic_write_candidates(directory) == 0
+        || access(quota_paths[0], F_OK) != 0
+        || access(
+            quota_paths[WLS_ATOMIC_RECOVERY_CANDIDATES_MAXIMUM], F_OK
+        ) != 0) goto cleanup;
     result = 0;
 cleanup:
     if (sockets[0] >= 0) close(sockets[0]);
@@ -8163,6 +11435,24 @@ cleanup:
     if (linked_fd >= 0) close(linked_fd);
     if (file_fd >= 0) close(file_fd);
     if (root_fd >= 0) close(root_fd);
+    for (index = 0U; index < quota_count; index++) unlink(quota_paths[index]);
+    unlink(malformed_path);
+    unlink(second_candidate_path);
+    unlink(candidate_path);
+    unlink(unknown_path);
+    unlink(fencing_path);
+    if (trust_path[0] != '\0') {
+        char package_lock[PATH_MAX];
+        int package_lock_length = snprintf(
+                package_lock,
+                sizeof(package_lock),
+                "%s/package-install.lock",
+                trust_path
+            );
+        if (package_lock_length > 0
+            && package_lock_length < (int)sizeof(package_lock)) unlink(package_lock);
+        rmdir(trust_path);
+    }
     unlink(link_path);
     unlink(source);
     rmdir(directory);

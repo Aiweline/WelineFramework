@@ -48,6 +48,8 @@ $securityRecentAttacks = is_array($panelSecurityData['recent_attacks'] ?? null) 
 $securityPolicyAudit = is_array($panelSecurityData['policy_audit'] ?? null) ? array_values($panelSecurityData['policy_audit']) : [];
 $securityPolicyAuditFilters = is_array($panelSecurityData['policy_audit_filters'] ?? null) ? $panelSecurityData['policy_audit_filters'] : [];
 $securityRulesJson = (string)($panelSecurityData['rules_json'] ?? '{}');
+$securityRulesGeneration = \max(0, (int)($panelSecurityData['rules_generation'] ?? 0));
+$securityRulesDigest = \trim((string)($panelSecurityData['rules_digest'] ?? ''));
 $securityRuleEditor = is_array($panelSecurityData['rule_editor'] ?? null) ? $panelSecurityData['rule_editor'] : [];
 $domainOverrideEditor = is_array($panelSecurityData['domain_override_editor'] ?? null) ? $panelSecurityData['domain_override_editor'] : [];
 $securityPanelError = trim((string)($panelSecurityData['error'] ?? ''));
@@ -1159,6 +1161,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <input type="hidden" name="domain_override[domain]" value="<?= $escapeHtml($domainPolicyDomain) ?>">
                             <input type="hidden" name="domain_override[label]" value="<?= $escapeHtml($domainPolicyLabel) ?>">
                             <input type="hidden" name="domain_override[scope]" value="<?= $escapeHtml($domainPolicyScope) ?>">
+                            <input type="hidden" name="rules_generation" value="<?= $securityRulesGeneration ?>">
+                            <input type="hidden" name="rules_digest" value="<?= $escapeHtml($securityRulesDigest) ?>">
                             <textarea name="rules_json" hidden><?= $escapeHtml($securityRulesJson !== '' ? $securityRulesJson : '{}') ?></textarea>
                             <div class="wls-domain-policy-summary">
                                 <div>
@@ -1713,6 +1717,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <span class="wls-status-pill"><?= __('AttackDetector') ?></span>
                         </div>
                         <input type="hidden" name="save_mode" value="visual">
+                        <input type="hidden" name="rules_generation" value="<?= $securityRulesGeneration ?>">
+                        <input type="hidden" name="rules_digest" value="<?= $escapeHtml($securityRulesDigest) ?>">
                         <div class="wls-rule-editor-grid">
                             <?php
                             $pathRateLimitRule = $ruleEditor('path_rate_limits');

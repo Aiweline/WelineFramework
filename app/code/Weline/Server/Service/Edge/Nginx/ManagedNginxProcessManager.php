@@ -10,6 +10,7 @@ use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxChildProcessProbe;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxProcessIdentity;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 
 /**
  * Start/stop/reload the per-project managed nginx process.
@@ -20,6 +21,14 @@ final class ManagedNginxProcessManager
     private const COMMAND_TIMEOUT_SECONDS = 30.0;
     private const GRACEFUL_STOP_TIMEOUT_SECONDS = 30.0;
     private const RELOAD_OLD_WORKER_TIMEOUT_SECONDS = 15.0;
+    private const CONFIG_TEST_LOCK_WAIT_SECONDS = 45.0;
+    private const CONFIG_TEST_PREFIX = 'wls-nginx-config-test-';
+    private const LEGACY_CONFIG_TEST_PID_PREFIX = 'nginx-config-test-';
+    private const CONFIG_TEST_LOCK_LEAF = 'managed-nginx.config-test.lock';
+    private const MAX_CONFIG_TEST_DIRECTORY_ENTRIES = 8192;
+    private const MAX_CONFIG_TEST_ARTIFACTS = 32;
+    private const MAX_CONFIG_TEST_ARTIFACTS_PER_TOKEN = 10;
+    private const MAX_CONFIG_TEST_PID_BYTES = 32;
 
     private readonly ManagedNginxPaths $paths;
     private readonly NginxProcessIdentity $processIdentity;
@@ -364,6 +373,26 @@ final class ManagedNginxProcessManager
         }
 
         try {
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $this->configTestLockFile(),
+                fn(): array => $this->testConfigLocked($configFile),
+                waitTimeoutSeconds: self::CONFIG_TEST_LOCK_WAIT_SECONDS,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'code' => 1,
+                'output' => 'managed nginx config-test namespace recovery failed: '
+                    . $throwable->getMessage(),
+            ];
+        }
+    }
+
+    /** @return array{code:int,output:string} */
+    private function testConfigLocked(string $configFile): array
+    {
+        $this->cleanupConfigTestArtifacts($configFile);
+
+        try {
             $config = GatewayProjectStateFilesystem::read(
                 $configFile,
                 self::MAX_CONFIG_BYTES,
@@ -377,8 +406,9 @@ final class ManagedNginxProcessManager
                     . $throwable->getMessage(),
             ];
         }
-        $testPidName = 'nginx-config-test-' . $token . '.pid';
-        $testConfig = $configFile . '.test.' . $token;
+        $testPidName = self::CONFIG_TEST_PREFIX . $token . '.pid';
+        $testConfig = $this->paths->confDir() . DIRECTORY_SEPARATOR
+            . self::CONFIG_TEST_PREFIX . $token . '.conf';
         $testPidFile = $this->paths->runDir() . DIRECTORY_SEPARATOR . $testPidName;
         $pidDirectivePattern = '/^\s*pid\s+[^;\r\n]+;\s*$/m';
         if (\preg_match_all($pidDirectivePattern, $config) !== 1) {
@@ -411,30 +441,463 @@ final class ManagedNginxProcessManager
                     . $throwable->getMessage(),
             ];
         }
-        $result = $this->runNginx(['-t'], $testConfig);
-        $cleanupErrors = [];
-        foreach ([$testPidFile, $testConfig] as $temporary) {
-            if (\file_exists($temporary) || \is_link($temporary)) {
-                try {
-                    GatewayProjectStateFilesystem::removeRegular(
-                        $temporary,
-                        'isolated managed Nginx config-test artifact',
-                    );
-                } catch (\Throwable $throwable) {
-                    $cleanupErrors[] = $throwable->getMessage();
-                }
-            }
+        try {
+            $result = $this->runNginx(['-t'], $testConfig);
+        } catch (\Throwable $throwable) {
+            $result = [
+                'code' => 1,
+                'output' => 'unable to execute isolated managed nginx config test: '
+                    . $throwable->getMessage(),
+            ];
         }
-        if ($cleanupErrors !== []) {
-            $output = \trim((string)($result['output'] ?? ''));
+
+        try {
+            $this->cleanupConfigTestArtifacts($configFile);
+        } catch (\Throwable $throwable) {
+            $output = \trim($result['output']);
             $cleanup = 'unable to remove isolated managed nginx config-test artifacts: '
-                . \implode('; ', $cleanupErrors);
+                . $throwable->getMessage();
             return [
                 'code' => 1,
                 'output' => $output === '' ? $cleanup : $output . "\n" . $cleanup,
             ];
         }
         return $result;
+    }
+
+    private function configTestLockFile(): string
+    {
+        return $this->paths->runDir() . DIRECTORY_SEPARATOR
+            . self::CONFIG_TEST_LOCK_LEAF;
+    }
+
+    /**
+     * Collect exact config-test crash evidence while the stable namespace lock
+     * is held. Discovery, semantic validation and a complete second snapshot
+     * finish before the first unlink. Any ambiguous PID or unsafe leaf keeps
+     * the whole set available for diagnosis instead of partially collecting it.
+     */
+    private function cleanupConfigTestArtifacts(string $protectedConfigFile): void
+    {
+        $selected = $this->configTestArtifactSnapshot($protectedConfigFile);
+        if ($selected['artifacts'] === []) {
+            return;
+        }
+        $rechecked = $this->configTestArtifactSnapshot($protectedConfigFile);
+        if (\array_keys($selected['artifacts']) !== \array_keys($rechecked['artifacts'])) {
+            throw new \RuntimeException(
+                'Managed Nginx config-test recovery artifact set changed before cleanup.',
+            );
+        }
+        foreach ($selected['directories'] as $directory => $identity) {
+            $current = $rechecked['directories'][$directory] ?? null;
+            if (!\is_array($current)
+                || !$this->sameConfigTestStableState($identity, $current)
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test recovery directory changed before cleanup.',
+                );
+            }
+        }
+        foreach ($selected['artifacts'] as $path => $artifact) {
+            $current = $rechecked['artifacts'][$path] ?? null;
+            if (!\is_array($current)
+                || !\hash_equals($artifact['kind'], $current['kind'])
+                || !\hash_equals($artifact['token'], $current['token'])
+                || !\hash_equals($artifact['sha256'], $current['sha256'])
+                || $artifact['pid'] !== $current['pid']
+                || !$this->sameConfigTestStableState(
+                    $artifact['identity'],
+                    $current['identity'],
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test recovery artifact changed before cleanup.',
+                );
+            }
+        }
+
+        // Close the final path/content/PID-state race for every selected leaf
+        // before mutating either directory. In particular, no safe config is
+        // removed before a later malformed or live PID is discovered.
+        foreach ($rechecked['artifacts'] as $artifact) {
+            $contents = GatewayProjectStateFilesystem::read(
+                $artifact['path'],
+                $artifact['kind'] === 'pid'
+                    ? self::MAX_CONFIG_TEST_PID_BYTES
+                    : self::MAX_CONFIG_BYTES,
+                'managed Nginx config-test recovery artifact',
+                $artifact['kind'] === 'staging',
+            );
+            $identity = @\lstat($artifact['path']);
+            if (!\is_array($identity)
+                || !$this->sameConfigTestStableState($artifact['identity'], $identity)
+                || !\hash_equals($artifact['sha256'], \hash('sha256', $contents))
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test recovery artifact changed during final preflight.',
+                );
+            }
+            if ($artifact['kind'] === 'pid') {
+                $pid = $this->parseConfigTestPid($contents);
+                if ($pid !== $artifact['pid']) {
+                    throw new \RuntimeException(
+                        'Managed Nginx config-test PID changed during final preflight.',
+                    );
+                }
+                $this->assertConfigTestPidExited($pid);
+            }
+        }
+        foreach ($rechecked['directories'] as $directory => $identity) {
+            $current = @\lstat($directory);
+            if (!\is_array($current)
+                || !$this->sameConfigTestStableState($identity, $current)
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test recovery directory changed during final preflight.',
+                );
+            }
+        }
+
+        $artifacts = \array_values($rechecked['artifacts']);
+        \usort(
+            $artifacts,
+            static fn(array $left, array $right): int => [
+                $left['kind'] === 'pid' ? 0 : 1,
+                $left['path'],
+            ] <=> [
+                $right['kind'] === 'pid' ? 0 : 1,
+                $right['path'],
+            ],
+        );
+        foreach ($artifacts as $artifact) {
+            if ($artifact['kind'] === 'pid') {
+                $contents = GatewayProjectStateFilesystem::read(
+                    $artifact['path'],
+                    self::MAX_CONFIG_TEST_PID_BYTES,
+                    'managed Nginx config-test PID artifact',
+                );
+                $pid = $this->parseConfigTestPid($contents);
+                if ($pid !== $artifact['pid']) {
+                    throw new \RuntimeException(
+                        'Managed Nginx config-test PID changed before removal.',
+                    );
+                }
+                $this->assertConfigTestPidExited($pid);
+            }
+            if (!GatewayProjectStateFilesystem::removeRegular(
+                $artifact['path'],
+                'managed Nginx config-test ' . $artifact['kind'] . ' artifact',
+                $artifact['identity'],
+            )) {
+                throw new \RuntimeException(
+                    'Unable to collect a managed Nginx config-test recovery artifact.',
+                );
+            }
+        }
+    }
+
+    /**
+     * @return array{
+     *   artifacts:array<string,array{
+     *     path:string,
+     *     kind:string,
+     *     token:string,
+     *     sha256:string,
+     *     pid:int|null,
+     *     identity:array<string|int,mixed>
+     *   }>,
+     *   directories:array<string,array<string|int,mixed>>
+     * }
+     */
+    private function configTestArtifactSnapshot(string $protectedConfigFile): array
+    {
+        $artifacts = [];
+        $directories = [];
+        $perToken = [];
+        foreach ([
+            [$this->paths->confDir(), true],
+            [$this->paths->runDir(), false],
+        ] as [$directory, $isConfigDirectory]) {
+            $directoryBefore = @\lstat($directory);
+            if (!\is_array($directoryBefore)
+                || \is_link($directory)
+                || ((((int)$directoryBefore['mode']) & 0170000) !== 0040000)
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test recovery directory is unsafe.',
+                );
+            }
+            $stream = @\opendir($directory);
+            if (!\is_resource($stream)) {
+                throw new \RuntimeException(
+                    'Unable to enumerate the managed Nginx config-test recovery directory.',
+                );
+            }
+            $rawEntries = 0;
+            try {
+                while (($leaf = @\readdir($stream)) !== false) {
+                    if ($leaf === '.' || $leaf === '..') {
+                        continue;
+                    }
+                    if (++$rawEntries > self::MAX_CONFIG_TEST_DIRECTORY_ENTRIES) {
+                        throw new \RuntimeException(
+                            'Managed Nginx config-test recovery directory quota is exhausted.',
+                        );
+                    }
+                    $classification = $this->classifyConfigTestArtifact(
+                        $leaf,
+                        $isConfigDirectory,
+                    );
+                    if ($classification === null) {
+                        continue;
+                    }
+                    $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                    if ($path === $protectedConfigFile) {
+                        throw new \RuntimeException(
+                            'Managed Nginx candidate collides with the reserved config-test recovery namespace.',
+                        );
+                    }
+                    if (\count($artifacts) >= self::MAX_CONFIG_TEST_ARTIFACTS
+                        || ($perToken[$classification['token']] ?? 0)
+                            >= self::MAX_CONFIG_TEST_ARTIFACTS_PER_TOKEN
+                    ) {
+                        throw new \RuntimeException(
+                            'Managed Nginx config-test recovery artifact quota is exhausted.',
+                        );
+                    }
+                    $maximumBytes = $classification['kind'] === 'pid'
+                        ? self::MAX_CONFIG_TEST_PID_BYTES
+                        : self::MAX_CONFIG_BYTES;
+                    $contents = GatewayProjectStateFilesystem::read(
+                        $path,
+                        $maximumBytes,
+                        'managed Nginx config-test recovery artifact',
+                        $classification['kind'] === 'staging',
+                    );
+                    $pid = null;
+                    if ($classification['kind'] === 'pid') {
+                        $pid = $this->parseConfigTestPid($contents);
+                        $this->assertConfigTestPidExited($pid);
+                    } elseif ($classification['kind'] === 'config') {
+                        $this->assertConfigTestArtifactContents(
+                            $contents,
+                            $classification['pid_leaf'],
+                        );
+                    }
+                    $identity = @\lstat($path);
+                    if (!\is_array($identity)) {
+                        throw new \RuntimeException(
+                            'Managed Nginx config-test recovery artifact disappeared during discovery.',
+                        );
+                    }
+                    $artifacts[$path] = [
+                        'path' => $path,
+                        'kind' => $classification['kind'],
+                        'token' => $classification['token'],
+                        'sha256' => \hash('sha256', $contents),
+                        'pid' => $pid,
+                        'identity' => $identity,
+                    ];
+                    $perToken[$classification['token']]
+                        = ($perToken[$classification['token']] ?? 0) + 1;
+                }
+            } finally {
+                @\closedir($stream);
+            }
+            $directoryAfter = @\lstat($directory);
+            if (!\is_array($directoryAfter)
+                || !$this->sameConfigTestStableState($directoryBefore, $directoryAfter)
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test recovery directory changed during discovery.',
+                );
+            }
+            $directories[$directory] = $directoryAfter;
+        }
+        \ksort($artifacts, SORT_STRING);
+        \ksort($directories, SORT_STRING);
+        return ['artifacts' => $artifacts, 'directories' => $directories];
+    }
+
+    /**
+     * @return array{kind:string,token:string,pid_leaf:string}|null
+     */
+    private function classifyConfigTestArtifact(
+        string $leaf,
+        bool $isConfigDirectory,
+    ): ?array {
+        $foldedLeaf = \strtolower($leaf);
+        if ($isConfigDirectory) {
+            if (\str_starts_with($foldedLeaf, self::CONFIG_TEST_PREFIX)) {
+                if (!\str_starts_with($leaf, self::CONFIG_TEST_PREFIX)) {
+                    throw new \RuntimeException(
+                        'Managed Nginx config-test recovery found a non-canonical case alias.',
+                    );
+                }
+                if (\preg_match(
+                    '/\A' . \preg_quote(self::CONFIG_TEST_PREFIX, '/')
+                        . '([a-f0-9]{32})\.conf(?:\.tmp-([a-f0-9]{24}))?\z/D',
+                    $leaf,
+                    $match,
+                ) !== 1) {
+                    throw new \RuntimeException(
+                        'Managed Nginx config-test recovery found a malformed reserved leaf.',
+                    );
+                }
+                $token = (string)$match[1];
+                return [
+                    'kind' => isset($match[2])
+                        ? 'staging'
+                        : 'config',
+                    'token' => $token,
+                    'pid_leaf' => self::CONFIG_TEST_PREFIX . $token . '.pid',
+                ];
+            }
+
+            $legacyPrefix = 'nginx.conf.candidate.';
+            $legacyPattern = '/\A' . \preg_quote($legacyPrefix, '/')
+                . '[1-9][0-9]{0,19}\.[a-f0-9]{8}'
+                . '\.test\.([a-f0-9]{32})'
+                . '(?:\.tmp-([a-f0-9]{24}))?\z/D';
+            $looksLikeLegacyTest = \str_starts_with(
+                $foldedLeaf,
+                $legacyPrefix,
+            ) && \str_contains($foldedLeaf, '.test.');
+            if ($looksLikeLegacyTest
+                && \preg_match($legacyPattern . 'i', $leaf) === 1
+                && \preg_match($legacyPattern, $leaf, $match) !== 1
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx legacy config-test recovery found a non-canonical case alias.',
+                );
+            }
+            if ($looksLikeLegacyTest
+                && \preg_match($legacyPattern, $leaf, $match) !== 1
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx legacy config-test recovery found a malformed reserved leaf.',
+                );
+            }
+            if ($looksLikeLegacyTest) {
+                $token = (string)$match[1];
+                return [
+                    'kind' => isset($match[2])
+                        ? 'staging'
+                        : 'config',
+                    'token' => $token,
+                    'pid_leaf' => self::LEGACY_CONFIG_TEST_PID_PREFIX . $token . '.pid',
+                ];
+            }
+            return null;
+        }
+
+        if (\hash_equals(
+            \strtolower(self::CONFIG_TEST_LOCK_LEAF),
+            $foldedLeaf,
+        )) {
+            if (!\hash_equals(self::CONFIG_TEST_LOCK_LEAF, $leaf)) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test lock has a non-canonical case alias.',
+                );
+            }
+            return null;
+        }
+
+        foreach ([
+            self::CONFIG_TEST_PREFIX,
+            self::LEGACY_CONFIG_TEST_PID_PREFIX,
+        ] as $prefix) {
+            if (!\str_starts_with($foldedLeaf, $prefix)) {
+                continue;
+            }
+            if (!\str_starts_with($leaf, $prefix)) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test PID recovery found a non-canonical case alias.',
+                );
+            }
+            if (\preg_match(
+                '/\A' . \preg_quote($prefix, '/') . '([a-f0-9]{32})\.pid\z/D',
+                $leaf,
+                $match,
+            ) !== 1) {
+                throw new \RuntimeException(
+                    'Managed Nginx config-test PID recovery found a malformed reserved leaf.',
+                );
+            }
+            $token = (string)$match[1];
+            return [
+                'kind' => 'pid',
+                'token' => $token,
+                'pid_leaf' => $prefix . $token . '.pid',
+            ];
+        }
+        return null;
+    }
+
+    private function assertConfigTestArtifactContents(
+        string $contents,
+        string $expectedPidLeaf,
+    ): void {
+        $pidDirectivePattern = '/^\s*pid\s+[^;\r\n]+;\s*$/m';
+        $expectedPattern = '/^\s*pid\s+run\/'
+            . \preg_quote($expectedPidLeaf, '/') . ';\s*$/m';
+        if (\preg_match_all($pidDirectivePattern, $contents) !== 1
+            || \preg_match_all($expectedPattern, $contents) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx config-test recovery config has an invalid isolated PID directive.',
+            );
+        }
+    }
+
+    private function parseConfigTestPid(string $contents): int
+    {
+        $raw = \trim($contents);
+        if ($raw === '' || !\ctype_digit($raw)) {
+            throw new \RuntimeException(
+                'Managed Nginx config-test PID artifact is malformed.',
+            );
+        }
+        $pid = (int)$raw;
+        if ($pid <= 0 || (string)$pid !== \ltrim($raw, '0')) {
+            throw new \RuntimeException(
+                'Managed Nginx config-test PID artifact is malformed.',
+            );
+        }
+        return $pid;
+    }
+
+    private function assertConfigTestPidExited(int $pid): void
+    {
+        $state = $this->pidState($pid);
+        if ($state === Processer::PROCESS_STATE_RUNNING) {
+            throw new \RuntimeException(
+                'Refusing recovery while a live config-test PID is present.',
+            );
+        }
+        if ($state !== Processer::PROCESS_STATE_EXITED) {
+            throw new \RuntimeException(
+                'Refusing recovery while a config-test PID state is indeterminate.',
+            );
+        }
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameConfigTestStableState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -484,9 +947,17 @@ final class ManagedNginxProcessManager
     /**
      * @return array{ok:bool,message:string}
      */
-    public function stop(): array
+    public function stop(?float $deadlineMonotonic = null): array
     {
+        $initialBudget = $this->remainingStopBudget($deadlineMonotonic);
+        if ($deadlineMonotonic !== null && $initialBudget < 23.0) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx stop deadline cannot contain process identity verification',
+            ];
+        }
         $status = $this->status();
+        $this->remainingStopBudget($deadlineMonotonic);
         if (!($status['ok'] ?? false)) {
             return ['ok' => false, 'message' => 'refusing stop: ' . (string)$status['message']];
         }
@@ -508,7 +979,7 @@ final class ManagedNginxProcessManager
             return ['ok' => true, 'message' => 'not running'];
         }
         if (!$this->paths->isInstalled()) {
-            return $this->killPid((int)$status['pid']);
+            return $this->killPid((int)$status['pid'], $deadlineMonotonic);
         }
 
         // Freeze the already-verified master identity before asking Nginx to
@@ -516,11 +987,37 @@ final class ManagedNginxProcessManager
         // so a transient status mismatch is not permission to signal anything.
         $masterPid = (int)$status['pid'];
         $cmd = \array_merge($this->baseCommand(), ['-s', 'quit']);
-        $stopCommand = GatewayBoundedCommandRunner::run($cmd, self::COMMAND_TIMEOUT_SECONDS);
+        $commandBudget = self::COMMAND_TIMEOUT_SECONDS;
+        if ($deadlineMonotonic !== null) {
+            // The bounded command runner reserves up to twelve seconds for
+            // Windows Job containment after its child deadline. Keep that
+            // recovery work inside the retirement's absolute deadline.
+            $commandBudget = \min(
+                $commandBudget,
+                $this->remainingStopBudget($deadlineMonotonic) - 13.0,
+            );
+            if ($commandBudget < 0.1) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx stop deadline cannot contain command cleanup',
+                ];
+            }
+        }
+        $stopCommand = GatewayBoundedCommandRunner::run($cmd, $commandBudget);
         $deadline = (\hrtime(true) / 1_000_000_000)
             + self::GRACEFUL_STOP_TIMEOUT_SECONDS;
+        if ($deadlineMonotonic !== null) {
+            $deadline = \min($deadline, $deadlineMonotonic);
+        }
         do {
-            SchedulerSystem::usleep(100_000);
+            $remaining = $deadline - (\hrtime(true) / 1_000_000_000);
+            if ($remaining <= 0.0) {
+                break;
+            }
+            SchedulerSystem::usleep((int)\max(
+                1,
+                \min(100_000, \floor($remaining * 1_000_000)),
+            ));
             $masterState = $this->pidState($masterPid);
             try {
                 $pidFilePid = $this->readPid();
@@ -554,7 +1051,7 @@ final class ManagedNginxProcessManager
                 'message' => 'nginx master remained alive with an unverifiable identity after graceful stop timeout',
             ];
         }
-        $killed = $this->killPid($masterPid);
+        $killed = $this->killPid($masterPid, $deadlineMonotonic);
         $killed['message'] = ($killed['ok'] ?? false)
             ? 'killed after graceful shutdown timeout'
             : 'graceful shutdown timed out: ' . (string)($killed['message'] ?? 'termination failed');
@@ -798,8 +1295,28 @@ final class ManagedNginxProcessManager
     /**
      * @return array{ok:bool,message:string}
      */
-    private function killPid(int $pid): array
+    private function killPid(
+        int $pid,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
+        try {
+            // Freeze the kernel birth before the mutable argv/manifest probe.
+            // If the PID is recycled at any later point, the stable handle
+            // termination below observes MISMATCH and sends no signal.
+            $runtimeIdentity = new MasterLeaseRuntimeIdentity();
+            $processIdentity = $runtimeIdentity->captureProcessIdentity($pid);
+        } catch (\Throwable $throwable) {
+            if ($this->pidState($pid) === Processer::PROCESS_STATE_EXITED) {
+                return $this->finalizeExitedMasterPidFile($pid);
+            }
+
+            return [
+                'ok' => false,
+                'message' => 'refusing to kill managed nginx without a stable process birth: '
+                    . $throwable->getMessage(),
+            ];
+        }
         $state = $this->pidState($pid);
         if ($state === Processer::PROCESS_STATE_EXITED) {
             return $this->finalizeExitedMasterPidFile($pid);
@@ -810,39 +1327,35 @@ final class ManagedNginxProcessManager
         if (!$this->pidIdentityMatches($pid)) {
             return ['ok' => false, 'message' => 'refusing to kill a PID that does not match managed nginx identity'];
         }
-        if (\PHP_OS_FAMILY === 'Windows') {
-            Processer::killByPid($pid, true);
-        } elseif (\function_exists('posix_kill')) {
-            @\posix_kill($pid, 15);
-            SchedulerSystem::usleep(200_000);
-            if ($this->pidState($pid) === Processer::PROCESS_STATE_RUNNING
-                && $this->pidIdentityMatches($pid)
-            ) {
-                @\posix_kill($pid, 9);
-            }
-        } else {
-            Processer::killByPid($pid, false);
-            SchedulerSystem::usleep(200_000);
-            if ($this->pidState($pid) === Processer::PROCESS_STATE_RUNNING
-                && $this->pidIdentityMatches($pid)
-            ) {
-                Processer::killByPid($pid, true);
-            }
-        }
-        for ($i = 0; $i < 20; $i++) {
-            $state = $this->pidState($pid);
-            if ($state === Processer::PROCESS_STATE_EXITED) {
-                return $this->finalizeExitedMasterPidFile($pid);
-            }
-            SchedulerSystem::usleep(100_000);
+        $result = $runtimeIdentity->terminateExactProcessIdentity(
+            $pid,
+            (string)$processIdentity['birth'],
+            (string)$processIdentity['pid_namespace_id'],
+            \min(0.5, $this->remainingStopBudget($deadlineMonotonic)),
+        );
+        if ((bool)($result['released'] ?? false)) {
+            return $this->finalizeExitedMasterPidFile($pid);
         }
 
-        $state = $this->pidState($pid);
         return [
             'ok' => false,
-            'message' => $state === Processer::PROCESS_STATE_UNKNOWN
-                ? 'managed nginx PID state remained unknown after termination'
-                : 'managed nginx PID remained alive after termination',
+            'message' => 'managed nginx stable-handle termination was not proven: '
+                . (string)($result['reason'] ?? 'unknown'),
         ];
+    }
+
+    private function remainingStopBudget(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return 60.0;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('Managed Nginx stop deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException('Managed Nginx stop deadline was exhausted.');
+        }
+        return $remaining;
     }
 }

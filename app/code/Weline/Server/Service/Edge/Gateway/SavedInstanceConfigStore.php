@@ -47,9 +47,15 @@ final class SavedInstanceConfigStore
         ) {
             throw new \RuntimeException('Saved instance configuration directory is unsafe.');
         }
+        $hasRecoveryBackup = false;
         if (!\file_exists($file) && !\is_link($file)) {
+            $hasRecoveryBackup = GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
+                $file,
+                self::MAXIMUM_BYTES,
+                'Saved instance configuration',
+            );
             $lock = $file . '.lock';
-            if (!\file_exists($lock) && !\is_link($lock)) {
+            if (!$hasRecoveryBackup && !\file_exists($lock) && !\is_link($lock)) {
                 // Linearize before a future writer creates its lock. Creating
                 // a lock for a never-saved instance would leave durable state
                 // merely because server:start inspected defaults.
@@ -309,7 +315,18 @@ final class SavedInstanceConfigStore
         }
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $file . '.lock',
-            $operation,
+            function () use ($file, $operation): mixed {
+                GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                    $file,
+                    self::MAXIMUM_BYTES,
+                    'Saved instance configuration',
+                    function (string $contents) use ($file): void {
+                        unset($contents);
+                        $this->read($file, true);
+                    },
+                );
+                return $operation();
+            },
             $seal,
         );
     }

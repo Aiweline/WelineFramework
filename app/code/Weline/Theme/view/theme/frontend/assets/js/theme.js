@@ -3418,13 +3418,20 @@
 
         initAfterDOMReady();
 
-        // 监听语言切换事件（header choice selector 已自管 cookie + 跳转，避免双处理器抢点击）
+        // 监听语言切换事件（header choice selector / native I18n switcher 已自管 cookie + 跳转，避免双处理器抢点击）
         document.addEventListener('click', function (e) {
             const languageSwitcher = e.target.closest('[data-i18n-switcher]');
             if (!languageSwitcher) {
                 return;
             }
             if (languageSwitcher.getAttribute('data-weline-choice-switcher') === 'language') {
+                return;
+            }
+            // Taglib LanguageSwitcher marks itself after binding; do not race it.
+            if (languageSwitcher.getAttribute('data-weline-i18n-native') === '1'
+                || languageSwitcher.dataset.welineI18nNative === '1'
+                || window.__WelineI18nNavigating
+            ) {
                 return;
             }
 

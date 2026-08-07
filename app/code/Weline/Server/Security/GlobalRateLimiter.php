@@ -15,6 +15,11 @@ use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
  */
 final class GlobalRateLimiter
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private const COUNTER_NAMESPACE = 'wls.policy.rate';
     private const BAN_NAMESPACE = 'wls.policy.ban';
     private const PATH_SEEN_NAMESPACE = 'wls.policy.path_seen';
@@ -64,7 +69,8 @@ final class GlobalRateLimiter
 
     public function shouldReconnectSharedState(): bool
     {
-        return (!$this->sharedAvailable || $this->state === null) && \microtime(true) >= $this->sharedRetryAt;
+        return (!$this->sharedAvailable || $this->state === null)
+            && self::monotonicSeconds() >= $this->sharedRetryAt;
     }
 
     public static function setBanDeltaPublisher(?callable $publisher): void
@@ -96,12 +102,16 @@ final class GlobalRateLimiter
         if ($ip === '') {
             return false;
         }
-        $now = \microtime(true);
+        // Authoritative ban expiries are epoch seconds because they survive
+        // process boundaries and are stored in the shared service. Only the
+        // process-local negative cache uses a monotonic deadline.
+        $wallNow = (float)\time();
+        $monotonicNow = self::monotonicSeconds();
         $positiveUntil = \max(
             (float)($this->positiveBans[$ip] ?? 0.0),
             (float)(self::$distributedPositiveBans[$this->distributedBanKey($ip)] ?? 0.0),
         );
-        if ($positiveUntil > $now) {
+        if ($positiveUntil > $wallNow) {
             return true;
         }
         if ($positiveUntil > 0.0) {
@@ -110,7 +120,7 @@ final class GlobalRateLimiter
                 self::$distributedPositiveBans[$this->distributedBanKey($ip)],
             );
         }
-        if ((float)($this->negativeBans[$ip] ?? 0.0) > $now) {
+        if ((float)($this->negativeBans[$ip] ?? 0.0) > $monotonicNow) {
             return false;
         }
         if ($this->state === null || !$this->sharedAvailable) {
@@ -120,13 +130,13 @@ final class GlobalRateLimiter
             $value = $this->state->get(self::BAN_NAMESPACE, $this->sharedKey($ip));
             if ($value !== null && $value !== false && $value !== 0 && $value !== '0') {
                 $declaredExpiry = \is_numeric($value) ? (float)$value : 0.0;
-                $this->rememberPositiveBan($ip, $declaredExpiry > $now
+                $this->rememberPositiveBan($ip, $declaredExpiry > $wallNow
                     ? $declaredExpiry
-                    : $now + self::BAN_POSITIVE_CACHE_SECONDS);
+                    : $wallNow + self::BAN_POSITIVE_CACHE_SECONDS);
                 unset($this->negativeBans[$ip]);
                 return true;
             }
-            $this->negativeBans[$ip] = $now + self::BAN_NEGATIVE_CACHE_SECONDS;
+            $this->negativeBans[$ip] = $monotonicNow + self::BAN_NEGATIVE_CACHE_SECONDS;
             return false;
         } catch (\Throwable) {
             $this->markSharedUnavailable();
@@ -371,7 +381,7 @@ final class GlobalRateLimiter
     private function markSharedUnavailable(): void
     {
         $this->sharedAvailable = false;
-        $this->sharedRetryAt = \microtime(true) + 1.0;
+        $this->sharedRetryAt = self::monotonicSeconds() + 1.0;
     }
 
     private function sharedKey(string $key): string

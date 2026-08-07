@@ -177,7 +177,7 @@ final class TlsSessionCacheRuntime
     public function maintain(float $maximumSeconds = 0.01, bool $allowTokenReload = false): bool
     {
         $maximumSeconds = \max(0.0001, $maximumSeconds);
-        $deadline = \microtime(true) + $maximumSeconds;
+        $deadline = self::monotonicSeconds() + $maximumSeconds;
         $readerReady = $this->client->connected();
         $writerReady = $this->writerClient->connected();
 
@@ -190,7 +190,7 @@ final class TlsSessionCacheRuntime
             } else {
                 $readerReady = $this->client->maintain($firstBudget, $allowTokenReload);
             }
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining >= 0.0001) {
                 if ($writerFirst) {
                     $readerReady = $this->client->maintain($remaining, $allowTokenReload);
@@ -199,7 +199,7 @@ final class TlsSessionCacheRuntime
                 }
             }
         } elseif (!$readerReady) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining >= 0.0001) {
                 $writerHasWork = $this->pendingWrites !== []
                     || $this->inflightWrites !== []
@@ -210,13 +210,13 @@ final class TlsSessionCacheRuntime
                 $readerReady = $this->client->maintain($readerBudget, $allowTokenReload);
             }
         } elseif (!$writerReady) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining >= 0.0001) {
                 $writerReady = $this->writerClient->maintain($remaining, $allowTokenReload);
             }
         }
 
-        $remaining = $deadline - \microtime(true);
+        $remaining = $deadline - self::monotonicSeconds();
         if ($writerReady && $remaining >= 0.0001) {
             $this->flushPendingWrites($remaining);
         }
@@ -405,16 +405,16 @@ final class TlsSessionCacheRuntime
      */
     public function flushPendingWrites(float $maximumSeconds = 0.001): bool
     {
-        $deadline = \microtime(true) + \max(0.0001, $maximumSeconds);
+        $deadline = self::monotonicSeconds() + \max(0.0001, $maximumSeconds);
         $this->drainWriterResponses($deadline);
 
-        while ($this->pendingWrites !== [] && \microtime(true) < $deadline) {
+        while ($this->pendingWrites !== [] && self::monotonicSeconds() < $deadline) {
             $key = \array_key_first($this->pendingWrites);
             if (!\is_string($key)) {
                 break;
             }
             $operation = $this->pendingWrites[$key];
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining < 0.0001) {
                 break;
             }
@@ -452,7 +452,7 @@ final class TlsSessionCacheRuntime
                 $this->drainWriterResponses($deadline);
             }
         }
-        if ($this->inflightWrites !== [] && \microtime(true) < $deadline) {
+        if ($this->inflightWrites !== [] && self::monotonicSeconds() < $deadline) {
             $this->drainWriterResponses($deadline);
         }
 
@@ -461,7 +461,7 @@ final class TlsSessionCacheRuntime
 
     private function drainWriterResponses(float $deadline): void
     {
-        $remaining = $deadline - \microtime(true);
+        $remaining = $deadline - self::monotonicSeconds();
         if ($remaining < 0.0001) {
             return;
         }
@@ -792,5 +792,10 @@ final class TlsSessionCacheRuntime
         $host = \strtolower(\trim($host, " []\t\n\r\0\x0B"));
 
         return \in_array($host, ['127.0.0.1', '::1', 'localhost'], true);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

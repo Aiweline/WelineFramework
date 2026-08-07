@@ -70,9 +70,6 @@ final class Add extends CommandAbstract
         }
         if ($result['needs_admin'] ?? false) {
             $this->printer->warning($result['message'] ?? __('需要提升权限'));
-            if (!empty($result['command'])) {
-                $this->printer->note((string) $result['command']);
-            }
             return;
         }
         $this->printer->error($result['message'] ?? __('写入 hosts 失败'));

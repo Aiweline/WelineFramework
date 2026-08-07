@@ -336,15 +336,128 @@ final class ProtocolEdgeRuntimeOwnershipTest extends TestCase
 
         $token = ProtocolEdgeRuntime::ensureTokenFile($instance);
         $this->cleanupFiles[] = $token;
+        $stateLock = $directory . DIRECTORY_SEPARATOR . '.state.lock';
+        $this->cleanupFiles[] = $stateLock;
         $directoryState = @\lstat($directory);
         $tokenState = @\lstat($token);
+        $lockState = @\lstat($stateLock);
         self::assertIsArray($directoryState);
         self::assertIsArray($tokenState);
+        self::assertIsArray($lockState);
         self::assertSame((int)$project['uid'], (int)$directoryState['uid']);
         self::assertSame((int)$project['gid'], (int)$directoryState['gid']);
         self::assertSame((int)$project['uid'], (int)$tokenState['uid']);
         self::assertSame((int)$project['gid'], (int)$tokenState['gid']);
+        self::assertSame((int)$project['uid'], (int)$lockState['uid']);
+        self::assertSame((int)$project['gid'], (int)$lockState['gid']);
         self::assertSame(0700, ((int)$directoryState['mode']) & 0777);
         self::assertSame(0600, ((int)$tokenState['mode']) & 0777);
+        self::assertSame(0600, ((int)$lockState['mode']) & 0777);
+    }
+
+    public function testTokenAccessCollectsRetainedBackupOnlyForAValidCurrentToken(): void
+    {
+        $instance = 'phpunit-edge-token-recovery-' . \bin2hex(\random_bytes(6));
+        $directory = ProtocolEdgeRuntime::runtimeDirectory($instance);
+        $token = ProtocolEdgeRuntime::ensureTokenFile($instance);
+        $backup = $token . '.wls-backup-' . \str_repeat('a', 16);
+        self::assertNotFalse(\file_put_contents($backup, \str_repeat('b', 64) . PHP_EOL));
+        $this->trackProtocolEdgeRuntime($directory, [$token, $backup]);
+
+        self::assertSame($token, ProtocolEdgeRuntime::ensureTokenFile($instance));
+        self::assertFileDoesNotExist($backup);
+        self::assertMatchesRegularExpression(
+            '/\A[a-f0-9]{64}\z/D',
+            \trim((string)\file_get_contents($token)),
+        );
+    }
+
+    public function testTokenAccessPreservesRetainedBackupWhenCurrentTokenIsMalformed(): void
+    {
+        $instance = 'phpunit-edge-token-corrupt-' . \bin2hex(\random_bytes(6));
+        $directory = ProtocolEdgeRuntime::runtimeDirectory($instance);
+        $token = ProtocolEdgeRuntime::ensureTokenFile($instance);
+        $backup = $token . '.wls-backup-' . \str_repeat('c', 16);
+        self::assertNotFalse(\file_put_contents($backup, \str_repeat('d', 64) . PHP_EOL));
+        self::assertNotFalse(\file_put_contents($token, "broken\n"));
+        $this->trackProtocolEdgeRuntime($directory, [$token, $backup]);
+
+        try {
+            ProtocolEdgeRuntime::ensureTokenFile($instance);
+            self::fail('A malformed current token must not authorize backup cleanup.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'token',
+                \strtolower($exception->getMessage()),
+            );
+        }
+        self::assertFileExists($backup);
+        self::assertSame("broken\n", (string)\file_get_contents($token));
+    }
+
+    public function testNativeConfigPublicationCollectsRetainedBackupAfterJsonValidation(): void
+    {
+        $instance = 'phpunit-edge-native-recovery-' . \bin2hex(\random_bytes(6));
+        $directory = ProtocolEdgeRuntime::runtimeDirectory($instance);
+        $config = (object)[
+            'apps' => (object)[
+                'tls' => (object)[],
+            ],
+        ];
+        $path = ProtocolEdgeRuntime::writeNativeConfig($instance, $config, false);
+        $backup = $path . '.wls-backup-' . \str_repeat('e', 16);
+        self::assertNotFalse(\file_put_contents($backup, "{}\n"));
+        $this->trackProtocolEdgeRuntime($directory, [$path, $backup]);
+
+        ProtocolEdgeRuntime::writeNativeConfig(
+            $instance,
+            (object)['apps' => (object)['tls' => (object)[]]],
+            false,
+        );
+
+        self::assertFileDoesNotExist($backup);
+        $published = \json_decode((string)\file_get_contents($path));
+        self::assertIsObject($published);
+        self::assertIsObject($published->apps ?? null);
+        self::assertIsObject($published->apps->tls ?? null);
+    }
+
+    public function testActiveStatePublicationCollectsOnlyACompletePairedGeneration(): void
+    {
+        $instance = 'phpunit-edge-active-recovery-' . \bin2hex(\random_bytes(6));
+        $directory = ProtocolEdgeRuntime::runtimeDirectory($instance);
+        $digest = \str_repeat('f', 64);
+        ProtocolEdgeRuntime::markConfigActive(
+            $instance,
+            $digest,
+            ['127.0.0.1:28081'],
+        );
+        $path = ProtocolEdgeRuntime::activeStateFile($instance);
+        $backup = $path . '.wls-backup-' . \str_repeat('1', 16);
+        self::assertNotFalse(\file_put_contents($backup, "previous\n"));
+        $this->trackProtocolEdgeRuntime($directory, [$path, $backup]);
+
+        ProtocolEdgeRuntime::markConfigActive(
+            $instance,
+            $digest,
+            ['127.0.0.1:28081'],
+        );
+
+        self::assertFileDoesNotExist($backup);
+        self::assertTrue(ProtocolEdgeRuntime::isConfigActive($instance, $digest));
+    }
+
+    /** @param list<string> $files */
+    private function trackProtocolEdgeRuntime(string $directory, array $files): void
+    {
+        foreach ($files as $file) {
+            $this->cleanupFiles[] = $file;
+        }
+        $this->cleanupFiles[] = $directory . DIRECTORY_SEPARATOR . '.state.lock';
+        $this->cleanupDirectories[] = $directory;
+        $sessionDirectory = $directory . DIRECTORY_SEPARATOR . 'stek';
+        if (\is_dir($sessionDirectory)) {
+            $this->cleanupDirectories[] = $sessionDirectory;
+        }
     }
 }

@@ -23,20 +23,37 @@ final class ProjectServingManifestStore
     private const MAX_CERTIFICATE_BYTES = 1_048_576;
     private const MAX_STORED_MANIFESTS = 128;
     private const MAX_STORED_MANIFEST_BYTES = 268_435_456;
+    private const MAX_ORPHANED_MANIFEST_CANDIDATES = 64;
+    private const MAX_RAW_MANIFEST_DIRECTORY_ENTRIES = self::MAX_STORED_MANIFESTS
+        + self::MAX_ORPHANED_MANIFEST_CANDIDATES;
     private const MANIFEST_RETENTION_SECONDS = 604_800;
     private const MAX_STORE_ROOT_ENTRIES = 2048;
+    private const MANIFEST_RETIREMENT_SCHEMA = 'wls-serving-manifest-retirement/1';
+    private const MANIFEST_RETIREMENT_MARKER_SCHEMA
+        = 'wls-serving-manifest-retirement-marker/1';
+    private const MAX_RETIREMENT_STATE_BYTES = 262_144;
+    private const POST_COMMIT_CLEANUP_SECONDS = 1.0;
 
     private readonly string $projectRoot;
     private readonly string $storeRoot;
     private readonly string $manifestRoot;
     private readonly int $projectOwner;
     private readonly int $projectGroup;
+    private readonly ?\Closure $publicationWallClock;
+    private readonly ?\Closure $publicationMonotonicClock;
+    private readonly ?\Closure $publicationBootIdentityResolver;
+    private readonly ?\Closure $snapshotReferenceTransition;
 
     private int $publicationTransactionDepth = 0;
     private string $publicationTransactionInstance = '';
 
-    public function __construct(?string $projectRoot = null)
-    {
+    public function __construct(
+        ?string $projectRoot = null,
+        ?\Closure $publicationWallClock = null,
+        ?\Closure $publicationMonotonicClock = null,
+        ?\Closure $publicationBootIdentityResolver = null,
+        ?\Closure $snapshotReferenceTransition = null,
+    ) {
         $requested = $projectRoot ?? (string)BP;
         if ($requested === '' || \str_contains($requested, "\0") || \is_link($requested)) {
             throw new \RuntimeException('WLS serving manifest project root is unsafe.');
@@ -58,6 +75,10 @@ final class ProjectServingManifestStore
         $this->manifestRoot = $this->storeRoot . DIRECTORY_SEPARATOR . 'manifests';
         $this->projectOwner = \is_int($status['uid'] ?? null) ? (int)$status['uid'] : -1;
         $this->projectGroup = \is_int($status['gid'] ?? null) ? (int)$status['gid'] : -1;
+        $this->publicationWallClock = $publicationWallClock;
+        $this->publicationMonotonicClock = $publicationMonotonicClock;
+        $this->publicationBootIdentityResolver = $publicationBootIdentityResolver;
+        $this->snapshotReferenceTransition = $snapshotReferenceTransition;
     }
 
     public function currentPointerPath(string $instanceId): string
@@ -81,6 +102,7 @@ final class ProjectServingManifestStore
         ?array $servingRouteIds = null,
         array $routeGenerations = [],
         ?bool $converged = null,
+        ?float $deadlineMonotonic = null,
     ): array {
         $instanceId = (string)($registration['instance_id'] ?? '');
         return $this->withPublicationTransaction(
@@ -90,23 +112,77 @@ final class ProjectServingManifestStore
                 $servingRouteIds,
                 $routeGenerations,
                 $converged,
+                $deadlineMonotonic,
             ): array {
+                $this->assertPublicationDeadline($deadlineMonotonic);
                 $candidate = $this->candidateFromRegistration(
                     $registration,
                     $servingRouteIds,
                     $routeGenerations,
                     $converged,
+                    $deadlineMonotonic,
                 );
                 return GatewayProjectStateFilesystem::withExclusiveLock(
                     $this->storeRoot . DIRECTORY_SEPARATOR . 'publish.lock',
-                    fn (): array => $this->publishLocked($candidate),
+                    function () use ($candidate, $deadlineMonotonic): array {
+                        $this->assertPublicationDeadline($deadlineMonotonic);
+                        return $this->publishLocked(
+                            $candidate,
+                            $deadlineMonotonic,
+                        );
+                    },
                     fn ($handle, string $path): mixed => $this->preserveOwnership(
                         $path,
                         $handle,
                     ),
+                    waitTimeoutSeconds: $this->publicationLockWaitTimeout(
+                        $deadlineMonotonic,
+                    ),
                 );
             },
+            $this->publicationLockWaitTimeout($deadlineMonotonic),
         );
+    }
+
+    private function publicationLockWaitTimeout(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        return \min(0.25, $this->assertPublicationDeadline($deadlineMonotonic));
+    }
+
+    private function assertPublicationDeadline(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('Serving manifest deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - $this->publicationMonotonicNow();
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException('Serving manifest deadline was exhausted.');
+        }
+        return $remaining;
+    }
+
+    private function publicationMonotonicNow(): float
+    {
+        $monotonic = $this->publicationMonotonicClock !== null
+            ? ($this->publicationMonotonicClock)()
+            : (\hrtime(true) / 1_000_000_000);
+        if ((!\is_int($monotonic) && !\is_float($monotonic))
+            || !\is_finite((float)$monotonic)
+            || (float)$monotonic < 0.0
+        ) {
+            throw new \RuntimeException(
+                'Serving manifest monotonic clock is invalid.',
+            );
+        }
+        return (float)$monotonic;
     }
 
     /**
@@ -121,6 +197,7 @@ final class ProjectServingManifestStore
     public function withPublicationTransaction(
         string $instanceId,
         \Closure $callback,
+        float $waitTimeoutSeconds = 300.0,
     ): mixed {
         $this->assertInstanceId($instanceId);
         $this->ensureStoreDirectories();
@@ -155,6 +232,7 @@ final class ProjectServingManifestStore
                 $lockPath,
                 $handle,
             ),
+            waitTimeoutSeconds: $waitTimeoutSeconds,
         );
     }
 
@@ -192,8 +270,11 @@ final class ProjectServingManifestStore
      * @param \Closure(array<string,true>):T $callback
      * @return T
      */
-    public function withCertificateSnapshotReferences(\Closure $callback): mixed
-    {
+    public function withCertificateSnapshotReferences(
+        \Closure $callback,
+        ?float $deadlineMonotonic = null,
+    ): mixed {
+        $this->assertPublicationDeadline($deadlineMonotonic);
         $status = @\lstat($this->storeRoot);
         if (!\is_array($status)) {
             if (\file_exists($this->storeRoot) || \is_link($this->storeRoot)) {
@@ -227,8 +308,14 @@ final class ProjectServingManifestStore
         }
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $this->storeRoot . DIRECTORY_SEPARATOR . 'publish.lock',
-            fn (): mixed => $callback($this->certificateSnapshotReferencesUnlocked()),
+            function () use ($callback, $deadlineMonotonic): mixed {
+                $this->assertPublicationDeadline($deadlineMonotonic);
+                return $callback($this->certificateSnapshotReferencesUnlocked());
+            },
             fn ($handle, string $path): mixed => $this->preserveOwnership($path, $handle),
+            waitTimeoutSeconds: $this->publicationLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
         );
     }
 
@@ -375,7 +462,9 @@ final class ProjectServingManifestStore
         ?array $servingRouteIds,
         array $routeGenerations,
         ?bool $converged,
+        ?float $deadlineMonotonic,
     ): array {
+        $this->assertPublicationDeadline($deadlineMonotonic);
         $projectUuid = \strtolower(\trim((string)($registration['project_uuid'] ?? '')));
         $instanceId = \trim((string)($registration['instance_id'] ?? ''));
         $projectRoot = \realpath((string)($registration['project_root'] ?? ''));
@@ -420,6 +509,7 @@ final class ProjectServingManifestStore
             }
             $selected = [];
             foreach ($servingRouteIds as $routeId) {
+                $this->assertPublicationDeadline($deadlineMonotonic);
                 $routeId = \strtolower(\trim((string)$routeId));
                 if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
                     || isset($selected[$routeId])
@@ -435,6 +525,7 @@ final class ProjectServingManifestStore
         }
         $normalizedRouteGenerations = [];
         foreach ($routeGenerations as $routeId => $routeGeneration) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
             if (!\is_string($routeId)
                 || \preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
                 || !\is_int($routeGeneration)
@@ -459,6 +550,7 @@ final class ProjectServingManifestStore
         $desiredRouteIds = [];
         $desiredRouteFacts = [];
         foreach ($desiredRoutes as $route) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
             if (!\is_array($route)) {
                 throw new \RuntimeException('Serving manifest desired route is malformed.');
             }
@@ -567,11 +659,13 @@ final class ProjectServingManifestStore
             $keyPath = $this->resolveProjectCertificateReference(
                 (array)($certificate['key'] ?? []),
             );
+            $this->assertPublicationDeadline($deadlineMonotonic);
             $snapshot = $this->verifiedCertificateSnapshot(
                 $sourceDigest,
                 $certificatePath,
                 $keyPath,
             );
+            $this->assertPublicationDeadline($deadlineMonotonic);
             $leafFingerprint = \strtolower(\trim((string)(
                 $certificate['leaf_fingerprint_sha256'] ?? ''
             )));
@@ -617,6 +711,7 @@ final class ProjectServingManifestStore
         }
         \ksort($desiredRouteFacts, SORT_STRING);
         foreach ($desiredRouteFacts as $routeId => $desiredRouteFact) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
             if (($desiredRouteFact['force_root_to_www'] ?? false) !== true) {
                 continue;
             }
@@ -635,6 +730,7 @@ final class ProjectServingManifestStore
             throw new \RuntimeException('Serving route selection is not a subset of current desired state.');
         }
         foreach ($routes as $routeId => $route) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
             $policy = (array)$route['policy'];
             if (($policy['force_root_to_www'] ?? false) !== true) {
                 continue;
@@ -662,6 +758,7 @@ final class ProjectServingManifestStore
         if ($converged && !$exactConverged) {
             throw new \RuntimeException('Serving manifest cannot mark a partial route subset converged.');
         }
+        $this->assertPublicationDeadline($deadlineMonotonic);
         return [
             'project_uuid' => $projectUuid,
             'project_root' => $this->projectRoot,
@@ -681,9 +778,18 @@ final class ProjectServingManifestStore
     }
 
     /** @param array<string,mixed> $payload */
-    private function publishLocked(array $payload): array
-    {
+    private function publishLocked(
+        array $payload,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $this->assertPublicationDeadline($deadlineMonotonic);
+        // Candidate construction happens before publish.lock is acquired. GC
+        // uses this same lock, so revalidating the complete content-addressed
+        // certificate closure here closes the validate/delete/publish window.
+        $this->assertPayload($payload, true);
+        $this->assertPublicationDeadline($deadlineMonotonic);
         $instanceId = (string)$payload['instance_id'];
+        $this->cleanupMutableAtomicWriteRecoveryBackupsLocked($instanceId);
         $factsDigest = \hash('sha256', GatewayClient::canonicalJson($payload));
         $current = null;
         try {
@@ -711,11 +817,24 @@ final class ProjectServingManifestStore
             $instanceId,
             true,
         );
+        $beforeCertificateReferences = $this
+            ->certificateSnapshotReferencesForInstanceUnlocked($instanceId);
+        $candidateCertificateReferences = $this
+            ->certificateSnapshotDigestsFromPayload($payload);
+        $this->transitionCertificateSnapshotReferences(
+            $candidateCertificateReferences,
+            \array_diff_key(
+                $beforeCertificateReferences,
+                $candidateCertificateReferences,
+            ),
+            $deadlineMonotonic,
+        );
         $authority = $this->readPublicationAuthority($instanceId);
         if ($authority === null && \is_array($currentAuthority)) {
             // One-time migration from the pointer-only format. Persist the
             // independently recoverable authority before accepting another
             // publication or returning an idempotent success.
+            $this->assertPublicationDeadline($deadlineMonotonic);
             $this->writePublicationAuthority($instanceId, $currentAuthority);
             $authority = $currentAuthority;
         } elseif ($authority !== null && \is_array($currentAuthority)) {
@@ -739,6 +858,7 @@ final class ProjectServingManifestStore
             && (int)$authority['generation'] === $floor
             && \hash_equals($factsDigest, (string)$authority['payload_sha256'])
         ) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
             $verified = $this->readBound(
                 $this->manifestPath(
                     (int)$authority['generation'],
@@ -763,6 +883,7 @@ final class ProjectServingManifestStore
                 $this->writeRecentLkgReferences($instanceId, $current);
             }
             $this->writeCurrentPointer($instanceId, $verified);
+            $this->afterCommittedPublication($instanceId);
             return $verified;
         }
         if (\is_array($current)
@@ -772,6 +893,8 @@ final class ProjectServingManifestStore
                 \hash('sha256', GatewayClient::canonicalJson($current['payload'])),
             )
         ) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
+            $this->afterCommittedPublication($instanceId);
             return $current;
         }
         if ($floor >= PHP_INT_MAX) {
@@ -808,10 +931,12 @@ final class ProjectServingManifestStore
                 );
             }
         } else {
+            $this->assertPublicationDeadline($deadlineMonotonic);
             $this->assertManifestStoreCapacity(\strlen($encoded));
             $this->atomicWrite($path, $encoded, 0600);
             $verified = $this->readBound($path, $generation, $digest);
         }
+        $this->assertPublicationDeadline($deadlineMonotonic);
         $authority = $this->authorityFromPublication($verified);
         // Authority advances before the advisory integer floor and pointer.
         // A crash at either later write remains recoverable from this exact
@@ -824,7 +949,217 @@ final class ProjectServingManifestStore
         );
         $this->writeRecentLkgReferences($instanceId, $current);
         $this->writeCurrentPointer($instanceId, $verified);
+        $this->afterCommittedPublication($instanceId);
         return $verified;
+    }
+
+    /**
+     * Collect only replaceable project-state targets. Immutable manifest
+     * generations and their first-publication staging leaves are deliberately
+     * outside this closure and remain governed by storedManifestInventory().
+     *
+     * Every official writer of these targets runs below publish.lock. Discover
+     * every retained target first, then validate the complete paired-current
+     * set before deleting any backup. This prevents a valid early target from
+     * being collected when a later target is missing, corrupt, or unbound.
+     */
+    private function cleanupMutableAtomicWriteRecoveryBackupsLocked(
+        string $instanceId,
+    ): void {
+        $targets = [
+            [
+                'type' => 'generation',
+                'path' => $this->generationFile($instanceId),
+                'maximum_bytes' => 32,
+                'label' => 'WLS serving manifest generation floor',
+            ],
+            [
+                'type' => 'authority',
+                'path' => $this->publicationAuthorityFile($instanceId),
+                'maximum_bytes' => 16_384,
+                'label' => 'WLS serving manifest authority',
+            ],
+            [
+                'type' => 'pointer',
+                'path' => $this->currentPointerPath($instanceId),
+                'maximum_bytes' => 16_384,
+                'label' => 'WLS serving manifest pointer',
+            ],
+            [
+                'type' => 'lkg',
+                'path' => $this->recentLkgFile($instanceId),
+                'maximum_bytes' => 32_768,
+                'label' => 'WLS serving manifest LKG reference',
+            ],
+            [
+                'type' => 'retirement',
+                'path' => $this->manifestRetirementStateFile(),
+                'maximum_bytes' => self::MAX_RETIREMENT_STATE_BYTES,
+                'label' => 'WLS serving manifest retirement state',
+            ],
+        ];
+        $retained = [];
+        foreach ($targets as $target) {
+            if (GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
+                (string)$target['path'],
+                (int)$target['maximum_bytes'],
+                (string)$target['label'],
+            )) {
+                $retained[] = $target;
+            }
+        }
+        if ($retained === []) {
+            return;
+        }
+
+        foreach ($retained as $target) {
+            $this->validateMutableAtomicRecoveryTarget(
+                (string)$target['type'],
+                $instanceId,
+            );
+        }
+        foreach ($retained as $target) {
+            $type = (string)$target['type'];
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                (string)$target['path'],
+                (int)$target['maximum_bytes'],
+                (string)$target['label'],
+                function (string $_contents) use ($type, $instanceId): void {
+                    $this->validateMutableAtomicRecoveryTarget(
+                        $type,
+                        $instanceId,
+                    );
+                },
+            );
+        }
+    }
+
+    private function validateMutableAtomicRecoveryTarget(
+        string $type,
+        string $instanceId,
+    ): void {
+        if (\hash_equals('retirement', $type)) {
+            $state = $this->readManifestRetirementStateUnlocked();
+            if (!isset(
+                $state['updated_unix'],
+                $state['updated_monotonic'],
+                $state['host_boot_id'],
+            )) {
+                throw new \RuntimeException(
+                    'WLS serving manifest retirement recovery target is corrupt.',
+                );
+            }
+            return;
+        }
+
+        $authority = $this->readPublicationAuthority($instanceId);
+        if (!\is_array($authority)) {
+            throw new \RuntimeException(
+                'WLS serving manifest recovery authority is missing.',
+            );
+        }
+        $this->assertPublicationAuthorityManifestBinding(
+            $authority,
+            $instanceId,
+        );
+
+        if (\hash_equals('authority', $type)) {
+            return;
+        }
+        if (\hash_equals('generation', $type)) {
+            $floor = $this->readGenerationFloor($instanceId);
+            if ($floor < 1 || $floor > (int)$authority['generation']) {
+                throw new \RuntimeException(
+                    'WLS serving manifest recovery generation floor is unbound.',
+                );
+            }
+            return;
+        }
+        if (\hash_equals('pointer', $type)) {
+            $current = $this->current($instanceId);
+            $this->assertPublicationBelongsToInstance(
+                $current,
+                $instanceId,
+                (string)$authority['project_uuid'],
+            );
+            $this->assertAuthorityCoversCurrent(
+                $authority,
+                $this->authorityFromPublication($current),
+            );
+            return;
+        }
+        if (\hash_equals('lkg', $type)) {
+            foreach ($this->readRecentLkgReferences(
+                $this->recentLkgFile($instanceId),
+                $instanceId,
+            ) as $reference) {
+                $publication = $this->readBound(
+                    (string)$reference['path'],
+                    (int)$reference['generation'],
+                    (string)$reference['digest'],
+                );
+                $this->assertPublicationBelongsToInstance(
+                    $publication,
+                    $instanceId,
+                    (string)$authority['project_uuid'],
+                );
+                if ((int)$publication['generation'] >= (int)$authority['generation']) {
+                    throw new \RuntimeException(
+                        'WLS serving manifest recovery LKG generation is unbound.',
+                    );
+                }
+            }
+            return;
+        }
+        throw new \LogicException('Unknown WLS serving manifest recovery target.');
+    }
+
+    /** @param array<string,mixed> $authority */
+    private function assertPublicationAuthorityManifestBinding(
+        array $authority,
+        string $instanceId,
+    ): void {
+        $publication = $this->readBound(
+            $this->manifestPath(
+                (int)$authority['generation'],
+                (string)$authority['manifest_digest'],
+            ),
+            (int)$authority['generation'],
+            (string)$authority['manifest_digest'],
+        );
+        $this->assertPublicationBelongsToInstance($publication, $instanceId);
+        if (!\hash_equals(
+            GatewayClient::canonicalJson($authority),
+            GatewayClient::canonicalJson(
+                $this->authorityFromPublication($publication),
+            ),
+        )) {
+            throw new \RuntimeException(
+                'WLS serving manifest recovery authority is unbound.',
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $publication */
+    private function assertPublicationBelongsToInstance(
+        array $publication,
+        string $instanceId,
+        ?string $projectUuid = null,
+    ): void {
+        $payload = \is_array($publication['payload'] ?? null)
+            ? $publication['payload']
+            : [];
+        if (!\hash_equals($instanceId, (string)($payload['instance_id'] ?? ''))
+            || ($projectUuid !== null
+                && !\hash_equals(
+                    $projectUuid,
+                    (string)($payload['project_uuid'] ?? ''),
+                ))
+        ) {
+            throw new \RuntimeException(
+                'WLS serving manifest recovery target belongs to another instance.',
+            );
+        }
     }
 
     /**
@@ -1496,29 +1831,114 @@ final class ProjectServingManifestStore
         if ($prospectiveBytes < 1 || $prospectiveBytes > self::MAX_MANIFEST_BYTES) {
             throw new \RuntimeException('WLS serving manifest size is outside its quota.');
         }
+        $entries = $this->storedManifestInventory();
+        $count = \count($entries);
+        $bytes = \array_sum(\array_column($entries, 'size'));
+        if ($count < self::MAX_STORED_MANIFESTS
+            && $bytes + $prospectiveBytes <= self::MAX_STORED_MANIFEST_BYTES
+        ) {
+            return;
+        }
+
+        $collectable = $this->collectableManifestRetirementEntries(
+            $entries,
+            $this->referencedManifestPathKeys(),
+        );
+        $removedDigests = [];
+        foreach ($collectable as $entry) {
+            GatewayProjectStateFilesystem::removeRegular(
+                (string)$entry['path'],
+                'expired unreferenced WLS serving manifest',
+            );
+            $removedDigests[] = (string)$entry['digest'];
+            --$count;
+            $bytes -= (int)$entry['size'];
+            if ($count < self::MAX_STORED_MANIFESTS
+                && $bytes + $prospectiveBytes
+                    <= self::MAX_STORED_MANIFEST_BYTES
+            ) {
+                break;
+            }
+        }
+        $this->forgetManifestRetirementDigests($removedDigests);
+        if ($count >= self::MAX_STORED_MANIFESTS
+            || $bytes + $prospectiveBytes > self::MAX_STORED_MANIFEST_BYTES
+        ) {
+            throw new \RuntimeException(
+                'WLS serving manifest store has no capacity for another generation.',
+            );
+        }
+    }
+
+    /**
+     * @return list<array{path:string,size:int,mtime:int,generation:int,digest:string}>
+     */
+    private function storedManifestInventory(): array
+    {
         $handle = @\opendir($this->manifestRoot);
         if (!\is_resource($handle)) {
             throw new \RuntimeException('Unable to enumerate the WLS serving manifest store.');
         }
-        $count = 0;
-        $bytes = 0;
+        $rawCount = 0;
+        $manifestCount = 0;
         $entries = [];
+        $digests = [];
+        $orphanedCandidates = [];
         try {
             while (($leaf = @\readdir($handle)) !== false) {
                 if ($leaf === '.' || $leaf === '..') {
                     continue;
                 }
-                if (++$count > self::MAX_STORED_MANIFESTS
+                if (++$rawCount > self::MAX_RAW_MANIFEST_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        'WLS serving manifest store exceeds its fixed raw entry limit.',
+                    );
+                }
+                $path = $this->manifestRoot . DIRECTORY_SEPARATOR . $leaf;
+                // Every caller reaches this inventory while holding the
+                // project-wide publish.lock. The same lock encloses immutable
+                // atomicWrite publication, so an exact staging leaf observed
+                // here belongs to a crashed writer, never a live instance.
+                if (\preg_match(
+                    '/\A[1-9][0-9]{0,18}-[a-f0-9]{64}'
+                        . '\.json\.tmp-[a-f0-9]{24}\z/D',
+                    $leaf,
+                ) === 1) {
+                    if (\count($orphanedCandidates)
+                        >= self::MAX_ORPHANED_MANIFEST_CANDIDATES
+                    ) {
+                        throw new \RuntimeException(
+                            'WLS serving manifest store contains too many orphaned candidates.',
+                        );
+                    }
+                    $status = @\lstat($path);
+                    if (!\is_array($status)
+                        || \is_link($path)
+                        || (((int)$status['mode'] & 0170000) !== 0100000)
+                        || (int)$status['nlink'] !== 1
+                    ) {
+                        throw new \RuntimeException(
+                            'WLS serving manifest store contains an unsafe orphaned candidate.',
+                        );
+                    }
+                    $orphanedCandidates[] = [
+                        'path' => $path,
+                        'identity' => $status,
+                    ];
+                    continue;
+                }
+                if (++$manifestCount > self::MAX_STORED_MANIFESTS
                     || \preg_match(
-                        '/\A[1-9][0-9]{0,18}-[a-f0-9]{64}\.json\z/D',
+                        '/\A([1-9][0-9]{0,18})-([a-f0-9]{64})\.json\z/D',
                         $leaf,
+                        $matches,
                     ) !== 1
+                    || isset($digests[(string)($matches[2] ?? '')])
                 ) {
                     throw new \RuntimeException(
                         'WLS serving manifest store entry quota or identity is invalid.',
                     );
                 }
-                $path = $this->manifestRoot . DIRECTORY_SEPARATOR . $leaf;
                 $status = @\lstat($path);
                 if (!\is_array($status)
                     || \is_link($path)
@@ -1536,61 +1956,425 @@ final class ProjectServingManifestStore
                         'WLS serving manifest store contains an unsafe entry.',
                     );
                 }
-                $bytes += (int)$status['size'];
+                $digest = (string)$matches[2];
+                $digests[$digest] = true;
                 $entries[] = [
                     'path' => $path,
                     'size' => (int)$status['size'],
                     'mtime' => (int)($status['mtime'] ?? 0),
+                    'generation' => (int)$matches[1],
+                    'digest' => $digest,
                 ];
             }
         } finally {
             @\closedir($handle);
         }
-        if ($count < self::MAX_STORED_MANIFESTS
-            && $bytes + $prospectiveBytes <= self::MAX_STORED_MANIFEST_BYTES
-        ) {
-            return;
+        foreach ($orphanedCandidates as $candidate) {
+            GatewayProjectStateFilesystem::removeRegular(
+                (string)$candidate['path'],
+                'orphaned WLS serving manifest candidate',
+                (array)$candidate['identity'],
+            );
+        }
+        return $entries;
+    }
+
+    /**
+     * @param list<array{path:string,size:int,mtime:int,generation:int,digest:string}> $entries
+     * @param array<string,true> $referencedPathKeys
+     * @return list<array{path:string,size:int,mtime:int,generation:int,digest:string}>
+     */
+    private function collectableManifestRetirementEntries(
+        array $entries,
+        array $referencedPathKeys,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $this->assertPublicationDeadline($deadlineMonotonic);
+        $this->ensureStoreDirectories();
+        if (\count($entries) > self::MAX_STORED_MANIFESTS) {
+            throw new \RuntimeException(
+                'WLS serving manifest retirement inventory exceeds its bound.',
+            );
+        }
+        $inventory = [];
+        foreach ($entries as $entry) {
+            $digest = \strtolower(\trim((string)($entry['digest'] ?? '')));
+            $generation = (int)($entry['generation'] ?? 0);
+            $path = (string)($entry['path'] ?? '');
+            if ($generation < 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+                || isset($inventory[$digest])
+                || $path === ''
+                || \str_contains($path, "\0")
+                || !\hash_equals(
+                    $generation . '-' . $digest . '.json',
+                    \basename($path),
+                )
+                || (int)($entry['size'] ?? 0) < 1
+                || (int)$entry['size'] > self::MAX_MANIFEST_BYTES
+            ) {
+                throw new \RuntimeException(
+                    'WLS serving manifest retirement inventory is malformed.',
+                );
+            }
+            $inventory[$digest] = $entry;
         }
 
-        // Garbage collection is deliberately delayed until capacity is
-        // needed. Only exact private immutable files older than seven days and
-        // absent from every current/authority pointer may be removed. A clock
-        // rollback merely retains more files and fails closed at the quota.
-        $referenced = $this->referencedManifestPathKeys();
-        $cutoff = \time() - self::MANIFEST_RETENTION_SECONDS;
-        $collectable = \array_values(\array_filter(
-            $entries,
-            fn (array $entry): bool => (int)$entry['mtime'] > 0
-                && (int)$entry['mtime'] <= $cutoff
-                && !isset($referenced[$this->pathKey((string)$entry['path'])]),
-        ));
-        \usort($collectable, static function (array $left, array $right): int {
-            $mtimeOrder = (int)$left['mtime'] <=> (int)$right['mtime'];
-            return $mtimeOrder !== 0
-                ? $mtimeOrder
-                : (string)$left['path'] <=> (string)$right['path'];
-        });
-        foreach ($collectable as $entry) {
-            GatewayProjectStateFilesystem::removeRegular(
-                (string)$entry['path'],
-                'expired unreferenced WLS serving manifest',
-            );
-            $count--;
-            $bytes -= (int)$entry['size'];
-            if ($count < self::MAX_STORED_MANIFESTS
-                && $bytes + $prospectiveBytes
-                    <= self::MAX_STORED_MANIFEST_BYTES
+        $clock = $this->manifestRetirementClock();
+        $state = $this->readManifestRetirementStateUnlocked();
+        $markers = $this->manifestRetirementMarkersForClock($state, $clock);
+        foreach (\array_keys($markers) as $digest) {
+            $entry = $inventory[$digest] ?? null;
+            if (!\is_array($entry)
+                || isset($referencedPathKeys[$this->pathKey((string)$entry['path'])])
             ) {
-                return;
+                unset($markers[$digest]);
             }
         }
-        if ($count >= self::MAX_STORED_MANIFESTS
-            || $bytes + $prospectiveBytes > self::MAX_STORED_MANIFEST_BYTES
-        ) {
+
+        $collectable = [];
+        foreach ($inventory as $digest => $entry) {
+            if (isset($referencedPathKeys[$this->pathKey((string)$entry['path'])])) {
+                unset($markers[$digest]);
+                continue;
+            }
+            $marker = \is_array($markers[$digest] ?? null)
+                ? $markers[$digest]
+                : null;
+            $age = $marker === null
+                ? null
+                : $this->manifestRetirementMarkerAge($marker, $digest, $clock);
+            if ($age === null) {
+                // Immutable-file mtime is never deletion authority. Missing,
+                // damaged, cross-boot or future state starts a complete new
+                // current-boot grace window.
+                $markers[$digest] = $this->newManifestRetirementMarker(
+                    $digest,
+                    $clock,
+                );
+                continue;
+            }
+            if ($age >= self::MANIFEST_RETENTION_SECONDS) {
+                $collectable[] = $entry + [
+                    'retired_monotonic' => (float)(
+                        $marker['unreferenced_since_monotonic'] ?? 0.0
+                    ),
+                ];
+            }
+        }
+        \ksort($markers, SORT_STRING);
+        $this->assertPublicationDeadline($deadlineMonotonic);
+        $this->publishManifestRetirementStateUnlocked($markers, $clock);
+        \usort($collectable, static function (array $left, array $right): int {
+            $order = (float)($left['retired_monotonic'] ?? 0.0)
+                <=> (float)($right['retired_monotonic'] ?? 0.0);
+            return $order !== 0
+                ? $order
+                : (string)$left['path'] <=> (string)$right['path'];
+        });
+        return $collectable;
+    }
+
+    /**
+     * @return array{wall_unix:int,monotonic:float,host_boot_id:string}
+     */
+    private function manifestRetirementClock(): array
+    {
+        $wall = $this->publicationWallClock !== null
+            ? ($this->publicationWallClock)()
+            : \time();
+        $bootIdentity = $this->publicationBootIdentityResolver !== null
+            ? ($this->publicationBootIdentityResolver)()
+            : GatewayHostBootIdentity::current();
+        if (!\is_int($wall) || $wall < 1 || !\is_string($bootIdentity)) {
             throw new \RuntimeException(
-                'WLS serving manifest store has no capacity for another generation.',
+                'WLS serving manifest retirement clock is invalid.',
             );
         }
+        return [
+            'wall_unix' => $wall,
+            'monotonic' => $this->publicationMonotonicNow(),
+            'host_boot_id' => GatewayHostBootIdentity::validate($bootIdentity),
+        ];
+    }
+
+    /**
+     * @param array{wall_unix:int,monotonic:float,host_boot_id:string} $clock
+     * @return array<string,mixed>
+     */
+    private function newManifestRetirementMarker(string $digest, array $clock): array
+    {
+        return [
+            'schema' => self::MANIFEST_RETIREMENT_MARKER_SCHEMA,
+            'manifest_digest' => $digest,
+            'host_boot_id' => $clock['host_boot_id'],
+            'unreferenced_since_unix' => $clock['wall_unix'],
+            'unreferenced_since_monotonic' => $clock['monotonic'],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $marker
+     * @param array{wall_unix:int,monotonic:float,host_boot_id:string} $clock
+     */
+    private function manifestRetirementMarkerAge(
+        array $marker,
+        string $digest,
+        array $clock,
+    ): ?float {
+        $sinceWall = $marker['unreferenced_since_unix'] ?? null;
+        $sinceMonotonic = $marker['unreferenced_since_monotonic'] ?? null;
+        if (!\hash_equals(
+            self::MANIFEST_RETIREMENT_MARKER_SCHEMA,
+            (string)($marker['schema'] ?? ''),
+        )
+            || !\hash_equals($digest, (string)($marker['manifest_digest'] ?? ''))
+            || !\hash_equals(
+                $clock['host_boot_id'],
+                (string)($marker['host_boot_id'] ?? ''),
+            )
+            || !\is_int($sinceWall)
+            || $sinceWall < 1
+            || $sinceWall > $clock['wall_unix']
+            || (!\is_int($sinceMonotonic) && !\is_float($sinceMonotonic))
+            || !\is_finite((float)$sinceMonotonic)
+            || (float)$sinceMonotonic < 0.0
+            || (float)$sinceMonotonic > $clock['monotonic']
+        ) {
+            return null;
+        }
+        $age = $clock['monotonic'] - (float)$sinceMonotonic;
+        return \is_finite($age) && $age >= 0.0 ? $age : null;
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @param array{wall_unix:int,monotonic:float,host_boot_id:string} $clock
+     * @return array<string,array<string,mixed>>
+     */
+    private function manifestRetirementMarkersForClock(
+        array $state,
+        array $clock,
+    ): array {
+        $updatedWall = $state['updated_unix'] ?? null;
+        $updatedMonotonic = $state['updated_monotonic'] ?? null;
+        if (!\is_int($updatedWall)
+            || $updatedWall < 1
+            || $updatedWall > $clock['wall_unix']
+            || (!\is_int($updatedMonotonic) && !\is_float($updatedMonotonic))
+            || !\is_finite((float)$updatedMonotonic)
+            || (float)$updatedMonotonic < 0.0
+            || (float)$updatedMonotonic > $clock['monotonic']
+            || !\hash_equals(
+                $clock['host_boot_id'],
+                (string)($state['host_boot_id'] ?? ''),
+            )
+            || !\is_array($state['markers'] ?? null)
+        ) {
+            return [];
+        }
+        return $state['markers'];
+    }
+
+    /** @return array<string,mixed> */
+    private function readManifestRetirementStateUnlocked(): array
+    {
+        $empty = ['schema' => self::MANIFEST_RETIREMENT_SCHEMA, 'markers' => []];
+        $path = $this->manifestRetirementStateFile();
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException(
+                    'WLS serving manifest retirement state path is unsafe.',
+                );
+            }
+            return $empty;
+        }
+        $this->assertPrivateStateFile(
+            $path,
+            'WLS serving manifest retirement state',
+        );
+        try {
+            $encoded = GatewayProjectStateFilesystem::read(
+                $path,
+                self::MAX_RETIREMENT_STATE_BYTES,
+                'WLS serving manifest retirement state',
+            );
+            $envelope = \json_decode($encoded, true, 32, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return $empty;
+        }
+        $state = \is_array($envelope) && \is_array($envelope['payload'] ?? null)
+            ? $envelope['payload']
+            : null;
+        if (!\is_array($state)
+            || !\hash_equals(
+                (string)($envelope['sha256'] ?? ''),
+                \hash('sha256', GatewayClient::canonicalJson($state)),
+            )
+            || !\hash_equals(
+                self::MANIFEST_RETIREMENT_SCHEMA,
+                (string)($state['schema'] ?? ''),
+            )
+            || !\is_array($state['markers'] ?? null)
+            || (($state['markers'] ?? []) !== [] && \array_is_list($state['markers']))
+            || \count($state['markers']) > self::MAX_STORED_MANIFESTS
+            || !\is_int($state['updated_unix'] ?? null)
+            || (int)$state['updated_unix'] < 1
+            || (!\is_int($state['updated_monotonic'] ?? null)
+                && !\is_float($state['updated_monotonic'] ?? null))
+            || !\is_finite((float)$state['updated_monotonic'])
+            || (float)$state['updated_monotonic'] < 0.0
+            || \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($state['host_boot_id'] ?? ''),
+            ) !== 1
+        ) {
+            return $empty;
+        }
+        $normalized = [];
+        foreach ($state['markers'] as $digest => $marker) {
+            if (!\is_string($digest)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+                || !\is_array($marker)
+                || !\hash_equals(
+                    self::MANIFEST_RETIREMENT_MARKER_SCHEMA,
+                    (string)($marker['schema'] ?? ''),
+                )
+                || !\hash_equals($digest, (string)($marker['manifest_digest'] ?? ''))
+                || !\hash_equals(
+                    (string)$state['host_boot_id'],
+                    (string)($marker['host_boot_id'] ?? ''),
+                )
+                || !\is_int($marker['unreferenced_since_unix'] ?? null)
+                || (int)$marker['unreferenced_since_unix'] < 1
+                || (int)$marker['unreferenced_since_unix'] > (int)$state['updated_unix']
+                || (!\is_int($marker['unreferenced_since_monotonic'] ?? null)
+                    && !\is_float($marker['unreferenced_since_monotonic'] ?? null))
+                || !\is_finite((float)$marker['unreferenced_since_monotonic'])
+                || (float)$marker['unreferenced_since_monotonic'] < 0.0
+                || (float)$marker['unreferenced_since_monotonic']
+                    > (float)$state['updated_monotonic']
+            ) {
+                return $empty;
+            }
+            $normalized[$digest] = $marker;
+        }
+        \ksort($normalized, SORT_STRING);
+        return [
+            'schema' => self::MANIFEST_RETIREMENT_SCHEMA,
+            'markers' => $normalized,
+            'updated_unix' => (int)$state['updated_unix'],
+            'updated_monotonic' => (float)$state['updated_monotonic'],
+            'host_boot_id' => (string)$state['host_boot_id'],
+        ];
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $markers
+     * @param array{wall_unix:int,monotonic:float,host_boot_id:string} $clock
+     */
+    private function publishManifestRetirementStateUnlocked(
+        array $markers,
+        array $clock,
+    ): void {
+        if (\count($markers) > self::MAX_STORED_MANIFESTS) {
+            throw new \RuntimeException(
+                'WLS serving manifest retirement marker set exceeds its bound.',
+            );
+        }
+        $payload = [
+            'schema' => self::MANIFEST_RETIREMENT_SCHEMA,
+            'markers' => $markers,
+            'updated_at' => \gmdate(DATE_ATOM, $clock['wall_unix']),
+            'updated_unix' => $clock['wall_unix'],
+            'updated_monotonic' => $clock['monotonic'],
+            'host_boot_id' => $clock['host_boot_id'],
+        ];
+        $encoded = \json_encode(
+            [
+                'payload' => $payload,
+                'sha256' => \hash(
+                    'sha256',
+                    GatewayClient::canonicalJson($payload),
+                ),
+            ],
+            JSON_PRETTY_PRINT
+                | JSON_UNESCAPED_SLASHES
+                | JSON_UNESCAPED_UNICODE
+                | JSON_PRESERVE_ZERO_FRACTION
+                | JSON_THROW_ON_ERROR,
+        ) . "\n";
+        if (\strlen($encoded) > self::MAX_RETIREMENT_STATE_BYTES) {
+            throw new \RuntimeException(
+                'WLS serving manifest retirement state exceeds its bound.',
+            );
+        }
+        $this->atomicWrite($this->manifestRetirementStateFile(), $encoded, 0600);
+    }
+
+    /** @param list<string> $digests */
+    private function forgetManifestRetirementDigests(array $digests): void
+    {
+        if ($digests === []) {
+            return;
+        }
+        $clock = $this->manifestRetirementClock();
+        $markers = $this->manifestRetirementMarkersForClock(
+            $this->readManifestRetirementStateUnlocked(),
+            $clock,
+        );
+        foreach ($digests as $digest) {
+            unset($markers[$digest]);
+        }
+        \ksort($markers, SORT_STRING);
+        $this->publishManifestRetirementStateUnlocked($markers, $clock);
+    }
+
+    private function synchronizeManifestRetirementReferencesAfterCommit(
+        float $deadlineMonotonic,
+    ): void {
+        try {
+            $this->assertPublicationDeadline($deadlineMonotonic);
+            $this->collectableManifestRetirementEntries(
+                $this->storedManifestInventory(),
+                $this->referencedManifestPathKeys(),
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable) {
+            // Marker state is derived. If it cannot be synchronized after the
+            // serving pointer commits, discard it so the next successful scan
+            // starts a full grace window instead of trusting stale authority.
+            try {
+                $this->invalidateManifestRetirementStateUnlocked();
+            } catch (\Throwable) {
+                // An unsafe state path will make future GC fail closed.
+            }
+        }
+    }
+
+    private function invalidateManifestRetirementStateUnlocked(): void
+    {
+        $path = $this->manifestRetirementStateFile();
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException(
+                    'WLS serving manifest retirement state path is unsafe.',
+                );
+            }
+            return;
+        }
+        GatewayProjectStateFilesystem::removeRegular(
+            $path,
+            'WLS serving manifest retirement state',
+        );
+        GatewayProjectStateFilesystem::syncDirectory(\dirname($path));
+    }
+
+    private function manifestRetirementStateFile(): string
+    {
+        return $this->storeRoot . DIRECTORY_SEPARATOR . 'manifest-retirement.json';
     }
 
     /** @return array<string,true> */
@@ -1637,6 +2421,10 @@ final class ProjectServingManifestStore
                         $referenced[$this->pathKey($reference)] = $reference;
                     }
                     continue;
+                } elseif (\hash_equals('manifest-retirement.json', $leaf)) {
+                    // Derived GC authority is validated by its own bounded
+                    // reader and is not itself a manifest reference.
+                    continue;
                 } elseif (\str_starts_with($leaf, 'current-')
                     || \str_starts_with($leaf, 'authority-')
                     || \str_starts_with($leaf, 'lkg-')
@@ -1659,8 +2447,56 @@ final class ProjectServingManifestStore
     /** @return array<string,true> */
     private function certificateSnapshotReferencesUnlocked(): array
     {
+        return $this->certificateSnapshotReferencesFromPaths(
+            \array_values($this->referencedManifestPaths()),
+        );
+    }
+
+    /** @return array<string,true> */
+    private function certificateSnapshotReferencesForInstanceUnlocked(
+        string $instanceId,
+    ): array {
+        $this->assertInstanceId($instanceId);
+        $paths = [];
+        foreach ([
+            $this->currentPointerPath($instanceId) => 'pointer',
+            $this->publicationAuthorityFile($instanceId) => 'authority',
+        ] as $referenceFile => $type) {
+            $status = @\lstat($referenceFile);
+            if (!\is_array($status)) {
+                if (\file_exists($referenceFile) || \is_link($referenceFile)) {
+                    throw new \RuntimeException(
+                        'WLS serving manifest reference path is unsafe.',
+                    );
+                }
+                continue;
+            }
+            $path = $type === 'pointer'
+                ? $this->readPointerReference($referenceFile)
+                : $this->readAuthorityReference($referenceFile);
+            $paths[$this->pathKey($path)] = $path;
+        }
+        foreach ($this->readRecentLkgReferences(
+            $this->recentLkgFile($instanceId),
+            $instanceId,
+            true,
+        ) as $lkg) {
+            $path = (string)$lkg['path'];
+            $paths[$this->pathKey($path)] = $path;
+        }
+        return $this->certificateSnapshotReferencesFromPaths(
+            \array_values($paths),
+        );
+    }
+
+    /**
+     * @param list<string> $paths
+     * @return array<string,true>
+     */
+    private function certificateSnapshotReferencesFromPaths(array $paths): array
+    {
         $references = [];
-        foreach ($this->referencedManifestPaths() as $path) {
+        foreach ($paths as $path) {
             $leaf = \basename($path);
             if (\preg_match(
                 '/\A([1-9][0-9]{0,18})-([a-f0-9]{64})\.json\z/D',
@@ -1684,7 +2520,89 @@ final class ProjectServingManifestStore
                 $references[$digest] = true;
             }
         }
+        \ksort($references, SORT_STRING);
         return $references;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,true>
+     */
+    private function certificateSnapshotDigestsFromPayload(array $payload): array
+    {
+        $references = [];
+        foreach ((array)($payload['routes'] ?? []) as $route) {
+            $digest = \strtolower(\trim((string)(
+                \is_array($route) ? ($route['certificate_source_digest'] ?? '') : ''
+            )));
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1) {
+                throw new \RuntimeException(
+                    'WLS serving candidate certificate snapshot reference is corrupt.',
+                );
+            }
+            $references[$digest] = true;
+        }
+        \ksort($references, SORT_STRING);
+        return $references;
+    }
+
+    private function synchronizeCertificateSnapshotRetirementReferences(
+        string $instanceId,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $this->transitionCertificateSnapshotReferences(
+            $this->certificateSnapshotReferencesForInstanceUnlocked($instanceId),
+            [],
+            $deadlineMonotonic,
+        );
+    }
+
+    /**
+     * @param array<int,string>|array<string,true> $referencedDigests
+     * @param array<int,string>|array<string,true> $retiringDigests
+     */
+    private function transitionCertificateSnapshotReferences(
+        array $referencedDigests,
+        array $retiringDigests,
+        ?float $deadlineMonotonic,
+    ): void {
+        if ($this->snapshotReferenceTransition !== null) {
+            ($this->snapshotReferenceTransition)(
+                $referencedDigests,
+                $retiringDigests,
+                $deadlineMonotonic,
+            );
+            return;
+        }
+        (new ProjectCertificateGenerationStore($this->projectRoot))
+            ->transitionCertificateSnapshotReferences(
+                $referencedDigests,
+                $retiringDigests,
+                $deadlineMonotonic,
+            );
+    }
+
+    private function afterCommittedPublication(string $instanceId): void
+    {
+        try {
+            $cleanupDeadline = $this->publicationMonotonicNow()
+                + self::POST_COMMIT_CLEANUP_SECONDS;
+        } catch (\Throwable) {
+            return;
+        }
+        try {
+            $this->synchronizeCertificateSnapshotRetirementReferences(
+                $instanceId,
+                $cleanupDeadline,
+            );
+        } catch (\Throwable) {
+            // The current pointer is already durable. Pre-commit reference
+            // transition protected every candidate snapshot, so a failed
+            // derived cleanup can only retain old material longer.
+        }
+        $this->synchronizeManifestRetirementReferencesAfterCommit(
+            $cleanupDeadline,
+        );
     }
 
     /**
@@ -1714,10 +2632,16 @@ final class ProjectServingManifestStore
         unset($unsigned['sha256']);
         $instanceId = (string)($unsigned['instance_id'] ?? '');
         $manifests = $unsigned['manifests'] ?? null;
-        $expectedPath = $this->recentLkgFile($instanceId);
+        $validInstanceId = \preg_match(
+            '/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D',
+            $instanceId,
+        ) === 1;
+        $expectedPath = $validInstanceId
+            ? $this->recentLkgFile($instanceId)
+            : '';
         if (!\is_array($envelope)
             || !\hash_equals(self::LKG_SCHEMA, (string)($unsigned['schema'] ?? ''))
-            || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceId) !== 1
+            || !$validInstanceId
             || ($expectedInstanceId !== null
                 && !\hash_equals($expectedInstanceId, $instanceId))
             || !$this->samePath($expectedPath, $path)

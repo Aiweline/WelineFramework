@@ -23,6 +23,11 @@ namespace Weline\Server\Service;
  */
 class AsyncLogger
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * 日志缓冲区
      * @var array<string, string[]>  [logFile => [messages]]
@@ -50,6 +55,12 @@ class AsyncLogger
      * @var array<string, int>
      */
     private static array $lastFlush = [];
+
+    /**
+     * 上次刷新的进程内单调时间
+     * @var array<string, float>
+     */
+    private static array $lastFlushMonotonic = [];
     
     /**
      * 刷新间隔（秒）
@@ -87,6 +98,7 @@ class AsyncLogger
             self::$buffers[$logFile] = [];
             self::$bufferBytes[$logFile] = 0;
             self::$lastFlush[$logFile] = \time();
+            self::$lastFlushMonotonic[$logFile] = self::monotonicSeconds();
         }
         
         // 添加到缓冲区
@@ -107,7 +119,7 @@ class AsyncLogger
         }
         
         // 时间超限
-        if (\time() - self::$lastFlush[$logFile] >= self::$flushInterval) {
+        if (self::monotonicSeconds() - self::$lastFlushMonotonic[$logFile] >= self::$flushInterval) {
             $shouldFlush = true;
         }
         
@@ -133,6 +145,7 @@ class AsyncLogger
         self::$buffers[$logFile] = [];
         self::$bufferBytes[$logFile] = 0;
         self::$lastFlush[$logFile] = \time();
+        self::$lastFlushMonotonic[$logFile] = self::monotonicSeconds();
     }
     
     /**

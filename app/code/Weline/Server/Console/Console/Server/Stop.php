@@ -5,255 +5,152 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Console\Server;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Console\CommandInterface;
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Process\Processer;
 
-class Stop implements CommandInterface
+/**
+ * Compatibility cleanup for a retired PHP built-in server generation.
+ *
+ * The persisted PID and port are discovery hints only. Destructive work is
+ * allowed solely through an exact, generation-bound managed-process lease and
+ * a fresh live-argv identity check performed by Processer.
+ */
+final class Stop implements CommandInterface
 {
-    use TablePrinter;
-    
-    private array $stoppedPids = [];
-
-    function __construct(
-        private Printing $printer
-    )
+    public function __construct(private Printing $printer)
     {
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function execute(array $args = [], array $data = [])
+    public function execute(array $args = [], array $data = []): int
     {
-        $force = $args['force'] ?? $args['f'] ?? false;
-        
-        $env = Env::getInstance();
-        $serverConfig = $env->get('cli_server') ?? [];
-        
-        $host = $serverConfig['host'] ?? '127.0.0.1';
-        $port = $serverConfig['port'] ?? 9981;
-        $pid = $serverConfig['pid'] ?? null;
-        $hasConfig = !empty($serverConfig) && isset($serverConfig['pid']);
-        
-        $stoppedFromConfig = false;
-        
-        // 首先检查配置中的进程ID
-        if ($pid && $this->isProcessRunning($pid)) {
-            $this->printer->note(__('正在停止配置中的服务器进程，进程ID：%{1}', [$pid]));
-            
-            if ($this->stopProcess($pid, $force)) {
-                $this->printer->success(__('配置中的服务器进程已停止！进程ID：%{1}', [$pid]));
-                $this->stoppedPids[] = $pid;
-                $stoppedFromConfig = true;
-            } else {
-                $this->printer->error(__('停止配置中的服务器进程失败！进程ID：%{1}', [$pid]));
-                if ($force) {
-                    $this->printer->note(__('强制停止失败，请尝试手动停止进程。'));
-                } else {
-                    $this->printer->note(__('请尝试使用 -f 参数强制停止或手动停止进程。'));
-                }
-            }
+        $serverConfig = Env::getInstance()->get('cli_server');
+        if (!\is_array($serverConfig) || !\array_key_exists('pid', $serverConfig)) {
+            $this->printer->info(__('没有已登记的退役 PHP 内置服务器。'));
+            return 0;
         }
-        
-        // 总是检查端口是否被占用，确保所有相关进程都被停止
-        // 即使配置为空，也应该检测端口
-        $context = stream_context_create([
-            'socket' => [
-                'tcp_nodelay' => true,
-            ]
-        ]);
-        $connection = @stream_socket_client("tcp://{$host}:{$port}", $errno, $errstr, 0.5, STREAM_CLIENT_CONNECT, $context);
-        if ($connection !== false && is_resource($connection)) {
-            fclose($connection);
-            
-            // 尝试获取占用端口的进程ID
-            $actualPid = $this->getProcessIdByPort($port);
-            
-            if ($actualPid) {
-                // 如果配置中的 PID 和实际检测到的 PID 相同，且已经停止了，跳过
-                if ($stoppedFromConfig && $actualPid == $pid) {
-                    // 进程已停止，继续后续流程
-                } else {
-                    // 检测到端口被占用，但配置信息可能不完整或者 PID 不同
-                    if (!$hasConfig) {
-                        $this->printer->warning(__('检测到端口 %{1}:%{2} 被占用，但配置信息为空。', [$host, $port]));
-                        $this->printer->note(__('检测到的进程ID：%{1}', [$actualPid]));
-                    } else if ($actualPid != $pid) {
-                        $this->printer->warning(__('检测到的进程ID（%{1}）与配置中的进程ID（%{2}）不一致。', [$actualPid, $pid]));
-                    }
-                    
-                    // 如果使用了 -f 参数，直接停止；否则提示用户
-                    if ($force) {
-                        $this->printer->note(__('正在停止检测到的进程，进程ID：%{1}', [$actualPid]));
-                    } else {
-                        $this->printer->note(__('是否要停止此进程？使用 -f 参数直接停止。'));
-                        // 即使没有 -f，也尝试停止（因为用户执行了 stop 命令）
-                        $this->printer->note(__('正在停止检测到的进程，进程ID：%{1}', [$actualPid]));
-                    }
-                    
-                    if ($this->stopProcess($actualPid, $force)) {
-                        $this->printer->success(__('端口监听进程已停止！进程ID：%{1}', [$actualPid]));
-                        $this->stoppedPids[] = $actualPid;
-                    } else {
-                        $this->printer->error(__('停止端口监听进程失败！进程ID：%{1}', [$actualPid]));
-                        if ($force) {
-                            $this->printer->note(__('强制停止失败，请尝试手动停止进程。'));
-                            if (PHP_OS_FAMILY !== 'Windows') {
-                                $this->printer->note(__('Linux/Unix 上可能需要 root 权限：sudo kill -9 %{1}', [$actualPid]));
-                            }
-                        } else {
-                            $this->printer->note(__('请尝试使用 -f 参数强制停止或手动停止进程。'));
-                        }
-                    }
-                }
-            } else {
-                $this->printer->warning(__('端口 %{1}:%{2} 被占用，但无法确定进程ID。', [$host, $port]));
-                $this->printer->note(__('请手动检查端口占用情况。'));
-            }
-        } else {
-            // 端口未被占用，检查是否已经停止过
-            if (!$stoppedFromConfig) {
-                if (!$hasConfig) {
-                    $this->printer->info(__('未检测到服务器运行（端口 %{1}:%{2} 未被占用）。', [$host, $port]));
-                } else {
-                    $this->printer->info(__('服务器未运行（端口 %{1}:%{2} 未被占用）。', [$host, $port]));
-                }
-            }
-        }
-        
-        // 触发服务器停止事件
-        $eventManager = ObjectManager::getInstance(EventsManager::class);
-        $eventData = [
-            'host' => $host,
-            'port' => $port,
-            'force' => $force,
-            'stopped_pids' => $this->getStoppedPids(),
-            'stop_time' => time()
-        ];
-        $eventManager->dispatch('Weline_Server::stop_after', $eventData);
-        
-        // 清理配置
-        $this->clearServerConfig();
-        
-        // 显示停止信息
-        if (!empty($this->stoppedPids)) {
-            echo "\n";
-            $stopInfo = [];
-            foreach ($this->stoppedPids as $stoppedPid) {
-                $stopInfo[] = ['进程ID', $stoppedPid];
-            }
-            $this->printTable('已停止的服务', $stopInfo);
-            echo "\n";
-        }
-        
-        $this->printer->success(__('服务器停止操作完成！'));
-    }
 
-    /**
-     * 检查进程是否正在运行
-     */
-    private function isProcessRunning(int $pid): bool
-    {
-        return Processer::isRunningByPid($pid);
-    }
-
-    /**
-     * 停止进程
-     */
-    private function stopProcess(int $pid, bool $force = false): bool
-    {
-        if (!$force) {
-            // 先尝试温和停止（与平台相关的优雅停止通常不可用，这里直接检查一次）
-            if (!Processer::isRunningByPid($pid)) {
-                return true;
+        $pid = (int)($serverConfig['pid'] ?? 0);
+        $port = (int)($serverConfig['port'] ?? 9981);
+        if ($pid <= 0) {
+            if (!$this->clearRuntimeConfig()) {
+                $this->printer->error(__('无法持久化清理后的退役 PHP 服务器记录。'));
+                return 1;
             }
+            $this->printer->note(__('已清理无效的退役 PHP 内置服务器运行时记录。'));
+            return 0;
         }
-        
-        // CLI 服务器的命令行是 "php -S localhost:port"，不包含 weline- 前缀
-        // 所以需要额外验证是否是 PHP 进程，然后直接使用驱动层杀死
-        $cmdLine = Processer::getProcessCommandLine($pid);
-        $isPhpServer = $cmdLine !== '' && (
-            \stripos($cmdLine, 'php') !== false && 
-            \stripos($cmdLine, '-S') !== false
+        if (Processer::probeProcessState($pid, true) === Processer::PROCESS_STATE_EXITED) {
+            if (!$this->clearRuntimeConfig()) {
+                $this->printer->error(__('进程已退出，但无法持久化清理后的运行时记录。'));
+                return 1;
+            }
+            $this->printer->note(__('退役 PHP 内置服务器已退出；仅清理运行时记录，未发送信号。'));
+            return 0;
+        }
+        if ($port < 1 || $port > 65535) {
+            return $this->refuseUnsafeTermination('持久化端口无效');
+        }
+
+        $expectedProcessName = 'weline-cli-server-' . $port;
+        $nameOnlyPname = '--name=' . $expectedProcessName;
+        $lease = Processer::getManagedProcessLeaseRecord($pid, $nameOnlyPname);
+        $leasePname = \trim((string)($lease['pname'] ?? ''));
+        $recordedProcessName = \trim((string)($lease['process_name'] ?? ''));
+        $launchId = \trim((string)($lease['launch_id'] ?? ''));
+
+        if ($lease === []
+            || (int)($lease['pid'] ?? 0) !== $pid
+            || $recordedProcessName === ''
+            || !\hash_equals($expectedProcessName, $recordedProcessName)
+            || $launchId === ''
+            || $leasePname === ''
+            || !\str_contains($leasePname, '--launch-id=' . \rawurlencode($launchId))
+        ) {
+            return $this->refuseUnsafeTermination('缺少可验证的精确出生 lease');
+        }
+
+        // Re-open by the generation-bearing pname so a name-only discovery
+        // record can never authorize termination of another launch generation.
+        $exactLease = Processer::getManagedProcessLeaseRecord($pid, $leasePname);
+        if ($exactLease === []
+            || !\hash_equals($launchId, \trim((string)($exactLease['launch_id'] ?? '')))
+            || !\hash_equals($leasePname, \trim((string)($exactLease['pname'] ?? '')))
+        ) {
+            return $this->refuseUnsafeTermination('精确出生 lease 已变更');
+        }
+
+        $result = Processer::terminateManagedProcessLease(
+            $pid,
+            $expectedProcessName,
+            $launchId,
+            $leasePname,
+            true,
+            ['name' => $expectedProcessName, 'launch-id' => $launchId]
         );
-        
-        if ($isPhpServer || $force) {
-            // PHP CLI 服务器或强制模式：直接使用驱动层杀死（绕过 weline- 前缀校验）
-            $result = Processer::getDriver()->killProcess($pid);
-            SchedulerSystem::usleep(500000);
-            
-            if (Processer::isRunningByPid($pid)) {
-                // 如果还在运行，尝试杀死进程树
-                Processer::getDriver()->killProcessTree($pid);
-                SchedulerSystem::usleep(300000);
-            }
-        } else {
-            // 普通模式：使用 Processer 的己方进程校验
-            Processer::killByPid($pid, false);
-            SchedulerSystem::usleep(500000);
+        if (!(bool)($result['released'] ?? false)) {
+            return $this->refuseUnsafeTermination(
+                (string)($result['reason'] ?? '实时身份无法确认')
+            );
         }
-        
-        return !Processer::isRunningByPid($pid);
+
+        if (!Processer::removeManagedProcessLeaseRecord($pid, $expectedProcessName, $launchId)) {
+            $this->printer->error(__('进程已退出，但精确 lease 清理失败；已保留运行时记录以便重试。'));
+            return 1;
+        }
+
+        if (!$this->clearRuntimeConfig()) {
+            $this->printer->error(__('进程已释放，但运行时记录持久化失败；已保留记录以便重试。'));
+            return 1;
+        }
+        if ((bool)($result['terminated'] ?? false)) {
+            $this->printer->success(__('已按精确出生身份停止退役 PHP 内置服务器。'));
+        } else {
+            $this->printer->note(__('旧 lease 已失效，未向当前 PID 发送信号；运行时记录已清理。'));
+        }
+
+        return 0;
     }
 
-    /**
-     * 清理服务器配置（仅移除运行时字段，保留用户配置如 worker_count、port、mode 等）
-     */
-    private function clearServerConfig(): void
+    private function refuseUnsafeTermination(string $reason): int
+    {
+        $this->printer->error(__('已拒绝自动停止退役 PHP 内置服务器：%{1}。', [$reason]));
+        $this->printer->note(__('持久化 PID、端口或进程名不构成终止授权；请由宿主管理员核对实际进程后处理。'));
+
+        return 1;
+    }
+
+    private function clearRuntimeConfig(): bool
     {
         $env = Env::getInstance();
         $server = $env->get('cli_server');
         if (!\is_array($server)) {
-            return;
+            return true;
         }
-        $runtimeKeys = ['pid', 'start_time', 'status'];
-        $cleaned = $server;
-        foreach ($runtimeKeys as $key) {
-            unset($cleaned[$key]);
+
+        foreach (['pid', 'start_time', 'status'] as $runtimeKey) {
+            unset($server[$runtimeKey]);
         }
-        $env->setConfig('cli_server', $cleaned);
-        $env->save();
+        return $env->setConfig('cli_server', $server);
     }
 
-    /**
-     * 通过端口获取进程ID
-     */
-    private function getProcessIdByPort(int $port): ?int
-    {
-        $pid = Processer::getProcessIdByPort($port);
-        return $pid > 0 ? $pid : null;
-    }
-
-    /**
-     * 获取停止的进程ID列表
-     */
-    private function getStoppedPids(): array
-    {
-        return $this->stoppedPids;
-    }
-
-    /**
-     * @inheritDoc
-     */
     public function tip(): string
     {
-        return __('停止PHP内置本地WebServer服务。使用 -f 或 --force 参数强制停止。');
+        return (string)__('停止已退役的 PHP 内置服务器（仅精确出生 lease）');
     }
 
     public function help(): array|string
     {
-        // 基于tip的默认help实现
-        return \Weline\Framework\Console\CommandHelper::formatHelp(
-            '',
+        return CommandHelper::formatHelp(
+            'console:server:stop',
             $this->tip(),
             [
-                '-h, --help' => '显示帮助信息',
+                '-f, --force' => __('兼容参数；不会绕过精确进程出生身份校验'),
             ],
-            [],
+            [
+                __('安全边界') => __('无法证明受管代次时拒绝发送任何终止信号'),
+            ],
             []
         );
     }

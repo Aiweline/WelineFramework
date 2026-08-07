@@ -5,38 +5,54 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Edge\Gateway;
 
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 
 /**
  * Stable, host-coordinated pure-WLS fallback port allocator.
  */
 final class GatewayPortLeaseAllocator
 {
+    public const LISTENER_PHASE_ACTIVE = 'ACTIVE';
+    public const LISTENER_PHASE_RESERVED = 'RESERVED';
+    public const LISTENER_PHASE_RELEASED = 'RELEASED';
+    public const LISTENER_PHASE_DRAIN_PREPARED = 'DRAIN_PREPARED';
+    public const LISTENER_PHASE_DRAIN_ACKED = 'DRAIN_ACKED';
+    public const LISTENER_PHASE_UNDRAIN_PREPARED = 'UNDRAIN_PREPARED';
+    public const LISTENER_PHASE_TERMINAL_DRAIN = 'TERMINAL_DRAIN';
     private const MIN_PORT = 20000;
     private const MAX_PORT = 29999;
     private const RESERVATION_TTL = 120;
     private const MAX_LEASE_FILES = 10000;
+    private const MAX_RECOVERABLE_LEASE_FILES = self::MAX_LEASE_FILES + 1;
+    private const MAX_ORPHANED_LEASE_CANDIDATES = 64;
+    private const MAX_RETAINED_WINDOWS_RECOVERY_BACKUPS = 64;
+    private const MAX_RAW_LEASE_DIRECTORY_ENTRIES = self::MAX_RECOVERABLE_LEASE_FILES
+        + self::MAX_ORPHANED_LEASE_CANDIDATES
+        + self::MAX_RETAINED_WINDOWS_RECOVERY_BACKUPS;
     private const MAX_WORKERS_PER_LEASE = 128;
-
-    /** @var array<int,string> */
-    private static array $processBirthCache = [];
+    public const SCHEMA_VERSION = 6;
 
     /** @var array<string,resource> */
     private array $retainedBoundSockets = [];
 
     private readonly string $leaseDirectory;
     private readonly string $hostBootId;
+    private readonly MasterLeaseRuntimeIdentity $runtimeIdentity;
 
     public function __construct(
         private readonly ProjectIdentityStore $projects = new ProjectIdentityStore(),
         ?string $leaseDirectory = null,
         ?string $hostBootId = null,
         private readonly ?\Closure $monotonicClock = null,
+        ?MasterLeaseRuntimeIdentity $runtimeIdentity = null,
+        private readonly ?\Closure $afterAtomicPublication = null,
     ) {
         $this->leaseDirectory = $leaseDirectory
             ?? $this->projects->hostStateRoot() . DIRECTORY_SEPARATOR . 'fallback-leases';
         $this->hostBootId = GatewayHostBootIdentity::validate(
             $hostBootId ?? GatewayHostBootIdentity::current(),
         );
+        $this->runtimeIdentity = $runtimeIdentity ?? new MasterLeaseRuntimeIdentity();
     }
 
     public function __destruct()
@@ -152,6 +168,17 @@ final class GatewayPortLeaseAllocator
                     $bound = false;
                 }
                 $temporaryReservation = \is_resource($bound) ? $bound : null;
+                if ($temporaryReservation !== null
+                    && !$this->retainedSocketMatches(
+                        $temporaryReservation,
+                        $bindHost,
+                        (int)$current['port'],
+                    )
+                ) {
+                    @\fclose($temporaryReservation);
+                    $temporaryReservation = null;
+                    $bound = false;
+                }
                 if ($bound === true || $temporaryReservation !== null) {
                     $current['allocation_scope'] = $exactPort === null
                         ? 'stable_range'
@@ -189,6 +216,7 @@ final class GatewayPortLeaseAllocator
                 }
                 $current['state'] = 'RELEASED';
                 unset($current['transfer_intent']);
+                $this->clearDrainTransition($current);
                 $current['released_at'] = \gmdate(DATE_ATOM);
                 $current['released_timestamp'] = \time();
                 $this->publishLease($file, $current);
@@ -203,7 +231,15 @@ final class GatewayPortLeaseAllocator
                 );
             }
 
-            $occupied = $this->occupiedLeasePorts($identity);
+            $inventory = $this->occupiedLeasePorts($identity);
+            $projectedLeaseCount = $inventory['lease_count']
+                + ($inventory['own_entry_retained'] ? 0 : 1);
+            if ($projectedLeaseCount > self::MAX_LEASE_FILES) {
+                throw new \RuntimeException(
+                    'WLS fallback lease directory has no capacity for another retained lease.'
+                );
+            }
+            $occupied = $inventory['ports'];
             $preferred = (int)($current['port'] ?? 0);
             $start = $preferred >= self::MIN_PORT && $preferred <= self::MAX_PORT
                 ? $preferred
@@ -229,11 +265,23 @@ final class GatewayPortLeaseAllocator
                     $bound = false;
                 }
                 $temporaryReservation = \is_resource($bound) ? $bound : null;
+                if ($temporaryReservation !== null
+                    && !$this->retainedSocketMatches(
+                        $temporaryReservation,
+                        $bindHost,
+                        $port,
+                    )
+                ) {
+                    @\fclose($temporaryReservation);
+                    $temporaryReservation = null;
+                    $bound = false;
+                }
                 if ($bound !== true && $temporaryReservation === null) {
                     continue;
                 }
+                $masterIdentity = $this->captureStableProcessIdentity(\getmypid());
                 $lease = [
-                    'schema_version' => 5,
+                    'schema_version' => self::SCHEMA_VERSION,
                     'allocation_scope' => $exactPort === null
                         ? 'stable_range'
                         : 'exact',
@@ -245,7 +293,8 @@ final class GatewayPortLeaseAllocator
                     'state' => 'RESERVED',
                     'master_pid' => \getmypid(),
                     'master_process_name' => $this->currentManagedProcessName(),
-                    'master_process_birth' => $this->processBirthIdentity(\getmypid()),
+                    'master_process_birth' => $masterIdentity['birth'],
+                    'master_pid_namespace_id' => $masterIdentity['pid_namespace_id'],
                     'worker_pid' => 0,
                     'launch_id' => '',
                     'workers' => [],
@@ -255,8 +304,16 @@ final class GatewayPortLeaseAllocator
                     'reserved_monotonic' => $this->monotonicNow(),
                     'confirmed_at' => null,
                     'draining_at' => null,
+                    'draining_timestamp' => null,
                     'draining_host_boot_id' => null,
                     'draining_monotonic' => null,
+                    'drain_transition_id' => null,
+                    'drain_acknowledged' => false,
+                    'listener_phase' => self::LISTENER_PHASE_RESERVED,
+                    'listener_transition_action' => null,
+                    'listener_transition_digest' => null,
+                    'drain_action_digest' => null,
+                    'transition_identity' => null,
                 ];
                 $published = false;
                 try {
@@ -293,6 +350,8 @@ final class GatewayPortLeaseAllocator
         string $launchId,
         string $leaseId,
         string $managedProcessName,
+        string $authorizedProcessBirth,
+        string $authorizedPidNamespaceId,
     ): array {
         $this->assertInstanceName($instanceName);
         $managedProcessName = \trim($managedProcessName);
@@ -307,19 +366,19 @@ final class GatewayPortLeaseAllocator
         ) {
             throw new \RuntimeException('Fallback lease launch identity is invalid.');
         }
-        $workerBirth = $this->assertManagedProcessIdentity(
+        $authorizedIdentity = $this->validateStableProcessIdentity(
+            $authorizedProcessBirth,
+            $authorizedPidNamespaceId,
+        );
+        $this->assertManagedProcessIdentity(
             $workerPid,
             $managedProcessName,
             $launchId,
             true,
+            $authorizedIdentity['birth'],
+            $authorizedIdentity['pid_namespace_id'],
         );
         $masterProcessName = $this->currentManagedProcessName();
-        $masterBirth = $this->assertManagedProcessIdentity(
-            \getmypid(),
-            $masterProcessName,
-            '',
-            false,
-        );
         return $this->withAllocationLock(function () use (
             $instanceName,
             $port,
@@ -327,9 +386,8 @@ final class GatewayPortLeaseAllocator
             $launchId,
             $leaseId,
             $managedProcessName,
-            $workerBirth,
+            $authorizedIdentity,
             $masterProcessName,
-            $masterBirth,
         ): array {
             if ($port < 1
                 || $port > 65535
@@ -342,11 +400,38 @@ final class GatewayPortLeaseAllocator
             $identity = $projectUuid . ':' . $instanceName;
             $file = $this->leaseFile($identity);
             $lease = $this->readLease($file);
+            if (!\is_array($lease)
+                || (int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
+            ) {
+                throw new \RuntimeException(
+                    'Fallback READY requires a schema-6 stable process-identity lease.'
+                );
+            }
+            $this->assertManagedProcessIdentity(
+                $workerPid,
+                $managedProcessName,
+                $launchId,
+                true,
+                $authorizedIdentity['birth'],
+                $authorizedIdentity['pid_namespace_id'],
+            );
+            $this->assertManagedProcessIdentity(
+                \getmypid(),
+                $masterProcessName,
+                '',
+                false,
+                (string)($lease['master_process_birth'] ?? ''),
+                (string)($lease['master_pid_namespace_id'] ?? ''),
+            );
             $sameOwner = $lease !== null
                 && \hash_equals($projectUuid, (string)($lease['project_uuid'] ?? ''))
                 && \hash_equals($instanceName, (string)($lease['instance'] ?? ''))
                 && (int)($lease['port'] ?? 0) === $port
                 && (int)($lease['master_pid'] ?? 0) === \getmypid()
+                && \hash_equals(
+                    $this->hostBootId,
+                    (string)($lease['host_boot_id'] ?? ''),
+                )
                 && $this->currentProcessMatchesMasterBirth($lease)
                 && \hash_equals($leaseId, (string)($lease['lease_id'] ?? ''));
             $workers = $lease !== null ? $this->normaliseWorkers($lease) : [];
@@ -356,7 +441,14 @@ final class GatewayPortLeaseAllocator
                     && (int)($worker['pid'] ?? 0) === $workerPid
                     && \hash_equals((string)($worker['launch_id'] ?? ''), $launchId)
                     && \hash_equals((string)($worker['process_name'] ?? ''), $managedProcessName)
-                    && \hash_equals((string)($worker['process_birth'] ?? ''), $workerBirth)
+                    && \hash_equals(
+                        (string)($worker['process_birth'] ?? ''),
+                        $authorizedIdentity['birth'],
+                    )
+                    && \hash_equals(
+                        (string)($worker['pid_namespace_id'] ?? ''),
+                        $authorizedIdentity['pid_namespace_id'],
+                    )
                 ) {
                     return $lease;
                 }
@@ -371,22 +463,23 @@ final class GatewayPortLeaseAllocator
             }
             $workers = \array_values(\array_filter(
                 $workers,
-                fn (array $worker): bool => $this->workerIsLive($worker, $lease),
+                fn (array $worker): bool => $this->workerMayStillExist($worker, $lease),
             ));
             $workers[] = [
                 'pid' => $workerPid,
                 'launch_id' => $launchId,
                 'process_name' => $managedProcessName,
-                'process_birth' => $workerBirth,
+                'process_birth' => $authorizedIdentity['birth'],
+                'pid_namespace_id' => $authorizedIdentity['pid_namespace_id'],
                 'confirmed_at' => \gmdate(DATE_ATOM),
                 'confirmed_timestamp' => \time(),
             ];
             $lease['state'] = 'ACTIVE';
             unset($lease['transfer_intent']);
-            $lease['schema_version'] = 5;
+            $this->clearDrainTransition($lease);
+            $lease['schema_version'] = self::SCHEMA_VERSION;
             $lease['bind_host'] = (string)($lease['bind_host'] ?? '127.0.0.1');
             $lease['master_process_name'] = $masterProcessName;
-            $lease['master_process_birth'] = $masterBirth;
             $lease['worker_pid'] = $workerPid;
             $lease['launch_id'] = $launchId;
             $lease['workers'] = $workers;
@@ -412,6 +505,8 @@ final class GatewayPortLeaseAllocator
         string $bindHost,
         string $managedProcessName,
         string $masterLaunchId,
+        string $authorizedProcessBirth,
+        string $authorizedPidNamespaceId,
     ): array {
         $this->assertInstanceName($instanceName);
         $managedProcessName = \trim($managedProcessName);
@@ -426,26 +521,25 @@ final class GatewayPortLeaseAllocator
         ) {
             throw new \RuntimeException('Transferred WLS public lease owner is invalid.');
         }
-        $masterProcessName = $this->currentManagedProcessName();
-        $masterBirth = $this->assertManagedProcessIdentity(
-            \getmypid(),
-            $masterProcessName,
-            '',
-            false,
+        $ownerIdentity = $this->validateStableProcessIdentity(
+            $authorizedProcessBirth,
+            $authorizedPidNamespaceId,
         );
-        $ownerBirth = $ownerPid === \getmypid()
-            ? $masterBirth
-            : $this->assertManagedProcessIdentity(
-                $ownerPid,
-                $managedProcessName,
-                $launchId,
-                true,
-            );
+        $masterProcessName = $this->currentManagedProcessName();
+        $masterIdentity = $this->captureStableProcessIdentity(\getmypid());
         if ($ownerPid === \getmypid()
             && !\hash_equals($masterProcessName, \trim($managedProcessName))
         ) {
             throw new \RuntimeException('Transferred WLS public lease Master identity is invalid.');
         }
+        $this->assertManagedProcessIdentity(
+            $ownerPid,
+            $managedProcessName,
+            $launchId,
+            $ownerPid !== \getmypid(),
+            $ownerIdentity['birth'],
+            $ownerIdentity['pid_namespace_id'],
+        );
         return $this->withAllocationLock(function () use (
             $instanceName,
             $port,
@@ -454,9 +548,9 @@ final class GatewayPortLeaseAllocator
             $leaseId,
             $bindHost,
             $managedProcessName,
-            $ownerBirth,
+            $ownerIdentity,
             $masterProcessName,
-            $masterBirth,
+            $masterIdentity,
             $masterLaunchId,
         ): array {
             $projectUuid = $this->projects->projectUuid();
@@ -464,7 +558,7 @@ final class GatewayPortLeaseAllocator
             $lease = $this->readLease($file);
             $reservedAt = (int)($lease['reserved_timestamp'] ?? 0);
             if ($lease === null
-                || (int)($lease['schema_version'] ?? 0) !== 5
+                || (int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
                 || !\hash_equals('RESERVED', (string)($lease['state'] ?? ''))
                 || !\hash_equals($projectUuid, (string)($lease['project_uuid'] ?? ''))
                 || !\hash_equals($instanceName, (string)($lease['instance'] ?? ''))
@@ -475,30 +569,54 @@ final class GatewayPortLeaseAllocator
                 )
                 || (int)($lease['port'] ?? 0) !== $port
                 || $reservedAt < 1
+                // Daemon handoff: Start CLI prepares the transfer intent, then
+                // exits after spawning Master. Master confirms on child READY,
+                // so the preparer PID is often already gone. Ownership is the
+                // immutable master_launch_id + lease identity fence, not a
+                // still-living preparer process.
                 || !$this->validTransferIntent(
                     $lease,
                     $masterLaunchId,
-                    true,
+                    false,
                 )
             ) {
                 throw new \RuntimeException(
                     'Transferred WLS public listener does not match the exact reserved host lease.'
                 );
             }
+            $this->assertManagedProcessIdentity(
+                $ownerPid,
+                $managedProcessName,
+                $launchId,
+                $ownerPid !== \getmypid(),
+                $ownerIdentity['birth'],
+                $ownerIdentity['pid_namespace_id'],
+            );
+            $this->assertManagedProcessIdentity(
+                \getmypid(),
+                $masterProcessName,
+                '',
+                false,
+                $masterIdentity['birth'],
+                $masterIdentity['pid_namespace_id'],
+            );
             $confirmedAt = \time();
-            $lease['schema_version'] = 5;
+            $lease['schema_version'] = self::SCHEMA_VERSION;
             $lease['bind_host'] = $bindHost;
             $lease['state'] = 'ACTIVE';
+            $this->clearDrainTransition($lease);
             $lease['master_pid'] = \getmypid();
             $lease['master_process_name'] = $masterProcessName;
-            $lease['master_process_birth'] = $masterBirth;
+            $lease['master_process_birth'] = $masterIdentity['birth'];
+            $lease['master_pid_namespace_id'] = $masterIdentity['pid_namespace_id'];
             $lease['worker_pid'] = $ownerPid;
             $lease['launch_id'] = $launchId;
             $workers = [[
                 'pid' => $ownerPid,
                 'launch_id' => $launchId,
                 'process_name' => \trim($managedProcessName),
-                'process_birth' => $ownerBirth,
+                'process_birth' => $ownerIdentity['birth'],
+                'pid_namespace_id' => $ownerIdentity['pid_namespace_id'],
                 'confirmed_at' => \gmdate(DATE_ATOM, $confirmedAt),
                 'confirmed_timestamp' => $confirmedAt,
             ]];
@@ -529,6 +647,10 @@ final class GatewayPortLeaseAllocator
                 || !\hash_equals($instanceName, (string)($lease['instance'] ?? ''))
                 || !\hash_equals($leaseId, (string)($lease['lease_id'] ?? ''))
                 || (int)($lease['master_pid'] ?? 0) !== \getmypid()
+                || !\hash_equals(
+                    $this->hostBootId,
+                    (string)($lease['host_boot_id'] ?? ''),
+                )
                 || !$this->currentProcessMatchesMasterBirth($lease)
             ) {
                 throw new \RuntimeException('Fallback drain does not match the active host lease.');
@@ -542,8 +664,462 @@ final class GatewayPortLeaseAllocator
                 $lease['draining_timestamp'] = \time();
                 $lease['draining_host_boot_id'] = $this->hostBootId;
                 $lease['draining_monotonic'] = $this->monotonicNow();
+                $lease['drain_transition_id'] = null;
+                $lease['drain_acknowledged'] = true;
+                $lease['listener_phase'] = self::LISTENER_PHASE_TERMINAL_DRAIN;
+                $lease['listener_transition_action'] = 'TERMINAL_DRAIN';
+                $lease['listener_transition_digest'] = \hash(
+                    'sha256',
+                    GatewayClient::canonicalJson([
+                        'host_boot_id' => (string)$lease['host_boot_id'],
+                        'lease_id' => (string)$lease['lease_id'],
+                        'master_pid' => (int)$lease['master_pid'],
+                        'port' => (int)$lease['port'],
+                        'state' => 'TERMINAL_DRAIN',
+                    ]),
+                );
+                $lease['drain_action_digest'] = null;
+                $lease['transition_identity'] = null;
                 $this->publishLease($file, $lease);
             }
+            return $lease;
+        });
+    }
+
+    /**
+     * Persist a fail-closed listener transition before the child is asked to
+     * stop admission. No drain clock exists until acknowledgeDrain() proves the
+     * exact child generation applied the transition.
+     *
+     * @return array<string,mixed>
+     */
+    public function beginDrain(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+        string $transitionId,
+        string $actionDigest,
+        array $transitionIdentity,
+    ): array {
+        $this->assertInstanceName($instanceName);
+        $leaseId = $this->validateLeaseId($leaseId);
+        $workerLaunchId = $this->validateLaunchId($workerLaunchId);
+        $transitionId = $this->validateTransitionId($transitionId);
+        $actionDigest = $this->validateActionDigest($actionDigest);
+        return $this->withAllocationLock(function () use (
+            $instanceName,
+            $port,
+            $leaseId,
+            $workerLaunchId,
+            $transitionId,
+            $actionDigest,
+            $transitionIdentity,
+        ): array {
+            [$file, $lease] = $this->transitionLease(
+                $instanceName,
+                $port,
+                $leaseId,
+                $workerLaunchId,
+            );
+            $transitionIdentity = $this->normaliseTransitionIdentity(
+                $transitionIdentity,
+                $lease,
+            );
+            $state = (string)($lease['state'] ?? '');
+            if ($state === 'DRAINING'
+                && \hash_equals(
+                    self::LISTENER_PHASE_DRAIN_PREPARED,
+                    (string)($lease['listener_phase'] ?? ''),
+                )
+                && \hash_equals(
+                    $transitionId,
+                    (string)($lease['drain_transition_id'] ?? ''),
+                )
+                && \hash_equals(
+                    $actionDigest,
+                    (string)($lease['listener_transition_digest'] ?? ''),
+                )
+                && $this->transitionIdentityMatches(
+                    $transitionIdentity,
+                    $lease['transition_identity'] ?? null,
+                )
+            ) {
+                return $lease;
+            }
+            if (!\hash_equals('ACTIVE', $state)) {
+                throw new \RuntimeException(
+                    'Only the exact active fallback generation may begin a drain transition.'
+                );
+            }
+            $lease['state'] = 'DRAINING';
+            $lease['drain_transition_id'] = $transitionId;
+            $lease['drain_acknowledged'] = false;
+            $lease['listener_phase'] = self::LISTENER_PHASE_DRAIN_PREPARED;
+            $lease['listener_transition_action'] = 'DRAIN';
+            $lease['listener_transition_digest'] = $actionDigest;
+            $lease['drain_action_digest'] = $actionDigest;
+            $lease['transition_identity'] = $transitionIdentity;
+            $lease['draining_at'] = null;
+            $lease['draining_timestamp'] = null;
+            $lease['draining_host_boot_id'] = null;
+            $lease['draining_monotonic'] = null;
+            $this->publishLease($file, $lease);
+            return $lease;
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function acknowledgeDrain(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+        string $transitionId,
+        string $actionDigest,
+        array $transitionIdentity,
+    ): array {
+        $this->assertInstanceName($instanceName);
+        $leaseId = $this->validateLeaseId($leaseId);
+        $workerLaunchId = $this->validateLaunchId($workerLaunchId);
+        $transitionId = $this->validateTransitionId($transitionId);
+        $actionDigest = $this->validateActionDigest($actionDigest);
+        return $this->withAllocationLock(function () use (
+            $instanceName,
+            $port,
+            $leaseId,
+            $workerLaunchId,
+            $transitionId,
+            $actionDigest,
+            $transitionIdentity,
+        ): array {
+            [$file, $lease] = $this->transitionLease(
+                $instanceName,
+                $port,
+                $leaseId,
+                $workerLaunchId,
+            );
+            $transitionIdentity = $this->normaliseTransitionIdentity(
+                $transitionIdentity,
+                $lease,
+            );
+            if (!\hash_equals('DRAINING', (string)($lease['state'] ?? ''))
+                || !\in_array(
+                    (string)($lease['listener_phase'] ?? ''),
+                    [
+                        self::LISTENER_PHASE_DRAIN_PREPARED,
+                        self::LISTENER_PHASE_DRAIN_ACKED,
+                    ],
+                    true,
+                )
+                || !\hash_equals('DRAIN', (string)($lease['listener_transition_action'] ?? ''))
+                || !\hash_equals(
+                    $transitionId,
+                    (string)($lease['drain_transition_id'] ?? ''),
+                )
+                || !\hash_equals(
+                    $actionDigest,
+                    (string)($lease['listener_transition_digest'] ?? ''),
+                )
+                || !\hash_equals(
+                    $actionDigest,
+                    (string)($lease['drain_action_digest'] ?? ''),
+                )
+                || !$this->transitionIdentityMatches(
+                    $transitionIdentity,
+                    $lease['transition_identity'] ?? null,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Fallback drain acknowledgement does not match its pending transition.'
+                );
+            }
+            if (($lease['drain_acknowledged'] ?? false) === true) {
+                return $lease;
+            }
+            $lease['drain_acknowledged'] = true;
+            $lease['listener_phase'] = self::LISTENER_PHASE_DRAIN_ACKED;
+            $lease['draining_at'] = \gmdate(DATE_ATOM);
+            $lease['draining_timestamp'] = \time();
+            $lease['draining_host_boot_id'] = $this->hostBootId;
+            $lease['draining_monotonic'] = $this->monotonicNow();
+            $this->publishLease($file, $lease);
+            return $lease;
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function restoreActiveAfterFailedDrain(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+        string $transitionId,
+        string $actionDigest,
+        array $transitionIdentity,
+    ): array {
+        return $this->restoreTransitionToActive(
+            $instanceName,
+            $port,
+            $leaseId,
+            $workerLaunchId,
+            $transitionId,
+            $actionDigest,
+            $transitionIdentity,
+            self::LISTENER_PHASE_DRAIN_PREPARED,
+        );
+    }
+
+    /** @return array<string,mixed> */
+    public function prepareUndrain(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+        string $transitionId,
+        string $drainActionDigest,
+        string $undrainActionDigest,
+        array $transitionIdentity,
+    ): array {
+        $this->assertInstanceName($instanceName);
+        $leaseId = $this->validateLeaseId($leaseId);
+        $workerLaunchId = $this->validateLaunchId($workerLaunchId);
+        $transitionId = $this->validateTransitionId($transitionId);
+        $drainActionDigest = $this->validateActionDigest($drainActionDigest);
+        $undrainActionDigest = $this->validateActionDigest($undrainActionDigest);
+        return $this->withAllocationLock(function () use (
+            $instanceName,
+            $port,
+            $leaseId,
+            $workerLaunchId,
+            $transitionId,
+            $drainActionDigest,
+            $undrainActionDigest,
+            $transitionIdentity,
+        ): array {
+            [$file, $lease] = $this->transitionLease(
+                $instanceName,
+                $port,
+                $leaseId,
+                $workerLaunchId,
+            );
+            $transitionIdentity = $this->normaliseTransitionIdentity(
+                $transitionIdentity,
+                $lease,
+            );
+            $phase = (string)($lease['listener_phase'] ?? '');
+            if ($phase === self::LISTENER_PHASE_UNDRAIN_PREPARED
+                && \hash_equals(
+                    $transitionId,
+                    (string)($lease['drain_transition_id'] ?? ''),
+                )
+                && \hash_equals(
+                    $drainActionDigest,
+                    (string)($lease['drain_action_digest'] ?? ''),
+                )
+                && \hash_equals(
+                    $undrainActionDigest,
+                    (string)($lease['listener_transition_digest'] ?? ''),
+                )
+                && $this->transitionIdentityMatches(
+                    $transitionIdentity,
+                    $lease['transition_identity'] ?? null,
+                )
+            ) {
+                return $lease;
+            }
+            if (!\hash_equals('DRAINING', (string)($lease['state'] ?? ''))
+                || !\hash_equals(self::LISTENER_PHASE_DRAIN_ACKED, $phase)
+                || ($lease['drain_acknowledged'] ?? false) !== true
+                || !\hash_equals(
+                    $transitionId,
+                    (string)($lease['drain_transition_id'] ?? ''),
+                )
+                || !\hash_equals(
+                    $drainActionDigest,
+                    (string)($lease['drain_action_digest'] ?? ''),
+                )
+                || !$this->transitionIdentityMatches(
+                    $transitionIdentity,
+                    $lease['transition_identity'] ?? null,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Fallback undrain preparation does not match an acknowledged drain.'
+                );
+            }
+            $lease['listener_phase'] = self::LISTENER_PHASE_UNDRAIN_PREPARED;
+            $lease['listener_transition_action'] = 'UNDRAIN';
+            $lease['listener_transition_digest'] = $undrainActionDigest;
+            $this->publishLease($file, $lease);
+            return $lease;
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function restoreDrainAckedAfterFailedUndrain(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+        string $transitionId,
+        string $undrainActionDigest,
+        array $transitionIdentity,
+    ): array {
+        $this->assertInstanceName($instanceName);
+        $leaseId = $this->validateLeaseId($leaseId);
+        $workerLaunchId = $this->validateLaunchId($workerLaunchId);
+        $transitionId = $this->validateTransitionId($transitionId);
+        $undrainActionDigest = $this->validateActionDigest($undrainActionDigest);
+        return $this->withAllocationLock(function () use (
+            $instanceName,
+            $port,
+            $leaseId,
+            $workerLaunchId,
+            $transitionId,
+            $undrainActionDigest,
+            $transitionIdentity,
+        ): array {
+            [$file, $lease] = $this->transitionLease(
+                $instanceName,
+                $port,
+                $leaseId,
+                $workerLaunchId,
+            );
+            $transitionIdentity = $this->normaliseTransitionIdentity(
+                $transitionIdentity,
+                $lease,
+            );
+            if (!\hash_equals(
+                self::LISTENER_PHASE_UNDRAIN_PREPARED,
+                (string)($lease['listener_phase'] ?? ''),
+            )
+                || !\hash_equals(
+                    $transitionId,
+                    (string)($lease['drain_transition_id'] ?? ''),
+                )
+                || !\hash_equals(
+                    $undrainActionDigest,
+                    (string)($lease['listener_transition_digest'] ?? ''),
+                )
+                || !$this->transitionIdentityMatches(
+                    $transitionIdentity,
+                    $lease['transition_identity'] ?? null,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Fallback failed-undrain compensation does not match its exact transition.'
+                );
+            }
+            $lease['listener_phase'] = self::LISTENER_PHASE_DRAIN_ACKED;
+            $lease['listener_transition_action'] = 'DRAIN';
+            $lease['listener_transition_digest'] = (string)$lease['drain_action_digest'];
+            $this->publishLease($file, $lease);
+            return $lease;
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function restoreActiveAfterUndrainAck(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+        string $transitionId,
+        string $actionDigest,
+        array $transitionIdentity,
+    ): array {
+        return $this->restoreTransitionToActive(
+            $instanceName,
+            $port,
+            $leaseId,
+            $workerLaunchId,
+            $transitionId,
+            $actionDigest,
+            $transitionIdentity,
+            self::LISTENER_PHASE_UNDRAIN_PREPARED,
+        );
+    }
+
+    /**
+     * The child has acknowledged UNDRAIN but a higher-priority stop,
+     * certificate or publication fence prevented ACTIVE commit. Replace the
+     * exact UNDRAIN transaction with a new fail-closed DRAIN transaction in
+     * one durable publication; ACTIVE is never externally observable.
+     *
+     * @return array<string,mixed>
+     */
+    public function compensateUndrainAckToPreparedDrain(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+        string $oldTransitionId,
+        string $undrainActionDigest,
+        array $transitionIdentity,
+        string $newTransitionId,
+        string $newDrainActionDigest,
+    ): array {
+        $this->assertInstanceName($instanceName);
+        $leaseId = $this->validateLeaseId($leaseId);
+        $workerLaunchId = $this->validateLaunchId($workerLaunchId);
+        $oldTransitionId = $this->validateTransitionId($oldTransitionId);
+        $undrainActionDigest = $this->validateActionDigest($undrainActionDigest);
+        $newTransitionId = $this->validateTransitionId($newTransitionId);
+        $newDrainActionDigest = $this->validateActionDigest($newDrainActionDigest);
+        return $this->withAllocationLock(function () use (
+            $instanceName,
+            $port,
+            $leaseId,
+            $workerLaunchId,
+            $oldTransitionId,
+            $undrainActionDigest,
+            $transitionIdentity,
+            $newTransitionId,
+            $newDrainActionDigest,
+        ): array {
+            [$file, $lease] = $this->transitionLease(
+                $instanceName,
+                $port,
+                $leaseId,
+                $workerLaunchId,
+            );
+            $transitionIdentity = $this->normaliseTransitionIdentity(
+                $transitionIdentity,
+                $lease,
+            );
+            if (!\hash_equals(
+                self::LISTENER_PHASE_UNDRAIN_PREPARED,
+                (string)($lease['listener_phase'] ?? ''),
+            )
+                || !\hash_equals(
+                    $oldTransitionId,
+                    (string)($lease['drain_transition_id'] ?? ''),
+                )
+                || !\hash_equals(
+                    $undrainActionDigest,
+                    (string)($lease['listener_transition_digest'] ?? ''),
+                )
+                || !$this->transitionIdentityMatches(
+                    $transitionIdentity,
+                    $lease['transition_identity'] ?? null,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Fallback undrain compensation does not match its exact acknowledgement.'
+                );
+            }
+            $lease['listener_phase'] = self::LISTENER_PHASE_DRAIN_PREPARED;
+            $lease['listener_transition_action'] = 'DRAIN';
+            $lease['listener_transition_digest'] = $newDrainActionDigest;
+            $lease['drain_action_digest'] = $newDrainActionDigest;
+            $lease['drain_transition_id'] = $newTransitionId;
+            $lease['drain_acknowledged'] = false;
+            $lease['draining_at'] = null;
+            $lease['draining_timestamp'] = null;
+            $lease['draining_host_boot_id'] = null;
+            $lease['draining_monotonic'] = null;
+            $this->publishLease($file, $lease);
             return $lease;
         });
     }
@@ -579,6 +1155,7 @@ final class GatewayPortLeaseAllocator
             }
             $lease['state'] = 'RELEASED';
             unset($lease['transfer_intent']);
+            $this->clearDrainTransition($lease);
             $lease['released_at'] = \gmdate(DATE_ATOM);
             $lease['released_timestamp'] = \time();
             $this->publishLease($file, $lease);
@@ -606,7 +1183,7 @@ final class GatewayPortLeaseAllocator
                     'Fallback release does not match its exact lease generation.'
                 );
             }
-            if ((int)($lease['schema_version'] ?? 0) !== 5) {
+            if ((int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION) {
                 if (!$this->numericPortIsBindable($port)) {
                     throw new \RuntimeException(
                         'Legacy fallback lease port is still occupied and cannot be collected.'
@@ -645,6 +1222,7 @@ final class GatewayPortLeaseAllocator
             }
             $lease['state'] = 'RELEASED';
             unset($lease['transfer_intent']);
+            $this->clearDrainTransition($lease);
             $lease['worker_pid'] = 0;
             $lease['launch_id'] = '';
             $lease['workers'] = [];
@@ -692,35 +1270,141 @@ final class GatewayPortLeaseAllocator
         string $workerLaunchId,
         int $masterPid,
     ): ?array {
+        $workerLaunchId = \strtolower(\trim($workerLaunchId));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $workerLaunchId) !== 1) {
+            throw new \InvalidArgumentException('WLS public serving lease proof is invalid.');
+        }
+        $lease = $this->servingLeaseForFence(
+            $instanceName,
+            $bindHost,
+            $port,
+            $leaseId,
+            $masterPid,
+        );
+        if ($lease === null) {
+            return null;
+        }
+        foreach ($this->normaliseWorkers($lease) as $worker) {
+            if (\hash_equals(
+                $workerLaunchId,
+                (string)($worker['launch_id'] ?? ''),
+            ) && $this->workerIsLive($worker, $lease)) {
+                return $this->projectServingWorker($lease, $worker);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the newest exact live owner without trusting the lease's
+     * compatibility top-level worker fields. Those fields describe the last
+     * confirmer and may legitimately outlive that child while another
+     * inherited or duplicated listener owner continues serving.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function liveServingLeaseForAnyOwner(
+        string $instanceName,
+        string $bindHost,
+        int $port,
+        string $leaseId,
+        int $masterPid,
+    ): ?array {
+        $lease = $this->servingLeaseForFence(
+            $instanceName,
+            $bindHost,
+            $port,
+            $leaseId,
+            $masterPid,
+        );
+        if ($lease === null) {
+            return null;
+        }
+        $workers = $this->normaliseWorkers($lease);
+        \usort($workers, static function (array $left, array $right): int {
+            $confirmed = (int)($right['confirmed_timestamp'] ?? 0)
+                <=> (int)($left['confirmed_timestamp'] ?? 0);
+            if ($confirmed !== 0) {
+                return $confirmed;
+            }
+            $launch = \strcmp(
+                (string)($left['launch_id'] ?? ''),
+                (string)($right['launch_id'] ?? ''),
+            );
+            return $launch !== 0
+                ? $launch
+                : (int)($left['pid'] ?? 0) <=> (int)($right['pid'] ?? 0);
+        });
+        foreach ($workers as $worker) {
+            if ($this->workerIsLive($worker, $lease)) {
+                return $this->projectServingWorker($lease, $worker);
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array<string,mixed>|null */
+    private function servingLeaseForFence(
+        string $instanceName,
+        string $bindHost,
+        int $port,
+        string $leaseId,
+        int $masterPid,
+    ): ?array {
         $this->assertInstanceName($instanceName);
         $bindHost = $this->normaliseBindHost($bindHost);
         $leaseId = $this->validateLeaseId($leaseId);
-        $workerLaunchId = \strtolower(\trim($workerLaunchId));
-        if ($port < 1
-            || $port > 65535
-            || $masterPid < 1
-            || \preg_match('/\A[a-f0-9]{32}\z/D', $workerLaunchId) !== 1
-        ) {
+        if ($port < 1 || $port > 65535 || $masterPid < 1) {
             throw new \InvalidArgumentException('WLS public serving lease proof is invalid.');
         }
         $lease = $this->status($instanceName);
         $allocationScope = (string)($lease['allocation_scope'] ?? '');
         if (!\is_array($lease)
-            || (int)($lease['schema_version'] ?? 0) !== 5
+            || (int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
+            || !\hash_equals(
+                $this->hostBootId,
+                (string)($lease['host_boot_id'] ?? ''),
+            )
             || !\in_array($allocationScope, ['exact', 'stable_range'], true)
             || ($allocationScope === 'stable_range'
                 && ($port < self::MIN_PORT || $port > self::MAX_PORT))
             || !\in_array((string)($lease['state'] ?? ''), ['ACTIVE', 'DRAINING'], true)
             || !\hash_equals($instanceName, (string)($lease['instance'] ?? ''))
             || !\hash_equals($leaseId, (string)($lease['lease_id'] ?? ''))
-            || !\hash_equals($workerLaunchId, (string)($lease['launch_id'] ?? ''))
             || !\hash_equals($bindHost, (string)($lease['bind_host'] ?? ''))
             || (int)($lease['port'] ?? 0) !== $port
             || (int)($lease['master_pid'] ?? 0) !== $masterPid
+            || !$this->processMatchesBirth(
+                $masterPid,
+                (string)($lease['master_process_birth'] ?? ''),
+                (string)($lease['master_pid_namespace_id'] ?? ''),
+            )
             || !$this->leaseIsLive($lease)
         ) {
             return null;
         }
+
+        return $lease;
+    }
+
+    /**
+     * Return a read-only serving projection whose compatibility fields identify
+     * the worker actually revalidated by this observation, not whichever worker
+     * most recently wrote the durable pool.
+     *
+     * @param array<string,mixed> $lease
+     * @param array<string,mixed> $worker
+     * @return array<string,mixed>
+     */
+    private function projectServingWorker(array $lease, array $worker): array
+    {
+        $confirmedTimestamp = (int)($worker['confirmed_timestamp'] ?? 0);
+        $lease['worker_pid'] = (int)($worker['pid'] ?? 0);
+        $lease['launch_id'] = (string)($worker['launch_id'] ?? '');
+        $lease['confirmed_timestamp'] = $confirmedTimestamp;
+        $lease['confirmed_at'] = \gmdate(DATE_ATOM, $confirmedTimestamp);
         return $lease;
     }
 
@@ -746,7 +1430,7 @@ final class GatewayPortLeaseAllocator
         }
         $lease = $this->status($instanceName);
         if (!\is_array($lease)
-            || (int)($lease['schema_version'] ?? 0) !== 5
+            || (int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
             || !\hash_equals('RESERVED', (string)($lease['state'] ?? ''))
             || !\hash_equals($instanceName, (string)($lease['instance'] ?? ''))
             || !\hash_equals($leaseId, (string)($lease['lease_id'] ?? ''))
@@ -804,7 +1488,7 @@ final class GatewayPortLeaseAllocator
             $file = $this->leaseFile($projectUuid . ':' . $instanceName);
             $lease = $this->readLease($file);
             if (!\is_array($lease)
-                || (int)($lease['schema_version'] ?? 0) !== 5
+                || (int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
                 || !\hash_equals('RESERVED', (string)($lease['state'] ?? ''))
                 || !\hash_equals($projectUuid, (string)($lease['project_uuid'] ?? ''))
                 || !\hash_equals($instanceName, (string)($lease['instance'] ?? ''))
@@ -828,6 +1512,7 @@ final class GatewayPortLeaseAllocator
                 'master_launch_id' => $masterLaunchId,
                 'prepared_pid' => \getmypid(),
                 'prepared_process_birth' => (string)$lease['master_process_birth'],
+                'prepared_pid_namespace_id' => (string)$lease['master_pid_namespace_id'],
                 'prepared_at' => \gmdate(DATE_ATOM, $now),
                 'prepared_timestamp' => $now,
                 'host_boot_id' => $this->hostBootId,
@@ -839,20 +1524,69 @@ final class GatewayPortLeaseAllocator
     }
 
     /**
-     * @return array<int,true>
+     * @return array{
+     *     ports:array<int,true>,
+     *     lease_count:int,
+     *     own_entry_retained:bool
+     * }
      */
     private function occupiedLeasePorts(string $ownIdentity): array
     {
         $occupied = [];
+        $ownLeaseLeaf = \basename($this->leaseFile($ownIdentity));
+        $ownEntryRetained = false;
         $directory = @\opendir($this->leaseDirectory);
         if (!\is_resource($directory)) {
             throw new \RuntimeException('Unable to enumerate the WLS fallback lease directory.');
         }
         $entries = [];
-        $leaseCount = 0;
+        $rawLeaseCount = 0;
+        $orphanedCandidateCount = 0;
+        $retainedRecoveryBackupCount = 0;
+        $retainedRecoveryBackups = [];
         try {
             while (($leaf = @\readdir($directory)) !== false) {
                 if ($leaf === '.' || $leaf === '..' || $leaf === 'allocation.lock') {
+                    continue;
+                }
+                if (++$rawLeaseCount > self::MAX_RAW_LEASE_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        'WLS fallback lease directory exceeds its fixed raw entry limit.'
+                    );
+                }
+                if (\preg_match(
+                    '/\A[a-f0-9]{24}\.json\.tmp-[a-f0-9]{24}\z/D',
+                    $leaf,
+                ) === 1) {
+                    if (++$orphanedCandidateCount > self::MAX_ORPHANED_LEASE_CANDIDATES) {
+                        throw new \RuntimeException(
+                            'WLS fallback lease directory contains too many orphaned candidates.'
+                        );
+                    }
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $this->leaseDirectory . DIRECTORY_SEPARATOR . $leaf,
+                        'orphaned WLS fallback lease candidate',
+                    );
+                    continue;
+                }
+                if (\preg_match(
+                    '/\A([a-f0-9]{24}\.json)\.wls-backup-[a-f0-9]{16}\z/D',
+                    $leaf,
+                    $recoveryMatch,
+                ) === 1) {
+                    if (++$retainedRecoveryBackupCount
+                        > self::MAX_RETAINED_WINDOWS_RECOVERY_BACKUPS
+                    ) {
+                        throw new \RuntimeException(
+                            'WLS fallback lease directory contains too many retained recovery backups.'
+                        );
+                    }
+                    $target = $this->leaseDirectory . DIRECTORY_SEPARATOR
+                        . (string)$recoveryMatch[1];
+                    $retainedRecoveryBackups[] = [
+                        'path' => $this->leaseDirectory . DIRECTORY_SEPARATOR . $leaf,
+                        'target' => $target,
+                    ];
                     continue;
                 }
                 if (\preg_match('/\A[a-f0-9]{24}\.json\z/D', $leaf) !== 1) {
@@ -860,9 +1594,9 @@ final class GatewayPortLeaseAllocator
                         'WLS fallback lease directory contains an unsafe entry.'
                     );
                 }
-                if (++$leaseCount > self::MAX_LEASE_FILES) {
+                if (\count($entries) >= self::MAX_RECOVERABLE_LEASE_FILES) {
                     throw new \RuntimeException(
-                        'WLS fallback lease directory exceeds its fixed raw entry limit.'
+                        'WLS fallback lease directory exceeds its fixed lease entry limit.'
                     );
                 }
                 $entries[] = $leaf;
@@ -870,6 +1604,7 @@ final class GatewayPortLeaseAllocator
         } finally {
             @\closedir($directory);
         }
+        $this->cleanupRetainedRecoveryBackups($retainedRecoveryBackups);
         $leaseCount = 0;
         foreach ($entries as $leaf) {
             if ($leaf === '.' || $leaf === '..' || $leaf === 'allocation.lock') {
@@ -888,6 +1623,9 @@ final class GatewayPortLeaseAllocator
                 continue;
             }
             $leaseCount++;
+            if (\hash_equals($ownLeaseLeaf, $leaf)) {
+                $ownEntryRetained = true;
+            }
             if (!$live) {
                 // An unknown listener may have taken the stale WLS port. Keep
                 // the numeric port unavailable across every IPv4/IPv6 address
@@ -920,7 +1658,187 @@ final class GatewayPortLeaseAllocator
                 $occupied[$port] = true;
             }
         }
-        return $occupied;
+        return [
+            'ports' => $occupied,
+            'lease_count' => $leaseCount,
+            'own_entry_retained' => $ownEntryRetained,
+        ];
+    }
+
+    /**
+     * A ReplaceFileW backup is the previous committed lease generation. Keep
+     * every backup until the complete recovery set and every paired current
+     * target have passed one bounded preflight. This prevents a later corrupt,
+     * missing, or legacy target from turning an inspection failure into
+     * partial evidence deletion.
+     *
+     * The caller holds allocation.lock, which is the namespace lock shared by
+     * every cooperative lease writer.
+     *
+     * @param list<array{path:string,target:string}> $backups
+     */
+    private function cleanupRetainedRecoveryBackups(array $backups): void
+    {
+        if ($backups === []) {
+            return;
+        }
+
+        /** @var list<array{path:string,target:string,identity:array<string|int,mixed>}> $validatedBackups */
+        $validatedBackups = [];
+        foreach ($backups as $backup) {
+            $path = $backup['path'];
+            \clearstatcache(true, $path);
+            $before = @\lstat($path);
+            if (!\is_array($before)) {
+                throw new \RuntimeException(
+                    'Retained Windows WLS fallback lease recovery backup is missing or unsafe.'
+                );
+            }
+            $size = GatewayProjectStateFilesystem::size(
+                $path,
+                65_536,
+                'retained Windows WLS fallback lease recovery backup',
+            );
+            \clearstatcache(true, $path);
+            $after = @\lstat($path);
+            if (!\is_int($size)
+                || $size < 1
+                || !\is_array($after)
+                || !$this->sameLeaseFileState($before, $after)
+            ) {
+                throw new \RuntimeException(
+                    'Retained Windows WLS fallback lease recovery backup changed during bounded preflight.'
+                );
+            }
+            $validatedBackups[] = [
+                'path' => $path,
+                'target' => $backup['target'],
+                'identity' => $after,
+            ];
+        }
+
+        /** @var array<string,array{identity:array<string|int,mixed>,sha256:string}> $targets */
+        $targets = [];
+        foreach ($validatedBackups as $backup) {
+            $target = $backup['target'];
+            if (isset($targets[$target])) {
+                continue;
+            }
+            \clearstatcache(true, $target);
+            $before = @\lstat($target);
+            if (!\is_array($before)) {
+                throw new \RuntimeException(
+                    'Retained WLS fallback lease recovery backup has no valid committed target.'
+                );
+            }
+            $encoded = GatewayProjectStateFilesystem::read(
+                $target,
+                65_536,
+                'retained WLS fallback lease recovery backup paired target',
+            );
+            $lease = \json_decode($encoded, true);
+            if (!\is_array($lease)) {
+                throw new \RuntimeException(
+                    'Retained WLS fallback lease recovery backup paired target contains invalid JSON.'
+                );
+            }
+            if (($lease['schema_version'] ?? null) !== self::SCHEMA_VERSION) {
+                throw new \RuntimeException(
+                    'Retained WLS fallback port lease recovery target must be full schema-6.'
+                );
+            }
+            $this->assertValidLease($lease);
+            $expectedTarget = $this->leaseFile(
+                (string)$lease['project_uuid'] . ':' . (string)$lease['instance'],
+            );
+            if (!\hash_equals($expectedTarget, $target)) {
+                throw new \RuntimeException(
+                    'Retained WLS fallback lease recovery backup target identity is invalid.'
+                );
+            }
+            \clearstatcache(true, $target);
+            $after = @\lstat($target);
+            if (!\is_array($after) || !$this->sameLeaseFileState($before, $after)) {
+                throw new \RuntimeException(
+                    'Retained WLS fallback lease recovery backup target changed during validation.'
+                );
+            }
+            $targets[$target] = [
+                'identity' => $after,
+                'sha256' => \hash('sha256', $encoded),
+            ];
+        }
+
+        // Recheck the complete selected set before the first deletion. No
+        // backup is collected if any current target or retained artifact has
+        // changed since its bounded validation above.
+        foreach ($targets as $target => $snapshot) {
+            $encoded = GatewayProjectStateFilesystem::read(
+                $target,
+                65_536,
+                'retained WLS fallback lease recovery backup paired target',
+            );
+            \clearstatcache(true, $target);
+            $current = @\lstat($target);
+            if (!\is_array($current)
+                || !$this->sameLeaseFileState($snapshot['identity'], $current)
+                || !\hash_equals($snapshot['sha256'], \hash('sha256', $encoded))
+            ) {
+                throw new \RuntimeException(
+                    'Retained WLS fallback lease recovery backup target changed before cleanup.'
+                );
+            }
+        }
+        foreach ($validatedBackups as $backup) {
+            \clearstatcache(true, $backup['path']);
+            $current = @\lstat($backup['path']);
+            if (!\is_array($current)
+                || !$this->sameLeaseFileState($backup['identity'], $current)
+            ) {
+                throw new \RuntimeException(
+                    'Retained Windows WLS fallback lease recovery backup changed before cleanup.'
+                );
+            }
+        }
+
+        foreach ($validatedBackups as $backup) {
+            $targetSnapshot = $targets[$backup['target']] ?? null;
+            \clearstatcache(true, $backup['target']);
+            $currentTarget = @\lstat($backup['target']);
+            if (!\is_array($targetSnapshot)
+                || !\is_array($currentTarget)
+                || !$this->sameLeaseFileState(
+                    $targetSnapshot['identity'],
+                    $currentTarget,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Retained WLS fallback lease recovery backup target changed before removal.'
+                );
+            }
+            GatewayProjectStateFilesystem::removeRegular(
+                $backup['path'],
+                'retained Windows WLS fallback lease recovery backup',
+                $backup['identity'],
+            );
+        }
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameLeaseFileState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -928,11 +1846,15 @@ final class GatewayPortLeaseAllocator
      */
     private function leaseIsLive(array $lease): bool
     {
+        if ((int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION) {
+            return false;
+        }
         $state = (string)($lease['state'] ?? '');
         if ($state === 'RESERVED') {
             $ownerAlive = $this->processMatchesBirth(
                     (int)($lease['master_pid'] ?? 0),
                     (string)($lease['master_process_birth'] ?? ''),
+                    (string)($lease['master_pid_namespace_id'] ?? ''),
                 );
             if (!$ownerAlive) {
                 return false;
@@ -960,10 +1882,11 @@ final class GatewayPortLeaseAllocator
             // decision is the only conservative fallback.
             return !$this->recordedPortIsBindable($lease);
         }
-        if ((int)($lease['schema_version'] ?? 0) < 5) {
-            return false;
-        }
         return \in_array($state, ['ACTIVE', 'DRAINING'], true)
+            && \hash_equals(
+                $this->hostBootId,
+                (string)($lease['host_boot_id'] ?? ''),
+            )
             && $this->leaseProcessAlive($lease);
     }
 
@@ -974,7 +1897,8 @@ final class GatewayPortLeaseAllocator
         bool $requireLivePreparer,
     ): bool {
         $intent = $lease['transfer_intent'] ?? null;
-        if (!\is_array($intent)
+        if ((int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
+            || !\is_array($intent)
             || (int)($intent['schema_version'] ?? 0) !== 2
             || \preg_match(
                 '/\A[a-f0-9]{32}\z/D',
@@ -984,6 +1908,10 @@ final class GatewayPortLeaseAllocator
             || !\hash_equals(
                 (string)($lease['master_process_birth'] ?? ''),
                 (string)($intent['prepared_process_birth'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)($lease['master_pid_namespace_id'] ?? ''),
+                (string)($intent['prepared_pid_namespace_id'] ?? ''),
             )
             || !$this->validTimestamp($intent['prepared_timestamp'] ?? null)
             || !\hash_equals(
@@ -1009,6 +1937,7 @@ final class GatewayPortLeaseAllocator
         return !$requireLivePreparer || $this->processMatchesBirth(
             (int)$intent['prepared_pid'],
             (string)$intent['prepared_process_birth'],
+            (string)($intent['prepared_pid_namespace_id'] ?? ''),
         );
     }
 
@@ -1027,7 +1956,7 @@ final class GatewayPortLeaseAllocator
 
     /**
      * @param array<string,mixed> $lease
-     * @return list<array{pid:int,launch_id:string,process_name:string,process_birth:string,confirmed_at?:mixed,confirmed_timestamp?:mixed}>
+     * @return list<array{pid:int,launch_id:string,process_name:string,process_birth:string,pid_namespace_id:string,confirmed_at?:mixed,confirmed_timestamp?:mixed}>
      */
     private function normaliseWorkers(array $lease): array
     {
@@ -1040,6 +1969,7 @@ final class GatewayPortLeaseAllocator
             $launchId = \trim((string)($worker['launch_id'] ?? ''));
             $processName = \trim((string)($worker['process_name'] ?? ''));
             $processBirth = \strtolower(\trim((string)($worker['process_birth'] ?? '')));
+            $pidNamespaceId = \trim((string)($worker['pid_namespace_id'] ?? ''));
             if ($pid < 1
                 || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
                 || \preg_match('/\A[A-Za-z0-9_.:@-]{1,191}\z/D', $processName) !== 1
@@ -1052,6 +1982,7 @@ final class GatewayPortLeaseAllocator
                 'launch_id' => $launchId,
                 'process_name' => $processName,
                 'process_birth' => $processBirth,
+                'pid_namespace_id' => $pidNamespaceId,
                 'confirmed_at' => $worker['confirmed_at'] ?? null,
                 'confirmed_timestamp' => $worker['confirmed_timestamp'] ?? null,
             ];
@@ -1079,7 +2010,9 @@ final class GatewayPortLeaseAllocator
         string $processName,
         string $launchId,
         bool $requireLaunchId,
-    ): string {
+        string $expectedBirth,
+        string $expectedPidNamespaceId,
+    ): void {
         $processName = \trim($processName);
         $launchId = \strtolower(\trim($launchId));
         if ($pid < 1
@@ -1097,18 +2030,20 @@ final class GatewayPortLeaseAllocator
         ) {
             throw new \RuntimeException('WLS port lease managed-process record is unavailable.');
         }
+        if ($this->runtimeIdentity->observeProcessIdentity(
+            $pid,
+            $expectedBirth,
+            $expectedPidNamespaceId,
+        ) !== MasterLeaseRuntimeIdentity::OWNER_MATCH) {
+            throw new \RuntimeException(
+                'WLS port lease stable process birth or PID namespace does not match.'
+            );
+        }
         if (!$requireLaunchId) {
             // Master self-check: prove the calling process still owns its managed
             // lease + birth identity. Do not require cli_set_process_title() to
             // equal the canonical name; macOS often keeps the full PHP argv.
-            if (!$this->processAlive($pid)) {
-                throw new \RuntimeException('WLS port lease live process identity could not be proven.');
-            }
-            $birth = $this->processBirthIdentity($pid);
-            if (\preg_match('/\A[a-f0-9]{64}\z/D', $birth) !== 1) {
-                throw new \RuntimeException('WLS port lease process birth identity is unavailable.');
-            }
-            return $birth;
+            return;
         }
         // Prefer immutable argv fences over cli_set_process_title(). On
         // macOS/Linux the OS cmdline is not always rewritten to the
@@ -1125,28 +2060,29 @@ final class GatewayPortLeaseAllocator
                 'launch-id' => $launchId,
             ],
         );
-        if (!\hash_equals(
-            Processer::PROCESS_STATE_RUNNING,
-            (string)($probe['state'] ?? ''),
-        )) {
+        $probeState = (string)($probe['state'] ?? Processer::PROCESS_STATE_UNKNOWN);
+        if ($probeState === Processer::PROCESS_STATE_EXITED
+            || $probeState === Processer::PROCESS_STATE_IDENTITY_MISMATCH
+        ) {
+            throw new \RuntimeException(
+                'WLS port lease managed-process identity was positively rejected: '
+                . (string)($probe['reason'] ?? 'unknown')
+            );
+        }
+        if ($probeState !== Processer::PROCESS_STATE_RUNNING) {
             // Darwin often exposes neither a rewritten title nor the original
             // --name/--launch-id argv after Processer adopts the child. The
             // managed lease record already matched pid+name+launch_id above;
             // accept with live PID + birth proof instead of failing closed on
             // an unreliable OS cmdline rendering.
-            if (!$this->processAlive($pid)) {
+            if ($probeState !== Processer::PROCESS_STATE_UNKNOWN) {
                 throw new \RuntimeException(
-                    'WLS port lease live process identity could not be proven: '
+                    'WLS port lease managed-process identity could not be proven: '
                     . (string)($probe['reason'] ?? 'unknown')
-                    . ' state=' . (string)($probe['state'] ?? '')
+                    . ' state=' . $probeState
                 );
             }
         }
-        $birth = $this->processBirthIdentity($pid);
-        if (\preg_match('/\A[a-f0-9]{64}\z/D', $birth) !== 1) {
-            throw new \RuntimeException('WLS port lease process birth identity is unavailable.');
-        }
-        return $birth;
     }
 
     /**
@@ -1161,6 +2097,7 @@ final class GatewayPortLeaseAllocator
         if (!$this->processMatchesBirth(
             $pid,
             (string)($worker['process_birth'] ?? ''),
+            (string)($worker['pid_namespace_id'] ?? ''),
         ) || \preg_match('/\A[A-Za-z0-9_.:@-]{1,191}\z/D', $processName) !== 1
         ) {
             return false;
@@ -1187,16 +2124,73 @@ final class GatewayPortLeaseAllocator
             && \hash_equals(
                 (string)($worker['process_birth'] ?? ''),
                 (string)($lease['master_process_birth'] ?? ''),
+            )
+            && \hash_equals(
+                (string)($worker['pid_namespace_id'] ?? ''),
+                (string)($lease['master_pid_namespace_id'] ?? ''),
+            );
+    }
+
+    /** @param array<string,mixed> $worker @param array<string,mixed> $lease */
+    private function workerMayStillExist(array $worker, array $lease): bool
+    {
+        $pid = (int)($worker['pid'] ?? 0);
+        $launchId = \strtolower(\trim((string)($worker['launch_id'] ?? '')));
+        $processName = \trim((string)($worker['process_name'] ?? ''));
+        $birth = \strtolower(\trim((string)($worker['process_birth'] ?? '')));
+        $pidNamespaceId = \trim((string)($worker['pid_namespace_id'] ?? ''));
+        if ($pid < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+            || \preg_match('/\A[A-Za-z0-9_.:@-]{1,191}\z/D', $processName) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $birth) !== 1
+        ) {
+            return false;
+        }
+        $state = $this->runtimeIdentity->observeProcessIdentity(
+            $pid,
+            $birth,
+            $pidNamespaceId,
+        );
+        if (\in_array($state, [
+            MasterLeaseRuntimeIdentity::OWNER_MISSING,
+            MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
+        ], true)) {
+            return false;
+        }
+        if ($state === MasterLeaseRuntimeIdentity::OWNER_UNKNOWN) {
+            return true;
+        }
+        $managed = Processer::getManagedProcessLeaseRecord(
+            $pid,
+            '--name=' . $processName,
+        );
+        if ($managed === []) {
+            // An exact process-birth match plus an unreadable managed ledger is
+            // UNKNOWN retention evidence, never permission to erase an owner.
+            return true;
+        }
+        $recordedLaunchId = \strtolower(\trim((string)($managed['launch_id'] ?? '')));
+        if ($recordedLaunchId !== '') {
+            return \hash_equals($launchId, $recordedLaunchId);
+        }
+
+        return $pid === (int)($lease['master_pid'] ?? 0)
+            && \hash_equals($processName, (string)($lease['master_process_name'] ?? ''))
+            && \hash_equals($birth, (string)($lease['master_process_birth'] ?? ''))
+            && \hash_equals(
+                $pidNamespaceId,
+                (string)($lease['master_pid_namespace_id'] ?? ''),
             );
     }
 
     /** @param array<string,mixed> $lease */
     private function currentProcessMatchesMasterBirth(array $lease): bool
     {
-        if ((int)($lease['schema_version'] ?? 0) < 5
+        if ((int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
             || !$this->processMatchesBirth(
                 \getmypid(),
                 (string)($lease['master_process_birth'] ?? ''),
+                (string)($lease['master_pid_namespace_id'] ?? ''),
             )
         ) {
             return false;
@@ -1205,43 +2199,65 @@ final class GatewayPortLeaseAllocator
         return $expected === '' || \hash_equals($expected, $this->currentManagedProcessName());
     }
 
-    private function processMatchesBirth(int $pid, string $expected): bool
+    private function processMatchesBirth(
+        int $pid,
+        string $expected,
+        string $expectedPidNamespaceId,
+    ): bool
     {
         $expected = \strtolower(\trim($expected));
         return \preg_match('/\A[a-f0-9]{64}\z/D', $expected) === 1
-            && $this->processAlive($pid)
-            && \hash_equals($expected, $this->processBirthIdentity($pid));
+            && $this->runtimeIdentity->observeProcessIdentity(
+                $pid,
+                $expected,
+                $expectedPidNamespaceId,
+            ) === MasterLeaseRuntimeIdentity::OWNER_MATCH;
     }
 
-    private function processBirthIdentity(int $pid): string
+    /** @return array{birth:string,pid_namespace_id:string} */
+    private function captureStableProcessIdentity(int $pid): array
     {
-        if ($pid < 1) {
-            return '';
+        $identity = $this->runtimeIdentity->captureProcessIdentity($pid);
+        return $this->validateStableProcessIdentity(
+            $identity['birth'],
+            $identity['pid_namespace_id'],
+        );
+    }
+
+    /** @return array{birth:string,pid_namespace_id:string} */
+    private function validateStableProcessIdentity(
+        string $birth,
+        string $pidNamespaceId,
+    ): array {
+        $normalizedBirth = \strtolower(\trim($birth));
+        $normalizedNamespace = \trim($pidNamespaceId);
+        if (!\hash_equals($birth, $normalizedBirth)
+            || !\hash_equals($pidNamespaceId, $normalizedNamespace)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $normalizedBirth) !== 1
+            || (PHP_OS_FAMILY === 'Linux'
+                && \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $normalizedNamespace) !== 1)
+            || (PHP_OS_FAMILY !== 'Linux' && $normalizedNamespace !== '')
+        ) {
+            throw new \RuntimeException('WLS port lease stable process identity is invalid.');
         }
-        if ($pid === \getmypid() && isset(self::$processBirthCache[$pid])) {
-            return self::$processBirthCache[$pid];
+
+        return [
+            'birth' => $normalizedBirth,
+            'pid_namespace_id' => $normalizedNamespace,
+        ];
+    }
+
+    private function validStablePidNamespace(string $pidNamespaceId): bool
+    {
+        $normalized = \trim($pidNamespaceId);
+        if (!\hash_equals($pidNamespaceId, $normalized)) {
+            return false;
         }
-        $info = Processer::getProcessInfo($pid);
-        $exists = ($info['exists'] ?? false) === true;
-        $startedAt = \trim((string)($info['start_time'] ?? ''));
-        $name = \trim((string)($info['name'] ?? ''));
-        $commandDigest = \hash('sha256', (string)($info['command'] ?? ''));
-        if ($exists && $startedAt !== '') {
-            $birth = \hash(
-                'sha256',
-                $pid . "\0" . $startedAt . "\0" . $name . "\0" . $commandDigest,
-            );
-            if ($pid === \getmypid()) {
-                self::$processBirthCache[$pid] = $birth;
-            }
-            return $birth;
+        if (PHP_OS_FAMILY === 'Linux') {
+            return \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $normalized) === 1;
         }
-        if ($pid === \getmypid() && $this->processAlive($pid)) {
-            // A process-local random token remains stable across allocator
-            // objects but cannot survive PID reuse or a new process image.
-            return self::$processBirthCache[$pid] = \bin2hex(\random_bytes(32));
-        }
-        return '';
+
+        return $normalized === '';
     }
 
     /**
@@ -1442,14 +2458,21 @@ final class GatewayPortLeaseAllocator
             );
         }
         GatewayProjectStateFilesystem::atomicWrite($file, $encoded, 0600);
+        // Optional fault boundary used by lifecycle tests to model an
+        // exception after atomic rename/ReplaceFile has already committed the
+        // after-image.  Callers must re-read the durable phase instead of
+        // treating every exception as a failed publication.
+        if ($this->afterAtomicPublication !== null) {
+            ($this->afterAtomicPublication)($file, $lease);
+        }
     }
 
     /** @param array<string,mixed> $lease */
     private function assertValidLease(array $lease): void
     {
-        if (($lease['schema_version'] ?? null) !== 5) {
+        if (($lease['schema_version'] ?? null) !== self::SCHEMA_VERSION) {
             throw new \RuntimeException(
-                'Only schema-5 WLS fallback leases may be published or trusted.'
+                'Only schema-6 WLS fallback leases may be published or trusted.'
             );
         }
         if (!\hash_equals(
@@ -1461,15 +2484,33 @@ final class GatewayPortLeaseAllocator
             || (float)$lease['reserved_monotonic'] <= 0.0
         ) {
             throw new \RuntimeException(
-                'Schema-5 WLS fallback lease lacks its monotonic host-boot fence.',
+                'Schema-6 WLS fallback lease lacks its monotonic host-boot fence.',
             );
         }
-        if (\hash_equals('DRAINING', (string)($lease['state'] ?? ''))
-            && !$this->drainingTimeIsComparable($lease)
-        ) {
-            throw new \RuntimeException(
-                'Published draining WLS fallback lease lacks its current-boot monotonic fence.',
-            );
+        if (\hash_equals('DRAINING', (string)($lease['state'] ?? ''))) {
+            $phase = (string)($lease['listener_phase'] ?? '');
+            if (\in_array($phase, [
+                self::LISTENER_PHASE_DRAIN_ACKED,
+                self::LISTENER_PHASE_UNDRAIN_PREPARED,
+                self::LISTENER_PHASE_TERMINAL_DRAIN,
+            ], true) && !$this->drainingTimeIsComparable($lease)) {
+                throw new \RuntimeException(
+                    'Published acknowledged WLS fallback drain lacks its current-boot monotonic fence.',
+                );
+            }
+            if ($phase === self::LISTENER_PHASE_DRAIN_PREPARED
+                && (\preg_match('/\A[a-f0-9]{32}\z/D', (string)(
+                    $lease['drain_transition_id'] ?? ''
+                )) !== 1
+                    || ($lease['draining_at'] ?? null) !== null
+                    || ($lease['draining_timestamp'] ?? null) !== null
+                    || ($lease['draining_host_boot_id'] ?? null) !== null
+                    || ($lease['draining_monotonic'] ?? null) !== null)
+            ) {
+                throw new \RuntimeException(
+                    'Published pending WLS fallback drain has an invalid transition fence.',
+                );
+            }
         }
         $intent = $lease['transfer_intent'] ?? null;
         if ($intent !== null
@@ -1488,7 +2529,7 @@ final class GatewayPortLeaseAllocator
     }
 
     /**
-     * Schema 3/4 records are parsed only so the allocator can conservatively
+     * Schema 3/4/5 records are parsed only so the allocator can conservatively
      * reserve their numeric port or collect them. They never authorize a
      * transfer, confirmation, drain, cancellation, or live-owner decision.
      *
@@ -1514,18 +2555,30 @@ final class GatewayPortLeaseAllocator
         $schemaVersion = $lease['schema_version'] ?? null;
         $bindHost = (string)($lease['bind_host'] ?? '127.0.0.1');
         $masterProcessName = \trim((string)($lease['master_process_name'] ?? ''));
-        $masterProcessBirth = \strtolower(\trim((string)(
-            $lease['master_process_birth'] ?? ''
-        )));
+        $rawMasterProcessBirth = $lease['master_process_birth'] ?? null;
+        $masterProcessBirth = \is_string($rawMasterProcessBirth)
+            ? \strtolower(\trim($rawMasterProcessBirth))
+            : '';
+        $rawMasterPidNamespaceId = $lease['master_pid_namespace_id'] ?? null;
+        $masterPidNamespaceId = \is_string($rawMasterPidNamespaceId)
+            ? $rawMasterPidNamespaceId
+            : '';
         $transferIntent = $lease['transfer_intent'] ?? null;
         $hostBootId = (string)($lease['host_boot_id'] ?? '');
         $reservedMonotonic = $lease['reserved_monotonic'] ?? null;
+        $drainTransitionId = $lease['drain_transition_id'] ?? null;
+        $drainAcknowledged = $lease['drain_acknowledged'] ?? null;
+        $listenerPhase = $lease['listener_phase'] ?? null;
+        $listenerTransitionAction = $lease['listener_transition_action'] ?? null;
+        $listenerTransitionDigest = $lease['listener_transition_digest'] ?? null;
+        $drainActionDigest = $lease['drain_action_digest'] ?? null;
+        $transitionIdentity = $lease['transition_identity'] ?? null;
         $allocationScope = (string)($lease['allocation_scope'] ?? (
             \is_int($port) && $port >= self::MIN_PORT && $port <= self::MAX_PORT
                 ? 'stable_range'
                 : ''
         ));
-        if (!\in_array($schemaVersion, [3, 4, 5], true)
+        if (!\in_array($schemaVersion, [3, 4, 5, self::SCHEMA_VERSION], true)
             || \preg_match(
                 '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
                 $projectUuid,
@@ -1557,7 +2610,7 @@ final class GatewayPortLeaseAllocator
                 && (!\array_key_exists('bind_host', $lease)
                     || !$this->validBindHost($bindHost)
                     || !\hash_equals($bindHost, $this->normaliseBindHost($bindHost))))
-            || ($schemaVersion === 5
+            || ($schemaVersion >= 5
                 && (!\in_array($allocationScope, ['stable_range', 'exact'], true)
                     || ($allocationScope === 'stable_range'
                         && ($port < self::MIN_PORT || $port > self::MAX_PORT))
@@ -1573,6 +2626,39 @@ final class GatewayPortLeaseAllocator
                         && (!\is_numeric($reservedMonotonic)
                             || !\is_finite((float)$reservedMonotonic)
                             || (float)$reservedMonotonic <= 0.0))))
+            || ($schemaVersion === self::SCHEMA_VERSION
+                && (!\is_string($rawMasterProcessBirth)
+                    || !\hash_equals($rawMasterProcessBirth, $masterProcessBirth)
+                    || !\is_string($rawMasterPidNamespaceId)
+                    || !$this->validStablePidNamespace($masterPidNamespaceId)
+                    || ($drainTransitionId !== null
+                        && (\is_string($drainTransitionId) === false
+                            || \preg_match(
+                                '/\A[a-f0-9]{32}\z/D',
+                                $drainTransitionId,
+                            ) !== 1))
+                    || ($drainAcknowledged !== null
+                        && !\is_bool($drainAcknowledged))
+                    || !\is_string($listenerPhase)
+                    || !\in_array($listenerPhase, [
+                        self::LISTENER_PHASE_RESERVED,
+                        self::LISTENER_PHASE_ACTIVE,
+                        self::LISTENER_PHASE_DRAIN_PREPARED,
+                        self::LISTENER_PHASE_DRAIN_ACKED,
+                        self::LISTENER_PHASE_UNDRAIN_PREPARED,
+                        self::LISTENER_PHASE_TERMINAL_DRAIN,
+                        self::LISTENER_PHASE_RELEASED,
+                    ], true)
+                    || ($listenerTransitionAction !== null
+                        && !\is_string($listenerTransitionAction))
+                    || ($listenerTransitionDigest !== null
+                        && (!\is_string($listenerTransitionDigest)
+                            || \preg_match('/\A[a-f0-9]{64}\z/D', $listenerTransitionDigest) !== 1))
+                    || ($drainActionDigest !== null
+                        && (!\is_string($drainActionDigest)
+                            || \preg_match('/\A[a-f0-9]{64}\z/D', $drainActionDigest) !== 1))
+                    || ($transitionIdentity !== null
+                        && !\is_array($transitionIdentity))))
         ) {
             throw new \RuntimeException('WLS fallback port lease is malformed.');
         }
@@ -1581,6 +2667,12 @@ final class GatewayPortLeaseAllocator
         foreach ($workers as $worker) {
             $rawWorkerLaunchId = \is_array($worker)
                 ? ($worker['launch_id'] ?? null)
+                : null;
+            $rawWorkerProcessBirth = \is_array($worker)
+                ? ($worker['process_birth'] ?? null)
+                : null;
+            $rawWorkerPidNamespaceId = \is_array($worker)
+                ? ($worker['pid_namespace_id'] ?? null)
                 : null;
             if (!\is_array($worker)
                 || !\is_int($worker['pid'] ?? null)
@@ -1594,7 +2686,7 @@ final class GatewayPortLeaseAllocator
                     '/\A[a-f0-9]{32}\z/D',
                     $rawWorkerLaunchId,
                 ) !== 1
-                || ($schemaVersion === 5
+                || ($schemaVersion >= 5
                     && (\preg_match(
                         '/\A[A-Za-z0-9_.:@-]{1,191}\z/D',
                         (string)($worker['process_name'] ?? ''),
@@ -1603,6 +2695,14 @@ final class GatewayPortLeaseAllocator
                             '/\A[a-f0-9]{64}\z/D',
                             (string)($worker['process_birth'] ?? ''),
                         ) !== 1))
+                || ($schemaVersion === self::SCHEMA_VERSION
+                    && (!\is_string($rawWorkerProcessBirth)
+                        || !\hash_equals(
+                            $rawWorkerProcessBirth,
+                            \strtolower(\trim($rawWorkerProcessBirth)),
+                        )
+                        || !\is_string($rawWorkerPidNamespaceId)
+                        || !$this->validStablePidNamespace($rawWorkerPidNamespaceId)))
                 || !$this->validTimestamp($worker['confirmed_timestamp'] ?? null)
             ) {
                 throw new \RuntimeException('WLS fallback port lease worker identity is malformed.');
@@ -1620,7 +2720,7 @@ final class GatewayPortLeaseAllocator
             throw new \RuntimeException('Reserved WLS fallback lease contains active worker state.');
         }
         if ($transferIntent !== null
-            && ($schemaVersion !== 5
+            && (!\in_array($schemaVersion, [5, self::SCHEMA_VERSION], true)
                 || $state !== 'RESERVED'
                 || !\is_array($transferIntent)
                 || !\in_array(
@@ -1637,6 +2737,13 @@ final class GatewayPortLeaseAllocator
                     $masterProcessBirth,
                     (string)($transferIntent['prepared_process_birth'] ?? ''),
                 )
+                || ($schemaVersion === self::SCHEMA_VERSION
+                    && (!\is_string($transferIntent['prepared_pid_namespace_id'] ?? null)
+                        || !\hash_equals(
+                        $masterPidNamespaceId,
+                        (string)($transferIntent['prepared_pid_namespace_id'] ?? ''),
+                    )
+                        || (int)($transferIntent['schema_version'] ?? 0) !== 2))
                 || !$this->validTimestamp(
                     $transferIntent['prepared_timestamp'] ?? null,
                 )
@@ -1657,15 +2764,17 @@ final class GatewayPortLeaseAllocator
             && ($workers === []
                 || $workerPid < 1
                 || $launchId === ''
-                || ($schemaVersion === 5 && $masterProcessName === '')
+                || ($schemaVersion >= 5 && $masterProcessName === '')
                 || !isset($workerKeys[$workerPid . ':' . $launchId])
                 || !$this->validTimestamp($lease['confirmed_timestamp'] ?? null))
         ) {
             throw new \RuntimeException('Active WLS fallback lease has no valid worker identity.');
         }
-        if ($state === 'DRAINING'
+        if ($schemaVersion === self::SCHEMA_VERSION) {
+            $this->assertListenerTransitionShape($lease);
+        } elseif ($state === 'DRAINING'
             && (!$this->validTimestamp($lease['draining_timestamp'] ?? null)
-                || ($schemaVersion === 5
+                || ($schemaVersion >= 5
                     && (!\is_string($lease['draining_host_boot_id'] ?? null)
                         || !\hash_equals(
                             $hostBootId,
@@ -1673,7 +2782,7 @@ final class GatewayPortLeaseAllocator
                         ))))
         ) {
             throw new \RuntimeException(
-                'Draining WLS fallback lease has no structurally valid drain identity.',
+                'Legacy draining WLS fallback lease has no valid drain identity.',
             );
         }
         if ($state === 'RELEASED'
@@ -1684,6 +2793,138 @@ final class GatewayPortLeaseAllocator
         ) {
             throw new \RuntimeException('Released WLS fallback lease retains active ownership.');
         }
+    }
+
+    /** @param array<string,mixed> $lease */
+    private function assertListenerTransitionShape(array $lease): void
+    {
+        $state = (string)($lease['state'] ?? '');
+        $phase = (string)($lease['listener_phase'] ?? '');
+        $action = $lease['listener_transition_action'] ?? null;
+        $digest = $lease['listener_transition_digest'] ?? null;
+        $drainDigest = $lease['drain_action_digest'] ?? null;
+        $transitionId = $lease['drain_transition_id'] ?? null;
+        $acknowledged = $lease['drain_acknowledged'] ?? null;
+        $identity = $lease['transition_identity'] ?? null;
+        $emptyTransition = $transitionId === null
+            && $acknowledged === false
+            && $action === null
+            && $digest === null
+            && $drainDigest === null
+            && $identity === null
+            && ($lease['draining_at'] ?? null) === null
+            && ($lease['draining_timestamp'] ?? null) === null
+            && ($lease['draining_host_boot_id'] ?? null) === null
+            && ($lease['draining_monotonic'] ?? null) === null;
+        if ($state === 'RESERVED') {
+            if ($phase !== self::LISTENER_PHASE_RESERVED || !$emptyTransition) {
+                throw new \RuntimeException(
+                    'Reserved WLS fallback lease has an invalid listener phase.'
+                );
+            }
+            return;
+        }
+        if ($state === 'ACTIVE') {
+            if ($phase !== self::LISTENER_PHASE_ACTIVE || !$emptyTransition) {
+                throw new \RuntimeException(
+                    'Active WLS fallback lease retains a listener transition.'
+                );
+            }
+            return;
+        }
+        if ($state === 'RELEASED') {
+            if ($phase !== self::LISTENER_PHASE_RELEASED || !$emptyTransition) {
+                throw new \RuntimeException(
+                    'Released WLS fallback lease retains a listener transition.'
+                );
+            }
+            return;
+        }
+        if ($state !== 'DRAINING') {
+            throw new \RuntimeException('WLS fallback listener phase is invalid.');
+        }
+
+        $ackClockValid = $acknowledged === true
+            && \is_string($lease['draining_at'] ?? null)
+            && (string)$lease['draining_at'] !== ''
+            && $this->validTimestamp($lease['draining_timestamp'] ?? null)
+            && \is_string($lease['draining_host_boot_id'] ?? null)
+            && \hash_equals(
+                (string)$lease['host_boot_id'],
+                (string)$lease['draining_host_boot_id'],
+            )
+            && \is_numeric($lease['draining_monotonic'] ?? null)
+            && \is_finite((float)$lease['draining_monotonic'])
+            && (float)$lease['draining_monotonic'] > 0.0;
+        if ($phase === self::LISTENER_PHASE_TERMINAL_DRAIN) {
+            if ($action !== 'TERMINAL_DRAIN'
+                || !\is_string($digest)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+                || $drainDigest !== null
+                || $transitionId !== null
+                || $identity !== null
+                || !$ackClockValid
+            ) {
+                throw new \RuntimeException(
+                    'Terminal WLS fallback drain lacks its exact terminal phase.'
+                );
+            }
+            return;
+        }
+
+        if (!\is_string($transitionId)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $transitionId) !== 1
+            || !\is_string($digest)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || !\is_string($drainDigest)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $drainDigest) !== 1
+            || !\is_array($identity)
+        ) {
+            throw new \RuntimeException(
+                'WLS fallback listener transition is missing an exact identity.'
+            );
+        }
+        $this->normaliseTransitionIdentity($identity, $lease);
+        if ($phase === self::LISTENER_PHASE_DRAIN_PREPARED) {
+            if ($action !== 'DRAIN'
+                || !\hash_equals($drainDigest, $digest)
+                || $acknowledged !== false
+                || ($lease['draining_at'] ?? null) !== null
+                || ($lease['draining_timestamp'] ?? null) !== null
+                || ($lease['draining_host_boot_id'] ?? null) !== null
+                || ($lease['draining_monotonic'] ?? null) !== null
+            ) {
+                throw new \RuntimeException(
+                    'Prepared WLS fallback drain has an invalid pre-ACK phase.'
+                );
+            }
+            return;
+        }
+        if ($phase === self::LISTENER_PHASE_DRAIN_ACKED) {
+            if ($action !== 'DRAIN'
+                || !\hash_equals($drainDigest, $digest)
+                || !$ackClockValid
+            ) {
+                throw new \RuntimeException(
+                    'Acknowledged WLS fallback drain has an invalid phase.'
+                );
+            }
+            return;
+        }
+        if ($phase === self::LISTENER_PHASE_UNDRAIN_PREPARED) {
+            if ($action !== 'UNDRAIN'
+                || \hash_equals($drainDigest, $digest)
+                || !$ackClockValid
+            ) {
+                throw new \RuntimeException(
+                    'Prepared WLS fallback undrain has an invalid phase.'
+                );
+            }
+            return;
+        }
+        throw new \RuntimeException(
+            'Draining WLS fallback lease has an unsupported listener phase.'
+        );
     }
 
     /**
@@ -1697,7 +2938,7 @@ final class GatewayPortLeaseAllocator
      */
     private function normaliseDrainingTimeObservation(array $lease): array
     {
-        if ((int)($lease['schema_version'] ?? 0) !== 5
+        if ((int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
             || !\hash_equals('DRAINING', (string)($lease['state'] ?? ''))
         ) {
             return $lease;
@@ -1718,8 +2959,14 @@ final class GatewayPortLeaseAllocator
         $leaseHostBootId = (string)($lease['host_boot_id'] ?? '');
         $drainingHostBootId = $lease['draining_host_boot_id'] ?? null;
         $drainingMonotonic = $lease['draining_monotonic'] ?? null;
-        if ((int)($lease['schema_version'] ?? 0) !== 5
+        if ((int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
             || !\hash_equals('DRAINING', (string)($lease['state'] ?? ''))
+            || ($lease['drain_acknowledged'] ?? true) !== true
+            || !\in_array((string)($lease['listener_phase'] ?? ''), [
+                self::LISTENER_PHASE_DRAIN_ACKED,
+                self::LISTENER_PHASE_UNDRAIN_PREPARED,
+                self::LISTENER_PHASE_TERMINAL_DRAIN,
+            ], true)
             || !\is_string($drainingHostBootId)
             || !\hash_equals($this->hostBootId, $leaseHostBootId)
             || !\hash_equals($leaseHostBootId, $drainingHostBootId)
@@ -1731,6 +2978,26 @@ final class GatewayPortLeaseAllocator
         return \is_finite($drainingMonotonic)
             && $drainingMonotonic > 0.0
             && $drainingMonotonic <= $this->monotonicNow();
+    }
+
+    /** @param array<string,mixed> $lease */
+    private function clearDrainTransition(array &$lease): void
+    {
+        $lease['drain_transition_id'] = null;
+        $lease['drain_acknowledged'] = false;
+        $lease['draining_at'] = null;
+        $lease['draining_timestamp'] = null;
+        $lease['draining_host_boot_id'] = null;
+        $lease['draining_monotonic'] = null;
+        $lease['listener_phase'] = match ((string)($lease['state'] ?? '')) {
+            'RESERVED' => self::LISTENER_PHASE_RESERVED,
+            'RELEASED' => self::LISTENER_PHASE_RELEASED,
+            default => self::LISTENER_PHASE_ACTIVE,
+        };
+        $lease['listener_transition_action'] = null;
+        $lease['listener_transition_digest'] = null;
+        $lease['drain_action_digest'] = null;
+        $lease['transition_identity'] = null;
     }
 
     private function validTimestamp(mixed $value): bool
@@ -1757,6 +3024,103 @@ final class GatewayPortLeaseAllocator
         }
     }
 
+    /**
+     * @return array{0:string,1:array<string,mixed>}
+     */
+    private function transitionLease(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+    ): array {
+        $projectUuid = $this->projects->projectUuid();
+        $file = $this->leaseFile($projectUuid . ':' . $instanceName);
+        $lease = $this->readLease($file);
+        if ($lease === null
+            || (int)($lease['schema_version'] ?? 0) !== self::SCHEMA_VERSION
+            || (int)($lease['port'] ?? 0) !== $port
+            || !\hash_equals($projectUuid, (string)($lease['project_uuid'] ?? ''))
+            || !\hash_equals($instanceName, (string)($lease['instance'] ?? ''))
+            || !\hash_equals($leaseId, (string)($lease['lease_id'] ?? ''))
+            || !\hash_equals($workerLaunchId, (string)($lease['launch_id'] ?? ''))
+            || (int)($lease['master_pid'] ?? 0) !== \getmypid()
+            || !\hash_equals($this->hostBootId, (string)($lease['host_boot_id'] ?? ''))
+            || !$this->currentProcessMatchesMasterBirth($lease)
+            || !$this->leaseProcessAlive($lease)
+            || $this->recordedPortIsBindable($lease)
+        ) {
+            throw new \RuntimeException(
+                'Fallback listener transition does not match a live exact host lease.'
+            );
+        }
+        return [$file, $lease];
+    }
+
+    /** @return array<string,mixed> */
+    private function restoreTransitionToActive(
+        string $instanceName,
+        int $port,
+        string $leaseId,
+        string $workerLaunchId,
+        string $transitionId,
+        string $actionDigest,
+        array $transitionIdentity,
+        string $requiredPhase,
+    ): array {
+        $this->assertInstanceName($instanceName);
+        $leaseId = $this->validateLeaseId($leaseId);
+        $workerLaunchId = $this->validateLaunchId($workerLaunchId);
+        $transitionId = $this->validateTransitionId($transitionId);
+        $actionDigest = $this->validateActionDigest($actionDigest);
+        return $this->withAllocationLock(function () use (
+            $instanceName,
+            $port,
+            $leaseId,
+            $workerLaunchId,
+            $transitionId,
+            $actionDigest,
+            $transitionIdentity,
+            $requiredPhase,
+        ): array {
+            [$file, $lease] = $this->transitionLease(
+                $instanceName,
+                $port,
+                $leaseId,
+                $workerLaunchId,
+            );
+            $transitionIdentity = $this->normaliseTransitionIdentity(
+                $transitionIdentity,
+                $lease,
+            );
+            if (!\hash_equals('DRAINING', (string)($lease['state'] ?? ''))
+                || !\hash_equals(
+                    $requiredPhase,
+                    (string)($lease['listener_phase'] ?? ''),
+                )
+                || !\hash_equals(
+                    $transitionId,
+                    (string)($lease['drain_transition_id'] ?? ''),
+                )
+                || !\hash_equals(
+                    $actionDigest,
+                    (string)($lease['listener_transition_digest'] ?? ''),
+                )
+                || !$this->transitionIdentityMatches(
+                    $transitionIdentity,
+                    $lease['transition_identity'] ?? null,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Fallback listener resume does not match its exact drain transition.'
+                );
+            }
+            $lease['state'] = 'ACTIVE';
+            $this->clearDrainTransition($lease);
+            $this->publishLease($file, $lease);
+            return $lease;
+        });
+    }
+
     private function validateLeaseId(string $leaseId): string
     {
         $normalized = \strtolower(\trim($leaseId));
@@ -1766,6 +3130,152 @@ final class GatewayPortLeaseAllocator
             throw new \InvalidArgumentException('WLS fallback lease identity is invalid.');
         }
         return $normalized;
+    }
+
+    private function validateLaunchId(string $launchId): string
+    {
+        $normalized = \strtolower(\trim($launchId));
+        if (!\hash_equals($launchId, $normalized)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $normalized) !== 1
+        ) {
+            throw new \InvalidArgumentException('WLS fallback worker launch identity is invalid.');
+        }
+        return $normalized;
+    }
+
+    private function validateTransitionId(string $transitionId): string
+    {
+        $normalized = \strtolower(\trim($transitionId));
+        if (!\hash_equals($transitionId, $normalized)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $normalized) !== 1
+        ) {
+            throw new \InvalidArgumentException('WLS fallback listener transition is invalid.');
+        }
+        return $normalized;
+    }
+
+    private function validateActionDigest(string $actionDigest): string
+    {
+        $normalized = \strtolower(\trim($actionDigest));
+        if (!\hash_equals($actionDigest, $normalized)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $normalized) !== 1
+        ) {
+            throw new \InvalidArgumentException(
+                'WLS fallback listener transition digest is invalid.'
+            );
+        }
+        return $normalized;
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     * @param array<string,mixed> $lease
+     * @return array<string,mixed>
+     */
+    private function normaliseTransitionIdentity(array $identity, array $lease): array
+    {
+        $canonical = [
+            'schema' => (string)($identity['schema'] ?? ''),
+            'project_uuid' => (string)($identity['project_uuid'] ?? ''),
+            'wls_instance' => (string)($identity['wls_instance'] ?? ''),
+            'role' => (string)($identity['role'] ?? ''),
+            'slot_id' => (string)($identity['slot_id'] ?? ''),
+            'service_generation' => $identity['service_generation'] ?? null,
+            'service_lease_id' => (string)($identity['service_lease_id'] ?? ''),
+            'worker_pid' => $identity['worker_pid'] ?? null,
+            'worker_process_birth' => (string)($identity['worker_process_birth'] ?? ''),
+            'worker_pid_namespace_id' => (string)($identity['worker_pid_namespace_id'] ?? ''),
+            'worker_launch_id' => (string)($identity['worker_launch_id'] ?? ''),
+            'master_pid' => $identity['master_pid'] ?? null,
+            'master_epoch' => $identity['master_epoch'] ?? null,
+            'master_launch_id' => (string)($identity['master_launch_id'] ?? ''),
+            'master_process_birth' => (string)($identity['master_process_birth'] ?? ''),
+            'master_pid_namespace_id' => (string)($identity['master_pid_namespace_id'] ?? ''),
+            'port' => $identity['port'] ?? null,
+            'host_lease_instance' => (string)($identity['host_lease_instance'] ?? ''),
+            'host_lease_id' => (string)($identity['host_lease_id'] ?? ''),
+            'host_boot_id' => (string)($identity['host_boot_id'] ?? ''),
+            'bind_host' => (string)($identity['bind_host'] ?? ''),
+            'listener_proof_digest' => (string)($identity['listener_proof_digest'] ?? ''),
+            'listener_transport' => (string)($identity['listener_transport'] ?? ''),
+            'listener_receipt_digest' => (string)($identity['listener_receipt_digest'] ?? ''),
+        ];
+        $received = $identity;
+        \ksort($received, SORT_STRING);
+        $expected = $canonical;
+        \ksort($expected, SORT_STRING);
+        $worker = null;
+        foreach ((array)($lease['workers'] ?? []) as $candidate) {
+            if (\is_array($candidate)
+                && (int)($candidate['pid'] ?? 0) === (int)$canonical['worker_pid']
+                && \hash_equals(
+                    (string)$canonical['worker_launch_id'],
+                    (string)($candidate['launch_id'] ?? ''),
+                )
+            ) {
+                $worker = $candidate;
+                break;
+            }
+        }
+        $workerNamespace = (string)$canonical['worker_pid_namespace_id'];
+        $masterNamespace = (string)$canonical['master_pid_namespace_id'];
+        $namespacesValid = PHP_OS_FAMILY === 'Linux'
+            ? (\preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $workerNamespace) === 1
+                && \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $masterNamespace) === 1)
+            : ($workerNamespace === '' && $masterNamespace === '');
+        if ($received !== $expected
+            || !\hash_equals('wls-gateway-fallback-listener/1', (string)$canonical['schema'])
+            || !\hash_equals((string)$lease['project_uuid'], (string)$canonical['project_uuid'])
+            || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', (string)$canonical['wls_instance']) !== 1
+            || !\hash_equals('gateway_fallback', (string)$canonical['role'])
+            || \preg_match('/\Agateway_fallback#[1-9][0-9]*\z/D', (string)$canonical['slot_id']) !== 1
+            || !\is_int($canonical['service_generation'])
+            || (int)$canonical['service_generation'] < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)$canonical['service_lease_id']) !== 1
+            || !\is_int($canonical['worker_pid'])
+            || (int)$canonical['worker_pid'] !== (int)$lease['worker_pid']
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$canonical['worker_process_birth']) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)$canonical['worker_launch_id']) !== 1
+            || !\hash_equals((string)$lease['launch_id'], (string)$canonical['worker_launch_id'])
+            || !\is_array($worker)
+            || !\hash_equals((string)$worker['process_birth'], (string)$canonical['worker_process_birth'])
+            || !\hash_equals((string)$worker['pid_namespace_id'], $workerNamespace)
+            || !\is_int($canonical['master_pid'])
+            || (int)$canonical['master_pid'] !== (int)$lease['master_pid']
+            || !\is_int($canonical['master_epoch'])
+            || (int)$canonical['master_epoch'] < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)$canonical['master_launch_id']) !== 1
+            || !\hash_equals((string)$lease['master_process_birth'], (string)$canonical['master_process_birth'])
+            || !\hash_equals((string)$lease['master_pid_namespace_id'], $masterNamespace)
+            || !\is_int($canonical['port'])
+            || (int)$canonical['port'] !== (int)$lease['port']
+            || !\hash_equals((string)$lease['instance'], (string)$canonical['host_lease_instance'])
+            || !\hash_equals((string)$lease['lease_id'], (string)$canonical['host_lease_id'])
+            || !\hash_equals((string)$lease['host_boot_id'], (string)$canonical['host_boot_id'])
+            || !\hash_equals((string)$lease['bind_host'], (string)$canonical['bind_host'])
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$canonical['listener_proof_digest']) !== 1
+            || !\in_array((string)$canonical['listener_transport'], [
+                'posix_inherited_fd',
+                'windows_wsaprotocol_info',
+            ], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$canonical['listener_receipt_digest']) !== 1
+            || !$namespacesValid
+        ) {
+            throw new \RuntimeException(
+                'Fallback listener transition identity does not match its exact host lease.'
+            );
+        }
+
+        return $canonical;
+    }
+
+    private function transitionIdentityMatches(array $expected, mixed $actual): bool
+    {
+        return \is_array($actual)
+            && \hash_equals(
+                GatewayClient::canonicalJson($expected),
+                GatewayClient::canonicalJson($actual),
+            );
     }
 
     private function normaliseBindHost(string $bindHost): string

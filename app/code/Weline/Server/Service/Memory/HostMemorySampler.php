@@ -186,16 +186,12 @@ final class HostMemorySampler
             }
         }
         $vm = $this->runProbe(['/usr/bin/vm_stat']);
-        if ($vm !== '') {
-            if (\preg_match('/page size of\s+(\d+)\s+bytes/i', $vm, $m)) {
-                $parsedPageSize = $this->boundedDecimal((string)$m[1]);
-                if ($parsedPageSize !== null
-                    && $parsedPageSize >= 4096
-                    && $parsedPageSize <= 65536
-                ) {
-                    $pageSize = $parsedPageSize;
-                    $cachedPageSize = $pageSize;
-                }
+        $vmStat = $this->parseDarwinVmStat($vm);
+        if ($vmStat !== null) {
+            $parsedPageSize = $vmStat['page_size'];
+            if ($parsedPageSize >= 4096 && $parsedPageSize <= 65536) {
+                $pageSize = $parsedPageSize;
+                $cachedPageSize = $pageSize;
             }
             // Without an observed page size, Apple Silicon (16 KiB) would be
             // under-counted 4x with the historical 4 KiB default and trip CRITICAL.
@@ -206,23 +202,12 @@ final class HostMemorySampler
                     'swap_used_mb' => null,
                 ];
             }
-            $free = 0;
-            $inactive = 0;
-            $speculative = 0;
-            $purgeable = 0;
-            if (\preg_match('/Pages free:\s+(\d+)/i', $vm, $m)) {
-                $free = $this->boundedDecimal((string)$m[1]) ?? 0;
-            }
-            if (\preg_match('/Pages inactive:\s+(\d+)/i', $vm, $m)) {
-                $inactive = $this->boundedDecimal((string)$m[1]) ?? 0;
-            }
-            if (\preg_match('/Pages speculative:\s+(\d+)/i', $vm, $m)) {
-                $speculative = $this->boundedDecimal((string)$m[1]) ?? 0;
-            }
-            if (\preg_match('/Pages purgeable:\s+(\d+)/i', $vm, $m)) {
-                $purgeable = $this->boundedDecimal((string)$m[1]) ?? 0;
-            }
-            $pages = $this->checkedSum([$free, $inactive, $speculative, $purgeable]);
+            $pages = $this->checkedSum([
+                $vmStat['pages_free'],
+                $vmStat['pages_inactive'],
+                $vmStat['pages_speculative'],
+                $vmStat['pages_purgeable'],
+            ]);
             if ($pages !== null && $pages <= \intdiv(PHP_INT_MAX, $pageSize)) {
                 $available = (int)\floor(($pages * $pageSize) / 1048576);
             }
@@ -365,19 +350,21 @@ final class HostMemorySampler
             $timeout = 1.5;
         }
         $stdout = '';
-        try {
-            $result = GatewayBoundedCommandRunner::run($command, $timeout);
-            $stdout = \trim((string)($result['stdout'] ?? $result['output'] ?? ''));
-            // Under Master FD inheritance the bounded runner often returns 125
-            // even when the probe already wrote a valid payload.
-            if ($stdout === '' || ((int)($result['code'] ?? 1) !== 0 && !$this->looksLikeDarwinProbeOutput($command, $stdout))) {
+        for ($attempt = 0; $attempt < 2 && $stdout === ''; ++$attempt) {
+            try {
+                $result = GatewayBoundedCommandRunner::run($command, $timeout);
+                $candidate = \trim((string)($result['stdout'] ?? $result['output'] ?? ''));
+                // Under Master FD inheritance the bounded runner can return
+                // 125 after the probe already emitted a complete payload.
+                if (($result['truncated'] ?? true) !== true
+                    && \in_array((int)($result['code'] ?? 1), [0, 125], true)
+                    && $this->looksLikeDarwinProbeOutput($command, $candidate)
+                ) {
+                    $stdout = $candidate;
+                }
+            } catch (\Throwable) {
                 $stdout = '';
             }
-        } catch (\Throwable) {
-            $stdout = '';
-        }
-        if ($stdout === '') {
-            $stdout = $this->runProbeDirect($command);
         }
 
         return $stdout;
@@ -388,55 +375,83 @@ final class HostMemorySampler
     {
         $binary = (string)($command[0] ?? '');
         if (\str_ends_with($binary, '/vm_stat')) {
-            return \preg_match('/Pages free:\s+\d+/i', $stdout) === 1;
+            return $this->parseDarwinVmStat($stdout) !== null;
         }
         if (\str_ends_with($binary, '/sysctl')) {
-            return \preg_match('/\A[0-9]+\z/D', \trim($stdout)) === 1;
+            return \preg_match('/\A[0-9]+\z/D', $stdout) === 1;
         }
 
-        return $stdout !== '';
+        return false;
     }
 
-    /** @param list<string> $command */
-    private function runProbeDirect(array $command): string
+    /**
+     * @return array{
+     *   page_size:int,
+     *   pages_free:int,
+     *   pages_inactive:int,
+     *   pages_speculative:int,
+     *   pages_purgeable:int
+     * }|null
+     */
+    private function parseDarwinVmStat(string $stdout): ?array
     {
-        if (!\function_exists('proc_open') || $command === []) {
-            return '';
+        if ($stdout === ''
+            || \strlen($stdout) > self::MAX_PROBE_BYTES
+            || \preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $stdout) === 1
+        ) {
+            return null;
         }
-        $pipes = [];
-        $process = @\proc_open(
-            $command,
-            [
-                0 => ['file', '/dev/null', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes,
-            null,
-            null,
-            ['bypass_shell' => true],
-        );
-        if (!\is_resource($process)) {
-            return '';
+        $normalized = \str_replace(["\r\n", "\r"], "\n", \trim($stdout));
+        $lines = \explode("\n", $normalized);
+        $header = \array_shift($lines);
+        if (!\is_string($header)
+            || \preg_match(
+                '/\AMach Virtual Memory Statistics: \(page size of ([0-9]+) bytes\)\z/D',
+                $header,
+                $headerMatches,
+            ) !== 1
+        ) {
+            return null;
         }
-        $stdout = '';
-        try {
-            if (isset($pipes[1]) && \is_resource($pipes[1])) {
-                $chunk = @\stream_get_contents($pipes[1], self::MAX_PROBE_BYTES + 1);
-                if (\is_string($chunk) && \strlen($chunk) <= self::MAX_PROBE_BYTES) {
-                    $stdout = $chunk;
-                }
-            }
-        } finally {
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    @\fclose($pipe);
-                }
-            }
-            @\proc_close($process);
+        $pageSize = $this->boundedDecimal((string)$headerMatches[1]);
+        if ($pageSize === null) {
+            return null;
         }
 
-        return \trim($stdout);
+        $values = [];
+        foreach ($lines as $line) {
+            if ($line === ''
+                || \preg_match(
+                    '/\A(?:"([A-Za-z][A-Za-z0-9 ()_-]*)"|'
+                        . '([A-Za-z][A-Za-z0-9 ()_-]*)):[ \t]+([0-9]+)\.\z/D',
+                    $line,
+                    $matches,
+                ) !== 1
+            ) {
+                return null;
+            }
+            $key = \strtolower((string)(($matches[1] ?? '') !== ''
+                ? $matches[1]
+                : ($matches[2] ?? '')));
+            $value = $this->boundedDecimal((string)($matches[3] ?? ''));
+            if ($value === null || isset($values[$key])) {
+                return null;
+            }
+            $values[$key] = $value;
+        }
+        foreach (['pages free', 'pages inactive', 'pages speculative', 'pages purgeable'] as $required) {
+            if (!isset($values[$required])) {
+                return null;
+            }
+        }
+
+        return [
+            'page_size' => $pageSize,
+            'pages_free' => $values['pages free'],
+            'pages_inactive' => $values['pages inactive'],
+            'pages_speculative' => $values['pages speculative'],
+            'pages_purgeable' => $values['pages purgeable'],
+        ];
     }
 
     private function readBoundedFile(string $path): ?string

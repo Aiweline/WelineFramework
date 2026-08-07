@@ -10,14 +10,39 @@ use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceCommand;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
+use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
 use Weline\Server\Shared\Connection\ConnectionPoolManager;
 
 class SharedStateServiceManager
 {
     private const DEFAULT_ENSURE_TIMEOUT_SEC = 30.0;
     private const DEFAULT_ENSURE_POLL_INTERVAL_MS = 100;
+    private const MAX_RUNTIME_FILE_BYTES = 64 * 1024;
+    private const RUNTIME_SCHEMA = 'wls-shared-runtime/2';
+    private const DEFAULT_LIFECYCLE_LOCK_WAIT_SECONDS = 30.0;
+    private const CONSUMER_RENEW_TRANSACTION_BUDGET_SECONDS = 0.025;
+    private const LIFECYCLE_IDENTITY_FIELDS = [
+        'role',
+        'host',
+        'port',
+        'pid',
+        'token_file_name',
+        'started_at',
+        'process_name',
+        'instance_name',
+        'service_instance_name',
+        'lifecycle_schema',
+        'lifecycle_generation',
+        'lifecycle_identity_digest',
+    ];
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
 
     /**
      * 解析 ensure() 的前台标志，与日志及 Windows 下共享侧车拉起方式一致。
@@ -50,6 +75,37 @@ class SharedStateServiceManager
         bool $frontend = false,
         bool $forceRestart = false
     ): array {
+        $roles = [ControlMessage::ROLE_SESSION_SERVER];
+        if ($this->isMemoryEnabled($config, $envConfig)) {
+            $roles[] = ControlMessage::ROLE_MEMORY_SERVER;
+        }
+        return $this->withRoleLifecycleLocks(
+            $roles,
+            fn(): array => $this->ensureRuntimeUnlocked(
+                $requesterInstanceName,
+                $config,
+                $envConfig,
+                $frontend,
+                $forceRestart,
+            ),
+        );
+    }
+
+    private function ensureRuntimeUnlocked(
+        string $requesterInstanceName,
+        array $config,
+        array $envConfig = [],
+        bool $frontend = false,
+        bool $forceRestart = false
+    ): array {
+        $this->recoverRuntimeFileForMutation(
+            ControlMessage::ROLE_SESSION_SERVER,
+        );
+        if ($this->isMemoryEnabled($config, $envConfig)) {
+            $this->recoverRuntimeFileForMutation(
+                ControlMessage::ROLE_MEMORY_SERVER,
+            );
+        }
         $sessionDefinition = $this->buildRoleDefinition(
             ControlMessage::ROLE_SESSION_SERVER,
             $requesterInstanceName,
@@ -80,7 +136,7 @@ class SharedStateServiceManager
             return $this->buildRuntimeFromQuickProbe($sessionProbe, $memoryProbe, $requesterInstanceName);
         }
 
-        $prepareStartedAt = \microtime(true);
+        $prepareStartedAt = self::monotonicSeconds();
         $sessionPrepare = $sessionNeedsStartup
             ? $this->prepareSharedService(
                 $sessionDefinition,
@@ -129,7 +185,7 @@ class SharedStateServiceManager
             }
         }
 
-        $waitStartedAt = \microtime(true);
+        $waitStartedAt = self::monotonicSeconds();
         $readyByRole = $this->waitUntilSharedServicesReadyBatch($pendingDefinitions);
         if ($pendingDefinitions !== []) {
             WlsLogger::info_(
@@ -139,7 +195,7 @@ class SharedStateServiceManager
                     $pendingDefinitions
                 ))
                 . ', prepare_ms=' . \round(($waitStartedAt - $prepareStartedAt) * 1000, 3)
-                . ', wait_ms=' . \round((\microtime(true) - $waitStartedAt) * 1000, 3)
+                . ', wait_ms=' . \round((self::monotonicSeconds() - $waitStartedAt) * 1000, 3)
             );
         }
 
@@ -249,6 +305,29 @@ class SharedStateServiceManager
         bool $frontend = false,
         bool $forceRestart = false
     ): array {
+        $role = $this->normalizeRoleName($role);
+        return $this->withRoleLifecycleLocks(
+            [$role],
+            fn(): array => $this->ensureUnlocked(
+                $role,
+                $config,
+                $envConfig,
+                $requesterInstanceName,
+                $frontend,
+                $forceRestart,
+            ),
+        );
+    }
+
+    private function ensureUnlocked(
+        string $role,
+        array $config = [],
+        array $envConfig = [],
+        string $requesterInstanceName = 'system',
+        bool $frontend = false,
+        bool $forceRestart = false
+    ): array {
+        $this->recoverRuntimeFileForMutation($role);
         $definition = $this->buildRoleDefinition($role, $requesterInstanceName, $config, $envConfig);
 
         $prepare = $this->prepareSharedService($definition, $requesterInstanceName, $frontend, $forceRestart);
@@ -321,18 +400,25 @@ class SharedStateServiceManager
                     . ", 请求者: {$requesterInstanceName}, 前台: "
                     . ($frontend ? '是' : '否') . ')'
                 );
-                $this->forceStopReusedService(
-                    $definition,
-                    \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []
+                $selected = $this->selectLifecycleGeneration(
+                    (string)$definition['role'],
+                    \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [],
+                    $this->createRegistry(),
                 );
+                if (!$this->forceStopReusedService(
+                    $definition,
+                    $selected,
+                )) {
+                    throw new \RuntimeException(
+                        'Unable to restart the selected shared-service generation.'
+                    );
+                }
                 // Do not wait here; readiness is verified after the process is launched.
             } else {
                 $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
                 $runtime['reuse_existing'] = true;
                 $runtime['shared_service'] = true;
                 $this->ensureSharedProcessLogVisible($runtime, $requesterInstanceName);
-
-                $this->writeRuntimeFile((string) $definition['role'], $runtime);
                 WlsLogger::info_(
                     '[SharedStateServiceManager] 共享服务已存在 (角色: ' . (string) $definition['role']
                     . ", 请求者实例名称: $requesterInstanceName, 前台模式: " . ($frontend ? '是' : '否') . ')'
@@ -353,7 +439,19 @@ class SharedStateServiceManager
         }
 
         if ((bool) ($probe['reusable_but_unhealthy'] ?? false)) {
-            $this->forceStopReusedService($definition, \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []);
+            $selected = $this->selectLifecycleGeneration(
+                (string)$definition['role'],
+                \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [],
+                $this->createRegistry(),
+            );
+            if (!$this->forceStopReusedService(
+                $definition,
+                $selected,
+            )) {
+                throw new \RuntimeException(
+                    'Unable to retire the unhealthy shared-service generation.'
+                );
+            }
             // Do not wait here; readiness is verified after the process is launched.
         }
         WlsLogger::info_(
@@ -399,7 +497,7 @@ class SharedStateServiceManager
             $timeoutSec = \max($timeoutSec, \min($platformDeadlineSec, \max(0.5, $configured)));
         }
 
-        $deadline = \microtime(true) + $timeoutSec;
+        $deadline = self::monotonicSeconds() + $timeoutSec;
         $startedAt = \date('c');
         $pending = [];
         foreach ($definitions as $definition) {
@@ -410,7 +508,7 @@ class SharedStateServiceManager
         $pollIndex = 0;
         $done = [];
 
-        while (\microtime(true) < $deadline && $pending !== []) {
+        while (self::monotonicSeconds() < $deadline && $pending !== []) {
             foreach ($pending as $roleKey => $definition) {
                 if (!$this->probeRunningSharedService(
                     $definition,
@@ -493,9 +591,45 @@ class SharedStateServiceManager
         string $requesterInstanceName = 'system',
         bool $frontend = false
     ): array {
+        $role = $this->normalizeRoleName($role);
+        return $this->withRoleLifecycleLocks(
+            [$role],
+            fn(): array => $this->restartUnlocked(
+                $role,
+                $config,
+                $envConfig,
+                $requesterInstanceName,
+                $frontend,
+            ),
+        );
+    }
+
+    private function restartUnlocked(
+        string $role,
+        array $config = [],
+        array $envConfig = [],
+        string $requesterInstanceName = 'system',
+        bool $frontend = false
+    ): array {
+        $this->recoverRuntimeFileForMutation($role);
         $definition = $this->buildRoleDefinition($role, $requesterInstanceName, $config, $envConfig);
 
-        $this->forceStopReusedService($definition, []);
+        $registry = $this->createRegistry();
+        $selected = $this->selectLifecycleGeneration(
+            (string)$definition['role'],
+            $this->readRuntimeFile((string)$definition['role']),
+            $registry,
+        );
+        if (!$this->forceStopReusedService($definition, $selected)) {
+            throw new \RuntimeException(
+                'Unable to restart the shared service because the selected generation remained active.'
+            );
+        }
+        $this->removeSelectedLifecycleGeneration(
+            (string)$definition['role'],
+            $selected,
+            $registry,
+        );
         WlsLogger::info_(
             "[SharedStateServiceManager] 启动共享服务 (角色: " . (string) $definition['role']
             . ", 请求者实例名称: $requesterInstanceName, 前台模式: " . ($frontend ? '是' : '否') . ')'
@@ -546,20 +680,35 @@ class SharedStateServiceManager
 
         $role = $this->normalizeRoleName($role);
         $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $this->readRuntimeFile($role));
+        $runtimeBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $runtime,
+        );
         $definition = $this->buildStatusProbeDefinition($role, $config, $envConfig, $runtime);
         $healthy = $this->probeRunningSharedService($definition, (string) $definition['token_file_name']);
         // `pid` remains the persisted/registry authority. Live process
         // observation is reported separately only after strict identity checks.
         $pid = (int) ($runtime['pid'] ?? 0);
-        $runtime = \array_merge(
-            $runtime,
-            $this->buildRuntimeMetadata(
-                $definition,
-                $pid,
-                \is_string($runtime['started_at'] ?? null) ? (string) $runtime['started_at'] : null,
-                $healthy ? \date('c') : (\is_string($runtime['healthy_at'] ?? null) ? (string) $runtime['healthy_at'] : null)
-            )
-        );
+        $healthyAt = $healthy
+            ? \date('c')
+            : (\is_string($runtime['healthy_at'] ?? null)
+                ? (string)$runtime['healthy_at']
+                : null);
+        if ($runtimeBound) {
+            $runtime['healthy_at'] = $healthyAt;
+        } else {
+            $runtime = \array_merge(
+                $runtime,
+                $this->buildRuntimeMetadata(
+                    $definition,
+                    $pid,
+                    \is_string($runtime['started_at'] ?? null)
+                        ? (string)$runtime['started_at']
+                        : null,
+                    $healthyAt,
+                ),
+            );
+        }
 
         return [
             'role' => (string) $definition['role'],
@@ -570,8 +719,12 @@ class SharedStateServiceManager
             'healthy' => $healthy,
             'started_at' => $runtime['started_at'] ?? null,
             'healthy_at' => $runtime['healthy_at'] ?? null,
-            'process_name' => (string) ($runtime['process_name'] ?? $definition['process_name']),
-            'instance_name' => (string) ($runtime['instance_name'] ?? $definition['service_instance_name']),
+            'process_name' => $runtimeBound
+                ? (string)($runtime['process_name'] ?? '')
+                : (string)($runtime['process_name'] ?? $definition['process_name']),
+            'instance_name' => $runtimeBound
+                ? (string)($runtime['instance_name'] ?? '')
+                : (string)($runtime['instance_name'] ?? $definition['service_instance_name']),
             'live_observation' => \is_array($runtime['live_observation'] ?? null)
                 ? $runtime['live_observation']
                 : null,
@@ -587,11 +740,35 @@ class SharedStateServiceManager
      */
     public function stop(string $role, array $config = [], array $envConfig = []): bool
     {
+        $role = $this->normalizeRoleName($role);
+        return $this->withRoleLifecycleLocks(
+            [$role],
+            fn(): bool => $this->stopUnlocked($role, $config, $envConfig),
+        );
+    }
+
+    private function stopUnlocked(
+        string $role,
+        array $config,
+        array $envConfig,
+    ): bool {
+        $this->recoverRuntimeFileForMutation($role);
         $definition = $this->buildRoleDefinition($role, 'system', $config, $envConfig);
 
-        $stopped = $this->forceStopReusedService($definition, []);
-        $this->removeRuntimeFile((string) $definition['role']);
-        $this->createRegistry()->removeRecord((string) $definition['role']);
+        $registry = $this->createRegistry();
+        $selected = $this->selectLifecycleGeneration(
+            (string)$definition['role'],
+            $this->readRuntimeFile((string)$definition['role']),
+            $registry,
+        );
+        $stopped = $this->forceStopReusedService($definition, $selected);
+        if ($stopped) {
+            $this->removeSelectedLifecycleGeneration(
+                (string)$definition['role'],
+                $selected,
+                $registry,
+            );
+        }
 
         return $stopped;
     }
@@ -657,12 +834,33 @@ class SharedStateServiceManager
 
         $targetRoles = $this->normalizeSharedConsumerRoles($roles);
         foreach ($targetRoles as $role) {
+            $deadline = self::monotonicSeconds()
+                + self::CONSUMER_RENEW_TRANSACTION_BUDGET_SECONDS;
             try {
-                $registry = $this->createRegistry();
-                $registry->touchConsumer($role, $instanceName);
-                $this->syncRuntimeRegistryMetadata($role, $registry);
-
-                $results[$role] = true;
+                $results[$role] = $this->withRoleLifecycleLocks(
+                    [$role],
+                    function () use ($role, $instanceName, $deadline): bool {
+                        if (VerifiedPersistentFileLock::isHeld(
+                            $this->getRuntimeFilePath($role) . '.lock',
+                        ) !== false) {
+                            return false;
+                        }
+                        $remaining = $deadline - self::monotonicSeconds();
+                        if (!\is_finite($remaining) || $remaining <= 0.0) {
+                            return false;
+                        }
+                        $registry = $this->createRegistry();
+                        return $registry->touchConsumerIfAvailable(
+                            $role,
+                            $instanceName,
+                            $remaining,
+                        );
+                    },
+                    \min(
+                        self::CONSUMER_RENEW_TRANSACTION_BUDGET_SECONDS,
+                        $this->lifecycleLockWaitSeconds(),
+                    ),
+                );
             } catch (\Throwable $throwable) {
                 WlsLogger::warning_(
                     "[SharedStateServiceManager] 共享服务 {$role} consumer token 续租异常: "
@@ -775,8 +973,10 @@ class SharedStateServiceManager
     public function shutdownIfUnused(string $role, array $options = []): bool
     {
         $role = $this->normalizeRoleName($role);
-
-        return $this->shutdownIfUnusedNow($role, $options);
+        return $this->withRoleLifecycleLocks(
+            [$role],
+            fn(): bool => $this->shutdownIfUnusedNow($role, $options),
+        );
     }
 
     /**
@@ -790,7 +990,7 @@ class SharedStateServiceManager
         $definition = $this->buildRoleDefinition($role, 'system', [], $envConfig);
         $record = $this->mergeRuntimeWithRegistryMetadata($role, $this->readRuntimeFile($role));
 
-        return \array_merge(
+        $result = \array_merge(
             [
                 'role' => $role,
                 'instance_name' => (string) $definition['service_instance_name'],
@@ -808,6 +1008,14 @@ class SharedStateServiceManager
             ],
             $record
         );
+        if (SharedStateServiceRegistry::hasExactLifecycleBinding($role, $record)) {
+            foreach (self::LIFECYCLE_IDENTITY_FIELDS as $field) {
+                if (!\array_key_exists($field, $record)) {
+                    unset($result[$field]);
+                }
+            }
+        }
+        return $result;
     }
 
     /**
@@ -929,9 +1137,20 @@ class SharedStateServiceManager
         ]);
 
         $stopped = $this->forceStopSharedService($record);
-        $this->removeRuntimeFile($role);
+        $host = (string)$record['host'];
+        $port = (int)$record['port'];
+        $portReleased = !$this->probeTcpPortInUse($host, $port);
+        if (!$stopped && !$portReleased) {
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] retaining runtime identity after failed stop: '
+                . 'role=' . $role . ', host=' . $host . ', port=' . $port
+            );
+        }
 
-        return $stopped;
+        // Lifecycle callers own generation-CAS cleanup after this method
+        // returns. Keeping selection and deletion separate prevents an old
+        // shutdown from unlinking a replacement generation.
+        return $stopped || $portReleased;
     }
 
     /**
@@ -954,7 +1173,19 @@ class SharedStateServiceManager
             'host' => $host,
             'port' => $port,
         ], $tokenFileName);
-        if (!$protocolHealthy && !(bool)($inspection['in_use'] ?? false)) {
+        if (!$protocolHealthy || !(bool)($inspection['in_use'] ?? false)) {
+            return false;
+        }
+        if (!$this->inspectionMatchesSelectedLifecycle($role, $record, $inspection)
+            || !$this->selectedLifecycleIsCurrent($role, $record)
+        ) {
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] refusing graceful shutdown after lifecycle replacement: '
+                . 'role=' . $role
+                . ', selected_generation=' . (int)($record['lifecycle_generation'] ?? 0)
+                . ', selected_pid=' . (int)($record['pid'] ?? 0)
+                . ', observed_pid=' . (int)($inspection['pid'] ?? 0)
+            );
             return false;
         }
 
@@ -963,36 +1194,114 @@ class SharedStateServiceManager
             return true;
         }
 
-        // The token file can disappear after a failed bootstrap while the
-        // shared sidecar itself is still alive. Never kill by port alone:
-        // require the existing inspector to prove project, role and shared
-        // process identity before the bounded PID fallback is allowed.
-        if (!(bool)($inspection['reusable'] ?? false)) {
-            return !$this->probeTcpPortInUse($host, $port);
+        // Authenticated PING and command/scope inspection prove which service
+        // answered, but the runtime record does not carry a host-boot-bound
+        // process-birth identity. After graceful shutdown fails, its numeric
+        // PID is therefore diagnostic only and cannot authorize a signal.
+        // Leave the sidecar in place and let an exact platform/credential tree
+        // recovery path handle it rather than risking a reused foreign PID.
+        if ((bool)($inspection['reusable'] ?? false)) {
+            WlsLogger::error_(
+                '[SharedStateServiceManager] graceful shutdown failed; refusing PID fallback '
+                . 'without a credential-bound process-birth lease: role=' . $role
+                . ', port=' . $port
+                . ', pid=' . (int)($inspection['pid'] ?? 0)
+            );
         }
 
-        $pid = (int)($inspection['pid'] ?? 0);
-        if ($pid <= 0 || !Processer::isRunningByPid($pid)) {
-            return !$this->probeTcpPortInUse($host, $port);
-        }
-        $killed = (bool)Processer::killByPid($pid, true);
-        if (!$killed && Processer::isRunningByPid($pid)) {
+        return !$this->probeTcpPortInUse($host, $port);
+    }
+
+    /**
+     * @param array<string,mixed> $selected
+     * @param array<string,mixed> $inspection
+     */
+    private function inspectionMatchesSelectedLifecycle(
+        string $role,
+        array $selected,
+        array $inspection,
+    ): bool {
+        if (!SharedStateServiceRegistry::hasExactLifecycleBinding($role, $selected)
+            || !(bool)($inspection['reusable'] ?? false)
+            || (int)($inspection['pid'] ?? 0) !== (int)($selected['pid'] ?? 0)
+            || (int)($inspection['port'] ?? 0) !== (int)($selected['port'] ?? 0)
+            || !\hash_equals($role, (string)($inspection['role'] ?? ''))
+        ) {
             return false;
         }
-        Processer::waitForExit([$pid], 2.0);
+        $selectedToken = \basename((string)($selected['token_file_name'] ?? ''));
+        $observedToken = \basename((string)($inspection['token_file_name'] ?? ''));
+        if ($selectedToken === ''
+            || $observedToken === ''
+            || !\hash_equals($selectedToken, $observedToken)
+        ) {
+            return false;
+        }
+        $observed = $selected;
+        $observed['role'] = $role;
+        $observed['port'] = (int)$inspection['port'];
+        $observed['pid'] = (int)$inspection['pid'];
+        $observed['token_file_name'] = $observedToken;
+        foreach (['process_name', 'instance_name'] as $field) {
+            $expected = \trim((string)($selected[$field] ?? ''));
+            if ($expected === '') {
+                continue;
+            }
+            $value = \trim((string)($inspection[$field] ?? ''));
+            if ($value === '' || !\hash_equals($expected, $value)) {
+                return false;
+            }
+            $observed[$field] = $value;
+        }
+        $serviceInstance = \trim((string)($selected['service_instance_name'] ?? ''));
+        if ($serviceInstance !== '') {
+            $observedInstance = \trim((string)($inspection['instance_name'] ?? ''));
+            if ($observedInstance === ''
+                || !\hash_equals($serviceInstance, $observedInstance)
+            ) {
+                return false;
+            }
+            $observed['service_instance_name'] = $observedInstance;
+        }
+        return \hash_equals(
+            (string)$selected['lifecycle_identity_digest'],
+            SharedStateServiceRegistry::lifecycleIdentityDigest($role, $observed),
+        );
+    }
 
-        return $this->waitForSharedServicePortRelease($host, $port, 1.0);
+    /** @param array<string,mixed> $selected */
+    private function selectedLifecycleIsCurrent(string $role, array $selected): bool
+    {
+        if (!SharedStateServiceRegistry::hasExactLifecycleBinding($role, $selected)) {
+            return false;
+        }
+        try {
+            $authority = self::highestLifecycleAuthority(
+                $role,
+                $this->createRegistry()->getRecord($role),
+                $this->readRuntimeFile($role),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+        return SharedStateServiceRegistry::hasExactLifecycleBinding($role, $authority)
+            && (int)($authority['lifecycle_generation'] ?? 0)
+                === (int)($selected['lifecycle_generation'] ?? 0)
+            && \hash_equals(
+                (string)($authority['lifecycle_identity_digest'] ?? ''),
+                (string)($selected['lifecycle_identity_digest'] ?? ''),
+            );
     }
 
     private function waitForSharedServicePortRelease(string $host, int $port, float $timeoutSec): bool
     {
-        $deadline = \microtime(true) + \max(0.05, $timeoutSec);
+        $deadline = self::monotonicSeconds() + \max(0.05, $timeoutSec);
         do {
             if (!$this->probeTcpPortInUse($host, $port, 0.05)) {
                 return true;
             }
             SchedulerSystem::yieldDelay(25);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         return !$this->probeTcpPortInUse($host, $port, 0.05);
     }
@@ -1027,7 +1336,8 @@ class SharedStateServiceManager
                 $port,
                 $tokenFileName,
                 $consumerCode,
-                $params
+                $params,
+                $role,
             );
         } catch (\Throwable) {
             return false;
@@ -1055,7 +1365,8 @@ class SharedStateServiceManager
             return SharedStateProtocolProbe::pingWithTokenBasename(
                 (string) $definition['host'],
                 (int) $definition['port'],
-                $tokenFileName
+                $tokenFileName,
+                (string) $definition['role'],
             );
         } catch (\Throwable) {
             return false;
@@ -1550,18 +1861,14 @@ class SharedStateServiceManager
      */
     protected function readRuntimeFile(string $role): array
     {
+        $role = $this->normalizeRoleName($role);
         $path = $this->getRuntimeFilePath($role);
-        if (!\is_file($path)) {
-            return [];
-        }
-
-        $raw = @\file_get_contents($path);
-        if ($raw === false || $raw === '') {
-            return [];
-        }
-
-        $data = \json_decode($raw, true);
-
+        $data = ServerInstanceManager::readValidatedJsonStatic(
+            $path,
+            self::runtimeRecoveryValidator($role),
+            'WLS shared-state ' . $this->toShortRole($role) . ' runtime',
+            self::MAX_RUNTIME_FILE_BYTES,
+        );
         return \is_array($data) ? $data : [];
     }
 
@@ -1570,8 +1877,11 @@ class SharedStateServiceManager
      */
     protected function writeRuntimeFile(string $role, array $runtime): void
     {
+        $role = $this->normalizeRoleName($role);
         $path = $this->getRuntimeFilePath($role);
         $payload = [
+            'schema' => self::RUNTIME_SCHEMA,
+            'role' => $role,
             'host' => (string) ($runtime['host'] ?? '127.0.0.1'),
             'port' => (int) ($runtime['port'] ?? $this->defaultPortForRole($role)),
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $this->defaultTokenForRole($role)),
@@ -1588,18 +1898,162 @@ class SharedStateServiceManager
             'consumer_count' => (int) ($runtime['consumer_count'] ?? 0),
             'shutdown_due_at' => $runtime['shutdown_due_at'] ?? null,
         ];
-
-        if (!ServerInstanceManager::atomicWriteJsonStatic($path, $payload)) {
+        foreach ([
+            'lifecycle_schema',
+            'lifecycle_generation',
+            'lifecycle_identity_digest',
+        ] as $field) {
+            if (\array_key_exists($field, $runtime)) {
+                $payload[$field] = $runtime[$field];
+            }
+        }
+        if (!ServerInstanceManager::updateValidatedJsonFileAtomically(
+            $path,
+            static function (array $previous) use ($role, $payload): array {
+                $boundPayload = SharedStateServiceRegistry::bindLifecycleGeneration(
+                    $role,
+                    $payload,
+                    $previous,
+                );
+                if (!SharedStateServiceRegistry::hasExactLifecycleBinding(
+                    $role,
+                    $boundPayload,
+                )) {
+                    throw new \RuntimeException(
+                        'Unable to bind the shared-state runtime to a complete lifecycle identity.'
+                    );
+                }
+                return $boundPayload;
+            },
+            self::runtimeRecoveryValidator($role),
+            'WLS shared-state ' . $this->toShortRole($role) . ' runtime',
+            self::MAX_RUNTIME_FILE_BYTES,
+        )) {
             throw new \RuntimeException('Unable to persist shared-state runtime file.');
         }
     }
 
     protected function removeRuntimeFile(string $role): void
     {
-        $path = $this->getRuntimeFilePath($role);
-        if (\is_file($path)) {
-            @\unlink($path);
+        $role = $this->normalizeRoleName($role);
+        $this->recoverRuntimeFileForMutation($role);
+        $selected = $this->readRuntimeFile($role);
+        if ($selected === []) {
+            return;
         }
+        $generation = (int)($selected['lifecycle_generation'] ?? 0);
+        $digest = (string)($selected['lifecycle_identity_digest'] ?? '');
+        if (!$this->removeRuntimeFileIfGeneration($role, $generation, $digest)) {
+            throw new \RuntimeException(
+                'Shared-state runtime generation changed before removal.'
+            );
+        }
+    }
+
+    protected function removeRuntimeFileIfGeneration(
+        string $role,
+        int $expectedGeneration,
+        string $expectedIdentityDigest,
+    ): bool {
+        $role = $this->normalizeRoleName($role);
+        if ($expectedGeneration < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedIdentityDigest) !== 1
+        ) {
+            return false;
+        }
+        return ServerInstanceManager::removeValidatedJsonFileIf(
+            $this->getRuntimeFilePath($role),
+            static fn(array $data): bool =>
+                (int)($data['lifecycle_generation'] ?? 0) === $expectedGeneration
+                && \hash_equals(
+                    (string)($data['lifecycle_identity_digest'] ?? ''),
+                    $expectedIdentityDigest,
+                ),
+            self::runtimeRecoveryValidator($role),
+            'WLS shared-state ' . $this->toShortRole($role) . ' runtime',
+            self::MAX_RUNTIME_FILE_BYTES,
+        );
+    }
+
+    /**
+     * Recover a unique committed backup before a lifecycle mutation performs
+     * any read. Read-only status paths deliberately remain observation-only.
+     */
+    protected function recoverRuntimeFileForMutation(string $role): void
+    {
+        $role = $this->normalizeRoleName($role);
+        if (!ServerInstanceManager::updateValidatedJsonFileAtomically(
+            $this->getRuntimeFilePath($role),
+            static fn(array $current): array => $current,
+            self::runtimeRecoveryValidator($role),
+            'WLS shared-state ' . $this->toShortRole($role) . ' runtime',
+            self::MAX_RUNTIME_FILE_BYTES,
+        )) {
+            throw new \RuntimeException(
+                'Unable to recover shared-state runtime before lifecycle mutation.'
+            );
+        }
+    }
+
+    /** @return \Closure(string):void */
+    private static function runtimeRecoveryValidator(string $expectedRole): \Closure
+    {
+        return static function (string $raw) use ($expectedRole): void {
+            if ($raw === '' || \strlen($raw) > self::MAX_RUNTIME_FILE_BYTES) {
+                throw new \RuntimeException(
+                    'WLS shared-state runtime size is invalid.'
+                );
+            }
+            $data = \json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            if (!\is_array($data)) {
+                throw new \RuntimeException(
+                    'WLS shared-state runtime is not a JSON object.'
+                );
+            }
+            $schema = (string)($data['schema'] ?? '');
+            if ($schema !== '' && !\hash_equals(self::RUNTIME_SCHEMA, $schema)) {
+                throw new \RuntimeException(
+                    'WLS shared-state runtime schema is invalid.'
+                );
+            }
+            $recordRole = \trim((string)($data['role'] ?? $expectedRole));
+            $host = \trim((string)($data['host'] ?? ''));
+            $port = (int)($data['port'] ?? 0);
+            $pid = (int)($data['pid'] ?? 0);
+            $token = \trim((string)($data['token_file_name'] ?? ''));
+            if (!\hash_equals($expectedRole, $recordRole)
+                || $host === ''
+                || $port < 1
+                || $port > 65535
+                || $pid < 0
+                || $token === ''
+                || $token === '.'
+                || $token === '..'
+                || \str_contains($token, "\0")
+                || \strlen($token) > 255
+                || !\hash_equals(
+                    \basename(\str_replace('\\', '/', $token)),
+                    $token,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'WLS shared-state runtime identity fields are invalid.'
+                );
+            }
+            $hasBinding = \array_key_exists('lifecycle_schema', $data)
+                || \array_key_exists('lifecycle_generation', $data)
+                || \array_key_exists('lifecycle_identity_digest', $data);
+            if (($schema !== '' || $hasBinding)
+                && !SharedStateServiceRegistry::hasExactLifecycleBinding(
+                    $expectedRole,
+                    $data,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'WLS shared-state runtime lifecycle binding is invalid.'
+                );
+            }
+        };
     }
 
     protected function getRuntimeFilePath(string $role): string
@@ -1636,6 +2090,302 @@ class SharedStateServiceManager
     }
 
     /**
+     * @template TResult
+     * @param list<string> $roles
+     * @param \Closure():TResult $callback
+     * @param float|null $waitTimeoutSeconds Null uses the lifecycle default.
+     * @return TResult
+     */
+    private function withRoleLifecycleLocks(
+        array $roles,
+        \Closure $callback,
+        ?float $waitTimeoutSeconds = null,
+    ): mixed {
+        $normalized = [];
+        foreach ($roles as $role) {
+            $role = $this->normalizeRoleName($role);
+            $normalized[$role] = $role;
+        }
+        \ksort($normalized, SORT_STRING);
+        return $this->acquireRoleLifecycleLocks(
+            \array_values($normalized),
+            0,
+            $callback,
+            $waitTimeoutSeconds ?? $this->lifecycleLockWaitSeconds(),
+        );
+    }
+
+    /**
+     * @template TResult
+     * @param list<string> $roles
+     * @param \Closure():TResult $callback
+     * @return TResult
+     */
+    private function acquireRoleLifecycleLocks(
+        array $roles,
+        int $offset,
+        \Closure $callback,
+        float $waitTimeoutSeconds,
+    ): mixed {
+        if (!isset($roles[$offset])) {
+            return $callback();
+        }
+        $path = $this->getRoleLifecycleLockPath($roles[$offset]);
+        $directory = \dirname($path);
+        if (!\is_dir($directory)
+            && !@\mkdir($directory, 0755, true)
+            && !\is_dir($directory)
+        ) {
+            throw new \RuntimeException(
+                'Unable to create the WLS shared-state lifecycle directory.'
+            );
+        }
+        $status = @\lstat($directory);
+        if (!\is_array($status)
+            || \is_link($directory)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'WLS shared-state lifecycle directory is unsafe.'
+            );
+        }
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $path,
+            fn(): mixed => $this->acquireRoleLifecycleLocks(
+                $roles,
+                $offset + 1,
+                $callback,
+                $waitTimeoutSeconds,
+            ),
+            waitTimeoutSeconds: $waitTimeoutSeconds,
+        );
+    }
+
+    protected function getRoleLifecycleLockPath(string $role): string
+    {
+        $shortRole = $this->toShortRole($this->normalizeRoleName($role));
+        return Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'shared'
+            . DIRECTORY_SEPARATOR
+            . SharedStateRuntimeScope::scopeDefaultFileName(
+                $shortRole . '.lifecycle.lock',
+            );
+    }
+
+    protected function lifecycleLockWaitSeconds(): float
+    {
+        return self::DEFAULT_LIFECYCLE_LOCK_WAIT_SECONDS;
+    }
+
+    /**
+     * Select and, for legacy/incomplete files, publish one exact lifecycle
+     * generation before a destructive operation authenticates the sidecar.
+     * The caller must already hold the stable per-role lifecycle lock.
+     *
+     * @return array<string,mixed>
+     */
+    private function selectLifecycleGeneration(
+        string $role,
+        array $runtime,
+        SharedStateServiceRegistry $registry,
+    ): array {
+        $role = $this->normalizeRoleName($role);
+        $record = $registry->getRecord($role);
+        $recordBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $record,
+        );
+        $runtimeBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $runtime,
+        );
+        $authority = self::highestLifecycleAuthority($role, $record, $runtime);
+        if ($recordBound
+            && $runtimeBound
+            && (int)($record['lifecycle_generation'] ?? 0)
+                === (int)($runtime['lifecycle_generation'] ?? 0)
+        ) {
+            $selected = \array_merge($runtime, $record);
+            foreach (self::LIFECYCLE_IDENTITY_FIELDS as $field) {
+                if (\array_key_exists($field, $record)) {
+                    $selected[$field] = $record[$field];
+                } else {
+                    unset($selected[$field]);
+                }
+            }
+            $selected['role'] = $role;
+            return $selected;
+        }
+
+        $selected = $authority === $runtime
+            ? \array_merge($record, $runtime)
+            : \array_merge($runtime, $record);
+        if ($authority !== []) {
+            foreach (self::LIFECYCLE_IDENTITY_FIELDS as $field) {
+                if (\array_key_exists($field, $authority)) {
+                    $selected[$field] = $authority[$field];
+                } else {
+                    unset($selected[$field]);
+                }
+            }
+        }
+        $selected['role'] = $role;
+        $selected = SharedStateServiceRegistry::bindLifecycleGeneration(
+            $role,
+            $selected,
+            $authority,
+        );
+        if (SharedStateServiceRegistry::lifecycleIdentityDigest(
+            $role,
+            $selected,
+        ) === '') {
+            return $selected;
+        }
+
+        $published = $this->publishRuntimeRecord($role, $selected, $registry);
+        if ($published !== []) {
+            $selected = \array_merge($selected, $published);
+        }
+        if (SharedStateServiceRegistry::hasExactLifecycleBinding($role, $selected)) {
+            $this->writeRuntimeFile($role, $selected);
+        }
+        return $selected;
+    }
+
+    /**
+     * Choose one complete generation/identity tuple. Equal generations are a
+     * single authority only when their canonical identity digests agree.
+     *
+     * @param array<string,mixed> $record
+     * @param array<string,mixed> $runtime
+     * @return array<string,mixed>
+     */
+    private static function highestLifecycleAuthority(
+        string $role,
+        array $record,
+        array $runtime,
+    ): array {
+        $recordBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $record,
+        );
+        $runtimeBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $runtime,
+        );
+        if ($recordBound && $runtimeBound) {
+            $recordGeneration = (int)($record['lifecycle_generation'] ?? 0);
+            $runtimeGeneration = (int)($runtime['lifecycle_generation'] ?? 0);
+            if ($recordGeneration === $runtimeGeneration
+                && !\hash_equals(
+                    (string)($record['lifecycle_identity_digest'] ?? ''),
+                    (string)($runtime['lifecycle_identity_digest'] ?? ''),
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Conflicting WLS shared-state lifecycle identities claim the same generation.'
+                );
+            }
+            return $runtimeGeneration > $recordGeneration ? $runtime : $record;
+        }
+        if ($recordBound) {
+            return $record;
+        }
+        return $runtimeBound ? $runtime : [];
+    }
+
+    /**
+     * Status and peek paths may combine observational metadata only when both
+     * documents authenticate the same lifecycle tuple. A lower generation is
+     * never allowed to fill fields that are absent from the higher authority.
+     *
+     * @param array<string,mixed> $runtime
+     * @param array<string,mixed> $record
+     * @return array<string,mixed>
+     */
+    private static function mergeLifecycleStateAuthority(
+        string $role,
+        array $runtime,
+        array $record,
+    ): array {
+        $runtimeBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $runtime,
+        );
+        $recordBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $record,
+        );
+        $authority = self::highestLifecycleAuthority($role, $record, $runtime);
+        if ($authority === []) {
+            return $runtime !== [] ? $runtime : $record;
+        }
+        if (!$runtimeBound || !$recordBound) {
+            return $authority;
+        }
+        $sameGeneration = (int)($runtime['lifecycle_generation'] ?? 0)
+            === (int)($record['lifecycle_generation'] ?? 0);
+        $sameIdentity = \hash_equals(
+            (string)($runtime['lifecycle_identity_digest'] ?? ''),
+            (string)($record['lifecycle_identity_digest'] ?? ''),
+        );
+        if (!$sameGeneration || !$sameIdentity) {
+            return $authority;
+        }
+
+        $selected = \array_merge($runtime, $record);
+        foreach (self::LIFECYCLE_IDENTITY_FIELDS as $field) {
+            if (\array_key_exists($field, $authority)) {
+                $selected[$field] = $authority[$field];
+            } else {
+                unset($selected[$field]);
+            }
+        }
+        return $selected;
+    }
+
+    /**
+     * Delete only the exact generation selected before shutdown. A compliant
+     * replacement cannot enter while the caller holds the role lock; CAS also
+     * protects against an out-of-band writer that ignores that lock.
+     *
+     * @param array<string,mixed> $selected
+     */
+    private function removeSelectedLifecycleGeneration(
+        string $role,
+        array $selected,
+        SharedStateServiceRegistry $registry,
+    ): void {
+        $generation = (int)($selected['lifecycle_generation'] ?? 0);
+        $digest = (string)($selected['lifecycle_identity_digest'] ?? '');
+        if ($generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+        ) {
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] refusing unbound shared-state cleanup: role='
+                . $role
+            );
+            return;
+        }
+        $registryRemoved = $registry->removeRecordIfGeneration(
+            $role,
+            $generation,
+            $digest,
+        );
+        if (!$registryRemoved && $registry->getRecord($role) !== []) {
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] retained replacement registry generation: role='
+                . $role
+            );
+        }
+        if (!$this->removeRuntimeFileIfGeneration($role, $generation, $digest)) {
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] retained replacement runtime generation: role='
+                . $role
+            );
+        }
+    }
+
+    /**
      * @param array<string, mixed> $runtime
      * @return array<string, mixed>
      */
@@ -1644,11 +2394,35 @@ class SharedStateServiceManager
         $role = $this->normalizeRoleName($role);
 
         $registry = $this->createRegistry();
+        $previousRuntime = $this->readRuntimeFile($role);
+        $authority = self::highestLifecycleAuthority(
+            $role,
+            $registry->getRecord($role),
+            $previousRuntime,
+        );
+        $candidateBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $runtime,
+        );
+        $runtimeAuthorityBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $previousRuntime,
+        );
+        if ($candidateBound || $runtimeAuthorityBound) {
+            $runtime = SharedStateServiceRegistry::bindLifecycleGeneration(
+                $role,
+                $runtime,
+                $authority,
+            );
+        }
+        $publishedRecord = $this->publishRuntimeRecord($role, $runtime, $registry);
+        if ($publishedRecord !== []) {
+            $runtime = \array_merge($runtime, $publishedRecord);
+        }
         if ($this->shouldTrackConsumer($requesterInstanceName)) {
             $registry->touchConsumer($role, $requesterInstanceName);
         }
 
-        $this->publishRuntimeRecord($role, $runtime, $registry);
         $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $runtime, $registry);
         if ($runtime !== []) {
             $this->ensureSharedProcessLogVisible($runtime, $requesterInstanceName);
@@ -1688,29 +2462,7 @@ class SharedStateServiceManager
         $registry ??= $this->createRegistry();
         $record = $registry->getRecord($role);
         $consumers = $registry->getConsumers($role);
-
-        foreach ([
-            'role',
-            'host',
-            'port',
-            'token_file_name',
-            'pid',
-            'started_at',
-            'healthy_at',
-            'process_name',
-            'instance_name',
-            'service_instance_name',
-            'shared_service',
-        ] as $key) {
-            if (!\array_key_exists($key, $record)) {
-                continue;
-            }
-            $current = $runtime[$key] ?? null;
-            $missing = $current === null || $current === '' || ($key === 'pid' && (int) $current <= 0);
-            if ($missing) {
-                $runtime[$key] = $record[$key];
-            }
-        }
+        $runtime = self::mergeLifecycleStateAuthority($role, $runtime, $record);
 
         $runtime['registered'] = $record !== [];
         $runtime['consumer_count'] = \count($consumers);
@@ -1889,12 +2641,12 @@ class SharedStateServiceManager
         string $role,
         array $runtime,
         SharedStateServiceRegistry $registry
-    ): void {
+    ): array {
         $role = $this->normalizeRoleName($role);
         $pid = (int) ($runtime['pid'] ?? 0);
         $port = (int) ($runtime['port'] ?? 0);
         if ($pid <= 0 || $port <= 0) {
-            return;
+            return [];
         }
 
         $recordFields = [];
@@ -1910,6 +2662,9 @@ class SharedStateServiceManager
             'instance_name',
             'service_instance_name',
             'shared_service',
+            'lifecycle_schema',
+            'lifecycle_generation',
+            'lifecycle_identity_digest',
         ] as $key) {
             if (!\array_key_exists($key, $runtime)) {
                 continue;
@@ -1925,12 +2680,12 @@ class SharedStateServiceManager
         }
 
         if ($recordFields === []) {
-            return;
+            return [];
         }
         $recordFields['role'] = $role;
         $recordFields['shared_service'] = true;
 
-        $registry->updateRecord(
+        return $registry->updateRecord(
             $role,
             static function (array $record) use ($recordFields): array {
                 $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
@@ -1993,6 +2748,7 @@ class SharedStateServiceManager
         ?SharedStateServiceRegistry $registry = null
     ): bool {
         $role = $this->normalizeRoleName($role);
+        $this->recoverRuntimeFileForMutation($role);
         $registry ??= $this->createRegistry();
         if ($registry->getConsumers($role) !== []) {
             return false;
@@ -2002,15 +2758,22 @@ class SharedStateServiceManager
         $config = \is_array($options['config'] ?? null) ? $options['config'] : [];
         $definition = $this->buildRoleDefinition($role, 'system', $config, $envConfig);
         $runtime = \is_array($options['runtime'] ?? null) ? $options['runtime'] : $this->readRuntimeFile($role);
+        $runtime = $this->selectLifecycleGeneration($role, $runtime, $registry);
 
         $stopped = false;
-        if ($runtime !== [] || $this->isPortOccupied((int) $definition['port'])) {
+        $serviceObserved = $runtime !== [] || $this->isPortOccupied((int) $definition['port']);
+        if ($serviceObserved) {
             $stopped = $this->forceStopReusedService($definition, $runtime);
-        } else {
-            $this->removeRuntimeFile($role);
         }
 
-        $registry->removeRecord($role);
+        if ($stopped || !$serviceObserved) {
+            $this->removeSelectedLifecycleGeneration($role, $runtime, $registry);
+        } else {
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] retaining registry record after failed stop: '
+                . 'role=' . $role . ', port=' . (int)$definition['port']
+            );
+        }
 
         return $stopped;
     }

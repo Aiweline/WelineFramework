@@ -16,10 +16,10 @@ use Weline\Server\Service\ServerInstanceManager;
 final class GatewayProjectEndpointReader
 {
     /** Hard ceiling for any directory leaf (including .json.lock / .tmp sidecars). */
-    private const MAX_RAW_DIRECTORY_ENTRIES = 4096;
+    public const MAX_RAW_DIRECTORY_ENTRIES = 4096;
     /** Semantic ceiling for endpoint JSON files only. */
-    private const MAX_ENDPOINT_ENTRIES = 256;
-    private const MAX_ENDPOINT_BYTES = 2_097_152;
+    public const MAX_ENDPOINT_ENTRIES = 256;
+    public const MAX_ENDPOINT_BYTES = 2_097_152;
 
     public function __construct(
         private readonly ServerInstanceManager $instances = new ServerInstanceManager(),
@@ -27,8 +27,9 @@ final class GatewayProjectEndpointReader
     }
 
     /** @return array<string,array<string,mixed>> */
-    public function all(): array
+    public function all(?float $deadlineMonotonic = null): array
     {
+        self::assertDeadline($deadlineMonotonic);
         $directory = $this->instances->getInstanceDir();
         $status = @\lstat($directory);
         if (!\is_array($status)) {
@@ -46,6 +47,42 @@ final class GatewayProjectEndpointReader
                 'Gateway project endpoint directory is linked or special.'
             );
         }
+        $waitTimeout = 300.0;
+        if ($deadlineMonotonic !== null) {
+            $waitTimeout = \min(
+                $waitTimeout,
+                $deadlineMonotonic - (\hrtime(true) / 1_000_000_000),
+            );
+            if ($waitTimeout <= 0.0) {
+                self::assertDeadline($deadlineMonotonic);
+            }
+        }
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            \rtrim($directory, '/\\') . DIRECTORY_SEPARATOR
+                . ServerInstanceManager::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
+            fn (): array => $this->readCompleteSnapshotLocked(
+                $directory,
+                $deadlineMonotonic,
+            ),
+            waitTimeoutSeconds: $waitTimeout,
+        );
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    private function readCompleteSnapshotLocked(
+        string $directory,
+        ?float $deadlineMonotonic,
+    ): array {
+        self::assertDeadline($deadlineMonotonic);
+        $lockedStatus = @\lstat($directory);
+        if (!\is_array($lockedStatus)
+            || \is_link($directory)
+            || ((((int)($lockedStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'Gateway project endpoint directory changed during discovery.'
+            );
+        }
         $handle = @\opendir($directory);
         if (!\is_resource($handle)) {
             throw new \RuntimeException('Unable to enumerate gateway project endpoints.');
@@ -55,6 +92,7 @@ final class GatewayProjectEndpointReader
         $endpointEntries = 0;
         try {
             while (($leaf = @\readdir($handle)) !== false) {
+                self::assertDeadline($deadlineMonotonic);
                 if ($leaf === '.' || $leaf === '..') {
                     continue;
                 }
@@ -63,8 +101,11 @@ final class GatewayProjectEndpointReader
                         'Gateway project endpoint directory exceeds its fixed raw entry limit.'
                     );
                 }
-                // Instance managers keep .json.lock / .tmp.* sidecars beside endpoints;
-                // they must not consume the semantic endpoint budget.
+                // Instance managers keep .json.lock sidecars beside endpoints;
+                // they must not consume the semantic endpoint budget. Temporary
+                // files do not end in .json and are filtered below. Matching a
+                // generic ".tmp." substring would hide valid instance IDs such
+                // as "primary.tmp.worker" from the complete project view.
                 if (self::isSidecarLeaf($leaf)) {
                     continue;
                 }
@@ -96,7 +137,9 @@ final class GatewayProjectEndpointReader
         \ksort($names, SORT_STRING);
         $endpoints = [];
         foreach (\array_keys($names) as $name) {
+            self::assertDeadline($deadlineMonotonic);
             $endpoint = $this->read($name);
+            self::assertDeadline($deadlineMonotonic);
             if (!\is_array($endpoint)) {
                 throw new \RuntimeException(
                     'Gateway project endpoint disappeared during complete discovery.'
@@ -104,7 +147,22 @@ final class GatewayProjectEndpointReader
             }
             $endpoints[$name] = $endpoint;
         }
+        self::assertDeadline($deadlineMonotonic);
         return $endpoints;
+    }
+
+    private static function assertDeadline(?float $deadlineMonotonic): void
+    {
+        if ($deadlineMonotonic === null) {
+            return;
+        }
+        if (!\is_finite($deadlineMonotonic)
+            || (\hrtime(true) / 1_000_000_000) >= $deadlineMonotonic
+        ) {
+            throw new \RuntimeException(
+                'Gateway project endpoint discovery deadline was exhausted.',
+            );
+        }
     }
 
     /** @return array<string,mixed>|null */
@@ -143,7 +201,6 @@ final class GatewayProjectEndpointReader
 
     private static function isSidecarLeaf(string $leaf): bool
     {
-        return \str_ends_with($leaf, '.json.lock')
-            || \str_contains($leaf, '.tmp.');
+        return \str_ends_with($leaf, '.json.lock');
     }
 }

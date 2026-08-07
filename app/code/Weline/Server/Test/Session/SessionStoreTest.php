@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Session;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
 use Weline\Server\Session\Server\SessionStore;
 
 /**
@@ -287,6 +288,423 @@ class SessionStoreTest extends TestCase
         $this->assertEquals('persist_user', $newStore->get($sessionId, 'name'));
     }
 
+    public function testSecondPersistenceKeepsUnchangedSessionsAcrossRestart(): void
+    {
+        $this->store->set('changed-session', 'version', 1);
+        $this->store->set('unchanged-session-a', 'value', 'alpha');
+        $this->store->set('unchanged-session-b', 'value', 'beta');
+        $this->assertTrue($this->store->forcePersist());
+
+        $this->store->set('changed-session', 'version', 2);
+        $this->assertTrue($this->store->forcePersist());
+
+        $restarted = new SessionStore([
+            'persist_path' => $this->testPersistPath,
+        ]);
+        $this->assertTrue($restarted->loadFromFile());
+        $this->assertSame(2, $restarted->get('changed-session', 'version'));
+        $this->assertSame('alpha', $restarted->get('unchanged-session-a', 'value'));
+        $this->assertSame('beta', $restarted->get('unchanged-session-b', 'value'));
+    }
+
+    public function testLoadCollectsLegacyCrashStagingAfterValidSnapshot(): void
+    {
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $target = $this->testPersistPath . 'wls_session_store.dat';
+        $legacyStaging = $target . '.tmp.1234.6a749c433c8aaf51160152';
+        $this->assertNotFalse(\file_put_contents($legacyStaging, 'interrupted'));
+
+        $restarted = new SessionStore([
+            'persist_path' => $this->testPersistPath,
+        ]);
+        $this->assertTrue($restarted->loadFromFile());
+        $this->assertSame('committed', $restarted->get('committed-session', 'value'));
+        $this->assertFileDoesNotExist($legacyStaging);
+    }
+
+    public function testDeletedSessionIsNotResurrectedByLaterSnapshot(): void
+    {
+        $this->store->set('kept-session', 'value', 'kept');
+        $this->store->set('deleted-session', 'value', 'deleted');
+        $this->assertTrue($this->store->forcePersist());
+        $this->assertTrue($this->store->destroy('deleted-session'));
+        $this->assertTrue($this->store->forcePersist());
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertTrue($restarted->loadFromFile());
+        $this->assertSame('kept', $restarted->get('kept-session', 'value'));
+        $this->assertFalse($restarted->exists('deleted-session'));
+    }
+
+    public function testPersistenceRefusesOversizedSnapshotWithoutReplacingCommittedTarget(): void
+    {
+        $store = new SessionStore([
+            'persist_path' => $this->testPersistPath,
+            'persist_max_bytes' => 1024,
+        ]);
+        $store->set('baseline-session', 'value', 'baseline');
+        $this->assertTrue($store->forcePersist());
+        $target = $this->persistTarget();
+        $baseline = \file_get_contents($target);
+        $this->assertIsString($baseline);
+
+        $store->set('oversized-session', 'value', \str_repeat('x', 4096));
+        $this->assertFalse($store->forcePersist());
+        $this->assertSame($baseline, \file_get_contents($target));
+    }
+
+    public function testLoadRestoresValidLegacyFullSnapshotWhenTargetIsMissing(): void
+    {
+        $target = $this->persistTarget();
+        $legacyStaging = $target . '.tmp.4321.6a749c433c8aa151160153';
+        $this->assertNotFalse(\file_put_contents(
+            $legacyStaging,
+            $this->snapshotRaw([
+                'legacy-session' => $this->snapshotEntry(['value' => 'restored']),
+            ]),
+        ));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertTrue($restarted->loadFromFile());
+        $this->assertSame('restored', $restarted->get('legacy-session', 'value'));
+        $this->assertFileExists($target);
+        $this->assertFileDoesNotExist($legacyStaging);
+    }
+
+    public function testLoadPreservesLegacyIncrementalStagingWhenTargetIsMissing(): void
+    {
+        $legacyStaging = $this->persistTarget() . '.tmp.4321.6a749c433c8aa151160154';
+        $this->assertNotFalse(\file_put_contents($legacyStaging, \serialize([
+            'incremental' => true,
+            'data' => [
+                'partial-session' => $this->snapshotEntry(['value' => 'partial']),
+            ],
+        ])));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFileExists($legacyStaging);
+        $this->assertFileDoesNotExist($this->persistTarget());
+    }
+
+    public function testLoadRestoresAtomicBackupWhenTargetIsMissing(): void
+    {
+        $backup = $this->persistTarget() . '.wls-backup-0123456789abcdef';
+        $this->assertNotFalse(\file_put_contents(
+            $backup,
+            $this->snapshotRaw([
+                'backup-session' => $this->snapshotEntry(['value' => 'backup']),
+            ]),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            $this->assertTrue(\chmod($backup, 0600));
+        }
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertTrue($restarted->loadFromFile());
+        $this->assertSame('backup', $restarted->get('backup-session', 'value'));
+        $this->assertFileExists($this->persistTarget());
+        $this->assertFileDoesNotExist($backup);
+    }
+
+    public function testLoadDiscardsAtomicStagingWhenNoTargetWasCommitted(): void
+    {
+        $staging = $this->persistTarget() . '.tmp-0123456789abcdef01234567';
+        $this->assertNotFalse(\file_put_contents($staging, 'uncommitted'));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFileDoesNotExist($staging);
+        $this->assertFileDoesNotExist($this->persistTarget());
+    }
+
+    public function testLoadCollectsAtomicBackupAndStagingAfterValidSnapshot(): void
+    {
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $backup = $this->persistTarget() . '.wls-backup-1123456789abcdef';
+        $staging = $this->persistTarget() . '.tmp-5123456789abcdef01234567';
+        $this->assertNotFalse(\file_put_contents($backup, 'retained-backup'));
+        $this->assertNotFalse(\file_put_contents($staging, 'retained-staging'));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertTrue($restarted->loadFromFile());
+        $this->assertSame('committed', $restarted->get('committed-session', 'value'));
+        $this->assertFileDoesNotExist($backup);
+        $this->assertFileDoesNotExist($staging);
+    }
+
+    public function testCorruptTargetPreservesAllRecoveryEvidence(): void
+    {
+        $target = $this->persistTarget();
+        $legacy = $target . '.tmp.5432.6a749c433c8aa151160155';
+        $atomic = $target . '.tmp-1123456789abcdef01234567';
+        $this->assertNotFalse(\file_put_contents($target, 'corrupt'));
+        $this->assertNotFalse(\file_put_contents($legacy, 'legacy'));
+        $this->assertNotFalse(\file_put_contents($atomic, 'atomic'));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFileExists($target);
+        $this->assertFileExists($legacy);
+        $this->assertFileExists($atomic);
+    }
+
+    public function testMalformedReservedArtifactFailsClosedWithoutDeletingEvidence(): void
+    {
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $malformed = $this->persistTarget() . '.tmp-not-a-token';
+        $this->assertNotFalse(\file_put_contents($malformed, 'reserved'));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFileExists($malformed);
+        $this->assertFileExists($this->persistTarget());
+    }
+
+    public function testRecoveryCaseAliasFailsClosedWithoutDeletingEvidence(): void
+    {
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $caseAlias = $this->persistTarget() . '.TMP-0123456789abcdef01234567';
+        $this->assertNotFalse(\file_put_contents($caseAlias, 'reserved'));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFileExists($caseAlias);
+    }
+
+    public function testRecoverySymlinkFailsClosedWithoutDeletingEvidence(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('Symlink creation is not reliably available on Windows CI.');
+        }
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $peer = $this->testPersistPath . 'symlink-peer';
+        $artifact = $this->persistTarget() . '.tmp-2123456789abcdef01234567';
+        $this->assertNotFalse(\file_put_contents($peer, 'peer'));
+        $this->assertTrue(\symlink($peer, $artifact));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertTrue(\is_link($artifact));
+        $this->assertFileExists($peer);
+    }
+
+    public function testRecoveryHardLinkFailsClosedWithoutDeletingEvidence(): void
+    {
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $peer = $this->testPersistPath . 'hardlink-peer';
+        $artifact = $this->persistTarget() . '.tmp-3123456789abcdef01234567';
+        $this->assertNotFalse(\file_put_contents($peer, 'peer'));
+        if (!@\link($peer, $artifact)) {
+            $this->markTestSkipped('Hard-link creation is unavailable on this filesystem.');
+        }
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFileExists($artifact);
+        $this->assertFileExists($peer);
+    }
+
+    public function testRecoverySpecialFileFailsClosedWithoutDeletingEvidence(): void
+    {
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $artifact = $this->persistTarget() . '.tmp-4123456789abcdef01234567';
+        $this->assertTrue(\mkdir($artifact));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertDirectoryExists($artifact);
+    }
+
+    public function testRecoveryArtifactQuotaFailsBeforeAnyDeletion(): void
+    {
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $artifacts = [];
+        for ($index = 0; $index < 9; ++$index) {
+            $artifact = $this->persistTarget()
+                . '.tmp.600'
+                . $index
+                . '.6a749c433c8aa1511601'
+                . \str_pad((string)$index, 2, '0', STR_PAD_LEFT);
+            $this->assertNotFalse(\file_put_contents($artifact, 'artifact-' . $index));
+            $artifacts[] = $artifact;
+        }
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        foreach ($artifacts as $artifact) {
+            $this->assertFileExists($artifact);
+        }
+    }
+
+    public function testRecoveryDirectoryEntryQuotaFailsBeforeAnyDeletion(): void
+    {
+        $this->store->set('committed-session', 'value', 'committed');
+        $this->assertTrue($this->store->forcePersist());
+        $artifact = $this->persistTarget() . '.tmp.7123.6a749c433c8aa151160156';
+        $this->assertNotFalse(\file_put_contents($artifact, 'artifact'));
+        for ($index = 0; $index < 40; ++$index) {
+            $this->assertNotFalse(\file_put_contents(
+                $this->testPersistPath . 'unrelated-' . $index,
+                '',
+            ));
+        }
+
+        $restarted = new SessionStore([
+            'persist_path' => $this->testPersistPath,
+            'persist_recovery_max_directory_entries' => 32,
+        ]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFileExists($artifact);
+    }
+
+    public function testPersistenceLockDeadlineKeepsCommittedSnapshotUnchanged(): void
+    {
+        $store = new SessionStore([
+            'persist_path' => $this->testPersistPath,
+            'persist_lock_timeout' => 0.05,
+        ]);
+        $store->set('baseline-session', 'value', 'baseline');
+        $this->assertTrue($store->forcePersist());
+        $target = $this->persistTarget();
+        $baseline = \file_get_contents($target);
+        $this->assertIsString($baseline);
+        $lockPath = $target . '.persist.lock';
+        $lock = VerifiedPersistentFileLock::acquire(
+            $lockPath,
+            1.0,
+            static fn (): array => ['purpose' => 'session-store-test-holder'],
+        );
+        $this->assertIsResource($lock);
+
+        try {
+            $store->set('contended-session', 'value', 'not-published');
+            $startedAt = \hrtime(true);
+            $this->assertFalse($store->forcePersist());
+            $elapsedSeconds = (\hrtime(true) - $startedAt) / 1_000_000_000;
+            $this->assertLessThan(0.5, $elapsedSeconds);
+            $this->assertSame($baseline, \file_get_contents($target));
+        } finally {
+            @\flock($lock, LOCK_UN);
+            @\fclose($lock);
+        }
+    }
+
+    public function testLoadRejectsStructurallyInvalidSnapshotWithoutPartialState(): void
+    {
+        $this->assertNotFalse(\file_put_contents($this->persistTarget(), \serialize([
+            'valid-session' => $this->snapshotEntry(['value' => 'must-not-load']),
+            'invalid-session' => ['data' => 'not-an-array', 'expire' => 0, 'atime' => \time()],
+        ])));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFalse($restarted->exists('valid-session'));
+        $this->assertFalse($restarted->exists('invalid-session'));
+    }
+
+    public function testLoadRejectsSnapshotAboveConfiguredSessionLimit(): void
+    {
+        $sessions = [];
+        for ($index = 0; $index < 3; ++$index) {
+            $sessions['session-' . $index] = $this->snapshotEntry(['index' => $index]);
+        }
+        $this->assertNotFalse(\file_put_contents($this->persistTarget(), $this->snapshotRaw($sessions)));
+
+        $restarted = new SessionStore([
+            'persist_path' => $this->testPersistPath,
+            'max_sessions' => 2,
+        ]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertSame([], $restarted->getAllSessionIds());
+    }
+
+    public function testLoadRejectsLinkedTarget(): void
+    {
+        $target = $this->persistTarget();
+        $this->assertNotFalse(\file_put_contents(
+            $target,
+            $this->snapshotRaw(['linked-session' => $this->snapshotEntry(['value' => 'linked'])]),
+        ));
+        $peer = $this->testPersistPath . 'target-hardlink-peer';
+        if (!@\link($target, $peer)) {
+            $this->markTestSkipped('Hard-link creation is unavailable on this filesystem.');
+        }
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFalse($restarted->exists('linked-session'));
+        $this->assertFileExists($target);
+        $this->assertFileExists($peer);
+    }
+
+    public function testLoadRejectsSymlinkTargetWithoutFollowingIt(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('Symlink creation is not reliably available on Windows CI.');
+        }
+        $target = $this->persistTarget();
+        $peer = $this->testPersistPath . 'target-symlink-peer';
+        $this->assertNotFalse(\file_put_contents(
+            $peer,
+            $this->snapshotRaw([
+                'symlink-session' => $this->snapshotEntry(['value' => 'must-not-load']),
+            ]),
+        ));
+        $this->assertTrue(\symlink($peer, $target));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFalse($restarted->exists('symlink-session'));
+        $this->assertTrue(\is_link($target));
+        $this->assertFileExists($peer);
+    }
+
+    public function testPersistenceRejectsSymlinkDirectoryWithoutWritingThroughIt(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('Symlink creation is not reliably available on Windows CI.');
+        }
+        $realDirectory = $this->testPersistPath . 'real-persist-directory';
+        $linkedDirectory = $this->testPersistPath . 'linked-persist-directory';
+        $this->assertTrue(\mkdir($realDirectory));
+        $this->assertTrue(\symlink($realDirectory, $linkedDirectory));
+        $store = new SessionStore([
+            'persist_path' => $linkedDirectory,
+            'persist_lock_timeout' => 0.05,
+        ]);
+        $store->set('blocked-session', 'value', 'blocked');
+
+        $this->assertFalse($store->forcePersist());
+        $this->assertFileDoesNotExist($realDirectory . '/wls_session_store.dat');
+        $this->assertFileDoesNotExist($realDirectory . '/wls_session_store.dat.persist.lock');
+    }
+
+    public function testLoadDoesNotReviveExpiredSnapshotEntry(): void
+    {
+        $this->assertNotFalse(\file_put_contents($this->persistTarget(), $this->snapshotRaw([
+            'expired-session' => [
+                'data' => ['value' => 'expired'],
+                'expire' => \time() - 10,
+                'atime' => \time() - 20,
+            ],
+            'live-session' => $this->snapshotEntry(['value' => 'live']),
+        ])));
+
+        $restarted = new SessionStore(['persist_path' => $this->testPersistPath]);
+        $this->assertTrue($restarted->loadFromFile());
+        $this->assertFalse($restarted->exists('expired-session'));
+        $this->assertSame('live', $restarted->get('live-session', 'value'));
+    }
+
     public function testPersistUsesCustomFileName(): void
     {
         $store = new SessionStore([
@@ -314,6 +732,81 @@ class SessionStoreTest extends TestCase
         $store->set('missing_dir_session', 'key', 'value');
         $this->assertTrue($store->forcePersist());
         $this->assertFileExists($missingDir . 'wls_session_store.dat');
+    }
+
+    public function testLegacySnapshotMigratesIntoDedicatedStateDirectoryOnce(): void
+    {
+        $stateDirectory = $this->testPersistPath . '.wls-state/';
+        $legacyTarget = $this->persistTarget();
+        $this->assertNotFalse(\file_put_contents($legacyTarget, $this->snapshotRaw([
+            'legacy-layout-session' => $this->snapshotEntry(['value' => 'migrated']),
+        ])));
+
+        $store = new SessionStore([
+            'persist_path' => $stateDirectory,
+            'legacy_persist_path' => $this->testPersistPath,
+        ]);
+        $this->assertTrue($store->loadFromFile());
+        $this->assertSame('migrated', $store->get('legacy-layout-session', 'value'));
+        $this->assertFileExists($stateDirectory . 'wls_session_store.dat');
+        $this->assertFileDoesNotExist($legacyTarget);
+        $markers = \glob($stateDirectory . '.legacy-retired-*') ?: [];
+        $this->assertCount(1, $markers);
+        $this->assertDirectoryExists($markers[0]);
+    }
+
+    public function testRetirementMarkerPreventsStaleLegacySnapshotResurrection(): void
+    {
+        $stateDirectory = $this->testPersistPath . '.wls-state/';
+        $legacyTarget = $this->persistTarget();
+        $this->assertNotFalse(\file_put_contents($legacyTarget, $this->snapshotRaw([
+            'legacy-layout-session' => $this->snapshotEntry(['value' => 'initial']),
+        ])));
+        $config = [
+            'persist_path' => $stateDirectory,
+            'legacy_persist_path' => $this->testPersistPath,
+        ];
+        $store = new SessionStore($config);
+        $this->assertTrue($store->loadFromFile());
+        $store->set('legacy-layout-session', 'value', 'new-generation');
+        $this->assertTrue($store->forcePersist());
+        $this->assertTrue(\unlink($stateDirectory . 'wls_session_store.dat'));
+        $this->assertNotFalse(\file_put_contents($legacyTarget, $this->snapshotRaw([
+            'legacy-layout-session' => $this->snapshotEntry(['value' => 'stale']),
+        ])));
+
+        $restarted = new SessionStore($config);
+        $this->assertFalse($restarted->loadFromFile());
+        $this->assertFalse($restarted->exists('legacy-layout-session'));
+        $this->assertFileExists($legacyTarget);
+    }
+
+    public function testDedicatedStateDirectoryIsNotBlockedByHighCardinalityLegacyDirectory(): void
+    {
+        for ($index = 0; $index < 40; ++$index) {
+            $this->assertNotFalse(\file_put_contents(
+                $this->testPersistPath . 'php-session-' . $index,
+                'session',
+            ));
+        }
+        $stateDirectory = $this->testPersistPath . '.wls-state/';
+        $store = new SessionStore([
+            'persist_path' => $stateDirectory,
+            'legacy_persist_path' => $this->testPersistPath,
+            'persist_recovery_max_directory_entries' => 16,
+        ]);
+        $store->set('low-cardinality-state', 'value', 'safe');
+
+        $this->assertTrue($store->forcePersist());
+        $this->assertFileExists($stateDirectory . 'wls_session_store.dat');
+    }
+
+    public function testRuntimeEntrypointSelectsDedicatedSessionStateDirectory(): void
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/bin/session_server.php');
+
+        $this->assertStringContainsString("'legacy_persist_path'", $source);
+        $this->assertStringContainsString("'.wls-state'", $source);
     }
 
     /**
@@ -348,9 +841,34 @@ class SessionStoreTest extends TestCase
             return;
         }
 
-        foreach ((array)\glob($path . '/*') as $childPath) {
-            $this->removePath($childPath);
+        foreach (new \FilesystemIterator($path, \FilesystemIterator::SKIP_DOTS) as $entry) {
+            /** @var \SplFileInfo $entry */
+            $this->removePath($entry->getPathname());
         }
         @\rmdir($path);
+    }
+
+    private function persistTarget(): string
+    {
+        return $this->testPersistPath . 'wls_session_store.dat';
+    }
+
+    /** @param array<string,array{data:array<array-key,mixed>,expire:int,atime:int}> $sessions */
+    private function snapshotRaw(array $sessions): string
+    {
+        return \serialize($sessions);
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array{data:array<string,mixed>,expire:int,atime:int}
+     */
+    private function snapshotEntry(array $data): array
+    {
+        return [
+            'data' => $data,
+            'expire' => \time() + 3600,
+            'atime' => \time(),
+        ];
     }
 }

@@ -672,7 +672,7 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
             return true;
         }
 
-        $deadline = $timeBudgetSec > 0.0 ? (\microtime(true) + $timeBudgetSec) : 0.0;
+        $deadline = $timeBudgetSec > 0.0 ? (ControlMessage::monotonicSeconds() + $timeBudgetSec) : 0.0;
         do {
             $written = $this->flushWriteBufferChunk($deadline);
             if ($written < 0) {
@@ -682,7 +682,7 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
             if ($written === 0) {
                 break;
             }
-        } while ($this->writeBuffer !== '' && $deadline > 0.0 && \microtime(true) < $deadline);
+        } while ($this->writeBuffer !== '' && $deadline > 0.0 && ControlMessage::monotonicSeconds() < $deadline);
 
         return $this->isConnected() && $this->writeBuffer === '';
     }
@@ -722,7 +722,7 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
         $write = [$socket];
         $except = [];
         if ($deadline > 0.0) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - ControlMessage::monotonicSeconds();
             if ($remaining <= 0.0) {
                 return 0;
             }
@@ -912,8 +912,11 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
             return false;
         }
 
-        $now = \microtime(true);
-        if (($now - $this->lastReconnectTime) < $this->reconnectInterval) {
+        $now = ControlMessage::monotonicSeconds();
+        if ($this->lastReconnectTime > 0.0
+            && $this->lastReconnectTime <= $now
+            && ($now - $this->lastReconnectTime) < $this->reconnectInterval
+        ) {
             return false;
         }
         $this->lastReconnectTime = $now;

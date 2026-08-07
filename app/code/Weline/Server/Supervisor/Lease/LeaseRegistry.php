@@ -5,6 +5,16 @@ namespace Weline\Server\Supervisor\Lease;
 
 final class LeaseRegistry
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    private static function wallClockSeconds(): float
+    {
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
+    }
+
     /**
      * @var array<string, SlotLease>
      */
@@ -33,7 +43,8 @@ final class LeaseRegistry
         string $leaseId = '',
         int $generation = 0
     ): SlotLease {
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
+        $wallNow = self::wallClockSeconds();
         if ($generation <= 0) {
             $generation = ($this->generations[$slotId] ?? 0) + 1;
         }
@@ -48,8 +59,10 @@ final class LeaseRegistry
             pid: $pid,
             port: $port,
             launchNonce: $launchNonce,
-            createdAt: $now,
-            updatedAt: $now,
+            createdAt: $wallNow,
+            updatedAt: $wallNow,
+            createdMonotonic: $now,
+            updatedMonotonic: $now,
         );
 
         $this->leases[$slotId] = $lease;

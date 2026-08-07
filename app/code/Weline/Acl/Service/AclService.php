@@ -9,6 +9,8 @@ use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Framework\App\Env;
+use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -125,10 +127,52 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         if ($t0 > 0) {
             RequestLifecycleTrace::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
         }
+        $entries = $this->dispatchRoleAclEntriesAfter($roleId, $entries);
         $state = self::requestState();
         $state['role_acl_entries'][$roleId] = $entries;
         self::storeRequestState($state);
         return $entries;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $entries
+     * @return list<array<string, mixed>>
+     */
+    private function dispatchRoleAclEntriesAfter(int $roleId, array $entries): array
+    {
+        $eventData = new DataObject([
+            'role_id' => $roleId,
+            'entries' => $entries,
+        ]);
+        try {
+            ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Acl::role_acl_entries_after', $eventData);
+        } catch (\Throwable) {
+            // fail-open to DB entries if event infra unavailable
+        }
+        $filtered = $eventData->getData('entries');
+
+        return \is_array($filtered) ? $filtered : $entries;
+    }
+
+    /**
+     * Observers may set allow_bypass=false (e.g. non-default website ceiling).
+     */
+    private function isSuperAdminBypassAllowed(int $roleId): bool
+    {
+        if ($roleId !== 1) {
+            return false;
+        }
+        $eventData = new DataObject([
+            'role_id' => $roleId,
+            'allow_bypass' => true,
+        ]);
+        try {
+            ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Acl::super_admin_bypass_check', $eventData);
+        } catch (\Throwable) {
+            return true;
+        }
+
+        return (bool)$eventData->getData('allow_bypass');
     }
 
     /**
@@ -141,8 +185,8 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         if ($roleId <= 0 || $routePath === '') {
             return false;
         }
-        // 超管角色（role_id=1）直接放行，由调用方决定是否需要额外约束
-        if ($roleId === 1) {
+        // 超管角色（role_id=1）默认站直接放行；非默认站由 observer 关闭 bypass，走授权包交集
+        if ($roleId === 1 && $this->isSuperAdminBypassAllowed($roleId)) {
             return true;
         }
         // 未定义 ACL 的路由不参与权限控制，视为白色 ACL
@@ -399,8 +443,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         if ($roleId <= 0) {
             return false;
         }
-        // 超管视为有权限
-        if ($roleId === 1) {
+        if ($roleId === 1 && $this->isSuperAdminBypassAllowed($roleId)) {
             return true;
         }
         $entries = $this->getRoleAclEntries($roleId);
@@ -415,7 +458,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         if ($roleId <= 0) {
             return false;
         }
-        if ($roleId === 1) {
+        if ($roleId === 1 && $this->isSuperAdminBypassAllowed($roleId)) {
             // 超管：若 ACL 表中存在任意 menus 类型资源，则认为具备菜单权限
             $anyMenus = $this->aclModel->clear()
                 ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
