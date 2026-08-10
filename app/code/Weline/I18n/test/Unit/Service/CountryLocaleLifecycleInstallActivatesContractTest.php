@@ -100,4 +100,44 @@ final class CountryLocaleLifecycleInstallActivatesContractTest extends TestCase
         self::assertStringContainsString("next.searchParams.delete('page')", $js);
         self::assertStringContainsString('isInstall', $js);
     }
+
+    public function testLifecycleInvalidatesLocaleCatalogCachesImmediately(): void
+    {
+        $source = (string)file_get_contents(
+            \BP . 'app/code/Weline/I18n/Service/CountryLocaleLifecycleService.php'
+        );
+
+        self::assertStringContainsString('private function invalidateLocaleCatalogCaches(): void', $source);
+        self::assertStringContainsString('private function syncLocalsStateForLocale(', $source);
+        self::assertStringContainsString('ActiveLocaleCodeProvider::class)->reset()', $source);
+        self::assertStringContainsString('LanguageSwitcher::clearProcessCaches()', $source);
+        self::assertStringContainsString('LanguageSelect::clearProcessCaches()', $source);
+        self::assertStringContainsString('Url::bumpWebsiteParserSitesVersion()', $source);
+
+        self::assertMatchesRegularExpression(
+            '/public function activateLocale\(string \$localeCode\): array\s*\{[\s\S]*?syncLocalsStateForLocale\(\$localeCode, true, true\);[\s\S]*?invalidateLocaleCatalogCaches\(\);[\s\S]*?\n    \}/',
+            $source,
+            'activateLocale must sync Locals and invalidate caches before return'
+        );
+        self::assertMatchesRegularExpression(
+            '/public function deactivateLocale\(string \$localeCode\): array\s*\{[\s\S]*?syncLocalsStateForLocale\(\$localeCode, true, false\);[\s\S]*?invalidateLocaleCatalogCaches\(\);[\s\S]*?\n    \}/',
+            $source,
+            'deactivateLocale must sync Locals and invalidate caches before return'
+        );
+        self::assertMatchesRegularExpression(
+            '/public function uninstallLocale\(string \$localeCode\): array\s*\{[\s\S]*?syncLocalsStateForLocale\(\$localeCode, false, false\);[\s\S]*?invalidateLocaleCatalogCaches\(\);[\s\S]*?\n    \}/',
+            $source,
+            'uninstallLocale must sync Locals and invalidate caches before return'
+        );
+        self::assertMatchesRegularExpression(
+            '/public function deactivateCountry\(string \$countryCode\): array\s*\{[\s\S]*?syncLocalsForCountry\(\$countryCode\);[\s\S]*?invalidateLocaleCatalogCaches\(\);[\s\S]*?\n    \}/',
+            $source,
+            'deactivateCountry must sync Locals and invalidate caches before return'
+        );
+        self::assertMatchesRegularExpression(
+            '/public function uninstallCountry\(string \$countryCode\): array\s*\{[\s\S]*?syncLocalsForCountry\(\$countryCode\);[\s\S]*?invalidateLocaleCatalogCaches\(\);[\s\S]*?\n    \}/',
+            $source,
+            'uninstallCountry must sync Locals and invalidate caches before return'
+        );
+    }
 }
