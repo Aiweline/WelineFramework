@@ -15,7 +15,7 @@ final class CountryLocaleLifecycleInstallActivatesContractTest extends TestCase
     public function testInstallLocaleDelegatesToActivateLocale(): void
     {
         $source = (string)file_get_contents(
-            BP . 'app/code/Weline/I18n/Service/CountryLocaleLifecycleService.php'
+            \BP . 'app/code/Weline/I18n/Service/CountryLocaleLifecycleService.php'
         );
 
         self::assertStringContainsString(
@@ -32,7 +32,7 @@ final class CountryLocaleLifecycleInstallActivatesContractTest extends TestCase
     public function testInstallCountryDelegatesToActivateCountry(): void
     {
         $source = (string)file_get_contents(
-            BP . 'app/code/Weline/I18n/Service/CountryLocaleLifecycleService.php'
+            \BP . 'app/code/Weline/I18n/Service/CountryLocaleLifecycleService.php'
         );
 
         self::assertStringContainsString(
@@ -49,7 +49,7 @@ final class CountryLocaleLifecycleInstallActivatesContractTest extends TestCase
     public function testLocaleListingOrdersActiveAndInstalledFirst(): void
     {
         $source = (string)file_get_contents(
-            BP . 'app/code/Weline/I18n/Controller/Backend/Countries/Locales.php'
+            \BP . 'app/code/Weline/I18n/Controller/Backend/Countries/Locales.php'
         );
 
         self::assertStringContainsString(
@@ -65,7 +65,7 @@ final class CountryLocaleLifecycleInstallActivatesContractTest extends TestCase
     public function testCountryListingOrdersActiveAndInstalledFirst(): void
     {
         $source = (string)file_get_contents(
-            BP . 'app/code/Weline/I18n/Controller/Backend/Countries.php'
+            \BP . 'app/code/Weline/I18n/Controller/Backend/Countries.php'
         );
 
         self::assertStringContainsString(
@@ -81,16 +81,16 @@ final class CountryLocaleLifecycleInstallActivatesContractTest extends TestCase
     public function testInstallAsyncFormsReloadToFirstPage(): void
     {
         $localeTpl = (string)file_get_contents(
-            BP . 'app/code/Weline/I18n/view/templates/Backend/Countries/Locales/getIndex.phtml'
+            \BP . 'app/code/Weline/I18n/view/templates/Backend/Countries/Locales/getIndex.phtml'
         );
         $countryTpl = (string)file_get_contents(
-            BP . 'app/code/Weline/I18n/view/templates/Backend/Countries/index.phtml'
+            \BP . 'app/code/Weline/I18n/view/templates/Backend/Countries/index.phtml'
         );
         $localizationTpl = (string)file_get_contents(
-            BP . 'app/code/Weline/I18n/view/templates/Backend/Localization/index.phtml'
+            \BP . 'app/code/Weline/I18n/view/templates/Backend/Localization/index.phtml'
         );
         $js = (string)file_get_contents(
-            BP . 'app/code/Weline/I18n/view/statics/js/backend-admin.js'
+            \BP . 'app/code/Weline/I18n/view/statics/js/backend-admin.js'
         );
 
         self::assertStringContainsString('data-async-reload="1"', $localeTpl);
