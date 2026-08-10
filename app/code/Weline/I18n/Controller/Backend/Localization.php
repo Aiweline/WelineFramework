@@ -120,8 +120,12 @@ class Localization extends BaseController
         $pageSize = (int)$this->request->getGet('page_size', 20);
         
         // 获取数据（确保包含简码、ISO2、ISO3字段）
+        // 已激活 / 已安装置顶，避免安装后在长列表中找不到。
         $locales = $this->locale
             ->fields('main_table.*,ln.' . \Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME . ' as display_name')
+            ->order('main_table.' . $this->locale::schema_fields_IS_ACTIVE, 'DESC')
+            ->order('main_table.' . $this->locale::schema_fields_IS_INSTALL, 'DESC')
+            ->order('main_table.' . $this->locale::schema_fields_CODE, 'ASC')
             ->pagination($page, $pageSize)
             ->select()
             ->fetchArray();
@@ -979,7 +983,7 @@ class Localization extends BaseController
 
         try {
             $summary = $this->lifecycle->installLocale($localeCode);
-            $message = (string)__('地区 %{1} 已安装，所属国家 %{2} 已同步安装', [
+            $message = (string)__('地区 %{1} 已安装并激活，所属国家 %{2} 已同步启用', [
                 $summary['locale_code'] ?? $localeCode,
                 $summary['country']['display_name'] ?? ($summary['country_code'] ?? ''),
             ]);

@@ -200,6 +200,8 @@
         var isDeactivation = action === 'locale-deactivate' || action === 'localization-deactivate' || action === 'country-disable';
         var isUninstall = action === 'locale-uninstall' || action === 'localization-uninstall' || action === 'country-uninstall';
 
+        var isInstall = action === 'locale-install' || action === 'localization-install' || action === 'country-install'
+            || action === 'country-batch-install';
         if (isActivation) {
             setStateBadge(activeCell, form.getAttribute('data-async-complete-label') || '已激活', 'success');
         } else if (isDeactivation) {
@@ -207,6 +209,10 @@
         } else if (isUninstall) {
             setStateBadge(activeCell, form.getAttribute('data-async-active-label') || '未激活', 'muted');
             setStateBadge(installCell, form.getAttribute('data-async-install-label') || '未安装', 'muted');
+        } else if (isInstall) {
+            // 安装即默认激活：同步更新两列状态徽章。
+            setStateBadge(installCell, '已安装', '');
+            setStateBadge(activeCell, '已激活', 'success');
         } else {
             setStateBadge(installCell, form.getAttribute('data-async-complete-label') || '已安装', '');
         }
@@ -215,7 +221,7 @@
         if (button) {
             button.disabled = true;
             button.textContent = button.getAttribute('data-async-complete-label') ||
-                (isActivation ? '已激活' : (isDeactivation ? '已停用' : (isUninstall ? '已卸载' : '已安装')));
+                (isActivation ? '已激活' : (isDeactivation ? '已停用' : (isUninstall ? '已卸载' : (isInstall ? '已安装并激活' : '已安装'))));
             button.classList.remove('btn-outline-primary');
             button.classList.remove('btn-outline-success');
             button.classList.remove('btn-outline-warning');
@@ -275,6 +281,21 @@
                 toast('success', payload.message || form.getAttribute('data-async-success-message') || '操作成功');
                 if (typeof options.onSuccess === 'function') {
                     options.onSuccess(payload);
+                }
+                if (form.getAttribute('data-async-reload') === '1') {
+                    var reloadUrl = form.getAttribute('data-async-reload-url') || '';
+                    if (reloadUrl) {
+                        window.location.href = reloadUrl;
+                    } else {
+                        try {
+                            var next = new URL(window.location.href);
+                            next.searchParams.delete('page');
+                            window.location.href = next.toString();
+                        } catch (e) {
+                            window.location.reload();
+                        }
+                    }
+                    return payload;
                 }
                 return payload;
             }).catch(function (error) {
