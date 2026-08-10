@@ -6,6 +6,7 @@ namespace Weline\Ai\Api\Runtime;
 
 use Weline\Ai\Middleware\TenantContext;
 use Weline\Ai\Middleware\TenantIsolation;
+use Weline\Ai\Service\Agent\AgentExecutionContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestResetException;
 use Weline\Framework\Runtime\RequestResetterInterface;
@@ -31,6 +32,12 @@ final class RequestResetter implements RequestResetterInterface
             ObjectManager::removeInstance(TenantIsolation::class);
         } catch (\Throwable $throwable) {
             RequestResetException::append($failures, 'tenant_isolation_instance', $throwable);
+        }
+
+        try {
+            AgentExecutionContext::reset();
+        } catch (\Throwable $throwable) {
+            RequestResetException::append($failures, 'agent_execution_context', $throwable);
         }
 
         if ($failures !== []) {

@@ -14,6 +14,7 @@ namespace Weline\Ai\Service\Provider;
 
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Helper\ErrorMessageHelper;
+use Weline\Ai\Service\Agent\AgentGovernance;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Http\Sse\SseContext;
@@ -1216,6 +1217,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      */
     private function convertToolsToOpenAiFormat(array $tools): array
     {
+        $tools = AgentGovernance::governToolDefs($tools);
         $openAiTools = [];
         foreach ($tools as $tool) {
             $openAiTools[] = [
