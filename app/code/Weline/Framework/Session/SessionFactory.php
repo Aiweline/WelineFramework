@@ -7,6 +7,7 @@ namespace Weline\Framework\Session;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\RequestScope;
 use Weline\Framework\Runtime\RuntimeRoutingPolicyInterface;
 use Weline\Framework\Session\Auth\AreaConfig;
 use Weline\Framework\Session\Auth\AuthenticatedSession;
@@ -31,6 +32,10 @@ use Weline\Framework\Session\Strategy\WlsStrategy;
  */
 class SessionFactory
 {
+    private const SESSION_SCOPE_KEY = 'session';
+
+    private const AUTH_SESSION_SCOPE_PREFIX = 'auth:';
+
     /** 配置 */
     private array $config;
 
@@ -45,6 +50,9 @@ class SessionFactory
 
     /** 已创建的 AuthenticatedSession 实例（请求级） */
     private array $authSessionInstances = [];
+
+    /** @var \WeakMap<\Fiber, RequestScope>|null */
+    private ?\WeakMap $fiberRequestScopes = null;
 
     /**
      * 构造函数
@@ -242,17 +250,30 @@ class SessionFactory
      */
     public function createSession(): SessionInterface
     {
-        if ($this->sessionInstance !== null) {
-            return $this->sessionInstance;
+        $fiber = $this->currentRequestFiber();
+        if ($fiber === null) {
+            if ($this->sessionInstance !== null) {
+                return $this->sessionInstance;
+            }
+        } else {
+            $session = $this->getFiberRequestScope($fiber)?->get(self::SESSION_SCOPE_KEY);
+            if ($session instanceof SessionInterface) {
+                return $session;
+            }
         }
 
         $storage = $this->createStorage();
         $strategy = $this->createStrategy($storage);
         $ttl = (int)($this->config['lifetime'] ?? $this->config['session_ttl'] ?? 3600);
 
-        $this->sessionInstance = new Session($storage, $strategy, $ttl);
+        $session = new Session($storage, $strategy, $ttl);
+        if ($fiber === null) {
+            $this->sessionInstance = $session;
+        } else {
+            $this->getFiberRequestScope($fiber, true)->set(self::SESSION_SCOPE_KEY, $session);
+        }
 
-        return $this->sessionInstance;
+        return $session;
     }
 
     /**
@@ -263,15 +284,28 @@ class SessionFactory
      */
     public function createAuthenticatedSession(string $area = 'frontend'): AuthenticatedSessionInterface
     {
-        if (isset($this->authSessionInstances[$area])) {
-            return $this->authSessionInstances[$area];
+        $fiber = $this->currentRequestFiber();
+        $scopeKey = self::AUTH_SESSION_SCOPE_PREFIX . $area;
+        if ($fiber === null) {
+            if (isset($this->authSessionInstances[$area])) {
+                return $this->authSessionInstances[$area];
+            }
+        } else {
+            $authSession = $this->getFiberRequestScope($fiber)?->get($scopeKey);
+            if ($authSession instanceof AuthenticatedSessionInterface) {
+                return $authSession;
+            }
         }
 
         $session = $this->createSession();
         $areaConfig = new AreaConfig($area);
 
         $authSession = new AuthenticatedSession($session, $areaConfig);
-        $this->authSessionInstances[$area] = $authSession;
+        if ($fiber === null) {
+            $this->authSessionInstances[$area] = $authSession;
+        } else {
+            $this->getFiberRequestScope($fiber, true)->set($scopeKey, $authSession);
+        }
 
         return $authSession;
     }
@@ -373,18 +407,30 @@ class SessionFactory
     {
         Session::flushRequestSessions();
 
-        if ($this->sessionInstance !== null && \method_exists($this->sessionInstance, 'reset')) {
-            $this->sessionInstance->reset();
+        $fiber = $this->currentRequestFiber();
+        if ($fiber === null) {
+            $this->resetMainRequestInstances();
+        } else {
+            $this->resetFiberRequestScope($fiber);
         }
-        
-        foreach ($this->authSessionInstances as $authSession) {
-            if (\method_exists($authSession, 'reset')) {
-                $authSession->reset();
-            }
-        }
-        
-        $this->sessionInstance = null;
-        $this->authSessionInstances = [];
+
+        Session::resetRequestState();
+    }
+
+    /**
+     * Discard request objects retained for an explicit Fiber after its own
+     * finally path has finished or failed. This never flushes another Fiber.
+     */
+    public function clearRequestInstancesForFiber(\Fiber $fiber): void
+    {
+        $this->resetFiberRequestScope($fiber);
+        Session::resetRequestStateForFiber($fiber);
+    }
+
+    /** @internal Runtime diagnostics and leak regression tests. */
+    public function getFiberRequestScopeCount(): int
+    {
+        return $this->fiberRequestScopes === null ? 0 : \count($this->fiberRequestScopes);
     }
 
     /**
@@ -393,11 +439,94 @@ class SessionFactory
     public static function resetAll(): void
     {
         if (self::$instance !== null) {
-            self::$instance->resetRequestInstances();
+            Session::flushAllRequestSessions();
+            self::$instance->resetAllRequestInstances();
             self::$instance = null;
         }
+        Session::resetAllRequestStates();
         self::$storageInstances = [];
         self::$strategyInstances = [];
+    }
+
+    private function currentRequestFiber(): ?\Fiber
+    {
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            return null;
+        }
+
+        return \Fiber::getCurrent();
+    }
+
+    private function getFiberRequestScope(\Fiber $fiber, bool $create = false): ?RequestScope
+    {
+        if ($this->fiberRequestScopes === null) {
+            if (!$create) {
+                return null;
+            }
+            $this->fiberRequestScopes = new \WeakMap();
+        }
+
+        if (!isset($this->fiberRequestScopes[$fiber])) {
+            if (!$create) {
+                return null;
+            }
+            $this->fiberRequestScopes[$fiber] = new RequestScope();
+        }
+
+        return $this->fiberRequestScopes[$fiber];
+    }
+
+    private function resetMainRequestInstances(): void
+    {
+        $this->resetRequestObjects([
+            ...$this->authSessionInstances,
+            $this->sessionInstance,
+        ]);
+        $this->sessionInstance = null;
+        $this->authSessionInstances = [];
+    }
+
+    private function resetFiberRequestScope(\Fiber $fiber): void
+    {
+        $scope = $this->getFiberRequestScope($fiber);
+        if ($scope === null) {
+            return;
+        }
+
+        $this->resetRequestObjects($scope->all());
+        unset($this->fiberRequestScopes[$fiber]);
+    }
+
+    private function resetAllRequestInstances(): void
+    {
+        $this->resetMainRequestInstances();
+        if ($this->fiberRequestScopes !== null) {
+            foreach ($this->fiberRequestScopes as $scope) {
+                $this->resetRequestObjects($scope->all());
+            }
+        }
+        $this->fiberRequestScopes = null;
+    }
+
+    /**
+     * @param array<array-key, object|null> $objects
+     */
+    private function resetRequestObjects(array $objects): void
+    {
+        $reset = [];
+        foreach ($objects as $object) {
+            if (!\is_object($object)) {
+                continue;
+            }
+            $objectId = \spl_object_id($object);
+            if (isset($reset[$objectId])) {
+                continue;
+            }
+            $reset[$objectId] = true;
+            if (\method_exists($object, 'reset')) {
+                $object->reset();
+            }
+        }
     }
 
     // ==================== 静态便捷方法 ====================

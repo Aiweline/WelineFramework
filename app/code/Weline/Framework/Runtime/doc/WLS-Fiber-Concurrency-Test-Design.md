@@ -1,6 +1,8 @@
 # WLS Fiber 并发与维护模式 — 测试设计方案
 
-> 目的：验证「目标 Fiber 投影 + 入口基线 + 挂起 Fiber 时 `StateManager::reset($omit)` + 失败 Worker 隔离」在 **维护模式**、**SSE 挂起 + 并发短请求**、**登录态 / 后台** 下无串味、无死锁；为 **omit 白名单** 变更提供回归门槛；为 **P3 SessionFactory 分桶** 预留压测接口。
+> 目的：验证「目标 Fiber 投影 + 入口基线 + 挂起 Fiber 时 `StateManager::reset($omit)` + 失败 Worker 隔离」在 **维护模式**、**SSE 挂起 + 并发短请求**、**登录态 / 后台** 下无串味、无死锁；为 **omit 白名单** 变更提供回归门槛，并验证 **P3 SessionFactory 分桶**。
+
+**执行状态（2026-08-09）**：P3 功能隔离及本机真实 WLS 有界并发已 `COMPLETED/ACCEPTED`；30 分钟阶梯混合长稳态和至少 100 万请求仍属于极致性能总计划的 `PENDING` 验收。
 
 ---
 
@@ -140,12 +142,21 @@
 
 ---
 
-## 4. P3 SessionFactory 按 Fiber 分桶 — 压测与功能设计（单独里程碑）
+## 4. P3 SessionFactory 按 Fiber 分桶 — 实现与验收
 
 **功能验收**
 
 - 同 Worker 内：Fiber A 挂起时，Fiber B `session_start` / 读登录态 **不覆盖** A 的工厂缓存槽位。
 - Fiber A 结束后仅回收 A 的桶（或 WeakMap 随 Fiber GC）。
+
+**完成证据（2026-08-09）**
+
+- `SessionFiberRequestIsolationTest`：6 tests / 20 assertions，覆盖 Session/AuthSession 交错、局部 reset/flush、目标清理、WeakMap GC 和 1000 次循环清桶。
+- 最终 Runtime/Session 回归：主矩阵 82 tests / 327 assertions；旧 Session 路径 32 tests / 53 assertions。
+- 独立 TLS WLS `ai-test-fiber-session-accept-20260809`、端口 19685、单 Worker：实际 Fiber 路径 2000/2000 成功，错误 0。
+- SSE 保持期间短请求 200/200 成功，SSE 的 10 条 progress 与 done 全部到达。
+- 固定 A/B Session cookie 累计 2200 请求，各自 `form_key` 始终稳定且互异，`mismatch=0`。
+- 两阶段各 1000 个 Session 请求后，Session Server RSS 保持 43200 KiB；Worker RSS 从 164976 KiB 回落到 163472 KiB，未出现线性爬升。
 
 **压测指标（建议 JMeter / wrk / k6 或本机脚本）**
 
@@ -154,7 +165,7 @@
 - 观测：进程 RSS、GC 次数、`/_wls/health`、p99 延迟、错误率。
 - 通过标准：错误率 &lt; 0.1%，无 Session 串用户报告，内存无持续线性爬升（30min 窗口）。
 
-**与当前方案关系**：未上 P3 前，S2/S3 仍必须在 **现有** SessionFactory 下单槽模型下通过；P3 合并后 **全量重跑** 本设计 S1–S5 + 压测。
+**剩余性能门槛**：N=50/200/500、20% SSE、30 分钟窗口及至少 100 万请求尚未执行；这些项目继续作为极致性能总计划的性能验收，不否定已通过的 P3 隔离功能验收。
 
 ---
 
@@ -183,7 +194,10 @@
 | `app/code/Weline/Framework/test/e2e/wls/wls-fiber-sse-concurrency.spec.js` | Playwright | P1 | 已加（`WLS_FIBER_SSE_E2E=1`；后台 `Weline_Server/sse-test`；`useProxy: false`；本地 `retries:1`） |
 | 系统页弱回归（Backend/Server 多路由容错） | E2E | P1 | 已加（同上开关） |
 | `app/code/Weline/Framework/Test/Integration/Runtime/StateManagerPeerOmitIntegrationTest.php` | PHPUnit | P2 | 已加 |
-| P3 压测脚本 + 报告模板 | 运维 | P3 前 | 待定 |
+| `app/code/Weline/Framework/Test/Unit/Session/SessionFiberRequestIsolationTest.php` | PHPUnit | P3 | 已加并通过 |
+| `dev/ai/codex/tasks/2026-08-09/2026-08-09-1309-wls-fiber-request-isolation-completion/session_live_probe.php` | Live harness | P3 | 已加；双 Session 2200 请求 `mismatch=0` |
+| P3 有界真实 WLS 报告 | 运维 | P3 | 已完成并写入任务账本 |
+| 30 分钟阶梯混合长稳态 + 至少 100 万请求报告 | 运维 | 总计划 | 待完成 |
 
 ### 7.1 运行命令摘要
 
