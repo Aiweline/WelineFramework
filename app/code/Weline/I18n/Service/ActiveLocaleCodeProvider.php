@@ -35,6 +35,14 @@ class ActiveLocaleCodeProvider
     }
 
     /**
+     * Drop request/process memo so the next read reloads from Locals.
+     */
+    public function reset(): void
+    {
+        $this->installedActiveCodes = null;
+    }
+
+    /**
      * @return string[]
      */
     public function getInstalledActiveCodes(): array
