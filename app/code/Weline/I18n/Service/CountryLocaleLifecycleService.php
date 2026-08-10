@@ -6,6 +6,7 @@ namespace Weline\I18n\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\OS\FileHelper;
 use Weline\I18n\Model\Countries;
@@ -13,6 +14,9 @@ use Weline\I18n\Model\Countries\Locale\Name as CountryLocaleName;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locale\Name as LocaleName;
+use Weline\I18n\Model\Locals;
+use Weline\I18n\Taglib\LanguageSelect;
+use Weline\I18n\Taglib\LanguageSwitcher;
 
 class CountryLocaleLifecycleService
 {
@@ -69,10 +73,14 @@ class CountryLocaleLifecycleService
             $country->setData(Countries::schema_fields_IS_INSTALL, 1)
                 ->setData(Countries::schema_fields_IS_ACTIVE, 1)
                 ->save();
+            // preferred 已安装激活时仍同步 Locals，避免读侧仍看不到。
+            $this->syncLocalsFromLocaleRecord($preferredLocale);
         }
 
         $summary = $this->syncCountryState($countryCode);
         $summary['preferred_locale'] = $preferredLocale;
+        // 国家安装/激活后立即失效读侧缓存（即使 preferred 已存在、未再走 activateLocale）。
+        $this->invalidateLocaleCatalogCaches();
 
         return $summary;
     }
@@ -95,8 +103,11 @@ class CountryLocaleLifecycleService
             ->fetch();
 
         $country->setData(Countries::schema_fields_IS_ACTIVE, 0)->save();
+        $this->syncLocalsForCountry($countryCode);
+        $summary = $this->syncCountryState($countryCode);
+        $this->invalidateLocaleCatalogCaches();
 
-        return $this->syncCountryState($countryCode);
+        return $summary;
     }
 
     public function uninstallCountry(string $countryCode): array
@@ -128,7 +139,8 @@ class CountryLocaleLifecycleService
         foreach ($localeCodes as $localeCode) {
             $this->clearLanguagePacksForLocale($localeCode);
         }
-        $this->clearTranslationCaches();
+        $this->syncLocalsForCountry($countryCode);
+        $this->invalidateLocaleCatalogCaches();
 
         return $this->buildCountryPayload($countryCode, $localeCodes);
     }
@@ -154,7 +166,9 @@ class CountryLocaleLifecycleService
             ->setData(Countries::schema_fields_IS_ACTIVE, 1)
             ->save();
 
+        $this->syncLocalsStateForLocale($localeCode, true, true);
         $countrySummary = $this->syncCountryState($countryCode);
+        $this->invalidateLocaleCatalogCaches();
 
         return $this->buildLocalePayload($localeCode, $countrySummary);
     }
@@ -173,7 +187,9 @@ class CountryLocaleLifecycleService
 
         $countryCode = (string)$locale->getData(Locale::schema_fields_COUNTRY_CODE);
         $locale->setData(Locale::schema_fields_IS_ACTIVE, 0)->save();
+        $this->syncLocalsStateForLocale($localeCode, true, false);
         $countrySummary = $this->syncCountryState($countryCode);
+        $this->invalidateLocaleCatalogCaches();
 
         return $this->buildLocalePayload($localeCode, $countrySummary);
     }
@@ -196,7 +212,8 @@ class CountryLocaleLifecycleService
             ->save();
 
         $this->clearLanguagePacksForLocale($localeCode);
-        $this->clearTranslationCaches();
+        $this->syncLocalsStateForLocale($localeCode, false, false);
+        $this->invalidateLocaleCatalogCaches();
         $countrySummary = $this->syncCountryState($countryCode);
 
         return $this->buildLocalePayload($localeCode, $countrySummary);
@@ -560,7 +577,93 @@ class CountryLocaleLifecycleService
         }
     }
 
-    private function clearTranslationCaches(): void
+    /**
+     * Mirror Locale install/active flags into Locals (language switcher / DetectLanguage / LocalizationProvider).
+     */
+    private function syncLocalsStateForLocale(string $localeCode, bool $installed, bool $active): void
+    {
+        $localeCode = $this->normalizeLocaleCode($localeCode);
+        if ($localeCode === '') {
+            return;
+        }
+
+        $isInstall = $installed ? 1 : 0;
+        $isActive = ($installed && $active) ? 1 : 0;
+
+        /** @var Locals $locals */
+        $locals = ObjectManager::getInstance(Locals::class);
+        $existing = $locals->clearQuery()
+            ->where(Locals::schema_fields_CODE, $localeCode)
+            ->select(Locals::schema_fields_CODE)
+            ->fetchArray();
+
+        if (!empty($existing)) {
+            $locals->clearQuery()
+                ->where(Locals::schema_fields_CODE, $localeCode)
+                ->update([
+                    Locals::schema_fields_IS_INSTALL => $isInstall,
+                    Locals::schema_fields_IS_ACTIVE => $isActive,
+                ])
+                ->fetch();
+            return;
+        }
+
+        if (!$installed) {
+            return;
+        }
+
+        $name = $this->resolveLocaleDisplayName($localeCode, $localeCode);
+        if ($name === '') {
+            $name = $localeCode;
+        }
+
+        $flag = '';
+        try {
+            $parts = explode('_', $localeCode);
+            $last = (string)end($parts);
+            if (strlen($last) === 2 && strtoupper($last) === $last) {
+                $flag = (string)$this->i18n->getCountryFlag($last, 24, 18);
+            }
+        } catch (\Throwable) {
+            $flag = '';
+        }
+
+        $locals->clearQuery()->insert([
+            [
+                Locals::schema_fields_CODE => $localeCode,
+                Locals::schema_fields_TARGET_CODE => $localeCode,
+                Locals::schema_fields_NAME => $name,
+                Locals::schema_fields_IS_ACTIVE => $isActive,
+                Locals::schema_fields_IS_INSTALL => $isInstall,
+                Locals::schema_fields_FLAG => $flag,
+            ],
+        ], [Locals::schema_fields_CODE, Locals::schema_fields_TARGET_CODE])->fetch();
+    }
+
+    private function syncLocalsFromLocaleRecord(string $localeCode): void
+    {
+        $locale = $this->getLocaleRecord($localeCode);
+        if (!$locale->getId()) {
+            $this->syncLocalsStateForLocale($localeCode, false, false);
+            return;
+        }
+
+        $installed = (int)$locale->getData(Locale::schema_fields_IS_INSTALL) === 1;
+        $active = (int)$locale->getData(Locale::schema_fields_IS_ACTIVE) === 1;
+        $this->syncLocalsStateForLocale($localeCode, $installed, $active);
+    }
+
+    private function syncLocalsForCountry(string $countryCode): void
+    {
+        foreach ($this->getLocaleCodesByCountry($countryCode) as $localeCode) {
+            $this->syncLocalsFromLocaleRecord($localeCode);
+        }
+    }
+
+    /**
+     * Immediately drop locale-catalog / translation read caches after lifecycle mutations.
+     */
+    private function invalidateLocaleCatalogCaches(): void
     {
         try {
             w_cache('i18n')->clear();
@@ -575,7 +678,33 @@ class CountryLocaleLifecycleService
         \Weline\Framework\Phrase\Parser::clearWorkerCaches();
         \Weline\I18n\Parser::clearWorkerCaches();
 
+        try {
+            ObjectManager::getInstance(ActiveLocaleCodeProvider::class)->reset();
+        } catch (\Throwable) {
+        }
+
+        try {
+            LanguageSwitcher::clearProcessCaches();
+        } catch (\Throwable) {
+        }
+
+        try {
+            LanguageSelect::clearProcessCaches();
+        } catch (\Throwable) {
+        }
+
+        try {
+            Url::bumpWebsiteParserSitesVersion();
+        } catch (\Throwable) {
+        }
+
         ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
+    }
+
+    /** @deprecated use invalidateLocaleCatalogCaches() */
+    private function clearTranslationCaches(): void
+    {
+        $this->invalidateLocaleCatalogCaches();
     }
 
     private function findActiveInstalledLocaleCode(string $countryCode): ?string
