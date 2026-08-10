@@ -1,12 +1,17 @@
-# WLS Fiber × StateManager 阶段 B 实现草案（修订版）
+# WLS Fiber × StateManager 阶段 B 实现记录（修订版）
 
 > 目标：在「多请求 Fiber 并发 + 挂起（SSE/yield）」下，避免 `StateManager::reset()` 与挂起 Fiber 的全局状态冲突，同时保证**下一新请求**不因省略 reset 而串会话/模板。  
 > 前置：阶段 A 已落地（`WlsFiberContext` 扩展快照、`syncFromServer`、`WlsConcurrency` 计数、`StateManager::reset($omit)` 能力）。
 
-**已编码（与草案 P1+P2 对齐）**
+**终态（2026-08-09）：P1、P2、P3 均已编码并验收。** 本文保留原方案推演，用于解释实现选择；状态以本节和代码为准。
+
+**已编码（P1+P2+P3）**
 
 - `StateManager::runWlsPersistentRequestEntryBaseline()`：每个 WLS 新请求在 `emulate` 之后执行，覆盖原分散在 `WlsRuntime` 的 Result/Template/Response 及与下列 omit 名对应的 OM 清理。
 - `WlsConcurrency::callbackNamesOmittableWithPeerFibers()`：返回与入口基线对齐的 reset 回调名；当 `getOtherSuspendedRequestFiberCount() > 0` 时，`WlsRuntime::reset()` 对 `StateManager::reset($omit)` 传入该列表。**不省略** `session_*`、`sse_context`、`request_context`、`db_connection_cleanup`、`request_instance` 等。
+- `SessionFactory`：Session/AuthSession 使用 `WeakMap<Fiber, RequestScope>`；当前请求 reset 和显式目标 Fiber cleanup 均不触碰同伴 Fiber。
+- `SessionRequestState`：shutdown 待落盘队列及请求级日志计数按 Fiber 隔离；无 Fiber 的 CLI/FPM 路径保留 main state。
+- Worker 请求 leave：在 RequestContext 清理前精确 reset 当前 Fiber 的 Session scope；异常和取消路径使用同一边界。
 
 ---
 
@@ -90,19 +95,25 @@ flowchart TB
 
 **与 `Session::flushRequestSessions()`**：仍在 `finally` **先于** reset 执行；若将来按 Fiber 分 Session 队列，再改为「只 flush 当前 Fiber 注册的 Session」。
 
-### P3 — SessionFactory / Template 等 **Fiber 分桶**（终态，高风险）
+### P3 — SessionFactory / Template 等 **Fiber 分桶**（已完成）
 
 **SessionFactory**：
 
-- 将 `sessionInstance` / `authSessionInstances` 从「进程单槽」改为 `WeakMap<Fiber, array{...}>` 或 `array<fiberId, ...>`（fiberId = `spl_object_id(Fiber)`）。  
-- `getInstance()->createXxx` 时按 `Fiber::getCurrent()` 取桶；无 Fiber（CLI）走原静态。  
-- `resetRequestInstances()`：仅清理**当前 Fiber**桶（在 `handle` finally 调用），或 Worker 在 Fiber 终止时调用 `resetForFiber($fiber)`。
+- `sessionInstance` / `authSessionInstances` 已从进程单槽改为 `WeakMap<Fiber, RequestScope>`；无 Fiber（CLI/FPM）走原 main state。
+- `createSession()` / `createAuthenticatedSession()` 按 `Fiber::getCurrent()` 取桶，同一 Fiber 内保持实例稳定。
+- `resetRequestInstances()` 只 flush/reset 当前 Fiber；`clearRequestInstancesForFiber()` 可精确丢弃已终止目标 Fiber 的桶。
+- `SessionRequestState` 同步隔离 shutdown queue 与请求日志计数，避免只修 Factory 后仍发生跨 Fiber flush。
 
 **Template / State / Response**：
 
 - 优先继续 **OM removeInstance + resetInstance**；若仍有静态残留，再考虑分桶或强制 `registerStaticReset`。
 
-**验收**：压力测试 + 内存曲线（避免 WeakMap 泄漏：Fiber 结束必须 unregister）。
+**验收结果（2026-08-09）**：
+
+- 单元：Session Fiber 隔离 6 tests / 20 assertions；1000 个短生命周期 Fiber 后 Factory/Session WeakMap 桶均为 0。
+- Runtime：主矩阵 82 tests / 327 assertions、旧 Session 路径 32 tests / 53 assertions，均通过。
+- 真实 WLS：唯一实例端口 19685、单 Worker；实际 Fiber 路径 2000/2000，SSE 挂起期间 200/200，双 Session 累计 2200 请求 `mismatch=0`。
+- 内存：Session Server 两阶段保持 43200 KiB；Worker 在第二阶段由 164976 KiB 回落至 163472 KiB，无线性爬升。
 
 ### P3.1 — ObjectManager / w_obj 对象生命周期规则
 
@@ -158,14 +169,16 @@ Worker 注册：
 
 ---
 
-## 7. 任务拆分（给排期用）
+## 7. 任务状态
 
-1. **文档评审**：确认 P2 采用策略 A 还是 B。  
-2. **P1**：列出 `StateManager` 回调与静态 reset 表，映射到入口可清项；补单测。  
-3. **P2**：实现 `omit` 白名单 +（可选）`handleDepth`；DEV 日志指标。  
-4. **P3**：SessionFactory Fiber 桶设计评审 + 实现 + 压测。  
-5. **E2E**：Playwright 或 curl 脚本「SSE + 并发 HTTP」。
+1. **文档评审**：`COMPLETED/ACCEPTED`，P2 使用入口基线 + 精确 omit 白名单。
+2. **P1**：`COMPLETED/ACCEPTED`，入口基线与单测已存在。
+3. **P2**：`COMPLETED/ACCEPTED`，omit 白名单、失败聚合与 Worker quarantine 已验收。
+4. **P3**：`COMPLETED/ACCEPTED`，SessionFactory/Session 请求状态 Fiber 分桶及真实 WLS 有界压力已通过。
+5. **并发验收**：`COMPLETED/ACCEPTED`，PHP live harness 覆盖 SSE + 并发 HTTP + 双 Session；本轮 Playwright runner 未安装，因此没有伪造新的 Browser 结果，沿用 2026-07-24 已接受的 Browser 基线。
+
+30 分钟 N=50/200/500 混合长稳态及至少 100 万请求属于极致性能总计划的剩余性能验收，不再是 P3 功能隔离代码的关闭阻塞项。
 
 ---
 
-*本文档为实现草案，随代码评审可删改章节；请勿与已冻结的产品需求文档混用。*
+*本文档已从方案草案更新为实现记录；请勿与已冻结的产品需求文档混用。*

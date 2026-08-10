@@ -23,20 +23,8 @@ class Session implements SessionInterface
 {
     private const HOT_PATH_LOG_LIMIT_DEFAULT = 64;
 
-    /** 本请求内已 start 的 Session 实例（用于 shutdown 时统一 save + writeClose） */
-    private static array $instancesForShutdown = [];
-
     /** 是否已注册 shutdown（只注册一次） */
     private static bool $shutdownRegistered = false;
-
-    /** 当前请求已记录的热路径 Session 日志数量 */
-    private static int $requestHotPathLogCount = 0;
-
-    /** 当前请求被抑制的热路径 Session 日志数量 */
-    private static int $requestHotPathLogSuppressedCount = 0;
-
-    /** 是否已提示当前请求的热路径日志被限流 */
-    private static bool $requestHotPathLogSuppressionAnnounced = false;
 
     /** 存储实例 */
     private SessionStorageInterface $storage;
@@ -105,7 +93,8 @@ class Session implements SessionInterface
 
         self::sessionLog('start', 'sid=' . ($this->sessionId !== '' ? substr($this->sessionId, 0, 8) . '...' : 'new'));
 
-        self::$instancesForShutdown[$this->sessionId ?: spl_object_id($this)] = $this;
+        $requestState = SessionRequestState::current();
+        $requestState->instancesForShutdown[$this->sessionId ?: spl_object_id($this)] = $this;
         if (!self::$shutdownRegistered) {
             self::$shutdownRegistered = true;
             register_shutdown_function([self::class, 'flushOnShutdown']);
@@ -117,7 +106,7 @@ class Session implements SessionInterface
      */
     public static function flushOnShutdown(): void
     {
-        self::flushRequestSessions();
+        self::flushAllRequestSessions();
     }
 
     /**
@@ -126,7 +115,12 @@ class Session implements SessionInterface
      */
     public static function clearKeysFromInstances(array $keys): void
     {
-        foreach (self::$instancesForShutdown as $session) {
+        $state = SessionRequestState::peekCurrent();
+        if ($state === null) {
+            return;
+        }
+
+        foreach ($state->instancesForShutdown as $session) {
             if (!$session instanceof self) {
                 continue;
             }
@@ -143,18 +137,35 @@ class Session implements SessionInterface
      */
     public static function flushRequestSessions(): void
     {
+        $state = SessionRequestState::peekCurrent();
+        if ($state === null) {
+            return;
+        }
+
         if (\class_exists(\Weline\Framework\Manager\MessageManager::class, false)
             && \method_exists(\Weline\Framework\Manager\MessageManager::class, 'shouldClearMessagesBeforeFlush')
             && \Weline\Framework\Manager\MessageManager::shouldClearMessagesBeforeFlush()
         ) {
             self::clearKeysFromInstances(\Weline\Framework\Manager\MessageManager::keys);
         }
-        $count = count(self::$instancesForShutdown);
+        self::flushRequestState($state);
+    }
+
+    public static function flushAllRequestSessions(): void
+    {
+        foreach (SessionRequestState::allStates() as $state) {
+            self::flushRequestState($state);
+        }
+    }
+
+    private static function flushRequestState(SessionRequestState $state): void
+    {
+        $count = count($state->instancesForShutdown);
         if ($count > 0 && self::shouldLogSessionOperations()) {
             w_log_info('[Session] flushRequestSessions count=' . $count, [], 'session');
         }
         $keep = [];
-        foreach (self::$instancesForShutdown as $session) {
+        foreach ($state->instancesForShutdown as $session) {
             if (!$session instanceof self) {
                 continue;
             }
@@ -164,7 +175,7 @@ class Session implements SessionInterface
                 $keep[] = $session;
             }
         }
-        self::$instancesForShutdown = $keep;
+        $state->instancesForShutdown = $keep;
     }
 
     /**
@@ -172,10 +183,23 @@ class Session implements SessionInterface
      */
     public static function resetRequestState(): void
     {
-        self::$instancesForShutdown = [];
-        self::$requestHotPathLogCount = 0;
-        self::$requestHotPathLogSuppressedCount = 0;
-        self::$requestHotPathLogSuppressionAnnounced = false;
+        SessionRequestState::resetCurrent();
+    }
+
+    public static function resetRequestStateForFiber(\Fiber $fiber): void
+    {
+        SessionRequestState::resetForFiber($fiber);
+    }
+
+    public static function resetAllRequestStates(): void
+    {
+        SessionRequestState::resetAll();
+    }
+
+    /** @internal Runtime diagnostics and leak regression tests. */
+    public static function getFiberRequestStateCount(): int
+    {
+        return SessionRequestState::fiberStateCount();
     }
 
     /**
@@ -444,20 +468,21 @@ class Session implements SessionInterface
             return;
         }
 
-        if (self::$requestHotPathLogCount < $limit) {
-            self::$requestHotPathLogCount++;
+        $requestState = SessionRequestState::current();
+        if ($requestState->hotPathLogCount < $limit) {
+            $requestState->hotPathLogCount++;
             w_log_info('[Session] ' . $op . ' ' . $detail, [], 'session');
             return;
         }
 
-        self::$requestHotPathLogSuppressedCount++;
-        if (!self::$requestHotPathLogSuppressionAnnounced && \function_exists('w_log_warning')) {
-            self::$requestHotPathLogSuppressionAnnounced = true;
+        $requestState->hotPathLogSuppressedCount++;
+        if (!$requestState->hotPathLogSuppressionAnnounced && \function_exists('w_log_warning')) {
+            $requestState->hotPathLogSuppressionAnnounced = true;
             w_log_warning(
                 '[Session] hot-path log limit reached for current request; suppressing further per-operation session logs',
                 [
                     'limit' => $limit,
-                    'suppressed_count' => self::$requestHotPathLogSuppressedCount,
+                    'suppressed_count' => $requestState->hotPathLogSuppressedCount,
                     'last_operation' => $op,
                 ],
                 'session'

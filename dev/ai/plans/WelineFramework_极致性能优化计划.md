@@ -2,6 +2,40 @@
 
 > 核心边界：`Weline_* -> Weline_Framework` 属于正常依赖，不作为模块耦合问题处理。重点治理其他业务模块之间的横向依赖、循环依赖、隐式依赖，以及 WLS 常驻运行时的请求热路径开销。
 
+## 执行状态（2026-08-09）
+
+本计划保留原始目标；状态只在有代码与验收证据时标记完成。2026-08-09 续做的 Fiber 请求隔离主线已完成并验收，其余阶段仍按原章节推进。
+
+| 状态 | 含义 |
+|---|---|
+| `COMPLETED/ACCEPTED` | 实现存在且已有决定性验收证据 |
+| `IN_PROGRESS` | 正在实现或复验，尚不能关闭 |
+| `PENDING` | 尚未实现或尚无足够证据 |
+| `OUT_OF_SCOPE` | 不属于某次聚焦续做，不代表原计划完成 |
+
+### Fiber 请求隔离追踪
+
+| 项目 | 状态 | 证据或缺口 |
+|---|---|---|
+| Worker 每请求 Fiber + Context/RequestContext/WlsFiberContext | `COMPLETED/ACCEPTED` | 当前 worker/runtime 边界存在；2026-07-24 P1B-003 普通、异常、SSE、取消、reload 验收通过 |
+| P1 请求入口干净基线、P2 peer-Fiber omit/reset、失败 quarantine | `COMPLETED/ACCEPTED` | P1B-003：121 tests / 606 assertions；双会话各 100 次 `mismatch=0` |
+| ObjectManager `WeakMap<Fiber, RequestScope>` 与请求结束清桶 | `COMPLETED/ACCEPTED` | 当前实现及 ObjectManager/WlsRuntime Fiber cleanup 测试 |
+| Template、Header、Response/output 请求态 | `COMPLETED/ACCEPTED` | 当前 Fiber-local WeakMap/请求 reset 实现及聚焦测试 |
+| 数据库连接租约、事务 owner、请求结束回滚 | `COMPLETED/ACCEPTED` | `ConnectionPool` Fiber owner/lease 与 request-end cleanup 测试 |
+| SessionFactory Session/AuthSession Fiber 分桶 | `COMPLETED/ACCEPTED` | `WeakMap<Fiber, RequestScope>` 已落地；交错 Fiber、局部 reset/flush、AuthSession 共 6 tests / 20 assertions |
+| Session shutdown 待落盘队列与请求日志计数 Fiber 隔离 | `COMPLETED/ACCEPTED` | `SessionRequestState` 按 Fiber 分桶；同伴 Fiber 的待落盘 Session 不再被提前 flush |
+| P3 显式清理、WeakMap GC 与内存稳定性 | `COMPLETED/ACCEPTED` | Worker leave 精确清桶；1000 个短生命周期 Fiber 后桶数为 0；两阶段各 1000 个真实 Session 请求后 Worker RSS 由 164976 KiB 回落至 163472 KiB |
+| P3 SSE + 双 Session 并发终态验收 | `COMPLETED/ACCEPTED` | 独立实例端口 19685：实际 Fiber 路径 2000/2000；SSE 同时 200/200；双 Session 累计 2200 请求 `mismatch=0`，SSE 10 条进度及 done 完整 |
+| DI、路由、ORM 编译、Response、OPcache/JIT 等其他阶段 | `PENDING` | 本次未实现；其状态不能由 Fiber 验收代替 |
+
+续做账本：`dev/ai/codex/tasks/2026-08-09/2026-08-09-1309-wls-fiber-request-isolation-completion/`。
+
+### 当前结论与剩余项
+
+- **Fiber 请求级隔离：`COMPLETED/ACCEPTED`**。Worker 请求 Fiber、上下文投影、对象作用域、Session/AuthSession、Session shutdown 状态、数据库租约及请求结束清理已有实现和决定性证据。
+- **极致性能总计划：`INCOMPLETE`**。DI、路由、ORM 编译、Response、OPcache/JIT 等独立阶段仍为 `PENDING`。
+- 本次有界压力验证不能代替第 15 节的总体验收：完整前后基准、CPU 证据、30 分钟混合长稳态及至少 100 万请求稳定性仍未完成。
+
 ## 1. 优化目标
 
 生产环境的 WLS 请求热路径应尽可能满足以下条件：
@@ -350,6 +384,8 @@ process singleton -> request scoped service
 否则进程级单例可能持有当前用户、Request、Session、语言、币种或权限数据。
 
 ### 5.4 优化 Fiber 请求作用域
+
+**实现状态（2026-08-09）：`COMPLETED/ACCEPTED`。** `ObjectManager` 与 `SessionFactory` 均使用 `WeakMap<Fiber, RequestScope>`；Session shutdown 待落盘队列和请求日志计数由 `SessionRequestState` 隔离。Worker 请求离开时仅清理当前 Fiber，CLI/FPM 无 Fiber 路径继续使用 main state。
 
 不建议使用：
 
