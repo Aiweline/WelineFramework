@@ -10,6 +10,7 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestExitException;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\WlsFiberContext;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Server\Service\WorkerResponseMemoryGuard;
 
 require_once BP . 'app/code/Weline/Server/bin/worker_runtime_common.php';
@@ -19,6 +20,7 @@ final class WorkerRequestFiberCancellationTest extends TestCase
     protected function setUp(): void
     {
         Runtime::setMode('wls');
+        SessionFactory::resetAll();
         WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
         WorkerResponseMemoryGuard::clearIncompleteRequestFiberCancelStreak();
     }
@@ -29,6 +31,7 @@ final class WorkerRequestFiberCancellationTest extends TestCase
         WorkerResponseMemoryGuard::clearIncompleteRequestFiberCancelStreak();
         RequestContext::cleanup();
         Context::leave();
+        SessionFactory::resetAll();
         Runtime::resetModeCache();
         parent::tearDown();
     }
@@ -152,6 +155,24 @@ final class WorkerRequestFiberCancellationTest extends TestCase
         self::assertTrue($fiber->isTerminated());
         self::assertSame('preserved', RequestContext::get('main-sentinel'));
         self::assertSame('main', Context::current()->get('meta.id'));
+    }
+
+    public function testWorkerRequestLeaveReleasesCurrentFiberSessionScope(): void
+    {
+        $factory = SessionFactory::getInstance();
+        $fiber = new \Fiber(static function () use ($factory): int {
+            wlsFiberRequestContextEnter(null, 'session-cleanup');
+            $factory->createSession();
+            self::assertSame(1, $factory->getFiberRequestScopeCount());
+
+            wlsFiberRequestContextLeave();
+
+            return $factory->getFiberRequestScopeCount();
+        });
+
+        self::assertNull($fiber->start());
+        self::assertTrue($fiber->isTerminated());
+        self::assertSame(0, $fiber->getReturn());
     }
 
     private function createStubbornCancelFiber(): \Fiber
