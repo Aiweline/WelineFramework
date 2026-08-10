@@ -36,29 +36,27 @@ class CountryLocaleLifecycleService
 
     public function installCountry(string $countryCode): array
     {
-        $countryCode = $this->normalizeCountryCode($countryCode);
-        $country = $this->ensureCountryExists($countryCode);
-        $localeCodes = $this->ensureLocaleRecordsForCountry($countryCode);
-
-        if ((int)$country->getData(Countries::schema_fields_IS_INSTALL) !== 1) {
-            $country->setData(Countries::schema_fields_IS_INSTALL, 1)->save();
-        }
-
-        return $this->buildCountryPayload($countryCode, $localeCodes);
+        // 安装即默认激活：国家安装后立即启用推荐地区，避免“装完找不到/还要再点激活”。
+        return $this->activateCountry($countryCode);
     }
 
     public function activateCountry(string $countryCode): array
     {
-        $installed = $this->installCountry($countryCode);
-        $countryCode = (string)$installed['country_code'];
-        $preferredLocale = $this->findActiveInstalledLocaleCode($countryCode);
+        $countryCode = $this->normalizeCountryCode($countryCode);
+        $this->ensureCountryExists($countryCode);
+        $localeCodes = $this->ensureLocaleRecordsForCountry($countryCode);
 
+        $country = $this->getCountryRecord($countryCode);
+        if ((int)$country->getData(Countries::schema_fields_IS_INSTALL) !== 1) {
+            $country->setData(Countries::schema_fields_IS_INSTALL, 1)->save();
+        }
+
+        $preferredLocale = $this->findActiveInstalledLocaleCode($countryCode);
         if (!$preferredLocale) {
-            $localeCodes = $this->getLocaleCodesByCountry($countryCode);
             $preferredLocale = $this->choosePreferredLocaleCode(
                 $countryCode,
                 $localeCodes,
-                array_filter([(string)($installed['preferred_locale'] ?? ''), Cookie::getLangLocal()])
+                array_filter([(string)Cookie::getLangLocal()])
             );
 
             if (!$preferredLocale) {
@@ -137,32 +135,8 @@ class CountryLocaleLifecycleService
 
     public function installLocale(string $localeCode): array
     {
-        $localeCode = $this->normalizeLocaleCode($localeCode);
-        $locale = $this->ensureLocaleRecordExists($localeCode);
-        $countryCode = (string)$locale->getData(Locale::schema_fields_COUNTRY_CODE);
-
-        $this->makeLocaleModel()->reset()
-            ->where(Locale::schema_fields_CODE, $localeCode)
-            ->update([Locale::schema_fields_IS_INSTALL => 1])
-            ->fetch();
-        $locale = $this->getLocaleRecord($localeCode);
-        if ((int)$locale->getData(Locale::schema_fields_IS_INSTALL) !== 1) {
-            throw new \RuntimeException((string)__('区域安装状态写入失败：%{1}', [$localeCode]));
-        }
-
-        $country = $this->ensureCountryExists($countryCode);
-        $this->makeCountryModel()->reset()
-            ->where(Countries::schema_fields_CODE, $countryCode)
-            ->update([Countries::schema_fields_IS_INSTALL => 1])
-            ->fetch();
-        $country = $this->getCountryRecord($countryCode);
-        if ((int)$country->getData(Countries::schema_fields_IS_INSTALL) !== 1) {
-            throw new \RuntimeException((string)__('国家安装状态写入失败：%{1}', [$countryCode]));
-        }
-
-        $countrySummary = $this->syncCountryState($countryCode);
-
-        return $this->buildLocalePayload($localeCode, $countrySummary);
+        // 安装即默认激活：地区语言安装后直接可用，不再要求二次点击激活。
+        return $this->activateLocale($localeCode);
     }
 
     public function activateLocale(string $localeCode): array

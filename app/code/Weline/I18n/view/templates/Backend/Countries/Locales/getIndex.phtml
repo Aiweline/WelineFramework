@@ -185,12 +185,13 @@ if ($search !== '') {
                                         <w:form method="post"
                                               action="@backend-url('*/backend/countries/locales/install')"
                                               data-async-action="locale-install"
-                                              data-async-success-message="@var(__('区域已安装，当前位置已保留。'))"
-                                              data-confirm-message="@var(__('确定安装 %{1} 吗？', [$code]))"
+                                              data-async-reload="1"
+                                              data-async-success-message="@var(__('区域已安装并激活，已刷新到列表顶部。'))"
+                                              data-confirm-message="@var(__('确定安装 %{1} 吗？安装后将默认激活。', [$code]))"
                                               data-confirm-type="info">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
-                                            <button type="submit" class="btn btn-sm btn-outline-primary" data-async-submit-label="<?= htmlspecialchars(__('安装中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已安装'), ENT_QUOTES, 'UTF-8') ?>"><?= __('安装') ?></button>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary" data-async-submit-label="<?= htmlspecialchars(__('安装中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已安装并激活'), ENT_QUOTES, 'UTF-8') ?>"><?= __('安装') ?></button>
                                         </w:form>
                                     <?php elseif (!$isActive): ?>
                                         <w:form method="post"
