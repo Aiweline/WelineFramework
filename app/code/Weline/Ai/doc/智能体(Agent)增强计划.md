@@ -30,6 +30,10 @@ extends/module/Weline_Ai/Agent/
 | `Agent/AgentResult.php` | 执行结果 DTO |
 | `Service/AgentScanner.php` | 智能体扫描器 |
 | `Model/AiAgent.php` | 数据库模型（ai_agent 表） |
+| `Model/AiAgentTool.php` | 智能体工具快照与覆盖 |
+| `Service/Agent/AgentCatalogService.php` | 目录、覆盖、启停 |
+| `Service/Agent/AgentGovernance.php` | 运行时工具过滤与描述覆盖 |
+| `Controller/Backend/Agent.php` | 后台智能体 Tab |
 | `extends.php` | Agent 扩展点定义 |
 | `Service/AiService.php` | 集成 executeAgent / getAgentsForScenario 等方法 |
 
@@ -38,25 +42,19 @@ extends/module/Weline_Ai/Agent/
 - `OpenAiProvider`：支持 tools + tool_choice 参数，解析 tool_calls
 - `AnthropicProvider`：支持 tool_use 格式，消息历史转换
 
-## 三、待实现任务
+## 三、后台治理（已完成）
 
-### 任务 1：触发智能体扫描（关键缺失）
+- 后台 Tab / 菜单：`ai/backend/agent`
+- 扫描已接入 `SetupUpgradeAfter`、`ModuleUpgradeAdapterScanObserver` 与 `ai:agent:scan`
+- 扫描保留人工覆盖与启停；禁用工具不进入 `AiService::executeAgent` 的 function calling
+- 直接 `$agent->execute()` 旁路不受治理
 
-**问题**：`AgentScanner.scanAllAgents()` 已实现但从未被调用，智能体不会注册到数据库。
+## 四、已知限制
 
-**修复**：
-1. 在 `SetupUpgradeAfter` Observer 中加入 `scanAllAgents()` 调用
-2. 在 `ModuleUpgradeAdapterScanObserver` 中也加入扫描
+- 不能在后台新建自定义智能体，不能改工具 JSON Schema / system prompt / `max_iterations`
+- `AiSiteBlogContentSeedService` 等直接调用 `$agent->execute()` 的路径不读取描述覆盖与工具启停
 
-### 任务 2：创建 CLI 命令 `ai:agent:scan`
-
-仿照 `ai:adapter:scan` 创建独立命令，支持手动触发扫描。
-
-### 任务 3：i18n 翻译补充
-
-为新增的 CLI 命令和扫描日志添加中英文翻译。
-
-## 四、接口说明
+## 五、接口说明
 
 ### AgentInterface 方法
 

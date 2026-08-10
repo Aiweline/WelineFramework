@@ -1,0 +1,532 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array<int,array<string,mixed>> $agents
+ */
+$agents = \is_array($agents ?? null) ? $agents : [];
+$agentI18n = [
+    'apiUnavailable' => (string)__('前端 API 不可用，请刷新页面后重试。'),
+    'loading' => (string)__('加载中...'),
+    'catalogLoadFailed' => (string)__('智能体目录加载失败'),
+    'noMatch' => (string)__('没有智能体符合当前筛选。'),
+    'agentDetail' => (string)__('智能体详情'),
+    'noSelection' => (string)__('未选择'),
+    'saving' => (string)__('正在保存...'),
+    'saved' => (string)__('已保存。'),
+    'saveFailed' => (string)__('保存失败'),
+    'updatingStatus' => (string)__('正在更新状态...'),
+    'statusUpdated' => (string)__('状态已更新。'),
+    'statusUpdateFailed' => (string)__('状态更新失败'),
+    'scanning' => (string)__('正在扫描智能体...'),
+    'scanFailed' => (string)__('扫描智能体失败'),
+    'scanConfirm' => (string)__('确定要扫描智能体吗？这将发现所有模块中的智能体并更新数据库记录，不会覆盖人工描述与启停。'),
+    'scanTitle' => (string)__('扫描智能体'),
+    'scanConfirmText' => (string)__('确定扫描'),
+    'cancelText' => (string)__('取消'),
+    'confirmUnavailable' => (string)__('确认组件不可用，请刷新页面后重试。'),
+    'activeLabel' => (string)__('启用'),
+    'disabledLabel' => (string)__('禁用'),
+    'missingLabel' => (string)__('缺失'),
+    'readonlySource' => (string)__('源描述（只读）'),
+    'overrideHint' => (string)__('留空则回退为源描述'),
+    'enableAgent' => (string)__('启用智能体'),
+    'disableAgent' => (string)__('禁用智能体'),
+    'enableTool' => (string)__('启用工具'),
+    'disableTool' => (string)__('禁用工具'),
+    'saveOverride' => (string)__('保存覆盖'),
+    'untitledAgent' => (string)__('未命名智能体'),
+    'noTools' => (string)__('该智能体尚未注册工具。'),
+];
+?>
+<?php if (empty($embed)): ?>
+    <?= $this->fetch('Weline_Ai::templates/Backend/Manager/tabs.phtml', ['activeTab' => 'agent']) ?>
+<?php endif; ?>
+
+<style>
+    .weline-ai-agent-page .agent-shell { min-height: 720px; }
+    .weline-ai-agent-page .agent-table-wrap { max-height: 650px; overflow: auto; }
+    .weline-ai-agent-page .agent-row { cursor: pointer; }
+    .weline-ai-agent-page .agent-row.is-selected { background: rgba(13, 110, 253, 0.08); }
+    .weline-ai-agent-page .agent-detail-card { position: sticky; top: 12px; }
+    .weline-ai-agent-page .agent-empty {
+        border: 1px dashed rgba(108, 117, 125, 0.35);
+        border-radius: 12px;
+        padding: 32px;
+        text-align: center;
+        color: #6c757d;
+        background: #fbfcfd;
+    }
+    .weline-ai-agent-page .agent-chip {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(108, 117, 125, 0.25);
+        border-radius: 999px;
+        padding: 2px 8px;
+        margin: 2px 4px 2px 0;
+        font-size: 11px;
+        color: #495057;
+        background: #f8f9fa;
+    }
+    .weline-ai-agent-page .tool-params {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        font-size: 11px;
+        max-height: 140px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+</style>
+
+<div class="container-fluid py-3 weline-ai-agent-page">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+        <div>
+            <h4 class="mb-1"><i class="mdi mdi-robot-industrial-outline me-1"></i><?= __('AI 智能体') ?></h4>
+            <div class="text-muted small"><?= __('管理已注册智能体、描述覆盖与工具启停。不能在后台新建智能体。') ?></div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-primary" id="ai-agent-scan-btn">
+                <i class="mdi mdi-magnify-scan me-1"></i><?= __('扫描智能体') ?>
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-3 agent-shell">
+        <div class="col-xl-6">
+            <div class="card h-100">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <strong><?= __('智能体目录') ?></strong>
+                    <input type="search" class="form-control form-control-sm" style="max-width: 240px;" id="ai-agent-filter" placeholder="<?= __('代码 / 名称 / 模块 / 场景') ?>">
+                </div>
+                <div class="card-body p-0 agent-table-wrap">
+                    <table class="table table-hover mb-0" id="ai-agent-table">
+                        <thead>
+                        <tr>
+                            <th><?= __('智能体') ?></th>
+                            <th><?= __('模块') ?></th>
+                            <th><?= __('工具') ?></th>
+                            <th><?= __('状态') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody id="ai-agent-tbody"></tbody>
+                    </table>
+                    <div class="agent-empty m-3 d-none" id="ai-agent-empty"><?= __('没有智能体符合当前筛选。') ?></div>
+                </div>
+                <div class="card-footer small text-muted" id="ai-agent-status"></div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="card agent-detail-card">
+                <div class="card-header d-flex align-items-center justify-content-between gap-2">
+                    <strong id="ai-agent-detail-title"><?= __('智能体详情') ?></strong>
+                    <span class="badge text-bg-secondary" id="ai-agent-detail-mode"><?= __('未选择') ?></span>
+                </div>
+                <div class="card-body">
+                    <form id="ai-agent-form" class="d-none">
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('代码') ?></label>
+                            <input type="text" class="form-control" id="ai-agent-code" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('源名称（只读）') ?></label>
+                            <input type="text" class="form-control" id="ai-agent-source-name" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('名称覆盖') ?></label>
+                            <input type="text" class="form-control" id="ai-agent-name-override" placeholder="<?= __('留空则回退为源名称') ?>">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('源描述（只读）') ?></label>
+                            <textarea class="form-control" id="ai-agent-source-description" rows="3" readonly></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('描述覆盖') ?></label>
+                            <textarea class="form-control" id="ai-agent-description-override" rows="4" placeholder="<?= __('留空则回退为源描述') ?>"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <div class="small text-muted mb-1"><?= __('场景') ?></div>
+                            <div id="ai-agent-scenarios"></div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <button type="button" class="btn btn-primary" id="ai-agent-save-btn"><?= __('保存覆盖') ?></button>
+                            <button type="button" class="btn btn-outline-secondary" id="ai-agent-toggle-btn"><?= __('禁用智能体') ?></button>
+                        </div>
+                        <div class="small" id="ai-agent-form-status"></div>
+                        <hr>
+                        <h6 class="mb-2"><?= __('工具') ?></h6>
+                        <div id="ai-agent-tools"></div>
+                    </form>
+                    <div class="agent-empty" id="ai-agent-detail-empty">
+                        <?= __('从目录选择一个智能体查看详情。') ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var i18n = <?= json_encode($agentI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var initialAgents = <?= json_encode($agents, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var state = { items: Array.isArray(initialAgents) ? initialAgents : [], selectedCode: '', filter: '' };
+    var els = {
+        tbody: document.getElementById('ai-agent-tbody'),
+        empty: document.getElementById('ai-agent-empty'),
+        status: document.getElementById('ai-agent-status'),
+        filter: document.getElementById('ai-agent-filter'),
+        form: document.getElementById('ai-agent-form'),
+        detailEmpty: document.getElementById('ai-agent-detail-empty'),
+        detailTitle: document.getElementById('ai-agent-detail-title'),
+        detailMode: document.getElementById('ai-agent-detail-mode'),
+        code: document.getElementById('ai-agent-code'),
+        sourceName: document.getElementById('ai-agent-source-name'),
+        nameOverride: document.getElementById('ai-agent-name-override'),
+        sourceDescription: document.getElementById('ai-agent-source-description'),
+        descriptionOverride: document.getElementById('ai-agent-description-override'),
+        scenarios: document.getElementById('ai-agent-scenarios'),
+        save: document.getElementById('ai-agent-save-btn'),
+        toggle: document.getElementById('ai-agent-toggle-btn'),
+        formStatus: document.getElementById('ai-agent-form-status'),
+        tools: document.getElementById('ai-agent-tools'),
+        scan: document.getElementById('ai-agent-scan-btn')
+    };
+
+    function aiOp(operation, data) {
+        var run = function (api) {
+            var resource = api.resource('ai');
+            if (!resource || typeof resource[operation] !== 'function') {
+                return Promise.reject(new Error(i18n.apiUnavailable));
+            }
+            return resource[operation](data || {}).then(function (res) {
+                return res && Object.prototype.hasOwnProperty.call(res, 'data') ? res.data : res;
+            });
+        };
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return window.Weline.load('api').then(run);
+        }
+        if (window.Weline && window.Weline.Api) {
+            return Promise.resolve(run(window.Weline.Api));
+        }
+        return Promise.reject(new Error(i18n.apiUnavailable));
+    }
+
+    function responseErrorMessage(err, fallback) {
+        var data = err && err.response && err.response.data ? err.response.data : null;
+        var nested = data && data.error ? data.error : null;
+        return (nested && (nested.message || nested.msg))
+            || (data && (data.message || data.msg))
+            || (err && err.message)
+            || fallback;
+    }
+
+    function setStatus(el, text, isError) {
+        if (!el) { return; }
+        el.className = 'small mt-2 ' + (isError ? 'text-danger' : 'text-success');
+        el.textContent = text || '';
+    }
+
+    function statusBadge(item) {
+        var status = String(item.status || '');
+        if (status === 'missing') {
+            return '<span class="badge text-bg-warning">' + i18n.missingLabel + '</span>';
+        }
+        if (status === 'disabled' || !item.is_active) {
+            return '<span class="badge text-bg-secondary">' + i18n.disabledLabel + '</span>';
+        }
+        return '<span class="badge text-bg-success">' + i18n.activeLabel + '</span>';
+    }
+
+    function selectedItem() {
+        return state.items.find(function (item) {
+            return String(item.code || '') === state.selectedCode;
+        }) || null;
+    }
+
+    function upsertItem(item) {
+        if (!item || !item.code) { return; }
+        var found = false;
+        state.items = state.items.map(function (current) {
+            if (String(current.code || '') === String(item.code)) {
+                found = true;
+                return item;
+            }
+            return current;
+        });
+        if (!found) {
+            state.items.push(item);
+        }
+    }
+
+    function filteredItems() {
+        var keyword = String(state.filter || '').trim().toLowerCase();
+        if (!keyword) { return state.items.slice(); }
+        return state.items.filter(function (item) {
+            var hay = [
+                item.code, item.effective_name, item.name, item.module, item.effective_description
+            ].concat(item.scenarios || []).join(' ').toLowerCase();
+            return hay.indexOf(keyword) > -1;
+        });
+    }
+
+    function renderList() {
+        var items = filteredItems();
+        els.tbody.innerHTML = '';
+        if (!items.length) {
+            els.empty.classList.remove('d-none');
+            els.status.textContent = '0';
+            return;
+        }
+        els.empty.classList.add('d-none');
+        items.forEach(function (item) {
+            var tr = document.createElement('tr');
+            tr.className = 'agent-row' + (String(item.code || '') === state.selectedCode ? ' is-selected' : '');
+            tr.setAttribute('data-code', item.code || '');
+            tr.innerHTML =
+                '<td><div class="fw-semibold">' + escapeHtml(item.effective_name || item.name || i18n.untitledAgent) + '</div>' +
+                '<div class="small text-muted">' + escapeHtml(item.code || '') + '</div></td>' +
+                '<td>' + escapeHtml(item.module || '-') + '</td>' +
+                '<td>' + String(item.tools_count || 0) + '</td>' +
+                '<td>' + statusBadge(item) + '</td>';
+            tr.addEventListener('click', function () {
+                state.selectedCode = String(item.code || '');
+                renderList();
+                renderDetail();
+            });
+            els.tbody.appendChild(tr);
+        });
+        els.status.textContent = String(items.length);
+    }
+
+    function renderDetail() {
+        var item = selectedItem();
+        if (!item) {
+            els.form.classList.add('d-none');
+            els.detailEmpty.classList.remove('d-none');
+            els.detailTitle.textContent = i18n.agentDetail;
+            els.detailMode.textContent = i18n.noSelection;
+            return;
+        }
+        els.form.classList.remove('d-none');
+        els.detailEmpty.classList.add('d-none');
+        els.detailTitle.textContent = item.effective_name || item.name || i18n.untitledAgent;
+        els.detailMode.textContent = item.is_present ? (item.is_active ? i18n.activeLabel : i18n.disabledLabel) : i18n.missingLabel;
+        els.code.value = item.code || '';
+        els.sourceName.value = item.name || '';
+        els.nameOverride.value = item.name_override || '';
+        els.sourceDescription.value = item.description || '';
+        els.descriptionOverride.value = item.description_override || '';
+        els.scenarios.innerHTML = '';
+        (item.scenarios || []).forEach(function (scenario) {
+            var chip = document.createElement('span');
+            chip.className = 'agent-chip';
+            chip.textContent = scenario;
+            els.scenarios.appendChild(chip);
+        });
+        els.toggle.textContent = item.is_active ? i18n.disableAgent : i18n.enableAgent;
+        els.toggle.disabled = !item.is_present && !item.is_active;
+        renderTools(item);
+    }
+
+    function renderTools(item) {
+        var tools = Array.isArray(item.tools) ? item.tools : [];
+        if (!tools.length) {
+            els.tools.innerHTML = '<div class="text-muted small">' + escapeHtml(i18n.noTools) + '</div>';
+            return;
+        }
+        els.tools.innerHTML = '';
+        tools.forEach(function (tool) {
+            var wrap = document.createElement('div');
+            wrap.className = 'border rounded p-3 mb-2';
+            var title = document.createElement('div');
+            title.className = 'd-flex justify-content-between align-items-start gap-2 mb-2';
+            title.innerHTML = '<div><div class="fw-semibold">' + escapeHtml(tool.tool_name || '') + '</div>' +
+                '<div class="small text-muted">' + (tool.is_present ? '' : escapeHtml(i18n.missingLabel)) + '</div></div>' +
+                '<span class="badge ' + (tool.is_enabled && tool.is_present ? 'text-bg-success' : 'text-bg-secondary') + '">' +
+                escapeHtml(tool.is_enabled ? i18n.activeLabel : i18n.disabledLabel) + '</span>';
+            var source = document.createElement('textarea');
+            source.className = 'form-control mb-2';
+            source.rows = 2;
+            source.readOnly = true;
+            source.value = tool.description || '';
+            var override = document.createElement('textarea');
+            override.className = 'form-control mb-2 js-tool-override';
+            override.rows = 2;
+            override.placeholder = i18n.overrideHint;
+            override.value = tool.description_override || '';
+            var params = document.createElement('pre');
+            params.className = 'tool-params bg-light border rounded p-2 mb-2';
+            params.textContent = JSON.stringify(tool.parameters || {}, null, 2);
+            var actions = document.createElement('div');
+            actions.className = 'd-flex flex-wrap gap-2';
+            var saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.className = 'btn btn-sm btn-outline-primary';
+            saveBtn.textContent = i18n.saveOverride;
+            saveBtn.addEventListener('click', function () {
+                saveTool(item.code, tool.tool_name, override.value);
+            });
+            var toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'btn btn-sm btn-outline-secondary';
+            toggleBtn.textContent = tool.is_enabled ? i18n.disableTool : i18n.enableTool;
+            toggleBtn.disabled = !tool.is_present && !tool.is_enabled;
+            toggleBtn.addEventListener('click', function () {
+                toggleTool(item.code, tool.tool_name, !tool.is_enabled);
+            });
+            actions.appendChild(saveBtn);
+            actions.appendChild(toggleBtn);
+            wrap.appendChild(title);
+            wrap.appendChild(source);
+            wrap.appendChild(override);
+            wrap.appendChild(params);
+            wrap.appendChild(actions);
+            els.tools.appendChild(wrap);
+        });
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function loadCatalog() {
+        setStatus(els.status, i18n.loading, false);
+        return aiOp('agentCatalog', { include_inactive: true }).then(function (res) {
+            if (!res || res.success === false) {
+                throw new Error((res && res.message) || i18n.catalogLoadFailed);
+            }
+            state.items = Array.isArray(res.items) ? res.items : [];
+            renderList();
+            renderDetail();
+            setStatus(els.status, '', false);
+        }).catch(function (err) {
+            setStatus(els.status, responseErrorMessage(err, i18n.catalogLoadFailed), true);
+        });
+    }
+
+    function saveAgent() {
+        var item = selectedItem();
+        if (!item) { return; }
+        setStatus(els.formStatus, i18n.saving, false);
+        aiOp('agentSave', {
+            code: item.code,
+            name_override: els.nameOverride.value,
+            description_override: els.descriptionOverride.value
+        }).then(function (res) {
+            if (!res || res.success === false) {
+                throw new Error((res && res.message) || i18n.saveFailed);
+            }
+            upsertItem(res.item);
+            renderList();
+            renderDetail();
+            setStatus(els.formStatus, i18n.saved, false);
+        }).catch(function (err) {
+            setStatus(els.formStatus, responseErrorMessage(err, i18n.saveFailed), true);
+        });
+    }
+
+    function toggleAgent() {
+        var item = selectedItem();
+        if (!item) { return; }
+        setStatus(els.formStatus, i18n.updatingStatus, false);
+        aiOp('agentSetActive', {
+            code: item.code,
+            is_active: !item.is_active
+        }).then(function (res) {
+            if (!res || res.success === false) {
+                throw new Error((res && res.message) || i18n.statusUpdateFailed);
+            }
+            upsertItem(res.item);
+            renderList();
+            renderDetail();
+            setStatus(els.formStatus, i18n.statusUpdated, false);
+        }).catch(function (err) {
+            setStatus(els.formStatus, responseErrorMessage(err, i18n.statusUpdateFailed), true);
+        });
+    }
+
+    function saveTool(agentCode, toolName, descriptionOverride) {
+        setStatus(els.formStatus, i18n.saving, false);
+        aiOp('agentSaveTool', {
+            agent_code: agentCode,
+            tool_name: toolName,
+            description_override: descriptionOverride
+        }).then(function (res) {
+            if (!res || res.success === false) {
+                throw new Error((res && res.message) || i18n.saveFailed);
+            }
+            upsertItem(res.item);
+            renderList();
+            renderDetail();
+            setStatus(els.formStatus, i18n.saved, false);
+        }).catch(function (err) {
+            setStatus(els.formStatus, responseErrorMessage(err, i18n.saveFailed), true);
+        });
+    }
+
+    function toggleTool(agentCode, toolName, enabled) {
+        setStatus(els.formStatus, i18n.updatingStatus, false);
+        aiOp('agentSetToolStatus', {
+            agent_code: agentCode,
+            tool_name: toolName,
+            is_enabled: enabled
+        }).then(function (res) {
+            if (!res || res.success === false) {
+                throw new Error((res && res.message) || i18n.statusUpdateFailed);
+            }
+            upsertItem(res.item);
+            renderList();
+            renderDetail();
+            setStatus(els.formStatus, i18n.statusUpdated, false);
+        }).catch(function (err) {
+            setStatus(els.formStatus, responseErrorMessage(err, i18n.statusUpdateFailed), true);
+        });
+    }
+
+    function scanAgents() {
+        var run = function () {
+            setStatus(els.status, i18n.scanning, false);
+            return aiOp('agentScan', {}).then(function (res) {
+                if (!res || res.success === false) {
+                    throw new Error((res && res.message) || i18n.scanFailed);
+                }
+                state.items = Array.isArray(res.items) ? res.items : state.items;
+                renderList();
+                renderDetail();
+                setStatus(els.status, res.message || '', false);
+            }).catch(function (err) {
+                setStatus(els.status, responseErrorMessage(err, i18n.scanFailed), true);
+            });
+        };
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            window.BackendConfirm.show(i18n.scanConfirm, {
+                title: i18n.scanTitle,
+                confirmText: i18n.scanConfirmText,
+                cancelText: i18n.cancelText,
+                onConfirm: run
+            });
+            return;
+        }
+        run();
+    }
+
+    els.filter.addEventListener('input', function () {
+        state.filter = els.filter.value || '';
+        renderList();
+    });
+    els.save.addEventListener('click', saveAgent);
+    els.toggle.addEventListener('click', toggleAgent);
+    els.scan.addEventListener('click', scanAgents);
+
+    renderList();
+    if (state.items.length) {
+        state.selectedCode = String(state.items[0].code || '');
+    }
+    renderDetail();
+    loadCatalog();
+})();
+</script>

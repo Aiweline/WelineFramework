@@ -30,6 +30,13 @@
           action="ai/backend/adapter" 
           icon="mdi mdi-puzzle-outline"
           order="20"/>
+    <menu source="Weline_Ai::ai_agent_list"
+          name="ai_agent_governance"
+          title="AI 智能体"
+          parent="Weline_Backend::ai_group"
+          action="ai/backend/agent"
+          icon="mdi mdi-robot-industrial-outline"
+          order="25"/>
     <menu source="Weline_Ai::ai_skill_list"
           name="ai_skill_governance"
           title="AI Skills"
