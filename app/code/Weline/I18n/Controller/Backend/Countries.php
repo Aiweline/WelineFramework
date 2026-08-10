@@ -117,7 +117,13 @@ class Countries extends BaseController
             }
         }
         $this->applyFilter($query, $displayFilter);
-        $result = $query->pagination()->select()->fetch();
+        $result = $query
+            ->order('main_table.' . CountriesModel::schema_fields_IS_ACTIVE, 'DESC')
+            ->order('main_table.' . CountriesModel::schema_fields_IS_INSTALL, 'DESC')
+            ->order('main_table.' . CountriesModel::schema_fields_CODE, 'ASC')
+            ->pagination()
+            ->select()
+            ->fetch();
         $countries = $result->getItems();
 
         foreach ($countries as $country) {
@@ -188,7 +194,7 @@ class Countries extends BaseController
 
         try {
             $summary = $this->lifecycle->installCountry($code);
-            $message = (string)__('国家 %{1} 已安装，可用地区 %{2} 个', [
+            $message = (string)__('国家 %{1} 已安装并激活，可用地区 %{2} 个', [
                 $summary['display_name'] ?? $summary['country_code'],
                 $summary['locale_count'] ?? 0,
             ]);
@@ -356,7 +362,7 @@ class Countries extends BaseController
                 $this->lifecycle->installCountry($code);
             },
             __('请选择要安装的国家！'),
-            __('已安装 %{1} 个国家'),
+            __('已安装并激活 %{1} 个国家'),
             __('%{1} 个国家安装失败'),
             $this->getRequestFilter('all')
         );
