@@ -17,6 +17,14 @@ class LanguageSelect implements TaglibInterface
 {
     private static array $itemsCache = [];
 
+    /**
+     * Drop process-local catalog memo after install/activate/deactivate/uninstall.
+     */
+    public static function clearProcessCaches(): void
+    {
+        self::$itemsCache = [];
+    }
+
     public static function name(): string
     {
         return 'i18n:language:select';
