@@ -1,12 +1,13 @@
 <?php
 /**
- * AI 管理顶部 Tab 栏（模型 | 适配器 | 技能 | 风格 | 供应商账户）
- * @var string $activeTab 当前 Tab：model | adapter | skill | style | account
+ * AI 管理顶部 Tab 栏（模型 | 适配器 | 智能体 | 技能 | 风格 | 供应商账户）
+ * @var string $activeTab 当前 Tab：model | adapter | agent | skill | style | account
  * @var \Weline\Framework\View\Template $this
  */
 $activeTab = $activeTab ?? 'model';
 $modelUrl = $this->getBackendUrl('ai/backend/model');
 $adapterUrl = $this->getBackendUrl('ai/backend/adapter');
+$agentUrl = $this->getBackendUrl('ai/backend/agent');
 $skillUrl = $this->getBackendUrl('ai/backend/skill');
 $styleUrl = $this->getBackendUrl('ai/backend/style');
 $providerUrl = $this->getBackendUrl('ai/backend/provider');
@@ -28,6 +29,11 @@ $providerUrl = $this->getBackendUrl('ai/backend/provider');
         <li class="nav-item">
             <a class="nav-link <?= $activeTab === 'adapter' ? 'active' : '' ?>" href="<?= htmlspecialchars($adapterUrl) ?>">
                 <i class="mdi mdi-puzzle-outline me-1"></i><lang>适配器</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'agent' ? 'active' : '' ?>" href="<?= htmlspecialchars($agentUrl) ?>">
+                <i class="mdi mdi-robot-industrial-outline me-1"></i><lang>智能体</lang>
             </a>
         </li>
         <li class="nav-item">

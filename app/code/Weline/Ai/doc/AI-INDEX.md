@@ -66,6 +66,7 @@
 - `app/code/Weline/Ai/doc/开发/单元测试指南.md`
 - `app/code/Weline/Ai/doc/开发/后台控制器开发规范.md`
 - `app/code/Weline/Ai/doc/开发/后台风格管理CRUD.md`
+- `app/code/Weline/Ai/doc/开发/后台智能体管理.md`
 - `app/code/Weline/Ai/doc/开发/快速开始.md`
 - `app/code/Weline/Ai/doc/智能体(Agent)增强计划.md`
 - `app/code/Weline/Ai/doc/用户/AI模块使用手册.md`

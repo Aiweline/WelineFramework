@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Ai',
-    "version" => '1.1.1',
+    "version" => '1.1.2',
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Backend' => '*',
@@ -12,6 +12,7 @@ return [
         'Weline_I18n' => '*',
     ],
     "provides" => [
+        \Weline\Ai\Api\AgentCatalogInterface::class => \Weline\Ai\Service\Agent\AgentCatalogService::class,
         \Weline\Ai\Api\AgentModelExecutorInterface::class => \Weline\Ai\Api\AgentModelExecutor::class,
         \Weline\Ai\Api\AiRuntimeInterface::class => \Weline\Ai\Api\AiRuntime::class,
         \Weline\Ai\Api\Configuration\ScenarioConfigurationInterface::class => \Weline\Ai\Service\Configuration\ScenarioConfiguration::class,

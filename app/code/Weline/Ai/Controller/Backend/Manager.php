@@ -9,7 +9,7 @@ use Weline\Framework\Acl\Acl;
 /**
  * AI 管理聚合页
  *
- * 模型 | 适配器 | 供应商账户 三个 Tab，URL 持久化 ?tab=model/adapter/account
+ * 模型 | 适配器 | 智能体 | 技能 | 风格 | 供应商账户，URL 持久化 ?tab=
  *
  * @package Weline_Ai
  */
@@ -26,7 +26,9 @@ class Manager extends BackendController
         $map = [
             'model' => 'ai/backend/model',
             'adapter' => 'ai/backend/adapter',
+            'agent' => 'ai/backend/agent',
             'skill' => 'ai/backend/skill',
+            'style' => 'ai/backend/style',
             'account' => 'ai/backend/provider',
         ];
         $path = $map[$tab] ?? $map['model'];

@@ -11,7 +11,6 @@ AI翻译调用,"AI translation call"
 "不允许的 Ai admin 路径","不允许的 Ai admin 路径"
 "无法解析 Ai admin 路径","无法解析 Ai admin 路径"
 控制器不存在：%{1},控制器不存在：%{1}
-未找到动作：%{1},未找到动作：%{1}
 默认模型设置成功,"Default model settings successfully applied"
 默认模型设置失败,默认模型设置失败
 默认模型配置保存成功,默认模型配置保存成功
@@ -47,7 +46,9 @@ AI翻译调用,"AI translation call"
 id属性不能为空,"The id attribute cannot be empty."
 搜索AI模型...,"Searching for AI models..."
 使用默认模型,"Using the default model"
-提示：点击选择AI模型，输入关键词搜索,提示：点击选择AI模型，输入关键词搜索
+供应商筛选,供应商筛选
+全部供应商,全部供应商
+提示：先选供应商，再搜索并点击选择模型,提示：先选供应商，再搜索并点击选择模型
 未找到匹配的模型,"No matching model found."
 加载失败,"Failed to load"
 "参数错误：words 必须是非空数组","参数错误：words 必须是非空数组"
@@ -146,6 +147,24 @@ API密钥已删除,"The API key has been deleted."
 个人设置,"Personal Settings"
 AI聊天,"AI Chat"
 聊天历史已清空,"Chat history has been cleared."
+智能体代码不能为空。,"Agent code is required."
+智能体代码和工具名称不能为空。,"Agent code and tool name are required."
+"成功扫描 %{count} 个智能体","Successfully scanned %{count} agents"
+扫描智能体失败,"Agent scan failed"
+"AI 智能体治理","AI agent governance"
+"AI 智能体目录与工具治理","AI agent catalog and tool governance"
+"查看 AI 智能体","View AI agents"
+"查看 AI 智能体目录","View AI agent catalog"
+保存智能体覆盖,"Save agent overrides"
+保存智能体名称与描述覆盖,"Save agent name and description overrides"
+切换智能体状态,"Toggle agent status"
+"启用或禁用 AI 智能体","Enable or disable AI agents"
+保存工具描述覆盖,"Save tool description override"
+保存智能体工具描述覆盖,"Save AI agent tool description override"
+切换工具状态,"Toggle tool status"
+启用或禁用智能体工具,"Enable or disable agent tools"
+"扫描 AI 智能体","Scan AI agents"
+"扫描并注册 AI 智能体","Scan and register AI agents"
 "模型绑定的供应商账户不存在（account_id: %{1}）","The provider account bound to the model does not exist (account_id: %{1})"
 "模型绑定的供应商账户未启用（account_id: %{1}，account_name: %{2}）","The provider account bound to the model is not enabled (account_id: %{1}, account_name: %{2})"
 "字段 %{field} 不是有效的 JSON 配置","Field %{field} is not a valid JSON configuration"
@@ -616,12 +635,6 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 确定删除,"Confirm deletion"
 正在绑定风格...,"Binding style..."
 风格已绑定到适配器。,"Style bound to adapter."
-正在匹配...,Matching...
-匹配失败,"Match failed"
-已匹配,Matched
-（分数,(score
-）,)
-未找到匹配风格。,"No matching style found."
 风格,风格
 "AI 风格","AI Style"
 管理模块、自定义、匹配和适配器绑定的视觉风格方向。,"Manage module, custom, matching, and adapter-bound visual style directions."
@@ -639,11 +652,34 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 自定义风格必须包含结构化字段，不能只填写补充说明。,"Custom styles must include structured fields and cannot only contain supplemental notes."
 克隆为自定义,"Clone as Custom"
 删除,Delete
-按简介匹配风格,"Match Style by Brief"
-站点标题,"Site Title"
-简介,Brief
-描述站点和目标市场,"Describe the site and target market"
-匹配风格,"Match Style"
+智能体目录加载失败,"Failed to load agent catalog"
+没有智能体符合当前筛选。,"No agents match the current filter."
+智能体详情,"Agent Detail"
+确定要扫描智能体吗？这将发现所有模块中的智能体并更新数据库记录，不会覆盖人工描述与启停。,"Scan agents now? This discovers agents from all modules and updates database records without overwriting description overrides or enablement."
+扫描智能体,"Scan agents"
+确定扫描,"Confirm scan"
+源描述（只读）,"Source description (read-only)"
+留空则回退为源描述,"Leave empty to fall back to the source description"
+启用智能体,"Enable agent"
+禁用智能体,"Disable agent"
+启用工具,"Enable tool"
+禁用工具,"Disable tool"
+保存覆盖,"Save override"
+未命名智能体,"Untitled agent"
+该智能体尚未注册工具。,"This agent has no registered tools yet."
+"AI 智能体","AI Agents"
+管理已注册智能体、描述覆盖与工具启停。不能在后台新建智能体。,"Manage registered agents, description overrides, and tool enablement. Custom agents cannot be created in admin."
+智能体目录,"Agent Catalog"
+"代码 / 名称 / 模块 / 场景","Code / name / module / scenario"
+智能体,Agent
+模块,模块
+工具,工具
+源名称（只读）,"Source name (read-only)"
+名称覆盖,"Name override"
+留空则回退为源名称,"Leave empty to fall back to the source name"
+描述覆盖,"Description override"
+场景,Scene
+从目录选择一个智能体查看详情。,"Select an agent from the catalog to view details."
 适配器说明,"Adapter Description"
 适配器,Adapter
 "用于不同业务场景调用 AI（如翻译、摘要、文章生成等）。每个适配器可设置默认模型，调用时会优先使用该模型；若未设置，则使用系统默认模型。","Used for invoking AI in different business scenarios (e.g., translation, summarization, article generation, etc.). Each adapter can set a default model; the call will prioritize this model; if not set, the system default model will be used."
@@ -668,15 +704,16 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 暂无场景适配器,"No scene adapters"
 "请点击""扫描适配器""按钮来扫描和收集适配器。","Please click the ""Scan Adapters"" button to scan and collect adapters."
 配置模型绑定,"Configuration model binding"
-为适配器分别绑定文本推理、文生图、文生视频模型；留空表示该能力不启用。,"Bind the text reasoning, Vincentian graph, and Vincentian video models to the adapter respectively; leaving them blank means that this capability is not enabled."
+为适配器分别绑定文本推理、文生图、文生视频模型；请先选供应商再搜索模型。留空表示该能力不启用。,为适配器分别绑定文本推理、文生图、文生视频模型；请先选供应商再搜索模型。留空表示该能力不启用。
+未关联可用供应商账户的模型会标注「未关联账户」，请优先选择已关联账户的供应商与模型。,未关联可用供应商账户的模型会标注「未关联账户」，请优先选择已关联账户的供应商与模型。
 文本推理模型,"Text reasoning model"
 不启用,"Not enabled"
 文生图模型,"Text-to-image model"
 文生视频模型,"Text-to-video model"
 保存绑定,"Save binding"
 搜索代码、名称、描述、模型绑定,"Search code, name, description, model binding"
+搜索模型名称或代码…,搜索模型名称或代码…
 确定要扫描场景适配器吗？这将发现所有模块中的适配器并更新数据库记录。,"Are you sure you want to scan scene adapters? This will discover adapters in all modules and update database records."
-确定扫描,"Confirm scan"
 确定要切换此适配器的状态吗？,"Are you sure you want to toggle the status of this adapter?"
 切换状态,"Switch Status"
 确定要删除此适配器吗？此操作不可恢复。,"Are you sure you want to delete this adapter? This action cannot be undone."
@@ -692,6 +729,10 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 确定要清理无效的适配器吗？这将删除代码文件已不存在的适配器记录。,"Are you sure you want to clear invalid adapters? This will delete adapter records whose code files no longer exist."
 清理无效适配器,"Clean up invalid adapters"
 确定清理,"Confirm cleanup"
+（未关联账户）,（未关联账户）
+未知供应商,未知供应商
+"· 未关联账户","· 未关联账户"
+（当前绑定，不在筛选结果中）,（当前绑定，不在筛选结果中）
 基本信息,"Basic Information"
 适配器ID,"Adapter ID"
 适配器名称,"Adapter name"
@@ -1077,6 +1118,9 @@ API基础URL,"API Base URL"
 只有自定义风格可以从数据库禁用。,"Only custom styles can be disabled from the database."
 只有自定义风格可以从数据库删除。,"Only custom styles can be deleted from the database."
 适配器代码不能为空。,"Adapter code is required."
+缺失的智能体不能启用。,"A missing agent cannot be enabled."
+缺失的工具不能启用。,"A missing tool cannot be enabled."
+工具不存在：%{1},"Tool does not exist: %{1}"
 "AI 请求在确认结果前中断，无法安全重试。","AI 请求在确认结果前中断，无法安全重试。"
 正在生成回复…,正在生成回复…
 "AI 服务暂时不可用，请检查所选模型和供应商连接后重试。","AI 服务暂时不可用，请检查所选模型和供应商连接后重试。"
@@ -1134,19 +1178,30 @@ AI用量审计恢复,"AI usage audit recovery"
 "每个智能体必须实现 AgentInterface 接口。","Each agent must implement the AgentInterface."
 开始扫描智能体...,"Start scanning agents..."
 未发现任何智能体,"No agents found"
-"成功扫描 %{count} 个智能体","Successfully scanned %{count} agents"
-场景,Scene
 工具数,"Number of tools"
 最大迭代,"Max Iterations"
 个工具,tools
 智能体扫描完成,"Agent scan completed"
-扫描智能体失败,"Agent scan failed"
 错误堆栈,"Error Stack"
 开始同步AI模型列表...,"Syncing AI model list..."
 "%{1} 同步成功：模型 %{2}，更新 %{3}，新增 %{4}，跳过 %{5}","%{1} Synchronization successful: model %{2}, update %{3}, add %{4}, skip %{5}"
 "%{1} 同步失败：%{2}","%{1} Synchronization failed: %{2}"
 "模型收集完成，共 %{1} 个模型","Model collection completed, total %{1} models"
 已跳过模型收集,"Model collection skipped"
+提示：点击选择AI模型，输入关键词搜索,提示：点击选择AI模型，输入关键词搜索
+为适配器分别绑定文本推理、文生图、文生视频模型；留空表示该能力不启用。,"Bind the text reasoning, Vincentian graph, and Vincentian video models to the adapter respectively; leaving them blank means that this capability is not enabled."
+未找到动作：%{1},未找到动作：%{1}
+正在匹配...,Matching...
+匹配失败,"Match failed"
+已匹配,Matched
+（分数,(score
+）,)
+未找到匹配风格。,"No matching style found."
+按简介匹配风格,"Match Style by Brief"
+站点标题,"Site Title"
+简介,Brief
+描述站点和目标市场,"Describe the site and target market"
+匹配风格,"Match Style"
 提示：点击选择AI模型，输入关键词搜索（800ms防抖）,"Tip: Click to select an AI model, enter keywords to search (800ms debounce)"
 "请提供 prompt。","请提供 prompt。"
 "generateStream 需要 prompt 与 on_chunk 回调。","generateStream 需要 prompt 与 on_chunk 回调。"

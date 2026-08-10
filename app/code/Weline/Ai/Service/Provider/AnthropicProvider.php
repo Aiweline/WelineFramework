@@ -12,6 +12,7 @@ namespace Weline\Ai\Service\Provider;
 
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Helper\ErrorMessageHelper;
+use Weline\Ai\Service\Agent\AgentGovernance;
 use Weline\Framework\App\Exception;
 
 /**
@@ -433,6 +434,7 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
      */
     private function convertToolsToAnthropicFormat(array $tools): array
     {
+        $tools = AgentGovernance::governToolDefs($tools);
         $anthropicTools = [];
         foreach ($tools as $tool) {
             $anthropicTools[] = [
