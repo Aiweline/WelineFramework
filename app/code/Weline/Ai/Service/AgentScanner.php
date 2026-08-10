@@ -10,8 +10,10 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Api\AgentCatalogInterface;
 use Weline\Ai\Api\AgentInterface;
 use Weline\Ai\Model\AiAgent;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Scan;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
@@ -62,6 +64,7 @@ class AgentScanner
     public function scanAllAgents(): array
     {
         $scannedAgents = [];
+        $presentCodes = [];
 
         // 1. 扫描 Weline_Ai 模块内置智能体
         $agentDir = BP . DIRECTORY_SEPARATOR . self::AGENT_DIR;
@@ -78,6 +81,7 @@ class AgentScanner
                     if ($agent) {
                         $this->registerAgent($agent, $agentFile);
                         $scannedAgents[] = $agent;
+                        $presentCodes[$agent->getCode()] = true;
                     }
                 } catch (\Exception $e) {
                     w_log_error("[AgentScanner] 加载内置智能体失败: {$agentFile}, 错误: " . $e->getMessage());
@@ -94,9 +98,16 @@ class AgentScanner
                 $moduleName = $agentInfo['module'] ?? '';
                 $this->registerAgent($agent, $agentFile, $moduleName);
                 $scannedAgents[] = $agent;
+                $presentCodes[$agent->getCode()] = true;
             } catch (\Exception $e) {
                 w_log_error("[AgentScanner] 注册扩展智能体失败: " . $e->getMessage());
             }
+        }
+
+        try {
+            $this->catalog()->markMissingAgents(array_keys($presentCodes));
+        } catch (\Throwable $e) {
+            w_log_error('[AgentScanner] 标记缺失智能体失败: ' . $e->getMessage());
         }
 
         return $scannedAgents;
@@ -171,7 +182,7 @@ class AgentScanner
             return null;
         }
 
-        require_once $agentFile;
+        $this->requireAgentFileOnce($agentFile);
 
         $className = $this->getClassNameFromFile($agentFile, $moduleName);
         if (!$className) {
@@ -196,9 +207,9 @@ class AgentScanner
      */
     private function getClassNameFromFile(string $filePath, ?string $moduleName = null): ?string
     {
-        // extends 目录下的文件：从文件内容解析命名空间
-        if (str_contains($filePath, DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR)
-            || str_contains($filePath, '/extends/')) {
+        // extends 目录下的文件：从文件内容解析命名空间（忽略 Extends/ 大小写）
+        $normalizedPath = str_replace('\\', '/', strtolower($filePath));
+        if (str_contains($normalizedPath, '/extends/')) {
             $content = file_get_contents($filePath);
             if ($content === false) {
                 return null;
@@ -232,6 +243,12 @@ class AgentScanner
             ->fetch();
 
         $currentTime = time();
+        $tools = [];
+        try {
+            $tools = $agent->getTools();
+        } catch (\Throwable $e) {
+            w_log_error("[AgentScanner] 读取智能体工具失败: {$code}, 错误: " . $e->getMessage());
+        }
         $data = [
             AiAgent::schema_fields_CODE => $code,
             AiAgent::schema_fields_NAME => $agent->getName(),
@@ -240,27 +257,37 @@ class AgentScanner
             AiAgent::schema_fields_CLASS_NAME => get_class($agent),
             AiAgent::schema_fields_FILE_PATH => $relativePath,
             AiAgent::schema_fields_SCENARIOS => json_encode($agent->getScenarios(), JSON_UNESCAPED_UNICODE),
-            AiAgent::schema_fields_TOOLS_COUNT => count($agent->getTools()),
+            AiAgent::schema_fields_TOOLS_COUNT => count($tools),
             AiAgent::schema_fields_MAX_ITERATIONS => $agent->getMaxIterations(),
             AiAgent::schema_fields_MODULE => $moduleName,
-            AiAgent::schema_fields_IS_ACTIVE => 1,
+            AiAgent::schema_fields_IS_PRESENT => 1,
             AiAgent::schema_fields_UPDATED_TIME => $currentTime,
         ];
 
         if ($existing->getId()) {
-            // 更新
             foreach ($data as $field => $value) {
                 $existing->setData($field, $value);
             }
             $existing->save();
         } else {
-            // 新增
+            $data[AiAgent::schema_fields_IS_ACTIVE] = 1;
             $data[AiAgent::schema_fields_CREATED_TIME] = $currentTime;
             $newAgent = new AiAgent();
             $newAgent->setData($data)->save();
         }
 
+        try {
+            $this->catalog()->syncToolsFromAgent($code, $tools);
+        } catch (\Throwable $e) {
+            w_log_error("[AgentScanner] 同步智能体工具失败: {$code}, 错误: " . $e->getMessage());
+        }
+
         return true;
+    }
+
+    private function catalog(): AgentCatalogInterface
+    {
+        return ObjectManager::getInstance(AgentCatalogInterface::class);
     }
 
     /**
@@ -287,14 +314,17 @@ class AgentScanner
             return $this->loadAgentFromCode($code);
         }
 
-        // 加载文件
-        $relativePath = $record->getData(AiAgent::schema_fields_FILE_PATH);
-        if (!empty($relativePath)) {
-            $agentFile = BP . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
-            if (file_exists($agentFile)) {
-                require_once $agentFile;
-            } else {
-                return $this->loadAgentFromCode($code);
+        // Prefer PSR-4 if the class is already loaded. Otherwise include the
+        // registered file once, normalizing Extends/ vs extends/ on macOS.
+        if (!class_exists($className, true)) {
+            $relativePath = $record->getData(AiAgent::schema_fields_FILE_PATH);
+            if (!empty($relativePath)) {
+                $agentFile = BP . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
+                if (file_exists($agentFile)) {
+                    $this->requireAgentFileOnce($agentFile);
+                } else {
+                    return $this->loadAgentFromCode($code);
+                }
             }
         }
 
@@ -477,6 +507,55 @@ class AgentScanner
         }
 
         return null;
+    }
+
+    /**
+     * Require an agent PHP file once, normalizing realpath so macOS
+     * case-insensitive FS does not double-declare the same class via
+     * Extends/ vs extends/ path spellings.
+     */
+    private function requireAgentFileOnce(string $agentFile): void
+    {
+        static $loadedByInode = [];
+
+        $resolved = \realpath($agentFile);
+        if (\is_string($resolved) && $resolved !== '') {
+            $agentFile = $resolved;
+        }
+
+        $inodeKey = '';
+        if (\is_file($agentFile)) {
+            $stat = @\stat($agentFile);
+            if (\is_array($stat) && isset($stat['dev'], $stat['ino'])) {
+                $inodeKey = (string)$stat['dev'] . ':' . (string)$stat['ino'];
+            }
+        }
+        if ($inodeKey === '') {
+            $inodeKey = \strtolower($agentFile);
+        }
+        if (isset($loadedByInode[$inodeKey])) {
+            return;
+        }
+
+        foreach (\get_included_files() as $included) {
+            $includedPath = \is_string($included) ? $included : '';
+            if ($includedPath === '' || !\is_file($includedPath)) {
+                continue;
+            }
+            $includedStat = @\stat($includedPath);
+            if (!\is_array($includedStat) || !isset($includedStat['dev'], $includedStat['ino'])) {
+                continue;
+            }
+            $includedKey = (string)$includedStat['dev'] . ':' . (string)$includedStat['ino'];
+            if ($includedKey === $inodeKey) {
+                $loadedByInode[$inodeKey] = true;
+
+                return;
+            }
+        }
+
+        require $agentFile;
+        $loadedByInode[$inodeKey] = true;
     }
 
     /**

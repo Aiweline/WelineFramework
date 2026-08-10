@@ -13,9 +13,11 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Api\AgentCatalogInterface;
 use Weline\Ai\Api\AgentInterface;
 use Weline\Ai\Api\AgentModelExecutor;
 use Weline\Ai\Api\AgentResult;
+use Weline\Ai\Service\Agent\AgentExecutionContext;
 use Weline\Ai\Api\AiModel as AgentModel;
 use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Model\AiModel;
@@ -584,6 +586,30 @@ class AiService
                 'primary_modality' => $primaryModality,
                 'capabilities' => \array_values(\array_filter(\array_map('strval', $requiredCapabilities))),
             ];
+        }
+
+        // Binding an active model is not enough: generateImage/chat still need a
+        // resolvable provider api_key/base_url. Surface that here so PageBuilder
+        // readiness gates fail closed instead of enqueueing doomed asset jobs.
+        $modelCode = \trim((string)($model['model_code'] ?? ''));
+        if ($modelCode !== '') {
+            try {
+                ObjectManager::getInstance(ConfigResolver::class)->resolveConfig(
+                    $modelCode,
+                    [],
+                    null,
+                    true,
+                );
+            } catch (\Throwable) {
+                return [
+                    'ready' => false,
+                    'code' => 'PROVIDER_CONFIG_UNAVAILABLE',
+                    'scenario_code' => $scenarioCode,
+                    'primary_modality' => $primaryModality,
+                    'model' => $model,
+                    'capabilities' => \array_values(\array_filter(\array_map('strval', $requiredCapabilities))),
+                ];
+            }
         }
 
         return [
@@ -2389,16 +2415,21 @@ class AiService
         }
 
         // 6. 委托给智能体执行（Agent 自行管理 Tool 调用循环）
-        $result = $agent->execute(
-            $prompt,
-            AgentModel::fromArray($model->getData()),
-            $params,
-            $wrappedCallback,
-        );
-        $result->agentCode = $agentCode;
-        $result->modelCode = $model->getModelCode();
+        AgentExecutionContext::enter($agentCode);
+        try {
+            $result = $agent->execute(
+                $prompt,
+                AgentModel::fromArray($model->getData()),
+                $params,
+                $wrappedCallback,
+            );
+            $result->agentCode = $agentCode;
+            $result->modelCode = $model->getModelCode();
 
-        return $result;
+            return $result;
+        } finally {
+            AgentExecutionContext::leave();
+        }
     }
 
     /**
@@ -2434,13 +2465,14 @@ class AiService
         $result = [];
 
         foreach ($agents as $code => $agent) {
+            $item = $this->agentCatalog()->findByCode((string)$code);
             $result[] = [
                 'code' => $agent->getCode(),
-                'name' => $agent->getName(),
-                'description' => $agent->getDescription(),
+                'name' => (string)($item['effective_name'] ?? $agent->getName()),
+                'description' => (string)($item['effective_description'] ?? $agent->getDescription()),
                 'version' => $agent->getVersion(),
                 'scenarios' => $agent->getScenarios(),
-                'tools_count' => count($agent->getTools()),
+                'tools_count' => (int)($item['tools_count'] ?? count($agent->getTools())),
                 'max_iterations' => $agent->getMaxIterations(),
             ];
         }
@@ -2456,9 +2488,35 @@ class AiService
      */
     public function getAgentInfo(string $agentCode): ?array
     {
+        $item = $this->agentCatalog()->findByCode($agentCode);
         $agent = $this->agentScanner->getAgent($agentCode);
-        if (!$agent) {
+        if (!$item && !$agent) {
             return null;
+        }
+
+        if (is_array($item)) {
+            $tools = [];
+            foreach ((array)($item['tools'] ?? []) as $tool) {
+                if (!is_array($tool)) {
+                    continue;
+                }
+                $tools[] = [
+                    'name' => (string)($tool['tool_name'] ?? ''),
+                    'description' => (string)($tool['effective_description'] ?? $tool['description'] ?? ''),
+                    'parameters' => is_array($tool['parameters'] ?? null) ? $tool['parameters'] : [],
+                    'enabled' => !empty($tool['is_enabled']) && !empty($tool['is_present']),
+                ];
+            }
+
+            return [
+                'code' => (string)$item['code'],
+                'name' => (string)($item['effective_name'] ?? $item['name'] ?? ''),
+                'description' => (string)($item['effective_description'] ?? $item['description'] ?? ''),
+                'version' => (string)($item['version'] ?? ''),
+                'scenarios' => is_array($item['scenarios'] ?? null) ? $item['scenarios'] : [],
+                'tools' => $tools,
+                'max_iterations' => (int)($item['max_iterations'] ?? 0),
+            ];
         }
 
         $tools = [];
@@ -2480,6 +2538,11 @@ class AiService
             'tools' => $tools,
             'max_iterations' => $agent->getMaxIterations(),
         ];
+    }
+
+    private function agentCatalog(): AgentCatalogInterface
+    {
+        return ObjectManager::getInstance(AgentCatalogInterface::class);
     }
 
     /**

@@ -13,6 +13,7 @@ use Weline\Ai\Service\DefaultModelManager;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Php\FiberTaskRunner;
+use Weline\Ai\Service\Query\AiAgentQuerySupport;
 use Weline\Ai\Service\Query\AiStyleSkillQuerySupport;
 use Weline\Framework\Service\Query\AdminControllerBridge;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -26,6 +27,7 @@ class AiQueryProvider implements QueryProviderInterface
 
     private ?AiProviderAccountQueryProvider $providerAccountQueryProvider = null;
     private ?AiStyleSkillQuerySupport $styleSkillQuerySupport = null;
+    private ?AiAgentQuerySupport $agentQuerySupport = null;
 
     public function __construct(
         private readonly AiService $aiService,
@@ -68,6 +70,12 @@ class AiQueryProvider implements QueryProviderInterface
             'skillImportUrl',
             'skillBindAdapter',
             'skillUnbindAdapter' => $this->styleSkillQuerySupport()->execute($operation, $params),
+            'agentCatalog',
+            'agentSave',
+            'agentSetActive',
+            'agentSaveTool',
+            'agentSetToolStatus',
+            'agentScan' => $this->agentQuerySupport()->execute($operation, $params),
             'providerListAccounts' => $this->providerAccountQueryProvider()->execute('listAccounts', $params),
             'providerGetAccount' => $this->providerAccountQueryProvider()->execute('getAccount', $params),
             'providerSaveAccount' => $this->providerAccountQueryProvider()->execute('saveAccount', $params),
@@ -428,7 +436,7 @@ class AiQueryProvider implements QueryProviderInterface
                 ['name' => 'modelTestConnection', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 3, 'auth' => 'backend', 'params' => ['model_code' => ['type' => 'string', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test an AI model connection'],
                 ['name' => 'modelBulkTestConnection', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 5, 'auth' => 'backend', 'params' => ['model_ids' => ['type' => 'array', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test AI model connections in batch'],
                 ['name' => 'modelTestSelfConfig', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 3, 'auth' => 'backend', 'params' => ['model_code' => ['type' => 'string', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test AI model self configuration'],
-            ], $this->styleSkillQuerySupport()->getOperationDescriptors(), $this->getProviderAccountOperationDescriptors())),
+            ], $this->styleSkillQuerySupport()->getOperationDescriptors(), $this->agentQuerySupport()->getOperationDescriptors(), $this->getProviderAccountOperationDescriptors())),
         ];
     }
 
@@ -554,6 +562,15 @@ class AiQueryProvider implements QueryProviderInterface
             ];
         } catch (\LogicException) {
             // Not a style/skill op — fall through.
+        }
+
+        try {
+            return [
+                'kind' => 'source',
+                'source_id' => $this->agentQuerySupport()->backendAclSourceId($operation),
+            ];
+        } catch (\LogicException) {
+            // Not an agent op — fall through.
         }
 
         $sourceId = match ($operation) {
@@ -979,6 +996,11 @@ class AiQueryProvider implements QueryProviderInterface
     private function styleSkillQuerySupport(): AiStyleSkillQuerySupport
     {
         return $this->styleSkillQuerySupport ??= new AiStyleSkillQuerySupport();
+    }
+
+    private function agentQuerySupport(): AiAgentQuerySupport
+    {
+        return $this->agentQuerySupport ??= new AiAgentQuerySupport();
     }
 
     private function requireNonEmptyString(array $params, string $key, ?string $alias = null): string
