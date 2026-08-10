@@ -375,6 +375,14 @@ function wlsSharedFiberRequestContextLeave(): void
         \Weline\Framework\Runtime\RequestResetException::append($failures, 'sse_context', $e);
     }
 
+    try {
+        if (\class_exists(\Weline\Framework\Session\SessionFactory::class, false)) {
+            \Weline\Framework\Session\SessionFactory::getInstance()->resetRequestInstances();
+        }
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'session_factory', $e);
+    }
+
     $fiber = \Fiber::getCurrent();
     $hasOwnedContext = $fiber === null
         ? \Weline\Framework\Context::getCurrent() !== null
