@@ -14,6 +14,12 @@ on:
       - "app/code/Weline/Server/Service/Edge/Gateway/**"
       - "app/code/Weline/Server/Service/Edge/CertificateMaterialUpdateCoordinator.php"
       - "app/code/Weline/Server/Service/Edge/Nginx/**"
+      - "app/code/Weline/Server/IPC/**"
+      - "app/code/Weline/Server/Service/Control/**"
+      - "app/code/Weline/Server/Dispatcher/**"
+      - "app/code/Weline/Server/Supervisor/**"
+      - "app/code/Weline/Server/Service/Runtime/**"
+      - "app/code/Weline/Server/Service/Policy/**"
       - "app/code/Weline/Server/IPC/ControlMessage.php"
       - "app/code/Weline/Server/Service/ServiceOrchestrator.php"
       - "app/code/Weline/Server/Service/Provider/GatewayProvider.php"
@@ -22,12 +28,11 @@ on:
       - "app/code/Weline/Server/Service/MasterLeaseRuntimeIdentity.php"
       - "app/code/Weline/Server/Service/ServerInstanceManager.php"
       - "app/code/Weline/Server/Service/Runtime/WindowsListenerHandoff*.php"
-      - "app/code/Weline/Server/Service/Runtime/ProtocolEdgeRuntime.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBackendIngressTokenStore.php"
       - "app/code/Weline/Server/Service/Runtime/RuntimeDependencyBootstrapper.php"
       - "app/code/Weline/Server/Service/Runtime/TlsTicketRingStore.php"
       - "app/code/Weline/Server/Service/Runtime/VerifiedPersistentFileLock.php"
       - "app/code/Weline/Server/Service/Policy/RuntimePolicyStore.php"
-      - "app/code/Weline/Server/Service/WlsGateway.php"
       - "app/code/Weline/Server/bin/worker.php"
       - "app/code/Weline/Server/bin/worker_ssl.php"
       - "app/code/Weline/Framework/System/Process/Processer.php"
@@ -69,6 +74,10 @@ on:
       - "app/code/Weline/Server/Test/Unit/Console/Gateway/**"
       - "app/code/Weline/Server/Test/Unit/Console/StatusCommandTest.php"
       - "app/code/Weline/Server/Test/Unit/Console/BenchmarkCommandTest.php"
+      - "app/code/Weline/Server/Test/Unit/ChildControl/**"
+      - "app/code/Weline/Server/Test/Unit/Control/**"
+      - "app/code/Weline/Server/Test/Unit/Dispatcher/**"
+      - "app/code/Weline/Server/Test/Unit/Supervisor/**"
       - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/**"
       - "app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/GatewayFallbackProviderTest.php"
@@ -81,7 +90,8 @@ on:
       - "app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerMasterExitRetentionTest.php"
       - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserWindowsIsolatedBatchReaperTest.php"
       - "app/code/Weline/Server/Test/Unit/Runtime/WindowsListenerHandoffTest.php"
-      - "app/code/Weline/Server/Test/Unit/Service/Runtime/ProtocolEdgeRuntimeOwnershipTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/GatewayBackendIngressTokenStoreOwnershipTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/DirectReloadSurgeIdAllocatorTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Runtime/RuntimeDependencyBootstrapperLockSafetyTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Runtime/TlsTicketRingStoreRecoveryTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Runtime/VerifiedPersistentFileLockSafetyTest.php"
@@ -166,6 +176,12 @@ on:
       - "app/code/Weline/Server/Service/Edge/Gateway/**"
       - "app/code/Weline/Server/Service/Edge/CertificateMaterialUpdateCoordinator.php"
       - "app/code/Weline/Server/Service/Edge/Nginx/**"
+      - "app/code/Weline/Server/IPC/**"
+      - "app/code/Weline/Server/Service/Control/**"
+      - "app/code/Weline/Server/Dispatcher/**"
+      - "app/code/Weline/Server/Supervisor/**"
+      - "app/code/Weline/Server/Service/Runtime/**"
+      - "app/code/Weline/Server/Service/Policy/**"
       - "app/code/Weline/Server/IPC/ControlMessage.php"
       - "app/code/Weline/Server/Service/ServiceOrchestrator.php"
       - "app/code/Weline/Server/Service/Provider/GatewayProvider.php"
@@ -174,12 +190,11 @@ on:
       - "app/code/Weline/Server/Service/MasterLeaseRuntimeIdentity.php"
       - "app/code/Weline/Server/Service/ServerInstanceManager.php"
       - "app/code/Weline/Server/Service/Runtime/WindowsListenerHandoff*.php"
-      - "app/code/Weline/Server/Service/Runtime/ProtocolEdgeRuntime.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBackendIngressTokenStore.php"
       - "app/code/Weline/Server/Service/Runtime/RuntimeDependencyBootstrapper.php"
       - "app/code/Weline/Server/Service/Runtime/TlsTicketRingStore.php"
       - "app/code/Weline/Server/Service/Runtime/VerifiedPersistentFileLock.php"
       - "app/code/Weline/Server/Service/Policy/RuntimePolicyStore.php"
-      - "app/code/Weline/Server/Service/WlsGateway.php"
       - "app/code/Weline/Server/bin/worker.php"
       - "app/code/Weline/Server/bin/worker_ssl.php"
       - "app/code/Weline/Framework/System/Process/Processer.php"
@@ -221,6 +236,10 @@ on:
       - "app/code/Weline/Server/Test/Unit/Console/Gateway/**"
       - "app/code/Weline/Server/Test/Unit/Console/StatusCommandTest.php"
       - "app/code/Weline/Server/Test/Unit/Console/BenchmarkCommandTest.php"
+      - "app/code/Weline/Server/Test/Unit/ChildControl/**"
+      - "app/code/Weline/Server/Test/Unit/Control/**"
+      - "app/code/Weline/Server/Test/Unit/Dispatcher/**"
+      - "app/code/Weline/Server/Test/Unit/Supervisor/**"
       - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/**"
       - "app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/GatewayFallbackProviderTest.php"
@@ -233,7 +252,8 @@ on:
       - "app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerMasterExitRetentionTest.php"
       - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserWindowsIsolatedBatchReaperTest.php"
       - "app/code/Weline/Server/Test/Unit/Runtime/WindowsListenerHandoffTest.php"
-      - "app/code/Weline/Server/Test/Unit/Service/Runtime/ProtocolEdgeRuntimeOwnershipTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/GatewayBackendIngressTokenStoreOwnershipTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Runtime/DirectReloadSurgeIdAllocatorTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Runtime/RuntimeDependencyBootstrapperLockSafetyTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Runtime/TlsTicketRingStoreRecoveryTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Runtime/VerifiedPersistentFileLockSafetyTest.php"
@@ -416,6 +436,18 @@ jobs:
           app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerMasterExitRetentionTest.php
           app/code/Weline/Framework/Test/Unit/System/Process/ProcesserWindowsIsolatedBatchReaperTest.php
           app/code/Weline/Server/Test/Unit/Runtime/WindowsListenerHandoffTest.php
+      - name: Validate WLS master-child control-plane contracts
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/ChildControl
+          app/code/Weline/Server/Test/Unit/Control
+          app/code/Weline/Server/Test/Unit/Dispatcher
+          app/code/Weline/Server/Test/Unit/Supervisor
+          app/code/Weline/Server/Test/Unit/Service/HybridControlPlaneServerTest.php
+          app/code/Weline/Server/Test/Unit/Service/MasterProcessControlPlaneRuntimeTest.php
+          app/code/Weline/Server/Test/Unit/Service/ServiceOrchestratorGatewayLeaseDeadlineTest.php
+          app/code/Weline/Server/Test/Unit/Service/GatewayStartupFallbackControlTest.php
       - name: Validate gateway serving projection and diagnostic consumers
         run: >-
           php vendor/bin/phpunit
@@ -436,7 +468,8 @@ jobs:
           --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Nginx
           app/code/Weline/Server/Test/Unit/Console/Gateway
-          app/code/Weline/Server/Test/Unit/Service/Runtime/ProtocolEdgeRuntimeOwnershipTest.php
+          app/code/Weline/Server/Test/Unit/Service/Runtime/GatewayBackendIngressTokenStoreOwnershipTest.php
+          app/code/Weline/Server/Test/Unit/Service/Runtime/DirectReloadSurgeIdAllocatorTest.php
           app/code/Weline/Server/Test/Unit/Service/Runtime/TlsTicketRingStoreRecoveryTest.php
           app/code/Weline/Server/Test/Unit/Service/SslCertificateReuseTest.php
           app/code/Weline/Server/Test/Unit/Service/SslCertificateStorageSecurityTest.php
@@ -585,6 +618,54 @@ jobs:
     permissions:
       contents: read
 
+  verify-release-container-images:
+    name: Verify immutable release container images on the trusted host
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      auditor_image: ${{ steps.verify-auditor.outputs.auditor_image }}
+      signer_image: ${{ steps.verify-signer.outputs.signer_image }}
+    steps:
+      - name: Verify auditor image digest before any container start
+        id: verify-auditor
+        env:
+          IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_REFERENCE" =~ ^([^[:space:]@]+)@sha256:([a-f0-9]{64})$ ]]; then
+            echo "WLS_GATEWAY_AUDITOR_IMAGE must be an immutable digest reference." >&2
+            exit 1
+          fi
+          expected_digest="${BASH_REMATCH[2]}"
+          docker pull --quiet "$IMAGE_REFERENCE"
+          resolved_digests="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE_REFERENCE")"
+          if ! grep -Eq "@sha256:${expected_digest}$" <<<"$resolved_digests"; then
+            echo "Pulled auditor image digest does not match the allowlisted reference." >&2
+            exit 1
+          fi
+          printf '%s\n' "auditor_image=$IMAGE_REFERENCE" >> "$GITHUB_OUTPUT"
+      - name: Verify signer image digest before any container start
+        id: verify-signer
+        env:
+          IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_REFERENCE" =~ ^([^[:space:]@]+)@sha256:([a-f0-9]{64})$ ]]; then
+            echo "WLS_GATEWAY_SIGNER_IMAGE must be an immutable digest reference." >&2
+            exit 1
+          fi
+          expected_digest="${BASH_REMATCH[2]}"
+          docker pull --quiet "$IMAGE_REFERENCE"
+          resolved_digests="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE_REFERENCE")"
+          if ! grep -Eq "@sha256:${expected_digest}$" <<<"$resolved_digests"; then
+            echo "Pulled signer image digest does not match the allowlisted reference." >&2
+            exit 1
+          fi
+          printf '%s\n' "signer_image=$IMAGE_REFERENCE" >> "$GITHUB_OUTPUT"
+
   assemble-production:
     name: Signed ${{ inputs.target_profile }} package
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
@@ -600,6 +681,8 @@ jobs:
       WLS_TARGET_PLATFORM: ${{ startsWith(inputs.target_profile, 'linux-') && 'Linux' || startsWith(inputs.target_profile, 'darwin-') && 'Darwin' || startsWith(inputs.target_profile, 'windows-') && 'Windows' || '' }}
       WLS_TARGET_ARCH: ${{ endsWith(inputs.target_profile, '-arm64') && 'arm64' || 'x86_64' }}
       WLS_PROVENANCE_SHA256: ${{ inputs.provenance_sha256 }}
+      WLS_GATEWAY_RELEASE_KEY_ID: ${{ vars.WLS_GATEWAY_RELEASE_KEY_ID }}
+      WLS_GATEWAY_RELEASE_PUBLIC_KEY_BASE64: ${{ vars.WLS_GATEWAY_RELEASE_PUBLIC_KEY_BASE64 }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -675,7 +758,7 @@ jobs:
           }
           $components = @('php', 'nginx', 'wls-gateway-broker', 'wls-gateway-launcher')
           if ($env:WLS_TARGET_PLATFORM -eq 'Windows') {
-            $components += 'wls-bounded-command'
+            $components += @('wls-bounded-command', 'wls-gateway-guardian')
           }
           foreach ($component in $components) {
             $destination = Join-Path $binDir "$component$suffix"
@@ -684,6 +767,7 @@ jobs:
           $provenance = Join-Path $componentDir "provenance.json"
           Receive-TrustedFile "$base/provenance.json" $provenance
           Receive-TrustedFile "$base/LICENSES.txt" (Join-Path $componentDir "LICENSES.txt")
+          Receive-TrustedFile "$base/ca-bundle.pem" (Join-Path $componentDir "ca-bundle.pem")
           $actual = (Get-FileHash -Algorithm SHA256 -Path $provenance).Hash.ToLowerInvariant()
           if ($actual -cne $env:WLS_PROVENANCE_SHA256) {
             throw "Approved provenance digest does not match the downloaded file."
@@ -714,11 +798,13 @@ jobs:
             "--nginx=$(Join-Path $componentDir "bin/nginx$suffix")",
             "--wls-gateway-broker=$(Join-Path $componentDir "bin/wls-gateway-broker$suffix")",
             "--wls-gateway-launcher=$(Join-Path $componentDir "bin/wls-gateway-launcher$suffix")",
+            "--ca-bundle=$(Join-Path $componentDir 'ca-bundle.pem')",
             "--licenses=$(Join-Path $componentDir 'LICENSES.txt')",
             "--provenance=$(Join-Path $componentDir 'provenance.json')"
           )
           if ($env:WLS_TARGET_PLATFORM -eq 'Windows') {
             $arguments += "--wls-bounded-command=$(Join-Path $componentDir 'bin/wls-bounded-command.exe')"
+            $arguments += "--wls-gateway-guardian=$(Join-Path $componentDir 'bin/wls-gateway-guardian.exe')"
           }
           & php @arguments
           if ($LASTEXITCODE -ne 0) {
@@ -727,6 +813,44 @@ jobs:
           $manifest = Get-Content -Raw (Join-Path $packageDir 'manifest.json') | ConvertFrom-Json
           if ($manifest.release_ready -ne $false -or $manifest.package_profile -ne 'production') {
             throw "Assembly must produce a non-ready production candidate."
+          }
+      - name: Inject enabled release verification key
+        shell: pwsh
+        run: |
+          $script = @'
+            $keyId = trim((string)getenv('WLS_GATEWAY_RELEASE_KEY_ID'));
+            $encoded = trim((string)getenv('WLS_GATEWAY_RELEASE_PUBLIC_KEY_BASE64'));
+            $public = base64_decode($encoded, true);
+            if (preg_match('/\A[0-9A-Za-z][0-9A-Za-z._-]{0,63}\z/D', $keyId) !== 1
+                || !is_string($public)
+                || strlen($public) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
+            ) {
+                fwrite(STDERR, "An exact enabled Ed25519 release verification key is required.\n");
+                exit(1);
+            }
+            $inventory = [
+                'schema_version' => 1,
+                'keys' => [[
+                    'id' => $keyId,
+                    'algorithm' => 'ed25519',
+                    'enabled' => true,
+                    'public_key_base64' => base64_encode($public),
+                ]],
+                'note' => 'Release artifact trust inventory; private keys are never distributed.',
+            ];
+            $bytes = json_encode(
+                $inventory,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . "\n";
+            $target = 'app/code/Weline/Server/env/gateway/trusted-release-keys.json';
+            if (file_put_contents($target, $bytes, LOCK_EX) !== strlen($bytes)) {
+                fwrite(STDERR, "Unable to inject the release verification key inventory.\n");
+                exit(1);
+            }
+          '@
+          & php -r $script
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release verification-key injection failed."
           }
       - name: Stage the protected signer implementation bundle
         shell: pwsh
@@ -762,11 +886,13 @@ jobs:
   audit-production:
     name: Audit immutable candidate without release secrets
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
-    needs: assemble-production
+    needs:
+      - assemble-production
+      - verify-release-container-images
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      AUDITOR_IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}
+      AUDITOR_IMAGE_REFERENCE: ${{ needs.verify-release-container-images.outputs.auditor_image }}
       EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
       EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS_X86_64 || '' }}
     steps:
@@ -775,18 +901,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ ! "$AUDITOR_IMAGE_REFERENCE" =~ ^([^[:space:]@]+)@sha256:([a-f0-9]{64})$ ]]; then
-            echo "WLS_GATEWAY_AUDITOR_IMAGE must be an immutable digest reference." >&2
-            exit 1
-          fi
-          expected_digest="${BASH_REMATCH[2]}"
-          docker pull --quiet "$AUDITOR_IMAGE_REFERENCE"
-          resolved="$(docker image inspect --format '{{index .RepoDigests 0}}' "$AUDITOR_IMAGE_REFERENCE")"
-          if [[ ! "$resolved" =~ @sha256:([a-f0-9]{64})$ ]]; then
-            echo "Pulled auditor image did not resolve to a digest." >&2
-            exit 1
-          fi
-          if [[ "${BASH_REMATCH[1]}" != "$expected_digest" ]]; then
-            echo "Pulled auditor image digest does not match the allowlisted reference." >&2
+            echo "The trusted host did not provide an immutable auditor image digest." >&2
             exit 1
           fi
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -860,13 +975,14 @@ jobs:
       - assemble-production
       - audit-production
       - native-gate
+      - verify-release-container-images
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: wls-gateway-release
     env:
       RELEASE_KEY_ID: ${{ vars.WLS_GATEWAY_RELEASE_KEY_ID }}
       WLS_TARGET_PLATFORM: ${{ startsWith(inputs.target_profile, 'linux-') && 'Linux' || startsWith(inputs.target_profile, 'darwin-') && 'Darwin' || startsWith(inputs.target_profile, 'windows-') && 'Windows' || '' }}
-      SIGNER_IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}
+      SIGNER_IMAGE_REFERENCE: ${{ needs.verify-release-container-images.outputs.signer_image }}
       EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
       EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS_X86_64 || '' }}
       PROTECTED_REF: ${{ github.ref_protected }}
@@ -876,18 +992,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ ! "$SIGNER_IMAGE_REFERENCE" =~ ^([^[:space:]@]+)@sha256:([a-f0-9]{64})$ ]]; then
-            echo "WLS_GATEWAY_SIGNER_IMAGE must be an immutable digest reference." >&2
-            exit 1
-          fi
-          expected_digest="${BASH_REMATCH[2]}"
-          docker pull --quiet "$SIGNER_IMAGE_REFERENCE"
-          resolved="$(docker image inspect --format '{{index .RepoDigests 0}}' "$SIGNER_IMAGE_REFERENCE")"
-          if [[ ! "$resolved" =~ @sha256:([a-f0-9]{64})$ ]]; then
-            echo "Pulled signer image did not resolve to a digest." >&2
-            exit 1
-          fi
-          if [[ "${BASH_REMATCH[1]}" != "$expected_digest" ]]; then
-            echo "Pulled signer image digest does not match the allowlisted reference." >&2
+            echo "The trusted host did not provide an immutable signer image digest." >&2
             exit 1
           fi
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -991,6 +1096,36 @@ jobs:
         with:
           name: wls-gateway-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/wls-gateway-package
+          if-no-files-found: error
+          retention-days: 30
+      - name: Stage signed project bootstrap distribution
+        shell: pwsh
+        run: |
+          $distribution = Join-Path $env:RUNNER_TEMP 'wls-gateway-project-distribution'
+          $packageTarget = Join-Path $distribution 'extend/server/wls-gateway/${{ inputs.target_profile }}'
+          $trustTarget = Join-Path $distribution 'app/code/Weline/Server/env/gateway'
+          New-Item -ItemType Directory -Path $packageTarget -Force | Out-Null
+          New-Item -ItemType Directory -Path $trustTarget -Force | Out-Null
+          Copy-Item -Path (Join-Path $env:RUNNER_TEMP 'wls-gateway-package/*') `
+            -Destination $packageTarget -Recurse -Force -ErrorAction Stop
+          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP `
+            'wls-gateway-signer/app/code/Weline/Server/env/gateway/trusted-release-keys.json') `
+            -Destination (Join-Path $trustTarget 'trusted-release-keys.json') `
+            -Force -ErrorAction Stop
+          $manifest = Get-Content -Raw (Join-Path $packageTarget 'manifest.json') | ConvertFrom-Json
+          $keys = Get-Content -Raw (Join-Path $trustTarget 'trusted-release-keys.json') | ConvertFrom-Json
+          if ($manifest.release_ready -ne $true -or
+              $manifest.package_profile -ne 'production' -or
+              $keys.keys.Count -ne 1 -or
+              $keys.keys[0].enabled -ne $true -or
+              $keys.keys[0].id -cne $manifest.signing_key_id) {
+            throw 'The staged project bootstrap distribution is not release-ready or trust-bound.'
+          }
+      - name: Upload signed project bootstrap distribution
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wls-gateway-project-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wls-gateway-project-distribution
           if-no-files-found: error
           retention-days: 30
       - name: Upload signed Windows pure-WLS bootstrap helper

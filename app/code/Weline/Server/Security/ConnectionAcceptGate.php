@@ -228,7 +228,7 @@ final class ConnectionAcceptGate
         string $connectionId,
         string $transportPeer,
         ?float $now = null,
-        bool $trustedProtocolEdge = false,
+        bool $trustedGatewayBackend = false,
     ): ConnectionAcceptDecision {
         $connectionId = \trim($connectionId);
         if ($connectionId === '') {
@@ -243,16 +243,16 @@ final class ConnectionAcceptGate
         if ($peerIp === '') {
             return $this->reject('', 'invalid_peer');
         }
-        // A local protocol edge may pool HTTP/1.1 upstream connections across
+        // Managed Nginx may pool HTTP/1.1 upstream connections across
         // many public clients. Connection-scoped PROXY v2 therefore cannot
         // represent the identity of every request on that pooled connection.
         // Treat the authenticated loopback edge as a transport whitelist while
         // retaining instance-wide capacity/rate limits and slow-peer cleanup;
         // Workers still enforce all client-IP rules from the authenticated,
         // per-request edge envelope.
-        $whitelisted = $trustedProtocolEdge
+        $whitelisted = $trustedGatewayBackend
             || $this->matchesSet($peerIp, $this->whitelistExact, $this->whitelistNetworks);
-        $trustedSource = $trustedProtocolEdge
+        $trustedSource = $trustedGatewayBackend
             || $this->matchesSet($peerIp, $this->trustedExact, $this->trustedNetworks);
 
         if (!$whitelisted && $this->matchesSet($peerIp, $this->denyExact, $this->denyNetworks)) {

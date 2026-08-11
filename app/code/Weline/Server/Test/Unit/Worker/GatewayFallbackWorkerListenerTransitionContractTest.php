@@ -115,7 +115,10 @@ final class GatewayFallbackWorkerListenerTransitionContractTest extends TestCase
             'function wlsApplyGatewayFallbackListenerTransition(',
         );
         self::assertStringContainsString('ProjectCertificateGenerationStore', $tlsFence);
-        self::assertStringContainsString('->active($domain, $deadline)', $tlsFence);
+        self::assertStringContainsString(
+            '->active($domain, $deadline, $trustProfile)',
+            $tlsFence,
+        );
         self::assertStringContainsString("['certificate_generation']", $tlsFence);
         self::assertStringContainsString("['certificate_source_digest']", $tlsFence);
         self::assertStringContainsString("['leaf_fingerprint_sha256']", $tlsFence);

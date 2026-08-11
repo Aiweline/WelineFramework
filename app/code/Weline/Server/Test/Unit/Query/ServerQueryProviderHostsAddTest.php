@@ -88,4 +88,19 @@ final class ServerQueryProviderHostsAddTest extends TestCase
         self::assertFalse((bool)($result['success'] ?? true));
         self::assertSame('apk-seo-d4de8e.weline.test', $result['domain'] ?? null);
     }
+
+    public function testAdminRequestResolvesKebabCaseControllerName(): void
+    {
+        $result = $this->createProvider()->execute('adminRequest', [
+            'url' => 'https://project.weline.test/server/backend/server-monitor/noop',
+            'method' => 'POST',
+        ]);
+
+        self::assertIsArray($result);
+        self::assertStringNotContainsString('Controller missing:', (string)($result['message'] ?? ''));
+        self::assertStringContainsString(
+            'Action missing on Weline\\Server\\Controller\\Backend\\ServerMonitor:',
+            (string)($result['message'] ?? ''),
+        );
+    }
 }

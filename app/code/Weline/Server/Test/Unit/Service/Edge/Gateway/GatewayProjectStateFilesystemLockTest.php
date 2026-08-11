@@ -83,9 +83,9 @@ final class GatewayProjectStateFilesystemLockTest extends TestCase
                     },
                     waitTimeoutSeconds: 0.5,
                 );
-                exit(0);
+                self::exitForkedChildWithoutRuntimeShutdown(0);
             } catch (\Throwable) {
-                exit(2);
+                self::exitForkedChildWithoutRuntimeShutdown(2);
             }
         }
 
@@ -134,6 +134,29 @@ final class GatewayProjectStateFilesystemLockTest extends TestCase
         self::assertFileDoesNotExist($this->lockFile);
     }
 
+    public function testExpiredAbsoluteDeadlineRejectsBeforeOpeningOrCallback(): void
+    {
+        $called = false;
+        try {
+            GatewayProjectStateFilesystem::withExclusiveLock(
+                $this->lockFile,
+                static function () use (&$called): void {
+                    $called = true;
+                },
+                waitTimeoutSeconds: 1.0,
+                deadlineMonotonic: (\hrtime(true) / 1_000_000_000) - 1.0,
+            );
+            self::fail('An expired absolute deadline must reject the lock operation.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'Timed out acquiring',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFalse($called);
+        self::assertFileDoesNotExist($this->lockFile);
+    }
+
     public function testConcurrentTrustedOpenersKeepOneStableLockIdentity(): void
     {
         if (PHP_OS_FAMILY === 'Windows'
@@ -162,7 +185,7 @@ final class GatewayProjectStateFilesystemLockTest extends TestCase
             }
             if ($pid === 0) {
                 if (@\file_put_contents($readyFile, 'ready', LOCK_EX) === false) {
-                    exit(3);
+                    self::exitForkedChildWithoutRuntimeShutdown(3);
                 }
                 $releaseDeadline = (\hrtime(true) / 1_000_000_000) + 3.0;
                 do {
@@ -173,7 +196,7 @@ final class GatewayProjectStateFilesystemLockTest extends TestCase
                     \usleep(1_000);
                 } while ((\hrtime(true) / 1_000_000_000) < $releaseDeadline);
                 if (!\is_file($this->startFile)) {
-                    exit(5);
+                    self::exitForkedChildWithoutRuntimeShutdown(5);
                 }
                 try {
                     for ($attempt = 0; $attempt < 6; ++$attempt) {
@@ -185,14 +208,14 @@ final class GatewayProjectStateFilesystemLockTest extends TestCase
                             waitTimeoutSeconds: 5.0,
                         );
                     }
-                    exit(0);
+                    self::exitForkedChildWithoutRuntimeShutdown(0);
                 } catch (\Throwable $exception) {
                     @\file_put_contents(
                         $readyFile . '.error',
                         $exception::class . ': ' . $exception->getMessage(),
                         LOCK_EX,
                     );
-                    exit(4);
+                    self::exitForkedChildWithoutRuntimeShutdown(4);
                 }
             }
             $children[] = $pid;
@@ -361,5 +384,24 @@ final class GatewayProjectStateFilesystemLockTest extends TestCase
         self::assertSame((int)$first['ctime'], (int)$second['ctime']);
         self::assertSame(0100600, (int)$second['mode']);
         self::assertSame(1, (int)$second['nlink']);
+    }
+
+    /**
+     * A forked PHPUnit child inherits every already-open runtime descriptor.
+     * Replacing the child image before reporting its status prevents PHP/PDO
+     * destructors from sending a PostgreSQL terminate frame on the parent's
+     * shared socket while preserving the exact process exit code.
+     */
+    private static function exitForkedChildWithoutRuntimeShutdown(int $status): never
+    {
+        $status = \max(0, \min(255, $status));
+        if (\function_exists('pcntl_exec')) {
+            @\pcntl_exec(PHP_BINARY, [
+                '-n',
+                '-r',
+                'exit(' . $status . ');',
+            ]);
+        }
+        exit($status);
     }
 }

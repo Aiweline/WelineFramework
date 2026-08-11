@@ -99,6 +99,73 @@ final class GatewayAcmeChallengePublisherTest extends TestCase
         ));
     }
 
+    public function testDeadGatewayMasterCannotMisclassifySecondaryRouteAsPureWls(): void
+    {
+        $syncCalled = false;
+        $registrationCalled = false;
+        $endpoint = $this->gatewayEndpoint('primary.example.test');
+        $endpoint['master_pid'] = 2_147_483_647;
+        $publisher = new GatewayAcmeChallengePublisher(
+            endpointProvider: static fn (): array => ['gateway' => $endpoint],
+            registrationProvider: static function () use (&$registrationCalled): array {
+                $registrationCalled = true;
+                throw new \RuntimeException('dead Master cannot build registration');
+            },
+            sync: static function () use (&$syncCalled): bool {
+                $syncCalled = true;
+                return true;
+            },
+            servingManifestProvider: fn (): array => $this->servingManifest(
+                'gateway',
+                ['primary.example.test', 'secondary.example.test'],
+            ),
+        );
+
+        self::assertFalse($publisher->publish(
+            $this->desired([
+                $this->challenge('secondary.example.test', 'TOKEN_secondary'),
+            ]),
+            'secondary.example.test',
+        ));
+        self::assertFalse($registrationCalled);
+        self::assertFalse($syncCalled);
+    }
+
+    public function testDeadGatewayMasterUsesCompleteManifestToProveUnrelatedPureWlsDomain(): void
+    {
+        $endpoint = $this->gatewayEndpoint('primary.example.test');
+        $endpoint['master_pid'] = 2_147_483_647;
+        $publisher = new GatewayAcmeChallengePublisher(
+            endpointProvider: static fn (): array => ['gateway' => $endpoint],
+            servingManifestProvider: fn (): array => $this->servingManifest(
+                'gateway',
+                ['primary.example.test', 'secondary.example.test'],
+            ),
+        );
+
+        self::assertTrue($publisher->publish(
+            $this->desired([$this->challenge('pure.example.test', 'TOKEN_pure')]),
+            'pure.example.test',
+        ));
+    }
+
+    public function testDeadGatewayMasterFailsClosedWhenCompleteMembershipIsUnavailable(): void
+    {
+        $endpoint = $this->gatewayEndpoint('primary.example.test');
+        $endpoint['master_pid'] = 2_147_483_647;
+        $publisher = new GatewayAcmeChallengePublisher(
+            endpointProvider: static fn (): array => ['gateway' => $endpoint],
+            servingManifestProvider: static function (): array {
+                throw new \RuntimeException('serving manifest unavailable');
+            },
+        );
+
+        self::assertFalse($publisher->publish(
+            $this->desired([$this->challenge('pure.example.test', 'TOKEN_pure')]),
+            'pure.example.test',
+        ));
+    }
+
     public function testFullReplayFailsClosedInsteadOfPublishingPartialGatewayView(): void
     {
         $syncCalled = false;
@@ -345,6 +412,32 @@ final class GatewayAcmeChallengePublisherTest extends TestCase
             'gateway_epoch' => \str_repeat('c', 32),
             'route_generations' => $routeGenerations,
         ];
+    }
+
+    /** @param list<string> $domains @return array<string,mixed> */
+    private function servingManifest(string $instance, array $domains): array
+    {
+        $routes = [];
+        foreach ($domains as $domain) {
+            $routes[] = [
+                'route_id' => \substr(\hash(
+                    'sha256',
+                    self::PROJECT_UUID . "\0" . $domain,
+                ), 0, 32),
+                'domain' => $domain,
+            ];
+        }
+        return ['payload' => [
+            'project_uuid' => self::PROJECT_UUID,
+            'instance_id' => $instance,
+            'instance_generation' => 5,
+            'master_epoch' => 3,
+            'launch_id' => \str_repeat('a', 32),
+            'desired_route_count' => \count($routes),
+            'desired_routes' => $routes,
+            'routes' => [],
+            'converged' => false,
+        ]];
     }
 
     /** @param list<array<string,mixed>> $registrations @return array<string,mixed> */

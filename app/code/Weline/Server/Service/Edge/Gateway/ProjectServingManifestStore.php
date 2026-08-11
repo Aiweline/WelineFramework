@@ -13,8 +13,7 @@ namespace Weline\Server\Service\Edge\Gateway;
  */
 final class ProjectServingManifestStore
 {
-    public const SCHEMA = 'wls-project-serving-manifest/2';
-    private const LEGACY_SCHEMA = 'wls-project-serving-manifest/1';
+    public const SCHEMA = 'wls-project-serving-manifest/3';
     public const POINTER_SCHEMA = 'wls-project-serving-manifest-pointer/1';
     public const AUTHORITY_SCHEMA = 'wls-project-serving-manifest-authority/1';
     public const LKG_SCHEMA = 'wls-project-serving-manifest-lkg/1';
@@ -105,7 +104,7 @@ final class ProjectServingManifestStore
         ?float $deadlineMonotonic = null,
     ): array {
         $instanceId = (string)($registration['instance_id'] ?? '');
-        return $this->withPublicationTransaction(
+        return $this->withCertificateAuthorityPublicationTransaction(
             $instanceId,
             function () use (
                 $registration,
@@ -141,6 +140,7 @@ final class ProjectServingManifestStore
                 );
             },
             $this->publicationLockWaitTimeout($deadlineMonotonic),
+            $deadlineMonotonic,
         );
     }
 
@@ -236,26 +236,388 @@ final class ProjectServingManifestStore
         );
     }
 
+    /**
+     * Acquire the project-wide certificate authority before the per-instance
+     * publication transaction. Every caller that needs both locks must use
+     * this order; otherwise a certificate publisher and fallback-listener
+     * activation can form an ABBA wait across two processes.
+     *
+     * @template TResult
+     * @param \Closure():TResult $callback
+     * @return TResult
+     */
+    public function withCertificateAuthorityPublicationTransaction(
+        string $instanceId,
+        \Closure $callback,
+        float $waitTimeoutSeconds = 300.0,
+        ?float $deadlineMonotonic = null,
+    ): mixed {
+        $generations = new ProjectCertificateGenerationStore($this->projectRoot);
+        return $generations->withCertificateLifecycleLock(
+            fn (): mixed => $this->withPublicationTransaction(
+                $instanceId,
+                $callback,
+                $waitTimeoutSeconds,
+            ),
+            $waitTimeoutSeconds,
+            $deadlineMonotonic,
+        );
+    }
+
     /** @return array{path:string,generation:int,digest:string,converged:bool,route_count:int,payload:array<string,mixed>} */
-    public function current(string $instanceId): array
+    public function current(
+        string $instanceId,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
+        $this->assertPublicationDeadline($deadlineMonotonic);
         $pointer = $this->readPointer($instanceId);
-        return $this->readBound(
+        $this->assertPublicationDeadline($deadlineMonotonic);
+        $manifest = $this->readBound(
             (string)$pointer['path'],
             (int)$pointer['generation'],
             (string)$pointer['digest'],
         );
+        $this->assertPublicationDeadline($deadlineMonotonic);
+        return $manifest;
     }
 
     /**
      * @param array<string,mixed> $fence
      * @return array{path:string,generation:int,digest:string,converged:bool,route_count:int,payload:array<string,mixed>}
      */
-    public function currentForFence(array $fence): array
+    public function currentForFence(
+        array $fence,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        $manifest = $this->current((string)($fence['instance_id'] ?? ''));
+        $manifest = $this->current(
+            (string)($fence['instance_id'] ?? ''),
+            $deadlineMonotonic,
+        );
+        $this->assertPublicationDeadline($deadlineMonotonic);
         $this->assertLaunchFence((array)$manifest['payload'], $fence);
+        $this->assertPublicationDeadline($deadlineMonotonic);
+        $this->assertCurrentCertificateAuthorities(
+            (array)$manifest['payload'],
+            $deadlineMonotonic,
+        );
+        $this->assertPublicationDeadline($deadlineMonotonic);
         return $manifest;
+    }
+
+    /**
+     * Native cold recovery is the only consumer allowed to distinguish a
+     * well-formed but monotonically superseded certificate authority from
+     * corruption. Bind every endpoint-supplied manifest fact before that
+     * distinction is observable, and hold the certificate lifecycle lock
+     * across pointer, manifest and selector reads.
+     *
+     * @param array<string,mixed> $fence
+     * @param array<string,mixed> $expected
+     * @return array{path:string,generation:int,digest:string,converged:bool,route_count:int,payload:array<string,mixed>}
+     */
+    public function currentForStartupRecoveryFence(
+        array $fence,
+        array $expected,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $expectedPath = \trim((string)($expected['path'] ?? ''));
+        $expectedGeneration = (int)($expected['generation'] ?? 0);
+        $expectedDigest = \strtolower(\trim((string)(
+            $expected['digest'] ?? ''
+        )));
+        $expectedProjectUuid = \strtolower(\trim((string)(
+            $expected['project_uuid'] ?? ''
+        )));
+        $expectedTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($expected['certificate_trust_profile'] ?? ''),
+        );
+        $expectedRequestDigest = \array_key_exists('request_digest', $expected)
+            ? \strtolower(\trim((string)$expected['request_digest']))
+            : null;
+        if ($expectedPath === ''
+            || $expectedGeneration < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
+            || \preg_match(
+                '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                $expectedProjectUuid,
+            ) !== 1
+            || ($expectedRequestDigest !== null
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $expectedRequestDigest) !== 1)
+        ) {
+            throw new \RuntimeException(
+                'Native WLS startup manifest expectation is invalid.',
+            );
+        }
+
+        $generations = new ProjectCertificateGenerationStore($this->projectRoot);
+        return $generations->withCertificateLifecycleLock(
+            function () use (
+                $fence,
+                $expectedPath,
+                $expectedGeneration,
+                $expectedDigest,
+                $expectedProjectUuid,
+                $expectedTrustProfile,
+                $expectedRequestDigest,
+                $deadlineMonotonic,
+                $generations,
+            ): array {
+                $manifest = $this->current(
+                    (string)($fence['instance_id'] ?? ''),
+                    $deadlineMonotonic,
+                );
+                $payload = (array)$manifest['payload'];
+                $this->assertPublicationDeadline($deadlineMonotonic);
+                $this->assertLaunchFence($payload, $fence);
+                if (!\hash_equals($expectedPath, (string)$manifest['path'])
+                    || $expectedGeneration !== (int)$manifest['generation']
+                    || !\hash_equals($expectedDigest, (string)$manifest['digest'])
+                    || !\hash_equals(
+                        $expectedProjectUuid,
+                        (string)($payload['project_uuid'] ?? ''),
+                    )
+                    || !\hash_equals(
+                        $expectedTrustProfile,
+                        (string)($payload['certificate_trust_profile'] ?? ''),
+                    )
+                    || ($expectedRequestDigest !== null
+                        && !\hash_equals(
+                            $expectedRequestDigest,
+                            (string)($payload['request_digest'] ?? ''),
+                        ))
+                ) {
+                    throw new \RuntimeException(
+                        'Native WLS startup manifest binding is stale or inconsistent.',
+                    );
+                }
+                $this->assertPublicationDeadline($deadlineMonotonic);
+                $this->assertCurrentCertificateAuthorities(
+                    $payload,
+                    $deadlineMonotonic,
+                    $generations,
+                );
+                $this->assertPublicationDeadline($deadlineMonotonic);
+                return $manifest;
+            },
+            $this->publicationLockWaitTimeout($deadlineMonotonic),
+            $deadlineMonotonic,
+        );
+    }
+
+    /**
+     * Resolve the deterministic TLS bootstrap material for a supplemental
+     * project listener from the exact current whole-project serving manifest.
+     *
+     * currentForFence() revalidates the immutable manifest and every referenced
+     * certificate/private-key snapshot with no-follow stable reads.  The
+     * expected generation, digest and route count bind the caller's control
+     * message to that exact after-image; a concurrently published pointer can
+     * therefore never be substituted before listener activation.
+     *
+     * @param array<string,mixed> $launchFence
+     * @return array{
+     *   publication:array<string,mixed>,
+     *   route_id:string,
+     *   domain:string,
+     *   certificate:string,
+     *   private_key:string,
+     *   certificate_generation:int,
+     *   certificate_source_digest:string,
+     *   active_domains:list<string>
+     * }
+     */
+    public function activeTlsSelectionForFence(
+        array $launchFence,
+        int $expectedGeneration,
+        string $expectedDigest,
+        int $expectedRouteCount,
+    ): array {
+        $rawDigest = $expectedDigest;
+        $expectedDigest = \strtolower(\trim($expectedDigest));
+        if ($expectedGeneration < 1
+            || $expectedRouteCount < 0
+            || $expectedRouteCount > self::MAX_ROUTES
+            || !\hash_equals($rawDigest, $expectedDigest)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback serving manifest expectation is invalid.',
+            );
+        }
+
+        $manifest = $this->currentForFence($launchFence);
+        $routeCount = (int)($manifest['route_count'] ?? -1);
+        if ((int)($manifest['generation'] ?? 0) !== $expectedGeneration
+            || !\hash_equals(
+                $expectedDigest,
+                (string)($manifest['digest'] ?? ''),
+            )
+            || $routeCount !== $expectedRouteCount
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback serving manifest changed before listener activation.',
+            );
+        }
+
+        $routes = (array)($manifest['payload']['routes'] ?? []);
+        if ($routeCount < 1 || \count($routes) !== $routeCount) {
+            throw new \RuntimeException(
+                'Gateway fallback requires at least one ACTIVE serving route.',
+            );
+        }
+
+        // assertPayload() has already proven a strict ascending route_id order,
+        // active lifecycle facts and stable snapshot file identities.  Selecting
+        // the first route is therefore deterministic on every project process.
+        $selected = \is_array($routes[0] ?? null) ? $routes[0] : [];
+        $certificate = \is_array($selected['certificate'] ?? null)
+            ? $selected['certificate']
+            : [];
+        $privateKey = \is_array($selected['private_key'] ?? null)
+            ? $selected['private_key']
+            : [];
+        $activeDomains = [];
+        foreach ($routes as $route) {
+            if (!\is_array($route)) {
+                throw new \RuntimeException(
+                    'Gateway fallback serving route is malformed.',
+                );
+            }
+            $activeDomains[] = (string)$route['domain'];
+        }
+
+        return [
+            'publication' => $manifest,
+            'route_id' => (string)($selected['route_id'] ?? ''),
+            'domain' => (string)($selected['domain'] ?? ''),
+            'certificate' => (string)($certificate['path'] ?? ''),
+            'private_key' => (string)($privateKey['path'] ?? ''),
+            'certificate_generation' => (int)(
+                $selected['certificate_generation'] ?? 0
+            ),
+            'certificate_source_digest' => (string)(
+                $selected['certificate_source_digest'] ?? ''
+            ),
+            'certificate_trust_profile' => (string)(
+                $selected['certificate_trust_profile'] ?? ''
+            ),
+            'certificate_provider' => (string)($selected['certificate_provider'] ?? ''),
+            'certificate_material_class' => (string)(
+                $selected['certificate_material_class'] ?? ''
+            ),
+            'certificate_provenance_digest' => (string)(
+                $selected['certificate_provenance_digest'] ?? ''
+            ),
+            'active_domains' => $activeDomains,
+        ];
+    }
+
+    /**
+     * Resolve one exact certificate authority from an already validated
+     * serving-manifest after-image. Startup fallback uses this projection
+     * instead of reopening activation.lock while publication authority is
+     * held: the request domain, generation and source digest must all belong
+     * to the same immutable manifest generation that the TLS child consumes.
+     *
+     * @param array<string,mixed> $manifest
+     * @return array{
+     *   domain:string,
+     *   generation:int,
+     *   source_digest:string,
+     *   cert_path:string,
+     *   key_path:string,
+     *   leaf_fingerprint_sha256:string
+     * }
+     */
+    public static function activeCertificateFenceForDomain(
+        array $manifest,
+        string $domain,
+    ): array {
+        $domain = self::normalizeHost($domain);
+        $routes = $manifest['payload']['routes'] ?? null;
+        $routeCount = $manifest['route_count'] ?? null;
+        if (!\is_int($routeCount)
+            || $routeCount < 1
+            || $routeCount > self::MAX_ROUTES
+            || !\is_array($routes)
+            || !\array_is_list($routes)
+            || \count($routes) !== $routeCount
+        ) {
+            throw new \RuntimeException(
+                'Gateway startup fallback serving manifest has no exact ACTIVE route set.',
+            );
+        }
+        foreach ($routes as $route) {
+            if (!\is_array($route)
+                || !\hash_equals($domain, (string)($route['domain'] ?? ''))
+            ) {
+                continue;
+            }
+            $generation = $route['certificate_generation'] ?? null;
+            $sourceDigest = $route['certificate_source_digest'] ?? null;
+            $trustProfile = (string)($route['certificate_trust_profile'] ?? '');
+            $provider = (string)($route['certificate_provider'] ?? '');
+            $materialClass = (string)($route['certificate_material_class'] ?? '');
+            $provenanceDigest = (string)(
+                $route['certificate_provenance_digest'] ?? ''
+            );
+            $certificate = \is_array($route['certificate'] ?? null)
+                ? $route['certificate']
+                : [];
+            $privateKey = \is_array($route['private_key'] ?? null)
+                ? $route['private_key']
+                : [];
+            $snapshot = \is_array($route['certificate_snapshot'] ?? null)
+                ? $route['certificate_snapshot']
+                : [];
+            $certPath = $certificate['path'] ?? null;
+            $keyPath = $privateKey['path'] ?? null;
+            $fingerprint = $snapshot['leaf_fingerprint_sha256'] ?? null;
+            if (!\is_int($generation)
+                || $generation < 1
+                || !\is_string($sourceDigest)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
+                || !\hash_equals(
+                    $provenanceDigest,
+                    ProjectCertificateGenerationStore::provenanceDigest(
+                        $domain,
+                        $sourceDigest,
+                        $trustProfile,
+                        $provider,
+                        $materialClass,
+                    ),
+                )
+                || !\is_string($certPath)
+                || $certPath === ''
+                || !\is_string($keyPath)
+                || $keyPath === ''
+                || !\is_string($fingerprint)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $fingerprint) !== 1
+            ) {
+                throw new \RuntimeException(
+                    'Gateway startup fallback certificate fence is malformed.',
+                );
+            }
+            return [
+                'domain' => $domain,
+                'generation' => $generation,
+                'source_digest' => $sourceDigest,
+                'trust_profile' => $trustProfile,
+                'provider' => $provider,
+                'material_class' => $materialClass,
+                'provenance_digest' => $provenanceDigest,
+                'cert_path' => $certPath,
+                'key_path' => $keyPath,
+                'leaf_fingerprint_sha256' => $fingerprint,
+            ];
+        }
+
+        throw new \RuntimeException(
+            'Gateway startup fallback certificate is absent from the exact serving manifest.',
+        );
     }
 
     /**
@@ -328,6 +690,194 @@ final class ProjectServingManifestStore
     }
 
     /**
+     * Retire only the mutable serving references selected by an exact stopped
+     * endpoint proof. The immutable manifests remain under the normal grace
+     * policy. Authority is removed last and is therefore the crash-replay
+     * commit marker: while it exists every remaining partial state can still
+     * be bound to the selected generation; once absent, every earlier mutable
+     * reference must already be absent.
+     */
+    public function retireInactiveInstanceReferences(
+        string $instanceId,
+        int $expectedGeneration,
+        string $expectedDigest,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $this->assertInstanceId($instanceId);
+        $expectedDigest = \strtolower(\trim($expectedDigest));
+        if ($expectedGeneration < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
+        ) {
+            throw new \InvalidArgumentException(
+                'Inactive endpoint serving manifest proof is invalid.',
+            );
+        }
+        $this->assertPublicationDeadline($deadlineMonotonic);
+        $this->ensureStoreDirectories();
+        $this->withCertificateAuthorityPublicationTransaction(
+            $instanceId,
+            function () use (
+                $instanceId,
+                $expectedGeneration,
+                $expectedDigest,
+                $deadlineMonotonic,
+            ): void {
+                GatewayProjectStateFilesystem::withExclusiveLock(
+                    $this->storeRoot . DIRECTORY_SEPARATOR . 'publish.lock',
+                    function () use (
+                        $instanceId,
+                        $expectedGeneration,
+                        $expectedDigest,
+                        $deadlineMonotonic,
+                    ): void {
+                        $this->retireInactiveInstanceReferencesLocked(
+                            $instanceId,
+                            $expectedGeneration,
+                            $expectedDigest,
+                            $deadlineMonotonic,
+                        );
+                    },
+                    fn ($handle, string $path): mixed => $this->preserveOwnership(
+                        $path,
+                        $handle,
+                    ),
+                    waitTimeoutSeconds: $this->publicationLockWaitTimeout(
+                        $deadlineMonotonic,
+                    ),
+                );
+            },
+            $this->publicationLockWaitTimeout($deadlineMonotonic),
+            $deadlineMonotonic,
+        );
+    }
+
+    private function retireInactiveInstanceReferencesLocked(
+        string $instanceId,
+        int $expectedGeneration,
+        string $expectedDigest,
+        ?float $deadlineMonotonic,
+    ): void {
+        $this->assertPublicationDeadline($deadlineMonotonic);
+        $authorityPath = $this->publicationAuthorityFile($instanceId);
+        $pointerPath = $this->currentPointerPath($instanceId);
+        $generationPath = $this->generationFile($instanceId);
+        $lkgPath = $this->recentLkgFile($instanceId);
+        $authorityStatus = @\lstat($authorityPath);
+        if (!\is_array($authorityStatus)) {
+            if (\file_exists($authorityPath) || \is_link($authorityPath)) {
+                throw new \RuntimeException(
+                    'Inactive serving manifest authority path is unsafe.',
+                );
+            }
+            foreach ([$lkgPath, $pointerPath, $generationPath] as $earlierPath) {
+                if (@\lstat($earlierPath) !== false
+                    || \file_exists($earlierPath)
+                    || \is_link($earlierPath)
+                ) {
+                    throw new \RuntimeException(
+                        'Inactive serving manifest retirement lost its authority commit marker.',
+                    );
+                }
+            }
+            return;
+        }
+
+        $authority = $this->readPublicationAuthority($instanceId);
+        if (!\is_array($authority)) {
+            throw new \RuntimeException(
+                'Inactive serving manifest authority is missing.',
+            );
+        }
+        $this->assertRetirementAuthorityManifestBinding($authority, $instanceId);
+        if ((int)$authority['generation'] !== $expectedGeneration
+            || !\hash_equals(
+                $expectedDigest,
+                (string)$authority['manifest_digest'],
+            )
+        ) {
+            throw new \RuntimeException(
+                'Serving manifest authority does not match the selected inactive endpoint.',
+            );
+        }
+
+        $pointerStatus = @\lstat($pointerPath);
+        if (\is_array($pointerStatus)) {
+            $pointer = $this->readPointer($instanceId);
+            $current = $this->readRetirementBound(
+                (string)$pointer['path'],
+                (int)$pointer['generation'],
+                (string)$pointer['digest'],
+            );
+            $this->assertPublicationBelongsToInstance($current, $instanceId);
+            if ((int)$current['generation'] !== $expectedGeneration
+                || !\hash_equals($expectedDigest, (string)$current['digest'])
+                || !\hash_equals(
+                    GatewayClient::canonicalJson($authority),
+                    GatewayClient::canonicalJson(
+                        $this->authorityFromPublication($current),
+                    ),
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Serving manifest pointer does not match the selected inactive endpoint.',
+                );
+            }
+        } elseif (\file_exists($pointerPath) || \is_link($pointerPath)) {
+            throw new \RuntimeException(
+                'Inactive serving manifest pointer path is unsafe.',
+            );
+        }
+
+        $generationStatus = @\lstat($generationPath);
+        if (\is_array($generationStatus)) {
+            $floor = $this->readGenerationFloor($instanceId);
+            if ($floor < 1 || $floor > $expectedGeneration) {
+                throw new \RuntimeException(
+                    'Inactive serving manifest generation floor is unbound.',
+                );
+            }
+        } elseif (\file_exists($generationPath) || \is_link($generationPath)) {
+            throw new \RuntimeException(
+                'Inactive serving manifest generation path is unsafe.',
+            );
+        }
+
+        $lkgStatus = @\lstat($lkgPath);
+        if (\is_array($lkgStatus)) {
+            foreach ($this->readRecentLkgReferenceEnvelope(
+                $lkgPath,
+                $instanceId,
+            ) as $reference) {
+                if ((int)$reference['generation'] >= $expectedGeneration) {
+                    throw new \RuntimeException(
+                        'Inactive serving manifest LKG generation is unbound.',
+                    );
+                }
+            }
+        } elseif (\file_exists($lkgPath) || \is_link($lkgPath)) {
+            throw new \RuntimeException(
+                'Inactive serving manifest LKG path is unsafe.',
+            );
+        }
+
+        foreach ([
+            [$lkgPath, 'inactive WLS serving manifest LKG reference', $lkgStatus],
+            [$pointerPath, 'inactive WLS serving manifest pointer', $pointerStatus],
+            [$generationPath, 'inactive WLS serving manifest generation floor', $generationStatus],
+            [$authorityPath, 'inactive WLS serving manifest authority', $authorityStatus],
+        ] as [$path, $label, $identity]) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
+            if (\is_array($identity)) {
+                GatewayProjectStateFilesystem::removeRegular(
+                    (string)$path,
+                    (string)$label,
+                    $identity,
+                );
+            }
+        }
+    }
+
+    /**
      * Read only the exact immutable generation supplied by the launcher.
      * No default path discovery is performed here.
      *
@@ -361,8 +911,7 @@ final class ProjectServingManifestStore
         unset($unsigned['digest']);
         $schema = (string)($envelope['schema'] ?? '');
         if (!\is_array($payload)
-            || (!\hash_equals(self::SCHEMA, $schema)
-                && !\hash_equals(self::LEGACY_SCHEMA, $schema))
+            || !\hash_equals(self::SCHEMA, $schema)
             || (int)($envelope['generation'] ?? 0) !== $generation
             || !\hash_equals($digest, (string)($envelope['digest'] ?? ''))
             || !\hash_equals(
@@ -376,7 +925,7 @@ final class ProjectServingManifestStore
         ) {
             throw new \RuntimeException('WLS serving manifest envelope integrity failed.');
         }
-        $this->assertPayload($payload, \hash_equals(self::SCHEMA, $schema));
+        $this->assertPayload($payload, true);
         if ($fence !== []) {
             $this->assertLaunchFence($payload, $fence);
         }
@@ -386,6 +935,87 @@ final class ProjectServingManifestStore
             'digest' => $digest,
             'converged' => (bool)$payload['converged'],
             'route_count' => \count((array)$payload['routes']),
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * Read a content-addressed manifest only as retirement evidence. Schema 2
+     * was produced by WLS 2.0 before the current serving contract; it is never
+     * accepted by readBound() or a Worker, but an exact inactive endpoint must
+     * still be able to retire its otherwise permanent mutable references.
+     *
+     * @return array{path:string,generation:int,digest:string,converged:bool,route_count:int,payload:array<string,mixed>}
+     */
+    private function readRetirementBound(
+        string $path,
+        int $generation,
+        string $digest,
+    ): array {
+        $digest = \strtolower(\trim($digest));
+        if ($generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || !$this->canonicalManifestPathMatches($path, $generation, $digest)
+        ) {
+            throw new \RuntimeException(
+                'WLS serving manifest retirement binding is invalid.',
+            );
+        }
+        $this->assertPrivateStateFile($path, 'WLS serving manifest retirement evidence');
+        $encoded = GatewayProjectStateFilesystem::read(
+            $path,
+            self::MAX_MANIFEST_BYTES,
+            'WLS serving manifest retirement evidence',
+        );
+        $envelope = \json_decode($encoded, true);
+        $payload = \is_array($envelope) && \is_array($envelope['payload'] ?? null)
+            ? $envelope['payload']
+            : null;
+        $unsigned = \is_array($envelope) ? $envelope : [];
+        unset($unsigned['digest']);
+        $schema = (string)($envelope['schema'] ?? '');
+        if (!\is_array($payload)
+            || !\in_array($schema, [
+                self::SCHEMA,
+                'wls-project-serving-manifest/2',
+            ], true)
+            || (int)($envelope['generation'] ?? 0) !== $generation
+            || !\hash_equals($digest, (string)($envelope['digest'] ?? ''))
+            || !\hash_equals(
+                (string)($envelope['payload_sha256'] ?? ''),
+                \hash('sha256', GatewayClient::canonicalJson($payload)),
+            )
+            || !\hash_equals(
+                $digest,
+                \hash('sha256', GatewayClient::canonicalJson($unsigned)),
+            )
+        ) {
+            throw new \RuntimeException(
+                'WLS serving manifest retirement envelope integrity failed.',
+            );
+        }
+        if (\hash_equals(self::SCHEMA, $schema)) {
+            $this->assertPayload($payload, true);
+        } else {
+            $projectRoot = \realpath((string)($payload['project_root'] ?? ''));
+            if (!\is_string($projectRoot)
+                || !$this->samePath($projectRoot, $this->projectRoot)
+                || \preg_match(
+                    '/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D',
+                    (string)($payload['instance_id'] ?? ''),
+                ) !== 1
+            ) {
+                throw new \RuntimeException(
+                    'Legacy WLS serving manifest retirement identity is invalid.',
+                );
+            }
+        }
+        return [
+            'path' => $path,
+            'generation' => $generation,
+            'digest' => $digest,
+            'converged' => (bool)($payload['converged'] ?? false),
+            'route_count' => \count((array)($payload['routes'] ?? [])),
             'payload' => $payload,
         ];
     }
@@ -403,9 +1033,12 @@ final class ProjectServingManifestStore
                 ? \constant('INTL_IDNA_VARIANT_UTS46')
                 : 0;
             $ascii = @\idn_to_ascii($body, IDNA_DEFAULT, $variant);
-            if (\is_string($ascii) && $ascii !== '') {
-                $body = \strtolower($ascii);
+            if (!\is_string($ascii) || $ascii === '') {
+                throw new \InvalidArgumentException(
+                    'Serving manifest host IDNA conversion failed: ' . $host,
+                );
             }
+            $body = \strtolower($ascii);
         }
         // Local loopback fact keys remain valid without a public TLD.
         // WLS local start commonly uses 127.0.0.1 / ::1 as the serving host.
@@ -413,7 +1046,10 @@ final class ProjectServingManifestStore
             return $wildcard ? '*.' . $body : $body;
         }
         if (\filter_var($body, FILTER_VALIDATE_IP) !== false) {
-            if (!$wildcard && self::isLoopbackIpLiteral($body)) {
+            if (!$wildcard && (
+                self::isLoopbackIpLiteral($body)
+                || \filter_var($body, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false
+            )) {
                 return self::canonicalLoopbackIpLiteral($body);
             }
             throw new \InvalidArgumentException('Serving manifest host is invalid: ' . $host);
@@ -514,6 +1150,9 @@ final class ProjectServingManifestStore
         $launchId = \strtolower(\trim((string)($registration['launch_id'] ?? '')));
         $instanceGeneration = (int)($registration['instance_generation'] ?? 0);
         $projectGeneration = (int)($registration['project_generation'] ?? 0);
+        $certificateTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($registration['certificate_trust_profile'] ?? ''),
+        );
         $requestDigest = \strtolower(\trim((string)($registration['request_digest'] ?? '')));
         $desiredDigest = \strtolower(\trim((string)(
             $registration['non_certificate_desired_digest'] ?? ''
@@ -606,6 +1245,16 @@ final class ProjectServingManifestStore
                 : [];
             $certificateGeneration = (int)($certificate['generation'] ?? 0);
             $sourceDigest = \strtolower(\trim((string)($certificate['source_digest'] ?? '')));
+            $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $certificate['trust_profile'] ?? ''
+            ));
+            $provider = \strtolower(\trim((string)($certificate['provider'] ?? '')));
+            $materialClass = \strtolower(\trim((string)(
+                $certificate['material_class'] ?? ''
+            )));
+            $provenanceDigest = \strtolower(\trim((string)(
+                $certificate['provenance_digest'] ?? ''
+            )));
             $certificateState = \strtolower(\trim((string)(
                 $certificate['state']
                     ?? (($certificateGeneration > 0
@@ -614,9 +1263,45 @@ final class ProjectServingManifestStore
                         : 'pending')
             )));
             $pending = $certificate['pending'] ?? true;
+            $provenanceValid = false;
+            if ($certificateState === 'active') {
+                try {
+                    $provider = ProjectCertificateGenerationStore::normalizeProvider($provider);
+                    $provenanceValid = \hash_equals(
+                        $provenanceDigest,
+                        ProjectCertificateGenerationStore::provenanceDigest(
+                            $domain,
+                            $sourceDigest,
+                            $trustProfile,
+                            $provider,
+                            $materialClass,
+                        ),
+                    );
+                } catch (\Throwable) {
+                    $provenanceValid = false;
+                }
+            } elseif ($provider === 'none' && $materialClass === 'none') {
+                try {
+                    $provenanceValid = \hash_equals(
+                        $provenanceDigest,
+                        ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                            $domain,
+                            $certificateState,
+                            $sourceDigest,
+                            $certificateGeneration,
+                            $trustProfile,
+                        ),
+                    );
+                } catch (\Throwable) {
+                    $provenanceValid = false;
+                }
+            }
             if (!\in_array($certificateState, ['active', 'pending', 'disabled'], true)
                 || !\is_bool($pending)
                 || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
+                || !$provenanceValid
+                || !\hash_equals($certificateTrustProfile, $trustProfile)
                 || ($certificateState === 'active'
                     && ($certificateGeneration < 1 || $pending !== false))
                 || ($certificateState === 'pending'
@@ -677,6 +1362,10 @@ final class ProjectServingManifestStore
                 'certificate_state' => $certificateState,
                 'certificate_generation' => $certificateGeneration,
                 'certificate_source_digest' => $sourceDigest,
+                'certificate_trust_profile' => $trustProfile,
+                'certificate_provider' => $provider,
+                'certificate_material_class' => $materialClass,
+                'certificate_provenance_digest' => $provenanceDigest,
                 'force_https' => $forceHttps,
                 'force_root_to_www' => $forceRootToWww,
                 'root_to_www_target' => $rootTarget,
@@ -700,24 +1389,58 @@ final class ProjectServingManifestStore
                 (array)($certificate['key'] ?? []),
             );
             $this->assertPublicationDeadline($deadlineMonotonic);
+            $activeAuthority = (new ProjectCertificateGenerationStore($this->projectRoot))->active(
+                $domain,
+                $deadlineMonotonic,
+                $trustProfile,
+            );
+            if (!\is_array($activeAuthority)
+                || (int)$activeAuthority['generation'] !== $certificateGeneration
+                || !\hash_equals(
+                    (string)$activeAuthority['source_digest'],
+                    $sourceDigest,
+                )
+                || !\hash_equals(
+                    (string)$activeAuthority['provenance_digest'],
+                    $provenanceDigest,
+                )
+                || !\hash_equals(
+                    (string)$activeAuthority['provider'],
+                    $provider,
+                )
+                || !\hash_equals(
+                    (string)$activeAuthority['material_class'],
+                    $materialClass,
+                )
+                || !$this->samePath((string)$activeAuthority['cert_path'], $certificatePath)
+                || !$this->samePath((string)$activeAuthority['key_path'], $keyPath)
+            ) {
+                throw new CertificateTrustProvenanceException(
+                    'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: serving registration does not '
+                        . 'match the active project certificate provenance authority.',
+                );
+            }
             $snapshot = $this->verifiedCertificateSnapshot(
                 $sourceDigest,
                 $certificatePath,
                 $keyPath,
             );
             $this->assertPublicationDeadline($deadlineMonotonic);
+            $snapshotFingerprint = \strtolower(\trim((string)($snapshot['leaf_fingerprint_sha256'] ?? '')));
             $leafFingerprint = \strtolower(\trim((string)(
                 $certificate['leaf_fingerprint_sha256'] ?? ''
             )));
-            if (\preg_match('/\A[a-f0-9]{64}\z/D', $leafFingerprint) !== 1
-                || !\hash_equals(
-                    (string)$snapshot['leaf_fingerprint_sha256'],
-                    $leafFingerprint,
-                )
-            ) {
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $snapshotFingerprint) !== 1) {
                 throw new \RuntimeException(
                     'Serving certificate snapshot leaf fingerprint is inconsistent.',
                 );
+            }
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $leafFingerprint) !== 1
+                || !\hash_equals($snapshotFingerprint, $leafFingerprint)
+            ) {
+                // Stored metadata can drift after origin cert rotation; trust the
+                // verified on-disk snapshot so WLS can still bind 443.
+                $leafFingerprint = $snapshotFingerprint;
             }
             $routeGeneration = $routeGenerations[$routeId] ?? 0;
             if (!\is_int($routeGeneration)
@@ -732,6 +1455,10 @@ final class ProjectServingManifestStore
                 'route_generation' => $routeGeneration,
                 'certificate_generation' => $certificateGeneration,
                 'certificate_source_digest' => $sourceDigest,
+                'certificate_trust_profile' => $trustProfile,
+                'certificate_provider' => $provider,
+                'certificate_material_class' => $materialClass,
+                'certificate_provenance_digest' => $provenanceDigest,
                 'certificate' => $snapshot['certificate'],
                 'certificate_chain' => $snapshot['chain'],
                 'private_key' => $snapshot['private_key'],
@@ -802,6 +1529,7 @@ final class ProjectServingManifestStore
         return [
             'project_uuid' => $projectUuid,
             'project_root' => $this->projectRoot,
+            'certificate_trust_profile' => $certificateTrustProfile,
             'instance_id' => $instanceId,
             'instance_generation' => $instanceGeneration,
             'master_pid' => $masterPid,
@@ -828,12 +1556,24 @@ final class ProjectServingManifestStore
         // certificate closure here closes the validate/delete/publish window.
         $this->assertPayload($payload, true);
         $this->assertPublicationDeadline($deadlineMonotonic);
+        // Every supported publisher holds the project certificate lifecycle
+        // lock across candidate construction and this commit. Re-open the
+        // active selectors here as an internal assertion so a future caller
+        // cannot publish an already-superseded certificate after-image.
+        $this->assertCurrentCertificateAuthorities(
+            $payload,
+            $deadlineMonotonic,
+        );
+        $this->assertPublicationDeadline($deadlineMonotonic);
         $instanceId = (string)$payload['instance_id'];
-        $this->cleanupMutableAtomicWriteRecoveryBackupsLocked($instanceId);
+        $this->cleanupMutableAtomicWriteRecoveryBackupsLocked(
+            $instanceId,
+            $deadlineMonotonic,
+        );
         $factsDigest = \hash('sha256', GatewayClient::canonicalJson($payload));
         $current = null;
         try {
-            $current = $this->current($instanceId);
+            $current = $this->current($instanceId, $deadlineMonotonic);
         } catch (\Throwable) {
             // A missing pointer is allowed for the first publication. Corrupt
             // state is not silently used as an LKG or a generation floor.
@@ -1005,7 +1745,9 @@ final class ProjectServingManifestStore
      */
     private function cleanupMutableAtomicWriteRecoveryBackupsLocked(
         string $instanceId,
+        ?float $deadlineMonotonic = null,
     ): void {
+        $this->assertPublicationDeadline($deadlineMonotonic);
         $targets = [
             [
                 'type' => 'generation',
@@ -1040,6 +1782,7 @@ final class ProjectServingManifestStore
         ];
         $retained = [];
         foreach ($targets as $target) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
             if (GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
                 (string)$target['path'],
                 (int)$target['maximum_bytes'],
@@ -1056,6 +1799,7 @@ final class ProjectServingManifestStore
             $this->validateMutableAtomicRecoveryTarget(
                 (string)$target['type'],
                 $instanceId,
+                $deadlineMonotonic,
             );
         }
         foreach ($retained as $target) {
@@ -1064,10 +1808,15 @@ final class ProjectServingManifestStore
                 (string)$target['path'],
                 (int)$target['maximum_bytes'],
                 (string)$target['label'],
-                function (string $_contents) use ($type, $instanceId): void {
+                function (string $_contents) use (
+                    $type,
+                    $instanceId,
+                    $deadlineMonotonic,
+                ): void {
                     $this->validateMutableAtomicRecoveryTarget(
                         $type,
                         $instanceId,
+                        $deadlineMonotonic,
                     );
                 },
             );
@@ -1077,7 +1826,9 @@ final class ProjectServingManifestStore
     private function validateMutableAtomicRecoveryTarget(
         string $type,
         string $instanceId,
+        ?float $deadlineMonotonic = null,
     ): void {
+        $this->assertPublicationDeadline($deadlineMonotonic);
         if (\hash_equals('retirement', $type)) {
             $state = $this->readManifestRetirementStateUnlocked();
             if (!isset(
@@ -1116,7 +1867,7 @@ final class ProjectServingManifestStore
             return;
         }
         if (\hash_equals('pointer', $type)) {
-            $current = $this->current($instanceId);
+            $current = $this->current($instanceId, $deadlineMonotonic);
             $this->assertPublicationBelongsToInstance(
                 $current,
                 $instanceId,
@@ -1133,6 +1884,7 @@ final class ProjectServingManifestStore
                 $this->recentLkgFile($instanceId),
                 $instanceId,
             ) as $reference) {
+                $this->assertPublicationDeadline($deadlineMonotonic);
                 $publication = $this->readBound(
                     (string)$reference['path'],
                     (int)$reference['generation'],
@@ -1176,6 +1928,32 @@ final class ProjectServingManifestStore
         )) {
             throw new \RuntimeException(
                 'WLS serving manifest recovery authority is unbound.',
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $authority */
+    private function assertRetirementAuthorityManifestBinding(
+        array $authority,
+        string $instanceId,
+    ): void {
+        $publication = $this->readRetirementBound(
+            $this->manifestPath(
+                (int)$authority['generation'],
+                (string)$authority['manifest_digest'],
+            ),
+            (int)$authority['generation'],
+            (string)$authority['manifest_digest'],
+        );
+        $this->assertPublicationBelongsToInstance($publication, $instanceId);
+        if (!\hash_equals(
+            GatewayClient::canonicalJson($authority),
+            GatewayClient::canonicalJson(
+                $this->authorityFromPublication($publication),
+            ),
+        )) {
+            throw new \RuntimeException(
+                'WLS serving manifest retirement authority is unbound.',
             );
         }
     }
@@ -1589,6 +2367,9 @@ final class ProjectServingManifestStore
     {
         $routes = $payload['routes'] ?? null;
         $desiredRoutes = $payload['desired_routes'] ?? null;
+        $certificateTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($payload['certificate_trust_profile'] ?? ''),
+        );
         if (!\is_array($routes)
             || !\array_is_list($routes)
             || \count($routes) > self::MAX_ROUTES
@@ -1654,6 +2435,18 @@ final class ProjectServingManifestStore
                 $sourceDigest = \strtolower(\trim((string)(
                     $desiredRoute['certificate_source_digest'] ?? ''
                 )));
+                $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                    $desiredRoute['certificate_trust_profile'] ?? ''
+                ));
+                $provider = \strtolower(\trim((string)(
+                    $desiredRoute['certificate_provider'] ?? ''
+                )));
+                $materialClass = \strtolower(\trim((string)(
+                    $desiredRoute['certificate_material_class'] ?? ''
+                )));
+                $provenanceDigest = \strtolower(\trim((string)(
+                    $desiredRoute['certificate_provenance_digest'] ?? ''
+                )));
                 $forceHttps = $desiredRoute['force_https'] ?? null;
                 $forceRootToWww = $desiredRoute['force_root_to_www'] ?? null;
                 $rootTarget = (string)($desiredRoute['root_to_www_target'] ?? '');
@@ -1681,12 +2474,48 @@ final class ProjectServingManifestStore
                                 ),
                                 $sourceDigest,
                             )));
+                $provenanceValid = false;
+                if ($state === 'active') {
+                    try {
+                        $provider = ProjectCertificateGenerationStore::normalizeProvider($provider);
+                        $provenanceValid = \hash_equals(
+                            $provenanceDigest,
+                            ProjectCertificateGenerationStore::provenanceDigest(
+                                $domain,
+                                $sourceDigest,
+                                $trustProfile,
+                                $provider,
+                                $materialClass,
+                            ),
+                        );
+                    } catch (\Throwable) {
+                        $provenanceValid = false;
+                    }
+                } elseif ($provider === 'none' && $materialClass === 'none') {
+                    try {
+                        $provenanceValid = \hash_equals(
+                            $provenanceDigest,
+                            ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                                $domain,
+                                $state,
+                                $sourceDigest,
+                                $generation,
+                                $trustProfile,
+                            ),
+                        );
+                    } catch (\Throwable) {
+                        $provenanceValid = false;
+                    }
+                }
                 if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
                     || !\hash_equals($expectedRouteId, $routeId)
                     || ($previousDesiredRouteId !== ''
                         && $routeId <= $previousDesiredRouteId)
                     || isset($desiredFacts[$routeId])
                     || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+                    || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
+                    || !$provenanceValid
+                    || !\hash_equals($certificateTrustProfile, $trustProfile)
                     || !$lifecycleValid
                     || !\is_bool($forceHttps)
                     || !\is_bool($forceRootToWww)
@@ -1708,6 +2537,10 @@ final class ProjectServingManifestStore
                     'state' => $state,
                     'generation' => $generation,
                     'source_digest' => $sourceDigest,
+                    'trust_profile' => $trustProfile,
+                    'provider' => $provider,
+                    'material_class' => $materialClass,
+                    'provenance_digest' => $provenanceDigest,
                     'force_https' => $forceHttps,
                     'force_root_to_www' => $forceRootToWww,
                     'root_to_www_target' => $rootTarget,
@@ -1748,6 +2581,31 @@ final class ProjectServingManifestStore
             ), 0, 32);
             $policy = \is_array($route['policy'] ?? null) ? $route['policy'] : [];
             $sourceDigest = (string)($route['certificate_source_digest'] ?? '');
+            $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $route['certificate_trust_profile'] ?? ''
+            ));
+            $provider = ProjectCertificateGenerationStore::normalizeProvider((string)(
+                $route['certificate_provider'] ?? ''
+            ));
+            $materialClass = \strtolower(\trim((string)(
+                $route['certificate_material_class'] ?? ''
+            )));
+            $provenanceDigest = \strtolower(\trim((string)(
+                $route['certificate_provenance_digest'] ?? ''
+            )));
+            $provenanceValid = \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                $provenanceDigest,
+            ) === 1 && \hash_equals(
+                $provenanceDigest,
+                ProjectCertificateGenerationStore::provenanceDigest(
+                    $domain,
+                    $sourceDigest,
+                    $trustProfile,
+                    $provider,
+                    $materialClass,
+                ),
+            );
             $desiredFact = $desiredFacts[$routeId] ?? null;
             if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
                 || !\hash_equals($expectedRouteId, $routeId)
@@ -1757,6 +2615,8 @@ final class ProjectServingManifestStore
                 || (int)($route['route_generation'] ?? -1) < 0
                 || (int)($route['certificate_generation'] ?? 0) < 1
                 || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+                || !$provenanceValid
+                || !\hash_equals($certificateTrustProfile, $trustProfile)
                 || ($requireLifecycleFacts
                     && (!\is_array($desiredFact)
                         || !\hash_equals('active', (string)$desiredFact['state'])
@@ -1766,6 +2626,22 @@ final class ProjectServingManifestStore
                         || !\hash_equals(
                             (string)$desiredFact['source_digest'],
                             $sourceDigest,
+                        )
+                        || !\hash_equals(
+                            (string)$desiredFact['trust_profile'],
+                            $trustProfile,
+                        )
+                        || !\hash_equals(
+                            (string)$desiredFact['provider'],
+                            $provider,
+                        )
+                        || !\hash_equals(
+                            (string)$desiredFact['material_class'],
+                            $materialClass,
+                        )
+                        || !\hash_equals(
+                            (string)$desiredFact['provenance_digest'],
+                            $provenanceDigest,
                         )))
                 || !\is_bool($policy['force_https'] ?? null)
                 || !\is_bool($policy['force_root_to_www'] ?? null)
@@ -1864,6 +2740,284 @@ final class ProjectServingManifestStore
         ) {
             throw new \RuntimeException('Partial WLS serving manifest is incorrectly converged.');
         }
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function assertCurrentCertificateAuthorities(
+        array $payload,
+        ?float $deadlineMonotonic,
+        ?ProjectCertificateGenerationStore $generations = null,
+    ): void {
+        $requiredTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($payload['certificate_trust_profile'] ?? ''),
+        );
+        $generations ??= new ProjectCertificateGenerationStore($this->projectRoot);
+        $activeRoutes = [];
+        foreach ((array)($payload['routes'] ?? []) as $route) {
+            if (!\is_array($route)) {
+                throw new \RuntimeException(
+                    'WLS serving manifest certificate authority route is malformed.',
+                );
+            }
+            $activeRoutes[(string)($route['domain'] ?? '')] = $route;
+        }
+        $desiredRoutes = (array)($payload['desired_routes'] ?? []);
+        $domains = [];
+        foreach ($desiredRoutes as $desiredRoute) {
+            if (!\is_array($desiredRoute)) {
+                throw new \RuntimeException(
+                    'WLS serving manifest desired certificate authority is malformed.',
+                );
+            }
+            $domain = self::normalizeHost((string)(
+                $desiredRoute['domain'] ?? ''
+            ));
+            $domains[] = $domain;
+        }
+        $authorities = $generations->authoritySnapshot(
+            $domains,
+            $deadlineMonotonic,
+            $requiredTrustProfile,
+        );
+        $transitions = [];
+        $activeDomains = [];
+        foreach ($desiredRoutes as $desiredRoute) {
+            $this->assertPublicationDeadline($deadlineMonotonic);
+            $domain = self::normalizeHost((string)(
+                $desiredRoute['domain'] ?? ''
+            ));
+            $manifestState = \strtolower(\trim((string)(
+                $desiredRoute['certificate_state'] ?? ''
+            )));
+            $manifestGeneration = (int)(
+                $desiredRoute['certificate_generation'] ?? -1
+            );
+            $manifestSourceDigest = \strtolower(\trim((string)(
+                $desiredRoute['certificate_source_digest'] ?? ''
+            )));
+            $authority = $authorities[$domain] ?? null;
+            if (!\is_array($authority)) {
+                throw new CertificateTrustProvenanceException(
+                    'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: serving manifest certificate '
+                        . 'authority snapshot is incomplete.',
+                );
+            }
+            $authorityState = (string)($authority['effective_state'] ?? '');
+            $authorityGeneration = (int)($authority['generation'] ?? 0);
+            if ($authorityState === 'absent') {
+                if ($manifestState === 'pending' && $manifestGeneration === 0) {
+                    continue;
+                }
+                throw new CertificateTrustProvenanceException(
+                    'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: serving manifest certificate '
+                        . 'authority disappeared or rolled back.',
+                );
+            }
+
+            if ($authorityState === 'disabled') {
+                $disabled = \is_array($authority['disabled'] ?? null)
+                    ? $authority['disabled']
+                    : null;
+                if ($disabled === null) {
+                    throw new CertificateTrustProvenanceException(
+                        'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: serving manifest certificate '
+                            . 'tombstone authority is incomplete.',
+                    );
+                }
+                if ($manifestState === 'pending') {
+                    $transitions[] = $this->certificateAuthorityTransition(
+                        $domain,
+                        $manifestState,
+                        $manifestGeneration,
+                        $authorityState,
+                        $authorityGeneration,
+                        'tombstoned',
+                    );
+                    continue;
+                }
+                if ($manifestState === 'active') {
+                    if ($authorityGeneration <= $manifestGeneration) {
+                        throw new CertificateTrustProvenanceException(
+                            'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: certificate tombstone '
+                                . 'does not monotonically supersede the active manifest.',
+                        );
+                    }
+                    $transitions[] = $this->certificateAuthorityTransition(
+                        $domain,
+                        $manifestState,
+                        $manifestGeneration,
+                        $authorityState,
+                        $authorityGeneration,
+                        'tombstoned',
+                    );
+                    continue;
+                }
+                if ($manifestState !== 'disabled'
+                    || $authorityGeneration < $manifestGeneration
+                    || ($authorityGeneration === $manifestGeneration
+                        && !\hash_equals(
+                            $manifestSourceDigest,
+                            (string)($disabled['source_digest'] ?? ''),
+                        ))
+                ) {
+                    throw new CertificateTrustProvenanceException(
+                        'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: disabled certificate '
+                            . 'authority rolled back or changed at the same generation.',
+                    );
+                }
+                if ($authorityGeneration > $manifestGeneration) {
+                    $transitions[] = $this->certificateAuthorityTransition(
+                        $domain,
+                        $manifestState,
+                        $manifestGeneration,
+                        $authorityState,
+                        $authorityGeneration,
+                        'tombstoned',
+                    );
+                }
+                continue;
+            }
+
+            if ($authorityState !== 'active') {
+                throw new CertificateTrustProvenanceException(
+                    'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: certificate authority state is invalid.',
+                );
+            }
+            $active = \is_array($authority['active'] ?? null)
+                ? $authority['active']
+                : null;
+            if ($active === null) {
+                throw new CertificateTrustProvenanceException(
+                    'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: active certificate authority is incomplete.',
+                );
+            }
+            $activeDomains[] = $domain;
+            if ($manifestState === 'pending') {
+                $transitions[] = $this->certificateAuthorityTransition(
+                    $domain,
+                    $manifestState,
+                    $manifestGeneration,
+                    $authorityState,
+                    $authorityGeneration,
+                    'active_advanced',
+                );
+                continue;
+            }
+            if ($manifestState === 'disabled') {
+                $disabled = \is_array($authority['disabled'] ?? null)
+                    ? $authority['disabled']
+                    : null;
+                $disabledGeneration = \is_array($disabled)
+                    ? (int)($disabled['generation'] ?? 0)
+                    : 0;
+                if ($disabledGeneration < $manifestGeneration
+                    || ($disabledGeneration === $manifestGeneration
+                        && !\hash_equals(
+                            $manifestSourceDigest,
+                            (string)($disabled['source_digest'] ?? ''),
+                        ))
+                    || $authorityGeneration <= $disabledGeneration
+                    || $authorityGeneration <= $manifestGeneration
+                ) {
+                    throw new CertificateTrustProvenanceException(
+                        'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: explicit certificate '
+                            . 're-enable authority is incomplete or rolled back.',
+                    );
+                }
+                $transitions[] = $this->certificateAuthorityTransition(
+                    $domain,
+                    $manifestState,
+                    $manifestGeneration,
+                    $authorityState,
+                    $authorityGeneration,
+                    'explicitly_reenabled',
+                );
+                continue;
+            }
+            if ($manifestState !== 'active'
+                || $authorityGeneration < $manifestGeneration
+            ) {
+                throw new CertificateTrustProvenanceException(
+                    'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: active certificate authority '
+                        . 'rolled back behind the serving manifest.',
+                );
+            }
+            if ($authorityGeneration > $manifestGeneration) {
+                $transitions[] = $this->certificateAuthorityTransition(
+                    $domain,
+                    $manifestState,
+                    $manifestGeneration,
+                    $authorityState,
+                    $authorityGeneration,
+                    'active_advanced',
+                );
+                continue;
+            }
+            foreach ([
+                'source_digest' => 'certificate_source_digest',
+                'trust_profile' => 'certificate_trust_profile',
+                'provider' => 'certificate_provider',
+                'material_class' => 'certificate_material_class',
+                'provenance_digest' => 'certificate_provenance_digest',
+            ] as $activeField => $desiredField) {
+                if (!\hash_equals(
+                    (string)($active[$activeField] ?? ''),
+                    (string)($desiredRoute[$desiredField] ?? ''),
+                )) {
+                    throw new CertificateTrustProvenanceException(
+                        'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: serving manifest certificate '
+                            . 'authority changed at the same generation.',
+                    );
+                }
+            }
+            $route = $activeRoutes[$domain] ?? null;
+            if (!\is_array($route)) {
+                continue;
+            }
+            foreach ([
+                'cert_path' => ['certificate', 'path'],
+                'key_path' => ['private_key', 'path'],
+                'leaf_fingerprint_sha256' => [
+                    'certificate_snapshot',
+                    'leaf_fingerprint_sha256',
+                ],
+            ] as $activeField => $routeField) {
+                $expected = (string)(
+                    ($route[$routeField[0]] ?? [])[$routeField[1]] ?? ''
+                );
+                if (!\hash_equals((string)($active[$activeField] ?? ''), $expected)) {
+                    throw new CertificateTrustProvenanceException(
+                        'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: serving manifest certificate '
+                            . 'snapshot changed at the same generation.',
+                    );
+                }
+            }
+        }
+        if ($transitions !== []) {
+            throw new ServingManifestAuthorityTransitionException(
+                $transitions,
+                $activeDomains,
+            );
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function certificateAuthorityTransition(
+        string $domain,
+        string $manifestState,
+        int $manifestGeneration,
+        string $authorityState,
+        int $authorityGeneration,
+        string $reason,
+    ): array {
+        return [
+            'domain' => $domain,
+            'manifest_state' => $manifestState,
+            'manifest_generation' => $manifestGeneration,
+            'authority_state' => $authorityState,
+            'authority_generation' => $authorityGeneration,
+            'reason' => $reason,
+        ];
     }
 
     private function assertManifestStoreCapacity(int $prospectiveBytes): void
@@ -2456,7 +3610,7 @@ final class ProjectServingManifestStore
                     '/\Alkg-[a-f0-9]{32}\.json\z/D',
                     $leaf,
                 ) === 1) {
-                    foreach ($this->readRecentLkgReferences($path) as $lkg) {
+                    foreach ($this->readRecentLkgReferenceEnvelope($path) as $lkg) {
                         $reference = (string)$lkg['path'];
                         $referenced[$this->pathKey($reference)] = $reference;
                     }
@@ -2547,7 +3701,14 @@ final class ProjectServingManifestStore
                     'WLS serving manifest reference has an invalid immutable filename.',
                 );
             }
-            $manifest = $this->readBound($path, (int)$matches[1], (string)$matches[2]);
+            // Snapshot GC must retain material referenced by a cryptographically
+            // bound schema-2 WLS 2.0 manifest even though that legacy payload
+            // is never accepted by readBound() for serving.
+            $manifest = $this->readRetirementBound(
+                $path,
+                (int)$matches[1],
+                (string)$matches[2],
+            );
             foreach ((array)$manifest['payload']['routes'] as $route) {
                 $digest = \strtolower(\trim((string)(
                     \is_array($route) ? ($route['certificate_source_digest'] ?? '') : ''
@@ -2653,6 +3814,34 @@ final class ProjectServingManifestStore
         ?string $expectedInstanceId = null,
         bool $missingAllowed = false,
     ): array {
+        $validated = $this->readRecentLkgReferenceEnvelope(
+            $path,
+            $expectedInstanceId,
+            $missingAllowed,
+        );
+        foreach ($validated as $reference) {
+            $this->readBound(
+                (string)$reference['path'],
+                (int)$reference['generation'],
+                (string)$reference['digest'],
+            );
+        }
+        return $validated;
+    }
+
+    /**
+     * Validate the mutable LKG envelope without granting its immutable target
+     * serving authority. Inactive-instance retirement may use this narrower
+     * proof to discard a historical reference whose manifest bytes are
+     * damaged, but every ordinary reader still calls readBound() above.
+     *
+     * @return list<array{generation:int,digest:string,path:string}>
+     */
+    private function readRecentLkgReferenceEnvelope(
+        string $path,
+        ?string $expectedInstanceId = null,
+        bool $missingAllowed = false,
+    ): array {
         $status = @\lstat($path);
         if (!\is_array($status)) {
             if (\file_exists($path) || \is_link($path) || !$missingAllowed) {
@@ -2721,7 +3910,6 @@ final class ProjectServingManifestStore
             ) {
                 throw new \RuntimeException('WLS serving manifest LKG reference is corrupt.');
             }
-            $this->readBound($manifestPath, $generation, $digest);
             $seen[$key] = true;
             $validated[] = [
                 'generation' => $generation,

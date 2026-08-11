@@ -824,11 +824,6 @@ class MasterProcess
         $configuredHttp = \is_array($this->config['http'] ?? null)
             ? $this->config['http']
             : [];
-        if (\trim((string)($this->config['protocol_edge_binary'] ?? '')) !== ''
-            || (bool)($this->config['protocol_edge_enabled'] ?? false)
-        ) {
-            throw new \RuntimeException('Master runtime rejects external native/Caddy protocol-edge processes.');
-        }
         if ($configuredHttp === []) {
             throw new \RuntimeException('Master runtime requires a persisted wls.http protocol snapshot.');
         }
@@ -1435,8 +1430,6 @@ class MasterProcess
             'http3',
             'edge_adapter',
             'http_protocol_selection',
-            'protocol_edge_enabled',
-            'protocol_edge_binary',
             'worker_port',
             'worker_base_port',
             'shared_state',

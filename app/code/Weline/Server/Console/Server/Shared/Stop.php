@@ -13,21 +13,43 @@ class Stop extends CommandAbstract
 {
     public function execute(array $args = [], array $data = [])
     {
-        $manager = new SharedStateServiceManager();
+        $manager = $this->createManager();
         $envConfig = Env::getInstance()->getConfig();
         if (!\is_array($envConfig)) {
             $envConfig = [];
         }
 
+        $failed = false;
         $sessionStopped = $manager->stop(ControlMessage::ROLE_SESSION_SERVER, [], $envConfig);
-        $this->printer->success(__('Session Server %{1}', [$sessionStopped ? 'stopped' : 'already stopped']));
+        if ($sessionStopped) {
+            $this->printer->success(__('Session Server stopped'));
+        } else {
+            $failed = true;
+            $this->printer->warning(
+                __('Session Server stop was not confirmed; runtime identity was retained for retry/repair.')
+            );
+        }
 
         if ($this->isMemoryEnabled($envConfig)) {
             $memoryStopped = $manager->stop(ControlMessage::ROLE_MEMORY_SERVER, [], $envConfig);
-            $this->printer->success(__('Memory Service %{1}', [$memoryStopped ? 'stopped' : 'already stopped']));
+            if ($memoryStopped) {
+                $this->printer->success(__('Memory Service stopped'));
+            } else {
+                $failed = true;
+                $this->printer->warning(
+                    __('Memory Service stop was not confirmed; runtime identity was retained for retry/repair.')
+                );
+            }
         } else {
             $this->printer->note(__('Memory Service disabled by configuration.'));
         }
+
+        return $failed ? 1 : 0;
+    }
+
+    protected function createManager(): SharedStateServiceManager
+    {
+        return new SharedStateServiceManager();
     }
 
     public function tip(): string

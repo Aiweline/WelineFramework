@@ -88,6 +88,186 @@ final class GatewayRegistrationRetirementCoordinatorTest extends TestCase
         );
     }
 
+    public function testCallerDeadlineIsForwardedUnchangedAcrossHostChain(): void
+    {
+        $deadlines = [];
+        $deadline = \hrtime(true) / 1_000_000_000 + 30.0;
+        $statuses = [
+            $this->ownStatus([$this->instance('ACTIVE')]),
+            $this->ownStatus([]),
+        ];
+        $coordinator = new GatewayRegistrationRetirementCoordinator(
+            lifecycle: $this->lifecycle,
+            statusResolver: static function (float $observedDeadline) use (
+                &$deadlines,
+                &$statuses,
+            ): array {
+                $deadlines[] = ['status', $observedDeadline];
+                return \array_shift($statuses) ?? [];
+            },
+            receiptValidator: static function (
+                string $instance,
+                float $observedDeadline,
+            ) use (&$deadlines): void {
+                $deadlines[] = ['receipt:' . $instance, $observedDeadline];
+            },
+            drainResolver: static function (
+                string $instance,
+                int $seconds,
+                bool $wait,
+                float $observedDeadline,
+            ) use (&$deadlines): array {
+                $deadlines[] = [
+                    'drain:' . $instance . ':' . $seconds . ':' . (int)$wait,
+                    $observedDeadline,
+                ];
+                return ['already_removed' => true];
+            },
+            currentHostBootId: self::HOST_BOOT_ID,
+        );
+
+        $result = $coordinator->retire(
+            'shop',
+            1,
+            true,
+            false,
+            $deadline,
+        );
+
+        self::assertSame(GatewayStopRegistrationPolicy::ACTION_DRAIN, $result['action']);
+        self::assertSame(
+            ['status', 'receipt:shop', 'drain:shop:1:1', 'status'],
+            \array_column($deadlines, 0),
+        );
+        foreach ($deadlines as [, $observedDeadline]) {
+            self::assertSame($deadline, $observedDeadline);
+        }
+        self::assertSame([], $statuses);
+    }
+
+    public function testCommittedUnregisterIsNeverCancelledWhenLocalCompletionFails(): void
+    {
+        $atomicCalls = 0;
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            atomicUpdater: function (
+                string $file,
+                callable $modifier,
+                float $timeout,
+            ) use (&$atomicCalls): bool {
+                $atomicCalls++;
+                self::assertGreaterThan(0.0, $timeout);
+                $current = \json_decode(
+                    (string)\file_get_contents($file),
+                    true,
+                    64,
+                    JSON_THROW_ON_ERROR,
+                );
+                $next = $modifier($current);
+                self::assertIsArray($next);
+                if ($atomicCalls === 2) {
+                    // completeRetirement prepared its exact RETIRED fact, but
+                    // the local CAS cannot prove publication. A third updater
+                    // call would be the forbidden cancellation/restoration.
+                    return false;
+                }
+                self::assertNotFalse(\file_put_contents(
+                    $file,
+                    \json_encode($next, JSON_THROW_ON_ERROR),
+                    LOCK_EX,
+                ));
+                return true;
+            },
+        );
+        $coordinator = new GatewayRegistrationRetirementCoordinator(
+            lifecycle: $lifecycle,
+            statusResolver: fn (): array => $this->ownStatus([
+                $this->instance('ACTIVE'),
+            ]),
+            receiptValidator: static function (string $instance): void {
+                unset($instance);
+            },
+            drainResolver: static function (
+                string $instance,
+                int $seconds,
+                bool $wait,
+            ): array {
+                unset($instance, $seconds, $wait);
+                return ['unregistered' => true, 'drain_complete' => true];
+            },
+            currentHostBootId: self::HOST_BOOT_ID,
+        );
+
+        try {
+            $coordinator->retire('shop', 1, true, true);
+            self::fail('A failed local completion must remain explicit.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'Host retirement is already authoritative',
+                $exception->getMessage(),
+            );
+            self::assertStringContainsString(
+                'was not restored',
+                $exception->getMessage(),
+            );
+        }
+
+        self::assertSame(2, $atomicCalls, 'Committed host retirement must not invoke cancellation.');
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_RETIRING,
+            $this->fact()['state'],
+        );
+    }
+
+    public function testCommittedUnregisterCrossingCallerDeadlineStillCompletesLocally(): void
+    {
+        $now = 100.0;
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+        $coordinator = new GatewayRegistrationRetirementCoordinator(
+            lifecycle: $lifecycle,
+            statusResolver: fn (): array => $this->ownStatus([
+                $this->instance('ACTIVE'),
+            ]),
+            receiptValidator: static function (string $instance): void {
+                unset($instance);
+            },
+            drainResolver: static function (
+                string $instance,
+                int $seconds,
+                bool $wait,
+            ) use (&$now): array {
+                unset($instance, $seconds, $wait);
+                // The Controller committed unregister before the response
+                // reached PHP, but the caller's original budget has elapsed.
+                $now = 102.0;
+                return ['unregistered' => true, 'drain_complete' => true];
+            },
+            currentHostBootId: self::HOST_BOOT_ID,
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+
+        $result = $coordinator->retire(
+            'shop',
+            1,
+            true,
+            true,
+            101.0,
+        );
+
+        self::assertSame(GatewayStopRegistrationPolicy::ACTION_DRAIN, $result['action']);
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_RETIRED,
+            $this->fact()['state'],
+        );
+    }
+
     public function testFailedStartupRetirementKeepsRetiringFence(): void
     {
         $coordinator = new GatewayRegistrationRetirementCoordinator(
@@ -286,9 +466,15 @@ final class GatewayRegistrationRetirementCoordinatorTest extends TestCase
             );
         }
 
+        $fact = $this->fact();
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_RETIRING,
+            $fact['state'],
+        );
         self::assertSame(
             GatewayRegistrationLifecycle::STATE_REGISTERED,
-            $this->fact()['state'],
+            $fact['previous_state'],
+            'An irreversible host drain must never be restored as registered.',
         );
     }
 

@@ -15,6 +15,9 @@ final class GatewayPaths
     public const PROTOCOL = 'wls-edge/2';
     public const IMPLEMENTATION_LEVEL = 'wls-2.0';
     public const SECURITY_PROFILE = 'native-broker-v1';
+    private const SYSTEMD_DEFINITION_DIRECTORY = '/etc/weline-gateway';
+    private const SYSTEMD_SERVICE_FILE = 'weline-wls-gateway-v2.service';
+    private const SYSTEMD_UNIT_DIRECTORY = '/etc/systemd/system';
     /**
      * Host-gateway upstream sockets can remain attached to one Direct
      * SO_REUSEPORT Worker for this long. Worker reload drain deadlines must
@@ -49,12 +52,7 @@ final class GatewayPaths
         }
 
         if (\PHP_OS_FAMILY === 'Windows') {
-            $base = (string)(\getenv('PROGRAMDATA') ?: '');
-            if (\trim($base) === '') {
-                throw new \RuntimeException('WLS Gateway requires PROGRAMDATA on Windows.');
-            }
-            return \rtrim($base, '/\\') . DIRECTORY_SEPARATOR . 'Weline'
-                . DIRECTORY_SEPARATOR . 'Gateway';
+            return GatewayWindowsHostRootAuthority::resolveHome();
         }
         if (\PHP_OS_FAMILY === 'Darwin') {
             return '/Library/Application Support/WelineGateway';
@@ -77,7 +75,7 @@ final class GatewayPaths
             return $this->runtimeDir() . DIRECTORY_SEPARATOR . 'run';
         }
         return \PHP_OS_FAMILY === 'Darwin'
-            ? '/var/run/weline-gateway'
+            ? '/private/var/run/weline-gateway'
             : '/run/weline-gateway';
     }
 
@@ -99,6 +97,290 @@ final class GatewayPaths
     public function slotsDir(): string
     {
         return $this->home() . DIRECTORY_SEPARATOR . 'slots';
+    }
+
+    /**
+     * Immutable WLS 2.0 v1 Recovery Guardian generation. Platform services
+     * point only at this directory; ordinary A/B and launcher rebootstrap
+     * transactions are never allowed to replace it.
+     */
+    public function guardianDir(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'guardian'
+            . DIRECTORY_SEPARATOR . 'v1';
+    }
+
+    public function guardianFile(): string
+    {
+        return $this->guardianDir() . DIRECTORY_SEPARATOR
+            . (\PHP_OS_FAMILY === 'Windows'
+                ? 'wls-gateway-guardian.exe'
+                : 'wls-gateway-guardian');
+    }
+
+    public function guardianDigestFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'guardian.sha256';
+    }
+
+    public function guardianGenerationHeadFile(int $slot): string
+    {
+        if (!\in_array($slot, [0, 1], true)) {
+            throw new \InvalidArgumentException(
+                'Gateway Guardian generation-head slot must be 0 or 1.',
+            );
+        }
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'guardian-generation-head.' . $slot;
+    }
+
+    public function guardianGenerationHeadLockFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'guardian-generation-head.lock';
+    }
+
+    public function guardianTransitionRequestFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'guardian-transition.request';
+    }
+
+    public function guardianTransitionAcknowledgementFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'guardian-transition.ack';
+    }
+
+    public function guardianRecoveryTransactionFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'guardian-recovery.transaction';
+    }
+
+    public function guardianTransitionRetirementFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'guardian-transition.retirement';
+    }
+
+    public function guardianStatusFile(): string
+    {
+        return $this->runDir() . DIRECTORY_SEPARATOR . 'guardian.status';
+    }
+
+    public function guardianRecoveryAuthorizationFile(string $nonce): string
+    {
+        return $this->rebootstrapBackupDir($nonce) . DIRECTORY_SEPARATOR
+            . 'guardian-recovery.authorization';
+    }
+
+    public function guardianRecoveryInventoryFile(string $nonce): string
+    {
+        return $this->rebootstrapBackupDir($nonce) . DIRECTORY_SEPARATOR
+            . 'guardian-recovery.inventory';
+    }
+
+    /**
+     * Root/LocalSystem-only workspace for an explicit whole-host launcher
+     * rebootstrap. It is deliberately outside A/B so a fully verified
+     * candidate can be self-tested without consuming either rollback slot.
+     */
+    public function rebootstrapDir(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'rebootstrap';
+    }
+
+    public function rebootstrapCandidatesDir(): string
+    {
+        return $this->rebootstrapDir() . DIRECTORY_SEPARATOR . 'candidates';
+    }
+
+    public function rebootstrapBackupsDir(): string
+    {
+        return $this->rebootstrapDir() . DIRECTORY_SEPARATOR . 'backups';
+    }
+
+    public function rebootstrapReceiptsDir(): string
+    {
+        return $this->rebootstrapDir() . DIRECTORY_SEPARATOR . 'receipts';
+    }
+
+    /**
+     * Root-only physical capacity reserved before a whole-host maintenance
+     * stop. Native launchers exclusively own descendants of this directory.
+     */
+    public function rebootstrapCapacityDir(): string
+    {
+        return $this->rebootstrapDir() . DIRECTORY_SEPARATOR . 'capacity';
+    }
+
+    public function rebootstrapCapacityHeldDir(string $nonce): string
+    {
+        return $this->rebootstrapCapacityDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce) . '.held';
+    }
+
+    public function rebootstrapCapacityReleasingDir(string $nonce): string
+    {
+        return $this->rebootstrapCapacityDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce) . '.releasing';
+    }
+
+    public function rebootstrapCapacityHeldManifestFile(string $nonce): string
+    {
+        return $this->rebootstrapCapacityDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce) . '.held.json';
+    }
+
+    public function rebootstrapCapacityReleasingReceiptFile(string $nonce): string
+    {
+        return $this->rebootstrapCapacityDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce) . '.releasing.json';
+    }
+
+    public function rebootstrapCapacityReleasedReceiptFile(string $nonce): string
+    {
+        return $this->rebootstrapCapacityDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce) . '.released.json';
+    }
+
+    public function rebootstrapCapacityReleasedGcFile(
+        string $nonce,
+        string $receiptSha256,
+    ): string {
+        $receiptSha256 = \strtolower(\trim($receiptSha256));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $receiptSha256) !== 1) {
+            throw new \InvalidArgumentException(
+                'Gateway released-capacity receipt digest must be 64 lowercase hexadecimal characters.',
+            );
+        }
+        return $this->rebootstrapCapacityReleasedReceiptFile($nonce)
+            . '.gc-' . \substr($receiptSha256, 0, 32);
+    }
+
+    public function rebootstrapJournalFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'rebootstrap.transaction';
+    }
+
+    /** Root-only forward-recovery journal for first host installation. */
+    public function initialBootstrapJournalFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'initial-bootstrap.transaction';
+    }
+
+    /**
+     * Native-launcher-readable, administrator-authenticated permission to
+     * start one exact rebootstrap journal/image pair.
+     */
+    public function rebootstrapStartAuthorizationFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'rebootstrap-start.authorization';
+    }
+
+    public function launcherRecoveryLedgerFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'launcher-recovery.ledger';
+    }
+
+    public function launcherRecoveryStatusFile(): string
+    {
+        return $this->runDir() . DIRECTORY_SEPARATOR
+            . 'launcher-recovery.status';
+    }
+
+    public function rebootstrapCandidateDir(string $nonce): string
+    {
+        return $this->rebootstrapCandidatesDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce);
+    }
+
+    public function rebootstrapBackupDir(string $nonce): string
+    {
+        return $this->rebootstrapBackupsDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce);
+    }
+
+    /**
+     * Fixed crash-replay quarantine for the candidate/new runtime image that
+     * is displaced while the retained old generation is restored.
+     */
+    public function rebootstrapRollbackNewGenerationDir(string $nonce): string
+    {
+        return $this->rebootstrapBackupDir($nonce) . DIRECTORY_SEPARATOR
+            . 'new-generation';
+    }
+
+    public function rebootstrapCollectedBackupDir(
+        string $nonce,
+        string $collectionNonce,
+    ): string {
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $collectionNonce) !== 1) {
+            throw new \InvalidArgumentException(
+                'Gateway rebootstrap collection nonce is invalid.',
+            );
+        }
+        return $this->rebootstrapBackupsDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce) . '.collecting-'
+            . $collectionNonce;
+    }
+
+    public function rebootstrapReceiptFile(string $nonce): string
+    {
+        return $this->rebootstrapReceiptsDir() . DIRECTORY_SEPARATOR
+            . $this->rebootstrapNonce($nonce) . '.json';
+    }
+
+    public function rebootstrapReceiptGcFile(
+        string $nonce,
+        string $receiptSha256,
+    ): string {
+        $receiptSha256 = \strtolower(\trim($receiptSha256));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $receiptSha256) !== 1) {
+            throw new \InvalidArgumentException(
+                'Gateway rebootstrap receipt GC digest is invalid.',
+            );
+        }
+        return $this->rebootstrapReceiptFile($nonce) . '.gc-'
+            . \substr($receiptSha256, 0, 32);
+    }
+
+    public function rebootstrapDerivedManifestFile(string $nonce): string
+    {
+        return $this->rebootstrapBackupDir($nonce) . DIRECTORY_SEPARATOR
+            . 'derived-state.manifest.json';
+    }
+
+    public function rebootstrapDerivedBackupDir(string $nonce): string
+    {
+        return $this->rebootstrapBackupDir($nonce) . DIRECTORY_SEPARATOR
+            . 'derived';
+    }
+
+    public function rebootstrapNewDerivedQuarantineDir(string $nonce): string
+    {
+        return $this->rebootstrapBackupDir($nonce) . DIRECTORY_SEPARATOR
+            . 'new-derived';
+    }
+
+    public function legacySnapshotsDir(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'snapshots';
+    }
+
+    public function sealedSnapshotsDir(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'snapshots-v2';
+    }
+
+    public function snapshotCandidatesDir(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'snapshot-candidates-v2';
     }
 
     public function slotDir(string $slot): string
@@ -130,6 +412,12 @@ final class GatewayPaths
         return $this->trustDir() . DIRECTORY_SEPARATOR . 'admin.token';
     }
 
+    /** Host-global CA identity; ordinary A/B slots must match it exactly. */
+    public function caBundleBaselineFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'ca-bundle.sha256';
+    }
+
     public function adminStoppedIntentFile(): string
     {
         return $this->trustDir() . DIRECTORY_SEPARATOR . 'admin-stopped.intent';
@@ -152,6 +440,18 @@ final class GatewayPaths
     public function platformServiceMetadataFile(): string
     {
         return $this->trustDir() . DIRECTORY_SEPARATOR . 'platform-service.json';
+    }
+
+    /**
+     * Durable forward-recovery journal for the schema-1 Linux unit-layout
+     * migration.  It is separate from the definition/metadata publication
+     * journal because the canonical systemd path changes type from a regular
+     * file to a symlink during this one-time transition.
+     */
+    public function systemdLayoutMigrationTransactionFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'systemd-layout-migration.transaction';
     }
 
     public function endpointFile(): string
@@ -197,6 +497,210 @@ final class GatewayPaths
                 : 'wls-gateway-launcher');
     }
 
+    /**
+     * The mutable systemd unit belongs in a root-only directory outside the
+     * controller's regular host state.  The canonical systemd search path
+     * contains only an exact link to this target, so Recovery Guardian can
+     * atomically restore the target without making /etc/systemd/system
+     * writable inside ProtectSystem=strict.
+     */
+    public function systemdDefinitionDirectory(): string
+    {
+        if ($this->isTestMode()) {
+            return $this->stateDir() . DIRECTORY_SEPARATOR
+                . 'systemd-definition';
+        }
+        return self::SYSTEMD_DEFINITION_DIRECTORY;
+    }
+
+    public function systemdServiceDefinitionFile(): string
+    {
+        return $this->systemdDefinitionDirectory() . DIRECTORY_SEPARATOR
+            . self::SYSTEMD_SERVICE_FILE;
+    }
+
+    /**
+     * The canonical unit-search path.  In production it must be an exact
+     * absolute symlink to systemdServiceDefinitionFile(); it is never a
+     * mutable WLS state target.
+     */
+    public function systemdServiceLinkFile(): string
+    {
+        if ($this->isTestMode()) {
+            return $this->stateDir() . DIRECTORY_SEPARATOR
+                . 'systemd-service-link.test';
+        }
+        return self::SYSTEMD_UNIT_DIRECTORY . DIRECTORY_SEPARATOR
+            . self::SYSTEMD_SERVICE_FILE;
+    }
+
+    /**
+     * Schema-1 Linux metadata used the canonical unit path as its mutable
+     * definition.  Keep the spelling explicit so status/remove can recognise
+     * that exact pre-release layout without treating arbitrary unit files as
+     * WLS-owned.
+     */
+    public function legacySystemdServiceDefinitionFile(): string
+    {
+        return $this->systemdServiceLinkFile();
+    }
+
+    /**
+     * Create the single mutable systemd-unit directory only during an
+     * administrator-controlled install/repair path.  Routine host-path
+     * discovery must not call this method: an existing directory is verified
+     * rather than repaired, and a malformed/foreign directory is rejected.
+     */
+    public function ensureSystemdDefinitionDirectory(): void
+    {
+        $directory = $this->systemdDefinitionDirectory();
+        if ($this->isTestMode()) {
+            $status = $this->ensureDirectory($directory);
+            if (!\is_array($status)
+                || \is_link($directory)
+                || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+            ) {
+                throw new \RuntimeException(
+                    'WLS Gateway test systemd definition directory is unsafe.',
+                );
+            }
+            if ((((int)($status['mode'] ?? 0)) & 0777) !== 0700
+                && !@\chmod($directory, 0700)
+            ) {
+                throw new \RuntimeException(
+                    'Unable to restrict the WLS Gateway test systemd definition directory.',
+                );
+            }
+            $this->assertSystemdDefinitionDirectoryAuthority();
+            return;
+        }
+        if (\PHP_OS_FAMILY !== 'Linux') {
+            throw new \RuntimeException(
+                'The WLS Gateway systemd definition directory is only available on Linux.',
+            );
+        }
+
+        $status = @\lstat($directory);
+        if (!\is_array($status)) {
+            if (\file_exists($directory) || \is_link($directory)
+                || !@\mkdir($directory, 0700)
+            ) {
+                throw new \RuntimeException(
+                    'Unable to create the root-owned WLS Gateway systemd definition directory.',
+                );
+            }
+            if (!@\chmod($directory, 0700)) {
+                throw new \RuntimeException(
+                    'Unable to seal the WLS Gateway systemd definition directory.',
+                );
+            }
+            GatewayProjectStateFilesystem::syncDirectory(\dirname($directory));
+            $status = @\lstat($directory);
+        }
+        $this->assertSystemdDefinitionDirectoryAuthority();
+    }
+
+    /**
+     * Read-only authority proof for the mutable systemd target directory.
+     * Status paths deliberately use this instead of ensureSystemdDefinitionDirectory():
+     * a missing or foreign directory must never become an installer side effect.
+     */
+    public function assertSystemdDefinitionDirectoryAuthority(): void
+    {
+        $directory = $this->systemdDefinitionDirectory();
+        $status = @\lstat($directory);
+        if (!\is_array($status)
+            || \is_link($directory)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+            || (((int)($status['mode'] ?? 0)) & 0777) !== 0700
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway systemd definition directory authority is unsafe.',
+            );
+        }
+        if ($this->isTestMode()) {
+            $home = @\lstat($this->home());
+            if (!\is_array($home)
+                || (int)($status['uid'] ?? -1) !== (int)($home['uid'] ?? -2)
+                || (int)($status['gid'] ?? -1) !== (int)($home['gid'] ?? -2)
+            ) {
+                throw new \RuntimeException(
+                    'WLS Gateway test systemd definition directory authority is unsafe.',
+                );
+            }
+            return;
+        }
+        if (\PHP_OS_FAMILY !== 'Linux'
+            || (int)($status['uid'] ?? -1) !== 0
+            || (int)($status['gid'] ?? -1) !== 0
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway systemd definition directory authority is unsafe.',
+            );
+        }
+        $this->assertProductionPosixDirectoryAclFree($directory);
+        $after = @\lstat($directory);
+        if (!\is_array($after)
+            || !$this->sameFileState($status, $after)
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway systemd definition directory changed during verification.',
+            );
+        }
+    }
+
+    /**
+     * Verify the parent that owns the canonical systemd link.  The Guardian
+     * never receives write access here; this proof makes the one installer
+     * rename safe from non-root replacement and rejects a non-standard unit
+     * namespace instead of following it.
+     */
+    public function assertSystemdUnitLinkDirectoryAuthority(): void
+    {
+        $directory = \dirname($this->systemdServiceLinkFile());
+        $status = @\lstat($directory);
+        if (!\is_array($status)
+            || \is_link($directory)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway canonical systemd unit directory is unsafe.',
+            );
+        }
+        if ($this->isTestMode()) {
+            $home = @\lstat($this->home());
+            if (!\is_array($home)
+                || (int)($status['uid'] ?? -1) !== (int)($home['uid'] ?? -2)
+                || (int)($status['gid'] ?? -1) !== (int)($home['gid'] ?? -2)
+                || (((int)($status['mode'] ?? 0)) & 0777) !== 0700
+            ) {
+                throw new \RuntimeException(
+                    'WLS Gateway test canonical systemd unit directory authority is unsafe.',
+                );
+            }
+            return;
+        }
+        if (\PHP_OS_FAMILY !== 'Linux'
+            || !\hash_equals(self::SYSTEMD_UNIT_DIRECTORY, $directory)
+            || (int)($status['uid'] ?? -1) !== 0
+            || (int)($status['gid'] ?? -1) !== 0
+            || ((((int)($status['mode'] ?? 0)) & 0022) !== 0)
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway canonical systemd unit directory authority is unsafe.',
+            );
+        }
+        $this->assertProductionPosixDirectoryAclFree($directory);
+        $after = @\lstat($directory);
+        if (!\is_array($after)
+            || !$this->sameFileState($status, $after)
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway canonical systemd unit directory changed during verification.',
+            );
+        }
+    }
+
     public function serviceDefinitionFile(): string
     {
         if ($this->isTestMode()) {
@@ -204,7 +708,7 @@ final class GatewayPaths
         }
         return match (\PHP_OS_FAMILY) {
             'Darwin' => '/Library/LaunchDaemons/com.weline.wls-gateway-v2.plist',
-            'Linux' => '/etc/systemd/system/weline-wls-gateway-v2.service',
+            'Linux' => $this->systemdServiceDefinitionFile(),
             'Windows' => $this->stateDir() . DIRECTORY_SEPARATOR . 'windows-service.json',
             default => throw new \RuntimeException('Unsupported WLS Gateway platform.'),
         };
@@ -309,7 +813,8 @@ final class GatewayPaths
 
     public function ensureDirectories(): void
     {
-        foreach ([
+        $testMode = $this->isTestMode();
+        $directories = [
             $this->home(),
             $this->runtimeDir(),
             $this->runDir(),
@@ -317,10 +822,48 @@ final class GatewayPaths
             $this->stateDir(),
             $this->trustDir(),
             $this->slotsDir(),
-            $this->home() . DIRECTORY_SEPARATOR . 'snapshots',
+            $this->guardianDir(),
+            $this->rebootstrapDir(),
+            $this->rebootstrapCandidatesDir(),
+            $this->rebootstrapBackupsDir(),
+            $this->rebootstrapCapacityDir(),
+            $this->rebootstrapReceiptsDir(),
+            $this->legacySnapshotsDir(),
             \dirname($this->launcherFile()),
-        ] as $directory) {
-            $status = $this->ensureDirectory($directory);
+        ];
+        if ($testMode) {
+            // Isolated tests have one owner and no host privilege boundary.
+            // Production fixed snapshot roots are created only by the
+            // privileged platform/native initializer with their exact owner,
+            // group and ACL profiles.
+            $directories[] = $this->sealedSnapshotsDir();
+            $directories[] = $this->snapshotCandidatesDir();
+        }
+        $allowProductionBootstrap = !$testMode
+            && $this->productionBootstrapAuthorityAllowed();
+
+        if (\PHP_OS_FAMILY === 'Windows' && !$testMode) {
+            $authoritativeHome = GatewayWindowsHostRootAuthority::ensureHome();
+            if (\strcasecmp($authoritativeHome, $this->home()) !== 0) {
+                throw new \RuntimeException(
+                    'Windows gateway trust-root authority changed during initialization.',
+                );
+            }
+            GatewayWindowsHostRootAuthority::ensureBootstrapDirectories(
+                \array_values(\array_filter(
+                    $directories,
+                    fn (string $directory): bool => \strcasecmp(
+                        $directory,
+                        $authoritativeHome,
+                    ) !== 0,
+                )),
+                $allowProductionBootstrap,
+            );
+        }
+        foreach ($directories as $directory) {
+            $status = \PHP_OS_FAMILY === 'Windows' && !$testMode
+                ? @\lstat($directory)
+                : $this->ensureDirectory($directory);
             if (!\is_array($status)
                 || \is_link($directory)
                 || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
@@ -333,14 +876,18 @@ final class GatewayPaths
                 // PHP are neither authoritative nor consistently mutable.
                 continue;
             }
-            $mode = ((int)($status['mode'] ?? 0)) & 0777;
-            // Production privilege separation deliberately promotes selected
-            // roots to 0750/0770 after the service identity exists. Repeated
-            // package-lock setup must not silently collapse those directories
-            // back to root-only 0700 and strand the downgraded Controller.
-            if ($this->isTestMode()
-                || !\in_array($mode, [0700, 0750, 0770, 0771], true)
-            ) {
+            if (!$testMode) {
+                // This helper is called by status, lock and recovery paths.
+                // It may validate an established privilege boundary but must
+                // never rewrite one as a side effect.
+                $this->assertProductionPosixDirectoryAuthority(
+                    $directory,
+                    $status,
+                    $allowProductionBootstrap,
+                );
+                continue;
+            }
+            if ((((int)($status['mode'] ?? 0)) & 0777) !== 0700) {
                 if (!@\chmod($directory, 0700)) {
                     throw new \RuntimeException(
                         'Unable to restrict WLS Gateway directory: ' . $directory
@@ -356,6 +903,284 @@ final class GatewayPaths
                 }
             }
         }
+    }
+
+    /** @param array<string|int,mixed> $status */
+    private function assertProductionPosixDirectoryAuthority(
+        string $directory,
+        array $status,
+        bool $allowBootstrap,
+    ): void {
+        $bootstrap = [[0, 0, 0700]];
+        $profiles = [
+            $this->guardianDir() => $bootstrap,
+            $this->rebootstrapDir() => $bootstrap,
+            $this->rebootstrapCandidatesDir() => $bootstrap,
+            $this->rebootstrapBackupsDir() => $bootstrap,
+            $this->rebootstrapCapacityDir() => $bootstrap,
+            $this->rebootstrapReceiptsDir() => $bootstrap,
+        ];
+        $controllerAccount = \PHP_OS_FAMILY === 'Darwin'
+            ? '_welinegateway'
+            : 'weline-gateway';
+        $dataPlaneAccount = \PHP_OS_FAMILY === 'Darwin'
+            ? '_welinegateway_nginx'
+            : 'weline-gateway-nginx';
+        $controller = \function_exists('posix_getpwnam')
+            ? @\posix_getpwnam($controllerAccount)
+            : false;
+        $controllerGroup = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($controllerAccount)
+            : false;
+        $dataPlane = \function_exists('posix_getpwnam')
+            ? @\posix_getpwnam($dataPlaneAccount)
+            : false;
+        $dataPlaneGroup = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($dataPlaneAccount)
+            : false;
+        if (\is_array($controller)
+            && \is_array($controllerGroup)
+            && \is_array($dataPlane)
+            && \is_array($dataPlaneGroup)
+            && (string)($controller['name'] ?? '') === $controllerAccount
+            && (string)($controllerGroup['name'] ?? '') === $controllerAccount
+            && (int)($controller['gid'] ?? -1)
+                === (int)($controllerGroup['gid'] ?? -2)
+            && (string)($dataPlane['name'] ?? '') === $dataPlaneAccount
+            && (string)($dataPlaneGroup['name'] ?? '') === $dataPlaneAccount
+            && (int)($dataPlane['gid'] ?? -1)
+                === (int)($dataPlaneGroup['gid'] ?? -2)
+        ) {
+            $controllerUid = (int)$controller['uid'];
+            $controllerGid = (int)$controller['gid'];
+            $dataPlaneGid = (int)$dataPlane['gid'];
+            $profiles += [
+                $this->home() => [
+                    [0, $controllerGid, 0751],
+                ],
+                $this->runtimeDir() => [
+                    [$controllerUid, $dataPlaneGid, 0750],
+                ],
+                $this->runDir() => [
+                    [0, $controllerGid, 0771],
+                ],
+                $this->logDir() => [
+                    [$controllerUid, $dataPlaneGid, 0770],
+                ],
+                $this->stateDir() => [
+                    [$controllerUid, $controllerGid, 0700],
+                ],
+                $this->trustDir() => [
+                    [0, $controllerGid, 0750],
+                ],
+                $this->slotsDir() => [
+                    [0, $controllerGid, 0755],
+                ],
+                $this->legacySnapshotsDir() => [
+                    [$controllerUid, $dataPlaneGid, 0710],
+                ],
+                \dirname($this->launcherFile()) => [
+                    [0, $controllerGid, 0750],
+                ],
+            ];
+        }
+        $allowed = $profiles[$directory] ?? [];
+        if ($allowBootstrap && !\in_array($bootstrap[0], $allowed, true)) {
+            $allowed[] = $bootstrap[0];
+        }
+        $actual = [
+            (int)($status['uid'] ?? -1),
+            (int)($status['gid'] ?? -1),
+            ((int)($status['mode'] ?? 0)) & 0777,
+        ];
+        if (!\in_array($actual, $allowed, true)) {
+            throw new \RuntimeException(
+                'WLS Gateway directory authority differs from its fixed profile: '
+                    . $directory,
+            );
+        }
+        $this->assertProductionPosixDirectoryAclFree($directory);
+        $after = @\lstat($directory);
+        if (!\is_array($after)) {
+            throw new \RuntimeException(
+                'WLS Gateway directory authority disappeared during validation: '
+                    . $directory,
+            );
+        }
+        foreach (['dev', 'ino', 'mode', 'uid', 'gid', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $status)
+                || !\array_key_exists($field, $after)
+                || (int)$status[$field] !== (int)$after[$field]
+            ) {
+                throw new \RuntimeException(
+                    'WLS Gateway directory authority changed during validation: '
+                        . $directory,
+                );
+            }
+        }
+    }
+
+    private function assertProductionPosixDirectoryAclFree(
+        string $directory,
+    ): void {
+        if (!\class_exists(\FFI::class)) {
+            throw new \RuntimeException(
+                'WLS Gateway production directory ACL verification requires FFI.',
+            );
+        }
+        static $bindings = [];
+        $platform = \PHP_OS_FAMILY;
+        try {
+            if (!isset($bindings[$platform])) {
+                $bindings[$platform] = match ($platform) {
+                    'Linux' => \FFI::cdef(
+                        'int open(const char *path, int flags, ...);'
+                            . ' long fgetxattr(int fd, const char *name,'
+                            . ' void *value, unsigned long size);'
+                            . ' int close(int fd);'
+                            . ' int *__errno_location(void);',
+                    ),
+                    'Darwin' => \FFI::cdef(
+                        'typedef void *acl_t;'
+                            . ' typedef void *acl_entry_t;'
+                            . ' int open(const char *path, int flags, ...);'
+                            . ' acl_t acl_get_fd_np(int fd, int type);'
+                            . ' int acl_get_entry(acl_t acl, int entry_id,'
+                            . ' acl_entry_t *entry);'
+                            . ' int acl_free(void *obj);'
+                            . ' int close(int fd);'
+                            . ' int *__error(void);',
+                    ),
+                    default => throw new \RuntimeException(
+                        'Unsupported WLS Gateway POSIX ACL platform.',
+                    ),
+                };
+            }
+            $ffi = $bindings[$platform];
+            $flags = $platform === 'Linux'
+                ? (0x10000 | 0x20000 | 0x80000)
+                : (0x100000 | 0x100 | 0x1000000);
+            $fd = (int)$ffi->open($directory, $flags);
+            if ($fd < 0) {
+                throw new \RuntimeException(
+                    'WLS Gateway production directory ACL handle cannot be opened.',
+                );
+            }
+            try {
+                if ($platform === 'Linux') {
+                    foreach ([
+                        'system.posix_acl_access',
+                        'system.posix_acl_default',
+                    ] as $name) {
+                        $ffi->__errno_location()[0] = 0;
+                        $result = (int)$ffi->fgetxattr($fd, $name, null, 0);
+                        $error = (int)$ffi->__errno_location()[0];
+                        if ($result >= 0
+                            || !\in_array($error, [61, 95], true)
+                        ) {
+                            throw new \RuntimeException(
+                                'WLS Gateway production directory has an ACL or indeterminate ACL state.',
+                            );
+                        }
+                    }
+                } else {
+                    $ffi->__error()[0] = 0;
+                    $acl = $ffi->acl_get_fd_np($fd, 0x00000100);
+                    if (\FFI::isNull($acl)) {
+                        if ((int)$ffi->__error()[0] !== 2) {
+                            throw new \RuntimeException(
+                                'WLS Gateway production macOS ACL state is indeterminate.',
+                            );
+                        }
+                    } else {
+                        $entry = $ffi->new('acl_entry_t');
+                        $ffi->__error()[0] = 0;
+                        $entryResult = (int)$ffi->acl_get_entry(
+                            $acl,
+                            0,
+                            \FFI::addr($entry),
+                        );
+                        $entryError = (int)$ffi->__error()[0];
+                        $freeResult = (int)$ffi->acl_free($acl);
+                        if ($entryResult >= 0
+                            || $entryError !== 22
+                            || $freeResult !== 0
+                        ) {
+                            throw new \RuntimeException(
+                                'WLS Gateway production macOS directory has an ACL or indeterminate ACL state.',
+                            );
+                        }
+                    }
+                }
+            } finally {
+                if ((int)$ffi->close($fd) !== 0) {
+                    throw new \RuntimeException(
+                        'WLS Gateway production directory ACL handle did not close cleanly.',
+                    );
+                }
+            }
+        } catch (\RuntimeException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException(
+                'WLS Gateway production directory ACL verification failed closed.',
+                0,
+                $exception,
+            );
+        }
+    }
+
+    private function productionBootstrapAuthorityAllowed(): bool
+    {
+        if ($this->isTestMode()) {
+            return false;
+        }
+        $metadata = @\lstat($this->platformServiceMetadataFile());
+        $definition = @\lstat($this->serviceDefinitionFile());
+        $legacyDefinition = \PHP_OS_FAMILY === 'Linux'
+            ? @\lstat($this->legacySystemdServiceDefinitionFile())
+            : false;
+        if (!\is_array($metadata)
+            && !\file_exists($this->platformServiceMetadataFile())
+            && !\is_link($this->platformServiceMetadataFile())
+            && !\is_array($definition)
+            && !\file_exists($this->serviceDefinitionFile())
+            && !\is_link($this->serviceDefinitionFile())
+            && !\is_array($legacyDefinition)
+            && (\PHP_OS_FAMILY !== 'Linux'
+                || (!\file_exists($this->legacySystemdServiceDefinitionFile())
+                    && !\is_link($this->legacySystemdServiceDefinitionFile())))
+        ) {
+            return true;
+        }
+        foreach ([
+            $this->trustDir() . DIRECTORY_SEPARATOR
+                . 'platform-definition.transaction',
+        ] as $evidence) {
+            $status = @\lstat($evidence);
+            if (\is_array($status)
+                && !\is_link($evidence)
+                && ((((int)($status['mode'] ?? 0)) & 0170000) === 0100000)
+                && (int)($status['nlink'] ?? 0) === 1
+                && (\PHP_OS_FAMILY === 'Windows'
+                    || ((int)($status['uid'] ?? -1) === 0
+                        && (((int)($status['mode'] ?? 0)) & 0077) === 0))
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function rebootstrapNonce(string $nonce): string
+    {
+        $nonce = \strtolower(\trim($nonce));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $nonce) !== 1) {
+            throw new \InvalidArgumentException(
+                'Gateway rebootstrap transaction nonce must be 32 lowercase hexadecimal characters.'
+            );
+        }
+        return $nonce;
     }
 
     /** @return array<string|int,mixed> */

@@ -574,6 +574,50 @@ final class StatusCommandTest extends TestCase
         self::assertSame(['http://shop.example.test:27676'], $fallback['urls']);
     }
 
+    public function testWildcardOnlyFallbackStatusReportsBindAndSniWithoutUrl(): void
+    {
+        $status = new class extends Status {
+            public function fallback(array $gatewayRuntime, array $endpoint): ?array
+            {
+                return $this->resolveGatewayFallbackStatus(
+                    null,
+                    $gatewayRuntime,
+                    $endpoint,
+                );
+            }
+
+            protected function runtimeFallbackServingEndpoint(array $endpoint): ?array
+            {
+                return null;
+            }
+
+            protected function runtimeFallbackServingObservation(array $endpoint): ?array
+            {
+                return [
+                    'bind_host' => '127.0.0.1',
+                    'bind_endpoint' => '127.0.0.1:27677',
+                    'connect_host' => '127.0.0.1',
+                    'authority_host' => null,
+                    'route_domains' => ['*.example.test'],
+                    'limitations' => ['hostname_and_sni_required'],
+                    'port' => 27677,
+                    'https' => true,
+                ];
+            }
+        };
+
+        $fallback = $status->fallback(
+            ['fallback_state' => 'DEGRADED_WLS'],
+            ['gateway' => ['requested_mode' => 'auto']],
+        );
+
+        self::assertIsArray($fallback);
+        self::assertSame('127.0.0.1:27677', $fallback['bind']);
+        self::assertSame([], $fallback['urls']);
+        self::assertSame(['*.example.test'], $fallback['route_domains']);
+        self::assertContains('hostname_and_sni_required', $fallback['limitations']);
+    }
+
     public function testPureWlsHttpDiagnosticAuthorityAcceptsCanonicalLoopbackHosts(): void
     {
         $method = new \ReflectionMethod(

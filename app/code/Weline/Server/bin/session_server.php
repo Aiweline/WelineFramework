@@ -256,6 +256,9 @@ if ($tokenFileName === '') {
     $tokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole($role, $port);
 }
 $sessionConfig['token_file_name'] = $tokenFileName;
+$sessionConfig['process_name'] = $processName;
+$sessionConfig['instance_name'] = $instanceName;
+$sessionConfig['service_instance_name'] = $instanceName;
 
 $server = new \Weline\Server\Session\Server\SessionServer($sessionConfig);
 

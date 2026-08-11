@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service\Edge\Nginx;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxConfigWriter;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
 
@@ -321,6 +322,92 @@ final class ManagedNginxConfigWriterAtomicSafetyTest extends TestCase
         }
     }
 
+    public function testGenerationAwareWriterIgnoresMutableCertificateSourceAfterActivation(): void
+    {
+        $domain = 'immutable-edge.example.test';
+        $paths = $this->paths('tls-generation');
+        $source = $this->createCertificate($domain, 'tls-generation-source');
+        $replacement = $this->createCertificate(
+            'wrong-san.example.test',
+            'tls-generation-replacement',
+        );
+        $active = (new ProjectCertificateGenerationStore($this->root))->activate(
+            $domain,
+            $source['cert'],
+            $source['key'],
+            '',
+            [],
+            null,
+            ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+            ProjectCertificateGenerationStore::PROVIDER_EXTERNAL,
+        );
+        $writer = new ManagedNginxConfigWriter($paths);
+        $first = $writer->write(
+            19017,
+            serverNames: [$domain],
+            http2Enabled: true,
+            candidate: true,
+            certificateGeneration: $active,
+        );
+        $firstConfig = \file_get_contents($first['conf']);
+        self::assertIsString($firstConfig);
+        self::assertTrue($first['certificate_generation_managed']);
+        self::assertSame($domain, $first['certificate_domain']);
+        self::assertSame((int)$active['generation'], $first['certificate_generation']);
+        self::assertStringContainsString(
+            'ssl_certificate     "'
+                . \str_replace('\\', '/', (string)$active['cert_path']) . '";',
+            $firstConfig,
+        );
+        self::assertStringContainsString(
+            'ssl_certificate_key "'
+                . \str_replace('\\', '/', (string)$active['key_path']) . '";',
+            $firstConfig,
+        );
+
+        // Replace the mutable fact-source leaves with a different, internally
+        // valid key pair and SAN after activation. WLS 2.0 must keep rendering
+        // the already-validated immutable selector, never follow this swap.
+        self::assertNotFalse(\copy($replacement['cert'], $source['cert']));
+        self::assertNotFalse(\copy($replacement['key'], $source['key']));
+        $second = $writer->write(
+            19017,
+            serverNames: [$domain],
+            http2Enabled: true,
+            candidate: true,
+            certificateGeneration: $active,
+        );
+        $secondConfig = \file_get_contents($second['conf']);
+        self::assertIsString($secondConfig);
+        self::assertStringContainsString(
+            'ssl_certificate     "'
+                . \str_replace('\\', '/', (string)$active['cert_path']) . '";',
+            $secondConfig,
+        );
+        self::assertSame(
+            (string)$active['leaf_fingerprint_sha256'],
+            $second['ssl_certificate_sha256'],
+        );
+
+        $changedExpected = $active;
+        $changedExpected['cert_path'] = $source['cert'];
+        try {
+            $writer->write(
+                19017,
+                serverNames: [$domain],
+                http2Enabled: true,
+                candidate: true,
+                certificateGeneration: $changedExpected,
+            );
+            self::fail('A changed certificate-generation after-image was accepted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'after-image changed',
+                $exception->getMessage(),
+            );
+        }
+    }
+
     private function paths(string $scope): ManagedNginxPaths
     {
         $paths = new ManagedNginxPaths($this->root, [
@@ -351,6 +438,60 @@ final class ManagedNginxConfigWriterAtomicSafetyTest extends TestCase
     private function mimeContents(): string
     {
         return "types {\n    text/html html htm;\n    text/css css;\n}\n";
+    }
+
+    /** @return array{cert:string,key:string} */
+    private function createCertificate(string $domain, string $name): array
+    {
+        if (!\extension_loaded('openssl')) {
+            self::markTestSkipped('The OpenSSL extension is required.');
+        }
+        $directory = $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/' . $name;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $config = $directory . DIRECTORY_SEPARATOR . 'openssl.cnf';
+        self::assertNotFalse(\file_put_contents($config, <<<CONF
+[req]
+distinguished_name = dn
+prompt = no
+req_extensions = server_ext
+x509_extensions = server_ext
+
+[dn]
+CN = {$domain}
+
+[server_ext]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = {$domain}
+CONF
+        ));
+        $arguments = [
+            'config' => $config,
+            'digest_alg' => 'sha256',
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'private_key_bits' => 2048,
+            'req_extensions' => 'server_ext',
+            'x509_extensions' => 'server_ext',
+        ];
+        $key = \openssl_pkey_new($arguments);
+        self::assertNotFalse($key);
+        $request = \openssl_csr_new(['commonName' => $domain], $key, $arguments);
+        self::assertNotFalse($request);
+        $certificate = \openssl_csr_sign($request, null, $key, 30, $arguments);
+        self::assertNotFalse($certificate);
+        self::assertTrue(\openssl_x509_export($certificate, $certificatePem));
+        self::assertTrue(\openssl_pkey_export($key, $keyPem, null, $arguments));
+        $certificatePath = $directory . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $keyPath = $directory . DIRECTORY_SEPARATOR . 'privkey.pem';
+        self::assertNotFalse(\file_put_contents($certificatePath, $certificatePem));
+        self::assertNotFalse(\file_put_contents($keyPath, $keyPem));
+        self::assertTrue(\chmod($certificatePath, 0600));
+        self::assertTrue(\chmod($keyPath, 0600));
+        return ['cert' => $certificatePath, 'key' => $keyPath];
     }
 
     private function removeTree(string $root): void

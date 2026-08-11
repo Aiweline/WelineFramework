@@ -153,7 +153,6 @@ class WlsPanelDashboardDataService
                 'status' => (string)__('Local'),
                 'path_label' => (string)__('Path'),
                 'path' => \defined('BP') ? BP : \dirname(__DIR__, 5),
-                'backend' => '',
                 'admin' => '',
                 'panel' => '',
                 'php' => '',

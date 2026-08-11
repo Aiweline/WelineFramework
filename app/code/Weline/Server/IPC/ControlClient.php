@@ -17,9 +17,13 @@ namespace Weline\Server\IPC;
 
 use Weline\Server\IPC\ChildControl\BeforeReadyGuardAwareClientInterface;
 use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
+use Weline\Server\IPC\ChildControl\OperationDeadlineAwareClientInterface;
 use Weline\Server\Log\WlsLogger;
 
-class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwareClientInterface
+class ControlClient implements
+    ChildControlClientInterface,
+    BeforeReadyGuardAwareClientInterface,
+    OperationDeadlineAwareClientInterface
 {
     /** TCP 连接 */
     private $socket = null;
@@ -99,6 +103,11 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
     /** Master-assigned connection identity, refreshed on every REGISTER ACK. */
     private int $masterClientId = 0;
 
+    /** Exact process-bound credential used only by managed-child REGISTER. */
+    private string $managedChildCredential = '';
+
+    private ?float $operationDeadlineMonotonic = null;
+
     /**
      * 连接到 Master 控制端口
      *
@@ -118,12 +127,17 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
 
         $errno  = 0;
         $errstr = '';
+        $connectTimeout = $this->remainingOperationTimeout(3.0);
+        if ($connectTimeout <= 0.0) {
+            $this->lastConnectError = 'operation_deadline_exhausted';
+            return false;
+        }
 
         $this->socket = @\stream_socket_client(
             "tcp://{$host}:{$port}",
             $errno,
             $errstr,
-            3 // 超时 3 秒
+            $connectTimeout,
         );
 
         if (!$this->socket) {
@@ -216,6 +230,19 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
         $this->beforeReadyGuard = $guard;
     }
 
+    public function setOperationDeadlineMonotonic(?float $deadlineMonotonic): void
+    {
+        $this->operationDeadlineMonotonic = $deadlineMonotonic;
+    }
+
+    public function setManagedChildCredential(string $credential): void
+    {
+        $credential = \strtolower(\trim($credential));
+        $this->managedChildCredential = \preg_match('/\A[a-f0-9]{64}\z/D', $credential) === 1
+            ? $credential
+            : '';
+    }
+
     /** 是否输出详细 IPC 日志（每条 SEND/RECV）—— DEV 模式开启 */
     private bool $verboseLog = false;
 
@@ -281,6 +308,10 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
 
         $parts = [];
         foreach ($payload as $k => $v) {
+            if ((string)$k === 'managed_child_credential') {
+                $parts[] = "{$k}=[redacted]";
+                continue;
+            }
             if (\is_array($v)) {
                 // 限制数组序列化大小：最多 1KB
                 $encoded = @\json_encode($v, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
@@ -387,7 +418,8 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
             $effectiveMsgId,
             (string)$this->registerInfo['slot_id'],
             (string)$this->registerInfo['lease_id'],
-            (int)$this->registerInfo['generation']
+            (int)$this->registerInfo['generation'],
+            $this->managedChildCredential,
         ));
     }
 
@@ -672,7 +704,9 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
             return true;
         }
 
-        $deadline = $timeBudgetSec > 0.0 ? (ControlMessage::monotonicSeconds() + $timeBudgetSec) : 0.0;
+        $deadline = $timeBudgetSec > 0.0
+            ? $this->operationPhaseDeadline($timeBudgetSec)
+            : 0.0;
         do {
             $written = $this->flushWriteBufferChunk($deadline);
             if ($written < 0) {
@@ -685,6 +719,29 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
         } while ($this->writeBuffer !== '' && $deadline > 0.0 && ControlMessage::monotonicSeconds() < $deadline);
 
         return $this->isConnected() && $this->writeBuffer === '';
+    }
+
+    private function operationPhaseDeadline(float $localTimeoutSeconds): float
+    {
+        $now = ControlMessage::monotonicSeconds();
+        $localDeadline = $now + \max(0.0, $localTimeoutSeconds);
+        if ($this->operationDeadlineMonotonic === null) {
+            return $localDeadline;
+        }
+        if (!\is_finite($this->operationDeadlineMonotonic)) {
+            return $now;
+        }
+
+        return \min($localDeadline, $this->operationDeadlineMonotonic);
+    }
+
+    private function remainingOperationTimeout(float $localTimeoutSeconds): float
+    {
+        $now = ControlMessage::monotonicSeconds();
+        return \max(
+            0.0,
+            $this->operationPhaseDeadline($localTimeoutSeconds) - $now,
+        );
     }
 
     private function enqueueWrite(string $message): bool

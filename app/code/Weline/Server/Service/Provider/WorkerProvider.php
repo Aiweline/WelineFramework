@@ -11,7 +11,7 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
 use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
 
@@ -117,8 +117,8 @@ class WorkerProvider extends AbstractServiceProvider
         // 保持为离散 argv，不使用 environment，以便 Windows 继续走快速批量启动路径。
         $arguments[] = '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context);
         if ($gatewayBackend) {
-            $arguments[] = '--protocol-edge-token-file='
-                . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
+            $arguments[] = '--gateway-backend-token-file='
+                . GatewayBackendIngressTokenStore::ensureTokenFile($context->instanceName);
             $projectUuid = \strtolower(\trim((string)$context->getConfig(
                 'wls.gateway.project_uuid',
                 '',

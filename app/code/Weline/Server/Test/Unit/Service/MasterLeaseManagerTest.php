@@ -118,7 +118,18 @@ final class MasterLeaseManagerTest extends TestCase
         self::assertNotFalse(@\copy($path, $backup));
         @\chmod($backup, 0600);
         $this->recoveryBackups[] = $backup;
-        GatewayProjectStateFilesystem::atomicWrite($path, "{}\n", 0600);
+        // This fixture deliberately models an external/crashed writer that
+        // corrupted the paired target after its recovery backup existed.
+        // Production atomicWrite must reject that unresolved artifact, so the
+        // fixture writes only this test's verified private regular file.
+        $target = @\lstat($path);
+        self::assertIsArray($target);
+        self::assertFalse(\is_link($path));
+        self::assertSame(0100000, ((int)$target['mode']) & 0170000);
+        self::assertSame(1, (int)$target['nlink']);
+        self::assertSame($path, \realpath($path));
+        self::assertNotFalse(@\file_put_contents($path, "{}\n", LOCK_EX));
+        self::assertTrue(@\chmod($path, 0600));
 
         try {
             $manager->touchRunning($instance, $pid, 19106, 1, $token);
@@ -188,6 +199,113 @@ final class MasterLeaseManagerTest extends TestCase
         } catch (\RuntimeException) {
             self::assertFileExists($path);
         }
+    }
+
+    public function testFutureLeaseWithMissingOwnerIsRecoveredByExactlyOneHigherEpoch(): void
+    {
+        $now = 4_500.0;
+        $manager = $this->manager($now);
+        $instance = $this->instance('lease-future-missing-owner');
+        $pid = (int)\getmypid();
+        $previousToken = \str_repeat('5', 64);
+        $replacementToken = \str_repeat('6', 64);
+        $path = $manager->writeRunning($instance, $pid, 19125, 7, $previousToken);
+        $future = $manager->readProtected($path);
+        self::assertIsArray($future);
+        $future['master_pid'] = 999_999_999;
+        $future['master_process_birth'] = \str_repeat('a', 64);
+        $future['updated_monotonic'] = $now + 300.0;
+        GatewayProjectStateFilesystem::atomicWrite(
+            $path,
+            (string)\json_encode($future, JSON_THROW_ON_ERROR),
+            0600,
+        );
+
+        $manager->writeRunning($instance, $pid, 19126, 8, $replacementToken);
+        $claimed = $manager->readProtected($path);
+        self::assertIsArray($claimed);
+        self::assertSame($replacementToken, $claimed['master_token']);
+        self::assertSame(8, $claimed['master_epoch']);
+        self::assertSame(2, $claimed['lease_sequence']);
+
+        $this->expectException(MasterLeaseOwnershipLostException::class);
+        $manager->writeRunning($instance, $pid, 19127, 8, \str_repeat('7', 64));
+    }
+
+    public function testFutureLeaseWithObservableOrUnknownOwnerRemainsAVeto(): void
+    {
+        $now = 4_600.0;
+        $pid = (int)\getmypid();
+        $namespace = PHP_OS_FAMILY === 'Linux' ? 'pid:[4026531999]' : '';
+        $runtime = new MasterLeaseRuntimeIdentity(
+            bootIdentityResolver: static fn (): string => \str_repeat('a', 64),
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+            processInfoResolver: static function (int $candidate) use ($pid): array {
+                return $candidate === $pid
+                    ? [
+                        'exists' => true,
+                        'name' => 'php',
+                        'command' => 'php bin/w server:start --name=unit-master',
+                        'start_time' => 'known-owner-birth',
+                    ]
+                    : ['exists' => null];
+            },
+            managedProcessVerifier: static fn (int $candidate, string $instance): bool
+                => $candidate === $pid,
+            pidNamespaceResolver: static fn (int $candidate): ?string => $namespace,
+        );
+        $manager = new MasterLeaseManager($runtime);
+        $instance = $this->instance('lease-future-veto-owner');
+        $path = $manager->writeRunning($instance, $pid, 19128, 7, \str_repeat('8', 64));
+
+        $future = $manager->readProtected($path);
+        self::assertIsArray($future);
+        $future['updated_monotonic'] = $now + 300.0;
+        GatewayProjectStateFilesystem::atomicWrite(
+            $path,
+            (string)\json_encode($future, JSON_THROW_ON_ERROR),
+            0600,
+        );
+        try {
+            $manager->writeRunning($instance, $pid, 19129, 8, \str_repeat('9', 64));
+            self::fail('A future lease whose owner still matches must veto replacement.');
+        } catch (MasterLeaseOwnershipLostException) {
+            self::assertSame(7, $manager->readProtected($path)['master_epoch'] ?? null);
+        }
+
+        $future['master_pid'] = 999_999_998;
+        $future['master_process_birth'] = \str_repeat('b', 64);
+        GatewayProjectStateFilesystem::atomicWrite(
+            $path,
+            (string)\json_encode($future, JSON_THROW_ON_ERROR),
+            0600,
+        );
+        $this->expectException(MasterLeaseOwnershipLostException::class);
+        $manager->writeRunning($instance, $pid, 19129, 8, \str_repeat('9', 64));
+    }
+
+    public function testFutureLeaseWithMismatchedOwnerIsRecoveredAtTheHigherEpoch(): void
+    {
+        $now = 4_700.0;
+        $manager = $this->manager($now);
+        $instance = $this->instance('lease-future-mismatched-owner');
+        $pid = (int)\getmypid();
+        $path = $manager->writeRunning($instance, $pid, 19130, 7, \str_repeat('a', 64));
+        $future = $manager->readProtected($path);
+        self::assertIsArray($future);
+        $future['master_process_birth'] = \str_repeat('b', 64);
+        $future['updated_monotonic'] = $now + 300.0;
+        GatewayProjectStateFilesystem::atomicWrite(
+            $path,
+            (string)\json_encode($future, JSON_THROW_ON_ERROR),
+            0600,
+        );
+
+        $manager->writeRunning($instance, $pid, 19131, 8, \str_repeat('c', 64));
+        self::assertSame(8, $manager->readProtected($path)['master_epoch'] ?? null);
+        self::assertSame(2, $manager->readProtected($path)['lease_sequence'] ?? null);
     }
 
     public function testForeignPidNamespaceVetoIsFreshnessBoundAndIgnoresWallClock(): void

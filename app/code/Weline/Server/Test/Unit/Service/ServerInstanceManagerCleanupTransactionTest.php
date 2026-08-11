@@ -193,6 +193,55 @@ final class ServerInstanceManagerCleanupTransactionTest extends TestCase
         }
     }
 
+    public function testCleanupRetiresServingReferencesBeforeEndpointCommit(): void
+    {
+        $name = $this->newInstanceName('serving-retirement');
+        $endpoint = $this->stoppedEndpoint($name, 35, 3_500);
+        $endpoint['gateway'] = [
+            'instance_id' => $name,
+            'serving_manifest_generation' => 7,
+            'serving_manifest_digest' => \str_repeat('a', 64),
+        ];
+        $this->writeEndpoint($name, $endpoint);
+
+        $manager = new class($this->directory) extends ServerInstanceManager {
+            /** @var list<array{instance:string,generation:int,digest:string,endpoint_present:bool}> */
+            public array $retirements = [];
+
+            public function __construct(private readonly string $directory)
+            {
+                parent::__construct();
+            }
+
+            public function getInstanceDir(): string
+            {
+                return $this->directory;
+            }
+
+            protected function retireInactiveServingManifestReferences(
+                string $name,
+                array $rawData,
+            ): void {
+                $gateway = (array)($rawData['gateway'] ?? []);
+                $this->retirements[] = [
+                    'instance' => $name,
+                    'generation' => (int)($gateway['serving_manifest_generation'] ?? 0),
+                    'digest' => (string)($gateway['serving_manifest_digest'] ?? ''),
+                    'endpoint_present' => \is_file($this->getInstanceFile($name)),
+                ];
+            }
+        };
+
+        self::assertSame([$name], $manager->cleanupInactiveInstances());
+        self::assertSame([[
+            'instance' => $name,
+            'generation' => 7,
+            'digest' => \str_repeat('a', 64),
+            'endpoint_present' => true,
+        ]], $manager->retirements);
+        self::assertFileDoesNotExist($manager->getInstanceFile($name));
+    }
+
     public function testCleanupRemovesOnlyEndpointSelectedManagedLeaseGeneration(): void
     {
         $name = $this->newInstanceName('pid-cas');

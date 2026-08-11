@@ -839,6 +839,23 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         }
     }
 
+    public function testDispatcherClassicClientCarriesManagedChildCredential(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $instanceName = 'ut-dispatcher-runtime-classic';
+        $this->setProperty($dispatcher, 'instanceName', $instanceName);
+        $secret = \str_repeat('b', 64);
+        $dispatcher->setHelloAuthSecret($secret);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'createIpcClient');
+        $method->setAccessible(true);
+        $client = $method->invoke($dispatcher);
+
+        self::assertInstanceOf(\Weline\Server\IPC\ControlClient::class, $client);
+        $credential = new \ReflectionProperty($client, 'managedChildCredential');
+        self::assertSame($secret, $credential->getValue($client));
+    }
+
     private function newDispatcherWithoutConstructor(): Dispatcher
     {
         $reflector = new \ReflectionClass(Dispatcher::class);

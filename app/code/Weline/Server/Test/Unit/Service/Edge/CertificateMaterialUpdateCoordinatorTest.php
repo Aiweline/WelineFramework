@@ -58,13 +58,19 @@ final class CertificateMaterialUpdateCoordinatorTest extends TestCase
         );
         self::assertStringContainsString('quarantineNativeTlsFaces(', $source);
         self::assertStringContainsString('explicitPureWlsServingEndpoint(', $source);
-        self::assertStringContainsString('fallbackWlsIsServing($endpoint)', $source);
+        self::assertStringContainsString(
+            'fallbackWlsIsServing('
+                . "\n            \$endpoint,"
+                . "\n            \$deadlineMonotonic,",
+            $source,
+        );
         self::assertStringContainsString("'NATIVE_EDGE_DRAINING'", $source);
         self::assertStringContainsString("'GATEWAY_ACTIVE'", $source);
         self::assertStringContainsString("\\hash_equals('DRAINED', \$nativeState)", $source);
         self::assertStringContainsString(
             '$potentialNativeTls = $revocationCommitted'
-                . "\n                && \$this->nativeReloadRequired(\$endpoint)",
+                . "\n                && \$this->nativeReloadRequired("
+                . '$endpoint, $deadlineMonotonic)',
             $source,
         );
         self::assertStringContainsString(

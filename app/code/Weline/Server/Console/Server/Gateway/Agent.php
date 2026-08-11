@@ -30,10 +30,12 @@ use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\GatewayPublicRouteProbe;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\GatewayRuntimeEndpointPublisher;
+use Weline\Server\Service\Edge\Gateway\GatewayStartupFallbackRequest;
 use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateRenewalIntentStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
+use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 use Weline\Server\Service\MasterChildCredentialStore;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SslCertificateService;
@@ -46,7 +48,6 @@ final class Agent extends CommandAbstract
     private const TICK_MILLISECONDS = 1000;
     private const HEARTBEAT_SECONDS = 10;
     private const PUBLIC_PROBE_SECONDS = 1;
-    private const OUTAGE_OBSERVATION_FRESHNESS_SECONDS = 3.0;
     private const FALLBACK_AFTER_SECONDS = 90;
     private const RECOVERY_STABLE_SECONDS = 30;
     private const FALLBACK_DRAIN_SECONDS = 300;
@@ -54,9 +55,21 @@ final class Agent extends CommandAbstract
     private const DESIRED_STATE_RESULT_MAX_BYTES = 4 * 1024 * 1024;
     private const DESIRED_STATE_DIAGNOSTIC_MAX_BYTES = 65_536;
     private const TICK_WORK_DEADLINE_SECONDS = 8.0;
+    /**
+     * One explicit failure observation may consume the complete bounded tick,
+     * followed by the scheduler delay and modest wake-up jitter. A shorter
+     * freshness fence continuously reset the 90-second fallback window while
+     * an unresponsive Controller consumed the legitimate per-tick budget.
+     */
+    private const OUTAGE_OBSERVATION_FRESHNESS_SECONDS =
+        self::TICK_WORK_DEADLINE_SECONDS
+        + (self::TICK_MILLISECONDS / 1000)
+        + 2.0;
     private const MINIMUM_STATUS_BUDGET_SECONDS = 2.25;
     private const MINIMUM_PUBLIC_PROBE_BUDGET_SECONDS = 1.0;
+    private const DESIRED_STATE_TERM_GRACE_SECONDS = 2.0;
     private const DESIRED_STATE_KILL_GRACE_SECONDS = 1.0;
+    private const DESIRED_STATE_FINAL_CLEANUP_SECONDS = 3.0;
     private const DESIRED_STATE_LAUNCH_FAILURE_LOG_SECONDS = 30.0;
     private const DEFERRED_REAP_MAXIMUM = 8;
     private const DEFERRED_REAP_KILL_RETRY_SECONDS = 10.0;
@@ -66,6 +79,7 @@ final class Agent extends CommandAbstract
     private const DESIRED_STATE_WORK_LOCK_WAIT_SECONDS = 1.0;
     private const DESIRED_STATE_TASK_ROLE = ControlMessage::ROLE_GATEWAY_AGENT;
     private const DESIRED_STATE_TASK_GENERATION = 1;
+    private const MASTER_CONTROL_BOOTSTRAP_DEADLINE_SECONDS = 30.0;
 
     /** @var list<array<string,mixed>> */
     private array $deferredDesiredStateReap = [];
@@ -78,9 +92,12 @@ final class Agent extends CommandAbstract
         }
         if (!$this->enabled($args['daemon'] ?? false)) {
             $instance = $this->stringArgument($args, 'instance-name', 'default');
+            $deadlineMonotonic = $this->monotonicNow()
+                + self::TICK_WORK_DEADLINE_SECONDS;
             $payload = (new GatewayHostManager())->heartbeat(
                 $instance,
-                $this->masterDrainCounters($instance),
+                $this->masterDrainCounters($instance, $deadlineMonotonic),
+                $deadlineMonotonic,
             );
             $this->printer->note(
                 \json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'
@@ -100,10 +117,12 @@ final class Agent extends CommandAbstract
         $this->registerManagedProcessIdentity($args);
 
         $shutdown = false;
+        $pendingStartupFallbackCommand = null;
         $this->registerSignals($shutdown);
         [$kernel, $guard, $parentCredential, $masterLeaseFile] = $this->connectMaster(
             $args,
             $shutdown,
+            $pendingStartupFallbackCommand,
         );
         if (!$kernel instanceof SubprocessControlKernel
             || !$guard instanceof ChildMasterGuard
@@ -143,12 +162,15 @@ final class Agent extends CommandAbstract
             &$publicationHeartbeatAt,
             &$gateway,
         ): void {
+            $now = $this->monotonicNow();
+            $progressDeadline = $deadlineMonotonic
+                ?? ($now + self::TICK_WORK_DEADLINE_SECONDS);
             if ($kernel !== null) {
                 try {
                     $kernel->tick();
                     $kernel->flushWrites();
                     if (!$kernel->isConnected()) {
-                        $kernel->reconnect();
+                        $kernel->reconnect($progressDeadline);
                     }
                 } catch (\Throwable) {
                     // Publication progress must keep driving the supervisor IPC,
@@ -156,7 +178,6 @@ final class Agent extends CommandAbstract
                     // Agent loop instead of corrupting the gateway transaction.
                 }
             }
-            $now = $this->monotonicNow();
             if (!self::publicationHeartbeatDue(
                 $now,
                 $publicationHeartbeatAt,
@@ -171,7 +192,7 @@ final class Agent extends CommandAbstract
                 $gateway?->heartbeat(
                     $instanceName,
                     [],
-                    $deadlineMonotonic,
+                    $progressDeadline,
                 );
             } catch (\Throwable) {
                 // The enclosing register/renew publication remains the desired
@@ -182,16 +203,25 @@ final class Agent extends CommandAbstract
         $paths = new GatewayPaths();
         $builder = new GatewayRegistrationBuilder();
         $publicProbe = new GatewayPublicRouteProbe();
-        $fallbackLeases = new GatewayPortLeaseAllocator();
         $fallbackOutages = new GatewayFallbackOutageStore();
         $endpointPublisher = new GatewayRuntimeEndpointPublisher();
-        $projectUuid = $builder->projectUuid();
+        // Bootstrap identity participates in the same bounded lock graph as
+        // every later Agent tick. A stale project/host-claim lock must not
+        // strand this managed child for the identity store's legacy 300s
+        // default before the supervisor loop can begin reporting health.
+        $bootstrapDeadline = $this->monotonicNow()
+            + self::TICK_WORK_DEADLINE_SECONDS;
+        $projectUuid = $builder->projectUuid($bootstrapDeadline);
         $acmeChallenges = new ProjectAcmeHttp01ChallengeStore();
         $certificateRenewals = new ProjectCertificateRenewalIntentStore();
         $certificateRetirements = new ProjectCertificateGenerationStore();
+        $servingManifests = new ProjectServingManifestStore((string)BP);
         $masterPid = $this->integerArgument($args, 'master-pid');
         $masterEpoch = $this->integerArgument($args, 'epoch');
-        $launchEndpoint = (new GatewayProjectEndpointReader())->read($instanceName);
+        $launchEndpoint = (new GatewayProjectEndpointReader())->read(
+            $instanceName,
+            $bootstrapDeadline,
+        );
         $masterLaunchId = \strtolower(\trim((string)(
             $launchEndpoint['gateway']['launch_id'] ?? ''
         )));
@@ -217,6 +247,7 @@ final class Agent extends CommandAbstract
         $lastFallbackCommandAt = 0.0;
         $fallbackRequested = false;
         $fallbackDrainRequested = false;
+        $startupFallbackRequest = null;
         $joinBackendRequested = false;
         $lastNativeDrainCommandAt = 0.0;
         $lastAcmeSyncAt = $this->monotonicNow();
@@ -245,17 +276,61 @@ final class Agent extends CommandAbstract
         $trustedGatewayDiscovered = false;
         try {
             while (!$shutdown) {
+                $now = $this->monotonicNow();
+                $tickDeadline = $now + self::TICK_WORK_DEADLINE_SECONDS;
                 $this->reapDeferredDesiredStateJobs();
                 $kernel?->tick();
                 $kernel?->flushWrites();
                 if ($kernel !== null && !$kernel->isConnected()) {
-                    $kernel->reconnect();
+                    $kernel->reconnect($tickDeadline);
                 }
                 if ($guard?->shouldExit()) {
                     break;
                 }
-                $now = $this->monotonicNow();
-                $tickDeadline = $now + self::TICK_WORK_DEADLINE_SECONDS;
+                if (\is_array($pendingStartupFallbackCommand)) {
+                    $candidate = $pendingStartupFallbackCommand;
+                    $pendingStartupFallbackCommand = null;
+                    try {
+                        $currentEndpoint = (new GatewayProjectEndpointReader())
+                            ->read($instanceName, $tickDeadline);
+                        $certificateDomain = (string)(
+                            $candidate['certificate_domain'] ?? ''
+                        );
+                        $startupManifest = $servingManifests->currentForFence([
+                            'instance_id' => $instanceName,
+                            'instance_generation' => $instanceGeneration,
+                            'master_pid' => $masterPid,
+                            'master_epoch' => $masterEpoch,
+                            'launch_id' => $masterLaunchId,
+                        ], $tickDeadline);
+                        $currentCertificate = ProjectServingManifestStore::
+                            activeCertificateFenceForDomain(
+                                $startupManifest,
+                                $certificateDomain,
+                            );
+                        $startupFallbackRequest = self::validateStartupFallbackRequest(
+                            $candidate,
+                            $currentEndpoint,
+                            $currentCertificate,
+                            $instanceName,
+                            $projectUuid,
+                            $instanceGeneration,
+                            $masterPid,
+                            $masterEpoch,
+                            $masterLaunchId,
+                        );
+                    } catch (\Throwable $throwable) {
+                        $startupFallbackRequest = null;
+                        WlsLogger::warning_(
+                            '[Gateway Agent] Rejected startup fallback request: '
+                            . GatewayBoundedText::singleLine(
+                                $throwable->getMessage(),
+                                512,
+                                'validation failed',
+                            ),
+                        );
+                    }
+                }
                 $desiredStateResult = $this->pollDesiredStateJob(
                     $desiredStateJob,
                     $now,
@@ -317,7 +392,10 @@ final class Agent extends CommandAbstract
                     try {
                         $heartbeatObservation = $gateway->heartbeat(
                             $instanceName,
-                            $this->masterDrainCounters($instanceName),
+                            $this->masterDrainCounters(
+                                $instanceName,
+                                $tickDeadline,
+                            ),
                             $tickDeadline,
                         );
                         $receiptReplayAttempted = false;
@@ -328,8 +406,8 @@ final class Agent extends CommandAbstract
                 if ($now - $lastFallbackLeaseProbe >= self::PUBLIC_PROBE_SECONDS) {
                     $lastFallbackLeaseProbe = $now;
                     $observedFallback = $this->observeFallbackLease(
-                        $fallbackLeases,
                         $instanceName,
+                        $tickDeadline,
                     );
                     $observedFallbackState = \strtoupper(\trim(
                         (string)($observedFallback['state'] ?? ''),
@@ -359,6 +437,7 @@ final class Agent extends CommandAbstract
                         }
                     } elseif (self::fallbackLeaseProvesLive($observedFallback)) {
                         $fallbackRequested = true;
+                        $startupFallbackRequest = null;
                         $fallbackStartedAt = $fallbackStartedAt > 0.0
                             ? $fallbackStartedAt
                             : $now;
@@ -449,7 +528,10 @@ final class Agent extends CommandAbstract
                 $certificateRetirementReplay = [];
                 if (!$projectDraining) {
                     try {
-                        $certificateReplay = $certificateRenewals->pendingReplay();
+                        $certificateReplay = $certificateRenewals->pendingReplay(
+                            0.25,
+                            $tickDeadline,
+                        );
                     } catch (\Throwable $throwable) {
                         WlsLogger::error_(
                             '[WlsGatewayAgent] certificate replay state rejected: '
@@ -640,6 +722,7 @@ final class Agent extends CommandAbstract
                                 $probeRegistration,
                                 $publicHttpsPort,
                                 $publicProbeRouteIds,
+                                $tickDeadline,
                             );
                     } catch (\Throwable) {
                         // A diagnostic probe is fail-closed for fallback
@@ -648,8 +731,11 @@ final class Agent extends CommandAbstract
                         $publicProbeHealthy = false;
                     }
                 }
-                $projectServingReady = $servingStatusAuthenticated
-                    && ($servingStatus['project_ready'] ?? false) === true
+                // Whole-project readiness is an operator/benchmark fence. It
+                // must not withdraw a verified ACTIVE route merely because a
+                // sibling is still PENDING_CERTIFICATE.
+                $routeServingReady = $servingStatusAuthenticated
+                    && ($servingStatus['route_serving_ready'] ?? false) === true
                     && (bool)($servingStatus['data_plane']['running'] ?? false)
                     && (string)($servingStatus['state'] ?? '') !== 'DATA_PLANE_DOWN';
                 $gatewayCoreDown = $statusAuthenticated
@@ -670,7 +756,7 @@ final class Agent extends CommandAbstract
                 $fallbackObservation = self::fallbackDataPlaneObservation(
                     statusAuthenticated: $statusAuthenticated,
                     servingStatusAuthenticated: $servingStatusAuthenticated,
-                    projectServingReady: $projectServingReady,
+                    projectServingReady: $routeServingReady,
                     allCertificateReadyRoutesActive: $allCertificateReadyRoutesActive,
                     routeActive: $routeActive,
                     publicProbeHealthy: $publicProbeHealthy,
@@ -902,6 +988,38 @@ final class Agent extends CommandAbstract
                 $fallbackEligible = $certificateReadyForFallback
                     && (!$joinRequired
                         || \in_array($nativeEdgeState, ['DRAINING', 'DRAINED'], true));
+                if ($projectDraining || $dataPlaneHealthy) {
+                    $startupFallbackRequest = null;
+                } elseif (\is_array($startupFallbackRequest)) {
+                    try {
+                        $startupManifest = $servingManifests->currentForFence([
+                            'instance_id' => $instanceName,
+                            'instance_generation' => $instanceGeneration,
+                            'master_pid' => $masterPid,
+                            'master_epoch' => $masterEpoch,
+                            'launch_id' => $masterLaunchId,
+                        ], $tickDeadline);
+                        $currentCertificate = ProjectServingManifestStore::
+                            activeCertificateFenceForDomain(
+                                $startupManifest,
+                                (string)($startupFallbackRequest[
+                                    'certificate_domain'
+                                ] ?? ''),
+                            );
+                        $certificateStillCurrent = \is_array($currentCertificate)
+                            && (int)($currentCertificate['generation'] ?? 0)
+                                === (int)($startupFallbackRequest['certificate_generation'] ?? 0)
+                            && \hash_equals(
+                                (string)($currentCertificate['source_digest'] ?? ''),
+                                (string)($startupFallbackRequest['certificate_source_digest'] ?? ''),
+                            );
+                    } catch (\Throwable) {
+                        $certificateStillCurrent = false;
+                    }
+                    if (!$certificateStillCurrent) {
+                        $startupFallbackRequest = null;
+                    }
+                }
                 $fallbackAction = self::decideFallbackLifecycleAction(
                     now: $now,
                     dataPlaneHealthy: $dataPlaneHealthy,
@@ -914,12 +1032,41 @@ final class Agent extends CommandAbstract
                     fallbackRequested: $fallbackRequested,
                     fallbackDrainRequested: $fallbackDrainRequested,
                     projectDraining: $projectDraining,
+                    startupFallbackRequested: \is_array($startupFallbackRequest),
                 );
                 if ($fallbackAction === ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE) {
                     $lastFallbackCommandAt = $now;
-                    if ($kernel?->sendControlCommand(
+                    $fallbackEnablePayload = null;
+                    try {
+                        $manifest = $servingManifests->currentForFence([
+                            'instance_id' => $instanceName,
+                            'instance_generation' => $instanceGeneration,
+                            'master_pid' => $masterPid,
+                            'master_epoch' => $masterEpoch,
+                            'launch_id' => $masterLaunchId,
+                        ], $tickDeadline);
+                        $fallbackEnablePayload = [
+                            'port' => 0,
+                            ...self::fallbackServingManifestExpectation($manifest),
+                        ];
+                        if (\is_array($startupFallbackRequest)) {
+                            $fallbackEnablePayload['startup_request'] =
+                                $startupFallbackRequest;
+                        }
+                    } catch (\Throwable $throwable) {
+                        WlsLogger::warning_(
+                            '[Gateway Agent] Fallback ENABLE is waiting for an exact ACTIVE '
+                            . 'serving manifest: ' . GatewayBoundedText::singleLine(
+                                $throwable->getMessage(),
+                                512,
+                                'serving manifest unavailable',
+                            ),
+                        );
+                    }
+                    if (\is_array($fallbackEnablePayload)
+                        && $kernel?->sendControlCommand(
                         ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE,
-                        ['port' => 0],
+                        $fallbackEnablePayload,
                     )) {
                         $fallbackRequested = true;
                         $fallbackStartedAt = $fallbackStartedAt > 0.0
@@ -953,6 +1100,7 @@ final class Agent extends CommandAbstract
                     // latch and start the final-disable clock.
                     $fallbackDrainRequested = false;
                 } elseif ($fallbackAction === ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE) {
+                    $lastFallbackCommandAt = $now;
                     if ($kernel?->sendControlCommand(
                         ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
                         ['port' => $fallbackPort],
@@ -1076,7 +1224,7 @@ final class Agent extends CommandAbstract
             );
             throw $throwable;
         } finally {
-            $this->terminateDesiredStateJob($desiredStateJob);
+            $this->terminateDesiredStateJobsForExit($desiredStateJob);
             // Agent lifecycle is not project lifecycle. Explicit server:stop
             // owns route draining; an Agent recycle or self-heal must leave
             // the healthy Nginx data plane and project lease untouched.
@@ -1103,16 +1251,17 @@ final class Agent extends CommandAbstract
         $retirementStore = new ProjectCertificateGenerationStore();
         try {
             while (!$shutdown) {
+                $now = $this->monotonicNow();
+                $tickDeadline = $now + self::TICK_WORK_DEADLINE_SECONDS;
                 $this->reapDeferredDesiredStateJobs();
                 $kernel->tick();
                 $kernel->flushWrites();
                 if (!$kernel->isConnected()) {
-                    $kernel->reconnect();
+                    $kernel->reconnect($tickDeadline);
                 }
                 if ($guard->shouldExit()) {
                     break;
                 }
-                $now = $this->monotonicNow();
                 $result = $this->pollDesiredStateJob($desiredStateJob, $now);
                 if (\is_array($result) && ($result['ok'] ?? false) !== true) {
                     WlsLogger::warning_(
@@ -1174,7 +1323,7 @@ final class Agent extends CommandAbstract
             }
             throw $throwable;
         } finally {
-            $this->terminateDesiredStateJob($desiredStateJob);
+            $this->terminateDesiredStateJobsForExit($desiredStateJob);
         }
         return 0;
     }
@@ -1203,21 +1352,24 @@ final class Agent extends CommandAbstract
             'error' => null,
             'completed_at' => null,
         ];
+        $mutationDeadline = $this->monotonicNow()
+            + \max(
+                1.0,
+                self::DESIRED_STATE_JOB_TIMEOUT_SECONDS - 15.0,
+            );
         try {
             if ($action === 'register') {
                 $this->assertDesiredStateTaskAuthorized($taskGuard, 'register');
-                (new GatewayHostManager())->register($instanceName);
+                (new GatewayHostManager())->register(
+                    $instanceName,
+                    $mutationDeadline,
+                );
             } elseif ($action === 'certificates') {
                 $this->assertDesiredStateTaskAuthorized($taskGuard, 'certificate replay');
                 $renewals = new ProjectCertificateRenewalIntentStore();
-                $pending = $renewals->pendingReplay();
+                $pending = $renewals->pendingReplay(0.25, $mutationDeadline);
                 if (\is_array($pending)) {
                     $gateway = new GatewayHostManager();
-                    $mutationDeadline = $this->monotonicNow()
-                        + \max(
-                            1.0,
-                            self::DESIRED_STATE_JOB_TIMEOUT_SECONDS - 15.0,
-                        );
                     $status = $gateway->status(5.0, $mutationDeadline);
                     $plan = $renewals->replayPlan($pending, $status);
                     $this->assertDesiredStateTaskAuthorized(
@@ -1232,7 +1384,7 @@ final class Agent extends CommandAbstract
                             $mutationDeadline,
                         );
                     } else {
-                        $gateway->register($instanceName);
+                        $gateway->register($instanceName, $mutationDeadline);
                     }
                     $result['mutation_action'] = (string)$plan['action'];
                 } else {
@@ -1244,14 +1396,21 @@ final class Agent extends CommandAbstract
                     'certificate retirement replay',
                 );
                 $retirements = (new SslCertificateService())
-                    ->replayPendingCertificateRetirements(75.0, 8);
+                    ->replayPendingCertificateRetirements(
+                        75.0,
+                        8,
+                        $mutationDeadline,
+                    );
                 $result['mutation_action'] = (int)$retirements['completed'] > 0
                     ? 'retirements'
                     : 'none';
             }
             if ($action !== 'retirements') {
                 $this->assertDesiredStateTaskAuthorized($taskGuard, 'desired-state build');
-                $registration = (new GatewayRegistrationBuilder())->build($instanceName);
+                $registration = (new GatewayRegistrationBuilder())->build(
+                    $instanceName,
+                    $mutationDeadline,
+                );
                 $result['registration'] = self::redactDesiredStateResult($registration);
             }
             $this->assertDesiredStateTaskAuthorized($taskGuard, 'result publication');
@@ -1767,7 +1926,7 @@ final class Agent extends CommandAbstract
                 $job['timed_out'] = true;
                 return null;
             }
-            if ($now - $requestedAt >= 2.0
+            if ($now - $requestedAt >= self::DESIRED_STATE_TERM_GRACE_SECONDS
                 && ($job['kill_requested'] ?? false) !== true
             ) {
                 @\proc_terminate($process, 9);
@@ -1878,7 +2037,10 @@ final class Agent extends CommandAbstract
     }
 
     /** @param array<string,mixed>|null $job */
-    private function terminateDesiredStateJob(?array &$job): void
+    private function terminateDesiredStateJob(
+        ?array &$job,
+        ?float $deadlineMonotonic = null,
+    ): void
     {
         if ($job === null) {
             return;
@@ -1889,23 +2051,26 @@ final class Agent extends CommandAbstract
         // call cannot begin another mutation or commit a result while shutdown
         // and DRAINING are converging.
         $this->revokeDesiredStateTask($terminating);
-        if (!$this->terminateAndReapDesiredStateJob($terminating)) {
-            // Never call proc_close while the child still reports running.
-            // A SIGKILLed process is retained and reaped non-blockingly by a
-            // later tick instead of extending the Agent heartbeat deadline.
+        if (!$this->terminateAndReapDesiredStateJob(
+            $terminating,
+            $deadlineMonotonic,
+        )) {
+            // Ordinary ticks pass no deadline: TERM is sent once and the exact
+            // process handle is retained for non-blocking TERM/KILL progress on
+            // later ticks. Only final Agent exit supplies an independent,
+            // explicitly bounded reap deadline.
             $now = $this->monotonicNow();
             $terminating['deferred_at'] = (float)($terminating['deferred_at'] ?? $now);
-            $terminating['kill_requested'] = true;
-            if ((float)($terminating['kill_requested_at'] ?? 0.0) <= 0.0) {
-                $terminating['kill_requested_at'] = $now;
-            }
             $this->deferredDesiredStateReap[] = $terminating;
         }
         $this->removeDesiredStateResult((string)($terminating['result_file'] ?? ''));
     }
 
     /** @param array<string,mixed> $job */
-    private function terminateAndReapDesiredStateJob(array &$job): bool
+    private function terminateAndReapDesiredStateJob(
+        array &$job,
+        ?float $deadlineMonotonic = null,
+    ): bool
     {
         $process = $job['process'] ?? null;
         $pipes = \is_array($job['pipes'] ?? null) ? $job['pipes'] : [];
@@ -1926,12 +2091,44 @@ final class Agent extends CommandAbstract
         $status = @\proc_get_status($process);
         $running = !\is_array($status) || ($status['running'] ?? false) === true;
         if ($running) {
-            @\proc_terminate($process);
-            $running = !$this->waitForDesiredStateProcessExit($process, $pipes, 2.0);
+            $now = $this->monotonicNow();
+            $terminationRequestedAt = (float)(
+                $job['termination_requested_at'] ?? 0.0
+            );
+            if ($terminationRequestedAt <= 0.0) {
+                @\proc_terminate($process);
+                $terminationRequestedAt = $now;
+                $job['termination_requested_at'] = $now;
+            }
+            if ($deadlineMonotonic === null) {
+                return false;
+            }
+            if (($job['kill_requested'] ?? false) !== true) {
+                $termDeadline = \min(
+                    $deadlineMonotonic,
+                    $terminationRequestedAt
+                        + self::DESIRED_STATE_TERM_GRACE_SECONDS,
+                );
+                $running = !$this->waitForDesiredStateProcessExit(
+                    $process,
+                    $pipes,
+                    $termDeadline,
+                );
+            }
         }
         if ($running) {
             @\proc_terminate($process, 9);
-            $running = !$this->waitForDesiredStateProcessExit($process, $pipes, 1.0);
+            $killRequestedAt = $this->monotonicNow();
+            $job['kill_requested'] = true;
+            $job['kill_requested_at'] = $killRequestedAt;
+            $running = !$this->waitForDesiredStateProcessExit(
+                $process,
+                $pipes,
+                \min(
+                    $deadlineMonotonic ?? $killRequestedAt,
+                    $killRequestedAt + self::DESIRED_STATE_KILL_GRACE_SECONDS,
+                ),
+            );
         }
         $this->drainDesiredStatePipes($pipes);
         $this->closeDesiredStatePipes($pipes);
@@ -1948,18 +2145,69 @@ final class Agent extends CommandAbstract
     private function waitForDesiredStateProcessExit(
         $process,
         array $pipes,
-        float $maximumSeconds,
+        float $deadlineMonotonic,
     ): bool {
-        $deadline = $this->monotonicNow() + \max(0.0, $maximumSeconds);
-        do {
+        while (true) {
             $this->drainDesiredStatePipes($pipes);
             $status = @\proc_get_status($process);
             if (\is_array($status) && ($status['running'] ?? false) !== true) {
                 return true;
             }
-            SchedulerSystem::usleep(20_000);
-        } while ($this->monotonicNow() < $deadline);
-        return false;
+            $now = $this->monotonicNow();
+            $sleepMicroseconds = self::boundedAgentDeadlineSleepMicroseconds(
+                $deadlineMonotonic,
+                $now,
+            );
+            if ($sleepMicroseconds < 1) {
+                return false;
+            }
+            SchedulerSystem::usleep($sleepMicroseconds);
+        }
+    }
+
+    private static function boundedAgentDeadlineSleepMicroseconds(
+        float $deadlineMonotonic,
+        float $monotonicNow,
+        int $maximumMicroseconds = 20_000,
+    ): int {
+        if (!\is_finite($deadlineMonotonic)
+            || !\is_finite($monotonicNow)
+            || $maximumMicroseconds < 1
+            || $deadlineMonotonic <= $monotonicNow
+        ) {
+            return 0;
+        }
+        $remainingSeconds = $deadlineMonotonic - $monotonicNow;
+        if ($remainingSeconds >= $maximumMicroseconds / 1_000_000) {
+            return $maximumMicroseconds;
+        }
+        return \max(0, (int)\floor($remainingSeconds * 1_000_000));
+    }
+
+    /** @param array<string,mixed>|null $job */
+    private function terminateDesiredStateJobsForExit(?array &$job): void
+    {
+        $deadlineMonotonic = $this->monotonicNow()
+            + self::DESIRED_STATE_FINAL_CLEANUP_SECONDS;
+        $this->terminateDesiredStateJob($job, $deadlineMonotonic);
+        foreach ($this->deferredDesiredStateReap as $index => &$deferredJob) {
+            $this->revokeDesiredStateTask($deferredJob);
+            $resultFile = (string)($deferredJob['result_file'] ?? '');
+            $reaped = $this->terminateAndReapDesiredStateJob(
+                $deferredJob,
+                $deadlineMonotonic,
+            );
+            $this->removeDesiredStateResult($resultFile);
+            if ($reaped) {
+                unset($this->deferredDesiredStateReap[$index]);
+            }
+        }
+        unset($deferredJob);
+        if ($this->deferredDesiredStateReap !== []) {
+            $this->deferredDesiredStateReap = \array_values(
+                $this->deferredDesiredStateReap,
+            );
+        }
     }
 
     /** @param array<int,resource> $pipes */
@@ -1997,8 +2245,33 @@ final class Agent extends CommandAbstract
                     $job['deferred_at'] = $now;
                 }
                 $deferredAt = (float)$job['deferred_at'];
-                if ($now - $deferredAt >= self::DEFERRED_REAP_MAXIMUM_AGE_SECONDS) {
+                $terminationRequestedAt = (float)(
+                    $job['termination_requested_at'] ?? 0.0
+                );
+                if ($terminationRequestedAt <= 0.0) {
+                    @\proc_terminate($process);
+                    $job['termination_requested_at'] = $now;
+                    continue;
+                }
+                $killRequested = ($job['kill_requested'] ?? false) === true;
+                if (!$killRequested
+                    && $now - $terminationRequestedAt
+                        >= self::DESIRED_STATE_TERM_GRACE_SECONDS
+                ) {
                     @\proc_terminate($process, 9);
+                    $job['kill_requested'] = true;
+                    $job['kill_requested_at'] = $now;
+                    $job['deferred_kill_at'] = $now;
+                    $killRequested = true;
+                }
+                if ($now - $deferredAt >= self::DEFERRED_REAP_MAXIMUM_AGE_SECONDS) {
+                    if (!$killRequested) {
+                        @\proc_terminate($process, 9);
+                        $job['kill_requested'] = true;
+                        $job['kill_requested_at'] = $now;
+                        $job['deferred_kill_at'] = $now;
+                        $killRequested = true;
+                    }
                     if (($job['maximum_age_reported'] ?? false) !== true) {
                         $job['maximum_age_reported'] = true;
                         WlsLogger::error_(
@@ -2007,11 +2280,16 @@ final class Agent extends CommandAbstract
                         );
                     }
                 }
-                $lastKill = (float)($job['deferred_kill_at']
+                $lastKill = (float)(
+                    $job['deferred_kill_at']
                     ?? $job['kill_requested_at']
-                    ?? $job['deferred_at']
-                    ?? $now);
-                if ($now - $lastKill >= self::DEFERRED_REAP_KILL_RETRY_SECONDS) {
+                    ?? 0.0
+                );
+                if ($killRequested
+                    && $lastKill > 0.0
+                    && $now - $lastKill
+                        >= self::DEFERRED_REAP_KILL_RETRY_SECONDS
+                ) {
                     @\proc_terminate($process, 9);
                     $job['deferred_kill_at'] = $now;
                 }
@@ -3399,6 +3677,17 @@ final class Agent extends CommandAbstract
         \ksort($receivedIdentity, SORT_STRING);
         $expectedIdentity = $canonicalIdentity;
         \ksort($expectedIdentity, SORT_STRING);
+        try {
+            $canonicalActionDigest = ControlMessage::gatewayFallbackListenerActionDigest(
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+                ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+                (string)($observation['drain_transition_id'] ?? ''),
+                '',
+                $canonicalIdentity,
+            );
+        } catch (\Throwable) {
+            return false;
+        }
         $workerNamespace = (string)$canonicalIdentity['worker_pid_namespace_id'];
         $masterNamespace = (string)$canonicalIdentity['master_pid_namespace_id'];
         $namespaceValid = PHP_OS_FAMILY === 'Linux'
@@ -3425,6 +3714,10 @@ final class Agent extends CommandAbstract
             && \hash_equals(
                 (string)$observation['listener_transition_digest'],
                 (string)($observation['drain_action_digest'] ?? ''),
+            )
+            && \hash_equals(
+                $canonicalActionDigest,
+                (string)$observation['listener_transition_digest'],
             )
             && $receivedIdentity === $expectedIdentity
             && \hash_equals(
@@ -3525,6 +3818,48 @@ final class Agent extends CommandAbstract
         return $port >= 20000 && $port <= 29999 ? $port : 0;
     }
 
+    /**
+     * @param array<string,mixed> $request
+     * @param array<string,mixed> $endpoint
+     * @param array<string,mixed> $activeCertificate
+     * @return array<string,int|string>
+     */
+    public static function validateStartupFallbackRequest(
+        array $request,
+        array $endpoint,
+        array $activeCertificate,
+        string $instanceName,
+        string $projectUuid,
+        int $instanceGeneration,
+        int $masterPid,
+        int $masterEpoch,
+        string $masterLaunchId,
+    ): array {
+        $validated = GatewayStartupFallbackRequest::assertMatches(
+            $request,
+            $instanceName,
+            $endpoint,
+            $activeCertificate,
+        );
+        if (!\hash_equals(
+                \strtolower(\trim($projectUuid)),
+                (string)$validated['project_uuid'],
+            )
+            || (int)$validated['instance_generation'] !== $instanceGeneration
+            || (int)$validated['master_pid'] !== $masterPid
+            || (int)$validated['master_epoch'] !== $masterEpoch
+            || !\hash_equals(
+                \strtolower(\trim($masterLaunchId)),
+                (string)$validated['master_launch_id'],
+            )
+        ) {
+            throw new \RuntimeException(
+                'Gateway startup fallback request does not belong to this Agent launch.',
+            );
+        }
+        return $validated;
+    }
+
     public static function decideFallbackLifecycleAction(
         float $now,
         bool $dataPlaneHealthy,
@@ -3537,6 +3872,7 @@ final class Agent extends CommandAbstract
         bool $fallbackRequested,
         bool $fallbackDrainRequested,
         bool $projectDraining = false,
+        bool $startupFallbackRequested = false,
     ): string {
         if (!$controlAvailable) {
             return '';
@@ -3553,10 +3889,20 @@ final class Agent extends CommandAbstract
             }
             if ($fallbackDrainStartedAt > 0.0
                 && $now - $fallbackDrainStartedAt >= self::FALLBACK_DRAIN_SECONDS
+                && ($lastFallbackCommandAt <= 0.0
+                    || $now - $lastFallbackCommandAt >= self::HEARTBEAT_SECONDS)
             ) {
                 return ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE;
             }
             return '';
+        }
+        if ($startupFallbackRequested
+            && !$dataPlaneHealthy
+            && (!$fallbackRequested
+                || $lastFallbackCommandAt <= 0.0
+                || $now - $lastFallbackCommandAt >= self::HEARTBEAT_SECONDS)
+        ) {
+            return ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE;
         }
         if ($fallbackRequested
             && $dataPlaneHealthy
@@ -3571,6 +3917,8 @@ final class Agent extends CommandAbstract
             }
             if ($fallbackDrainStartedAt > 0.0
                 && $now - $fallbackDrainStartedAt >= self::FALLBACK_DRAIN_SECONDS
+                && ($lastFallbackCommandAt <= 0.0
+                    || $now - $lastFallbackCommandAt >= self::HEARTBEAT_SECONDS)
             ) {
                 return ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE;
             }
@@ -3741,11 +4089,18 @@ final class Agent extends CommandAbstract
     /**
      * @return array<string,int|bool>
      */
-    private function masterDrainCounters(string $instanceName): array
+    private function masterDrainCounters(
+        string $instanceName,
+        float $deadlineMonotonic,
+    ): array
     {
         try {
             return self::aggregateMasterDrainCounters(
-                (new IpcControlGateway())->getStatus($instanceName, 1.0),
+                (new IpcControlGateway())->getStatusBeforeDeadline(
+                    $instanceName,
+                    1.0,
+                    $deadlineMonotonic,
+                ),
             );
         } catch (\Throwable) {
             return self::aggregateMasterDrainCounters([]);
@@ -3754,9 +4109,12 @@ final class Agent extends CommandAbstract
 
     /** @return array<string,mixed> */
     private function observeFallbackLease(
-        GatewayPortLeaseAllocator $leases,
         string $instanceName,
+        float $deadlineMonotonic,
     ): array {
+        $leases = new GatewayPortLeaseAllocator(
+            operationDeadlineMonotonic: $deadlineMonotonic,
+        );
         $leaseInstanceId = GatewayLeaseIdentity::forRole(
             $instanceName,
             GatewayLeaseIdentity::ROLE_FALLBACK,
@@ -3868,8 +4226,14 @@ final class Agent extends CommandAbstract
     /**
      * @return array{0:?SubprocessControlKernel,1:?ChildMasterGuard,2:string,3:string}
      */
-    private function connectMaster(array $args, bool &$shutdown): array
+    private function connectMaster(
+        array $args,
+        bool &$shutdown,
+        ?array &$startupFallbackCommand,
+    ): array
     {
+        $bootstrapDeadline = $this->monotonicNow()
+            + self::MASTER_CONTROL_BOOTSTRAP_DEADLINE_SECONDS;
         $controlPort = $this->integerArgument($args, 'control-port');
         if ($controlPort <= 0) {
             return [null, null, '', ''];
@@ -3898,7 +4262,11 @@ final class Agent extends CommandAbstract
             $masterPid,
             $epoch,
         );
-        $controlPort = SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
+        $controlPort = SubprocessControlKernel::resolveControlPort(
+            $instanceName,
+            $controlPort,
+            deadlineMonotonic: $bootstrapDeadline,
+        );
         $identity = new ChildProcessIdentity(
             role: ControlMessage::ROLE_GATEWAY_AGENT,
             pid: \getmypid() ?: 0,
@@ -3907,9 +4275,20 @@ final class Agent extends CommandAbstract
             epoch: $epoch,
             launchId: $launchId,
         );
-        $handler = new RedirectControlHandler(static function (bool $requested) use (&$shutdown): void {
-            $shutdown = $shutdown || $requested;
-        });
+        $handler = new RedirectControlHandler(
+            static function (bool $requested) use (&$shutdown): void {
+                $shutdown = $shutdown || $requested;
+            },
+            static function (array $message) use (&$startupFallbackCommand): void {
+                if (!\hash_equals(
+                    ControlMessage::ACTION_GATEWAY_STARTUP_FALLBACK_REQUEST,
+                    (string)($message['action'] ?? ''),
+                )) {
+                    return;
+                }
+                $startupFallbackCommand = $message;
+            },
+        );
         $kernel = new SubprocessControlKernel(
             identity: $identity,
             handler: $handler,
@@ -3917,17 +4296,28 @@ final class Agent extends CommandAbstract
             instanceCode: $instanceName,
             helloAuthSecret: $parentCredential,
         );
-        if (!$kernel->connectAndRegister($controlPort, false)) {
+        if (!$kernel->connectAndRegister(
+            $controlPort,
+            false,
+            $bootstrapDeadline,
+        )) {
             throw new \RuntimeException('WLS Gateway Agent cannot register with Master.');
         }
-        $deadline = $this->monotonicNow() + 3.0;
-        while ($this->monotonicNow() < $deadline) {
-            if ($kernel->sendReady()) {
+        while ($this->monotonicNow() < $bootstrapDeadline) {
+            if ($kernel->sendReady($bootstrapDeadline)) {
                 break;
             }
             $kernel->tick();
             $kernel->flushWrites();
-            SchedulerSystem::usleep(10000);
+            $sleepMicroseconds = self::boundedAgentDeadlineSleepMicroseconds(
+                $bootstrapDeadline,
+                $this->monotonicNow(),
+                10_000,
+            );
+            if ($sleepMicroseconds < 1) {
+                break;
+            }
+            SchedulerSystem::usleep($sleepMicroseconds);
         }
         return [
             $kernel,
@@ -4040,6 +4430,49 @@ final class Agent extends CommandAbstract
                 $masterEpoch,
                 $launchId,
             );
+    }
+
+    /**
+     * Bind an ENABLE command to one exact, already validated whole-project
+     * serving-manifest after-image. A fallback listener is never requested
+     * when the current project has no ACTIVE TLS route.
+     *
+     * @param array<string,mixed> $manifest
+     * @return array{
+     *   serving_manifest_generation:int,
+     *   serving_manifest_digest:string,
+     *   serving_manifest_route_count:int
+     * }
+     */
+    public static function fallbackServingManifestExpectation(
+        array $manifest,
+    ): array {
+        $generation = $manifest['generation'] ?? null;
+        $digest = $manifest['digest'] ?? null;
+        $routeCount = $manifest['route_count'] ?? null;
+        $routes = $manifest['payload']['routes'] ?? null;
+        if (!\is_int($generation)
+            || $generation < 1
+            || !\is_string($digest)
+            || $digest !== \strtolower(\trim($digest))
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || !\is_int($routeCount)
+            || $routeCount < 1
+            || $routeCount > ProjectServingManifestStore::MAX_ROUTES
+            || !\is_array($routes)
+            || !\array_is_list($routes)
+            || \count($routes) !== $routeCount
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback requires one exact serving manifest with ACTIVE routes.',
+            );
+        }
+
+        return [
+            'serving_manifest_generation' => $generation,
+            'serving_manifest_digest' => $digest,
+            'serving_manifest_route_count' => $routeCount,
+        ];
     }
 
     /**

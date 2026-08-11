@@ -2,21 +2,28 @@
 
 本目录记录 Weline Server（WLS）的现行架构、运行方式和历史设计。开发与排障优先阅读现行文档；带日期的修复报告和阶段方案只作为历史证据，不作为当前实现契约。
 
-WLS 2.0 启动统一使用 `--edge=auto|gateway|wls`。`auto` 只发现并加入已受信的
-`wls-edge/2` 宿主网关；不会在普通项目启动中安装、升级或修复宿主服务。网关不存在或
-不兼容时，`auto` 以稳定的 20000–29999 loopback 高端口启动纯 WLS TLS，并明确报告
-这不是 80/443 的透明替代。`gateway` 要求既有网关可用，否则非零退出；`wls` 完全
-绕过网关。`--no-nginx` 是 `--edge=wls` 的兼容别名。
+WLS 2.0 启动统一使用 `--edge=auto|gateway|wls`。项目发布合同要求最终发行物必须在
+固定平台路径携带已签名的完整 Gateway/Nginx 包；只有完成发布组装后的项目才满足这一
+前置，当前源码树或仅上传 overlay artifact 不等于项目已经携带。`auto` 优先加入已受信的 `wls-edge/2` 宿主网关；若网关
+尚不存在、80/443 可安全取得且发行包、平台权限和守护安装条件均满足，首个项目会在
+宿主级互斥锁内建立独立网关并注册自身。包被验证并复制到宿主 A/B 槽后，网关不再依赖
+引导项目的生命周期。未知 owner 占用公共端口、无权限、缺包、坏签名或建立失败时，
+`auto` 以稳定的 20000–29999 loopback 高端口启动纯 WLS TLS，并明确报告这不是 80/443
+的透明替代。`gateway` 必须加入或完成同一首次建立，否则非零退出；`wls` 完全绕过
+网关。`--no-nginx` 是 `--edge=wls` 的兼容别名。首次自动建立不等于自动升级、修复或
+接管：既有网关的 upgrade/repair/rebootstrap 仍必须由显式管理命令执行。
 公开 CLI 会拒绝 `--edge=legacy` 及其他未知值；`legacy` 只用于首次识别没有 edge mode
 字段的已保存 WLS 1.x 项目配置。识别后运行时可以把该兼容状态内部持久化为
 `edge_mode=legacy`，确保重启前后继续等待显式提升，但新实例不能通过 CLI 主动声明。
 
 项目 UUID、desired/certificate generation 和摘要保存在 `app/etc/wls-project.json`；
 该文件随项目目录迁移，宿主只保存可重建的 UUID 路径声明、端口租约和证书快照。当前
-WLS 2.0 已完成平台 Broker、`wls-edge/2` 协议鉴权、证书事务、LKG/A-B 恢复以及网关
-与纯 WLS 的当前源码严格百万矩阵。网关 H1/H2、纯 WLS H1/H2 已各完成 warmup 后
-三轮精确百万，双租户 H2 三轮与 Controller 接管、Worker reload/drain 持续流量也
-全部 0 错误，TEST-036 已通过；但整体仍是 `CHECKPOINT / NOT RELEASE-READY`。
+WLS 2.0 已形成平台 Broker、`wls-edge/2` 协议鉴权、证书事务和 LKG/A-B
+恢复的实现检查点。历史检查点曾对网关 H1/H2、纯 WLS H1/H2、双租户、
+Controller 接管与 Worker reload/drain 执行严格百万矩阵；但当前未提交的
+恢复链修复改变了源码 generation，这些历史数据不得作为当前验收。当前状态
+为 `IMPLEMENTATION REOPENED / ACCEPTANCE BLOCKED`，必须在复审阻断项闭合后重跑 PostgreSQL、
+真实恢复、当前源码百万请求和三平台门禁。
 Linux PostgreSQL legacy 80/443 已使用受信历史签名包完成启动失败、激活后失败回滚和
 成功提升；提升后最终 HTTP/2 百万仍为 1,000,000/1,000,000、0 错误。Windows
 Service/Named Pipe DACL/reboot 实机、macOS LaunchDaemon ACL/reboot，以及外部
@@ -25,13 +32,15 @@ CA/DNS 公网首次签发尚未闭合，TASK-013 未全绿，因此 TASK-014 的
 
 ## 推荐阅读
 
-1. [WLS 运行时架构：现状与目标](WLS架构图.md) — 总体组件、状态权威、已确认故障、目标架构和验收门槛。
-2. [WLS 启动与关闭链路图](WLS启动与关闭链路图.md) — CLI、Master、Orchestrator 和 residual cleanup 的实际时序。
-3. [IPC 控制通道架构](IPC控制通道架构.md) — REGISTER、READY、lease、heartbeat、route snapshot 和控制命令。
-4. [Dispatcher 分流架构设计](Dispatcher分流架构设计.md) — 数据面转发、路由快照、健康隔离和维护兜底。
-5. [WLS Session/Memory 共享服务架构](WLS_Session共享服务架构.md) — 跨 Worker/实例共享状态 sidecar。
-6. [WLS 模式部署指南](WLS模式部署指南.md) — WLS 2.0 edge mode、共享网关、纯 WLS 回退、启动参数和运维门禁。
-7. [WLS 2.0 Gateway 使用指南](WLS-Gateway使用指南.md) — edge 模式、项目身份、宿主边界与当前实施状态。
+1. [Weline_Server 需求](需求.md) — 当前已确认的产品边界、兼容和验收定义。
+2. [Weline_Server 开发日志](开发日志.md) — 按目标版本记录当前门禁、整改和未验证项。
+3. [WLS 运行时架构：现状与目标](WLS架构图.md) — 总体组件、状态权威、已确认故障、目标架构和验收门槛。
+4. [WLS 启动与关闭链路图](WLS启动与关闭链路图.md) — CLI、Master、Orchestrator 和 residual cleanup 的实际时序。
+5. [IPC 控制通道架构](IPC控制通道架构.md) — REGISTER、READY、lease、heartbeat、route snapshot 和控制命令。
+6. [Dispatcher 分流架构设计](Dispatcher分流架构设计.md) — 数据面转发、路由快照、健康隔离和维护兜底。
+7. [WLS Session/Memory 共享服务架构](WLS_Session共享服务架构.md) — 跨 Worker/实例共享状态 sidecar。
+8. [WLS 模式部署指南](WLS模式部署指南.md) — WLS 2.0 edge mode、共享网关、纯 WLS 回退、启动参数和运维门禁。
+9. [WLS 2.0 Gateway 使用指南](WLS-Gateway使用指南.md) — edge 模式、项目身份、宿主边界与当前实施状态。
 
 ## 按问题定位
 
@@ -61,7 +70,8 @@ CA/DNS 公网首次签发尚未闭合，TASK-013 未全绿，因此 TASK-014 的
   Nginx 数据面探针为宿主派生事实；项目的域名、证书源、UUID 和 generation 始终以
   项目文件为事实源。纯 WLS 以 Master endpoint、TLS/HTTP policy 和 Worker READY
   为运行事实，不复用网关的协议结论。legacy 项目托管 Nginx 在显式 promote 前保持
-  原状；Caddy 与独立 Protocol Edge 仍是不可运行的历史材料。
+  原状；WLS 2.0 项目发行包内的锁定 Nginx 只作为首次建立宿主网关的受信来源，运行中
+  的共享 Nginx 位于宿主 A/B 槽；项目也可显式或降级为纯 WLS。
 - SharedState registry：Session/Memory sidecar；只能由认证后的写路径修正。
 - `var/server/instances/*.json`：CLI endpoint 发现，不是运行时共识。
 - PID/端口索引：可重建缓存，不是存活或身份的最终事实源。
@@ -83,7 +93,6 @@ CA/DNS 公网首次签发尚未闭合，TASK-013 未全绿，因此 TASK-014 的
 - `WLS-HA-*`、`WLS-MASTER-*`、`WLS-SUPERVISOR-*`
 - `WLS-default-startup-*`、`WLS-DISPATCHER-*`
 - `WLS-EventBuffer-SSL-Worker.md`（EventBuffer TLS Worker 已退役；当前纯 WLS 使用 Stream TLS，本文件仍只供历史取证）
-- 旧 `gateway:start`、实例目录扫描、default route 和项目内 `gateway.php` 方案
 - `wls-panel-plan/` 下的阶段计划和验收证据
 
 历史材料中的 `DispatcherCore`、旧控制端口公式、旧 add/remove-worker 消息、固定复活延迟或“常驻请求 Fiber 池”等描述，除非已被现行源码和总览再次确认，否则均不视为当前契约。

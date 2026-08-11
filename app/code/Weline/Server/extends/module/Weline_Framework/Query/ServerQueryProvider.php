@@ -864,8 +864,6 @@ class ServerQueryProvider implements QueryProviderInterface
                     'path_available' => $pathReal !== '' && \is_dir($pathReal),
                     'php_profile' => (string)($data[WlsPanelProject::schema_fields_PHP_PROFILE] ?? ''),
                     'database_profile' => (string)($data[WlsPanelProject::schema_fields_DATABASE_PROFILE] ?? ''),
-                    'gateway_enabled' => (int)($data[WlsPanelProject::schema_fields_GATEWAY_ENABLED] ?? 0),
-                    'backend' => (string)($card['backend'] ?? ''),
                     'admin' => (string)($card['admin'] ?? ''),
                     'panel' => (string)($card['panel'] ?? ''),
                 ],
@@ -1414,7 +1412,7 @@ class ServerQueryProvider implements QueryProviderInterface
         } else {
             return ['success' => false, 'message' => 'Unsupported admin path: ' . $normalized];
         }
-        $controllerSeg = str_replace(['-', '_'], '', ucwords(str_replace(['-', '_'], ' ', $controllerSeg)));
+        $controllerSeg = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $controllerSeg)));
         $actionSeg = str_replace('-', '', $actionSeg);
         $ns = 'Weline\Server\Controller';
         $class = $ns . '\\' . $area . '\\' . $controllerSeg;

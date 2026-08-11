@@ -24,7 +24,7 @@
 
 Windows Direct 不使用中间 PROXY v2 hop，Worker 直接接收 Nginx 的 loopback H1。只有显式 Dispatcher 兼容模式才用带实例认证的 PROXY Protocol v2 证明“这是本实例的回源连接”；它同样不转发公网 TLS，也不把 loopback peer 当作最终客户端身份。项目托管 Nginx 保留 Host，并逐请求覆盖 `X-Forwarded-For`、公开 scheme/port 与 authority；Worker 只有在 socket peer 命中固定编译的托管 loopback trusted proxy 后才采用这些字段。解析 XFF 时从右向左剥离受信 hop，选择最靠右的第一个非受信 IP；客户端注入的 `CF-Connecting-IP`、`X-Real-IP` 或 `Weline-Real-IP` 不能单独成为身份权威，缺失或畸形时 fail closed 到 transport peer。
 
-Trusted loopback 只授权重建客户端与公开 origin，不是业务白名单或 Origin 凭据。loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则；只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则。Gateway、Caddy、WLS-native/TLS 与 Protocol Edge 没有可达启动入口，也不存在可启用的兼容连接池。
+Trusted loopback 只授权重建客户端与公开 origin，不是业务白名单或 Origin 凭据。loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则；只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则。宿主 Gateway Nginx、legacy 项目 Nginx 和纯 WLS TLS 均为可达入口，但不因 loopback 回源而绕过业务层策略。
 
 ## 3. RuntimePolicyBundle
 

@@ -85,11 +85,15 @@ final class WorkerResponseMemoryGuard
     }
 
     /**
-     * Linux libevent can use an exclusive wake-up for a listener shared by
-     * multiple processes. Accepting only one socket from that wake-up can
-     * leave the tail of the queue dormant until a later connection arrives.
-     * Drain a bounded batch on that exact topology; keep the one-at-a-time
-     * fairness policy for Darwin and level-triggered select.
+     * An event-backed listener shared by multiple processes can deliver one
+     * wake-up for a whole connection burst. Accepting only one socket from
+     * that wake-up leaves the kernel queue exposed while the Worker handles
+     * the accepted request. This is especially visible on macOS, where the
+     * effective listen backlog is commonly 128 and an HTTP/2 edge connection
+     * can fan out hundreds of loopback upstream connects at once.
+     *
+     * Drain a bounded batch for every event-backed shared listener. Retain
+     * one-at-a-time fairness only for the level-triggered select driver.
      */
     public static function listenerAcceptBatchLimit(
         bool $sharedListener,
@@ -100,7 +104,7 @@ final class WorkerResponseMemoryGuard
             return 64;
         }
 
-        return $osFamily === 'Linux' && \strtolower(\trim($eventLoopDriver)) === 'event'
+        return \strtolower(\trim($eventLoopDriver)) === 'event'
             ? 64
             : 1;
     }

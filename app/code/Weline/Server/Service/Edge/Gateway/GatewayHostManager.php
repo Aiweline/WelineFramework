@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Gateway;
 
-use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * Installs and controls the project-independent host gateway runtime.
  */
-final class GatewayHostManager
+final class GatewayHostManager implements GatewayStartupHostInterface
 {
-    public const LEASE_RECEIPT_SCHEMA_VERSION = 2;
+    public const LEASE_RECEIPT_SCHEMA_VERSION = 3;
 
     public const ENROLLMENT_RECEIPT_FIELDS = [
         'schema_version',
@@ -52,6 +51,9 @@ final class GatewayHostManager
         'active_config_digest',
         'host_boot_id',
         'issued_monotonic',
+        'lifecycle_state',
+        'drain_operation_id',
+        'drain_started_monotonic',
         'lease_sequence',
         'lease_ttl_seconds',
         'route_generations',
@@ -90,14 +92,38 @@ final class GatewayHostManager
 
     private const EXPLICIT_START_READY_TIMEOUT_SECONDS = 60.0;
     private const PROMOTION_ENROLLMENT_READY_TIMEOUT_SECONDS = 5.0;
+    private const PROMOTION_REGISTRATION_TIMEOUT_SECONDS = 180.0;
+    private const DOMAIN_TRANSFER_TIMEOUT_SECONDS = 180.0;
+    private const UNREGISTER_TIMEOUT_SECONDS = 180.0;
+    private const PROJECT_MUTATION_TIMEOUT_SECONDS = 180.0;
+    private const HEARTBEAT_OPERATION_TIMEOUT_SECONDS = 30.0;
+    private const LEASE_VALIDATION_TIMEOUT_SECONDS = 10.0;
+    private const INSTALL_OPERATION_TIMEOUT_SECONDS = 600.0;
+    private const INSTALL_COMPENSATION_RESERVE_SECONDS = 120.0;
+    private const PROMOTION_OPERATION_TIMEOUT_SECONDS = 900.0;
+    private const UPGRADE_OPERATION_TIMEOUT_SECONDS = 900.0;
+    private const UPGRADE_COMPENSATION_RESERVE_SECONDS = 180.0;
+    private const REBOOTSTRAP_OPERATION_TIMEOUT_SECONDS = 900.0;
+    private const REBOOTSTRAP_COMPENSATION_RESERVE_SECONDS = 180.0;
+    private const SERVICE_CONTROL_OPERATION_TIMEOUT_SECONDS = 300.0;
+    private const SERVICE_START_COMPENSATION_RESERVE_SECONDS = 120.0;
+    private const START_COMPENSATION_INTENT_RESTORE_SECONDS = 15.0;
+    private const START_COMPENSATION_PLATFORM_PROOF_SECONDS = 20.0;
+    private const START_COMPENSATION_INTENT_PROOF_SECONDS = 10.0;
+    private const ADMIN_REQUEST_TIMEOUT_SECONDS = 180.0;
+    private const MIN_BOUNDED_COMMAND_TIMEOUT_SECONDS = 0.1;
     private const UPGRADE_SHADOW_READY_SECONDS = 15.0;
     private const UPGRADE_ACTIVATION_READY_SECONDS = 15.0;
     private const UPGRADE_CONTROL_HANDOFF_SECONDS = 15.0;
     private const UPGRADE_IDENTITY_PROBE_MARGIN_SECONDS = 15.0;
+    private const REBOOTSTRAP_HEALTHY_OBSERVATION_SECONDS = 15.0;
+    private const REBOOTSTRAP_IDENTITY_TIMEOUT_SECONDS = 75.0;
     private const DRAIN_LEASE_HEARTBEAT_SECONDS = 10.0;
     private const DRAIN_LEASE_HEARTBEAT_FAILURE_SECONDS = 30.0;
     private const FAILURE_COMPENSATION_LOCK_WAIT_SECONDS = 0.25;
     private const FAILURE_COMPENSATION_DEADLINE_SECONDS = 1.0;
+
+    private readonly GatewayInitialBootstrapJournal $initialBootstrapJournal;
 
     public function __construct(
         private readonly GatewayPaths $paths = new GatewayPaths(),
@@ -105,7 +131,10 @@ final class GatewayHostManager
         private readonly HostGatewayPackageManager $packages = new HostGatewayPackageManager(),
         private readonly GatewayPlatformServiceInstaller $platform = new GatewayPlatformServiceInstaller(),
         private readonly ?\Closure $progressCallback = null,
+        ?GatewayInitialBootstrapJournal $initialBootstrapJournal = null,
     ) {
+        $this->initialBootstrapJournal = $initialBootstrapJournal
+            ?? new GatewayInitialBootstrapJournal($this->paths);
     }
 
     /**
@@ -143,12 +172,7 @@ final class GatewayHostManager
                     $this->waitForPublicationDelay(0.2, $deadline);
                     continue;
                 }
-                return [
-                    'ok' => false,
-                    'ready' => false,
-                    'reason' => $throwable->getMessage(),
-                    'home' => $this->paths->home(),
-                ];
+                return $this->launcherRecoveryStatusFallback($throwable);
             }
         }
     }
@@ -158,10 +182,10 @@ final class GatewayHostManager
      *
      * @return array<string,mixed>
      */
-    public function administratorStatus(): array
+    public function administratorStatus(?float $deadlineMonotonic = null): array
     {
         try {
-            $response = $this->client->administratorStatus();
+            $response = $this->client->administratorStatus($deadlineMonotonic);
             if (!($response['ok'] ?? false)) {
                 return [
                     'ok' => false,
@@ -172,25 +196,190 @@ final class GatewayHostManager
             $payload = \is_array($response['payload'] ?? null) ? $response['payload'] : [];
             return ['ok' => true] + $payload;
         } catch (\Throwable $throwable) {
-            return [
-                'ok' => false,
-                'ready' => false,
-                'reason' => $throwable->getMessage(),
-                'home' => $this->paths->home(),
-            ];
+            return $this->launcherRecoveryStatusFallback($throwable);
         }
     }
 
     /**
-     * Classify startup discovery without installing, binding public ports,
-     * requesting credentials, changing a service or touching another process.
-     * Establishment is reserved for explicit administrator commands.
+     * The stable Launcher projection is diagnostic-only. It can explain a
+     * missing Controller socket, but it is never accepted as readiness,
+     * ownership, enrollment, fencing, or control authority.
      *
      * @return array<string,mixed>
      */
-    public function prepare(?array $observedStatus = null): array
+    private function launcherRecoveryStatusFallback(\Throwable $failure): array
     {
+        $fallback = [
+            'ok' => false,
+            'ready' => false,
+            'reason' => $failure->getMessage(),
+            'home' => $this->paths->home(),
+        ];
+        $projection = $this->readLauncherRecoveryStatusProjection();
+        if ($projection === null) {
+            return $fallback;
+        }
+        return $fallback + [
+            'state' => (string)$projection['stage'],
+            'recovery' => [
+                'stage' => (string)$projection['stage'],
+                'reason' => (string)$projection['reason'],
+                'runtime_generation' => (string)$projection['runtime_generation'],
+                'active_slot' => (string)$projection['active_slot'],
+                'next_retry_at' => (int)$projection['next_retry_at'],
+                'next_retry_monotonic_ms' => (int)$projection['next_retry_monotonic_ms'],
+                'failure_count' => (int)$projection['failure_count'],
+                'maintenance_attempt' => (int)$projection['maintenance_attempt'],
+                'source' => 'launcher_diagnostic_projection',
+                'authoritative' => false,
+            ],
+            'launcher_recovery' => $projection,
+        ];
+    }
+
+    /** @return array<string,mixed>|null */
+    private function readLauncherRecoveryStatusProjection(): ?array
+    {
+        $path = $this->paths->launcherRecoveryStatusFile();
+        $pathStatus = @\lstat($path);
+        if (!\is_array($pathStatus)
+            || \is_link($path)
+            || ((((int)($pathStatus['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($pathStatus['nlink'] ?? 0) !== 1
+            || (int)($pathStatus['size'] ?? 0) < 1
+            || (int)($pathStatus['size'] ?? 0) > 2048
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && ((((int)($pathStatus['mode'] ?? 0)) & 0777) !== 0444))
+            || (!$this->paths->isTestMode()
+                && \PHP_OS_FAMILY !== 'Windows'
+                && (int)($pathStatus['uid'] ?? -1) !== 0)
+        ) {
+            return null;
+        }
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        try {
+            $opened = @\fstat($handle);
+            $contents = @\stream_get_contents($handle, 2049);
+            $after = @\fstat($handle);
+            $pathAfter = @\lstat($path);
+            if (!\is_array($opened)
+                || !\is_array($after)
+                || !\is_array($pathAfter)
+                || !\is_string($contents)
+                || \strlen($contents) > 2048
+                || !$this->sameFileState($pathStatus, $opened)
+                || !$this->sameFileState($opened, $after)
+                || !$this->sameFileState($after, $pathAfter)
+                || \str_contains($contents, "\0")
+            ) {
+                return null;
+            }
+        } finally {
+            @\fclose($handle);
+        }
+        if (\preg_match(
+            '/\AWLS-LAUNCHER-RECOVERY-STATUS\/1\n'
+            . 'projection_only=true\nready=false\ncontrol_authority=false\n'
+            . 'stage=(IDLE|HIGH_FREQUENCY|MAINTENANCE_BACKOFF|ATTEMPTING|HEALTH_OBSERVING|ADMIN_STOPPED|REBOOTSTRAP_PENDING)\n'
+            . 'reason=(NONE|IDENTITY_REBOUND|BOOT_REANCHORED|LEDGER_INVALID|INCOMPLETE_ATTEMPT|STARTING|HEALTH_OBSERVATION|BROKER_EXIT|SPAWN_FAILED|SUPERVISION_FAILED|CONTROLLED_STOP)\n'
+            . 'host_boot_id=([a-f0-9]{64})\n'
+            . 'launcher_generation=([a-f0-9]{64})\n'
+            . 'launcher_identity=([a-f0-9]{64})\n'
+            . 'runtime_generation=([a-f0-9]{64})\n'
+            . 'active_slot=([AB])\nfailure_count=([0-9]{1,2})\n'
+            . 'maintenance_attempt=([0-9]{1,10})\n'
+            . 'next_retry_monotonic_ms=([0-9]{1,20})\n'
+            . 'next_retry_at=([0-9]{1,19})\nupdated_at=([0-9]{1,19})\n\z/D',
+            $contents,
+            $matches,
+        ) !== 1) {
+            return null;
+        }
+        $failureCount = self::boundedDiagnosticInteger($matches[8], 10);
+        $maintenanceAttempt = self::boundedDiagnosticInteger(
+            $matches[9],
+            \PHP_INT_MAX,
+        );
+        $nextRetryMonotonic = self::boundedDiagnosticInteger(
+            $matches[10],
+            \PHP_INT_MAX,
+        );
+        $nextRetryAt = self::boundedDiagnosticInteger(
+            $matches[11],
+            \PHP_INT_MAX,
+        );
+        $updatedAt = self::boundedDiagnosticInteger(
+            $matches[12],
+            \PHP_INT_MAX,
+        );
+        if ($failureCount === null
+            || $maintenanceAttempt === null
+            || $nextRetryMonotonic === null
+            || $nextRetryAt === null
+            || $updatedAt === null
+            || $updatedAt < 1
+        ) {
+            return null;
+        }
+        return [
+            'projection_only' => true,
+            'ready' => false,
+            'control_authority' => false,
+            'stage' => $matches[1],
+            'reason' => $matches[2],
+            'host_boot_id' => $matches[3],
+            'launcher_generation' => $matches[4],
+            'launcher_identity' => $matches[5],
+            'runtime_generation' => $matches[6],
+            'active_slot' => $matches[7],
+            'failure_count' => $failureCount,
+            'maintenance_attempt' => $maintenanceAttempt,
+            'next_retry_monotonic_ms' => $nextRetryMonotonic,
+            'next_retry_at' => $nextRetryAt,
+            'updated_at' => $updatedAt,
+            'source' => 'launcher_diagnostic_projection',
+            'authoritative' => false,
+        ];
+    }
+
+    private static function boundedDiagnosticInteger(
+        string $value,
+        int $maximum,
+    ): ?int {
+        $normalized = \ltrim($value, '0');
+        $normalized = $normalized === '' ? '0' : $normalized;
+        $maximumText = (string)$maximum;
+        if (\strlen($normalized) > \strlen($maximumText)
+            || (\strlen($normalized) === \strlen($maximumText)
+                && \strcmp($normalized, $maximumText) > 0)
+        ) {
+            return null;
+        }
+        return (int)$normalized;
+    }
+
+    /**
+     * Classify startup discovery without binding public ports, requesting
+     * credentials, changing a service or touching another process. A caller
+     * may use INSTALL_REQUIRED to enter the separately locked, signed-package
+     * initial-bootstrap transaction.
+     *
+     * @return array<string,mixed>
+     */
+    public function prepare(
+        ?array $observedStatus = null,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::ADMIN_REQUEST_TIMEOUT_SECONDS,
+        );
+        $this->remainingOperationDeadline($deadlineMonotonic);
         $atomicWrite = GatewayProjectStateFilesystem::atomicWriteRuntimeCapability();
+        $this->remainingOperationDeadline($deadlineMonotonic);
         if (($atomicWrite['ready'] ?? false) !== true) {
             return [
                 'ok' => false,
@@ -201,12 +390,33 @@ final class GatewayHostManager
                 'project_state_atomic_write' => $atomicWrite,
             ];
         }
-        $status = $observedStatus ?? $this->status(5.0);
+        $status = $observedStatus ?? $this->status(5.0, $deadlineMonotonic);
+        $this->remainingOperationDeadline($deadlineMonotonic);
         if (self::hostStatusIsTrustedReady($status)) {
             return $status + ['established' => false];
         }
-        $profile = $this->installedListenProfileOrDefault();
-        $availability = $this->classifyPublicPortsReadOnly($profile);
+        $virgin = $this->classifyVirginHostReadOnly($deadlineMonotonic);
+        if (($virgin['state'] ?? '') !== 'VIRGIN_HOST') {
+            return [
+                'ok' => false,
+                'ready' => false,
+                'state' => (string)($virgin['state'] ?? 'REPAIR_REQUIRED'),
+                'reason' => (string)($virgin['reason']
+                    ?? 'The host is not provably safe for initial Gateway installation.'),
+                'owner' => (string)($virgin['owner'] ?? 'unknown'),
+                'listen_profile' => 'default',
+            ];
+        }
+        // A virgin first installation has no persisted profile authority.
+        // WLS 2.0 fixes that transaction to the full default IPv4/IPv6
+        // profile; alternate profiles belong to explicit repair/migration.
+        $profile = 'default';
+        $this->remainingOperationDeadline($deadlineMonotonic);
+        $availability = $this->classifyPublicPortsReadOnly(
+            $profile,
+            $deadlineMonotonic,
+        );
+        $this->remainingOperationDeadline($deadlineMonotonic);
         if (($availability['state'] ?? '') !== 'AVAILABLE') {
             return [
                 'ok' => false,
@@ -222,10 +432,315 @@ final class GatewayHostManager
             'ok' => false,
             'ready' => false,
             'state' => 'INSTALL_REQUIRED',
-            'reason' => 'WLS 2.0 Gateway is not ready. Installation is an explicit administrator action; run server:gateway:install.',
+            'reason' => 'WLS 2.0 Gateway is not ready. A release-ready signed project package may establish the first host gateway under the host bootstrap lock; otherwise run server:gateway:install explicitly.',
             'listen_profile' => $profile,
             'port_diagnostics' => $availability['diagnostics'] ?? [],
         ];
+    }
+
+    /**
+     * Prove that no WLS/foreign same-name platform service or semantic host
+     * state exists before authorizing first installation. This method is
+     * bounded, no-follow and read-only; absence must be positive evidence.
+     *
+     * @return array{state:string,reason:string,owner:string}
+     */
+    private function classifyVirginHostReadOnly(
+        float $deadlineMonotonic,
+    ): array {
+        $this->remainingOperationDeadline($deadlineMonotonic);
+        try {
+            $bootstrap = $this->initialBootstrapJournal->load();
+        } catch (\Throwable $throwable) {
+            return [
+                'state' => 'REPAIR_REQUIRED',
+                'reason' => 'The initial Gateway bootstrap journal is invalid: '
+                    . GatewayBoundedText::singleLine(
+                        $throwable->getMessage(),
+                        1024,
+                        'journal validation failed',
+                    ),
+                'owner' => 'unknown',
+            ];
+        }
+        if (\is_array($bootstrap)) {
+            $bootstrapPhase = (string)($bootstrap['phase'] ?? '');
+            if (\in_array($bootstrapPhase, [
+                'ROLLING_BACK',
+                'VERIFIED',
+            ], true)) {
+                return [
+                    'state' => 'REPAIR_REQUIRED',
+                    'reason' => \hash_equals('VERIFIED', $bootstrapPhase)
+                        ? 'A verified installed Gateway generation is semantic host state; data-plane or definition failure requires explicit repair, not first-install replay.'
+                        : 'An incomplete Gateway bootstrap rollback requires explicit repair.',
+                    'owner' => 'unknown',
+                ];
+            }
+            return [
+                'state' => 'BOOTSTRAP_RECOVERY_REQUIRED',
+                'reason' => 'A digest-bound Gateway bootstrap journal requires same-package replay.',
+                'owner' => 'wls-gateway',
+            ];
+        }
+        $registration = $this->platform->initialServiceRegistrationStatus(
+            $deadlineMonotonic,
+        );
+        $registrationState = (string)($registration['state'] ?? 'UNKNOWN');
+        if (\hash_equals('PRESENT', $registrationState)) {
+            return [
+                'state' => 'HOST_SERVICE_PRESENT',
+                'reason' => (string)($registration['reason']
+                    ?? 'A same-name platform service is already registered.'),
+                'owner' => 'unknown',
+            ];
+        }
+        if (!\hash_equals('ABSENT', $registrationState)) {
+            return [
+                'state' => 'REPAIR_REQUIRED',
+                'reason' => (string)($registration['reason']
+                    ?? 'Platform service registration absence is indeterminate.'),
+                'owner' => 'unknown',
+            ];
+        }
+
+        $semanticPaths = \array_values(\array_unique([
+            $this->paths->serviceDefinitionFile(),
+            $this->paths->platformServiceMetadataFile(),
+            $this->paths->systemdServiceDefinitionFile(),
+            $this->paths->systemdServiceLinkFile(),
+            $this->paths->legacySystemdServiceDefinitionFile(),
+        ]));
+        foreach ($semanticPaths as $path) {
+            $this->remainingOperationDeadline($deadlineMonotonic);
+            $status = @\lstat($path);
+            if (\is_array($status) || \file_exists($path) || \is_link($path)) {
+                return [
+                    'state' => 'REPAIR_REQUIRED',
+                    'reason' => 'Residual Gateway platform definition or metadata exists: '
+                        . $path,
+                    'owner' => 'unknown',
+                ];
+            }
+        }
+
+        $home = $this->paths->home();
+        $homeStatus = @\lstat($home);
+        if (!\is_array($homeStatus)) {
+            if (\file_exists($home) || \is_link($home)) {
+                return [
+                    'state' => 'REPAIR_REQUIRED',
+                    'reason' => 'The Gateway host root absence is indeterminate.',
+                    'owner' => 'unknown',
+                ];
+            }
+        } else {
+            try {
+                $this->assertVirginHostTree(
+                    $home,
+                    $deadlineMonotonic,
+                );
+            } catch (\Throwable $throwable) {
+                return [
+                    'state' => 'REPAIR_REQUIRED',
+                    'reason' => 'Residual or unsafe Gateway host state exists: '
+                        . GatewayBoundedText::singleLine(
+                            $throwable->getMessage(),
+                            1024,
+                            'host state is not virgin',
+                        ),
+                    'owner' => 'unknown',
+                ];
+            }
+        }
+
+        $run = $this->paths->runDir();
+        if (!self::pathWithinOrEqual($run, $home)) {
+            $runStatus = @\lstat($run);
+            if (\is_array($runStatus)) {
+                try {
+                    $records = GatewayBoundedTreeWalker::collect(
+                        $run,
+                        true,
+                        false,
+                        64,
+                        2,
+                    );
+                    if (\count($records) !== 1) {
+                        throw new \RuntimeException(
+                            'the external runtime directory is not empty',
+                        );
+                    }
+                    $this->assertVirginDirectoryStatus($run, $runStatus);
+                } catch (\Throwable $throwable) {
+                    return [
+                        'state' => 'REPAIR_REQUIRED',
+                        'reason' => 'Residual Gateway runtime state exists: '
+                            . GatewayBoundedText::singleLine(
+                                $throwable->getMessage(),
+                                512,
+                                'runtime state is not virgin',
+                            ),
+                        'owner' => 'unknown',
+                    ];
+                }
+            } elseif (\file_exists($run) || \is_link($run)) {
+                return [
+                    'state' => 'REPAIR_REQUIRED',
+                    'reason' => 'The Gateway runtime directory absence is indeterminate.',
+                    'owner' => 'unknown',
+                ];
+            }
+        }
+        return [
+            'state' => 'VIRGIN_HOST',
+            'reason' => 'Platform registration and semantic Gateway host state are provably absent.',
+            'owner' => '',
+        ];
+    }
+
+    private function assertVirginHostTree(
+        string $home,
+        float $deadlineMonotonic,
+    ): void {
+        $records = GatewayBoundedTreeWalker::collect(
+            $home,
+            true,
+            false,
+            512,
+            8,
+            function () use ($deadlineMonotonic): void {
+                $this->remainingOperationDeadline($deadlineMonotonic);
+            },
+        );
+        $allowedDirectories = [];
+        foreach ([
+            $home,
+            $this->paths->runtimeDir(),
+            $this->paths->runDir(),
+            $this->paths->logDir(),
+            $this->paths->stateDir(),
+            $this->paths->trustDir(),
+            $this->paths->slotsDir(),
+            \dirname($this->paths->guardianDir()),
+            $this->paths->guardianDir(),
+            $this->paths->rebootstrapDir(),
+            $this->paths->rebootstrapCandidatesDir(),
+            $this->paths->rebootstrapBackupsDir(),
+            $this->paths->rebootstrapReceiptsDir(),
+            $this->paths->rebootstrapCapacityDir(),
+            $this->paths->legacySnapshotsDir(),
+            $this->paths->sealedSnapshotsDir(),
+            $this->paths->snapshotCandidatesDir(),
+            \dirname($this->paths->launcherFile()),
+            $this->paths->systemdDefinitionDirectory(),
+        ] as $directory) {
+            if (self::pathWithinOrEqual($directory, $home)) {
+                $allowedDirectories[self::normalizedHostPath($directory)] = true;
+            }
+        }
+        $log = self::normalizedHostPath($this->paths->logDir());
+        $trust = self::normalizedHostPath($this->paths->trustDir());
+        $allowedLocks = [
+            'package-bootstrap.lock' => true,
+            'package-install.lock' => true,
+        ];
+        foreach ($records as $record) {
+            $this->remainingOperationDeadline($deadlineMonotonic);
+            $path = (string)$record['path'];
+            $normalized = self::normalizedHostPath($path);
+            $status = @\lstat($path);
+            if (!\is_array($status)
+                || \is_link($path)
+                || (string)($status['dev'] ?? '') !== (string)$record['device']
+                || (string)($status['ino'] ?? '') !== (string)$record['inode']
+            ) {
+                throw new \RuntimeException(
+                    'a host-state entry changed during no-follow inspection',
+                );
+            }
+            if (($record['directory'] ?? false) === true) {
+                $underLog = $normalized !== $log
+                    && \str_starts_with($normalized . '/', $log . '/');
+                if (!isset($allowedDirectories[$normalized]) && !$underLog) {
+                    throw new \RuntimeException(
+                        'an unknown host directory remains: ' . $path,
+                    );
+                }
+                $this->assertVirginDirectoryStatus($path, $status);
+                continue;
+            }
+            $underLog = $normalized !== $log
+                && \str_starts_with($normalized . '/', $log . '/');
+            if ($underLog) {
+                if ((int)($status['size'] ?? -1) < 0
+                    || (int)($status['size'] ?? -1) > 16_777_216
+                    || ((((int)($status['mode'] ?? 0)) & 0022) !== 0)
+                ) {
+                    throw new \RuntimeException(
+                        'a retained diagnostic log is unsafe or oversized',
+                    );
+                }
+                continue;
+            }
+            $parent = self::normalizedHostPath(\dirname($path));
+            $name = \basename($path);
+            if (!\hash_equals($trust, $parent)
+                || !isset($allowedLocks[$name])
+                || (int)($status['size'] ?? -1) !== 0
+                || (int)($status['nlink'] ?? 0) !== 1
+                || (PHP_OS_FAMILY !== 'Windows'
+                    && ((((int)($status['mode'] ?? 0)) & 0777) !== 0600))
+            ) {
+                throw new \RuntimeException(
+                    'semantic or unknown host residue remains: ' . $path,
+                );
+            }
+            $this->assertVirginOwner($path, $status);
+        }
+    }
+
+    /** @param array<string|int,mixed> $status */
+    private function assertVirginDirectoryStatus(string $path, array $status): void
+    {
+        if ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000
+            || ((((int)($status['mode'] ?? 0)) & 0022) !== 0)
+        ) {
+            throw new \RuntimeException(
+                'a retained directory is writable by another identity: ' . $path,
+            );
+        }
+        $this->assertVirginOwner($path, $status);
+    }
+
+    /** @param array<string|int,mixed> $status */
+    private function assertVirginOwner(string $path, array $status): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return;
+        }
+        $expected = $this->paths->isTestMode()
+            ? (\function_exists('posix_geteuid') ? \posix_geteuid() : (int)($status['uid'] ?? -1))
+            : 0;
+        if ((int)($status['uid'] ?? -1) !== $expected) {
+            throw new \RuntimeException(
+                'a retained path has an unexpected owner: ' . $path,
+            );
+        }
+    }
+
+    private static function normalizedHostPath(string $path): string
+    {
+        $path = \rtrim(\str_replace('\\', '/', $path), '/');
+        return PHP_OS_FAMILY === 'Windows' ? \strtolower($path) : $path;
+    }
+
+    private static function pathWithinOrEqual(string $path, string $root): bool
+    {
+        $path = self::normalizedHostPath($path);
+        $root = self::normalizedHostPath($root);
+        return \hash_equals($path, $root)
+            || \str_starts_with($path . '/', $root . '/');
     }
 
     /**
@@ -233,8 +748,19 @@ final class GatewayHostManager
      *
      * @return array<string,mixed>
      */
-    public function install(string $packageDirectory, string $profile = 'default'): array
-    {
+    public function install(
+        string $packageDirectory,
+        string $profile = 'default',
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::INSTALL_OPERATION_TIMEOUT_SECONDS,
+        );
+        $forwardDeadline = $this->operationDeadlineWithReservedCompensation(
+            $deadlineMonotonic,
+            self::INSTALL_COMPENSATION_RESERVE_SECONDS,
+        );
         $atomicWrite = GatewayProjectStateFilesystem::atomicWriteRuntimeCapability();
         if (($atomicWrite['ready'] ?? false) !== true) {
             return [
@@ -246,16 +772,97 @@ final class GatewayHostManager
                 'project_state_atomic_write' => $atomicWrite,
             ];
         }
-        $portCheck = $this->publicPortsAvailable($profile);
-        if (!($portCheck['ok'] ?? false)) {
+        try {
+            $existingJournal = $this->initialBootstrapJournal->load();
+            $hostStagedRecovery = \is_array($existingJournal)
+                && !\hash_equals(
+                    'PREPARING',
+                    (string)($existingJournal['phase'] ?? ''),
+                );
+            if (!$hostStagedRecovery) {
+                // Exact project bytes are required only until immutable host
+                // staging commits. stage() repeats this verification.
+                $verification = $this->packages->verifyPackage(
+                    $packageDirectory,
+                    $profile,
+                    $forwardDeadline,
+                );
+            } else {
+                $verification = [];
+            }
+        } catch (\Throwable $throwable) {
             return [
                 'ok' => false,
                 'ready' => false,
-                'state' => (string)($portCheck['state'] ?? 'PORT_TAKEN'),
-                'reason' => (string)$portCheck['reason'],
-                'owner' => (string)($portCheck['owner'] ?? 'unknown'),
-                'listen_profile' => $profile,
-                'port_diagnostics' => $portCheck['diagnostics'] ?? [],
+                'state' => \str_contains($throwable->getMessage(), 'journal')
+                    ? 'REPAIR_REQUIRED'
+                    : 'PACKAGE_INVALID',
+                'reason' => GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    2048,
+                    'Gateway installation preflight failed.',
+                ),
+            ];
+        }
+
+        if ($existingJournal === null) {
+            $virgin = $this->classifyVirginHostReadOnly($forwardDeadline);
+            if (($virgin['state'] ?? '') !== 'VIRGIN_HOST') {
+                return [
+                    'ok' => false,
+                    'ready' => false,
+                    'state' => (string)($virgin['state'] ?? 'REPAIR_REQUIRED'),
+                    'reason' => (string)($virgin['reason']
+                        ?? 'The host is not safe for first installation.'),
+                    'owner' => (string)($virgin['owner'] ?? 'unknown'),
+                ];
+            }
+            $portCheck = $this->publicPortsAvailable($profile);
+            if (!($portCheck['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'ready' => false,
+                    'state' => (string)($portCheck['state'] ?? 'PORT_TAKEN'),
+                    'reason' => (string)$portCheck['reason'],
+                    'owner' => (string)($portCheck['owner'] ?? 'unknown'),
+                    'listen_profile' => $profile,
+                    'port_diagnostics' => $portCheck['diagnostics'] ?? [],
+                ];
+            }
+        }
+
+        try {
+            if ($existingJournal !== null) {
+                // Fingerprint mismatch is rejected without any new host write.
+                $journal = $hostStagedRecovery
+                    ? $this->initialBootstrapJournal->resumeHostStaged($profile)
+                    : $this->initialBootstrapJournal->beginOrResume(
+                        $verification,
+                        $profile,
+                    );
+            } else {
+                $this->paths->ensureDirectories();
+                $journal = $this->initialBootstrapJournal->beginOrResume(
+                    $verification,
+                    $profile,
+                );
+            }
+            $this->packages->assertNoActiveRebootstrap(
+                'Gateway installation',
+                $forwardDeadline,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'ready' => false,
+                'state' => \str_contains($throwable->getMessage(), 'REPAIR_REQUIRED')
+                    ? 'REPAIR_REQUIRED'
+                    : 'INSTALL_FAILED',
+                'reason' => GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    2048,
+                    'Gateway initial bootstrap journal could not be established.',
+                ),
             ];
         }
 
@@ -263,16 +870,194 @@ final class GatewayHostManager
         $service = null;
         $activated = false;
         try {
-            $staged = $this->packages->stage($packageDirectory, $profile);
-            $service = $this->platform->installDefinition($profile);
-            $this->packages->activate((string)$staged['slot']);
-            $activated = true;
-            $this->platform->start((string)$service['kind']);
+            $phase = (string)$journal['phase'];
+            if (\hash_equals('PREPARING', $phase)) {
+                $staged = $this->packages->recoverInitialStagedPackage(
+                    (string)$journal['package_digest'],
+                    $profile,
+                    null,
+                    $forwardDeadline,
+                );
+                if ($staged === null) {
+                    $staged = $this->packages->stage(
+                        $packageDirectory,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                }
+                self::assertInitialBootstrapStagedIdentity($journal, $staged);
+                GatewayInitialBootstrapCrashSimulation::hit(
+                    'after-stage',
+                    $this->paths,
+                );
+                $journal = $this->initialBootstrapJournal->advance(
+                    $journal,
+                    'STAGED',
+                    [
+                        'slot' => (string)$staged['slot'],
+                        'runtime_generation'
+                            => (string)$staged['runtime_generation'],
+                        'previous_active_slot'
+                            => (string)$staged['previous_active_slot'],
+                    ],
+                );
+                $phase = 'STAGED';
+            } else {
+                $staged = $this->packages->recoverInitialStagedPackage(
+                    (string)$journal['package_digest'],
+                    $profile,
+                    (string)$journal['slot'],
+                    $forwardDeadline,
+                );
+                if ($staged === null) {
+                    throw new \RuntimeException(
+                        'REPAIR_REQUIRED: the journaled Gateway runtime slot is missing.',
+                    );
+                }
+                self::assertInitialBootstrapStagedIdentity($journal, $staged);
+            }
+
+            if (\hash_equals('STAGED', $phase)) {
+                try {
+                    $service = $this->platform->installedDefinition();
+                } catch (\RuntimeException $definitionStatus) {
+                    if (!\str_contains(
+                        $definitionStatus->getMessage(),
+                        'metadata is unavailable',
+                    )) {
+                        throw $definitionStatus;
+                    }
+                    $service = $this->platform->installDefinition(
+                        $profile,
+                        $forwardDeadline,
+                    );
+                }
+                $journal = $this->initialBootstrapJournal->advance(
+                    $journal,
+                    'DEFINITION_INSTALLED',
+                    ['service_kind' => (string)$service['kind']],
+                );
+                $phase = 'DEFINITION_INSTALLED';
+                GatewayInitialBootstrapCrashSimulation::hit(
+                    'after-definition',
+                    $this->paths,
+                );
+            } else {
+                $service = $this->platform->installedDefinition();
+                if ((string)$journal['service_kind'] !== ''
+                    && !\hash_equals(
+                        (string)$journal['service_kind'],
+                        (string)$service['kind'],
+                    )
+                ) {
+                    throw new \RuntimeException(
+                        'REPAIR_REQUIRED: the installed platform definition does not match the bootstrap journal.',
+                    );
+                }
+            }
+
+            if (\hash_equals('DEFINITION_INSTALLED', $phase)) {
+                $activeFile = $this->paths->activeSlotFile();
+                $active = (\file_exists($activeFile) || \is_link($activeFile))
+                    ? $this->paths->activeSlot()
+                    : '';
+                if ($active === '') {
+                    $this->packages->activate(
+                        (string)$staged['slot'],
+                        $forwardDeadline,
+                    );
+                } elseif (!\hash_equals((string)$staged['slot'], $active)) {
+                    throw new \RuntimeException(
+                        'REPAIR_REQUIRED: the active slot conflicts with the bootstrap journal.',
+                    );
+                }
+                $activated = true;
+                GatewayInitialBootstrapCrashSimulation::hit(
+                    'after-activate',
+                    $this->paths,
+                );
+                $journal = $this->initialBootstrapJournal->advance(
+                    $journal,
+                    'ACTIVATED',
+                );
+                $phase = 'ACTIVATED';
+            } else {
+                $activeFile = $this->paths->activeSlotFile();
+                if (!\file_exists($activeFile)
+                    || !\hash_equals(
+                        (string)$staged['slot'],
+                        $this->paths->activeSlot(),
+                    )
+                ) {
+                    throw new \RuntimeException(
+                        'REPAIR_REQUIRED: the journaled Gateway activation is not present.',
+                    );
+                }
+                $activated = true;
+            }
+
+            if (\hash_equals('ACTIVATED', $phase)) {
+                $this->platform->start(
+                    (string)$service['kind'],
+                    $forwardDeadline,
+                );
+                GatewayInitialBootstrapCrashSimulation::hit(
+                    'after-start',
+                    $this->paths,
+                );
+                $journal = $this->initialBootstrapJournal->advance(
+                    $journal,
+                    'STARTED',
+                );
+            }
         } catch (\Throwable $throwable) {
+            if ($throwable instanceof GatewayInitialBootstrapCrashSimulation) {
+                return [
+                    'ok' => false,
+                    'ready' => false,
+                    'state' => 'BOOTSTRAP_INTERRUPTED',
+                    'reason' => $throwable->getMessage(),
+                    'journal_phase' => (string)$journal['phase'],
+                ];
+            }
             $cleanupFailures = [];
+            try {
+                $journal = $this->initialBootstrapJournal->advance(
+                    $journal,
+                    'ROLLING_BACK',
+                );
+            } catch (\Throwable $journalFailure) {
+                return [
+                    'ok' => false,
+                    'ready' => false,
+                    'state' => 'INSTALL_ROLLBACK_FAILED',
+                    'reason' => GatewayBoundedText::singleLine(
+                        $throwable->getMessage(),
+                        1536,
+                        'Gateway installation failed.',
+                    ) . ' Cleanup was not started because the durable rollback journal could not be published: '
+                        . GatewayBoundedText::singleLine(
+                            $journalFailure->getMessage(),
+                            512,
+                            'journal publication failed',
+                        ),
+                ];
+            }
+            if (!\is_array($service)) {
+                try {
+                    $service = $this->platform->installedDefinition();
+                } catch (\Throwable) {
+                    $service = null;
+                }
+            }
+            $platformRemovalComplete = !\is_array($service);
             if (\is_array($service)) {
                 try {
-                    $this->platform->removeDefinition((string)$service['kind']);
+                    $this->platform->removeDefinition(
+                        (string)$service['kind'],
+                        $deadlineMonotonic,
+                    );
+                    $platformRemovalComplete = true;
                 } catch (\Throwable $cleanup) {
                     $cleanupFailures[] = 'platform definition: '
                         . GatewayBoundedText::singleLine(
@@ -282,15 +1067,31 @@ final class GatewayHostManager
                         );
                 }
             }
-            if (\is_array($staged)) {
+            if (\is_array($staged) && $platformRemovalComplete) {
                 try {
+                    $activeSlotFile = $this->paths->activeSlotFile();
+                    $actualActive = (\file_exists($activeSlotFile)
+                            || \is_link($activeSlotFile))
+                        ? $this->paths->activeSlot()
+                        : '';
+                    // The active pointer is the durable commit fact. Activation
+                    // can publish it before a later fsync/intent-finalization
+                    // error prevents the in-memory flag from being assigned.
+                    $activated = $activated || \hash_equals(
+                        (string)$staged['slot'],
+                        $actualActive,
+                    );
                     if ($activated) {
                         $this->packages->rollbackActivation(
                             (string)$staged['slot'],
                             (string)$staged['previous_active_slot'],
+                            $deadlineMonotonic,
                         );
                     } else {
-                        $this->packages->discardStaged((string)$staged['slot']);
+                        $this->packages->discardStaged(
+                            (string)$staged['slot'],
+                            $deadlineMonotonic,
+                        );
                     }
                 } catch (\Throwable $cleanup) {
                     $cleanupFailures[] = 'runtime slot: '
@@ -301,12 +1102,29 @@ final class GatewayHostManager
                         );
                 }
             }
+            if ($cleanupFailures === []
+                && \is_array($staged)
+                && $platformRemovalComplete
+            ) {
+                try {
+                    $this->initialBootstrapJournal->remove($journal);
+                } catch (\Throwable $cleanup) {
+                    $cleanupFailures[] = 'bootstrap journal: '
+                        . GatewayBoundedText::singleLine(
+                            $cleanup->getMessage(),
+                            512,
+                            'journal retirement failed',
+                        );
+                }
+            }
             return [
                 'ok' => false,
                 'ready' => false,
-                'state' => $cleanupFailures === []
-                    ? 'INSTALL_FAILED'
-                    : 'INSTALL_ROLLBACK_FAILED',
+                'state' => \str_contains($throwable->getMessage(), 'REPAIR_REQUIRED')
+                    ? 'REPAIR_REQUIRED'
+                    : ($cleanupFailures === []
+                        ? 'INSTALL_FAILED'
+                        : 'INSTALL_ROLLBACK_FAILED'),
                 'reason' => GatewayBoundedText::singleLine(
                     $throwable->getMessage(),
                     2048,
@@ -318,6 +1136,10 @@ final class GatewayHostManager
         }
 
         if ($this->paths->isTestMode()) {
+            $journal = $this->initialBootstrapJournal->advance(
+                $journal,
+                'VERIFIED',
+            );
             return [
                 'ok' => true,
                 'ready' => false,
@@ -334,40 +1156,170 @@ final class GatewayHostManager
         // Initial publication includes a mandatory 15-second candidate probe.
         // Leave enough budget for platform startup, native Broker fencing and
         // that probe without weakening any readiness condition.
-        $deadline = self::monotonicNow() + 45.0;
-        do {
-            \usleep(100000);
-            $status = $this->administratorStatus();
-            if (self::hostStatusMatchesRuntimeIdentity(
-                $status,
-                (string)$staged['slot'],
-                (string)$staged['runtime_generation'],
-            )) {
-                return $status + [
-                    'installed' => true,
-                    'slot' => $staged['slot'],
-                    'runtime_generation' => $staged['runtime_generation'],
-                ];
-            }
-        } while (self::monotonicNow() < $deadline);
+        $deadline = \min(
+            $forwardDeadline,
+            self::monotonicNow() + 45.0,
+        );
+        $failureState = 'START_TIMEOUT';
+        $status = [];
+        try {
+            do {
+                $this->waitForPublicationDelay(0.1, $deadline);
+                $status = $this->administratorStatus($forwardDeadline);
+                if (self::hostStatusMatchesRuntimeIdentity(
+                    $status,
+                    (string)$staged['slot'],
+                    (string)$staged['runtime_generation'],
+                )) {
+                    $journal = $this->initialBootstrapJournal->advance(
+                        $journal,
+                        'VERIFIED',
+                    );
+                    GatewayInitialBootstrapCrashSimulation::hit(
+                        'after-trusted-status',
+                        $this->paths,
+                    );
+                    return $status + [
+                        'installed' => true,
+                        'slot' => $staged['slot'],
+                        'runtime_generation' => $staged['runtime_generation'],
+                    ];
+                }
+                if (self::hostStatusIsTrustedPortTaken(
+                    $status,
+                    (string)$staged['slot'],
+                    (string)$staged['runtime_generation'],
+                )) {
+                    $failureState = 'PORT_TAKEN';
+                    break;
+                }
+            } while (self::monotonicNow() < $deadline);
+        } catch (GatewayInitialBootstrapCrashSimulation $crash) {
+            return [
+                'ok' => false,
+                'ready' => false,
+                'state' => 'BOOTSTRAP_INTERRUPTED',
+                'reason' => $crash->getMessage(),
+                'journal_phase' => (string)$journal['phase'],
+            ];
+        } catch (\Throwable $readinessFailure) {
+            $status = [
+                'reason' => GatewayBoundedText::singleLine(
+                    $readinessFailure->getMessage(),
+                    1024,
+                    'Gateway readiness observation failed.',
+                ),
+            ];
+        }
 
+        try {
+            $journal = $this->initialBootstrapJournal->advance(
+                $journal,
+                'ROLLING_BACK',
+            );
+        } catch (\Throwable $journalFailure) {
+            return [
+                'ok' => false,
+                'ready' => false,
+                'state' => 'INSTALL_ROLLBACK_FAILED',
+                'reason' => 'Gateway readiness failed, but rollback was not started because its durable journal could not be published: '
+                    . GatewayBoundedText::singleLine(
+                        $journalFailure->getMessage(),
+                        512,
+                        'journal publication failed',
+                    ),
+            ];
+        }
+        return $this->rollbackInitialActivationAfterReadinessFailure(
+            $service,
+            $staged,
+            $failureState,
+            $status,
+            $deadlineMonotonic,
+            $journal,
+        );
+    }
+
+    /** @param array<string,mixed> $journal @param array<string,mixed> $staged */
+    private static function assertInitialBootstrapStagedIdentity(
+        array $journal,
+        array $staged,
+    ): void {
+        foreach ([
+            'package_digest',
+            'manifest_digest',
+            'signature_digest',
+            'platform',
+            'arch',
+            'profile',
+        ] as $field) {
+            $expected = (string)($journal[$field] ?? '');
+            $actual = (string)($staged[$field] ?? '');
+            if ($expected === ''
+                || $actual === ''
+                || !\hash_equals($expected, $actual)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway initial staged package fingerprint does not match the bootstrap journal.',
+                );
+            }
+        }
+    }
+
+    /**
+     * Remove only the newly installed, identity-verified gateway service and
+     * restore its previous immutable slot. The method never resolves or acts
+     * on the process that owns 80/443.
+     *
+     * @param array<string,mixed> $service
+     * @param array<string,mixed> $staged
+     * @param array<string,mixed> $status
+     * @return array<string,mixed>
+     */
+    private function rollbackInitialActivationAfterReadinessFailure(
+        array $service,
+        array $staged,
+        string $failureState,
+        array $status,
+        float $deadlineMonotonic,
+        array $journal,
+    ): array {
+        $failureState = \hash_equals('PORT_TAKEN', $failureState)
+            ? 'PORT_TAKEN'
+            : 'START_TIMEOUT';
         $rollbackReason = '';
         try {
-            $this->platform->removeDefinition((string)$service['kind']);
+            $this->platform->removeDefinition(
+                (string)$service['kind'],
+                $deadlineMonotonic,
+            );
             $this->packages->rollbackActivation(
                 (string)$staged['slot'],
                 (string)$staged['previous_active_slot'],
+                $deadlineMonotonic,
             );
+            $this->initialBootstrapJournal->remove($journal);
         } catch (\Throwable $throwable) {
-            $rollbackReason = ' Rollback requires attention: ' . $throwable->getMessage();
+            $rollbackReason = ' Rollback requires attention: '
+                . GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    512,
+                    'rollback failed',
+                );
         }
         return [
             'ok' => false,
             'ready' => false,
-            'state' => 'START_TIMEOUT',
-            'reason' => (string)($status['reason'] ?? 'Gateway did not prove release readiness within 45 seconds.')
-                . $rollbackReason,
-            'slot' => $staged['slot'],
+            'state' => $rollbackReason === ''
+                ? $failureState
+                : 'INSTALL_ROLLBACK_FAILED',
+            'reason' => ($failureState === 'PORT_TAKEN'
+                ? 'PORT_TAKEN: an unknown listener acquired a public gateway port after the installation preflight; WLS did not stop or modify it.'
+                : (string)($status['reason']
+                    ?? 'Gateway did not prove release readiness within 45 seconds.'))
+                    . $rollbackReason,
+            'slot' => (string)$staged['slot'],
+            'owner' => $failureState === 'PORT_TAKEN' ? 'unknown' : '',
         ];
     }
 
@@ -380,7 +1332,12 @@ final class GatewayHostManager
     public function stageLegacyPromotion(
         string $packageDirectory,
         string $profile = 'default',
+        ?float $deadlineMonotonic = null,
     ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROMOTION_OPERATION_TIMEOUT_SECONDS,
+        );
         GatewayProjectStateFilesystem::assertAtomicWriteRuntimeCapability();
         try {
             $installed = $this->platform->installedDefinition();
@@ -399,15 +1356,27 @@ final class GatewayHostManager
         $staged = null;
         $service = null;
         try {
-            $staged = $this->packages->stage($packageDirectory, $profile);
-            $service = $this->platform->installDefinition($profile);
-            $this->platform->secureInstalledRuntime();
+            $staged = $this->packages->stage(
+                $packageDirectory,
+                $profile,
+                $deadlineMonotonic,
+            );
+            $service = $this->platform->installDefinition(
+                $profile,
+                $deadlineMonotonic,
+            );
+            $this->platform->secureInstalledRuntime($deadlineMonotonic);
             return $staged + ['service' => $service, 'promotion_staged' => true];
         } catch (\Throwable $throwable) {
             $cleanupFailures = [];
+            $platformRemovalComplete = !\is_array($service);
             if (\is_array($service)) {
                 try {
-                    $this->platform->removeDefinition((string)$service['kind']);
+                    $this->platform->removeDefinition(
+                        (string)$service['kind'],
+                        $deadlineMonotonic,
+                    );
+                    $platformRemovalComplete = true;
                 } catch (\Throwable $cleanup) {
                     $cleanupFailures[] = 'platform definition: '
                         . GatewayBoundedText::singleLine(
@@ -417,9 +1386,12 @@ final class GatewayHostManager
                         );
                 }
             }
-            if (\is_array($staged)) {
+            if (\is_array($staged) && $platformRemovalComplete) {
                 try {
-                    $this->packages->discardStaged((string)$staged['slot']);
+                    $this->packages->discardStaged(
+                        (string)$staged['slot'],
+                        $deadlineMonotonic,
+                    );
                 } catch (\Throwable $cleanup) {
                     $cleanupFailures[] = 'runtime slot: '
                         . GatewayBoundedText::singleLine(
@@ -451,8 +1423,14 @@ final class GatewayHostManager
      * @param array<string,mixed> $staged
      * @return array<string,mixed>
      */
-    public function activateLegacyPromotion(array $staged): array
-    {
+    public function activateLegacyPromotion(
+        array $staged,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROMOTION_OPERATION_TIMEOUT_SECONDS,
+        );
         GatewayProjectStateFilesystem::assertAtomicWriteRuntimeCapability();
         $service = \is_array($staged['service'] ?? null)
             ? $staged['service']
@@ -473,8 +1451,8 @@ final class GatewayHostManager
                 . (string)($ports['reason'] ?? 'port unavailable')
             );
         }
-        $this->packages->activate($slot);
-        $this->platform->start($kind);
+        $this->packages->activate($slot, $deadlineMonotonic);
+        $this->platform->start($kind, $deadlineMonotonic);
         if ($this->paths->isTestMode()) {
             return [
                 'ok' => true,
@@ -484,10 +1462,13 @@ final class GatewayHostManager
             ];
         }
         $timeoutSeconds = self::legacyPromotionReadinessTimeoutSeconds();
-        $deadline = self::monotonicNow() + $timeoutSeconds;
+        $deadline = \min(
+            $deadlineMonotonic,
+            self::monotonicNow() + $timeoutSeconds,
+        );
         do {
-            \usleep(100000);
-            $status = $this->administratorStatus();
+            $this->waitForPublicationDelay(0.1, $deadline);
+            $status = $this->administratorStatus($deadlineMonotonic);
             if (self::hostStatusMatchesRuntimeIdentity(
                 $status,
                 $slot,
@@ -495,10 +1476,45 @@ final class GatewayHostManager
             )) {
                 return $status + ['promotion_activated' => true, 'slot' => $slot];
             }
+            if (self::hostStatusIsTrustedPortTaken(
+                $status,
+                $slot,
+                (string)($staged['runtime_generation'] ?? ''),
+            )) {
+                $this->failLegacyPromotionForTrustedPortTaken(
+                    $staged,
+                    $deadlineMonotonic,
+                );
+            }
         } while (self::monotonicNow() < $deadline);
         throw new \RuntimeException(
             'Promoted host gateway did not become ready within '
                 . \number_format($timeoutSeconds, 0, '.', '') . ' seconds.'
+        );
+    }
+
+    /** @param array<string,mixed> $staged */
+    private function failLegacyPromotionForTrustedPortTaken(
+        array $staged,
+        float $deadlineMonotonic,
+    ): never
+    {
+        try {
+            $this->quiesceLegacyPromotion($staged, $deadlineMonotonic);
+        } catch (\Throwable $quiesce) {
+            throw new \RuntimeException(
+                'PORT_TAKEN: an unknown listener acquired a public gateway port during promotion; WLS did not stop or modify it. Gateway quiesce failed, so its service definition and slot remain for promotion-journal recovery: '
+                    . GatewayBoundedText::singleLine(
+                        $quiesce->getMessage(),
+                        512,
+                        'quiesce failed',
+                    ),
+                0,
+                $quiesce,
+            );
+        }
+        throw new \RuntimeException(
+            'PORT_TAKEN: an unknown listener acquired a public gateway port during promotion; WLS did not stop or modify it. The owned gateway was quiesced; the promotion journal must restore and probe the legacy owner before removing the service definition or rolling back its slot.'
         );
     }
 
@@ -516,8 +1532,15 @@ final class GatewayHostManager
     /**
      * @param array<string,mixed> $staged
      */
-    public function abortLegacyPromotion(array $staged, bool $activated): void
-    {
+    public function abortLegacyPromotion(
+        array $staged,
+        bool $activated,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROMOTION_OPERATION_TIMEOUT_SECONDS,
+        );
         $service = \is_array($staged['service'] ?? null)
             ? $staged['service']
             : [];
@@ -528,7 +1551,7 @@ final class GatewayHostManager
             // service definition whose durable removal has not completed.
             // removeDefinition owns an idempotent pending-removal fence, so
             // surface failures and let the promotion journal retry them.
-            $this->platform->removeDefinition($kind);
+            $this->platform->removeDefinition($kind, $deadlineMonotonic);
         }
         if (!\in_array($slot, ['A', 'B'], true)) {
             return;
@@ -546,7 +1569,11 @@ final class GatewayHostManager
                 $staged['previous_active_slot'] ?? ''
             )));
             if (\hash_equals($slot, $actualActive)) {
-                $this->packages->rollbackActivation($slot, $previous);
+                $this->packages->rollbackActivation(
+                    $slot,
+                    $previous,
+                    $deadlineMonotonic,
+                );
             } elseif (($previous !== '' && \hash_equals($previous, $actualActive))
                 || ($previous === '' && $actualActive === '')
             ) {
@@ -565,7 +1592,7 @@ final class GatewayHostManager
             if (!\file_exists($slotDirectory) && !\is_link($slotDirectory)) {
                 return;
             }
-            $this->packages->discardStaged($slot);
+            $this->packages->discardStaged($slot, $deadlineMonotonic);
         }
     }
 
@@ -577,8 +1604,14 @@ final class GatewayHostManager
      *
      * @param array<string,mixed> $staged
      */
-    public function quiesceLegacyPromotion(array $staged): void
-    {
+    public function quiesceLegacyPromotion(
+        array $staged,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROMOTION_OPERATION_TIMEOUT_SECONDS,
+        );
         $service = \is_array($staged['service'] ?? null)
             ? $staged['service']
             : [];
@@ -588,18 +1621,23 @@ final class GatewayHostManager
                 'Legacy promotion service identity is invalid.'
             );
         }
-        $this->platform->stop($kind);
+        $this->platform->stop($kind, $deadlineMonotonic);
     }
 
     /** @return array<string,mixed> */
     public function enrollCurrentProjectForPromotion(
         GatewayRegistrationBuilder $builder,
         string $projectRoot,
+        ?float $deadlineMonotonic = null,
     ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROMOTION_REGISTRATION_TIMEOUT_SECONDS,
+        );
         $projectFacts = $this->withPromotionProjectOwnerIdentity(
             $projectRoot,
             static fn (): array => [
-                'project_uuid' => $builder->projectUuid(),
+                'project_uuid' => $builder->projectUuid($deadlineMonotonic),
                 'certificate_roots' => $builder->enrollmentCertificateRoots($projectRoot),
                 'allowed_domains' => $builder->desiredDomains(),
             ],
@@ -626,7 +1664,11 @@ final class GatewayHostManager
             'capabilities' => ['acme_http_01' => true],
             ...$ownerProof,
         ]);
-        $response = $this->client->request('enroll', $enrollment);
+        $response = $this->client->request(
+            'enroll',
+            $enrollment,
+            $deadlineMonotonic,
+        );
         if (!($response['ok'] ?? false)) {
             throw new \RuntimeException(
                 (string)($response['error']['message'] ?? 'Promotion enrollment failed.')
@@ -645,10 +1687,15 @@ final class GatewayHostManager
                 : [],
             $enrollment,
         );
-        (new GatewayCredentialStore())->install($credential, $projectUuid);
+        (new GatewayCredentialStore())->install(
+            $credential,
+            $projectUuid,
+            $deadlineMonotonic,
+        );
         if (!$this->paths->isTestMode()) {
             $this->awaitPromotionEnrollmentDurability(
                 (int)$receipt['security_generation'],
+                $deadlineMonotonic,
             );
         }
         unset($payload['credential']);
@@ -851,6 +1898,7 @@ final class GatewayHostManager
 
     private function awaitPromotionEnrollmentDurability(
         int $expectedSecurityGeneration,
+        ?float $deadlineMonotonic = null,
     ): void
     {
         if ($expectedSecurityGeneration < 1) {
@@ -859,11 +1907,14 @@ final class GatewayHostManager
             );
         }
         $timeoutSeconds = self::PROMOTION_ENROLLMENT_READY_TIMEOUT_SECONDS;
-        $deadline = \hrtime(true) / 1_000_000_000 + $timeoutSeconds;
+        $deadline = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            $timeoutSeconds,
+        );
         $lastStatus = [];
         do {
             $this->serviceProgressCallback($deadline);
-            $status = $this->administratorStatus();
+            $status = $this->administratorStatus($deadline);
             $lastStatus = $status;
             $controlGeneration = (int)($status['control_generation'] ?? 0);
             if (self::hostStatusIsTrustedReady($status)
@@ -871,7 +1922,7 @@ final class GatewayHostManager
             ) {
                 return;
             }
-            \usleep(100000);
+            $this->waitForPublicationDelay(0.1, $deadline);
         } while (\hrtime(true) / 1_000_000_000 < $deadline);
         throw new \RuntimeException(
             'Promotion enrollment was not durably observable on a ready gateway within '
@@ -893,12 +1944,23 @@ final class GatewayHostManager
     public function registerCurrentProjectForPromotion(
         string $instanceName,
         string $projectRoot,
+        ?float $deadlineMonotonic = null,
     ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROMOTION_REGISTRATION_TIMEOUT_SECONDS,
+        );
         return $this->withPromotionProjectOwnerIdentity(
             $projectRoot,
-            function () use ($instanceName): array {
-                $registration = (new GatewayRegistrationBuilder())->build($instanceName);
-                return $this->submitRegistration($registration);
+            function () use ($instanceName, $deadlineMonotonic): array {
+                $registration = (new GatewayRegistrationBuilder())->build(
+                    $instanceName,
+                    $deadlineMonotonic,
+                );
+                return $this->submitRegistration(
+                    $registration,
+                    $deadlineMonotonic,
+                );
             },
         );
     }
@@ -916,13 +1978,24 @@ final class GatewayHostManager
         string $projectRoot,
         float $timeoutSeconds = 120.0,
         float $stableSeconds = 12.0,
+        ?float $deadlineMonotonic = null,
     ): array {
+        $timeoutSeconds = \max(1.0, $timeoutSeconds);
+        $stableSeconds = \max(1.0, \min(30.0, $stableSeconds));
+        $convergenceDeadline = \hrtime(true) / 1_000_000_000 + $timeoutSeconds;
+        $operationDeadline = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            $timeoutSeconds + $stableSeconds,
+        );
         return $this->withPromotionProjectOwnerIdentity(
             $projectRoot,
-            function () use ($instanceName, $timeoutSeconds, $stableSeconds): array {
-                $timeoutSeconds = \max(1.0, $timeoutSeconds);
-                $stableSeconds = \max(1.0, \min(30.0, $stableSeconds));
-                $deadline = \hrtime(true) / 1_000_000_000 + $timeoutSeconds;
+            function () use (
+                $instanceName,
+                $timeoutSeconds,
+                $stableSeconds,
+                $convergenceDeadline,
+                $operationDeadline,
+            ): array {
                 $healthySince = 0.0;
                 $lastReason = 'project Agent has not published an active route';
                 $lastStatus = [];
@@ -930,14 +2003,17 @@ final class GatewayHostManager
                 $probe = new GatewayPublicRouteProbe();
 
                 while (true) {
-                    $this->serviceProgressCallback($deadline);
+                    $this->serviceProgressCallback($operationDeadline);
                     $now = \hrtime(true) / 1_000_000_000;
-                    $status = $this->status(1.0);
+                    $status = $this->status(1.0, $operationDeadline);
                     $lastStatus = $status;
                     $registration = null;
                     try {
                         if (($status['ok'] ?? false) && ($status['ready'] ?? false)) {
-                            $registration = $builder->build($instanceName);
+                            $registration = $builder->build(
+                                $instanceName,
+                                $operationDeadline,
+                            );
                         }
                     } catch (\Throwable $throwable) {
                         $lastReason = $throwable->getMessage();
@@ -1005,6 +2081,8 @@ final class GatewayHostManager
                             $publicHealthy = $probe->registrationIsHealthy(
                                 $registration,
                                 (int)($status['public_https'] ?? 0),
+                                null,
+                                $operationDeadline,
                             );
                         } catch (\Throwable $throwable) {
                             $lastReason = $throwable->getMessage();
@@ -1048,9 +2126,9 @@ final class GatewayHostManager
                     }
                     if (self::promotionActivationTimedOut(
                         $now,
-                        $deadline,
+                        $convergenceDeadline,
                         $stableSeconds,
-                    )) {
+                    ) || $now >= $operationDeadline) {
                         throw new \RuntimeException(
                             'Promoted project did not become durably reachable through its '
                                 . 'Gateway Agent within '
@@ -1059,7 +2137,7 @@ final class GatewayHostManager
                                 . '; gateway_state=' . (string)($lastStatus['state'] ?? 'unavailable')
                         );
                     }
-                    \usleep(200000);
+                    $this->waitForPublicationDelay(0.2, $operationDeadline);
                 }
             },
         );
@@ -1304,9 +2382,20 @@ final class GatewayHostManager
      *
      * @return array<string,mixed>
      */
-    public function stagePackage(string $packageDirectory, string $profile = 'default'): array
-    {
-        return $this->packages->stage($packageDirectory, $profile);
+    public function stagePackage(
+        string $packageDirectory,
+        string $profile = 'default',
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::UPGRADE_OPERATION_TIMEOUT_SECONDS,
+        );
+        return $this->packages->stage(
+            $packageDirectory,
+            $profile,
+            $deadlineMonotonic,
+        );
     }
 
     /**
@@ -1317,12 +2406,27 @@ final class GatewayHostManager
      *
      * @return array<string,mixed>
      */
-    public function upgrade(string $packageDirectory, string $profile = 'default'): array
-    {
+    public function upgrade(
+        string $packageDirectory,
+        string $profile = 'default',
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::UPGRADE_OPERATION_TIMEOUT_SECONDS,
+        );
+        $forwardDeadline = $this->operationDeadlineWithReservedCompensation(
+            $deadlineMonotonic,
+            self::UPGRADE_COMPENSATION_RESERVE_SECONDS,
+        );
+        $this->packages->assertNoActiveRebootstrap(
+            'Gateway A/B upgrade',
+            $forwardDeadline,
+        );
         $service = null;
         $before = null;
         if (!$this->paths->isTestMode()) {
-            $before = $this->administratorStatus();
+            $before = $this->administratorStatus($forwardDeadline);
             if (!self::hostStatusIsTrustedReady($before)) {
                 throw new \RuntimeException(
                     'Gateway must be healthy before an A/B package upgrade: '
@@ -1333,14 +2437,27 @@ final class GatewayHostManager
         $staged = null;
         $observation = null;
         try {
-            $staged = $this->packages->stage($packageDirectory, $profile);
+            $staged = $this->packages->stage(
+                $packageDirectory,
+                $profile,
+                $forwardDeadline,
+            );
             // Platform limits and sandbox policy are part of the gateway
             // release contract too. Refresh only the immutable supervisor
             // definition: installation-time permission sealing must not race
             // the running Controller's atomic state publications.
-            $service = $this->platform->refreshDefinition($profile);
-            $observation = $this->packages->beginUpgradeActivation($staged);
-            $this->platform->restartControlPlane((string)$service['kind']);
+            $service = $this->platform->refreshDefinition(
+                $profile,
+                $forwardDeadline,
+            );
+            $observation = $this->packages->beginUpgradeActivation(
+                $staged,
+                $forwardDeadline,
+            );
+            $this->platform->restartControlPlane(
+                (string)$service['kind'],
+                $forwardDeadline,
+            );
             if ($this->paths->isTestMode()) {
                 return [
                     'accepted' => true,
@@ -1349,18 +2466,19 @@ final class GatewayHostManager
                     'platform_service' => (string)$service['kind'],
                     'slot' => (string)$staged['slot'],
                     'runtime_generation' => (string)$staged['runtime_generation'],
-                    'observation' => $observation,
+                    'observation' => self::publicUpgradeObservation($observation),
                 ];
             }
             $status = $this->awaitUpgradeIdentity(
                 (string)$staged['slot'],
                 (string)$staged['runtime_generation'],
+                $forwardDeadline,
             );
             if ($status !== null) {
                 return $status + [
                     'accepted' => true,
                     'platform_service' => (string)$service['kind'],
-                    'observation' => $observation,
+                    'observation' => self::publicUpgradeObservation($observation),
                 ];
             }
             throw new \RuntimeException(
@@ -1377,16 +2495,30 @@ final class GatewayHostManager
                     $this->packages->rollbackUpgradeActivation(
                         (string)$staged['slot'],
                         $previousSlot,
+                        \is_array($observation['rollback_context'] ?? null)
+                            ? $observation['rollback_context']
+                            : [],
+                        $deadlineMonotonic,
                     );
-                    $this->platform->restartControlPlane((string)$service['kind']);
+                    $this->platform->restartControlPlane(
+                        (string)$service['kind'],
+                        $deadlineMonotonic,
+                    );
                     if (!$this->paths->isTestMode()
-                        && $this->awaitUpgradeIdentity($previousSlot, $previousGeneration) === null
+                        && $this->awaitUpgradeIdentity(
+                            $previousSlot,
+                            $previousGeneration,
+                            $deadlineMonotonic,
+                        ) === null
                     ) {
                         throw new \RuntimeException(
                             'The previous gateway slot did not recover its verified identity after rollback.'
                         );
                     }
-                    $this->packages->discardStaged((string)$staged['slot']);
+                    $this->packages->discardStaged(
+                        (string)$staged['slot'],
+                        $deadlineMonotonic,
+                    );
                 } catch (\Throwable $rollback) {
                     throw new \RuntimeException(
                         $throwable->getMessage()
@@ -1398,7 +2530,10 @@ final class GatewayHostManager
                 }
             } elseif (\is_array($staged)) {
                 try {
-                    $this->packages->discardStaged((string)$staged['slot']);
+                    $this->packages->discardStaged(
+                        (string)$staged['slot'],
+                        $deadlineMonotonic,
+                    );
                 } catch (\Throwable $cleanup) {
                     throw new \RuntimeException(
                         GatewayBoundedText::singleLine(
@@ -1420,14 +2555,1735 @@ final class GatewayHostManager
         }
     }
 
-    /** @return array<string,mixed>|null */
-    private function awaitUpgradeIdentity(string $slot, string $runtimeGeneration): ?array
+    /**
+     * Explicit WLS 2.0 v1 maintenance rebootstrap for a changed stable
+     * launcher generation. This is crash-resumable when the administrator
+     * reruns the same signed package and nonce. A platform daemon may restart
+     * an already authorized exact generation, but never advances or commits
+     * this administrator-owned transaction by itself.
+     *
+     * @return array<string,mixed>
+     */
+    public function rebootstrap(
+        string $packageDirectory,
+        string $profile,
+        string $nonce,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::REBOOTSTRAP_OPERATION_TIMEOUT_SECONDS,
+        );
+        $forwardDeadline = $this->operationDeadlineWithRequiredCompensation(
+            $deadlineMonotonic,
+            self::REBOOTSTRAP_COMPENSATION_RESERVE_SECONDS,
+        );
+        GatewayProjectStateFilesystem::assertAtomicWriteRuntimeCapability();
+        $profile = self::normalizeListenProfile($profile);
+        $prepared = $this->packages->prepareRebootstrapCandidate(
+            $packageDirectory,
+            $profile,
+            $nonce,
+            $forwardDeadline,
+        );
+        $packageDigest = (string)($prepared['package_digest'] ?? '');
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $packageDigest) !== 1) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap preparation returned an invalid package identity.'
+            );
+        }
+        if (\in_array((string)($prepared['phase'] ?? ''), [
+            'COMMITTED',
+            'ROLLED_BACK',
+        ], true)) {
+            $prepared = \hash_equals(
+                'COMMITTED',
+                (string)$prepared['phase'],
+            )
+                ? $this->packages->commitRebootstrap(
+                    $nonce,
+                    $packageDigest,
+                    $profile,
+                    $forwardDeadline,
+                )
+                : $this->packages->completeRebootstrapRollback(
+                    $nonce,
+                    $packageDigest,
+                    $profile,
+                    $forwardDeadline,
+                );
+            return $this->rebootstrapTerminalResult($prepared);
+        }
+
+        try {
+            for ($step = 0; $step < 24; $step++) {
+                $transaction = $this->packages->rebootstrapStatus(
+                    $nonce,
+                    $forwardDeadline,
+                );
+                if ($transaction === null) {
+                    throw new \RuntimeException(
+                        'Gateway rebootstrap journal disappeared before terminal receipt publication.'
+                    );
+                }
+                $phase = (string)$transaction['phase'];
+                if (\hash_equals('PREPARED', $phase)) {
+                    $snapshot = $transaction['platform_snapshot'] ?? null;
+                    if (!\is_array($snapshot)) {
+                        $snapshot = $this->platform
+                            ->snapshotRebootstrapDefinition(
+                                $nonce,
+                                $forwardDeadline,
+                            );
+                        $transaction = $this->packages->recordRebootstrapEvidence(
+                            $nonce,
+                            $packageDigest,
+                            $profile,
+                            'PREPARED',
+                            ['platform_snapshot' => $snapshot],
+                            $forwardDeadline,
+                        );
+                    }
+                    $transaction = $this->packages
+                        ->ensureRebootstrapCapacityReserve(
+                            $nonce,
+                            $packageDigest,
+                            $profile,
+                            $forwardDeadline,
+                        );
+                    $this->packages->verifyRebootstrapCapacityReserveHeld(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    $intent = $this->readVerifiedAdminStoppedIntent(
+                        $forwardDeadline,
+                    );
+                    if ($intent !== null) {
+                        $epoch = $this->adminStoppedIntentEpoch($intent);
+                        $this->packages->advanceRebootstrapPhase(
+                            $nonce,
+                            $packageDigest,
+                            $profile,
+                            'PREPARED',
+                            'STOP_COMMITTED',
+                            [
+                                'admin_stopped_contents' => $intent,
+                                'gateway_epoch' => $epoch,
+                            ],
+                            $forwardDeadline,
+                        );
+                        continue;
+                    }
+                    $status = $this->administratorStatus($forwardDeadline);
+                    if (!self::hostStatusIsTrustedReady($status)) {
+                        throw new \RuntimeException(
+                            'Gateway must be identity-verified and healthy before the maintenance stop: '
+                                . (string)($status['reason'] ?? 'status unavailable')
+                        );
+                    }
+                    $epoch = \strtolower(\trim((string)($status['epoch'] ?? '')));
+                    if (\preg_match('/\A[a-f0-9]{32}\z/D', $epoch) !== 1) {
+                        throw new \RuntimeException(
+                            'Gateway maintenance stop did not have a trusted epoch.'
+                        );
+                    }
+                    // The reserve must still be physically present at the
+                    // last fail-closed boundary before retiring public
+                    // traffic. Candidate preparation and status probing are
+                    // intentionally outside that trusted interval.
+                    $this->packages->verifyRebootstrapCapacityReserveHeld(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    $response = $this->client->request('stop', [
+                        'force' => true,
+                        'confirm' => true,
+                    ], $forwardDeadline);
+                    if (!($response['ok'] ?? false)) {
+                        throw new \RuntimeException(
+                            (string)($response['error']['message']
+                                ?? 'Gateway maintenance stop failed.')
+                        );
+                    }
+                    $payload = \is_array($response['payload'] ?? null)
+                        ? $response['payload']
+                        : [];
+                    $intent = $this->readVerifiedAdminStoppedIntent(
+                        $forwardDeadline,
+                    );
+                    if ($intent === null
+                        || !\hash_equals(
+                            $epoch,
+                            $this->adminStoppedIntentEpoch($intent),
+                        )
+                    ) {
+                        throw new \RuntimeException(
+                            'Gateway maintenance stop did not publish the expected signed ADMIN_STOPPED intent.'
+                        );
+                    }
+                    $this->packages->advanceRebootstrapPhase(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        'PREPARED',
+                        'STOP_COMMITTED',
+                        [
+                            'admin_stopped_contents' => $intent,
+                            'gateway_epoch' => $epoch,
+                        ],
+                        $forwardDeadline,
+                    );
+                    $this->platform->stop(
+                        (string)$snapshot['kind'],
+                        $forwardDeadline,
+                    );
+                    if (($payload['accepted'] ?? false) !== true
+                        || ($payload['data_plane_stopped'] ?? false) !== true
+                        || ($payload['manual_cleanup_required'] ?? true) !== false
+                    ) {
+                        throw new \RuntimeException(
+                            'Gateway stop intent is persistent, but Controller did not prove complete data-plane retirement; the host remains stopped for whole-generation rollback.'
+                        );
+                    }
+                    continue;
+                }
+                if (\hash_equals('STOP_COMMITTED', $phase)) {
+                    $this->packages->verifyRebootstrapCapacityReserveHeld(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    $snapshot = $this->requiredRebootstrapPlatformSnapshot(
+                        $transaction,
+                    );
+                    $this->platform->stop(
+                        (string)$snapshot['kind'],
+                        $forwardDeadline,
+                    );
+                    $this->assertRebootstrapQuiescent(
+                        $transaction,
+                        $profile,
+                        $snapshot,
+                        $forwardDeadline,
+                    );
+                    $this->packages->advanceRebootstrapPhase(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        'STOP_COMMITTED',
+                        'QUIESCED',
+                        [],
+                        $forwardDeadline,
+                    );
+                    continue;
+                }
+                if (\hash_equals('QUIESCED', $phase)) {
+                    $snapshot = $this->requiredRebootstrapPlatformSnapshot(
+                        $transaction,
+                    );
+                    $this->assertRebootstrapQuiescent(
+                        $transaction,
+                        $profile,
+                        $snapshot,
+                        $forwardDeadline,
+                    );
+                    $releaseReason = (string)(
+                        $transaction['capacity_reserve_release_reason'] ?? ''
+                    );
+                    if (\hash_equals('rollback', $releaseReason)) {
+                        $result = $this->performRebootstrapRollback(
+                            $transaction,
+                            $nonce,
+                            $packageDigest,
+                            $profile,
+                            (string)($transaction['failure_reason']
+                                ?? 'Gateway rebootstrap rollback capacity release resumed.'),
+                            $forwardDeadline,
+                        );
+                        return $this->rebootstrapTerminalResult($result);
+                    }
+                    if ($releaseReason !== ''
+                        && !\hash_equals('forward', $releaseReason)
+                    ) {
+                        throw new \RuntimeException(
+                            'Gateway quiesced capacity reserve has an invalid release path.'
+                        );
+                    }
+                    $transaction = $this->packages
+                        ->releaseRebootstrapCapacityReserve(
+                            $nonce,
+                            $packageDigest,
+                            $profile,
+                            'forward',
+                            $forwardDeadline,
+                        );
+                    $this->packages->publishRebootstrapGeneration(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    continue;
+                }
+                if (\hash_equals('OLD_GENERATION_STASHED', $phase)) {
+                    $snapshot = $this->requiredRebootstrapPlatformSnapshot(
+                        $transaction,
+                    );
+                    $this->assertRebootstrapQuiescent(
+                        $transaction,
+                        $profile,
+                        $snapshot,
+                        $forwardDeadline,
+                    );
+                    $this->packages->publishRebootstrapGeneration(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    continue;
+                }
+                if (\hash_equals('NEW_GENERATION_PUBLISHED', $phase)) {
+                    $snapshot = $this->requiredRebootstrapPlatformSnapshot(
+                        $transaction,
+                    );
+                    $this->assertRebootstrapQuiescent(
+                        $transaction,
+                        $profile,
+                        $snapshot,
+                        $forwardDeadline,
+                    );
+                    $service = $this->platform->refreshDefinition(
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    if (!\hash_equals(
+                            (string)$snapshot['kind'],
+                            (string)$service['kind'],
+                        )
+                    ) {
+                        throw new \RuntimeException(
+                            'Refreshed gateway platform definition changed service identity.'
+                        );
+                    }
+                    $this->platform->persistentStoppedProof(
+                        (string)$snapshot['kind'],
+                        $forwardDeadline,
+                    );
+                    $this->packages->advanceRebootstrapPhase(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        'NEW_GENERATION_PUBLISHED',
+                        'PLATFORM_REFRESHED',
+                        [],
+                        $forwardDeadline,
+                    );
+                    continue;
+                }
+                if (\hash_equals('PLATFORM_REFRESHED', $phase)) {
+                    $snapshot = $this->requiredRebootstrapPlatformSnapshot(
+                        $transaction,
+                    );
+                    $this->assertRebootstrapQuiescent(
+                        $transaction,
+                        $profile,
+                        $snapshot,
+                        $forwardDeadline,
+                    );
+                    // START_AUTHORIZED is itself a native launch capability.
+                    // Seal and re-prove the retained generation before the
+                    // authenticated journal is allowed to enter that phase.
+                    $this->platform->secureRebootstrapBackup(
+                        $nonce,
+                        $forwardDeadline,
+                    );
+                    if ($this->paths->isTestMode()
+                        && \hash_equals(
+                            'forward:after-backup-sealed-before-start-authorization',
+                            \trim((string)(
+                                \getenv('WLS_GATEWAY_TEST_REBOOTSTRAP_FAULT')
+                                    ?: ''
+                            )),
+                        )
+                    ) {
+                        throw new GatewayRebootstrapCrashSimulation(
+                            'Simulated gateway rebootstrap crash at forward:after-backup-sealed-before-start-authorization.',
+                        );
+                    }
+                    $this->packages->advanceRebootstrapPhase(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        'PLATFORM_REFRESHED',
+                        'START_AUTHORIZED',
+                        [],
+                        $forwardDeadline,
+                    );
+                    continue;
+                }
+                if (\hash_equals('START_AUTHORIZED', $phase)) {
+                    $this->startRebootstrapGeneration(
+                        $transaction,
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    continue;
+                }
+                if (\hash_equals('OBSERVING', $phase)) {
+                    if (!$this->paths->isTestMode()) {
+                        $this->awaitRebootstrapIdentity(
+                            $transaction,
+                            $forwardDeadline,
+                        );
+                    }
+                    $result = $this->packages->commitRebootstrap(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    return $this->rebootstrapTerminalResult($result);
+                }
+                if (\in_array($phase, [
+                    'ROLLING_BACK',
+                    'ROLLBACK_START_AUTHORIZED',
+                    'ROLLBACK_OBSERVING',
+                ], true)) {
+                    $result = $this->resumeRebootstrapRollback(
+                        $transaction,
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $forwardDeadline,
+                    );
+                    return $this->rebootstrapTerminalResult($result);
+                }
+                if (\in_array($phase, ['COMMITTED', 'ROLLED_BACK'], true)) {
+                    return $this->rebootstrapTerminalResult($transaction);
+                }
+                throw new \RuntimeException(
+                    'Gateway rebootstrap cannot resume unsupported phase '
+                        . $phase . '.'
+                );
+            }
+            throw new \RuntimeException(
+                'Gateway rebootstrap exceeded its bounded phase transition count.'
+            );
+        } catch (\Throwable $throwable) {
+            if ($throwable instanceof GatewayRebootstrapCrashSimulation) {
+                // Test-only power-loss boundary: preserve the authenticated
+                // journal exactly as a real process death would.
+                throw $throwable;
+            }
+            try {
+                $transaction = $this->packages->rebootstrapStatus(
+                    $nonce,
+                    $deadlineMonotonic,
+                );
+                if ($transaction !== null
+                    && !\in_array((string)$transaction['phase'], [
+                        'COMMITTED',
+                        'ROLLED_BACK',
+                    ], true)
+                ) {
+                    if (\hash_equals(
+                        'PREPARED',
+                        (string)$transaction['phase'],
+                    ) && $this->readVerifiedAdminStoppedIntent(
+                        $deadlineMonotonic,
+                    ) === null) {
+                        $this->packages->cancelPreparedRebootstrap(
+                            $nonce,
+                            $packageDigest,
+                            $profile,
+                            $throwable->getMessage(),
+                            $deadlineMonotonic,
+                        );
+                        $this->packages->completePreparedRebootstrapCancellation(
+                            $nonce,
+                            $packageDigest,
+                            $profile,
+                            $deadlineMonotonic,
+                        );
+                        $this->packages->assertNoActiveRebootstrap(
+                            'Gateway pre-stop rebootstrap cleanup',
+                            $deadlineMonotonic,
+                        );
+                    } else {
+                        $this->prepareRebootstrapFailureRollback(
+                            $transaction,
+                            $nonce,
+                            $packageDigest,
+                            $profile,
+                            $throwable,
+                            $deadlineMonotonic,
+                        );
+                    }
+                }
+            } catch (\Throwable $rollback) {
+                if ($rollback instanceof GatewayRebootstrapCrashSimulation) {
+                    throw $rollback;
+                }
+                throw new \RuntimeException(
+                    GatewayBoundedText::singleLine(
+                        $throwable->getMessage(),
+                        1536,
+                        'Gateway rebootstrap failed.',
+                    ) . ' Whole-generation rollback remains journaled and also failed: '
+                        . GatewayBoundedText::singleLine(
+                            $rollback->getMessage(),
+                            512,
+                            'rollback failed',
+                        ),
+                    0,
+                    $throwable,
+                );
+            }
+            throw $throwable;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $transaction
+     * @return array<string,mixed>
+     */
+    private function rebootstrapTerminalResult(array $transaction): array
     {
-        $deadline = \hrtime(true) / 1_000_000_000
-            + self::upgradeReadinessTimeoutSeconds();
+        $phase = (string)($transaction['phase'] ?? '');
+        if (!\in_array($phase, ['COMMITTED', 'ROLLED_BACK'], true)) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap did not publish a terminal result.'
+            );
+        }
+        $committed = \hash_equals('COMMITTED', $phase);
+        $trustRotated = $committed
+            && (bool)($transaction['trust_rotation'] ?? false);
+        $oldEpoch = (string)($transaction['old_gateway_epoch'] ?? '');
+        $newEpoch = (string)($transaction['new_gateway_epoch'] ?? '');
+        $activeEpoch = $committed ? $newEpoch : $oldEpoch;
+        if (($committed || $activeEpoch !== '')
+            && \preg_match('/\A[a-f0-9]{32}\z/D', $activeEpoch) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap terminal epoch evidence is incomplete.'
+            );
+        }
+        $result = $transaction;
+        // gateway_epoch remains an old-epoch alias inside the authenticated
+        // journal. Project the actually active epoch at the public boundary.
+        $result['gateway_epoch'] = $activeEpoch;
+        $result['active_gateway_epoch'] = $activeEpoch;
+        $result['accepted'] = $committed;
+        $result['persistent'] = true;
+        $result['gateway_epoch_preserved'] = !$trustRotated;
+        return $result;
+    }
+
+    private function readVerifiedAdminStoppedIntent(
+        ?float $deadlineMonotonic = null,
+    ): ?string
+    {
+        return $this->withAdminStoppedIntentTransaction(function (): ?string {
+            $file = $this->paths->adminStoppedIntentFile();
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                $file,
+                4096,
+                'ADMIN_STOPPED intent',
+                function (string $contents): void {
+                    $this->assertAdminStoppedIntent($contents);
+                },
+            );
+            if (!\file_exists($file) && !\is_link($file)) {
+                return null;
+            }
+            $contents = $this->readStableRegularFile(
+                $file,
+                4096,
+                'ADMIN_STOPPED intent',
+            );
+            $this->assertAdminStoppedIntent($contents);
+            return $contents;
+        }, $deadlineMonotonic);
+    }
+
+    private function adminStoppedIntentEpoch(string $intent): string
+    {
+        $this->assertAdminStoppedIntent($intent);
+        if (\preg_match(
+            '/\AWLS-ADMIN-STOPPED\/1\n'
+                . 'host_id=[a-f0-9]{32}\n'
+                . 'epoch=([a-f0-9]{32})\n/D',
+            $intent,
+            $matches,
+        ) !== 1) {
+            throw new \RuntimeException(
+                'ADMIN_STOPPED intent does not contain a valid gateway epoch.'
+            );
+        }
+        return (string)$matches[1];
+    }
+
+    /**
+     * @param array<string,mixed> $transaction
+     * @return array{kind:string,profile:string,definition_sha256:string,metadata_sha256:string}
+     */
+    private function requiredRebootstrapPlatformSnapshot(
+        array $transaction,
+    ): array {
+        $snapshot = $transaction['platform_snapshot'] ?? null;
+        $keys = \is_array($snapshot) ? \array_keys($snapshot) : [];
+        \sort($keys, SORT_STRING);
+        if (!\is_array($snapshot)
+            || $keys !== [
+                'definition_sha256',
+                'kind',
+                'metadata_sha256',
+                'profile',
+            ]
+            || !\in_array((string)($snapshot['kind'] ?? ''), [
+                'test-session',
+                'launchd-system',
+                'systemd-system',
+                'windows-service',
+            ], true)
+            || !\in_array((string)($snapshot['profile'] ?? ''), [
+                'default',
+                'ipv4-only',
+            ], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $snapshot['definition_sha256'] ?? ''
+            )) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $snapshot['metadata_sha256'] ?? ''
+            )) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap platform snapshot evidence is missing or invalid.'
+            );
+        }
+        /** @var array{kind:string,profile:string,definition_sha256:string,metadata_sha256:string} $snapshot */
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string,mixed> $transaction
+     * @param array{kind:string,profile:string,definition_sha256:string,metadata_sha256:string} $snapshot
+     */
+    private function assertRebootstrapQuiescent(
+        array $transaction,
+        string $profile,
+        array $snapshot,
+        float $deadlineMonotonic,
+    ): void {
+        $profile = self::normalizeListenProfile($profile);
+        if (!\hash_equals($profile, (string)$snapshot['profile'])) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap profile changed after the platform snapshot.'
+            );
+        }
+        $expectedIntent = $this->packages->rebootstrapAdminStoppedIntent(
+            (string)$transaction['nonce'],
+            (string)$transaction['package_digest'],
+            $profile,
+            $deadlineMonotonic,
+        );
+        $intent = $this->readVerifiedAdminStoppedIntent($deadlineMonotonic);
+        if ($intent === null || !\hash_equals($expectedIntent, $intent)) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap requires the exact signed ADMIN_STOPPED intent.'
+            );
+        }
+        $epoch = $this->adminStoppedIntentEpoch($intent);
+        if (!\hash_equals((string)$transaction['gateway_epoch'], $epoch)) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap ADMIN_STOPPED epoch changed during recovery.'
+            );
+        }
+        $stopped = $this->platform->persistentStoppedProof(
+            (string)$snapshot['kind'],
+            $deadlineMonotonic,
+        );
+        $phase = (string)($transaction['phase'] ?? '');
+        if (\in_array($phase, [
+            'STOP_COMMITTED',
+            'QUIESCED',
+            'OLD_GENERATION_STASHED',
+            'NEW_GENERATION_PUBLISHED',
+        ], true)
+            && (!\hash_equals(
+                (string)$snapshot['definition_sha256'],
+                (string)($stopped['definition_sha256'] ?? ''),
+            ) || !\hash_equals(
+                (string)$snapshot['metadata_sha256'],
+                (string)($stopped['metadata_sha256'] ?? ''),
+            ))
+        ) {
+            throw new \RuntimeException(
+                'Gateway platform definition changed before its rebootstrap refresh.'
+            );
+        }
+
+        $runtimePaths = [];
+        foreach ([
+            $this->paths->launcherFile(),
+            $this->paths->slotDir('A'),
+            $this->paths->slotDir('B'),
+            $this->paths->rebootstrapCandidateDir((string)$transaction['nonce']),
+            $this->paths->rebootstrapBackupDir((string)$transaction['nonce'])
+                . DIRECTORY_SEPARATOR . 'slots' . DIRECTORY_SEPARATOR . 'A',
+            $this->paths->rebootstrapBackupDir((string)$transaction['nonce'])
+                . DIRECTORY_SEPARATOR . 'slots' . DIRECTORY_SEPARATOR . 'B',
+        ] as $path) {
+            if (\file_exists($path) || \is_link($path)) {
+                $runtimePaths[] = $path;
+            }
+        }
+        if ($runtimePaths === []) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap cannot prove an empty runtime generation.'
+            );
+        }
+        $this->packages->assertNoLiveProcessesForRuntimePaths(
+            $runtimePaths,
+            'whole-generation gateway rebootstrap',
+            $deadlineMonotonic,
+        );
+
+        if (!$this->paths->isTestMode()) {
+            $classification = $this->classifyPublicPortsReadOnly(
+                $profile,
+                $deadlineMonotonic,
+            );
+            if (!\hash_equals(
+                'AVAILABLE',
+                (string)($classification['state'] ?? ''),
+            )) {
+                throw new \RuntimeException(
+                    'Gateway rebootstrap public-listener proof failed: '
+                        . (string)($classification['reason'] ?? 'unknown state')
+                );
+            }
+        }
+        for ($probe = 0; $probe < 2; $probe++) {
+            $available = $this->publicPortsAvailable($profile);
+            if (($available['ok'] ?? false) !== true
+                || !\hash_equals(
+                    'AVAILABLE',
+                    (string)($available['state'] ?? ''),
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Gateway rebootstrap public ports are not quiescent: '
+                        . (string)($available['reason'] ?? 'bind proof failed')
+                );
+            }
+            if ($probe === 0) {
+                $this->waitForPublicationDelay(0.05, $deadlineMonotonic);
+            }
+        }
+    }
+
+    /** @param array<string,mixed> $transaction */
+    private function startRebootstrapGeneration(
+        array $transaction,
+        string $nonce,
+        string $packageDigest,
+        string $profile,
+        float $deadlineMonotonic,
+    ): void {
+        $forwardDeadline = $this->operationDeadlineWithRequiredCompensation(
+            $deadlineMonotonic,
+            self::SERVICE_START_COMPENSATION_RESERVE_SECONDS,
+        );
+        $snapshot = $this->requiredRebootstrapPlatformSnapshot($transaction);
+        $expectedIntent = $this->packages->rebootstrapAdminStoppedIntent(
+            $nonce,
+            $packageDigest,
+            $profile,
+            $forwardDeadline,
+        );
+        $currentIntent = $this->readVerifiedAdminStoppedIntent(
+            $forwardDeadline,
+        );
+        if ($currentIntent === null && !$this->paths->isTestMode()) {
+            $status = $this->administratorStatus($forwardDeadline);
+            if (self::hostStatusMatchesRuntimeControlIdentity(
+                $status,
+                'A',
+                (string)$transaction['runtime_generation'],
+            )) {
+                $epoch = $this->assertRebootstrapObservedEpoch(
+                    $transaction,
+                    $status,
+                );
+                $this->packages->advanceRebootstrapPhase(
+                    $nonce,
+                    $packageDigest,
+                    $profile,
+                    'START_AUTHORIZED',
+                    'OBSERVING',
+                    ['new_gateway_epoch' => $epoch],
+                    $forwardDeadline,
+                );
+                return;
+            }
+        }
+        if ($currentIntent === null) {
+            $this->platform->stop(
+                (string)$snapshot['kind'],
+                $forwardDeadline,
+            );
+            $this->restoreAdminStoppedIntent(
+                $expectedIntent,
+                $forwardDeadline,
+            );
+            $currentIntent = $this->readVerifiedAdminStoppedIntent(
+                $forwardDeadline,
+            );
+        }
+        if ($currentIntent === null
+            || !\hash_equals($expectedIntent, $currentIntent)
+        ) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap start is fenced by a different ADMIN_STOPPED intent.'
+            );
+        }
+        $this->assertRebootstrapQuiescent(
+            $transaction,
+            $profile,
+            $snapshot,
+            $forwardDeadline,
+        );
+        $this->platform->secureRebootstrapBackup(
+            $nonce,
+            $forwardDeadline,
+        );
+        $this->packages->assertRebootstrapPreStartClosure(
+            $nonce,
+            $packageDigest,
+            $profile,
+            $forwardDeadline,
+        );
+        $cleared = $this->clearAdminStoppedIntent($forwardDeadline);
+        if ($cleared === null || !\hash_equals($expectedIntent, $cleared)) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap could not consume its exact ADMIN_STOPPED intent.'
+            );
+        }
+        try {
+            $this->platform->start(
+                (string)$snapshot['kind'],
+                $forwardDeadline,
+            );
+            if ($this->paths->isTestMode()) {
+                $epoch = $this->testRebootstrapObservedEpoch($transaction);
+            } else {
+                $status = $this->awaitRebootstrapStartedIdentity(
+                    $transaction,
+                    $forwardDeadline,
+                );
+                $epoch = $this->assertRebootstrapObservedEpoch(
+                    $transaction,
+                    $status,
+                );
+            }
+            $this->packages->advanceRebootstrapPhase(
+                $nonce,
+                $packageDigest,
+                $profile,
+                'START_AUTHORIZED',
+                'OBSERVING',
+                ['new_gateway_epoch' => $epoch],
+                $forwardDeadline,
+            );
+        } catch (\Throwable $throwable) {
+            $compensationFailures = $this->compensateFailedGatewayStart(
+                (string)$snapshot['kind'],
+                $expectedIntent,
+                $deadlineMonotonic,
+            );
+            if ($compensationFailures !== []) {
+                throw new \RuntimeException(
+                    GatewayBoundedText::singleLine(
+                        $throwable->getMessage(),
+                        1536,
+                        'Gateway rebootstrap start failed.',
+                    ) . ' Fail-closed start compensation also failed: '
+                        . \implode('; ', $compensationFailures),
+                    0,
+                    $throwable,
+                );
+            }
+            throw $throwable;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $transaction
+     * @return array<string,mixed>
+     */
+    private function awaitRebootstrapIdentity(
+        array $transaction,
+        float $operationDeadlineMonotonic,
+    ): array
+    {
+        $runtimeGeneration = (string)$transaction['runtime_generation'];
+        $epoch = (string)$transaction['new_gateway_epoch'];
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $epoch) !== 1) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap observation lacks the bound new epoch.'
+            );
+        }
+        $deadline = \min(
+            $operationDeadlineMonotonic,
+            self::monotonicNow()
+                + self::REBOOTSTRAP_IDENTITY_TIMEOUT_SECONDS,
+        );
+        $healthySince = null;
+        $last = [];
         do {
-            \usleep(100000);
-            $status = $this->administratorStatus();
+            $this->waitForPublicationDelay(0.1, $deadline);
+            $last = $this->administratorStatus($operationDeadlineMonotonic);
+            if (self::hostStatusMatchesRuntimeControlIdentity(
+                $last,
+                'A',
+                $runtimeGeneration,
+            )) {
+                $observedEpoch = \strtolower(\trim((string)(
+                    $last['epoch'] ?? ''
+                )));
+                if (!\hash_equals($epoch, $observedEpoch)) {
+                    throw new \RuntimeException(
+                        'Gateway rebootstrap changed its bound new gateway epoch.'
+                    );
+                }
+            }
+            if (self::hostStatusMatchesRuntimeIdentity(
+                $last,
+                'A',
+                $runtimeGeneration,
+            ) && \hash_equals(
+                $epoch,
+                \strtolower(\trim((string)($last['epoch'] ?? ''))),
+            )) {
+                $healthySince ??= self::monotonicNow();
+                if (self::monotonicNow() - $healthySince
+                    >= self::REBOOTSTRAP_HEALTHY_OBSERVATION_SECONDS
+                ) {
+                    return $last;
+                }
+            } else {
+                $healthySince = null;
+            }
+        } while (self::monotonicNow() < $deadline);
+        throw new \RuntimeException(
+            'Gateway rebootstrap runtime did not remain identity-verified and healthy for 15 seconds: '
+                . (string)($last['reason'] ?? 'status unavailable')
+        );
+    }
+
+    /**
+     * Wait only for the authenticated Controller identity needed to bind the
+     * new epoch. The later OBSERVING phase still owns the full 15-second
+     * health/data-plane stability window.
+     *
+     * @param array<string,mixed> $transaction
+     * @return array<string,mixed>
+     */
+    private function awaitRebootstrapStartedIdentity(
+        array $transaction,
+        float $operationDeadlineMonotonic,
+    ): array {
+        $deadline = \min(
+            $operationDeadlineMonotonic,
+            self::monotonicNow()
+                + self::REBOOTSTRAP_IDENTITY_TIMEOUT_SECONDS,
+        );
+        $last = [];
+        do {
+            $this->waitForPublicationDelay(0.1, $deadline);
+            $last = $this->administratorStatus($operationDeadlineMonotonic);
+            if (self::hostStatusMatchesRuntimeControlIdentity(
+                $last,
+                'A',
+                (string)$transaction['runtime_generation'],
+            )) {
+                return $last;
+            }
+        } while (self::monotonicNow() < $deadline);
+        throw new \RuntimeException(
+            'Gateway rebootstrap runtime did not expose its authenticated new identity: '
+                . (string)($last['reason'] ?? 'status unavailable'),
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $transaction
+     * @param array<string,mixed> $status
+     */
+    private function assertRebootstrapObservedEpoch(
+        array $transaction,
+        array $status,
+    ): string {
+        if (!self::hostStatusMatchesRuntimeControlIdentity(
+            $status,
+            'A',
+            (string)$transaction['runtime_generation'],
+        )) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap epoch came from another runtime identity.'
+            );
+        }
+        $observed = \strtolower(\trim((string)($status['epoch'] ?? '')));
+        $old = (string)($transaction['old_gateway_epoch'] ?? '');
+        $bound = (string)($transaction['new_gateway_epoch'] ?? '');
+        $rotation = (bool)($transaction['trust_rotation'] ?? false);
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $observed) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $old) !== 1
+            || ($rotation
+                ? \hash_equals($old, $observed)
+                : !\hash_equals($old, $observed))
+            || ($bound !== '' && !\hash_equals($bound, $observed))
+        ) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap observed epoch violates its trust-generation contract.'
+            );
+        }
+        return $observed;
+    }
+
+    /** @param array<string,mixed> $transaction */
+    private function testRebootstrapObservedEpoch(array $transaction): string
+    {
+        $old = (string)($transaction['old_gateway_epoch'] ?? '');
+        if (!(bool)($transaction['trust_rotation'] ?? false)) {
+            return $old;
+        }
+        $epoch = \substr(\hash(
+            'sha256',
+            "wls-rebootstrap-test-epoch\0"
+                . (string)$transaction['nonce'] . "\0"
+                . (string)$transaction['candidate_ca_bundle_sha256'],
+        ), 0, 32);
+        if (\hash_equals($old, $epoch)) {
+            $epoch = ($epoch[0] === '0' ? '1' : '0') . \substr($epoch, 1);
+        }
+        return $epoch;
+    }
+
+    /**
+     * @param array<string,mixed> $transaction
+     * @return array<string,mixed>
+     */
+    private function resumeRebootstrapRollback(
+        array $transaction,
+        string $nonce,
+        string $packageDigest,
+        string $profile,
+        float $deadlineMonotonic,
+    ): array {
+        return $this->performRebootstrapRollback(
+            $transaction,
+            $nonce,
+            $packageDigest,
+            $profile,
+            (string)($transaction['failure_reason']
+                ?? 'Gateway rebootstrap rollback resumed.'),
+            $deadlineMonotonic,
+        );
+    }
+
+    /** @param array<string,mixed> $transaction */
+    private function prepareRebootstrapFailureRollback(
+        array $transaction,
+        string $nonce,
+        string $packageDigest,
+        string $profile,
+        \Throwable $failure,
+        float $deadlineMonotonic,
+    ): void {
+        $this->performRebootstrapRollback(
+            $transaction,
+            $nonce,
+            $packageDigest,
+            $profile,
+            $failure->getMessage(),
+            $deadlineMonotonic,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $transaction
+     * @return array<string,mixed>
+     */
+    private function performRebootstrapRollback(
+        array $transaction,
+        string $nonce,
+        string $packageDigest,
+        string $profile,
+        string $reason,
+        float $deadlineMonotonic,
+    ): array {
+        if (\hash_equals(
+            'ROLLING_BACK',
+            (string)($transaction['phase'] ?? ''),
+        ) && (string)($transaction['admin_stopped_digest'] ?? '') === '') {
+            return $this->packages->completePreparedRebootstrapCancellation(
+                $nonce,
+                $packageDigest,
+                $profile,
+                $deadlineMonotonic,
+            );
+        }
+        $transaction = $this->releaseRebootstrapCapacityForRollback(
+            $transaction,
+            $nonce,
+            $packageDigest,
+            $profile,
+            $deadlineMonotonic,
+        );
+        // Revoke the forward start authorization before touching the service
+        // or any published runtime path. Re-entry can then only execute the
+        // persisted rollback state machine below.
+        $transaction = $this->packages->beginRebootstrapRollback(
+            $nonce,
+            $packageDigest,
+            $profile,
+            $reason,
+            $deadlineMonotonic,
+        );
+        $snapshot = $this->requiredRebootstrapPlatformSnapshot($transaction);
+        $phase = (string)$transaction['phase'];
+        if (\hash_equals('ROLLING_BACK', $phase)) {
+            $expectedIntent = $this->packages->rebootstrapAdminStoppedIntent(
+                $nonce,
+                $packageDigest,
+                $profile,
+                $deadlineMonotonic,
+            );
+            $this->platform->stop(
+                (string)$snapshot['kind'],
+                $deadlineMonotonic,
+            );
+            $currentIntent = $this->readVerifiedAdminStoppedIntent(
+                $deadlineMonotonic,
+            );
+            if ($currentIntent === null) {
+                $this->restoreAdminStoppedIntent(
+                    $expectedIntent,
+                    $deadlineMonotonic,
+                );
+                $currentIntent = $this->readVerifiedAdminStoppedIntent(
+                    $deadlineMonotonic,
+                );
+            }
+            if ($currentIntent === null
+                || !\hash_equals($expectedIntent, $currentIntent)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway rebootstrap rollback is fenced by a different ADMIN_STOPPED intent.'
+                );
+            }
+            $current = $this->packages->rebootstrapStatus(
+                $nonce,
+                $deadlineMonotonic,
+            );
+            if ($current === null) {
+                throw new \RuntimeException(
+                    'Gateway rebootstrap rollback journal disappeared.'
+                );
+            }
+            $this->assertRebootstrapQuiescent(
+                $current,
+                $profile,
+                $snapshot,
+                $deadlineMonotonic,
+            );
+            $this->packages->rollbackRebootstrapGeneration(
+                $nonce,
+                $packageDigest,
+                $profile,
+                $reason,
+                $deadlineMonotonic,
+            );
+            $this->platform->restoreRebootstrapDefinition(
+                $nonce,
+                $snapshot,
+                $deadlineMonotonic,
+            );
+            $this->platform->persistentStoppedProof(
+                (string)$snapshot['kind'],
+                $deadlineMonotonic,
+            );
+            $currentIntent = $this->readVerifiedAdminStoppedIntent(
+                $deadlineMonotonic,
+            );
+            if ($currentIntent === null
+                || !\hash_equals($expectedIntent, $currentIntent)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway rebootstrap rollback lost its signed stop fence.'
+                );
+            }
+            $this->platform->secureRebootstrapBackup(
+                $nonce,
+                $deadlineMonotonic,
+            );
+            $transaction = $this->packages->advanceRebootstrapPhase(
+                $nonce,
+                $packageDigest,
+                $profile,
+                'ROLLING_BACK',
+                'ROLLBACK_START_AUTHORIZED',
+                [],
+                $deadlineMonotonic,
+            );
+            $phase = (string)$transaction['phase'];
+        }
+
+        $expectedIntent = null;
+        try {
+            if (\hash_equals('ROLLBACK_START_AUTHORIZED', $phase)) {
+                // This phase can mean either a fresh start or crash adoption of
+                // an already-running old generation. Keep the entire helper in
+                // the fail-closed region and export its exact intent as soon as
+                // it is verified, before any later replay step can fail.
+                $this->startRebootstrapRollbackGeneration(
+                    $transaction,
+                    $nonce,
+                    $packageDigest,
+                    $profile,
+                    $deadlineMonotonic,
+                    $expectedIntent,
+                );
+                $transaction = $this->packages->rebootstrapStatus(
+                    $nonce,
+                    $deadlineMonotonic,
+                ) ?? throw new \RuntimeException(
+                    'Gateway rollback journal disappeared after old-generation start.',
+                );
+                $phase = (string)$transaction['phase'];
+            }
+            if (!\hash_equals('ROLLBACK_OBSERVING', $phase)) {
+                throw new \RuntimeException(
+                    'Gateway rebootstrap rollback cannot finish from phase '
+                        . $phase . '.',
+                );
+            }
+            if (!$this->paths->isTestMode()) {
+                $observationDeadline = $this
+                    ->operationDeadlineWithRequiredCompensation(
+                        $deadlineMonotonic,
+                        self::SERVICE_START_COMPENSATION_RESERVE_SECONDS,
+                    );
+                // A resumed ROLLBACK_OBSERVING transaction has no in-memory
+                // fence. Acquire it inside this fail-closed region: a package
+                // lock timeout or damaged journal must still stop and prove
+                // the already-running Controller/Nginx tree quiescent.
+                $expectedIntent ??= $this->packages
+                    ->rebootstrapAdminStoppedIntent(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $observationDeadline,
+                    );
+                $this->awaitRebootstrapRollbackIdentity(
+                    $transaction,
+                    $observationDeadline,
+                );
+            }
+        } catch (\Throwable $failure) {
+            $recoveryFailures = [];
+            try {
+                $resetDeadline = $this
+                    ->operationDeadlineWithRequiredCompensation(
+                        $deadlineMonotonic,
+                        self::SERVICE_START_COMPENSATION_RESERVE_SECONDS,
+                    );
+                $this->packages->retryRebootstrapRollbackObservation(
+                    $nonce,
+                    $packageDigest,
+                    $profile,
+                    $failure->getMessage(),
+                    $resetDeadline,
+                );
+            } catch (\Throwable $transitionFailure) {
+                if ($transitionFailure instanceof GatewayRebootstrapCrashSimulation) {
+                    throw $transitionFailure;
+                }
+                $recoveryFailures[] = 'journal reset: '
+                    . GatewayBoundedText::singleLine(
+                        $transitionFailure->getMessage(),
+                        512,
+                        'reset failed',
+                    );
+            }
+            try {
+                foreach ($this->compensateFailedGatewayStart(
+                    (string)$snapshot['kind'],
+                    $expectedIntent,
+                    $deadlineMonotonic,
+                    $expectedIntent !== null,
+                ) as $compensationFailure) {
+                    $recoveryFailures[] = $compensationFailure;
+                }
+            } catch (\Throwable $compensationFailure) {
+                $recoveryFailures[] = 'compensation execution: '
+                    . GatewayBoundedText::singleLine(
+                        $compensationFailure->getMessage(),
+                        512,
+                        'compensation failed',
+                    );
+            }
+            if ($recoveryFailures !== []) {
+                throw new \RuntimeException(
+                    GatewayBoundedText::singleLine(
+                        $failure->getMessage(),
+                        1536,
+                        'Gateway rollback observation failed.',
+                    ) . ' Fail-closed rollback retry preparation also failed: '
+                        . \implode('; ', $recoveryFailures),
+                    0,
+                    $failure,
+                );
+            }
+            throw new \RuntimeException(
+                GatewayBoundedText::singleLine(
+                    $failure->getMessage(),
+                    1792,
+                    'Gateway rollback observation failed.',
+                ) . ' The failed old-generation start was stopped and the signed rollback transaction was reset to ROLLING_BACK for bounded replay.',
+                0,
+                $failure,
+            );
+        }
+        $result = $this->packages->completeRebootstrapRollback(
+            $nonce,
+            $packageDigest,
+            $profile,
+            $deadlineMonotonic,
+        );
+        $this->packages->assertNoActiveRebootstrap(
+            'Gateway rolled-back rebootstrap cleanup',
+            $deadlineMonotonic,
+        );
+        return $result;
+    }
+
+    /**
+     * Free the transaction-owned physical recovery budget only after the
+     * stopped old generation is proven quiescent, and before ROLLING_BACK can
+     * authorize any runtime, slot, trust or platform-definition mutation.
+     *
+     * @param array<string,mixed> $transaction
+     * @return array<string,mixed>
+     */
+    private function releaseRebootstrapCapacityForRollback(
+        array $transaction,
+        string $nonce,
+        string $packageDigest,
+        string $profile,
+        float $deadlineMonotonic,
+    ): array {
+        $phase = (string)($transaction['phase'] ?? '');
+        if (\hash_equals('PREPARED', $phase)) {
+            $intent = $this->readVerifiedAdminStoppedIntent(
+                $deadlineMonotonic,
+            );
+            if ($intent === null) {
+                throw new \RuntimeException(
+                    'Gateway pre-stop rebootstrap must use cancellation instead of whole-generation rollback.'
+                );
+            }
+            $this->packages->verifyRebootstrapCapacityReserveHeld(
+                $nonce,
+                $packageDigest,
+                $profile,
+                $deadlineMonotonic,
+            );
+            $transaction = $this->packages->advanceRebootstrapPhase(
+                $nonce,
+                $packageDigest,
+                $profile,
+                'PREPARED',
+                'STOP_COMMITTED',
+                [
+                    'admin_stopped_contents' => $intent,
+                    'gateway_epoch' => $this->adminStoppedIntentEpoch($intent),
+                ],
+                $deadlineMonotonic,
+            );
+            $phase = 'STOP_COMMITTED';
+        }
+
+        if (\hash_equals('STOP_COMMITTED', $phase)) {
+            $this->packages->verifyRebootstrapCapacityReserveHeld(
+                $nonce,
+                $packageDigest,
+                $profile,
+                $deadlineMonotonic,
+            );
+            $snapshot = $this->requiredRebootstrapPlatformSnapshot(
+                $transaction,
+            );
+            $this->platform->stop(
+                (string)$snapshot['kind'],
+                $deadlineMonotonic,
+            );
+            $this->restoreRebootstrapStopFenceForRollback(
+                $transaction,
+                $profile,
+                $deadlineMonotonic,
+            );
+            $this->assertRebootstrapQuiescent(
+                $transaction,
+                $profile,
+                $snapshot,
+                $deadlineMonotonic,
+            );
+            $transaction = $this->packages->advanceRebootstrapPhase(
+                $nonce,
+                $packageDigest,
+                $profile,
+                'STOP_COMMITTED',
+                'QUIESCED',
+                [],
+                $deadlineMonotonic,
+            );
+            $phase = 'QUIESCED';
+        }
+
+        if (\in_array($phase, ['QUIESCED', 'ROLLING_BACK'], true)) {
+            $snapshot = $this->requiredRebootstrapPlatformSnapshot(
+                $transaction,
+            );
+            $this->platform->stop(
+                (string)$snapshot['kind'],
+                $deadlineMonotonic,
+            );
+            $this->restoreRebootstrapStopFenceForRollback(
+                $transaction,
+                $profile,
+                $deadlineMonotonic,
+            );
+            $this->assertRebootstrapQuiescent(
+                $transaction,
+                $profile,
+                $snapshot,
+                $deadlineMonotonic,
+            );
+            $capacityState = (string)(
+                $transaction['capacity_reserve_state'] ?? ''
+            );
+            if (!\hash_equals('RELEASED', $capacityState)) {
+                $releaseReason = (string)(
+                    $transaction['capacity_reserve_release_reason'] ?? ''
+                );
+                if ($releaseReason === '') {
+                    $releaseReason = 'rollback';
+                }
+                if (!\in_array($releaseReason, ['forward', 'rollback'], true)) {
+                    throw new \RuntimeException(
+                        'Gateway rollback capacity reserve has an invalid release path.'
+                    );
+                }
+                $transaction = $this->packages
+                    ->releaseRebootstrapCapacityReserve(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        $releaseReason,
+                        $deadlineMonotonic,
+                    );
+            }
+        }
+
+        return $transaction;
+    }
+
+    /** @param array<string,mixed> $transaction */
+    private function restoreRebootstrapStopFenceForRollback(
+        array $transaction,
+        string $profile,
+        float $deadlineMonotonic,
+    ): void {
+        $expectedIntent = $this->packages->rebootstrapAdminStoppedIntent(
+            (string)$transaction['nonce'],
+            (string)$transaction['package_digest'],
+            $profile,
+            $deadlineMonotonic,
+        );
+        $currentIntent = $this->readVerifiedAdminStoppedIntent(
+            $deadlineMonotonic,
+        );
+        if ($currentIntent === null) {
+            $this->restoreAdminStoppedIntent(
+                $expectedIntent,
+                $deadlineMonotonic,
+            );
+            $currentIntent = $this->readVerifiedAdminStoppedIntent(
+                $deadlineMonotonic,
+            );
+        }
+        if ($currentIntent === null
+            || !\hash_equals($expectedIntent, $currentIntent)
+        ) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap rollback is fenced by a different ADMIN_STOPPED intent.'
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $transaction */
+    private function startRebootstrapRollbackGeneration(
+        array $transaction,
+        string $nonce,
+        string $packageDigest,
+        string $profile,
+        float $deadlineMonotonic,
+        ?string &$expectedIntent,
+    ): void {
+        $forwardDeadline = $this->operationDeadlineWithRequiredCompensation(
+            $deadlineMonotonic,
+            self::SERVICE_START_COMPENSATION_RESERVE_SECONDS,
+        );
+        $snapshot = $this->requiredRebootstrapPlatformSnapshot($transaction);
+        $identity = $this->requiredRebootstrapRollbackIdentity($transaction);
+        $expectedIntent = $this->packages->rebootstrapAdminStoppedIntent(
+            $nonce,
+            $packageDigest,
+            $profile,
+            $forwardDeadline,
+        );
+        $currentIntent = $this->readVerifiedAdminStoppedIntent(
+            $forwardDeadline,
+        );
+        if ($currentIntent === null && !$this->paths->isTestMode()) {
+            $status = $this->administratorStatus($forwardDeadline);
+            if ($this->rebootstrapRollbackStatusMatches(
+                $status,
+                $identity,
+                true,
+            )) {
+                $this->packages->advanceRebootstrapPhase(
+                    $nonce,
+                    $packageDigest,
+                    $profile,
+                    'ROLLBACK_START_AUTHORIZED',
+                    'ROLLBACK_OBSERVING',
+                    [],
+                    $forwardDeadline,
+                );
+                return;
+            }
+        }
+        if ($currentIntent === null) {
+            $this->platform->stop(
+                (string)$snapshot['kind'],
+                $forwardDeadline,
+            );
+            $this->restoreAdminStoppedIntent(
+                $expectedIntent,
+                $forwardDeadline,
+            );
+            $currentIntent = $this->readVerifiedAdminStoppedIntent(
+                $forwardDeadline,
+            );
+        }
+        if ($currentIntent === null
+            || !\hash_equals($expectedIntent, $currentIntent)
+        ) {
+            throw new \RuntimeException(
+                'Gateway rollback start is fenced by a different ADMIN_STOPPED intent.',
+            );
+        }
+        $this->packages->assertRebootstrapRollbackPreStartClosure(
+            $nonce,
+            $packageDigest,
+            $profile,
+            $forwardDeadline,
+        );
+        $cleared = $this->clearAdminStoppedIntent($forwardDeadline);
+        if ($cleared === null || !\hash_equals($expectedIntent, $cleared)) {
+            throw new \RuntimeException(
+                'Gateway rollback could not consume its exact ADMIN_STOPPED intent.',
+            );
+        }
+        $this->platform->start(
+            (string)$snapshot['kind'],
+            $forwardDeadline,
+        );
+        if (!$this->paths->isTestMode()) {
+            $status = $this->awaitRebootstrapRollbackStartedIdentity(
+                $identity,
+                $forwardDeadline,
+            );
+            if (!$this->rebootstrapRollbackStatusMatches(
+                $status,
+                $identity,
+                false,
+            )) {
+                throw new \RuntimeException(
+                    'Gateway rollback started another runtime identity or epoch.',
+                );
+            }
+        }
+        $this->packages->advanceRebootstrapPhase(
+            $nonce,
+            $packageDigest,
+            $profile,
+            'ROLLBACK_START_AUTHORIZED',
+            'ROLLBACK_OBSERVING',
+            [],
+            $forwardDeadline,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $transaction
+     * @return array{slot:string,runtime_generation:string,epoch:string}
+     */
+    private function requiredRebootstrapRollbackIdentity(
+        array $transaction,
+    ): array {
+        $slot = (string)($transaction['old_active_slot'] ?? '');
+        $oldSlots = (array)($transaction['old_slots'] ?? []);
+        $closure = $oldSlots[$slot] ?? null;
+        $runtimeGeneration = \is_array($closure)
+            ? (string)($closure['runtime_generation'] ?? '')
+            : '';
+        $epoch = (string)($transaction['old_gateway_epoch'] ?? '');
+        if (!\in_array($slot, ['A', 'B'], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $epoch) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway rollback journal lacks an exact old runtime identity.',
+            );
+        }
+        return [
+            'slot' => $slot,
+            'runtime_generation' => $runtimeGeneration,
+            'epoch' => $epoch,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $status
+     * @param array{slot:string,runtime_generation:string,epoch:string} $identity
+     */
+    private function rebootstrapRollbackStatusMatches(
+        array $status,
+        array $identity,
+        bool $controlOnly,
+    ): bool {
+        $matches = $controlOnly
+            ? self::hostStatusMatchesRuntimeControlIdentity(
+                $status,
+                $identity['slot'],
+                $identity['runtime_generation'],
+            )
+            : self::hostStatusMatchesRuntimeIdentity(
+                $status,
+                $identity['slot'],
+                $identity['runtime_generation'],
+            );
+        return $matches && \hash_equals(
+            $identity['epoch'],
+            \strtolower(\trim((string)($status['epoch'] ?? ''))),
+        );
+    }
+
+    /**
+     * @param array{slot:string,runtime_generation:string,epoch:string} $identity
+     * @return array<string,mixed>
+     */
+    private function awaitRebootstrapRollbackStartedIdentity(
+        array $identity,
+        float $operationDeadlineMonotonic,
+    ): array {
+        $deadline = \min(
+            $operationDeadlineMonotonic,
+            self::monotonicNow()
+                + self::REBOOTSTRAP_IDENTITY_TIMEOUT_SECONDS,
+        );
+        $last = [];
+        do {
+            $this->waitForPublicationDelay(0.1, $deadline);
+            $last = $this->administratorStatus($operationDeadlineMonotonic);
+            if ($this->rebootstrapRollbackStatusMatches(
+                $last,
+                $identity,
+                true,
+            )) {
+                return $last;
+            }
+        } while (self::monotonicNow() < $deadline);
+        throw new \RuntimeException(
+            'Gateway rollback did not expose its authenticated old identity and epoch: '
+                . (string)($last['reason'] ?? 'status unavailable'),
+        );
+    }
+
+    /** @param array<string,mixed> $transaction */
+    private function awaitRebootstrapRollbackIdentity(
+        array $transaction,
+        float $operationDeadlineMonotonic,
+    ): array {
+        $identity = $this->requiredRebootstrapRollbackIdentity($transaction);
+        $deadline = \min(
+            $operationDeadlineMonotonic,
+            self::monotonicNow()
+                + self::REBOOTSTRAP_IDENTITY_TIMEOUT_SECONDS,
+        );
+        $healthySince = null;
+        $last = [];
+        do {
+            $this->waitForPublicationDelay(0.1, $deadline);
+            $last = $this->administratorStatus($operationDeadlineMonotonic);
+            if ($this->rebootstrapRollbackStatusMatches(
+                $last,
+                $identity,
+                false,
+            )) {
+                $healthySince ??= self::monotonicNow();
+                if (self::monotonicNow() - $healthySince
+                    >= self::REBOOTSTRAP_HEALTHY_OBSERVATION_SECONDS
+                ) {
+                    return $last;
+                }
+            } else {
+                $healthySince = null;
+            }
+        } while (self::monotonicNow() < $deadline);
+        throw new \RuntimeException(
+            'Gateway rollback runtime did not remain identity-verified and healthy for 15 seconds: '
+                . (string)($last['reason'] ?? 'status unavailable'),
+        );
+    }
+
+    /** @return array<string,mixed>|null */
+    private function awaitUpgradeIdentity(
+        string $slot,
+        string $runtimeGeneration,
+        float $operationDeadlineMonotonic,
+    ): ?array {
+        $deadline = \min(
+            $operationDeadlineMonotonic,
+            \hrtime(true) / 1_000_000_000
+                + self::upgradeReadinessTimeoutSeconds(),
+        );
+        do {
+            $this->waitForPublicationDelay(0.1, $deadline);
+            $status = $this->administratorStatus($operationDeadlineMonotonic);
             if (self::hostStatusMatchesRuntimeIdentity(
                 $status,
                 $slot,
@@ -1437,6 +4293,20 @@ final class GatewayHostManager
             }
         } while (\hrtime(true) / 1_000_000_000 < $deadline);
         return null;
+    }
+
+    /**
+     * The signed monotonic rollback context is an internal compensation
+     * capability. Keep diagnostic observation fields in command responses,
+     * but never expose that capability after the upgrade call returns.
+     *
+     * @param array<string,mixed> $observation
+     * @return array<string,mixed>
+     */
+    private static function publicUpgradeObservation(array $observation): array
+    {
+        unset($observation['rollback_context']);
+        return $observation;
     }
 
     private static function upgradeReadinessTimeoutSeconds(): float
@@ -1450,10 +4320,20 @@ final class GatewayHostManager
     /**
      * @return array<string,mixed>
      */
-    public function register(string $instanceName): array
+    public function register(
+        string $instanceName,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROJECT_MUTATION_TIMEOUT_SECONDS,
+        );
         $builder = new GatewayRegistrationBuilder();
-        return $this->submitRegistration($builder->build($instanceName));
+        return $this->submitRegistration(
+            $builder->build($instanceName, $deadlineMonotonic),
+            $deadlineMonotonic,
+        );
     }
 
     /**
@@ -1471,6 +4351,10 @@ final class GatewayHostManager
         ?float $deadlineMonotonic = null,
     ): array
     {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROJECT_MUTATION_TIMEOUT_SECONDS,
+        );
         return $this->submitRegistration($registration, $deadlineMonotonic);
     }
 
@@ -1704,20 +4588,87 @@ final class GatewayHostManager
         string $slot,
         string $runtimeGeneration,
     ): bool {
+        return ($status['ready'] ?? false) === true
+            && self::hostStatusMatchesRuntimeControlIdentity(
+                $status,
+                $slot,
+                $runtimeGeneration,
+            );
+    }
+
+    /**
+     * Match an authenticated, admission-capable Controller even while its
+     * public data plane is intentionally not ready. This is narrower than a
+     * free-form status/reason check: the current host boot, active immutable
+     * slot and release generation all have to match the runtime just started.
+     *
+     * @param array<string,mixed> $status
+     */
+    private static function hostStatusMatchesRuntimeControlIdentity(
+        array $status,
+        string $slot,
+        string $runtimeGeneration,
+    ): bool {
         $slot = \strtoupper(\trim($slot));
         $runtimeGeneration = \strtolower(\trim($runtimeGeneration));
-        return \in_array($slot, ['A', 'B'], true)
-            && \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) === 1
-            && self::hostStatusIsTrustedReady($status)
-            && \hash_equals(
+        if (!\in_array($slot, ['A', 'B'], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
+            || !self::controlPlaneAcceptsRegistration($status)
+            || !\hash_equals(
                 $slot,
                 \strtoupper(\trim((string)($status['active_slot'] ?? ''))),
             )
-            && \hash_equals(
+            || !\hash_equals(
                 $runtimeGeneration,
                 \strtolower(\trim((string)(
                     $status['runtime_generation'] ?? ''
                 ))),
+            )
+        ) {
+            return false;
+        }
+        try {
+            self::currentAuthenticatedHostBootId($status);
+        } catch (\Throwable) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * A late bind race is terminal only when the authenticated Controller for
+     * the exact runtime reports the structured state twice: once as the host
+     * health state and once as its recovery stage. Never promote an arbitrary
+     * diagnostic `reason` string into authority to remove a platform service.
+     *
+     * @param array<string,mixed> $status
+     */
+    private static function hostStatusIsTrustedPortTaken(
+        array $status,
+        string $slot,
+        string $runtimeGeneration,
+    ): bool {
+        $recovery = \is_array($status['recovery'] ?? null)
+            ? $status['recovery']
+            : [];
+        $dataPlane = \is_array($status['data_plane'] ?? null)
+            ? $status['data_plane']
+            : [];
+        return self::hostStatusMatchesRuntimeControlIdentity(
+            $status,
+            $slot,
+            $runtimeGeneration,
+        )
+            && ($status['ready'] ?? null) === false
+            && ($dataPlane['ok'] ?? null) === true
+            && ($dataPlane['running'] ?? null) === false
+            && \hash_equals(
+                'PORT_TAKEN',
+                \strtoupper(\trim((string)($status['state'] ?? ''))),
+            )
+            && \hash_equals(
+                'PORT_TAKEN',
+                \strtoupper(\trim((string)($recovery['stage'] ?? ''))),
             );
     }
 
@@ -1754,9 +4705,12 @@ final class GatewayHostManager
         ?float $deadlineMonotonic = null,
     ): array
     {
-        $this->remainingOperationDeadline($deadlineMonotonic);
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROJECT_MUTATION_TIMEOUT_SECONDS,
+        );
         $builder = new GatewayRegistrationBuilder();
-        $registration = $builder->build($instanceName);
+        $registration = $builder->build($instanceName, $deadlineMonotonic);
         $this->remainingOperationDeadline($deadlineMonotonic);
         $status = $this->status(5.0, $deadlineMonotonic);
         if (!self::controlPlaneAcceptsRegistration($status)) {
@@ -1807,7 +4761,10 @@ final class GatewayHostManager
             );
         }
         $renewals = new ProjectCertificateRenewalIntentStore();
-        $pending = $renewals->pendingReplay();
+        $pending = $renewals->pendingReplay(
+            $this->operationLockWaitTimeout($deadlineMonotonic, 300.0),
+            $deadlineMonotonic,
+        );
         if (\is_array($pending)) {
             $plan = $renewals->replayPlan($pending, $status);
             if (!\hash_equals('renew', (string)$plan['action'])) {
@@ -1961,7 +4918,10 @@ final class GatewayHostManager
         array $drainCounters = [],
         ?float $deadlineMonotonic = null,
     ): array {
-        $this->remainingOperationDeadline($deadlineMonotonic);
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::HEARTBEAT_OPERATION_TIMEOUT_SECONDS,
+        );
         $registration = $this->loadLeaseReceipt($instanceName);
         $payload = [
             'project_uuid' => (string)$registration['project_uuid'],
@@ -1974,8 +4934,16 @@ final class GatewayHostManager
             'master_epoch' => (int)$registration['master_epoch'],
             'launch_id' => (string)$registration['launch_id'],
         ];
-        if ($drainCounters !== []) {
+        if ($drainCounters !== []
+            && \hash_equals(
+                'DRAINING',
+                (string)($registration['lifecycle_state'] ?? ''),
+            )
+        ) {
             $payload['drain_counters'] = $drainCounters;
+            $payload['drain_operation_id'] = (string)(
+                $registration['drain_operation_id'] ?? ''
+            );
         }
         $response = $this->client->projectRequest(
             'heartbeat',
@@ -2014,7 +4982,10 @@ final class GatewayHostManager
         string $desiredDigest,
         ?float $deadlineMonotonic = null,
     ): array {
-        $this->remainingOperationDeadline($deadlineMonotonic);
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::PROJECT_MUTATION_TIMEOUT_SECONDS,
+        );
         $computedDigest = \hash('sha256', GatewayClient::canonicalJson($challenges));
         if ($challengeGeneration < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $desiredDigest) !== 1
@@ -2050,8 +5021,19 @@ final class GatewayHostManager
         string $instanceName,
         int $seconds = 300,
         bool $waitForConnections = false,
+        ?float $deadlineMonotonic = null,
     ): array
     {
+        $boundedSeconds = \max(1, \min(300, $seconds));
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            (float)\min(90, $boundedSeconds)
+                + 90.0
+                + ($waitForConnections ? (float)$boundedSeconds : 0.0)
+                + ($waitForConnections
+                    ? self::UNREGISTER_TIMEOUT_SECONDS
+                    : 5.0),
+        );
         $registration = $this->loadLeaseReceipt($instanceName);
         $drainOperationId = self::drainOperationId($registration, $instanceName);
         $response = $this->idempotentProjectMutation(
@@ -2065,9 +5047,10 @@ final class GatewayHostManager
                 'master_epoch' => (int)$registration['master_epoch'],
                 'launch_id' => (string)$registration['launch_id'],
                 'drain_operation_id' => $drainOperationId,
-                'seconds' => \max(1, \min(300, $seconds)),
+                'seconds' => $boundedSeconds,
             ],
-            (float)\min(90, \max(1, $seconds)),
+            (float)\min(90, $boundedSeconds),
+            $deadlineMonotonic,
         );
         if (!($response['ok'] ?? false)) {
             if (\str_contains(
@@ -2084,6 +5067,7 @@ final class GatewayHostManager
             $response,
             false,
             (string)$registration['project_uuid'],
+            deadlineMonotonic: $deadlineMonotonic,
         );
         $operation = \is_array($payload['operation'] ?? null)
             ? $payload['operation']
@@ -2121,6 +5105,8 @@ final class GatewayHostManager
         $this->persistLeaseReceipt(
             $instanceName,
             self::leaseReceiptFromPublication($payload),
+            $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+            $deadlineMonotonic,
         );
         if (!$waitForConnections) {
             return $payload;
@@ -2129,7 +5115,8 @@ final class GatewayHostManager
             $instanceName,
             (string)$registration['project_uuid'],
             $payload,
-            \max(1, \min(300, $seconds)),
+            $boundedSeconds,
+            operationDeadlineMonotonic: $deadlineMonotonic,
         );
     }
 
@@ -2148,7 +5135,14 @@ final class GatewayHostManager
         bool $waitForConnections = false,
         ?float $deadlineMonotonic = null,
     ): array {
-        $this->remainingOperationDeadline($deadlineMonotonic);
+        $boundedSeconds = \max(1, \min(300, $seconds));
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            (float)\min(90, $boundedSeconds)
+                + 90.0
+                + ($waitForConnections ? (float)$boundedSeconds : 0.0)
+                + 5.0,
+        );
         self::assertLeaseReceiptInstanceName($instanceName);
         $credential = (new GatewayCredentialStore())->load();
         $status = $this->status(5.0, $deadlineMonotonic);
@@ -2158,7 +5152,6 @@ final class GatewayHostManager
             $instanceName,
         );
         $drainOperationId = self::drainOperationId($fence, $instanceName);
-        $boundedSeconds = \max(1, \min(300, $seconds));
         $response = $this->idempotentProjectMutation(
             'drain',
             $fence + [
@@ -2545,8 +5538,15 @@ final class GatewayHostManager
     /**
      * @return array<string,mixed>
      */
-    public function unregister(string $instanceName): array
+    public function unregister(
+        string $instanceName,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::UNREGISTER_TIMEOUT_SECONDS,
+        );
         $registration = $this->loadLeaseReceipt($instanceName);
         $response = $this->idempotentProjectMutation('unregister', [
             'project_uuid' => (string)$registration['project_uuid'],
@@ -2556,7 +5556,7 @@ final class GatewayHostManager
             'instance_generation' => (int)$registration['instance_generation'],
             'master_epoch' => (int)$registration['master_epoch'],
             'launch_id' => (string)$registration['launch_id'],
-        ]);
+        ], deadlineMonotonic: $deadlineMonotonic);
         if (!($response['ok'] ?? false)) {
             throw new \RuntimeException(
                 (string)($response['error']['message'] ?? 'Gateway unregister failed.')
@@ -2566,6 +5566,7 @@ final class GatewayHostManager
             $response,
             false,
             (string)$registration['project_uuid'],
+            deadlineMonotonic: $deadlineMonotonic,
         );
     }
 
@@ -2584,9 +5585,14 @@ final class GatewayHostManager
         string $domain,
         string $fromProjectUuid,
         string $toProjectUuid,
+        ?float $deadlineMonotonic = null,
     ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::DOMAIN_TRANSFER_TIMEOUT_SECONDS,
+        );
         $builder = new GatewayRegistrationBuilder();
-        $registration = $builder->build($instanceName);
+        $registration = $builder->build($instanceName, $deadlineMonotonic);
         $currentProject = \strtolower((string)$registration['project_uuid']);
         $toProjectUuid = \strtolower(\trim($toProjectUuid));
         if (!\hash_equals($currentProject, $toProjectUuid)) {
@@ -2594,7 +5600,7 @@ final class GatewayHostManager
                 'The transfer target must be the current project identity.'
             );
         }
-        $status = $this->administratorStatus();
+        $status = $this->administratorStatus($deadlineMonotonic);
         if (!($status['ok'] ?? false) || !($status['ready'] ?? false)) {
             throw new \RuntimeException(
                 (string)($status['reason'] ?? 'WLS Gateway is not ready for domain transfer.')
@@ -2607,7 +5613,7 @@ final class GatewayHostManager
             'from_project_uuid' => \strtolower(\trim($fromProjectUuid)),
             'to_project_uuid' => $toProjectUuid,
             'confirm' => true,
-        ]);
+        ], $deadlineMonotonic);
         if (!($prepared['ok'] ?? false)) {
             throw new \RuntimeException(
                 (string)($prepared['error']['message'] ?? 'Domain transfer preparation failed.')
@@ -2626,31 +5632,40 @@ final class GatewayHostManager
                 'project_uuid' => $toProjectUuid,
                 'transfer_id' => $transferId,
                 'registration' => $registration,
-            ]);
+            ], $deadlineMonotonic);
             if (!($staged['ok'] ?? false)) {
                 throw new \RuntimeException(
                     (string)($staged['error']['message'] ?? 'Domain transfer target proof failed.')
                 );
             }
-            $this->awaitPublication($staged, false, $toProjectUuid);
+            $this->awaitPublication(
+                $staged,
+                false,
+                $toProjectUuid,
+                deadlineMonotonic: $deadlineMonotonic,
+            );
             $committed = $this->client->request('transfer', [
                 'phase' => 'commit',
                 'transfer_id' => $transferId,
                 'confirm' => true,
-            ]);
+            ], $deadlineMonotonic);
             if (!($committed['ok'] ?? false)) {
                 throw new \RuntimeException(
                     (string)($committed['error']['message'] ?? 'Domain transfer commit failed.')
                 );
             }
-            return $this->awaitPublication($committed, true);
+            return $this->awaitPublication(
+                $committed,
+                true,
+                deadlineMonotonic: $deadlineMonotonic,
+            );
         } catch (\Throwable $throwable) {
             $abortFailure = null;
             try {
                 $aborted = $this->client->request('transfer', [
                     'phase' => 'abort',
                     'transfer_id' => $transferId,
-                ]);
+                ], $deadlineMonotonic);
                 if (($aborted['ok'] ?? false) !== true) {
                     throw new \RuntimeException((string)(
                         $aborted['error']['message']
@@ -2686,20 +5701,40 @@ final class GatewayHostManager
      *
      * @return array<string,mixed>
      */
-    public function stopGateway(bool $force = false): array
-    {
+    public function stopGateway(
+        bool $force = false,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::SERVICE_CONTROL_OPERATION_TIMEOUT_SECONDS,
+        );
         $service = $this->platform->installedDefinition();
         $response = $this->client->request('stop', [
             'force' => $force,
             'confirm' => true,
-        ]);
+        ], $deadlineMonotonic);
         if (!($response['ok'] ?? false)) {
             throw new \RuntimeException(
                 (string)($response['error']['message'] ?? 'Gateway stop failed.')
             );
         }
-        $this->platform->stop((string)$service['kind']);
-        return (array)($response['payload'] ?? []) + [
+        $payload = \is_array($response['payload'] ?? null)
+            ? $response['payload']
+            : [];
+        $this->platform->stop(
+            (string)$service['kind'],
+            $deadlineMonotonic,
+        );
+        if (($payload['accepted'] ?? false) !== true
+            || ($payload['data_plane_stopped'] ?? false) !== true
+            || ($payload['manual_cleanup_required'] ?? true) !== false
+        ) {
+            throw new \RuntimeException(
+                'Gateway stop intent is persistent, but Controller did not prove complete data-plane retirement; the service remains stopped for explicit recovery.'
+            );
+        }
+        return $payload + [
             'platform_service' => (string)$service['kind'],
             'persistent' => true,
         ];
@@ -2711,13 +5746,28 @@ final class GatewayHostManager
      *
      * @return array<string,mixed>
      */
-    public function startGateway(): array
+    public function startGateway(?float $deadlineMonotonic = null): array
     {
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::SERVICE_CONTROL_OPERATION_TIMEOUT_SECONDS,
+        );
+        $forwardDeadline = $this->operationDeadlineWithRequiredCompensation(
+            $deadlineMonotonic,
+            self::SERVICE_START_COMPENSATION_RESERVE_SECONDS,
+        );
+        $this->packages->assertNoActiveRebootstrap(
+            'Gateway explicit start',
+            $forwardDeadline,
+        );
         GatewayProjectStateFilesystem::assertAtomicWriteRuntimeCapability();
         $service = $this->platform->installedDefinition();
-        $intent = $this->clearAdminStoppedIntent();
+        $intent = $this->clearAdminStoppedIntent($forwardDeadline);
         try {
-            $this->platform->start((string)$service['kind']);
+            $this->platform->start(
+                (string)$service['kind'],
+                $forwardDeadline,
+            );
             if ($this->paths->isTestMode()) {
                 return [
                     'accepted' => true,
@@ -2730,11 +5780,14 @@ final class GatewayHostManager
             // complete the mandatory 15-second continuous probe window. The
             // previous 15-second command deadline raced that safety gate and
             // stopped an otherwise healthy service just before it became ready.
-            $deadline = self::monotonicNow()
-                + self::EXPLICIT_START_READY_TIMEOUT_SECONDS;
+            $deadline = \min(
+                $forwardDeadline,
+                self::monotonicNow()
+                    + self::EXPLICIT_START_READY_TIMEOUT_SECONDS,
+            );
             do {
-                \usleep(100000);
-                $status = $this->administratorStatus();
+                $this->waitForPublicationDelay(0.1, $deadline);
+                $status = $this->administratorStatus($forwardDeadline);
                 if (self::hostStatusIsTrustedReady($status)) {
                     return $status + [
                         'accepted' => true,
@@ -2747,33 +5800,118 @@ final class GatewayHostManager
                     ?? 'Gateway did not become ready after explicit administrator start.')
             );
         } catch (\Throwable $throwable) {
-            $stopFailure = null;
-            try {
-                $this->platform->stop((string)$service['kind']);
-            } catch (\Throwable $stop) {
-                $stopFailure = $stop;
-            }
-            if ($intent !== null) {
-                $this->restoreAdminStoppedIntent($intent);
-            }
-            if ($stopFailure instanceof \Throwable) {
+            $compensationFailures = $this->compensateFailedGatewayStart(
+                (string)$service['kind'],
+                $intent,
+                $deadlineMonotonic,
+            );
+            if ($compensationFailures !== []) {
                 throw new \RuntimeException(
                     GatewayBoundedText::singleLine(
                         $throwable->getMessage(),
                         2048,
                         'Gateway explicit start failed.',
-                    ) . ' Platform stop also failed: '
-                        . GatewayBoundedText::singleLine(
-                            $stopFailure->getMessage(),
-                            512,
-                            'stop failed',
-                        ),
+                    ) . ' Fail-closed start compensation also failed: '
+                        . \implode('; ', $compensationFailures),
                     0,
                     $throwable,
                 );
             }
             throw $throwable;
         }
+    }
+
+    /**
+     * Stop a failed explicit start and restore its durable stop fence without
+     * allowing one compensation failure to suppress the remaining proofs.
+     *
+     * @return list<string>
+     */
+    private function compensateFailedGatewayStart(
+        string $kind,
+        ?string $expectedIntent,
+        float $deadlineMonotonic,
+        bool $requireExactIntent = false,
+    ): array {
+        $intentProofReserve = $expectedIntent === null
+            ? 0.0
+            : self::START_COMPENSATION_INTENT_PROOF_SECONDS;
+        $platformProofDeadline = $deadlineMonotonic - $intentProofReserve;
+        $intentRestoreDeadline = $platformProofDeadline
+            - self::START_COMPENSATION_PLATFORM_PROOF_SECONDS;
+        $stopDeadline = $intentRestoreDeadline - ($expectedIntent === null
+            ? 0.0
+            : self::START_COMPENSATION_INTENT_RESTORE_SECONDS);
+        $failures = [];
+        try {
+            $this->platform->stop($kind, $stopDeadline);
+        } catch (\Throwable $failure) {
+            $failures[] = 'platform stop: ' . GatewayBoundedText::singleLine(
+                $failure->getMessage(),
+                512,
+                'stop failed',
+            );
+        }
+
+        if ($expectedIntent !== null) {
+            try {
+                $this->restoreAdminStoppedIntent(
+                    $expectedIntent,
+                    $intentRestoreDeadline,
+                );
+            } catch (\Throwable $failure) {
+                $failures[] = 'stop-intent restore: '
+                    . GatewayBoundedText::singleLine(
+                        $failure->getMessage(),
+                        512,
+                        'restore failed',
+                    );
+            }
+        }
+
+        try {
+            $this->platform->persistentStoppedProof(
+                $kind,
+                $platformProofDeadline,
+            );
+        } catch (\Throwable $failure) {
+            $failures[] = 'persistent-stop proof: '
+                . GatewayBoundedText::singleLine(
+                    $failure->getMessage(),
+                    512,
+                    'proof failed',
+                );
+        }
+
+        if ($expectedIntent !== null) {
+            try {
+                // compare-absent restore deliberately preserves a signed STOP
+                // concurrently published by the native Broker. Either the
+                // exact before-image or that validated replacement is a newer
+                // authoritative fail-closed fence.
+                $observedIntent = $this->readVerifiedAdminStoppedIntent(
+                    $deadlineMonotonic,
+                );
+                if ($observedIntent === null
+                    || ($requireExactIntent
+                        && !\hash_equals($expectedIntent, $observedIntent))
+                ) {
+                    throw new \RuntimeException(
+                        $requireExactIntent
+                            ? 'The exact rebootstrap ADMIN_STOPPED intent was not restored after compensation.'
+                            : 'No verified ADMIN_STOPPED intent remains after compensation.'
+                    );
+                }
+            } catch (\Throwable $failure) {
+                $failures[] = 'stop-intent proof: '
+                    . GatewayBoundedText::singleLine(
+                        $failure->getMessage(),
+                        512,
+                        'proof failed',
+                    );
+            }
+        }
+        return $failures;
     }
 
     /**
@@ -2785,15 +5923,26 @@ final class GatewayHostManager
      * @param \Closure():TResult $callback
      * @return TResult
      */
-    private function withAdminStoppedIntentTransaction(\Closure $callback): mixed
-    {
+    private function withAdminStoppedIntentTransaction(
+        \Closure $callback,
+        ?float $deadlineMonotonic = null,
+    ): mixed {
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $this->paths->trustDir() . DIRECTORY_SEPARATOR . 'package-install.lock',
             $callback,
+            waitTimeoutSeconds: $deadlineMonotonic === null
+                ? 30.0
+                : \min(
+                    30.0,
+                    $this->remainingOperationDeadline($deadlineMonotonic),
+                ),
+            deadlineMonotonic: $deadlineMonotonic,
         );
     }
 
-    private function clearAdminStoppedIntent(): ?string
+    private function clearAdminStoppedIntent(
+        ?float $deadlineMonotonic = null,
+    ): ?string
     {
         return $this->withAdminStoppedIntentTransaction(function (): ?string {
             $file = $this->paths->adminStoppedIntentFile();
@@ -2819,11 +5968,13 @@ final class GatewayHostManager
                 'verified ADMIN_STOPPED intent',
             );
             return $contents;
-        });
+        }, $deadlineMonotonic);
     }
 
-    private function restoreAdminStoppedIntent(string $contents): void
-    {
+    private function restoreAdminStoppedIntent(
+        string $contents,
+        ?float $deadlineMonotonic = null,
+    ): void {
         $this->withAdminStoppedIntentTransaction(function () use ($contents): void {
             $file = $this->paths->adminStoppedIntentFile();
             if (\file_exists($file) || \is_link($file)) {
@@ -2854,7 +6005,7 @@ final class GatewayHostManager
                 throw new \RuntimeException('Restored ADMIN_STOPPED intent is unsafe.');
             }
             $this->syncDirectory(\dirname($file));
-        });
+        }, $deadlineMonotonic);
     }
 
     private function assertAdminStoppedIntent(string $contents): void
@@ -2974,9 +6125,27 @@ final class GatewayHostManager
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
      */
-    public function request(string $operation, array $payload = []): array
+    public function request(
+        string $operation,
+        array $payload = [],
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        return $this->client->request($operation, $payload);
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::ADMIN_REQUEST_TIMEOUT_SECONDS,
+        );
+        if (\hash_equals('repair', \strtolower(\trim($operation)))) {
+            $this->packages->assertNoActiveRebootstrap(
+                'Gateway repair',
+                $deadlineMonotonic,
+            );
+        }
+        return $this->client->request(
+            $operation,
+            $payload,
+            $deadlineMonotonic,
+        );
     }
 
     /**
@@ -2990,7 +6159,10 @@ final class GatewayHostManager
         string $instanceName,
         ?float $deadlineMonotonic = null,
     ): array {
-        $this->remainingOperationDeadline($deadlineMonotonic);
+        $deadlineMonotonic = $this->boundedOperationDeadline(
+            $deadlineMonotonic,
+            self::LEASE_VALIDATION_TIMEOUT_SECONDS,
+        );
         self::assertLeaseReceiptInstanceName($instanceName);
         $receipt = $this->loadLeaseReceipt($instanceName);
         $this->remainingOperationDeadline($deadlineMonotonic);
@@ -3073,7 +6245,7 @@ final class GatewayHostManager
         if ($existing === []) {
             return;
         }
-        foreach (['project_uuid', 'gateway_epoch', 'instance_id', 'launch_id'] as $field) {
+        foreach (['project_uuid', 'instance_id', 'launch_id'] as $field) {
             $left = (string)($existing[$field] ?? '');
             $right = (string)($incoming[$field] ?? '');
             if ($left === '' || $right === '' || !\hash_equals($left, $right)) {
@@ -3083,6 +6255,12 @@ final class GatewayHostManager
                 return;
             }
         }
+
+        $existingGatewayEpoch = (string)($existing['gateway_epoch'] ?? '');
+        $incomingGatewayEpoch = (string)($incoming['gateway_epoch'] ?? '');
+        $sameGatewayEpoch = $existingGatewayEpoch !== ''
+            && $incomingGatewayEpoch !== ''
+            && \hash_equals($existingGatewayEpoch, $incomingGatewayEpoch);
 
         $existingConfigGeneration = $existing['active_config_generation'] ?? null;
         $incomingConfigGeneration = $incoming['active_config_generation'] ?? null;
@@ -3098,18 +6276,32 @@ final class GatewayHostManager
         $incomingSequence = $incoming['lease_sequence'] ?? null;
         $existingIssuedMonotonic = $existing['issued_monotonic'] ?? null;
         $incomingIssuedMonotonic = $incoming['issued_monotonic'] ?? null;
+        $existingLifecycle = \strtoupper((string)(
+            $existing['lifecycle_state'] ?? ''
+        ));
+        $incomingLifecycle = \strtoupper((string)(
+            $incoming['lifecycle_state'] ?? ''
+        ));
+        $existingDrainOperationId = (string)(
+            $existing['drain_operation_id'] ?? ''
+        );
+        $incomingDrainOperationId = (string)(
+            $incoming['drain_operation_id'] ?? ''
+        );
         $existingTtl = $existing['lease_ttl_seconds'] ?? null;
         $incomingTtl = $incoming['lease_ttl_seconds'] ?? null;
         if (!\is_int($existingConfigGeneration)
             || !\is_int($incomingConfigGeneration)
             || !\is_int($existingProjectGeneration)
             || !\is_int($incomingProjectGeneration)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $existingGatewayEpoch) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $incomingGatewayEpoch) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $existingBootId) !== 1
             || !\hash_equals($existingBootId, $incomingBootId)
             || !\is_int($existingSequence)
             || !\is_int($incomingSequence)
             || $existingSequence < 1
-            || $incomingSequence < $existingSequence
+            || ($sameGatewayEpoch && $incomingSequence < $existingSequence)
             || !(\is_int($existingIssuedMonotonic)
                 || \is_float($existingIssuedMonotonic))
             || !(\is_int($incomingIssuedMonotonic)
@@ -3118,10 +6310,21 @@ final class GatewayHostManager
             || !\is_finite((float)$incomingIssuedMonotonic)
             || (float)$existingIssuedMonotonic < 0.0
             || (float)$incomingIssuedMonotonic < (float)$existingIssuedMonotonic
+            || (!$sameGatewayEpoch
+                && (float)$incomingIssuedMonotonic
+                    <= (float)$existingIssuedMonotonic)
+            || ($existingLifecycle === 'DRAINING'
+                && $incomingLifecycle !== 'DRAINING')
+            || ($existingLifecycle === 'DRAINING'
+                && !\hash_equals(
+                    $existingDrainOperationId,
+                    $incomingDrainOperationId,
+                ))
             || !\is_int($existingTtl)
             || !\is_int($incomingTtl)
             || $existingConfigGeneration < 1
-            || $incomingConfigGeneration < $existingConfigGeneration
+            || ($sameGatewayEpoch
+                && $incomingConfigGeneration < $existingConfigGeneration)
             || $existingProjectGeneration < 1
             || $incomingProjectGeneration < $existingProjectGeneration
             || $existingTtl < 1
@@ -3140,6 +6343,16 @@ final class GatewayHostManager
             throw new \RuntimeException(
                 'REGISTER_REPLAY_REQUIRED: stale gateway lease receipt completion was rejected.'
             );
+        }
+
+        if (!$sameGatewayEpoch) {
+            // A Controller epoch may reset receipt/config sequences, but its
+            // first replacement for the same host boot and WLS launch must be
+            // strictly newer on the host monotonic clock. Equal timestamps
+            // cannot order two epochs safely and therefore require the client
+            // to retry. This rejects a delayed old-epoch heartbeat after the
+            // new epoch has committed.
+            return;
         }
 
         if ($incomingSequence === $existingSequence) {
@@ -3457,6 +6670,13 @@ final class GatewayHostManager
             $receipt['host_boot_id'] ?? ''
         )));
         $issuedMonotonic = $receipt['issued_monotonic'] ?? null;
+        $lifecycleState = \strtoupper(\trim((string)(
+            $receipt['lifecycle_state'] ?? ''
+        )));
+        $drainOperationId = \strtolower(\trim((string)(
+            $receipt['drain_operation_id'] ?? ''
+        )));
+        $drainStartedMonotonic = $receipt['drain_started_monotonic'] ?? null;
         $leaseSequence = $receipt['lease_sequence'] ?? null;
         $expectedIdempotencyKey = \substr(\hash(
             'sha256',
@@ -3537,6 +6757,17 @@ final class GatewayHostManager
             || !\is_finite((float)$issuedMonotonic)
             || (float)$issuedMonotonic < 0.0
             || (float)$issuedMonotonic > $monotonicNow + 1.0
+            || !\in_array($lifecycleState, ['ACTIVE', 'DRAINING'], true)
+            || (!\is_int($drainStartedMonotonic)
+                && !\is_float($drainStartedMonotonic))
+            || !\is_finite((float)$drainStartedMonotonic)
+            || ($lifecycleState === 'ACTIVE'
+                && ($drainOperationId !== ''
+                    || (float)$drainStartedMonotonic !== 0.0))
+            || ($lifecycleState === 'DRAINING'
+                && (\preg_match('/\A[a-f0-9]{64}\z/D', $drainOperationId) !== 1
+                    || (float)$drainStartedMonotonic <= 0.0
+                    || (float)$drainStartedMonotonic > (float)$issuedMonotonic))
             || !\is_int($leaseSequence)
             || $leaseSequence < 1
             || !\is_int($receipt['lease_ttl_seconds'] ?? null)
@@ -3851,6 +7082,96 @@ final class GatewayHostManager
         return $remaining;
     }
 
+    /**
+     * Establish one absolute budget at a public operation boundary, or derive
+     * a child deadline that can only shorten its caller's existing budget.
+     */
+    private function boundedOperationDeadline(
+        ?float $deadlineMonotonic,
+        float $defaultSeconds,
+    ): float {
+        if (!\is_finite($defaultSeconds) || $defaultSeconds <= 0.0) {
+            throw new \RuntimeException('Gateway operation timeout is invalid.');
+        }
+        $localDeadline = \hrtime(true) / 1_000_000_000 + $defaultSeconds;
+        if ($deadlineMonotonic === null) {
+            return $localDeadline;
+        }
+        $this->remainingOperationDeadline($deadlineMonotonic);
+        return \min($deadlineMonotonic, $localDeadline);
+    }
+
+    /**
+     * Reserve a bounded tail of the caller's absolute budget before any
+     * irreversible host mutation. Forward work can exhaust only its child
+     * deadline; rollback and definition/slot cleanup retain the outer tail.
+     */
+    private function operationDeadlineWithReservedCompensation(
+        float $operationDeadlineMonotonic,
+        float $preferredReserveSeconds,
+    ): float {
+        if (!\is_finite($preferredReserveSeconds)
+            || $preferredReserveSeconds <= 0.0
+        ) {
+            throw new \RuntimeException(
+                'Gateway compensation reserve is invalid.'
+            );
+        }
+        $remaining = $this->remainingOperationDeadline(
+            $operationDeadlineMonotonic,
+        );
+        if ($remaining < self::MIN_BOUNDED_COMMAND_TIMEOUT_SECONDS * 2.0) {
+            throw new \RuntimeException(
+                'Gateway operation budget cannot reserve rollback capacity.'
+            );
+        }
+        $reserve = \min(
+            $preferredReserveSeconds,
+            \max(
+                self::MIN_BOUNDED_COMMAND_TIMEOUT_SECONDS,
+                $remaining / 3.0,
+            ),
+        );
+        $forwardDeadline = $operationDeadlineMonotonic - $reserve;
+        if ($forwardDeadline - self::monotonicNow()
+            < self::MIN_BOUNDED_COMMAND_TIMEOUT_SECONDS
+        ) {
+            throw new \RuntimeException(
+                'Gateway operation budget cannot preserve its rollback deadline.'
+            );
+        }
+        return $forwardDeadline;
+    }
+
+    /**
+     * Preserve a fixed rollback budget for a mutation whose platform recovery
+     * time cannot safely be compressed to a fraction of a short caller budget.
+     */
+    private function operationDeadlineWithRequiredCompensation(
+        float $operationDeadlineMonotonic,
+        float $requiredReserveSeconds,
+    ): float {
+        if (!\is_finite($requiredReserveSeconds)
+            || $requiredReserveSeconds <= 0.0
+        ) {
+            throw new \RuntimeException(
+                'Gateway required compensation reserve is invalid.'
+            );
+        }
+        $remaining = $this->remainingOperationDeadline(
+            $operationDeadlineMonotonic,
+        );
+        if ($remaining
+            < $requiredReserveSeconds
+                + self::MIN_BOUNDED_COMMAND_TIMEOUT_SECONDS
+        ) {
+            throw new \RuntimeException(
+                'Gateway operation budget cannot preserve its required rollback capacity.'
+            );
+        }
+        return $operationDeadlineMonotonic - $requiredReserveSeconds;
+    }
+
     private function operationLockWaitTimeout(
         ?float $deadlineMonotonic,
         float $defaultSeconds,
@@ -4035,7 +7356,10 @@ final class GatewayHostManager
                             . 'WebSocket, and request counters reached zero.',
                     );
                 }
-                $unregistered = $this->unregister($instanceName);
+                $unregistered = $this->unregister(
+                    $instanceName,
+                    $operationDeadlineMonotonic,
+                );
                 return $drain + $lastCounters
                     + self::forcedDrainSummary($lastCounters) + [
                         'drain_complete' => false,
@@ -4204,13 +7528,18 @@ final class GatewayHostManager
     public function installInactiveSlot(
         ?string $packageDirectory = null,
         string $profile = 'default',
+        ?float $deadlineMonotonic = null,
     ): array {
         if ($packageDirectory === null || \trim($packageDirectory) === '') {
             throw new \RuntimeException(
                 'WLS 2.0 no longer seeds a host gateway from the project; provide a signed self-contained package.'
             );
         }
-        return $this->stagePackage($packageDirectory, $profile);
+        return $this->stagePackage(
+            $packageDirectory,
+            $profile,
+            $deadlineMonotonic,
+        );
     }
 
     /**
@@ -4285,36 +7614,50 @@ final class GatewayHostManager
      *
      * @return array<string,mixed>
      */
-    private function classifyPublicPortsReadOnly(string $profile): array
+    private function classifyPublicPortsReadOnly(
+        string $profile,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $profile = self::normalizeListenProfile($profile);
+        $this->remainingOperationDeadline($deadlineMonotonic);
         $ports = \array_values(\array_unique([
             $this->paths->publicHttpPort(),
             $this->paths->publicHttpsPort(),
         ]));
-        $numericOwner = [];
-        foreach ($ports as $port) {
-            try {
-                $numericOwner[$port] = Processer::getProcessIdByPort($port);
-            } catch (\Throwable) {
-                $numericOwner[$port] = -1;
-            }
-        }
+        // The legacy Processer PID lookup shells out through platform drivers
+        // without an absolute timeout. PID visibility is diagnostic only, so
+        // classification relies on the bounded kernel table plus an actual
+        // loopback connect and remains fail-closed when neither is conclusive.
+        $listenerTable = $this->readOnlyPublicListenerTable(
+            $ports,
+            $deadlineMonotonic,
+        );
         $diagnostics = [];
         foreach ($this->publicListenTargets($profile) as $target) {
+            $this->remainingOperationDeadline($deadlineMonotonic);
             $port = (int)$target['port'];
-            $pid = (int)($numericOwner[$port] ?? -1);
             $familyObservation = $this->readOnlyLoopbackListenerProbe(
                 (string)$target['family'],
                 $port,
+                $deadlineMonotonic,
             );
-            $portState = $pid > 0 || $familyObservation === true
-                ? true
-                : ($pid < 0 && $familyObservation === null ? null : false);
+            $tableObservation = ($listenerTable['known'] ?? false) === true
+                ? isset($listenerTable['occupied'][$port])
+                : null;
+            $portState = self::classifyReadOnlyListenerObservation(
+                0,
+                $familyObservation,
+                $tableObservation,
+            );
             $diagnostics[] = $target + [
                 'check' => 'read_only_listener_table_and_connect',
                 'occupied' => $portState,
-                'owner_pid_visible' => $pid > 0,
+                'owner_pid_visible' => false,
+                'listener_table_observed' => $tableObservation,
+                'listener_table_source' => (string)(
+                    $listenerTable['source'] ?? 'unavailable'
+                ),
             ];
         }
         $occupiedPorts = [];
@@ -4353,8 +7696,165 @@ final class GatewayHostManager
         ];
     }
 
-    private function readOnlyLoopbackListenerProbe(string $family, int $port): ?bool
+    /**
+     * Read the kernel listener table without a shell or a bind probe. A
+     * successful command proves both positive and negative observations; a
+     * missing tool or unreadable table remains unknown rather than available.
+     *
+     * @param list<int> $ports
+     * @return array{known:bool,occupied:array<int,true>,source:string}
+     */
+    private function readOnlyPublicListenerTable(
+        array $ports,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $systemRoot = \rtrim((string)(\getenv('SystemRoot') ?: 'C:\\Windows'), '/\\');
+            $commands = [
+                [$systemRoot . '\\System32\\netstat.exe', '-ano', '-p', 'tcp'],
+            ];
+        } elseif (PHP_OS_FAMILY === 'Darwin') {
+            $commands = [
+                ['/usr/sbin/netstat', '-an', '-p', 'tcp'],
+                ['/usr/bin/netstat', '-an', '-p', 'tcp'],
+            ];
+        } else {
+            $commands = [
+                ['/usr/sbin/ss', '-H', '-l', '-t', '-n'],
+                ['/usr/bin/ss', '-H', '-l', '-t', '-n'],
+                ['/bin/ss', '-H', '-l', '-t', '-n'],
+                ['/usr/sbin/netstat', '-tln'],
+                ['/usr/bin/netstat', '-tln'],
+                ['/bin/netstat', '-tln'],
+            ];
+        }
+        foreach ($commands as $command) {
+            $executable = @\realpath($command[0]);
+            if (!\is_string($executable)
+                || $executable === ''
+                || !\is_file($executable)
+                || !\is_executable($executable)
+            ) {
+                continue;
+            }
+            $command[0] = $executable;
+            $remaining = $this->remainingOperationDeadline(
+                $deadlineMonotonic,
+            );
+            if ($remaining < self::MIN_BOUNDED_COMMAND_TIMEOUT_SECONDS) {
+                throw new \RuntimeException(
+                    'Gateway operation deadline was exhausted before listener-table inspection.',
+                );
+            }
+            try {
+                $result = GatewayBoundedCommandRunner::run(
+                    $command,
+                    \min(1.0, $remaining),
+                    null,
+                    true,
+                    deadlineMonotonic: $deadlineMonotonic,
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+            if ((int)($result['code'] ?? -1) !== 0
+                || ($result['truncated'] ?? false) === true
+            ) {
+                continue;
+            }
+            return [
+                'known' => true,
+                'occupied' => self::parseReadOnlyListenerTable(
+                    (string)($result['stdout'] ?? $result['output'] ?? ''),
+                    $ports,
+                ),
+                'source' => \basename($executable),
+            ];
+        }
+        return ['known' => false, 'occupied' => [], 'source' => 'unavailable'];
+    }
+
+    /**
+     * @param list<int> $ports
+     * @return array<int,true>
+     */
+    private static function parseReadOnlyListenerTable(
+        string $output,
+        array $ports,
+    ): array {
+        $wanted = [];
+        foreach ($ports as $port) {
+            if ($port > 0 && $port <= 65535) {
+                $wanted[$port] = true;
+            }
+        }
+        $occupied = [];
+        foreach (\preg_split('/\R/', $output) ?: [] as $line) {
+            $line = \trim((string)$line);
+            if ($line === ''
+                || (\stripos($line, 'LISTEN') === false
+                    && \stripos($line, 'LISTENING') === false)
+            ) {
+                continue;
+            }
+            $parts = \preg_split('/\s+/', $line) ?: [];
+            $protocol = \strtoupper((string)($parts[0] ?? ''));
+            $localAddress = '';
+            if ($protocol === 'LISTEN') {
+                // Linux ss: LISTEN Recv-Q Send-Q Local Peer
+                $localAddress = (string)($parts[3] ?? '');
+            } elseif (\in_array($protocol, ['TCP', 'TCP4', 'TCP6'], true)) {
+                $listeningIndex = \array_search('LISTENING', \array_map(
+                    static fn (mixed $part): string => \strtoupper((string)$part),
+                    $parts,
+                ), true);
+                $localAddress = $listeningIndex !== false
+                    ? (string)($parts[1] ?? '')
+                    : (string)($parts[3] ?? '');
+            }
+            if ($localAddress === '') {
+                continue;
+            }
+            $port = 0;
+            if (\preg_match('/:(\d+)\z/D', $localAddress, $match) === 1
+                || \preg_match('/\.(\d+)\z/D', $localAddress, $match) === 1
+            ) {
+                $port = (int)$match[1];
+            }
+            if (isset($wanted[$port])) {
+                $occupied[$port] = true;
+            }
+        }
+        return $occupied;
+    }
+
+    private static function classifyReadOnlyListenerObservation(
+        int $pid,
+        ?bool $familyObservation,
+        ?bool $tableObservation,
+    ): ?bool {
+        if ($pid > 0
+            || $familyObservation === true
+            || $tableObservation === true
+        ) {
+            return true;
+        }
+        // Only a successfully read kernel table may prove absence for a
+        // listener that does not accept loopback connections and hides its PID.
+        return $tableObservation === false ? false : null;
+    }
+
+    private function readOnlyLoopbackListenerProbe(
+        string $family,
+        int $port,
+        ?float $deadlineMonotonic = null,
+    ): ?bool
+    {
+        $timeout = \min(
+            0.15,
+            $this->remainingOperationDeadline($deadlineMonotonic),
+        );
         $address = $family === 'ipv6'
             ? 'tcp://[::1]:' . $port
             : 'tcp://127.0.0.1:' . $port;
@@ -4362,7 +7862,7 @@ final class GatewayHostManager
             $address,
             $errno,
             $error,
-            0.15,
+            $timeout,
             \STREAM_CLIENT_CONNECT,
         );
         if (\is_resource($socket)) {

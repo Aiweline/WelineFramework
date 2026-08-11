@@ -9,6 +9,8 @@ use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 
 final class Transfer extends AbstractGatewayCommand
 {
+    private const OPERATION_BUDGET_SECONDS = 120.0;
+
     public function execute(array $args = [], array $data = []): int
     {
         $json = $this->isJson($args);
@@ -32,8 +34,12 @@ final class Transfer extends AbstractGatewayCommand
                 'transfer_arguments_required',
             );
         }
+        $deadlineMonotonic = (\hrtime(true) / 1_000_000_000)
+            + self::OPERATION_BUDGET_SECONDS;
         try {
-            $current = (new GatewayRegistrationBuilder())->projectUuid();
+            $current = (new GatewayRegistrationBuilder())->projectUuid(
+                $deadlineMonotonic,
+            );
             if (!\hash_equals($current, $to)) {
                 return $this->failure(
                     __('--to 必须等于当前目标项目 UUID：%{1}', [$current]),
@@ -47,6 +53,7 @@ final class Transfer extends AbstractGatewayCommand
                 $domain,
                 $from,
                 $to,
+                $deadlineMonotonic,
             );
             if (!$json) {
                 $this->printer->success(

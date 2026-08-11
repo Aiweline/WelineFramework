@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Control;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Control\BackendStatusService;
 use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Service\SharedStateRuntimeScope;
 use Weline\Server\Shared\Client\SharedStateClient;
 
 final class BackendStatusServiceTest extends TestCase
@@ -151,8 +152,8 @@ final class BackendStatusServiceTest extends TestCase
         self::assertTrue($dto['success']);
         self::assertSame(
             [
-                [20970, 'session_server.20970.token'],
-                [20971, 'memory_server.20971.token'],
+                [20970, SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', 20970)],
+                [20971, SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', 20971)],
             ],
             $service->stateClientCalls
         );

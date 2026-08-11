@@ -42,9 +42,15 @@ final class GatewayProvider extends AbstractServiceProvider
             'wls.gateway.requested_mode',
             '',
         )));
-        return $effective === GatewayStartupDecision::MODE_GATEWAY
-            || $effective === GatewayStartupDecision::MODE_WLS
-            || $requested === GatewayStartupDecision::MODE_AUTO;
+        // Explicit/persisted pure-WLS mode is a complete gateway opt-out. In
+        // particular, do not keep a "retirement-only" Agent alive: certificate
+        // retirement may consult the host controller and would violate the
+        // edge=wls promise that startup never touches the shared gateway.
+        // Auto fallback remains a gateway tenant while WLS is serving, so its
+        // Agent must stay enabled to retry registration and switch back.
+        return $requested !== GatewayStartupDecision::MODE_WLS
+            && ($effective === GatewayStartupDecision::MODE_GATEWAY
+                || $requested === GatewayStartupDecision::MODE_AUTO);
     }
 
     public function getInstanceCount(ServiceContext $context): int
@@ -91,6 +97,14 @@ final class GatewayProvider extends AbstractServiceProvider
             'wls.gateway.requested_mode',
             '',
         )));
+        if ($requested === GatewayStartupDecision::MODE_WLS
+            || ($effective === GatewayStartupDecision::MODE_WLS
+                && $requested !== GatewayStartupDecision::MODE_AUTO)
+        ) {
+            throw new \LogicException(
+                'Explicit pure WLS mode must not start the WLS Gateway Agent.'
+            );
+        }
         $arguments = [
             'server:gateway:agent',
             '--daemon',
@@ -99,11 +113,6 @@ final class GatewayProvider extends AbstractServiceProvider
             '--master-pid=' . $context->masterPid,
             '--worker-id=' . $instanceId,
         ];
-        if ($effective === GatewayStartupDecision::MODE_WLS
-            && $requested !== GatewayStartupDecision::MODE_AUTO
-        ) {
-            $arguments[] = '--certificate-retirement-only';
-        }
         return new ServiceCommand(
             script: BP . 'bin' . DS . 'w',
             arguments: $arguments,

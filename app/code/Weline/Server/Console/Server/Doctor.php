@@ -368,14 +368,12 @@ class Doctor extends CommandAbstract
                         ? [
                             'protocols' => [HttpProtocolSelection::HTTP_2, HttpProtocolSelection::HTTP_1],
                             'preferred' => HttpProtocolSelection::HTTP_2,
-                            'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
                             'tls_session_resumption' => true,
                             'alt_svc' => false,
                         ]
                         : [
                             'protocols' => [HttpProtocolSelection::HTTP_1],
                             'preferred' => HttpProtocolSelection::HTTP_1,
-                            'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
                             'tls_session_resumption' => false,
                             'alt_svc' => false,
                         ],

@@ -66,6 +66,65 @@ final class NativeGatewayAdminStoppedTransactionContractTest extends TestCase
         self::assertStringContainsString('if (\\file_exists($file) || \\is_link($file))', $restore);
     }
 
+    public function testExplicitStartAndRebootstrapReserveAndProveCompensation(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5) . '/Service/Edge/Gateway/GatewayHostManager.php',
+        );
+        $rebootstrap = $this->functionBody(
+            $source,
+            'public function rebootstrap(',
+            'private function rebootstrapTerminalResult(',
+        );
+        $startGeneration = $this->functionBody(
+            $source,
+            'private function startRebootstrapGeneration(',
+            'private function awaitRebootstrapIdentity(',
+        );
+        $startGateway = $this->functionBody(
+            $source,
+            'public function startGateway(',
+            'private function compensateFailedGatewayStart(',
+        );
+        $compensation = $this->functionBody(
+            $source,
+            'private function compensateFailedGatewayStart(',
+            'private function withAdminStoppedIntentTransaction(',
+        );
+
+        self::assertStringContainsString(
+            'REBOOTSTRAP_COMPENSATION_RESERVE_SECONDS',
+            $rebootstrap,
+        );
+        self::assertStringContainsString('$forwardDeadline', $rebootstrap);
+        self::assertStringContainsString(
+            'SERVICE_START_COMPENSATION_RESERVE_SECONDS',
+            $startGeneration,
+        );
+        self::assertStringContainsString(
+            'compensateFailedGatewayStart(',
+            $startGeneration,
+        );
+        self::assertStringContainsString(
+            'SERVICE_START_COMPENSATION_RESERVE_SECONDS',
+            $startGateway,
+        );
+        self::assertStringContainsString(
+            'compensateFailedGatewayStart(',
+            $startGateway,
+        );
+
+        self::assertStringContainsString('$this->platform->stop(', $compensation);
+        self::assertStringContainsString('restoreAdminStoppedIntent(', $compensation);
+        self::assertStringContainsString('persistentStoppedProof(', $compensation);
+        self::assertStringContainsString('readVerifiedAdminStoppedIntent(', $compensation);
+        self::assertGreaterThanOrEqual(
+            4,
+            \substr_count($compensation, 'catch (\\Throwable $failure)'),
+            'Stop, intent restore and both terminal proofs must fail independently.',
+        );
+    }
+
     public function testBothNativeBootstrapClientsUseTheProtocolSecretVerbatim(): void
     {
         $gateway = \dirname(__DIR__, 5) . '/Service/Edge/Gateway';

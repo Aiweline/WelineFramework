@@ -21,8 +21,8 @@ use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\Edge\NativeServingManifestStartupRecovery;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\ServerInstanceManager;
@@ -348,15 +348,12 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'http' => [
                     'protocols' => [HttpProtocolSelection::HTTP_1],
                     'preferred' => HttpProtocolSelection::HTTP_1,
-                    'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
                 ],
             ], true)->toArray();
             ServerInstanceManager::atomicWriteJsonStatic($instanceFile, [
                 'lifecycle_state' => 'starting',
                 'edge_adapter' => 'nginx',
                 'http_protocol_selection' => $httpProtocolSelection,
-                'protocol_edge_enabled' => false,
-                'protocol_edge_binary' => '',
             ], 5);
 
             $orchestrator->markReady($context, 10);
@@ -370,8 +367,6 @@ class ServiceOrchestratorStartupTest extends TestCase
             self::assertSame(10, $data['server_ready_service_count'] ?? null);
             self::assertSame('nginx', $data['edge_adapter'] ?? null);
             self::assertSame($httpProtocolSelection, $data['http_protocol_selection'] ?? null);
-            self::assertFalse((bool)($data['protocol_edge_enabled'] ?? true));
-            self::assertSame('', $data['protocol_edge_binary'] ?? null);
         } finally {
             if (\is_file($instanceFile)) {
                 @\unlink($instanceFile);
@@ -421,7 +416,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                     'http' => [
                         'protocols' => ['h1'],
                         'preferred' => 'h1',
-                        'protocol_edge' => 'disabled',
                         'tls_session_resumption' => false,
                         'alt_svc' => false,
                     ],
@@ -4213,7 +4207,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame('p11005ce4.weline.test', $command->arguments[0] ?? null);
     }
 
-    public function testGatewayDispatcherUsesSameProtocolEdgeTokenAsWorkers(): void
+    public function testGatewayDispatcherUsesSameBackendTokenAsWorkers(): void
     {
         $instanceName = 'gateway-dispatcher-token';
         $provider = new DispatcherProvider();
@@ -4252,7 +4246,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                     'http' => [
                         'protocols' => ['h1'],
                         'preferred' => 'h1',
-                        'protocol_edge' => 'disabled',
                         'tls_session_resumption' => false,
                         'alt_svc' => false,
                     ],
@@ -4267,15 +4260,15 @@ class ServiceOrchestratorStartupTest extends TestCase
             $command = $provider->buildCommand(1, $context);
 
             self::assertContains(
-                '--protocol-edge-token-file=' . ProtocolEdgeRuntime::tokenFile($instanceName),
+                '--gateway-backend-token-file=' . GatewayBackendIngressTokenStore::tokenFile($instanceName),
                 $command->arguments,
             );
             self::assertMatchesRegularExpression(
                 '/^[a-f0-9]{64}$/D',
-                \trim((string)\file_get_contents(ProtocolEdgeRuntime::tokenFile($instanceName))),
+                \trim((string)\file_get_contents(GatewayBackendIngressTokenStore::tokenFile($instanceName))),
             );
         } finally {
-            @\unlink(ProtocolEdgeRuntime::tokenFile($instanceName));
+            self::cleanupGatewayBackendTokenState($instanceName);
         }
     }
 
@@ -4321,7 +4314,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                     'http' => [
                         'protocols' => ['h1'],
                         'preferred' => 'h1',
-                        'protocol_edge' => 'disabled',
                         'tls_session_resumption' => false,
                         'alt_svc' => false,
                     ],
@@ -4336,7 +4328,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             $command = $provider->buildCommand(1, $context);
 
             self::assertContains(
-                '--protocol-edge-token-file=' . ProtocolEdgeRuntime::tokenFile($instanceName),
+                '--gateway-backend-token-file=' . GatewayBackendIngressTokenStore::tokenFile($instanceName),
                 $command->arguments,
             );
             self::assertContains('--gateway-project-uuid=' . $projectUuid, $command->arguments);
@@ -4351,7 +4343,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                 $command->arguments,
             );
         } finally {
-            @\unlink(ProtocolEdgeRuntime::tokenFile($instanceName));
+            self::cleanupGatewayBackendTokenState($instanceName);
         }
     }
 
@@ -4406,7 +4398,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             $command = $provider->buildCommand(1, $context);
 
             self::assertContains(
-                '--protocol-edge-token-file=' . ProtocolEdgeRuntime::tokenFile($instanceName),
+                '--gateway-backend-token-file=' . GatewayBackendIngressTokenStore::tokenFile($instanceName),
                 $command->arguments,
             );
             self::assertContains('--gateway-project-uuid=' . $projectUuid, $command->arguments);
@@ -4421,7 +4413,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                 $command->arguments,
             );
         } finally {
-            @\unlink(ProtocolEdgeRuntime::tokenFile($instanceName));
+            self::cleanupGatewayBackendTokenState($instanceName);
         }
     }
 
@@ -5729,7 +5721,6 @@ class ServiceOrchestratorStartupTest extends TestCase
             'edge_adapter' => 'wls',
             'public_origin' => $publicOrigin,
             'http_protocol_selection' => $protocolSelection->toArray(),
-            'protocol_edge_enabled' => false,
             'host' => $context->host,
             'public_host' => $context->publicHost,
             'port' => $context->mainPort,
@@ -5897,6 +5888,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $afterEnv['wls']['serving_manifest_generation'] = 3;
         $afterEnv['wls']['serving_manifest_digest'] = $digest;
         $afterEnv['wls']['serving_instance_generation'] = 7;
+        $afterEnv['wls']['serving_certificate_trust_profile'] = 'test';
         $after = new ServiceContext(
             instanceName: 'ut-deferred-fence',
             epoch: 1,
@@ -5927,6 +5919,10 @@ class ServiceOrchestratorStartupTest extends TestCase
         $adopted = $this->readPrivate($orchestrator, 'context');
         self::assertInstanceOf(ServiceContext::class, $adopted);
         self::assertSame(3, (int)$adopted->getConfig('wls.serving_manifest_generation', 0));
+        self::assertSame(
+            'test',
+            $adopted->getConfig('wls.serving_certificate_trust_profile', ''),
+        );
         self::assertArrayNotHasKey(
             NativeServingManifestStartupRecovery::CONFIG_KEY,
             \is_array($adopted->envConfig['wls']['gateway'] ?? null)
@@ -6000,6 +5996,14 @@ class ServiceOrchestratorStartupTest extends TestCase
             'Deferred child startup configuration changed outside the serving manifest fence.',
         );
         $this->invokePrivateWithArgs($orchestrator, 'adoptDeferredChildStartupContext', [$after]);
+    }
+
+    private static function cleanupGatewayBackendTokenState(string $instanceName): void
+    {
+        $tokenFile = GatewayBackendIngressTokenStore::tokenFile($instanceName);
+        @\unlink($tokenFile);
+        @\unlink(\dirname($tokenFile) . DIRECTORY_SEPARATOR . '.state.lock');
+        @\rmdir(\dirname($tokenFile));
     }
 
     private function invokePrivate(object $object, string $method): mixed

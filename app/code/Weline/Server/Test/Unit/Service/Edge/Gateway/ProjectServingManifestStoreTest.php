@@ -7,6 +7,7 @@ namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 
 final class ProjectServingManifestStoreTest extends TestCase
@@ -51,6 +52,7 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertSame('*.localhost', ProjectServingManifestStore::normalizeHost('*.localhost'));
         self::assertSame('127.0.0.1', ProjectServingManifestStore::normalizeHost('127.0.0.1'));
         self::assertSame('::1', ProjectServingManifestStore::normalizeHost('::1'));
+        self::assertSame('172.31.35.19', ProjectServingManifestStore::normalizeHost('172.31.35.19'));
 
         $this->expectException(\InvalidArgumentException::class);
         ProjectServingManifestStore::normalizeHost('8.8.8.8');
@@ -99,9 +101,124 @@ final class ProjectServingManifestStoreTest extends TestCase
         );
     }
 
+    public function testFallbackBootstrapSelectsActiveSiblingWhenPrimaryIsInactive(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        foreach (['pending', 'disabled'] as $state) {
+            $instance = $state . '-primary';
+            $activeDomain = $state . '-sibling.example.test';
+            $publication = $store->publishFromRegistration($this->registration(
+                $instance,
+                [
+                    $this->inactiveRoute($state . '-primary.example.test', $state),
+                    $this->route($activeDomain),
+                ],
+            ));
+
+            $selection = $store->activeTlsSelectionForFence(
+                $this->fence($instance),
+                $publication['generation'],
+                $publication['digest'],
+                $publication['route_count'],
+            );
+
+            self::assertSame(1, $publication['route_count']);
+            self::assertSame($activeDomain, $selection['domain']);
+            self::assertSame([$activeDomain], $selection['active_domains']);
+            self::assertSame(
+                $publication['digest'],
+                $selection['publication']['digest'],
+            );
+            self::assertFileExists($selection['certificate']);
+            self::assertFileExists($selection['private_key']);
+        }
+    }
+
+    public function testStartupCertificateFenceComesFromTheExactServingManifest(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $publication = $store->publishFromRegistration($this->registration(
+            'startup-fence',
+            [
+                $this->route('primary.example.test'),
+                $this->route('sibling.example.test'),
+            ],
+        ));
+
+        $fence = ProjectServingManifestStore::activeCertificateFenceForDomain(
+            $publication,
+            'PRIMARY.EXAMPLE.TEST.',
+        );
+
+        self::assertSame('primary.example.test', $fence['domain']);
+        self::assertSame(3, $fence['generation']);
+        self::assertSame($this->snapshotDigest, $fence['source_digest']);
+        self::assertFileExists($fence['cert_path']);
+        self::assertFileExists($fence['key_path']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('absent from the exact serving manifest');
+        ProjectServingManifestStore::activeCertificateFenceForDomain(
+            $publication,
+            'missing.example.test',
+        );
+    }
+
+    public function testFallbackBootstrapRejectsManifestWithNoActiveCertificate(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $publication = $store->publishFromRegistration($this->registration(
+            'all-pending',
+            [
+                $this->inactiveRoute('first-pending.example.test', 'pending'),
+                $this->inactiveRoute('second-pending.example.test', 'pending'),
+            ],
+        ));
+
+        self::assertSame(0, $publication['route_count']);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('at least one ACTIVE serving route');
+        $store->activeTlsSelectionForFence(
+            $this->fence('all-pending'),
+            $publication['generation'],
+            $publication['digest'],
+            $publication['route_count'],
+        );
+    }
+
+    public function testFallbackBootstrapRejectsConcurrentManifestReplacement(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $firstRegistration = $this->registration('racing-primary', [
+            $this->route('before-race.example.test'),
+        ]);
+        $first = $store->publishFromRegistration($firstRegistration);
+        $nextRegistration = [
+            ...$firstRegistration,
+            'project_generation' => 6,
+            'request_digest' => \str_repeat('e', 64),
+            'non_certificate_desired_digest' => \str_repeat('f', 64),
+            'routes' => [$this->route('after-race.example.test')],
+        ];
+        $next = $store->publishFromRegistration($nextRegistration);
+
+        self::assertGreaterThan($first['generation'], $next['generation']);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(
+            'serving manifest changed before listener activation',
+        );
+        $store->activeTlsSelectionForFence(
+            $this->fence('racing-primary'),
+            $first['generation'],
+            $first['digest'],
+            $first['route_count'],
+        );
+    }
+
     public function testCommittedPointerSurvivesExpiredPostCommitReferenceCleanup(): void
     {
-        $now = 100.0;
+        $now = \hrtime(true) / 1_000_000_000;
+        $deadline = $now + 0.5;
         $transitionDeadlines = [];
         $store = new ProjectServingManifestStore(
             $this->root,
@@ -111,11 +228,11 @@ final class ProjectServingManifestStoreTest extends TestCase
             snapshotReferenceTransition: static function (
                 array $_referenced,
                 array $_retiring,
-                ?float $deadline,
-            ) use (&$now, &$transitionDeadlines): void {
-                $transitionDeadlines[] = $deadline;
+                ?float $transitionDeadline,
+            ) use (&$now, $deadline, &$transitionDeadlines): void {
+                $transitionDeadlines[] = $transitionDeadline;
                 if (\count($transitionDeadlines) === 2) {
-                    $now = 102.0;
+                    $now = $deadline + 1.0;
                     throw new \RuntimeException('synthetic post-commit cleanup failure');
                 }
             },
@@ -123,14 +240,14 @@ final class ProjectServingManifestStoreTest extends TestCase
 
         $published = $store->publishFromRegistration(
             $this->registration('primary', [$this->route('deadline.example.test')]),
-            deadlineMonotonic: 100.5,
+            deadlineMonotonic: $deadline,
         );
 
         self::assertSame(1, $published['generation']);
         self::assertSame($published['digest'], $store->current('primary')['digest']);
         self::assertCount(2, $transitionDeadlines);
-        self::assertSame(100.5, $transitionDeadlines[0]);
-        self::assertGreaterThan(100.5, $transitionDeadlines[1]);
+        self::assertSame($deadline, $transitionDeadlines[0]);
+        self::assertGreaterThan($deadline, $transitionDeadlines[1]);
     }
 
     public function testSnapshotReferenceCallbackCommitIsNotReversedByExpiredDeadline(): void
@@ -268,7 +385,7 @@ final class ProjectServingManifestStoreTest extends TestCase
             $store->publishFromRegistration($registration);
             self::fail('Mutated material must be rejected.');
         } catch (\RuntimeException $exception) {
-            self::assertStringContainsString('snapshot manifest integrity', $exception->getMessage());
+            self::assertStringContainsString('snapshot integrity', $exception->getMessage());
         }
         $pointerAfter = \json_decode((string)\file_get_contents($pointerPath), true);
         self::assertIsArray($pointerBefore);
@@ -344,6 +461,149 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertArrayHasKey($digests[1], $references);
         self::assertArrayHasKey($digests[2], $references);
         self::assertArrayHasKey($digests[3], $references);
+    }
+
+    public function testInactiveInstanceRetirementReplaysPastCorruptHistoricalLkg(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $instanceId = 'retired-corrupt-lkg';
+        $first = $store->publishFromRegistration($this->registration(
+            $instanceId,
+            [$this->route('retired-lkg.example.test')],
+        ));
+        $nextDigest = $this->createSnapshot(
+            'retired-lkg-certificate-2',
+            'retired-lkg-private-key-2',
+            'retired-lkg-chain-2',
+        );
+        $current = $store->publishFromRegistration($this->registration(
+            $instanceId,
+            [$this->route('retired-lkg.example.test', false, $nextDigest, 4)],
+        ));
+        $currentEnvelope = \json_decode(
+            (string)\file_get_contents((string)$current['path']),
+            true,
+        );
+        self::assertIsArray($currentEnvelope);
+        unset($currentEnvelope['digest']);
+        $currentEnvelope['schema'] = 'wls-project-serving-manifest/2';
+        $legacyDigest = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($currentEnvelope),
+        );
+        $legacyPath = \dirname((string)$current['path']) . DIRECTORY_SEPARATOR
+            . (int)$current['generation'] . '-' . $legacyDigest . '.json';
+        $currentEnvelope['digest'] = $legacyDigest;
+        self::assertNotFalse(\file_put_contents(
+            $legacyPath,
+            \json_encode($currentEnvelope, JSON_THROW_ON_ERROR),
+        ));
+        self::assertTrue(\unlink((string)$current['path']));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($legacyPath, 0600));
+        }
+        $pointerPath = $store->currentPointerPath($instanceId);
+        $pointer = \json_decode((string)\file_get_contents($pointerPath), true);
+        self::assertIsArray($pointer);
+        $pointer['digest'] = $legacyDigest;
+        $pointer['path'] = $legacyPath;
+        unset($pointer['sha256']);
+        $pointer['sha256'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($pointer),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $pointerPath,
+            \json_encode($pointer, JSON_THROW_ON_ERROR),
+        ));
+        $instanceKey = \substr(\hash('sha256', $instanceId), 0, 32);
+        $stateRoot = \dirname($pointerPath);
+        $authorityPath = $stateRoot . DIRECTORY_SEPARATOR
+            . 'authority-' . $instanceKey . '.json';
+        $authority = \json_decode(
+            (string)\file_get_contents($authorityPath),
+            true,
+        );
+        self::assertIsArray($authority);
+        $authority['manifest_digest'] = $legacyDigest;
+        unset($authority['sha256']);
+        $authority['sha256'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($authority),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $authorityPath,
+            \json_encode($authority, JSON_THROW_ON_ERROR),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($pointerPath, 0600));
+            self::assertTrue(\chmod($authorityPath, 0600));
+        }
+        $current['path'] = $legacyPath;
+        $current['digest'] = $legacyDigest;
+        self::assertArrayHasKey(
+            $nextDigest,
+            $store->referencedCertificateSnapshotDigests(),
+            'A legacy schema-2 manifest remains GC evidence, never serving authority.',
+        );
+        self::assertNotFalse(\file_put_contents(
+            (string)$first['path'],
+            '{"corrupt":true}',
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod((string)$first['path'], 0600));
+        }
+
+        try {
+            $store->referencedCertificateSnapshotDigests();
+            self::fail('A referenced corrupt historical manifest must fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'envelope integrity failed',
+                $exception->getMessage(),
+            );
+        }
+
+        try {
+            $store->retireInactiveInstanceReferences(
+                $instanceId,
+                (int)$current['generation'],
+                \str_repeat('f', 64),
+            );
+            self::fail('A mismatched endpoint serving proof must not retire references.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'does not match the selected inactive endpoint',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileExists($store->currentPointerPath($instanceId));
+
+        $store->retireInactiveInstanceReferences(
+            $instanceId,
+            (int)$current['generation'],
+            (string)$current['digest'],
+        );
+
+        foreach ([
+            $stateRoot . DIRECTORY_SEPARATOR . 'lkg-' . $instanceKey . '.json',
+            $store->currentPointerPath($instanceId),
+            $stateRoot . DIRECTORY_SEPARATOR . 'generation-' . $instanceKey,
+            $stateRoot . DIRECTORY_SEPARATOR . 'authority-' . $instanceKey . '.json',
+        ] as $retiredPath) {
+            self::assertFileDoesNotExist($retiredPath);
+        }
+        self::assertFileExists((string)$first['path']);
+        self::assertSame([], $store->referencedCertificateSnapshotDigests());
+
+        // Authority is the retirement commit marker. Once it is absent and
+        // every earlier mutable reference is absent, replay is idempotent.
+        $store->retireInactiveInstanceReferences(
+            $instanceId,
+            (int)$current['generation'],
+            (string)$current['digest'],
+        );
+        self::assertSame([], $store->referencedCertificateSnapshotDigests());
     }
 
     public function testMutableRecoveryBackupsRequireWholeClosureValidationBeforeCleanup(): void
@@ -446,7 +706,7 @@ final class ProjectServingManifestStoreTest extends TestCase
         ));
     }
 
-    public function testMutableCertificateSourcePathIsRejected(): void
+    public function testMutableCertificateSourcePathCannotBypassActiveAuthority(): void
     {
         $sourceDirectory = $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/source';
         self::assertTrue(\mkdir($sourceDirectory, 0700));
@@ -476,9 +736,19 @@ final class ProjectServingManifestStoreTest extends TestCase
             \hash('sha256', 'mutable-certificate') . ':'
                 . \hash('sha256', 'mutable-private-key') . ':',
         );
+        $route['certificate']['provenance_digest']
+            = ProjectCertificateGenerationStore::provenanceDigest(
+                'mutable.example.test',
+                (string)$route['certificate']['source_digest'],
+                ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+                ProjectCertificateGenerationStore::PROVIDER_SELF_SIGNED,
+                ProjectCertificateGenerationStore::MATERIAL_CLASS_SELF_SIGNED,
+            );
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('cannot bind mutable certificate source paths');
+        $this->expectExceptionMessage(
+            'does not match the active project certificate provenance authority',
+        );
         (new ProjectServingManifestStore($this->root))->publishFromRegistration(
             $this->registration('primary', [$route]),
         );
@@ -823,7 +1093,24 @@ final class ProjectServingManifestStoreTest extends TestCase
             ),
             'state' => 'pending',
             'pending' => true,
+            'trust_profile' => ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+            'provider' => 'none',
+            'material_class' => 'none',
         ];
+        $target['certificate']['provenance_digest']
+            = ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                'www.pending-target.example.test',
+                'pending',
+                (string)$target['certificate']['source_digest'],
+                0,
+                ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+            );
+        $this->publishInactiveCertificateAuthority(
+            'www.pending-target.example.test',
+            'pending',
+            0,
+            (string)$target['certificate']['source_digest'],
+        );
 
         $manifest = (new ProjectServingManifestStore($this->root))
             ->publishFromRegistration($this->registration('primary', [$apex, $target]));
@@ -965,6 +1252,8 @@ final class ProjectServingManifestStoreTest extends TestCase
         return [
             'project_uuid' => '123e4567-e89b-42d3-a456-426614174000',
             'project_root' => $this->root,
+            'certificate_trust_profile'
+                => ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
             'instance_id' => $instanceId,
             'instance_generation' => 11,
             'master_pid' => 12345,
@@ -995,6 +1284,25 @@ final class ProjectServingManifestStoreTest extends TestCase
         $projectUuid = '123e4567-e89b-42d3-a456-426614174000';
         self::assertFileExists($cert);
         self::assertFileExists($key);
+        $trustProfile = ProjectCertificateGenerationStore::TRUST_PROFILE_TEST;
+        $provider = ProjectCertificateGenerationStore::PROVIDER_SELF_SIGNED;
+        $materialClass = ProjectCertificateGenerationStore::MATERIAL_CLASS_SELF_SIGNED;
+        $provenanceDigest = ProjectCertificateGenerationStore::provenanceDigest(
+            $domain,
+            $snapshotDigest,
+            $trustProfile,
+            $provider,
+            $materialClass,
+        );
+        $this->publishActiveCertificateAuthority(
+            $domain,
+            $snapshotDigest,
+            $certificateGeneration,
+            $trustProfile,
+            $provider,
+            $materialClass,
+            $provenanceDigest,
+        );
         return [
             'route_id' => \substr(\hash('sha256', $projectUuid . "\0" . $domain), 0, 32),
             'domain' => $domain,
@@ -1010,7 +1318,13 @@ final class ProjectServingManifestStoreTest extends TestCase
                         . $snapshotDigest . '/privkey.pem',
                 ],
                 'source_digest' => $snapshotDigest,
-                'leaf_fingerprint_sha256' => \str_repeat('d', 64),
+                'trust_profile' => $trustProfile,
+                'provider' => $provider,
+                'material_class' => $materialClass,
+                'provenance_digest' => $provenanceDigest,
+                'leaf_fingerprint_sha256' => $this->snapshotLeafFingerprint(
+                    $snapshotDigest,
+                ),
                 'generation' => $certificateGeneration,
                 'pending' => false,
             ],
@@ -1020,8 +1334,101 @@ final class ProjectServingManifestStoreTest extends TestCase
         ];
     }
 
+    /** @return array<string,mixed> */
+    private function inactiveRoute(string $domain, string $state): array
+    {
+        if (!\in_array($state, ['pending', 'disabled'], true)) {
+            throw new \InvalidArgumentException('Unsupported inactive route state.');
+        }
+        $generation = $state === 'disabled' ? 7 : 0;
+        $route = $this->route($domain);
+        $route['certificate'] = [
+            'state' => $state,
+            'pending' => true,
+            'generation' => $generation,
+            'source_digest' => $state === 'disabled'
+                ? \hash(
+                    'sha256',
+                    "wls-disabled-certificate\0" . $domain . "\0" . $generation,
+                )
+                : \hash('sha256', "wls-pending-certificate\0" . $domain),
+            'trust_profile' => ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+            'provider' => 'none',
+            'material_class' => 'none',
+        ];
+        $route['certificate']['provenance_digest']
+            = ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                $domain,
+                $state,
+                (string)$route['certificate']['source_digest'],
+                $generation,
+                ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+            );
+        $this->publishInactiveCertificateAuthority(
+            $domain,
+            $state,
+            $generation,
+            (string)$route['certificate']['source_digest'],
+        );
+        if ($state === 'disabled') {
+            $route['force_https'] = false;
+        }
+        return $route;
+    }
+
     private function createSnapshot(string $certificate, string $privateKey, string $chain): string
     {
+        $fixtureSeed = \hash('sha256', $certificate . "\0" . $privateKey . "\0" . $chain);
+        $config = $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/snapshot-'
+            . \substr($fixtureSeed, 0, 16) . '-' . \bin2hex(\random_bytes(4)) . '.cnf';
+        self::assertNotFalse(\file_put_contents($config, <<<'CONF'
+[req]
+distinguished_name = dn
+prompt = no
+req_extensions = server_ext
+x509_extensions = server_ext
+
+[dn]
+CN = example.test
+
+[server_ext]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = example.test
+DNS.2 = *.example.test
+DNS.3 = www.pending-target.example.test
+DNS.4 = www.redirect.example.test
+CONF
+        ));
+        $arguments = [
+            'config' => $config,
+            'digest_alg' => 'sha256',
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'private_key_bits' => 2048,
+            'req_extensions' => 'server_ext',
+            'x509_extensions' => 'server_ext',
+        ];
+        $key = \openssl_pkey_new($arguments);
+        self::assertNotFalse($key);
+        $request = \openssl_csr_new(['commonName' => 'example.test'], $key, $arguments);
+        self::assertNotFalse($request);
+        $signed = \openssl_csr_sign(
+            $request,
+            null,
+            $key,
+            30,
+            $arguments,
+            (int)\hexdec(\substr($fixtureSeed, 0, 7)),
+        );
+        self::assertNotFalse($signed);
+        self::assertTrue(\openssl_x509_export($signed, $certificate, false));
+        self::assertTrue(\openssl_pkey_export($key, $privateKey, null, $arguments));
+        $certificate = \rtrim($certificate) . "\n";
+        $chain = '';
         $certHash = \hash('sha256', $certificate);
         $keyHash = \hash('sha256', $privateKey);
         $chainHash = $chain === '' ? '' : \hash('sha256', $chain);
@@ -1046,7 +1453,11 @@ final class ProjectServingManifestStoreTest extends TestCase
         $payload = [
             'schema_version' => 1,
             'source_digest' => $digest,
-            'leaf_fingerprint_sha256' => \str_repeat('d', 64),
+            'leaf_fingerprint_sha256' => \strtolower(\str_replace(
+                ':',
+                '',
+                (string)\openssl_x509_fingerprint($signed, 'sha256'),
+            )),
             'cert_sha256' => $certHash,
             'key_sha256' => $keyHash,
             'chain_sha256' => $chainHash,
@@ -1072,6 +1483,133 @@ final class ProjectServingManifestStoreTest extends TestCase
             self::assertTrue(\chmod($directory, 0700));
         }
         return $digest;
+    }
+
+    private function snapshotLeafFingerprint(string $snapshotDigest): string
+    {
+        $manifest = $this->snapshotManifestPayload($snapshotDigest);
+        return (string)($manifest['leaf_fingerprint_sha256'] ?? '');
+    }
+
+    /** @return array<string,mixed> */
+    private function snapshotManifestPayload(string $snapshotDigest): array
+    {
+        $path = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/snapshots/' . $snapshotDigest
+            . '/snapshot.json';
+        $envelope = \json_decode((string)\file_get_contents($path), true);
+        self::assertIsArray($envelope);
+        self::assertIsArray($envelope['payload'] ?? null);
+        return $envelope['payload'];
+    }
+
+    private function publishActiveCertificateAuthority(
+        string $domain,
+        string $snapshotDigest,
+        int $generation,
+        string $trustProfile,
+        string $provider,
+        string $materialClass,
+        string $provenanceDigest,
+    ): void {
+        $snapshot = $this->snapshotManifestPayload($snapshotDigest);
+        $snapshotRoot = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/snapshots/' . $snapshotDigest;
+        $activeRoot = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/active';
+        if (!\is_dir($activeRoot)) {
+            self::assertTrue(\mkdir($activeRoot, 0700, true));
+        }
+        $chainHash = (string)($snapshot['chain_sha256'] ?? '');
+        $payload = [
+            'schema_version' => ProjectCertificateGenerationStore::SCHEMA_VERSION,
+            'domain' => $domain,
+            'generation' => $generation,
+            'source_digest' => $snapshotDigest,
+            'trust_profile' => $trustProfile,
+            'provider' => $provider,
+            'material_class' => $materialClass,
+            'provenance_digest' => $provenanceDigest,
+            'cert_path' => $snapshotRoot . DIRECTORY_SEPARATOR . 'fullchain.pem',
+            'key_path' => $snapshotRoot . DIRECTORY_SEPARATOR . 'privkey.pem',
+            'chain_path' => $chainHash === ''
+                ? ''
+                : $snapshotRoot . DIRECTORY_SEPARATOR . 'chain.pem',
+            'leaf_fingerprint_sha256'
+                => (string)($snapshot['leaf_fingerprint_sha256'] ?? ''),
+            'cert_sha256' => (string)($snapshot['cert_sha256'] ?? ''),
+            'key_sha256' => (string)($snapshot['key_sha256'] ?? ''),
+            'chain_sha256' => $chainHash,
+            'activated_at' => '2026-08-04T00:00:00+00:00',
+            'previous' => null,
+        ];
+        $envelope = [
+            'payload' => $payload,
+            'sha256' => \hash('sha256', GatewayClient::canonicalJson($payload)),
+        ];
+        $path = $activeRoot . DIRECTORY_SEPARATOR
+            . \substr(\hash('sha256', $domain), 0, 32) . '.json';
+        self::assertNotFalse(\file_put_contents(
+            $path,
+            \json_encode(
+                $envelope,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($path, 0600));
+            self::assertTrue(\chmod($activeRoot, 0700));
+        }
+    }
+
+    private function publishInactiveCertificateAuthority(
+        string $domain,
+        string $state,
+        int $generation,
+        string $sourceDigest,
+    ): void {
+        $selector = \substr(\hash('sha256', $domain), 0, 32) . '.json';
+        $storeRoot = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations';
+        $activePath = $storeRoot . DIRECTORY_SEPARATOR . 'active'
+            . DIRECTORY_SEPARATOR . $selector;
+        if (\is_file($activePath)) {
+            self::assertTrue(\unlink($activePath));
+        }
+        $disabledRoot = $storeRoot . DIRECTORY_SEPARATOR . 'disabled';
+        if (!\is_dir($disabledRoot)) {
+            self::assertTrue(\mkdir($disabledRoot, 0700, true));
+        }
+        $disabledPath = $disabledRoot . DIRECTORY_SEPARATOR . $selector;
+        if ($state === 'pending') {
+            if (\is_file($disabledPath)) {
+                self::assertTrue(\unlink($disabledPath));
+            }
+            return;
+        }
+        $payload = [
+            'schema' => 'wls-project-certificate-disabled/1',
+            'state' => 'disabled',
+            'domain' => $domain,
+            'generation' => $generation,
+            'source_digest' => $sourceDigest,
+            'disabled_at' => '2026-08-04T00:00:00+00:00',
+        ];
+        $envelope = [
+            'payload' => $payload,
+            'sha256' => \hash('sha256', GatewayClient::canonicalJson($payload)),
+        ];
+        self::assertNotFalse(\file_put_contents(
+            $disabledPath,
+            \json_encode(
+                $envelope,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($disabledPath, 0600));
+            self::assertTrue(\chmod($disabledRoot, 0700));
+        }
     }
 
     /** @return array<string,mixed> */

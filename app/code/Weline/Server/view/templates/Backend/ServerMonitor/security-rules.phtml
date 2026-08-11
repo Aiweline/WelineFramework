@@ -4,6 +4,15 @@ $rulesJson = (string) $this->getData('rulesJson');
 if ($rulesJson === '') {
     $rulesJson = '{}';
 }
+$rulesData = \json_decode($rulesJson, true, 512, JSON_THROW_ON_ERROR);
+if (!\is_array($rulesData)) {
+    throw new \UnexpectedValueException('WLS security rules must decode to an object.');
+}
+$rulesJson = (string)\json_encode(
+    $rulesData,
+    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
+        | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR,
+);
 $rulesGeneration = \max(0, (int)$this->getData('rulesGeneration'));
 $rulesDigest = \trim((string)$this->getData('rulesDigest'));
 ?>
@@ -223,7 +232,7 @@ $rulesDigest = \trim((string)$this->getData('rulesDigest'));
     </div>
 </div>
 
-<script id="wls-security-rules-json" type="application/json"><?= htmlspecialchars($rulesJson, ENT_QUOTES) ?></script>
+<script id="wls-security-rules-json" type="application/json"><?= $rulesJson ?></script>
 <script>
 (function(g){
   if(g.__bqAdmin_server) return;

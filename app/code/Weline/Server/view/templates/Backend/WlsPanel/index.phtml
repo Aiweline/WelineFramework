@@ -26,7 +26,6 @@ $panelPluginViewerLabel = trim((string)($panelPluginViewerContext['label'] ?? ''
 $panelDashboardData = $this->getData('panelDashboardData');
 $panelDashboardData = is_array($panelDashboardData) ? $panelDashboardData : [];
 $dashboardMetrics = is_array($panelDashboardData['metrics'] ?? null) ? $panelDashboardData['metrics'] : [];
-$gatewayData = is_array($panelDashboardData['gateway'] ?? null) ? $panelDashboardData['gateway'] : [];
 $securityData = is_array($panelDashboardData['security'] ?? null) ? $panelDashboardData['security'] : [];
 $runtimeData = is_array($panelDashboardData['runtime'] ?? null) ? $panelDashboardData['runtime'] : [];
 $dashboardErrors = is_array($panelDashboardData['errors'] ?? null) ? array_values($panelDashboardData['errors']) : [];
@@ -37,8 +36,6 @@ $projectConfigItems = is_array($panelProjectConfigCenter['items'] ?? null) ? arr
 $projectConfigReadinessSummary = is_array($panelProjectConfigCenter['readiness_summary'] ?? null) ? $panelProjectConfigCenter['readiness_summary'] : [];
 $panelProjectFormData = $this->getData('panelProjectFormData');
 $panelProjectFormData = is_array($panelProjectFormData) ? $panelProjectFormData : [];
-$panelGatewaySettings = $this->getData('panelGatewaySettings');
-$panelGatewaySettings = is_array($panelGatewaySettings) ? $panelGatewaySettings : [];
 $panelSecurityData = $this->getData('panelSecurityData');
 $panelSecurityData = is_array($panelSecurityData) ? $panelSecurityData : [];
 $securityStats = is_array($panelSecurityData['stats'] ?? null) ? $panelSecurityData['stats'] : [];
@@ -59,36 +56,6 @@ $securityPagination = is_array($panelSecurityData['attack_pagination'] ?? null) 
 $securityScopeOptions = is_array($panelSecurityData['scope_options'] ?? null) ? array_values($panelSecurityData['scope_options']) : [];
 $securitySeverityOptions = is_array($panelSecurityData['severity_options'] ?? null) ? array_values($panelSecurityData['severity_options']) : [];
 $securityTypeOptions = is_array($panelSecurityData['type_options'] ?? null) ? array_values($panelSecurityData['type_options']) : [];
-$gatewayModeConfig = is_array($panelGatewaySettings['config'] ?? null) ? $panelGatewaySettings['config'] : [];
-$gatewayModeEnabled = !empty($gatewayModeConfig['enabled']);
-$gatewayModeListen = trim((string)($gatewayModeConfig['listen'] ?? '0.0.0.0:443'));
-$gatewayRequestedTopology = trim((string)($gatewayModeConfig['requested_topology'] ?? 'auto'));
-$gatewayRequestedTopologyLabel = trim((string)($gatewayModeConfig['requested_topology_label'] ?? __('自动')));
-$gatewayTopologyOptions = is_array($gatewayModeConfig['topology_options'] ?? null) ? array_values($gatewayModeConfig['topology_options']) : [];
-$gatewayModeEffectiveEnabled = !empty($gatewayModeConfig['effective_enabled']);
-$gatewayModeEffectiveListen = trim((string)($gatewayModeConfig['effective_listen'] ?? $gatewayModeListen));
-$gatewayEffectiveTopology = trim((string)($gatewayModeConfig['effective_topology'] ?? ''));
-$gatewayEffectiveTopologyLabel = trim((string)($gatewayModeConfig['effective_topology_label'] ?? __('未知')));
-$gatewayEffectiveTopologyHint = trim((string)($gatewayModeConfig['effective_topology_hint'] ?? ''));
-$gatewayDirectListenCapability = is_array($gatewayModeConfig['direct_listen_capability'] ?? null) ? $gatewayModeConfig['direct_listen_capability'] : [];
-$gatewayDirectListenSupported = !empty($gatewayDirectListenCapability['supported']);
-$gatewayDirectListenLabel = trim((string)($gatewayDirectListenCapability['label'] ?? ''));
-$gatewayDirectListenMessage = trim((string)($gatewayDirectListenCapability['message'] ?? ''));
-$gatewayDirectListenOs = trim((string)($gatewayDirectListenCapability['os_family'] ?? ''));
-$gatewayModeEnvOverride = !empty($gatewayModeConfig['env_override']);
-$gatewayInstances = is_array($panelGatewaySettings['instances'] ?? null) ? array_values($panelGatewaySettings['instances']) : [];
-$gatewayTargetInstances = array_values(array_filter(
-    $gatewayInstances,
-    static fn (array $instance): bool => !empty($instance['gateway_running'])
-        || !empty($instance['instance_running'])
-));
-if ($gatewayTargetInstances === []) {
-    $gatewayTargetInstances = $gatewayInstances;
-}
-$selectedGatewayInstance = trim((string)($panelGatewaySettings['selected_instance'] ?? ''));
-$gatewaySettingsError = trim((string)($panelGatewaySettings['error'] ?? ''));
-$gatewayAmbiguousTargets = !empty($panelGatewaySettings['ambiguous_gateway_targets']);
-$gatewayAutoSelected = !empty($panelGatewaySettings['auto_selected']);
 $panelNotice = trim((string)($this->getData('panelNotice') ?? ''));
 $panelError = trim((string)($this->getData('panelError') ?? ''));
 $panelAutoRefresh = trim((string)($this->getData('panelAutoRefresh') ?? ''));
@@ -121,8 +88,6 @@ $securityPolicyUrl = $this->getBackendUrl('*/backend/wls-panel/security-policy')
 $securityAuditUrl = $this->getBackendUrl('*/backend/wls-panel/security-audit');
 $projectSaveUrl = $this->getBackendUrl('*/backend/wls-panel/project-save');
 $projectDeleteUrl = $this->getBackendUrl('*/backend/wls-panel/project-delete');
-$gatewayApplyUrl = $this->getBackendUrl('*/backend/wls-panel/gateway-apply');
-$gatewaySaveUrl = $this->getBackendUrl('*/backend/wls-panel/gateway-save');
 $securityRulesSaveUrl = $this->getBackendUrl('*/backend/wls-panel/security-rules-save');
 $pluginRefreshUrl = $this->getBackendUrl('*/backend/wls-panel/plugin-refresh');
 $projectAdminUrl = $this->getBackendUrl('admin');
@@ -141,19 +106,12 @@ $appStorePlatformEnvironmentLabel = match ($appStorePlatformEnvironment) {
 };
 $appStorePlatformEnvironmentClass = $appStorePlatformEnvironment === 'production' ? 'is-on' : '';
 $serverManagerUrl = $this->getBackendUrl('*/backend/server-manager');
-$gatewayLegacyUrl = $this->getBackendUrl('*/backend/reverse-proxy-manager');
 $securityAdvancedRulesUrl = $this->getBackendUrl('*/backend/server-monitor/security-rules');
 $attackLogUrl = $this->getBackendUrl('*/backend/server-monitor/attack-log');
 $sslUrl = $this->getBackendUrl('*/backend/ssl-certificate');
 $optimizationUrl = $this->getBackendUrl('*/backend/optimization-guide');
 $managedProjectCount = (int)($dashboardMetrics['managed_projects'] ?? count($projectCards));
-$gatewayRuleCount = (int)($dashboardMetrics['gateway_rules'] ?? 0);
 $securityEventCount = (int)($dashboardMetrics['security_events'] ?? 0);
-$gatewayActiveCount = (int)($gatewayData['active'] ?? 0);
-$gatewayTotalCount = (int)($gatewayData['total'] ?? $gatewayRuleCount);
-$gatewayActiveRouteCount = (int)($panelGatewaySettings['active_route_count'] ?? $gatewayActiveCount);
-$gatewayEnabledInstanceCount = (int)($panelGatewaySettings['gateway_instance_count'] ?? 0);
-$gatewayRunningInstanceCount = (int)($panelGatewaySettings['running_gateway_instance_count'] ?? 0);
 $runtimeRunningInstances = (int)($runtimeData['running_instances'] ?? 0);
 $runtimeInstances = (int)($runtimeData['instances'] ?? 0);
 $runtimeWorkers = (int)($runtimeData['workers'] ?? 0);
@@ -183,8 +141,6 @@ $projectFormValue = static function (string $key, string $default = '') use ($pa
 };
 $projectFormId = (int)($panelProjectFormData['project_id'] ?? 0);
 $projectFormStatus = $projectFormValue('status', 'active');
-$projectFormGatewayEnabled = (int)($panelProjectFormData['gateway_enabled'] ?? 1) === 1;
-$projectFormBackendSsl = (int)($panelProjectFormData['backend_ssl'] ?? 0) === 1;
 $projectFormShowEditor = $projectFormId > 0 || (int)($this->request->getParam('new_project', 0)) === 1;
 $buildPanelProjectUrl = static function (array $params = []) use ($projectsUrl): string {
     if ($params === []) {
@@ -461,7 +417,6 @@ $resolveProjectActionLinks = static function (array $project) use (
     $projectPanelLink = (string)($project['panel'] ?? '');
     $projectPhpLink = (string)($project['php'] ?? '');
     $projectDbLink = (string)($project['db'] ?? '');
-    $projectBackendLink = (string)($project['backend'] ?? '');
 
     $phpOperationUrl = $buildOperationCapabilityUrl('php-profile', 'WLS PHP Manager', $buildProjectOperationContext($project, 'php-profile'));
     $dbOperationUrl = $buildOperationCapabilityUrl('database-profile', 'WLS Database Manager', $buildProjectOperationContext($project, 'database-profile'));
@@ -469,10 +424,10 @@ $resolveProjectActionLinks = static function (array $project) use (
     $deployUrl = $buildOperationCapabilityUrl('deploy', 'WLS Deploy', $buildProjectOperationContext($project, 'deploy'));
 
     if ($projectAdminLink === '') {
-        $projectAdminLink = $projectType === 'current' ? $projectAdminUrl : $projectBackendLink;
+        $projectAdminLink = $projectType === 'current' ? $projectAdminUrl : '';
     }
     if ($projectPanelLink === '') {
-        $projectPanelLink = $projectType === 'current' ? $dashboardUrl : $projectBackendLink;
+        $projectPanelLink = $projectType === 'current' ? $dashboardUrl : '';
     }
     if ($projectPhpLink === '') {
         $projectPhpLink = $phpOperationUrl;
@@ -2531,341 +2486,6 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     <span><?= __('公网入口固定为项目隔离 Nginx；WLS 仅提供 127.0.0.1 明文 HTTP/1.1 回源') ?></span>
                 </div>
             </section>
-        <?php elseif ($activePage === 'gateway'): ?>
-            <section class="wls-section" id="gateway-settings">
-                <div class="wls-section-head">
-                    <div>
-                        <span class="wls-shell-kicker"><?= __('网关模式') ?></span>
-                        <h2><?= __('网关设置') ?></h2>
-                    </div>
-                    <a class="wls-secondary-button" href="<?= $escapeHtml($gatewayLegacyUrl) ?>"><?= __('高级网关') ?></a>
-                </div>
-                <?php if ($gatewaySettingsError !== ''): ?>
-                    <div class="wls-inline-warning">
-                        <?= __('网关实例发现失败：%{1}', [$gatewaySettingsError]) ?>
-                    </div>
-                <?php endif; ?>
-                <?php if ($gatewayAmbiguousTargets): ?>
-                    <div class="wls-inline-warning">
-                        <?= __('有多个网关实例正在运行。应用路由前请先选择一个。') ?>
-                    </div>
-                <?php endif; ?>
-                <?php if ($gatewayModeEnvOverride): ?>
-                    <div class="wls-inline-warning">
-                        <?= __('当前运行时的网关环境变量正在覆盖面板保存的配置。') ?>
-                    </div>
-                <?php endif; ?>
-                <div class="wls-gateway-summary-grid">
-                    <article>
-                        <span><?= __('活跃路由') ?></span>
-                        <strong><?= $gatewayActiveRouteCount ?></strong>
-                    </article>
-                    <article>
-                        <span><?= __('网关已启用') ?></span>
-                        <strong><?= $gatewayEnabledInstanceCount ?></strong>
-                    </article>
-                    <article>
-                        <span><?= __('网关运行中') ?></span>
-                        <strong><?= $gatewayRunningInstanceCount ?></strong>
-                    </article>
-                    <article>
-                        <span><?= __('生效拓扑') ?></span>
-                        <strong><?= $escapeHtml($gatewayEffectiveTopologyLabel !== '' ? $gatewayEffectiveTopologyLabel : __('未知')) ?></strong>
-                    </article>
-                </div>
-                <w:form class="wls-gateway-config-form" method="post" action="@var($gatewaySaveUrl)">
-                    <div class="wls-form-title-row">
-                        <div>
-                            <h3><?= __('网关模式配置') ?></h3>
-                            <span class="wls-help-text">
-                                <?= __('保存到 env 配置的 wls.gateway。监听变更需要重启或重载 WLS，才能拉起网关进程。') ?>
-                            </span>
-                        </div>
-                        <span class="wls-status-pill">
-                            <?= $gatewayModeEffectiveEnabled ? __('当前生效：已启用') : __('当前生效：已停用') ?>
-                        </span>
-                    </div>
-                    <div class="wls-form-grid">
-                        <label class="wls-checkbox-field">
-                            <input type="hidden" name="gateway_enabled" value="0">
-                            <input type="checkbox" name="gateway_enabled" value="1" <?= $gatewayModeEnabled ? 'checked' : '' ?>>
-                            <span><?= __('启用网关模式') ?></span>
-                        </label>
-                        <label class="wls-form-field">
-                            <span><?= __('网关监听') ?></span>
-                            <input type="text"
-                                   name="gateway_listen"
-                                   value="<?= $escapeHtml($gatewayModeListen !== '' ? $gatewayModeListen : '0.0.0.0:443') ?>"
-                                   placeholder="0.0.0.0:443"
-                                   required>
-                        </label>
-                        <label class="wls-form-field" data-wls-gateway-topology>
-                            <span><?= __('请求拓扑') ?></span>
-                            <select name="runtime_topology">
-                                <?php foreach ($gatewayTopologyOptions as $topologyOption): ?>
-                                    <?php
-                                    $topologyValue = trim((string)($topologyOption['value'] ?? ''));
-                                    $topologyOptionLabel = trim((string)($topologyOption['label'] ?? $topologyValue));
-                                    if ($topologyValue === '') {
-                                        continue;
-                                    }
-                                    ?>
-                                    <option value="<?= $escapeHtml($topologyValue) ?>" <?= $gatewayRequestedTopology === $topologyValue ? 'selected' : '' ?>>
-                                        <?= $escapeHtml($topologyOptionLabel !== '' ? $topologyOptionLabel : $topologyValue) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </label>
-                        <label class="wls-form-field">
-                            <span><?= __('应用目标') ?></span>
-                            <select name="gateway_instance" <?= $gatewayAmbiguousTargets ? 'required' : '' ?>>
-                                <option value=""><?= __('自动选择网关') ?></option>
-                                <?php foreach ($gatewayTargetInstances as $instance): ?>
-                                    <?php
-                                    $instanceName = (string)($instance['name'] ?? '');
-                                    $listenLabel = trim((string)($instance['listen'] ?? ''));
-                                    $optionLabel = $instanceName . ($listenLabel !== '' ? ' - ' . $listenLabel : '');
-                                    ?>
-                                    <option value="<?= $escapeHtml($instanceName) ?>" <?= $selectedGatewayInstance === $instanceName ? 'selected' : '' ?>>
-                                        <?= $escapeHtml($optionLabel) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </label>
-                        <label class="wls-form-field">
-                            <span><?= __('运行时动作') ?></span>
-                            <select name="runtime_action">
-                                <option value="reload" selected><?= __('保存后重载工作进程') ?></option>
-                                <option value="restart"><?= __('保存后重启目标 WLS 实例') ?></option>
-                                <option value="none"><?= __('仅应用路由') ?></option>
-                            </select>
-                        </label>
-                        <label class="wls-checkbox-field">
-                            <input type="hidden" name="apply_routes" value="0">
-                            <input type="checkbox" name="apply_routes" value="1" checked>
-                            <span><?= __('保存后应用路由') ?></span>
-                        </label>
-                    </div>
-                    <span class="wls-help-text">
-                        <?= __('工作进程重载只刷新运行时工作进程。监听、网关角色或请求拓扑变更需要重启目标实例。') ?>
-                        <?php if ($gatewayEffectiveTopologyHint !== ''): ?>
-                            <?= $escapeHtml($gatewayEffectiveTopologyHint) ?>
-                        <?php endif; ?>
-                    </span>
-                    <div class="wls-gateway-effective-row">
-                        <span><?= __('生效监听') ?>: <strong><?= $escapeHtml($gatewayModeEffectiveListen !== '' ? $gatewayModeEffectiveListen : '0.0.0.0:443') ?></strong></span>
-                        <span><?= __('已保存监听') ?>: <strong><?= $escapeHtml($gatewayModeListen !== '' ? $gatewayModeListen : '0.0.0.0:443') ?></strong></span>
-                        <span><?= __('生效拓扑') ?>: <strong><?= $escapeHtml($gatewayEffectiveTopologyLabel !== '' ? $gatewayEffectiveTopologyLabel : __('未知')) ?></strong></span>
-                        <span><?= __('请求拓扑') ?>: <strong><?= $escapeHtml($gatewayRequestedTopologyLabel !== '' ? $gatewayRequestedTopologyLabel : __('自动')) ?></strong></span>
-                    </div>
-                    <div class="wls-gateway-effective-row" data-wls-direct-listen-capability="<?= $gatewayDirectListenSupported ? 'supported' : 'unavailable' ?>">
-                        <span>
-                            <?= __('直连监听能力') ?>:
-                            <strong><?= $escapeHtml($gatewayDirectListenLabel !== '' ? $gatewayDirectListenLabel : __('直连监听不可用')) ?></strong>
-                        </span>
-                        <?php if ($gatewayDirectListenOs !== ''): ?>
-                            <span><?= __('运行时 OS') ?>: <strong><?= $escapeHtml($gatewayDirectListenOs) ?></strong></span>
-                        <?php endif; ?>
-                        <?php if ($gatewayDirectListenMessage !== ''): ?>
-                            <span><?= $escapeHtml($gatewayDirectListenMessage) ?></span>
-                        <?php endif; ?>
-                    </div>
-                    <div class="wls-form-actions">
-                        <button class="wls-primary-button" type="submit"><?= __('保存网关模式') ?></button>
-                    </div>
-                </w:form>
-                <w:form class="wls-gateway-apply-form" method="post" action="@var($gatewayApplyUrl)">
-                    <label class="wls-form-field">
-                        <span><?= __('网关目标') ?></span>
-                        <select name="gateway_instance" <?= $gatewayAmbiguousTargets ? 'required' : '' ?>>
-                            <option value=""><?= __('自动选择网关') ?></option>
-                            <?php foreach ($gatewayTargetInstances as $instance): ?>
-                                <?php
-                                $instanceName = (string)($instance['name'] ?? '');
-                                $listenLabel = trim((string)($instance['listen'] ?? ''));
-                                $optionLabel = $instanceName . ($listenLabel !== '' ? ' - ' . $listenLabel : '');
-                                ?>
-                                <option value="<?= $escapeHtml($instanceName) ?>" <?= $selectedGatewayInstance === $instanceName ? 'selected' : '' ?>>
-                                    <?= $escapeHtml($optionLabel) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </label>
-                    <div class="wls-form-actions">
-                        <button class="wls-primary-button" type="submit"><?= __('立即应用路由') ?></button>
-                    </div>
-                </w:form>
-                <?php if ($gatewayInstances === []): ?>
-                    <div class="wls-empty-state">
-                        <strong><?= __('未发现 WLS 实例。') ?></strong>
-                        <span><?= __('启动已启用网关的 WLS 实例后，才能从面板应用路由。') ?></span>
-                    </div>
-                <?php else: ?>
-                    <div class="wls-project-list wls-instance-list"
-                         data-wls-instance-list
-                         data-wls-instance-page="1"
-                         data-wls-instance-page-size="10"
-                         data-empty-label="<?= $escapeHtml(__('没有匹配的 WLS 实例。')) ?>"
-                         data-summary-label="<?= $escapeHtml(__('正在显示第 %{1}-%{2} 条，共 %{3} 个实例')) ?>">
-                        <div class="wls-project-list-toolbar wls-instance-list-toolbar" aria-label="<?= __('网关实例列表工具') ?>">
-                            <label class="wls-form-field">
-                                <span><?= __('搜索 WLS 实例') ?></span>
-                                <input type="search"
-                                       data-wls-instance-search
-                                       placeholder="<?= $escapeHtml(__('搜索名称、监听、拓扑或状态')) ?>">
-                            </label>
-                            <label class="wls-form-field">
-                                <span><?= __('每页行数') ?></span>
-                                <select data-wls-instance-page-size>
-                                    <option value="10" selected>10</option>
-                                    <option value="20">20</option>
-                                    <option value="50">50</option>
-                                </select>
-                            </label>
-                            <div class="wls-project-list-summary wls-instance-list-summary"
-                                 data-wls-instance-summary
-                                 aria-live="polite"></div>
-                        </div>
-                        <div class="wls-project-table-wrap">
-                            <table class="wls-project-table wls-instance-table">
-                                <thead>
-                                <tr>
-                                    <th><?= __('实例') ?></th>
-                                    <th><?= __('网关监听') ?></th>
-                                    <th><?= __('状态') ?></th>
-                                    <th><?= __('主监听') ?></th>
-                                    <th><?= __('拓扑') ?></th>
-                                    <th><?= __('操作') ?></th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                        <?php foreach ($gatewayInstances as $instanceIndex => $instance): ?>
-                            <?php
-                            $instanceName = (string)($instance['name'] ?? '');
-                            $listenLabel = trim((string)($instance['listen'] ?? ''));
-                            $mainListenLabel = trim((string)($instance['main_listen'] ?? ''));
-                            $runtimeTopology = trim((string)($instance['runtime_topology'] ?? ''));
-                            $listenerMode = trim((string)($instance['listener_mode'] ?? ''));
-                            $isDirect = !empty($instance['is_direct']);
-                            $controlPort = (int)($instance['control_port'] ?? 0);
-                            $gatewayEnabled = !empty($instance['gateway_enabled']);
-                            $gatewayRunning = !empty($instance['gateway_running']);
-                            $gatewayReadyCount = (int)($instance['gateway_ready_count'] ?? 0);
-                            $gatewayProcessCount = (int)($instance['gateway_process_count'] ?? 0);
-                            $instanceRunning = !empty($instance['instance_running']);
-                            $instanceStatusLabel = $gatewayRunning ? __('就绪') : ($gatewayEnabled ? __('已启用') : __('已停用'));
-                            $instanceMasterLabel = $instanceRunning ? __('运行中') : __('已停止');
-                            $instanceTopologyLabel = $runtimeTopology !== '' ? $runtimeTopology : (string)__('未知');
-                            $instanceTopologyDisplay = $instanceTopologyLabel
-                                . ($listenerMode !== '' ? ' / ' . $listenerMode : '');
-                            $instanceProcessLabel = __('%{1}/%{2} ready', [$gatewayReadyCount, $gatewayProcessCount]);
-                            $instanceDetailId = 'wls-gateway-instance-detail-' . $instanceIndex;
-                            $instanceSearchText = strtolower(trim(implode(' ', [
-                                $instanceName,
-                                $listenLabel,
-                                $mainListenLabel,
-                                $instanceTopologyDisplay,
-                                (string)$instanceStatusLabel,
-                                (string)$instanceMasterLabel,
-                                (string)$controlPort,
-                                (string)$instanceProcessLabel,
-                            ])));
-                            ?>
-                            <tr class="wls-project-row wls-instance-row <?= $selectedGatewayInstance === $instanceName ? 'is-selected' : '' ?>"
-                                data-wls-instance-row
-                                data-wls-instance-search="<?= $escapeHtml($instanceSearchText) ?>"
-                                data-wls-instance-detail="<?= $escapeHtml($instanceDetailId) ?>">
-                                <td>
-                                    <div class="wls-project-instance-cell">
-                                        <strong><?= $escapeHtml($instanceName !== '' ? $instanceName : __('未命名 WLS')) ?></strong>
-                                        <?php if ($selectedGatewayInstance === $instanceName): ?>
-                                            <span><?= __('已选目标') ?></span>
-                                        <?php else: ?>
-                                            <span><?= __('WLS 运行时') ?></span>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="wls-project-path-cell wls-instance-listen-cell">
-                                        <small><?= __('网关') ?></small>
-                                        <code><?= $escapeHtml($listenLabel !== '' ? $listenLabel : __('未配置')) ?></code>
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="wls-status-pill <?= $gatewayRunning ? 'is-on' : ($gatewayEnabled ? '' : 'is-off') ?>">
-                                        <?= $escapeHtml((string)$instanceStatusLabel) ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <code><?= $escapeHtml($mainListenLabel !== '' ? $mainListenLabel : __('不可用')) ?></code>
-                                </td>
-                                <td>
-                                    <span class="wls-project-path-cell">
-                                        <small><?= $escapeHtml($isDirect ? __('直连监听') : ($runtimeTopology === 'dispatcher' ? __('派遣器监听') : __('运行时监听'))) ?></small>
-                                        <code><?= $escapeHtml($instanceTopologyDisplay) ?></code>
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="wls-project-row-actions">
-                                        <button class="wls-link-button"
-                                                type="button"
-                                                data-wls-instance-detail-toggle
-                                                aria-controls="<?= $escapeHtml($instanceDetailId) ?>"
-                                                aria-expanded="false"><?= __('详情') ?></button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr class="wls-project-detail-row wls-instance-detail-row"
-                                data-wls-instance-detail-row
-                                id="<?= $escapeHtml($instanceDetailId) ?>"
-                                hidden>
-                                <td colspan="6">
-                                    <div class="wls-project-detail-panel wls-instance-detail-panel">
-                                        <div class="wls-project-meta wls-instance-meta">
-                                            <div>
-                                                <span class="wls-meta-label"><?= __('网关监听') ?></span>
-                                                <span class="wls-meta-value"><?= $escapeHtml($listenLabel !== '' ? $listenLabel : __('未配置网关监听')) ?></span>
-                                            </div>
-                                            <div>
-                                                <span class="wls-meta-label"><?= __('主监听') ?></span>
-                                                <span class="wls-meta-value"><?= $escapeHtml($mainListenLabel !== '' ? $mainListenLabel : __('不可用')) ?></span>
-                                            </div>
-                                            <div>
-                                                <span class="wls-meta-label"><?= __('拓扑') ?></span>
-                                                <span class="wls-meta-value"><?= $escapeHtml($instanceTopologyDisplay) ?></span>
-                                            </div>
-                                            <div>
-                                                <span class="wls-meta-label"><?= __('控制端口') ?></span>
-                                                <span class="wls-meta-value"><?= $controlPort > 0 ? $controlPort : __('不可用') ?></span>
-                                            </div>
-                                            <div>
-                                                <span class="wls-meta-label"><?= __('主进程') ?></span>
-                                                <span class="wls-meta-value"><?= $escapeHtml((string)$instanceMasterLabel) ?></span>
-                                            </div>
-                                            <div>
-                                                <span class="wls-meta-label"><?= __('网关进程') ?></span>
-                                                <span class="wls-meta-value"><?= $escapeHtml((string)$instanceProcessLabel) ?></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="wls-project-list-empty" data-wls-instance-empty hidden>
-                            <?= __('没有匹配的 WLS 实例。') ?>
-                        </div>
-                        <div class="wls-project-pagination" data-wls-instance-pagination>
-                            <button class="wls-secondary-button" type="button" data-wls-instance-page-prev><?= __('上一页') ?></button>
-                            <span data-wls-instance-page-label></span>
-                            <button class="wls-secondary-button" type="button" data-wls-instance-page-next><?= __('下一页') ?></button>
-                        </div>
-                    </div>
-                <?php endif; ?>
-            </section>
-
         <?php elseif ($activePage === 'projects'): ?>
             <section class="wls-section wls-projects-page">
                 <div class="wls-section-head">
@@ -2885,7 +2505,6 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     </div>
                     <w:form method="post" action="@var($projectSaveUrl)" aria-labelledby="wls-project-editor-title">
                         <input type="hidden" name="project_id" value="<?= $projectFormId ?>">
-                        <input type="hidden" name="gateway_enabled" value="0">
                         <div class="wls-form-grid">
                             <label class="wls-form-field">
                                 <span><?= __('项目名称') ?></span>
@@ -3131,16 +2750,15 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         $projectDbLink = (string)($project['db'] ?? '');
                         $projectPhpLabel = (string)($project['php_label'] ?? __('可编辑运行时档案'));
                         $projectDbLabel = (string)($project['db_label'] ?? __('点击配置档案'));
-                        $projectGatewayEnabled = (int)($project['gateway_enabled'] ?? ($projectType === 'gateway' ? 1 : 0));
                         $projectPhpOperationUrl = $buildOperationCapabilityUrl('php-profile', 'WLS PHP Manager', $buildProjectOperationContext($project, 'php-profile'));
                         $projectDbOperationUrl = $buildOperationCapabilityUrl('database-profile', 'WLS Database Manager', $buildProjectOperationContext($project, 'database-profile'));
                         $projectFileManagerUrl = $buildOperationCapabilityUrl('file-manager', 'WLS File Manager', $buildProjectOperationContext($project, 'file-manager'));
                         $projectDeployUrl = $buildOperationCapabilityUrl('deploy', 'WLS Deploy', $buildProjectOperationContext($project, 'deploy'));
                         if ($projectAdminLink === '') {
-                            $projectAdminLink = $projectType === 'current' ? $projectAdminUrl : (string)($project['backend'] ?? '');
+                            $projectAdminLink = $projectType === 'current' ? $projectAdminUrl : '';
                         }
                         if ($projectPanelLink === '') {
-                            $projectPanelLink = $projectType === 'current' ? $dashboardUrl : (string)($project['backend'] ?? '');
+                            $projectPanelLink = $projectType === 'current' ? $dashboardUrl : '';
                         }
                         if ($projectPhpLink === '') {
                             $projectPhpLink = $projectPhpOperationUrl;
@@ -3690,8 +3308,7 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-metric-grid,
 .wls-action-grid,
 .wls-project-grid,
-.wls-plugin-refresh-grid,
-.wls-gateway-summary-grid {
+.wls-plugin-refresh-grid {
     display: grid;
     gap: 16px;
     min-width: 0;
@@ -3701,7 +3318,6 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     margin-bottom: 28px;
 }
 .wls-metric-grid article,
-.wls-gateway-summary-grid article,
 .wls-section,
 .wls-project-card,
 .wls-project-list,
@@ -3713,15 +3329,13 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     border-radius: 8px;
     box-shadow: var(--wls-shadow-soft);
 }
-.wls-metric-grid article,
-.wls-gateway-summary-grid article {
+.wls-metric-grid article {
     min-height: 96px;
     padding: 18px;
     display: grid;
     gap: 8px;
 }
 .wls-metric-grid span,
-.wls-gateway-summary-grid span,
 .wls-action-card small,
 .wls-meta-label,
 .wls-marketplace-console p,
@@ -3729,8 +3343,7 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-filter-bar span {
     color: var(--wls-muted);
 }
-.wls-metric-grid strong,
-.wls-gateway-summary-grid strong {
+.wls-metric-grid strong {
     font-size: 30px;
     line-height: 1;
 }
@@ -4048,10 +3661,6 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-project-pagination button:disabled {
     cursor: not-allowed;
     opacity: 0.48;
-}
-.wls-gateway-summary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin: 16px 0;
 }
 .wls-action-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4766,17 +4375,6 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     border-color: var(--wls-accent);
     color: var(--wls-accent);
 }
-.wls-gateway-config-form {
-    border-bottom: 1px solid var(--wls-border);
-    border-top: 1px solid var(--wls-border);
-    display: grid;
-    gap: 14px;
-    margin: 16px 0;
-    padding: 16px 0;
-}
-.wls-gateway-config-form .wls-form-title-row {
-    margin-bottom: 0;
-}
 .wls-help-text {
     color: var(--wls-muted);
     display: block;
@@ -4784,45 +4382,6 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     line-height: 1.45;
     margin-top: 5px;
     max-width: 760px;
-}
-.wls-gateway-effective-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 18px;
-    color: var(--wls-muted);
-    font-size: 13px;
-}
-.wls-gateway-effective-row strong {
-    color: var(--wls-text);
-    overflow-wrap: anywhere;
-}
-.wls-gateway-apply-form {
-    align-items: end;
-    border-bottom: 1px solid var(--wls-border);
-    border-top: 1px solid var(--wls-border);
-    display: grid;
-    gap: 14px;
-    grid-template-columns: minmax(220px, 420px) minmax(0, 1fr);
-    margin: 16px 0;
-    padding: 16px 0;
-}
-.wls-instance-meta {
-    display: grid;
-    gap: 10px;
-    margin: 0;
-}
-.wls-instance-meta div {
-    display: grid;
-    gap: 4px;
-}
-.wls-instance-meta-label {
-    color: var(--wls-muted);
-    font-size: 12px;
-    font-weight: 700;
-}
-.wls-instance-meta-value {
-    color: var(--wls-text);
-    overflow-wrap: anywhere;
 }
 .wls-project-title-row {
     display: flex;
@@ -5256,7 +4815,6 @@ a.wls-meta-value:hover {
     .wls-metric-grid,
     .wls-action-grid,
     .wls-plugin-refresh-grid,
-    .wls-gateway-summary-grid,
     .wls-security-project-grid,
     .wls-domain-policy-summary,
     .wls-domain-policy-inheritance-grid,
@@ -5313,7 +4871,6 @@ a.wls-meta-value:hover {
     .wls-action-grid,
     .wls-project-grid,
     .wls-plugin-refresh-grid,
-    .wls-gateway-summary-grid,
     .wls-security-metric-grid,
     .wls-security-project-grid,
     .wls-domain-policy-summary,
@@ -5322,7 +4879,6 @@ a.wls-meta-value:hover {
     .wls-domain-policy-grid,
     .wls-security-audit-meta,
     .wls-security-layout,
-    .wls-gateway-apply-form,
     .wls-filter-bar {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -5371,8 +4927,7 @@ a.wls-meta-value:hover {
     .wls-pagination-actions,
     .wls-section-actions,
     .wls-project-config-head,
-    .wls-project-config-title,
-    .wls-gateway-effective-row {
+    .wls-project-config-title {
         align-items: flex-start;
         flex-direction: column;
     }
@@ -5825,161 +5380,6 @@ a.wls-meta-value:hover {
             return;
         }
         const detailId = row.getAttribute('data-wls-project-detail') || '';
-        const detailRow = detailRows.get(detailId);
-        if (!detailRow) {
-            return;
-        }
-        const expanded = toggle.getAttribute('aria-expanded') === 'true';
-        collapseAll();
-        if (!expanded) {
-            row.classList.add('is-expanded');
-            detailRow.hidden = false;
-            toggle.setAttribute('aria-expanded', 'true');
-        }
-    });
-
-    render();
-})();
-
-(function () {
-    const list = document.querySelector('[data-wls-instance-list]');
-    if (!list) {
-        return;
-    }
-
-    const searchInput = list.querySelector('[data-wls-instance-search]');
-    const pageSizeSelect = list.querySelector('[data-wls-instance-page-size]');
-    const summary = list.querySelector('[data-wls-instance-summary]');
-    const empty = list.querySelector('[data-wls-instance-empty]');
-    const pageLabel = list.querySelector('[data-wls-instance-page-label]');
-    const prevButton = list.querySelector('[data-wls-instance-page-prev]');
-    const nextButton = list.querySelector('[data-wls-instance-page-next]');
-    const rows = Array.from(list.querySelectorAll('[data-wls-instance-row]'));
-    const detailRows = new Map();
-
-    list.querySelectorAll('[data-wls-instance-detail-row]').forEach(function (row) {
-        if (row.id) {
-            detailRows.set(row.id, row);
-        }
-    });
-
-    let state = {
-        page: 1,
-        pageSize: Number.parseInt(list.getAttribute('data-wls-instance-page-size') || '10', 10) || 10,
-        query: '',
-    };
-
-    const collapseAll = function () {
-        rows.forEach(function (row) {
-            row.classList.remove('is-expanded');
-            const toggle = row.querySelector('[data-wls-instance-detail-toggle]');
-            if (toggle) {
-                toggle.setAttribute('aria-expanded', 'false');
-            }
-        });
-        detailRows.forEach(function (row) {
-            row.hidden = true;
-        });
-    };
-
-    const matchingRows = function () {
-        const query = state.query.trim().toLowerCase();
-        if (!query) {
-            return rows;
-        }
-        return rows.filter(function (row) {
-            return String(row.getAttribute('data-wls-instance-search') || '').includes(query);
-        });
-    };
-
-    const render = function () {
-        const matches = matchingRows();
-        const total = matches.length;
-        const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
-        state.page = Math.max(1, Math.min(state.page, totalPages));
-        const start = (state.page - 1) * state.pageSize;
-        const end = start + state.pageSize;
-        const visible = new Set(matches.slice(start, end));
-
-        rows.forEach(function (row) {
-            const detailId = row.getAttribute('data-wls-instance-detail') || '';
-            const detailRow = detailRows.get(detailId);
-            const isVisible = visible.has(row);
-            row.hidden = !isVisible;
-            if (!isVisible && detailRow) {
-                detailRow.hidden = true;
-                row.classList.remove('is-expanded');
-                const toggle = row.querySelector('[data-wls-instance-detail-toggle]');
-                if (toggle) {
-                    toggle.setAttribute('aria-expanded', 'false');
-                }
-            }
-        });
-
-        const from = total === 0 ? 0 : start + 1;
-        const to = Math.min(end, total);
-        const summaryLabel = list.getAttribute('data-summary-label') || '正在显示第 %{1}-%{2} 条，共 %{3} 个实例';
-        if (summary) {
-            summary.textContent = summaryLabel
-                .replace('%{1}', String(from))
-                .replace('%{2}', String(to))
-                .replace('%{3}', String(total));
-        }
-        if (empty) {
-            empty.hidden = total !== 0;
-        }
-        if (pageLabel) {
-            pageLabel.textContent = String(state.page) + ' / ' + String(totalPages);
-        }
-        if (prevButton) {
-            prevButton.disabled = state.page <= 1;
-        }
-        if (nextButton) {
-            nextButton.disabled = state.page >= totalPages;
-        }
-    };
-
-    if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            state.query = searchInput.value || '';
-            state.page = 1;
-            collapseAll();
-            render();
-        });
-    }
-    if (pageSizeSelect) {
-        pageSizeSelect.addEventListener('change', function () {
-            state.pageSize = Number.parseInt(pageSizeSelect.value || '10', 10) || 10;
-            state.page = 1;
-            collapseAll();
-            render();
-        });
-    }
-    if (prevButton) {
-        prevButton.addEventListener('click', function () {
-            state.page -= 1;
-            collapseAll();
-            render();
-        });
-    }
-    if (nextButton) {
-        nextButton.addEventListener('click', function () {
-            state.page += 1;
-            collapseAll();
-            render();
-        });
-    }
-
-    list.addEventListener('click', function (event) {
-        const toggle = event.target.closest('[data-wls-instance-detail-toggle]');
-        if (!toggle) {
-            return;
-        }
-        const row = toggle.closest('[data-wls-instance-row]');
-        if (!row) {
-            return;
-        }
-        const detailId = row.getAttribute('data-wls-instance-detail') || '';
         const detailRow = detailRows.get(detailId);
         if (!detailRow) {
             return;

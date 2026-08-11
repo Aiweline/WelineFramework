@@ -4,7 +4,10 @@
 
 - 本文描述默认 WLS Orchestrator 模式下的实例链路，即 `php bin/w server:start [name]` 与 `php bin/w server:stop [name ...]`。
 - `--edge=auto|gateway|wls` 是 WLS 2.0 唯一 edge mode 入口；`--no-nginx`
-  等价 `--edge=wls`。普通 start 只发现/加入既有宿主网关，不安装或修复宿主服务。
+  等价 `--edge=wls`。`auto/gateway` 先发现并加入既有受信网关；在明确证明 virgin host、
+  公共端口安全且随项目发布的签名包通过校验时，普通 start 可执行一次宿主 Gateway 首装。
+  它不会下载/编译 legacy Managed Nginx，也不会借首装执行 upgrade/repair/rebootstrap。
+  `wls` 不发现、不建立也不修改宿主网关。
 - `server:stop name-a name-b`、`server:stop --prefix <prefix>` 与 `server:stop --all` 都只在外层枚举多个实例；每个实例仍复用同一关闭协议并单独获取 stop lock。
 
 ## 启动链路图
@@ -19,7 +22,7 @@ flowchart TB
     D --> E["getServerConfig()<br/>CLI > 实例 > env > auto"]
     E --> E0["ProjectIdentityStore<br/>UUIDv4 + desired/certificate generation CAS"]
     E0 --> E1{"EdgeRuntimeDecision"}
-    E1 -->|gateway| E2["只读 status/discover<br/>受信 wls-edge/2 ready 才加入<br/>backend 固定 loopback"]
+    E1 -->|gateway| E2["只读 status/discover<br/>受信 wls-edge/2 ready 则加入<br/>否则仅 virgin host + 签名发行包可首装<br/>bootstrap journal 同 fingerprint 恢复"]
     E1 -->|auto unavailable| E3["稳定分配 20000–29999<br/>纯 WLS TLS + loopback bind<br/>不创建宿主服务文件"]
     E1 -->|wls / --no-nginx| E4["纯 WLS TLS<br/>显式端口冲突即非零退出"]
     E1 -->|legacy| E5["保持项目 Nginx 原状<br/>等待显式 promote"]
@@ -164,12 +167,11 @@ flowchart TB
 - Windows `auto` 固定使用 `worker_ports + stream_select` Direct；Linux `auto` 优先 `reuseport + event`，在 `sockets`/`SO_REUSEPORT` 不可用时回退 `shared_fd + event`；macOS `auto` 使用 `shared_fd + event`。三者共用 REGISTER→WARMING→READY、policy digest 与分批重载契约；业务 Worker 的 READY v3 必须证明首页 Process FPC 已热，并提交绕过 FPC 的动态首渲染回执。动态目标默认是发布性能门禁而非存活门禁；显式开启 strict 开关时才会因超标拒绝 READY。初启与标准分批 replacement 使用同一契约。
 - Windows UNC 项目根目录使用有界冷启动兼容预算：首页 READY 单次 60 秒、Orchestrator 默认基线 150 秒、绝对总启动最多 300 秒；Windows 本地盘仍为 30 秒/90 秒，POSIX 不变。预算只延长失败上限，不降低 4/4 Worker、首页 Process FPC HIT、policy digest 或 listener capability 门禁；环境/配置显式值始终优先。
 - 业务 Worker 的每一次 READY 发送都经过进程注入的 before-ready guard：首次注册、Master ACK 超时重发、普通 TCP 自动重连和 Supervisor 自动重连都重新检查显式非 local 的 Worker credential store。门禁异常时不发送 READY、不保留 confirmed 状态；自动重连已建立的控制连接会关闭，以便数据库恢复后按重连节流再次尝试。Maintenance Worker 不使用该浏览器凭据链，因此不执行 credential store 检查。
-- 拓扑/依赖预检发生在任何 Master/Worker 创建之前；普通启动只读探测，不下载、安装或编译。Linux 的 `auto` 优先验证并选择 `reuseport` Direct，能力不可用时回退 `shared_fd`；macOS 选择 `shared_fd`，Windows 选择 `worker_ports`。Direct 最终不满足 listener/event/policy 能力时明确失败，显式 Dispatcher 仍受支持。只有 `--install-deps` 分支允许准备 PHP 依赖并用新进程复验。普通 start/reload/restart 也绝不构建 Nginx；仅显式 `server:nginx:install` 在 Unix 上可能构建，且 PCRE2/rewrite 为硬依赖。HTTP/3 只读检查已安装 Nginx 模块与真实 QUIC 门禁，不调用 PHP FFI/native 构建链。
+- 拓扑/依赖预检发生在任何 Master/Worker 创建之前；普通启动不下载、编译或补装 PHP/legacy Managed Nginx。Linux 的 `auto` 优先验证并选择 `reuseport` Direct，能力不可用时回退 `shared_fd`；macOS 选择 `shared_fd`，Windows 选择 `worker_ports`。Direct 最终不满足 listener/event/policy 能力时明确失败，显式 Dispatcher 仍受支持。只有 `--install-deps` 分支允许准备 PHP 依赖并用新进程复验。`auto/gateway` 唯一允许的安装副作用，是在 virgin host 上把最终项目发行物自带、已签名的 Gateway/Nginx 包复制到宿主 A/B 槽并建立平台守护；它不构建、不下载，也不使用 legacy `server:nginx:install`。仅显式 `server:nginx:install` 在 Unix 上可能为 legacy 实例构建，且 PCRE2/rewrite 为硬依赖。HTTP/3 只读检查已安装 Nginx 模块与真实 QUIC 门禁，不调用 PHP FFI/native 构建链。
 - macOS `worker_count=auto` 使用性能核数并受内存预算限制；启动与 Doctor/建议共用同一个 resolver，显式 `-c` 保持不变。
 - 平台无关的 `direct` 是唯一 Direct 状态值。gateway/legacy backend 使用 loopback
   明文 H1；纯 WLS 使用 Stream TLS，提供 H2/H1，不提供 H3。
-- `worker_ssl`、EventBuffer TLS、ProtocolEdge、Caddy 与 Native Transport 是不可达
-  遗留代码；纯 WLS Stream TLS 是受支持的项目 edge。
+- `worker_ssl` 是纯 WLS Stream TLS 的受支持项目 edge。
 - Worker 通过 `--public-origin` 获得对外 scheme/authority；该 HTTPS `public_origin` 必须经 `ManagedNginxPublicOrigin::normalize()` 校验后，由 endpoint schema v4 穿过 `ServerInstanceManager` allowlist 和 `Start::runMasterOnly()` 配置恢复原样传递，缺失、非字符串或非 HTTPS 时在绑定端口前 fail closed，禁止从内部回源 `host/port` 重建；READY 首页预热与真实 HTTP/HTTPS FPC key 一致。托管 Nginx 有 `$http_host` 时原样转发，H3 空值时用 `$host:$server_port`，再由固定 trusted loopback 上的 `Host` 与 `X-Forwarded-Proto/Port` 重建公开 origin；loopback 不因此成为业务 whitelist。
 - H1 fresh 分流门禁仅允许 Nginx loopback allowlist 保护的 `/_wls/` 位置传播精确 `Connection: close`；普通业务位置清空 upstream `Connection`，持续复用 Nginx Keep-Alive 池。
 - legacy ACME HTTP-01 仍由项目 Nginx challenge location 处理。WLS 2.0 Gateway 的

@@ -14,7 +14,7 @@ namespace Weline\Server\Service\Edge\Gateway;
  */
 final class ProjectCertificateRenewalIntentStore
 {
-    public const SCHEMA_VERSION = 1;
+    public const SCHEMA_VERSION = 2;
 
     private const MAX_STATE_BYTES = 262_144;
     private const MAX_ROUTES = 256;
@@ -26,10 +26,13 @@ final class ProjectCertificateRenewalIntentStore
     private readonly int $projectOwner;
     private readonly int $projectGroup;
     private readonly ?\Closure $monotonicClock;
+    /** @var (\Closure(string,?float):array<string,mixed>)|null */
+    private readonly ?\Closure $leaseReceiptResolver;
 
     public function __construct(
         ?string $projectRoot = null,
         ?\Closure $monotonicClock = null,
+        ?\Closure $leaseReceiptResolver = null,
     ) {
         $requested = $projectRoot ?? (string)BP;
         $real = $requested !== '' && !\str_contains($requested, "\0")
@@ -58,6 +61,7 @@ final class ProjectCertificateRenewalIntentStore
             ? (int)$status['gid']
             : -1;
         $this->monotonicClock = $monotonicClock;
+        $this->leaseReceiptResolver = $leaseReceiptResolver;
     }
 
     /**
@@ -120,6 +124,8 @@ final class ProjectCertificateRenewalIntentStore
                 'request_digest' => (string)$facts['request_digest'],
                 'non_certificate_desired_digest' =>
                     (string)$facts['non_certificate_desired_digest'],
+                'certificate_trust_profile' =>
+                    (string)$facts['certificate_trust_profile'],
                 'route_set_digest' => (string)$facts['route_set_digest'],
                 'certificate_set_digest' => (string)$facts['certificate_set_digest'],
                 'routes' => (array)$facts['routes'],
@@ -137,7 +143,10 @@ final class ProjectCertificateRenewalIntentStore
     /**
      * @return array{intent:array<string,mixed>,last_ack:array<string,mixed>|null}|null
      */
-    public function pendingReplay(): ?array
+    public function pendingReplay(
+        float $waitTimeoutSeconds = 300.0,
+        ?float $deadlineMonotonic = null,
+    ): ?array
     {
         if (!\is_dir($this->directory) && !\is_link($this->directory)) {
             return null;
@@ -156,7 +165,7 @@ final class ProjectCertificateRenewalIntentStore
                     ? $state['last_ack']
                     : null,
             ];
-        });
+        }, $waitTimeoutSeconds, $deadlineMonotonic);
     }
 
     /**
@@ -203,6 +212,10 @@ final class ProjectCertificateRenewalIntentStore
             || !\hash_equals(
                 (string)$intent['non_certificate_desired_digest'],
                 (string)($lastAck['non_certificate_desired_digest'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)$intent['certificate_trust_profile'],
+                (string)($lastAck['certificate_trust_profile'] ?? ''),
             )
         ) {
             return [
@@ -364,76 +377,100 @@ final class ProjectCertificateRenewalIntentStore
                 'Certificate renewal acknowledgement action is invalid.'
             );
         }
+
+        // First prove that this exact intent still needs an acknowledgement.
+        // Do not hold the project certificate-state lock while authenticating
+        // the host receipt: Named Pipe/Unix Socket I/O may consume the caller's
+        // remaining budget and must never block certificate generation writers.
+        $pending = $this->withLock(function () use (
+            $facts,
+            $instanceName,
+            $action,
+        ): ?array {
+            $state = $this->readState((string)$facts['project_uuid']);
+            return $this->pendingAcknowledgement(
+                $state,
+                $facts,
+                $instanceName,
+                $action,
+            );
+        }, $waitTimeoutSeconds, $deadlineMonotonic);
+        if ($pending === null) {
+            return false;
+        }
+        $attemptFence = $this->acknowledgementAttemptFence($pending);
+
+        $epoch = \strtolower(\trim((string)($status['epoch'] ?? '')));
+        if (!GatewayHostManager::controlPlaneAcceptsRegistration($status)
+            || !\hash_equals(
+                (string)$facts['project_uuid'],
+                \strtolower(\trim((string)($status['project_uuid'] ?? ''))),
+            )
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $epoch) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Certificate renewal acknowledgement requires authenticated own-status.'
+            );
+        }
+        // A hex-looking signature in endpoint JSON is not authority.
+        // HostManager verifies credential HMAC, receipt freshness, exact
+        // endpoint launch/generation and authenticated current gateway
+        // epoch/route closure before this intent may be acknowledged.
+        $receipt = $this->leaseReceiptResolver !== null
+            ? ($this->leaseReceiptResolver)($instanceName, $deadlineMonotonic)
+            : (new GatewayHostManager())->validatedLeaseReceiptForInstance(
+                $instanceName,
+                $deadlineMonotonic,
+            );
+        if (!\is_array($receipt)) {
+            throw new \RuntimeException(
+                'Certificate renewal acknowledgement lease receipt is invalid.'
+            );
+        }
+        $routeGenerations = $this->assertReceiptMatchesFacts(
+            $receipt,
+            $facts,
+            $instanceName,
+            $epoch,
+        );
+        $this->assertStatusMatchesFacts(
+            $status,
+            $facts,
+            $routeGenerations,
+            $receipt,
+        );
+
+        // Re-read under the same stable lock and commit only if the pending
+        // intent and replay attempt still match the authenticated snapshot.
         return $this->withLock(function () use (
             $facts,
             $instanceName,
             $action,
-            $status,
+            $epoch,
+            $routeGenerations,
+            $attemptFence,
         ): bool {
             $state = $this->readState((string)$facts['project_uuid']);
-            $pending = \is_array($state['pending'] ?? null)
-                ? $state['pending']
-                : null;
+            $pending = $this->pendingAcknowledgement(
+                $state,
+                $facts,
+                $instanceName,
+                $action,
+            );
             if ($pending === null) {
                 return false;
             }
             if (!\hash_equals(
-                (string)$facts['intent_id'],
-                (string)($pending['intent_id'] ?? ''),
+                $attemptFence,
+                $this->acknowledgementAttemptFence($pending),
             )) {
-                if ((int)($pending['project_generation'] ?? 0)
-                    > (int)$facts['project_generation']
-                ) {
-                    // A newer complete certificate desired state superseded
-                    // this in-flight publication. It remains pending and must
-                    // not turn the already committed older publication into a
-                    // false transaction failure.
-                    return false;
-                }
                 throw new \RuntimeException(
-                    'Certificate renewal intent changed before acknowledgement.'
+                    'Certificate renewal replay attempt changed while authenticating acknowledgement.'
                 );
             }
             $attempt = \is_array($pending['last_attempt'] ?? null)
                 ? $pending['last_attempt']
                 : [];
-            if (!\hash_equals($action, (string)($attempt['action'] ?? ''))
-                || !\hash_equals($instanceName, (string)($attempt['instance_id'] ?? ''))
-            ) {
-                throw new \RuntimeException(
-                    'Certificate renewal acknowledgement does not match its replay attempt.'
-                );
-            }
-            $epoch = \strtolower(\trim((string)($status['epoch'] ?? '')));
-            if (!GatewayHostManager::controlPlaneAcceptsRegistration($status)
-                || !\hash_equals(
-                    (string)$facts['project_uuid'],
-                    \strtolower(\trim((string)($status['project_uuid'] ?? ''))),
-                )
-                || \preg_match('/\A[a-f0-9]{32}\z/D', $epoch) !== 1
-            ) {
-                throw new \RuntimeException(
-                    'Certificate renewal acknowledgement requires authenticated own-status.'
-                );
-            }
-            // A hex-looking signature in endpoint JSON is not authority.
-            // HostManager verifies credential HMAC, receipt freshness, exact
-            // endpoint launch/generation and authenticated current gateway
-            // epoch/route closure before this intent may be acknowledged.
-            $receipt = (new GatewayHostManager())
-                ->validatedLeaseReceiptForInstance($instanceName);
-            $routeGenerations = $this->assertReceiptMatchesFacts(
-                $receipt,
-                $facts,
-                $instanceName,
-                $epoch,
-            );
-            $this->assertStatusMatchesFacts(
-                $status,
-                $facts,
-                $routeGenerations,
-                $receipt,
-            );
             if ($action === 'renew') {
                 $expected = $this->normalizeRouteGenerations(
                     \is_array($attempt['expected_route_generations'] ?? null)
@@ -461,6 +498,8 @@ final class ProjectCertificateRenewalIntentStore
                     (string)$facts['non_certificate_desired_digest'],
                 'route_set_digest' => (string)$facts['route_set_digest'],
                 'certificate_set_digest' => (string)$facts['certificate_set_digest'],
+                'certificate_trust_profile' =>
+                    (string)$facts['certificate_trust_profile'],
                 'gateway_epoch' => $epoch,
                 'route_generations' => $routeGenerations,
                 'action' => $action,
@@ -472,6 +511,77 @@ final class ProjectCertificateRenewalIntentStore
             $this->writeState($state);
             return true;
         }, $waitTimeoutSeconds, $deadlineMonotonic);
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @param array<string,mixed> $facts
+     * @return array<string,mixed>|null
+     */
+    private function pendingAcknowledgement(
+        array $state,
+        array $facts,
+        string $instanceName,
+        string $action,
+    ): ?array {
+        $pending = \is_array($state['pending'] ?? null)
+            ? $state['pending']
+            : null;
+        if ($pending === null) {
+            return null;
+        }
+        if (!\hash_equals(
+            (string)$facts['intent_id'],
+            (string)($pending['intent_id'] ?? ''),
+        )) {
+            if ((int)($pending['project_generation'] ?? 0)
+                > (int)$facts['project_generation']
+            ) {
+                // A newer complete certificate desired state superseded this
+                // in-flight publication. Keep it pending and treat this older
+                // acknowledgement as an idempotent no-op.
+                return null;
+            }
+            throw new \RuntimeException(
+                'Certificate renewal intent changed before acknowledgement.'
+            );
+        }
+        $attempt = \is_array($pending['last_attempt'] ?? null)
+            ? $pending['last_attempt']
+            : [];
+        if (!\hash_equals($action, (string)($attempt['action'] ?? ''))
+            || !\hash_equals($instanceName, (string)($attempt['instance_id'] ?? ''))
+        ) {
+            throw new \RuntimeException(
+                'Certificate renewal acknowledgement does not match its replay attempt.'
+            );
+        }
+        return $pending;
+    }
+
+    /** @param array<string,mixed> $pending */
+    private function acknowledgementAttemptFence(array $pending): string
+    {
+        $attempt = \is_array($pending['last_attempt'] ?? null)
+            ? $pending['last_attempt']
+            : [];
+        $expected = \is_array($attempt['expected_route_generations'] ?? null)
+            ? $attempt['expected_route_generations']
+            : [];
+        \ksort($expected, SORT_STRING);
+
+        return \hash('sha256', GatewayClient::canonicalJson([
+            'intent_id' => (string)($pending['intent_id'] ?? ''),
+            'sequence' => (int)($pending['sequence'] ?? 0),
+            'count' => (int)($attempt['count'] ?? 0),
+            'attempted_at' => (int)($attempt['attempted_at'] ?? 0),
+            'instance_id' => (string)($attempt['instance_id'] ?? ''),
+            'action' => (string)($attempt['action'] ?? ''),
+            'gateway_epoch' => (string)($attempt['gateway_epoch'] ?? ''),
+            'expected_route_generations' => $expected,
+            'failed_at' => (int)($attempt['failed_at'] ?? 0),
+            'error' => (string)($attempt['error'] ?? ''),
+        ]));
     }
 
     /** @param array<string,mixed> $registration @return array<string,mixed> */
@@ -488,6 +598,9 @@ final class ProjectCertificateRenewalIntentStore
         $nonCertificateDesiredDigest = \strtolower(\trim((string)(
             $registration['non_certificate_desired_digest'] ?? ''
         )));
+        $certificateTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($registration['certificate_trust_profile'] ?? ''),
+        );
         if (\preg_match(
             '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
             $projectUuid,
@@ -538,6 +651,18 @@ final class ProjectCertificateRenewalIntentStore
             $sourceDigest = \strtolower(\trim((string)(
                 $certificate['source_digest'] ?? ''
             )));
+            $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $certificate['trust_profile'] ?? ''
+            ));
+            $provider = \strtolower(\trim((string)(
+                $certificate['provider'] ?? ''
+            )));
+            $materialClass = \strtolower(\trim((string)(
+                $certificate['material_class'] ?? ''
+            )));
+            $provenanceDigest = \strtolower(\trim((string)(
+                $certificate['provenance_digest'] ?? ''
+            )));
             $pending = $certificate['pending'] ?? $generation === 0;
             $state = \strtolower(\trim((string)(
                 $certificate['state']
@@ -550,6 +675,7 @@ final class ProjectCertificateRenewalIntentStore
                     $routeId,
                 )
                 || !\is_bool($pending)
+                || !\hash_equals($certificateTrustProfile, $trustProfile)
                 || !\in_array($state, ['active', 'pending', 'disabled'], true)
                 || ($state === 'active' && ($generation < 1 || $pending !== false))
                 || ($state === 'pending'
@@ -564,10 +690,45 @@ final class ProjectCertificateRenewalIntentStore
                         || $pending !== true
                         || \str_starts_with($domain, '*.')))
                 || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
                 || isset($routes[$routeId])
             ) {
                 throw new \RuntimeException(
                     'Gateway certificate replay route fact is malformed or duplicated.'
+                );
+            }
+            if ($state === 'active') {
+                $provider = ProjectCertificateGenerationStore::normalizeProvider($provider);
+                $provenanceValid = \hash_equals(
+                    ProjectCertificateGenerationStore::provenanceDigest(
+                        $domain,
+                        $sourceDigest,
+                        $trustProfile,
+                        $provider,
+                        $materialClass,
+                    ),
+                    $provenanceDigest,
+                ) && ($trustProfile
+                        !== ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION
+                    || $materialClass
+                        === ProjectCertificateGenerationStore::MATERIAL_CLASS_PUBLIC_TRUST);
+            } else {
+                $provenanceValid = $provider === 'none'
+                    && $materialClass === 'none'
+                    && \hash_equals(
+                        ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                            $domain,
+                            $state,
+                            $sourceDigest,
+                            $generation,
+                            $trustProfile,
+                        ),
+                        $provenanceDigest,
+                    );
+            }
+            if (!$provenanceValid) {
+                throw new \RuntimeException(
+                    'Gateway certificate replay route provenance is invalid.',
                 );
             }
             $routes[$routeId] = [
@@ -576,6 +737,10 @@ final class ProjectCertificateRenewalIntentStore
                 'state' => $state,
                 'certificate_generation' => $generation,
                 'source_digest' => $sourceDigest,
+                'trust_profile' => $trustProfile,
+                'provider' => $provider,
+                'material_class' => $materialClass,
+                'provenance_digest' => $provenanceDigest,
                 'pending' => $pending,
             ];
         }
@@ -601,6 +766,7 @@ final class ProjectCertificateRenewalIntentStore
             'project_generation' => $projectGeneration,
             'request_digest' => $requestDigest,
             'non_certificate_desired_digest' => $nonCertificateDesiredDigest,
+            'certificate_trust_profile' => $certificateTrustProfile,
             'route_set_digest' => $routeSetDigest,
             'certificate_set_digest' => $certificateSetDigest,
         ]));
@@ -611,6 +777,7 @@ final class ProjectCertificateRenewalIntentStore
             'project_generation' => $projectGeneration,
             'request_digest' => $requestDigest,
             'non_certificate_desired_digest' => $nonCertificateDesiredDigest,
+            'certificate_trust_profile' => $certificateTrustProfile,
             'route_set_digest' => $routeSetDigest,
             'certificate_set_digest' => $certificateSetDigest,
             'routes' => $routes,
@@ -627,6 +794,8 @@ final class ProjectCertificateRenewalIntentStore
             'request_digest' => $intent['request_digest'] ?? '',
             'non_certificate_desired_digest' =>
                 $intent['non_certificate_desired_digest'] ?? '',
+            'certificate_trust_profile' =>
+                $intent['certificate_trust_profile'] ?? '',
             'routes' => \array_map(
                 static fn (mixed $route): array => \is_array($route) ? [
                     'route_id' => $route['route_id'] ?? '',
@@ -635,6 +804,10 @@ final class ProjectCertificateRenewalIntentStore
                         'state' => $route['state'] ?? '',
                         'generation' => $route['certificate_generation'] ?? -1,
                         'source_digest' => $route['source_digest'] ?? '',
+                        'trust_profile' => $route['trust_profile'] ?? '',
+                        'provider' => $route['provider'] ?? '',
+                        'material_class' => $route['material_class'] ?? '',
+                        'provenance_digest' => $route['provenance_digest'] ?? '',
                         'pending' => $route['pending'] ?? null,
                     ],
                 ] : [],
@@ -732,6 +905,18 @@ final class ProjectCertificateRenewalIntentStore
                 ? $route['certificate']
                 : [];
             $certificateGeneration = (int)($certificate['generation'] ?? -1);
+            $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $certificate['trust_profile'] ?? ''
+            ));
+            $provider = \strtolower(\trim((string)(
+                $certificate['provider'] ?? ''
+            )));
+            $materialClass = \strtolower(\trim((string)(
+                $certificate['material_class'] ?? ''
+            )));
+            $provenanceDigest = \strtolower(\trim((string)(
+                $certificate['provenance_digest'] ?? ''
+            )));
             $pending = ($certificate['pending'] ?? $certificateGeneration === 0) === true;
             $certificateState = \strtolower(\trim((string)(
                 $certificate['state']
@@ -754,6 +939,10 @@ final class ProjectCertificateRenewalIntentStore
                 'source_digest' => \strtolower(\trim((string)(
                     $certificate['source_digest'] ?? ''
                 ))),
+                'trust_profile' => $trustProfile,
+                'provider' => $provider,
+                'material_class' => $materialClass,
+                'provenance_digest' => $provenanceDigest,
             ];
         }
         \ksort($routes, SORT_STRING);
@@ -894,6 +1083,22 @@ final class ProjectCertificateRenewalIntentStore
                 || !\hash_equals(
                     (string)$route['source_digest'],
                     (string)($current['source_digest'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)$route['trust_profile'],
+                    (string)($current['trust_profile'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)$route['provider'],
+                    (string)($current['provider'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)$route['material_class'],
+                    (string)($current['material_class'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)$route['provenance_digest'],
+                    (string)($current['provenance_digest'] ?? ''),
                 )
                 || (int)$routeGenerations[$routeId]
                     !== (int)($current['route_generation'] ?? 0)
@@ -1075,6 +1280,17 @@ final class ProjectCertificateRenewalIntentStore
     /** @param array<string,mixed> $ack */
     private function assertAcknowledgement(array $ack): void
     {
+        try {
+            ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $ack['certificate_trust_profile'] ?? ''
+            ));
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'Project certificate acknowledgement trust profile is invalid.',
+                0,
+                $throwable,
+            );
+        }
         if (\preg_match('/\A[a-f0-9]{64}\z/D', (string)($ack['intent_id'] ?? '')) !== 1
             || (int)($ack['project_generation'] ?? 0) < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', (string)($ack['request_digest'] ?? '')) !== 1

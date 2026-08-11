@@ -160,6 +160,7 @@ class SslCertificateServiceTest extends TestCase
                     'unit.test' => [
                         'cert' => '/tmp/unit.crt',
                         'key' => '/tmp/unit.key',
+                        'provider' => SslCertificateService::PROVIDER_LOCAL_CA,
                     ],
                 ];
             }
@@ -171,6 +172,7 @@ class SslCertificateServiceTest extends TestCase
 
             $this->assertSame('/tmp/unit.crt', $map['unit.test']['cert'] ?? null);
             $this->assertSame('/tmp/unit.key', $map['unit.test']['key'] ?? null);
+            $this->assertArrayNotHasKey('provider', $map['unit.test'] ?? []);
         } finally {
             if ($hadMap) {
                 \file_put_contents($mapFile, (string) $previousMap);

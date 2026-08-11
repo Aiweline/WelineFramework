@@ -42,6 +42,28 @@ final class WlsMemoryAdapterAtomicTest extends TestCase
         self::assertNull($adapter->get('quota'));
         self::assertFalse($adapter->isAvailable());
     }
+
+    public function testClearBumpsEpochSoPeerWorkerDropsLocalCache(): void
+    {
+        $shared = new SharedCacheStateDouble();
+        $config = [
+            'local_cache_size' => 10,
+            'local_cache_memory_pressure_threshold' => 0.99,
+        ];
+        $writer = new WlsMemoryAdapter('acl_epoch', $config, $shared);
+        $reader = new WlsMemoryAdapter('acl_epoch', $config, $shared);
+
+        self::assertTrue($writer->set('acl_2_source', ['Weline_AppStore::index']));
+        self::assertSame(['Weline_AppStore::index'], $reader->get('acl_2_source'));
+
+        self::assertTrue($writer->clear());
+
+        $synced = new \ReflectionProperty(WlsMemoryAdapter::class, 'epochSyncedRequestId');
+        $synced->setAccessible(true);
+        $synced->setValue($reader, null);
+
+        self::assertNull($reader->get('acl_2_source'));
+    }
 }
 
 final class SharedCacheStateDouble implements SharedCacheStateInterface

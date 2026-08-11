@@ -474,6 +474,17 @@ class Status extends CommandAbstract
         // live lease and immutable serving manifest; it may never have had a
         // historical gateway runtime_project_proof.
         $trustedFallback = $this->runtimeFallbackServingEndpoint($endpoint);
+        $trustedObservation = $trustedFallback !== null
+            ? [
+                'bind_host' => (string)$trustedFallback['bind_host'],
+                'bind_endpoint' => '',
+                'authority_host' => (string)$trustedFallback['authority_host'],
+                'route_domains' => [],
+                'limitations' => [],
+                'port' => (int)$trustedFallback['port'],
+                'https' => (bool)$trustedFallback['https'],
+            ]
+            : $this->runtimeFallbackServingObservation($endpoint);
         $metadata = [];
         $state = '';
         $port = 0;
@@ -493,17 +504,27 @@ class Status extends CommandAbstract
                 $port = (int)($fallback->port ?? 0);
             }
         }
-        if ($trustedFallback !== null) {
+        if ($trustedObservation !== null) {
             $metadata = $gatewayRuntime;
             $state = 'DEGRADED_WLS';
-            $port = (int)$trustedFallback['port'];
-            $bindHost = (string)$trustedFallback['bind_host'];
+            $port = (int)$trustedObservation['port'];
+            $bindHost = (string)$trustedObservation['bind_host'];
             $bindAuthority = \str_contains($bindHost, ':')
                 ? '[' . $bindHost . ']'
                 : $bindHost;
             $metadata['fallback_bind_host'] = $bindHost;
-            $metadata['fallback_bind'] = $bindAuthority . ':' . $port;
-            $metadata['fallback_urls'] = [(string)$trustedFallback['origin']];
+            $metadata['fallback_bind'] = (string)(
+                $trustedObservation['bind_endpoint'] ?? ''
+            ) ?: $bindAuthority . ':' . $port;
+            $metadata['fallback_urls'] = $trustedFallback !== null
+                ? [(string)$trustedFallback['origin']]
+                : [];
+            $metadata['fallback_route_domains'] = (array)(
+                $trustedObservation['route_domains'] ?? []
+            );
+            $metadata['fallback_limitations'] = (array)(
+                $trustedObservation['limitations'] ?? []
+            );
         } elseif (\strtoupper(\trim($state)) === 'DEGRADED_WLS') {
             // A service-role metadata row without a fresh lease proof is not
             // evidence that the public fallback listener is still serving.
@@ -584,12 +605,22 @@ class Status extends CommandAbstract
             'state' => $state,
             'bind' => $bind,
             'urls' => \array_keys($urls),
+            'route_domains' => \array_values(\array_filter(
+                (array)($metadata['fallback_route_domains'] ?? []),
+                static fn (mixed $domain): bool => \is_string($domain)
+                    && \trim($domain) !== '',
+            )),
+            'limitations' => \array_values(\array_filter(
+                (array)($metadata['fallback_limitations'] ?? []),
+                static fn (mixed $limitation): bool => \is_string($limitation)
+                    && \trim($limitation) !== '',
+            )),
             'kind' => $kind,
         ];
     }
 
     /**
-     * @param array{state:string,bind:string,urls:list<string>,kind?:string} $status
+     * @param array{state:string,bind:string,urls:list<string>,route_domains?:list<string>,limitations?:list<string>,kind?:string} $status
      */
     private function showGatewayFallbackStatus(array $status, string $prefix): void
     {
@@ -606,6 +637,15 @@ class Status extends CommandAbstract
             . (string)$status['bind']);
         foreach ($status['urls'] as $url) {
             $this->printer->note($prefix . __('备用 TLS 地址：') . $url);
+        }
+        if ($status['urls'] === [] && ($status['route_domains'] ?? []) !== []) {
+            $this->printer->note(
+                $prefix . __('路由域名/SNI：')
+                . \implode(', ', (array)$status['route_domains']),
+            );
+            $this->printer->warning($prefix . __(
+                '当前没有可直接使用的 HTTPS URL；必须提供匹配通配符证书的具体 hostname/SNI。'
+            ));
         }
         $this->printer->warning($prefix . __(
             '高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。'
@@ -835,6 +875,15 @@ class Status extends CommandAbstract
     protected function runtimeFallbackServingEndpoint(array $raw): ?array
     {
         return GatewayRuntimeServingProjection::fallbackServingEndpoint($raw);
+    }
+
+    /**
+     * @param array<string,mixed> $raw
+     * @return array<string,mixed>|null
+     */
+    protected function runtimeFallbackServingObservation(array $raw): ?array
+    {
+        return GatewayRuntimeServingProjection::fallbackServingObservation($raw);
     }
 
     /** @param array<string,mixed> $raw */

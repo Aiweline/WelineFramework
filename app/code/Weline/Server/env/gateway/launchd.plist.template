@@ -7,7 +7,8 @@
   <string>com.weline.wls-gateway-v2</string>
   <key>ProgramArguments</key>
   <array>
-    <string>{{LAUNCHER}}</string>
+    <string>{{GUARDIAN}}</string>
+    <string>--guardian</string>
     <string>--service</string>
     <string>--home={{HOME}}</string>
     <string>--run={{RUN_DIR}}</string>
@@ -33,6 +34,8 @@
   <integer>5</integer>
   <key>AbandonProcessGroup</key>
   <false/>
+  <key>ExitTimeOut</key>
+  <integer>330</integer>
   <key>ProcessType</key>
   <string>Interactive</string>
   <key>SoftResourceLimits</key>

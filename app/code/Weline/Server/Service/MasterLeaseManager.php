@@ -105,7 +105,6 @@ class MasterLeaseManager
                 $lease = $current['lease'];
                 $sameBoot = \hash_equals($bootId, (string)$lease['host_boot_id']);
                 if ($sameBoot) {
-                    $this->assertNotFuture($lease, $now);
                     $sequence = $this->nextSequence((int)$lease['lease_sequence']);
                     $sameOwner = $this->candidateMatchesLease(
                         $lease,
@@ -116,24 +115,47 @@ class MasterLeaseManager
                         $token,
                         $owner,
                     );
+                    $updatedMonotonic = (float)$lease['updated_monotonic'];
+                    $futureLease = !\is_finite($updatedMonotonic)
+                        || $updatedMonotonic <= 0.0
+                        || $updatedMonotonic > $now;
                     if (!$sameOwner && $epoch <= (int)$lease['master_epoch']) {
                         throw new MasterLeaseOwnershipLostException(
                             'WLS Master lease takeover epoch must advance the previous generation.',
                         );
                     }
-                    $fresh = ($now - (float)$lease['updated_monotonic'])
-                        <= self::HEARTBEAT_STALE_SEC;
-                    if ($fresh
-                        && (!$sameOwner || (string)$lease['state'] !== self::STATE_RUNNING)
-                    ) {
+                    if ($futureLease) {
+                        // A monotonic value from a failed restore may be ahead
+                        // of this boot's clock. The persistent lease lock is
+                        // the CAS boundary: recover only when the previous
+                        // owner is conclusively gone or mismatched, and only
+                        // with a strictly higher epoch. MATCH and UNKNOWN are
+                        // a live-owner veto; overwriting either could create a
+                        // double Master.
                         $ownerStatus = $runtime->observeOwner($lease, true);
-                        if (\in_array($ownerStatus, [
-                            MasterLeaseRuntimeIdentity::OWNER_MATCH,
-                            MasterLeaseRuntimeIdentity::OWNER_UNKNOWN,
+                        if ($sameOwner || !\in_array($ownerStatus, [
+                            MasterLeaseRuntimeIdentity::OWNER_MISSING,
+                            MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
                         ], true)) {
                             throw new MasterLeaseOwnershipLostException(
-                                'WLS Master lease is already owned by another live generation.',
+                                'Future WLS Master lease owner is not safely recoverable.',
                             );
+                        }
+                    } else {
+                        $fresh = ($now - $updatedMonotonic)
+                            <= self::HEARTBEAT_STALE_SEC;
+                        if ($fresh
+                            && (!$sameOwner || (string)$lease['state'] !== self::STATE_RUNNING)
+                        ) {
+                            $ownerStatus = $runtime->observeOwner($lease, true);
+                            if (\in_array($ownerStatus, [
+                                MasterLeaseRuntimeIdentity::OWNER_MATCH,
+                                MasterLeaseRuntimeIdentity::OWNER_UNKNOWN,
+                            ], true)) {
+                                throw new MasterLeaseOwnershipLostException(
+                                    'WLS Master lease is already owned by another live generation.',
+                                );
+                            }
                         }
                     }
                 }
@@ -602,6 +624,7 @@ class MasterLeaseManager
         int $masterPid,
         int $masterEpoch,
         string $credential,
+        bool $requireFreshness = true,
     ): array {
         if ($leaseFile === ''
             || $masterPid <= 0
@@ -623,6 +646,7 @@ class MasterLeaseManager
                 $masterPid,
                 $masterEpoch,
                 $credential,
+                $requireFreshness,
             );
     }
 

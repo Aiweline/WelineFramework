@@ -190,8 +190,7 @@ final class HttpProtocolCapabilityProbe
         $http3AutoReady = $http3Ready && $http3ClientReady;
         $edgeIsNginx = $edgeAdapter !== null
             && $edgeAdapter->name() === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
-        $edgeIsCaddy = $httpProtocolSelection?->isCaddyProtocolEdge() ?? false;
-        $edgeIsExternal = $edgeIsNginx || $edgeIsCaddy;
+        $edgeIsExternal = $edgeIsNginx;
         $managedNginx = $edgeIsNginx && \is_array($edgeSnapshot['managed_nginx'] ?? null)
             ? $edgeSnapshot['managed_nginx']
             : [];
@@ -218,14 +217,6 @@ final class HttpProtocolCapabilityProbe
                 static fn(string $protocol): bool => $protocol !== $configuredPreferred,
             )),
         ];
-        $publicConfiguredOrder = \array_map(
-            static fn(string $protocol): string => match ($protocol) {
-                HttpProtocolSelection::HTTP_3 => 'http/3',
-                HttpProtocolSelection::HTTP_2 => 'http/2',
-                default => 'http/1.1',
-            },
-            $orderedProtocols,
-        );
         $targetPreferred = $edgeIsExternal
             ? 'http/1.1'
             : match ($configuredPreferred) {
@@ -263,7 +254,7 @@ final class HttpProtocolCapabilityProbe
             'owner' => 'wls',
             'role' => $edgeIsNginx
                 ? 'nginx_backend'
-                : ($edgeIsCaddy ? 'caddy_backend' : 'public_and_wls_endpoint'),
+                : 'public_and_wls_endpoint',
             'target_preferred' => $targetPreferred,
             'effective_preferred' => $effectivePreferred,
             'fallback' => $fallback,
@@ -316,23 +307,6 @@ final class HttpProtocolCapabilityProbe
                 'tls_session_resumption_reload_continuity_verified' => (bool)(
                     $managedNginx['tls_session_resumption_reload_continuity_verified'] ?? false
                 ),
-            ];
-        } elseif ($edgeIsCaddy) {
-            $publicEdgeSurface = [
-                'owner' => 'caddy',
-                'role' => 'public_https',
-                'target_preferred' => $publicConfiguredOrder[0] ?? null,
-                'effective_preferred' => null,
-                'fallback' => \array_slice($publicConfiguredOrder, 1),
-                'negotiation_order' => $publicConfiguredOrder,
-                'policy_bound' => $endpointPolicyBound,
-                'policy_source' => $policySource,
-                'runtime_verified' => false,
-                'capability_verified' => false,
-                'observed_preferred' => null,
-                'verification_required' => 'live Caddy public HTTPS/QUIC probe',
-                'http3_when_available' => \in_array('http/3', $publicConfiguredOrder, true),
-                'http3_reason' => 'Caddy owns public HTTP negotiation; live endpoint evidence is required before automatic benchmark selection.',
             ];
         } else {
             $publicEdgeSurface = [

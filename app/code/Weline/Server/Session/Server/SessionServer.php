@@ -266,6 +266,13 @@ final class SessionServer
             'token_file_name' => \basename($this->tokenFilePath),
             'started_at' => \date('c'),
             'healthy_at' => \date('c'),
+            'process_name' => \trim((string)($this->config['process_name'] ?? '')),
+            'instance_name' => \trim((string)($this->config['instance_name'] ?? '')),
+            'service_instance_name' => \trim((string)(
+                $this->config['service_instance_name']
+                    ?? $this->config['instance_name']
+                    ?? ''
+            )),
             'shared_service' => true,
         ];
         $publishedRecord = $this->sharedRegistry->updateRecord(

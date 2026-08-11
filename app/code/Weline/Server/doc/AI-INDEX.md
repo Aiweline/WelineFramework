@@ -28,18 +28,18 @@
 - `app/code/Weline/Server/composer.json`
 
 - `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：21
-- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：59
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：14
-- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：7
+- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：62
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：13
+- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：6
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：11
 - `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：2
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：206
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：281
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：7
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：5
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：2
-- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：10
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
+- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：8
+- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：2
 
 ## 从源码识别到的开发提示
 
@@ -101,8 +101,10 @@
 - `app/code/Weline/Server/doc/开发/session-entry-migration-checklist.md`
 - `app/code/Weline/Server/doc/开发/ssl-dynamic-restore-plan.md`
 - `app/code/Weline/Server/doc/开发/task.md`
+- `app/code/Weline/Server/doc/开发日志.md`
 - `app/code/Weline/Server/doc/计划-AI建站-w_query与本机hosts.md`
 - `app/code/Weline/Server/doc/证书管理Hook集成.md`
+- `app/code/Weline/Server/doc/需求.md`
 
 ## 开发前门禁
 

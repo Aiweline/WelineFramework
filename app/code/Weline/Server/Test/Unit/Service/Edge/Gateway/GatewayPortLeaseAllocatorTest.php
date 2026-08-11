@@ -46,7 +46,7 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
             $listener->close();
         }
         Processer::removePidFile('--name=' . $this->masterProcessName);
-        if ($this->originalProcessTitle !== '' && \function_exists('cli_set_process_title')) {
+        if (\function_exists('cli_set_process_title')) {
             @\cli_set_process_title($this->originalProcessTitle);
         }
         $this->removeTree($this->root);
@@ -924,6 +924,124 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         self::assertTrue($listener->matches('127.0.0.1', (int)$lease['port']));
     }
 
+    public function testExpiredOperationDeadlineRejectsBeforeBinding(): void
+    {
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'deadline-host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $bindCalls = 0;
+        $allocator = $this->allocator(
+            'deadline-project',
+            $hostState,
+            $leaseDirectory,
+            monotonicClock: static fn (): float => 100.0,
+            operationDeadlineMonotonic: 99.0,
+        );
+
+        try {
+            $allocator->reserveBound(
+                'site-gateway-fallback',
+                static function (int $port) use (&$bindCalls): bool {
+                    unset($port);
+                    ++$bindCalls;
+                    return true;
+                },
+            );
+            self::fail('An expired absolute deadline must reject lease allocation.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'deadline was exhausted',
+                $exception->getMessage(),
+            );
+        }
+        self::assertSame(0, $bindCalls);
+    }
+
+    public function testOperationDeadlineBoundsNestedProjectIdentityLockContention(): void
+    {
+        $name = 'identity-lock-project';
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'identity-lock-host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $deadline = (\hrtime(true) / 1_000_000_000) + 0.15;
+        $allocator = $this->allocator(
+            $name,
+            $hostState,
+            $leaseDirectory,
+            operationDeadlineMonotonic: $deadline,
+        );
+        $lockPath = $this->root . DIRECTORY_SEPARATOR . $name
+            . DIRECTORY_SEPARATOR . 'app/etc/.wls-project.lock';
+        $lock = @\fopen($lockPath, 'c+b');
+        self::assertIsResource($lock);
+        self::assertTrue(@\flock($lock, LOCK_EX | LOCK_NB));
+        $bindCalls = 0;
+        $started = \hrtime(true) / 1_000_000_000;
+        try {
+            $allocator->reserveBound(
+                'site-gateway-fallback',
+                static function (int $port) use (&$bindCalls): bool {
+                    unset($port);
+                    ++$bindCalls;
+                    return true;
+                },
+            );
+            self::fail('Nested project identity contention must respect the allocator deadline.');
+        } catch (\RuntimeException) {
+            self::assertLessThan(
+                1.0,
+                (\hrtime(true) / 1_000_000_000) - $started,
+            );
+        } finally {
+            @\flock($lock, LOCK_UN);
+            @\fclose($lock);
+        }
+        self::assertSame(0, $bindCalls);
+    }
+
+    public function testOperationDeadlineBoundsNestedHostClaimLockContention(): void
+    {
+        $name = 'host-claim-project';
+        $project = $this->root . DIRECTORY_SEPARATOR . $name;
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host-claim-state';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        self::assertTrue(\mkdir(
+            $project . DIRECTORY_SEPARATOR . 'app/etc',
+            0700,
+            true,
+        ));
+        $identity = new ProjectIdentityStore(
+            $project,
+            $hostState,
+            $this->root . DIRECTORY_SEPARATOR . 'missing-host-claim-legacy.json',
+        );
+        $projectUuid = $identity->projectUuid(
+            (\hrtime(true) / 1_000_000_000) + 2.0,
+        );
+        $claimLockPath = $hostState . DIRECTORY_SEPARATOR . 'project-identities'
+            . DIRECTORY_SEPARATOR . $projectUuid . '.json.lock';
+        $claimLock = @\fopen($claimLockPath, 'c+b');
+        self::assertIsResource($claimLock);
+        self::assertTrue(@\flock($claimLock, LOCK_EX | LOCK_NB));
+        $allocator = new GatewayPortLeaseAllocator(
+            $identity,
+            $leaseDirectory,
+            operationDeadlineMonotonic:
+                (\hrtime(true) / 1_000_000_000) + 0.15,
+        );
+        $started = \hrtime(true) / 1_000_000_000;
+        try {
+            $allocator->status('site-gateway-fallback');
+            self::fail('Nested host claim contention must respect the allocator deadline.');
+        } catch (\RuntimeException) {
+            self::assertLessThan(
+                1.0,
+                (\hrtime(true) / 1_000_000_000) - $started,
+            );
+        } finally {
+            @\flock($claimLock, LOCK_UN);
+            @\fclose($claimLock);
+        }
+    }
+
     public function testRetainedReservationReentryReturnsTheExactLease(): void
     {
         $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
@@ -1383,6 +1501,7 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         ?string $hostBootId = null,
         ?\Closure $monotonicClock = null,
         ?\Closure $afterAtomicPublication = null,
+        ?float $operationDeadlineMonotonic = null,
     ): GatewayPortLeaseAllocator {
         $project = $this->root . DIRECTORY_SEPARATOR . $name;
         self::assertTrue(\mkdir(
@@ -1402,6 +1521,7 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
             $monotonicClock,
             null,
             $afterAtomicPublication,
+            $operationDeadlineMonotonic,
         );
     }
 

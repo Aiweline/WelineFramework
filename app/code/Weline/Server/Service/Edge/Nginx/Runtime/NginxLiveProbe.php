@@ -25,6 +25,7 @@ final class NginxLiveProbe
         int $maxAttempts = 1,
         int $requiredConsecutive = 1,
         float $connectTimeoutSeconds = 0.25,
+        ?float $deadlineMonotonic = null,
     ): array {
         $this->validateRequest(
             $address,
@@ -36,14 +37,28 @@ final class NginxLiveProbe
             $requiredConsecutive,
             $connectTimeoutSeconds,
         );
+        if ($deadlineMonotonic !== null && !\is_finite($deadlineMonotonic)) {
+            throw new \InvalidArgumentException(
+                'Nginx live probe deadline is invalid.',
+            );
+        }
         $expectedHeaders = $this->normalizeExpectedHeaders($expectedHeaders);
         $started = \hrtime(true);
         $consecutive = 0;
+        $attempts = 0;
         $lastReason = 'No probe attempt completed.';
         $lastStatusLine = '';
         $lastBodyDigest = '';
 
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            if ($this->boundedDeadlineSeconds(
+                $connectTimeoutSeconds,
+                $deadlineMonotonic,
+            ) === null) {
+                $lastReason = 'Nginx live probe lifecycle deadline was exhausted.';
+                break;
+            }
+            $attempts = $attempt;
             $result = $this->requestOnce(
                 $address,
                 $port,
@@ -53,6 +68,7 @@ final class NginxLiveProbe
                 $expectedHeaders,
                 $bodyContains,
                 $connectTimeoutSeconds,
+                $deadlineMonotonic,
             );
             $lastReason = $result['reason'];
             $lastStatusLine = $result['status_line'];
@@ -73,15 +89,18 @@ final class NginxLiveProbe
             } else {
                 $consecutive = 0;
             }
-            if ($attempt < $maxAttempts) {
-                \usleep(100_000);
+            if ($attempt < $maxAttempts
+                && !$this->sleepWithinDeadline(0.1, $deadlineMonotonic)
+            ) {
+                $lastReason = 'Nginx live probe lifecycle deadline was exhausted.';
+                break;
             }
         }
 
         return [
             'ok' => false,
             'reason' => $lastReason,
-            'attempts' => $maxAttempts,
+            'attempts' => $attempts,
             'consecutive_matches' => $consecutive,
             'status_line' => $lastStatusLine,
             'body_sha256' => $lastBodyDigest,
@@ -102,7 +121,20 @@ final class NginxLiveProbe
         array $expectedHeaders,
         string $bodyContains,
         float $connectTimeoutSeconds,
+        ?float $deadlineMonotonic,
     ): array {
+        $connectTimeoutSeconds = $this->boundedDeadlineSeconds(
+            $connectTimeoutSeconds,
+            $deadlineMonotonic,
+        );
+        if ($connectTimeoutSeconds === null) {
+            return [
+                'ok' => false,
+                'reason' => 'Nginx live probe lifecycle deadline was exhausted.',
+                'status_line' => '',
+                'body_sha256' => '',
+            ];
+        }
         $errno = 0;
         $error = '';
         $socket = @\stream_socket_client(
@@ -120,7 +152,19 @@ final class NginxLiveProbe
                 'body_sha256' => '',
             ];
         }
-        @\stream_set_timeout($socket, 1);
+        if (!$this->setSocketTimeoutWithinDeadline(
+            $socket,
+            1.0,
+            $deadlineMonotonic,
+        )) {
+            @\fclose($socket);
+            return [
+                'ok' => false,
+                'reason' => 'Nginx live probe lifecycle deadline was exhausted.',
+                'status_line' => '',
+                'body_sha256' => '',
+            ];
+        }
         $request = 'GET ' . $path . " HTTP/1.1\r\n"
             . 'Host: ' . $host . "\r\n"
             . "Connection: close\r\n"
@@ -137,13 +181,16 @@ final class NginxLiveProbe
         }
         $response = '';
         while (!\feof($socket) && \strlen($response) < 1_048_576) {
+            if (!$this->setSocketTimeoutWithinDeadline(
+                $socket,
+                1.0,
+                $deadlineMonotonic,
+            )) {
+                break;
+            }
             $chunk = @\fread($socket, 16_384);
             if (!\is_string($chunk) || $chunk === '') {
-                $meta = @\stream_get_meta_data($socket);
-                if (($meta['timed_out'] ?? false) === true) {
-                    break;
-                }
-                continue;
+                break;
             }
             $response .= $chunk;
         }
@@ -264,5 +311,56 @@ final class NginxLiveProbe
     private function formatAddress(string $address, int $port): string
     {
         return \str_contains($address, ':') ? '[' . $address . ']:' . $port : $address . ':' . $port;
+    }
+
+    private function boundedDeadlineSeconds(
+        float $maximumSeconds,
+        ?float $deadlineMonotonic,
+    ): ?float {
+        if ($deadlineMonotonic === null) {
+            return $maximumSeconds;
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            return null;
+        }
+        return \min($maximumSeconds, $remaining);
+    }
+
+    /** @param resource $socket */
+    private function setSocketTimeoutWithinDeadline(
+        mixed $socket,
+        float $maximumSeconds,
+        ?float $deadlineMonotonic,
+    ): bool {
+        $timeout = $this->boundedDeadlineSeconds(
+            $maximumSeconds,
+            $deadlineMonotonic,
+        );
+        if ($timeout === null) {
+            return false;
+        }
+        $seconds = (int)\floor($timeout);
+        $microseconds = (int)\ceil(($timeout - $seconds) * 1_000_000);
+        if ($microseconds >= 1_000_000) {
+            $seconds++;
+            $microseconds = 0;
+        } elseif ($seconds === 0 && $microseconds < 1) {
+            $microseconds = 1;
+        }
+        return @\stream_set_timeout($socket, $seconds, $microseconds);
+    }
+
+    private function sleepWithinDeadline(
+        float $seconds,
+        ?float $deadlineMonotonic,
+    ): bool {
+        $delay = $this->boundedDeadlineSeconds($seconds, $deadlineMonotonic);
+        if ($delay === null) {
+            return false;
+        }
+        \usleep((int)\max(1, \ceil($delay * 1_000_000)));
+        return $deadlineMonotonic === null
+            || (\hrtime(true) / 1_000_000_000) < $deadlineMonotonic;
     }
 }

@@ -9,7 +9,7 @@ use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
 use Weline\Server\Service\Runtime\WindowsListenerHandoff;
 use Weline\Server\Service\ServiceOrchestrator;
 
@@ -95,8 +95,8 @@ class DispatcherProvider extends AbstractServiceProvider
             '--edge-adapter=' . $edgeAdapterName,
         ];
         if ($gatewayBackend) {
-            $arguments[] = '--protocol-edge-token-file='
-                . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
+            $arguments[] = '--gateway-backend-token-file='
+                . GatewayBackendIngressTokenStore::ensureTokenFile($context->instanceName);
         }
 
         $handoff = $context->getConfig('wls.gateway.startup_listener_handoff', []);
