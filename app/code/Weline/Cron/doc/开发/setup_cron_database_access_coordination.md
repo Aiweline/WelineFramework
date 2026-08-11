@@ -21,7 +21,7 @@
 
 ## 调度父子协议
 
-0. 系统 crontab 生成脚本必须先取得当前项目 `var/cron-main.lock` 的非阻塞 advisory lock；macOS 使用 `lockf -k -t 0` 持锁到调度父进程退出，Linux 使用 `flock -n`。上一分钟调度父进程仍在运行时，本分钟安全跳过；两种工具均不可用时 fail-closed，禁止无锁扫描。该锁只串行化调度父进程，不替代每个任务独立的数据库共享锁与 handoff token。
+0. 系统 crontab 生成脚本必须先取得当前项目 `var/cron-main.lock` 的非阻塞 advisory lock；macOS 使用 `lockf -k -t 0` 持锁到调度父进程退出，Linux 使用 `flock -n`。随后它还必须在 PHP bootstrap 前取得 `var/process/setup_upgrade.lock`：Linux 使用非阻塞共享 `flock`，macOS 使用非阻塞 `lockf`。这层兼容围栏保证尚未接入顶层数据库访问租约的旧 `setup:upgrade` 实现持有排他锁时，系统 Cron 也不会进入数据库。上一分钟调度父进程仍在运行或 Setup 正在升级时，本分钟安全跳过；两种工具均不可用时 fail-closed，禁止无锁扫描。锁文件存在本身不表示锁忙，只能根据实际获取结果判断。`cron-main.lock` 只串行化调度父进程，升级兼容围栏也不替代每个任务独立的数据库共享锁与 handoff token。
 1. 父调度器以 `id + 原 status + 原 run_time + 原 launch_id + 原 pid` 围栏认领任务，原子写入本轮唯一的 `BLOCK + pid=0 + run_start + launch_id`；认领失败不得启动子进程。
 2. 子进程必须同时携带稳定 `--name`、本轮 `--launch-id` 和 `--cron-run-start`。POSIX 派生器在 fork 后先让 child 等待本地 exec gate；父进程提交该 PID 的 exact managed lease 后才发 GO，提交或 GO 失败时 child 在 exec 前自行退出，父进程禁止向未登记 raw PID 发信号。它取得 SH 后发布 `READY(pid)`，但在收到父进程决定前不得解析业务 Model 或进入业务代码。本机冷启动 READY 预算为 30 秒。
 3. 父进程确认 READY PID 与启动器返回的真实 PHP PID 一致，再以 `id + run_start + launch_id + BLOCK + pid=0` 做 CAS，写为 `RUNNING + pid`。CAS 成功后才发布 GO。

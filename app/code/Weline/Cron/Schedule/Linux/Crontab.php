@@ -217,9 +217,8 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
     }
 
     /**
-     * Generate a per-project single-flight wrapper. Cron may start a new
-     * minute while the previous dispatcher is still booting or scanning, so
-     * the wrapper must acquire one advisory lock before bootstrapping PHP.
+     * Generate a per-project single-flight wrapper that also stays outside
+     * the database while setup:upgrade owns its exclusive upgrade lock.
      */
     private function buildShellScript(
         string $baseProjectDir,
@@ -230,21 +229,29 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
         if ($normalizedBase === '') {
             $normalizedBase = DIRECTORY_SEPARATOR;
         }
-        $lockPath = $normalizedBase . DIRECTORY_SEPARATOR . 'var'
+        $cronLockPath = $normalizedBase . DIRECTORY_SEPARATOR . 'var'
             . DIRECTORY_SEPARATOR . 'cron-main.lock';
+        $setupLockDir = $normalizedBase . DIRECTORY_SEPARATOR . 'var'
+            . DIRECTORY_SEPARATOR . 'process';
+        $setupLockPath = $setupLockDir . DIRECTORY_SEPARATOR . 'setup_upgrade.lock';
 
         return '#!/bin/sh' . PHP_EOL
             . 'CRON_PROJECT_DIR=' . escapeshellarg($normalizedBase) . PHP_EOL
             . 'CRON_PHP_BINARY=' . escapeshellarg($phpBinary) . PHP_EOL
             . 'CRON_LOG=' . escapeshellarg($logPath) . PHP_EOL
-            . 'CRON_LOCK_FILE=' . escapeshellarg($lockPath) . PHP_EOL
+            . 'CRON_LOCK_FILE=' . escapeshellarg($cronLockPath) . PHP_EOL
+            . 'SETUP_LOCK_DIR=' . escapeshellarg($setupLockDir) . PHP_EOL
+            . 'SETUP_LOCK_FILE=' . escapeshellarg($setupLockPath) . PHP_EOL
             . 'cd "$CRON_PROJECT_DIR" || exit 1' . PHP_EOL
+            . 'mkdir -p "$SETUP_LOCK_DIR" || exit 1' . PHP_EOL
             . 'if command -v lockf >/dev/null 2>&1; then' . PHP_EOL
-            . '    exec lockf -k -t 0 "$CRON_LOCK_FILE" "$CRON_PHP_BINARY"'
+            . '    exec lockf -k -t 0 "$CRON_LOCK_FILE" lockf -k -t 0'
+            . ' "$SETUP_LOCK_FILE" "$CRON_PHP_BINARY"'
             . ' bin/w cron:task:run >> "$CRON_LOG" 2>&1' . PHP_EOL
             . 'fi' . PHP_EOL
             . 'if command -v flock >/dev/null 2>&1; then' . PHP_EOL
-            . '    exec flock -n "$CRON_LOCK_FILE" "$CRON_PHP_BINARY"'
+            . '    exec flock -n "$CRON_LOCK_FILE" flock -s -n'
+            . ' "$SETUP_LOCK_FILE" "$CRON_PHP_BINARY"'
             . ' bin/w cron:task:run >> "$CRON_LOG" 2>&1' . PHP_EOL
             . 'fi' . PHP_EOL
             . 'printf \'%s\\n\' \'Cron skipped: lockf/flock is unavailable.\''
