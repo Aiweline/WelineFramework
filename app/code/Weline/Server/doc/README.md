@@ -49,6 +49,7 @@ CA/DNS 公网首次签发尚未闭合，TASK-013 未全绿，因此 TASK-014 的
 | Worker 扩缩容 | [Worker 动态扩缩容架构](WLS-Worker动态扩缩容架构设计.md)、[用户手册](WLS-Worker扩缩容用户手册.md) |
 | 多实例隔离 | [WLS 实例隔离机制](WLS实例隔离机制.md) |
 | 安全与规则 | [WLS 安全与规则配置推演](WLS安全与规则配置推演.md) |
+| 非 WLS 部署的可恢复任务无人接管 | `setup:upgrade` 自动收集的 `weline_runtime_task_watch` Cron；手工诊断可运行 `php bin/w runtime:task:watch --once` |
 
 ## 状态权威速查
 
