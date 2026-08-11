@@ -117,6 +117,9 @@ role id、名称和说明，不得直接实例化 ACL Role Model。`RoleRecord` 
 后台 menu.xml 的解析和拓扑仍由 Backend 所有，ACL 通过
 `Weline\Acl\Api\Resource\MenuRegistryInterface` 独占 ACL 菜单表的查询、禁用、删除和
 upsert。接口只接收标量数组，不向 Backend 暴露 ORM 或查询构造器。
+`setup:upgrade --route` 收集控制器 ACL 时，既有父级查询与 upsert 必须以固定小批次执行并
+保持在同一事务内，避免 SQLite 的绑定变量上限使大型模块路由同步提前中止；写入异常只记
+诊断日志并继续向上抛出，禁止调试输出提前结束命令并伪造成功退出码。
 审计、遥测等模块需要把 `class + HTTP method + route` 解析为 ACL 资源时，使用
 `AuthorizationServiceInterface::findRouteResource()`。结果是 final readonly `RouteResource`，
 只含 `acl_id` 与 `source_name`；未匹配返回 `null`，ORM Model 和 Query Builder 留在 Acl 内部。

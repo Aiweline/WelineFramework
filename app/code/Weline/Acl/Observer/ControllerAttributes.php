@@ -20,6 +20,9 @@ use Weline\Framework\Manager\ObjectManager;
 
 class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
 {
+    /** 保守低于 SQLite 默认 999 个绑定变量上限，同时兼容其他数据库。 */
+    private const ACL_SQL_BATCH_SIZE = 50;
+
     /** @var array 已加载的控制器类级别权限映射 [moduleName => [className => sourceId]] */
     private array $loaded_controller_acl_names = [];
     
@@ -706,16 +709,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             // 批量保存时不再保留既有 type='menus'，确保侧栏菜单严格以 menu.xml 为准
             // 仅保留 parent_source（当新数据为空时）
             $sourceIds = array_column($deduplicatedAcls, 'source_id');
-            $existingParentMap = [];
-            if (!empty($sourceIds)) {
-                $existingRecords = $this->acl->reset()
-                    ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
-                    ->select(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
-                    ->fetchArray();
-                foreach ($existingRecords as $record) {
-                    $existingParentMap[$record['source_id']] = $record['parent_source'] ?? '';
-                }
-            }
+            $existingParentMap = $this->loadExistingParentMap($sourceIds);
             foreach ($deduplicatedAcls as &$acl) {
                 $sourceId = $acl['source_id'] ?? '';
                 if (!empty($sourceId) && isset($existingParentMap[$sourceId])) {
@@ -728,14 +722,13 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             unset($acl);
 
             // acl 表对 source_id 有 UNIQUE，存在则按冲突键更新全部字段（方言由适配器生成）
-            $this->acl->reset()->clearData();
-            $this->acl->getQuery()->insert($deduplicatedAcls, 'source_id', '')->fetch();
+            $this->upsertAclBatches($deduplicatedAcls);
             $this->acl->commit();
             CollectedAclSourceIdsRegistry::add(...array_column($deduplicatedAcls, 'source_id'));
         } catch (\Exception $exception) {
             $this->acl->rollBack();
             if (DEV) {
-                p($exception->getMessage());
+                LoggerFactory::create('acl')->error($exception->getMessage());
             }
             throw $exception;
         }
@@ -877,16 +870,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         try {
             // 方法级别 ACL 统一为 type='pc'；仅保留 parent_source（当新数据为空时）
             $sourceIds = array_column($deduplicatedAcls, 'source_id');
-            $existingParentMap = [];
-            if (!empty($sourceIds)) {
-                $existingRecords = $this->acl->reset()
-                    ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
-                    ->select(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
-                    ->fetchArray();
-                foreach ($existingRecords as $record) {
-                    $existingParentMap[$record['source_id']] = $record['parent_source'] ?? '';
-                }
-            }
+            $existingParentMap = $this->loadExistingParentMap($sourceIds);
             foreach ($deduplicatedAcls as &$acl) {
                 $sourceId = $acl['source_id'] ?? '';
                 if (!empty($sourceId) && isset($existingParentMap[$sourceId])) {
@@ -899,20 +883,55 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             unset($acl);
 
             // acl 表对 source_id 有 UNIQUE，存在则按冲突键更新全部字段（方言由适配器生成）
-            $this->acl->reset()->clearData();
-            $this->acl->getQuery()->insert($deduplicatedAcls, ['source_id'], '')->fetch();
+            $this->upsertAclBatches($deduplicatedAcls);
             $this->acl->commit();
             CollectedAclSourceIdsRegistry::add(...array_column($deduplicatedAcls, 'source_id'));
         } catch (\Exception $exception) {
             $this->acl->rollBack();
             if (DEV) {
-                p($exception->getMessage());
+                LoggerFactory::create('acl')->error($exception->getMessage());
             }
             throw $exception;
         }
         
         // 清空已保存的方法级别权限
         unset($this->pending_method_level_acls[$module]);
+    }
+
+    /**
+     * @param array<int, mixed> $sourceIds
+     * @return array<string, string>
+     */
+    private function loadExistingParentMap(array $sourceIds): array
+    {
+        $sourceIds = array_values(array_unique(array_filter(
+            array_map(static fn(mixed $sourceId): string => (string)$sourceId, $sourceIds),
+            static fn(string $sourceId): bool => $sourceId !== ''
+        )));
+        $existingParentMap = [];
+
+        foreach (array_chunk($sourceIds, self::ACL_SQL_BATCH_SIZE) as $sourceIdBatch) {
+            $existingRecords = $this->acl->reset()
+                ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceIdBatch, 'in')
+                ->select(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
+                ->fetchArray();
+            foreach ($existingRecords as $record) {
+                $existingParentMap[$record['source_id']] = $record['parent_source'] ?? '';
+            }
+        }
+
+        return $existingParentMap;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $acls
+     */
+    private function upsertAclBatches(array $acls): void
+    {
+        foreach (array_chunk($acls, self::ACL_SQL_BATCH_SIZE) as $aclBatch) {
+            $this->acl->reset()->clearData();
+            $this->acl->getQuery()->insert($aclBatch, ['source_id'], '')->fetch();
+        }
     }
 
     /**
