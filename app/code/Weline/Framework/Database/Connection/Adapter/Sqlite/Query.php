@@ -50,6 +50,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     private const REQUEST_RETRY_BUDGET_CONTEXT_KEY = 'database.sqlite.retry_budget';
 
     private ?\WeakReference $nonBlockingBusyTimeoutLink = null;
+    private ?bool $returningClauseSupported = null;
 
     public string $exist_update_sql = '';
 
@@ -57,6 +58,23 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      * 获取数据库连接
      */
     abstract public function getLink(): PDO;
+
+    private function supportsReturningClause(): bool
+    {
+        if ($this->returningClauseSupported !== null) {
+            return $this->returningClauseSupported;
+        }
+
+        try {
+            $statement = $this->getLink()->query('SELECT sqlite_version()');
+            $version = $statement === false ? '' : (string)$statement->fetchColumn();
+
+            return $this->returningClauseSupported = $version !== ''
+                && version_compare($version, '3.35.0', '>=');
+        } catch (\Throwable) {
+            return $this->returningClauseSupported = false;
+        }
+    }
 
     public function splitSqlStatements($sql)
     {
@@ -464,6 +482,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             'exist_update_sql' => $this->exist_update_sql,
             'insert_update_fields' => $this->insert_update_fields,
             'insert_update_where_fields' => $this->insert_update_where_fields,
+            'supports_returning' => $this->supportsReturningClause(),
         ];
         $compiled = $compiler->compile($this->ast, $options);
         $this->sql = preg_replace('/\s+/', ' ', trim($compiled->sql));
@@ -499,6 +518,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 'exist_update_sql' => $this->exist_update_sql,
                 'insert_update_fields' => $this->insert_update_fields,
                 'insert_update_where_fields' => $this->insert_update_where_fields,
+                'supports_returning' => $this->supportsReturningClause(),
             ];
             $compiled = $compiler->compile($this->ast, $options);
             $this->sql = $compiled->sql;
