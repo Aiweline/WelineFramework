@@ -19,7 +19,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
         string $action,
         string $reloadType = '',
         array $payload = [],
-        float $timeout = 6.0
+        float $timeout = 6.0,
+        ?float $deadlineMonotonic = null,
     ): array {
         $requestId = (string)($payload['msg_id'] ?? ControlCommandResult::requestId($action));
         $payload['msg_id'] = $requestId;
@@ -31,6 +32,14 @@ class IpcControlGateway implements IpcControlGatewayInterface
         }
         if ($action === ControlMessage::ACTION_STOP && !isset($payload['stop_trace_id'])) {
             $payload['stop_trace_id'] = 'gw-' . \getmypid() . '-' . \time();
+        }
+        if (self::deadlineIsExhausted($deadlineMonotonic)) {
+            return ControlCommandResult::normalize(
+                self::deadlineExhaustedResult(),
+                $instanceName,
+                $action,
+                $requestId,
+            );
         }
 
         $endpoint = $this->resolveControlEndpoint($instanceName);
@@ -46,7 +55,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
         $result = $this->sendCommand(
             $controlPort,
             ControlMessage::command($action, $reloadType, $payload, (string)$endpoint['control_token']),
-            $timeout
+            $timeout,
+            deadlineMonotonic: $deadlineMonotonic,
         );
 
         return ControlCommandResult::normalize($result, $instanceName, $action, $requestId);
@@ -155,6 +165,26 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
+    public function setMaintenanceModeBeforeDeadline(
+        string $instanceName,
+        bool $enabled,
+        float $timeout,
+        float $deadlineMonotonic,
+        bool $dispatcherOnly = false,
+    ): array {
+        return $this->dispatchAsyncCommand(
+            $instanceName,
+            $enabled
+                ? ControlMessage::ACTION_MAINTENANCE_ENABLE
+                : ControlMessage::ACTION_MAINTENANCE_DISABLE,
+            '',
+            $dispatcherOnly ? ['dispatcher_only' => true] : [],
+            $timeout,
+            $enabled ? 'Maintenance enable queued' : 'Maintenance disable queued',
+            $deadlineMonotonic,
+        );
+    }
+
     public function routingCacheClear(string $instanceName, float $timeout = 5.0): array
     {
         return $this->commandAsync(
@@ -170,6 +200,21 @@ class IpcControlGateway implements IpcControlGatewayInterface
     public function getStatus(string $instanceName = 'default', float $timeout = 4.0): array
     {
         return $this->command($instanceName, ControlMessage::ACTION_STATUS, '', [], $timeout ?: Timeouts::CONTROL_CMD_STATUS_READ_SEC);
+    }
+
+    public function getStatusBeforeDeadline(
+        string $instanceName,
+        float $timeout,
+        float $deadlineMonotonic,
+    ): array {
+        return $this->command(
+            $instanceName,
+            ControlMessage::ACTION_STATUS,
+            '',
+            [],
+            $timeout ?: Timeouts::CONTROL_CMD_STATUS_READ_SEC,
+            $deadlineMonotonic,
+        );
     }
 
     public function getStatusBrief(string $instanceName = 'default', float $timeout = 1.5): array
@@ -553,20 +598,6 @@ class IpcControlGateway implements IpcControlGatewayInterface
         ];
     }
 
-    /**
-     * @param array<int, array<string, mixed>> $routes
-     */
-    public function proxyApply(string $instanceName = 'default', array $routes = [], float $timeout = 5.0): array
-    {
-        unset($instanceName, $routes, $timeout);
-
-        return [
-            'success' => false,
-            'message' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
-            'data' => ['routes' => 0, 'gateways' => 0, 'targets' => []],
-        ];
-    }
-
     public function securityUnblock(string $instanceName = 'default', ?string $ip = null, bool $clearAll = false): array
     {
         $payload = ['clear_all' => $clearAll];
@@ -672,6 +703,27 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
+    public function setMaintenanceModeManyBeforeDeadline(
+        array $instanceNames,
+        bool $enabled,
+        float $timeout,
+        float $deadlineMonotonic,
+        bool $dispatcherOnly = false,
+    ): array {
+        return $this->dispatchCommandMany(
+            $instanceNames,
+            $enabled
+                ? ControlMessage::ACTION_MAINTENANCE_ENABLE
+                : ControlMessage::ACTION_MAINTENANCE_DISABLE,
+            '',
+            $dispatcherOnly ? ['dispatcher_only' => true] : [],
+            $timeout,
+            true,
+            $enabled ? 'Maintenance enable queued' : 'Maintenance disable queued',
+            $deadlineMonotonic,
+        );
+    }
+
     /**
      * @param string[] $instanceNames
      * @return array<string, array{success:bool,message:string,data:array}>
@@ -766,7 +818,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
         array $payload,
         float $timeout,
         bool $asyncAck,
-        string $acceptedMessage
+        string $acceptedMessage,
+        ?float $deadlineMonotonic = null,
     ): array {
         $results = [];
         $commands = [];
@@ -802,7 +855,13 @@ class IpcControlGateway implements IpcControlGatewayInterface
             return $results;
         }
 
-        $parallel = $this->sendCommandsParallel($commands, $timeout, $asyncAck, $acceptedMessage);
+        $parallel = $this->sendCommandsParallel(
+            $commands,
+            $timeout,
+            $asyncAck,
+            $acceptedMessage,
+            $deadlineMonotonic,
+        );
         foreach ($parallel as $name => $r) {
             $meta = $commands[$name] ?? [];
             $results[$name] = ControlCommandResult::normalize(
@@ -830,7 +889,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
         array $instanceCommands,
         float $timeout,
         bool $acceptWriteTimeoutAsAsyncAck,
-        string $acceptedMessage
+        string $acceptedMessage,
+        ?float $deadlineMonotonic = null,
     ): array {
         $results = [];
         if ($instanceCommands === []) {
@@ -838,7 +898,6 @@ class IpcControlGateway implements IpcControlGatewayInterface
         }
 
         $readTimeout = \max(0.05, $timeout);
-        $connectTimeout = \max(Timeouts::CONTROL_MIN_CONNECT_TIMEOUT_SEC, $readTimeout);
 
         /** @var array<string, resource> $connections */
         $connections = [];
@@ -852,6 +911,14 @@ class IpcControlGateway implements IpcControlGatewayInterface
             $errstr = '';
             $conn = null;
             for ($attempt = 1; $attempt <= Timeouts::CONTROL_CONNECT_ATTEMPTS; $attempt++) {
+                $connectTimeout = self::controlConnectTimeout(
+                    $readTimeout,
+                    $deadlineMonotonic,
+                    ControlMessage::monotonicSeconds(),
+                );
+                if ($connectTimeout <= 0.0) {
+                    break;
+                }
                 $conn = @\stream_socket_client(
                     "tcp://127.0.0.1:{$port}",
                     $errno,
@@ -862,10 +929,22 @@ class IpcControlGateway implements IpcControlGatewayInterface
                     break;
                 }
                 if ($attempt < Timeouts::CONTROL_CONNECT_ATTEMPTS) {
-                    SchedulerSystem::usleep(Timeouts::CONTROL_CONNECT_RETRY_USEC);
+                    $retryMicroseconds = self::boundedRetryMicroseconds(
+                        Timeouts::CONTROL_CONNECT_RETRY_USEC,
+                        $deadlineMonotonic,
+                        ControlMessage::monotonicSeconds(),
+                    );
+                    if ($retryMicroseconds < 1) {
+                        break;
+                    }
+                    SchedulerSystem::usleep($retryMicroseconds);
                 }
             }
             if (!$conn) {
+                if (self::deadlineIsExhausted($deadlineMonotonic)) {
+                    $results[$instance] = self::deadlineExhaustedResult();
+                    continue;
+                }
                 $results[$instance] = [
                     'success' => false,
                     'message' => (string)__('连接控制端口失败：%{1}', [$errstr ?: 'unknown']),
@@ -874,7 +953,12 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 continue;
             }
 
-            if (!$this->writeCommandFully($conn, $command, $readTimeout)) {
+            if (!$this->writeCommandFully(
+                $conn,
+                $command,
+                $readTimeout,
+                $deadlineMonotonic,
+            )) {
                 @\fclose($conn);
                 $results[$instance] = [
                     'success' => false,
@@ -888,7 +972,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
             $buffers[$instance] = '';
         }
 
-        $deadline = ControlMessage::monotonicSeconds() + $readTimeout;
+        $deadline = $deadlineMonotonic
+            ?? (ControlMessage::monotonicSeconds() + $readTimeout);
         while ($connections !== []) {
             $remaining = $deadline - ControlMessage::monotonicSeconds();
             if ($remaining <= 0) {
@@ -1049,8 +1134,37 @@ class IpcControlGateway implements IpcControlGatewayInterface
         float $timeout = 5.0,
         string $acceptedMessage = 'Command queued'
     ): array {
+        return $this->dispatchAsyncCommand(
+            $instanceName,
+            $action,
+            $reloadType,
+            $payload,
+            $timeout,
+            $acceptedMessage,
+            null,
+        );
+    }
+
+    private function dispatchAsyncCommand(
+        string $instanceName,
+        string $action,
+        string $reloadType,
+        array $payload,
+        float $timeout,
+        string $acceptedMessage,
+        ?float $deadlineMonotonic,
+    ): array {
         $requestId = (string)($payload['msg_id'] ?? ControlCommandResult::requestId($action));
         $payload['msg_id'] = $requestId;
+        if (self::deadlineIsExhausted($deadlineMonotonic)) {
+            return ControlCommandResult::normalize(
+                self::deadlineExhaustedResult(),
+                $instanceName,
+                $action,
+                $requestId,
+                true,
+            );
+        }
         $endpoint = $this->resolveControlEndpoint($instanceName);
         $controlPort = (int)$endpoint['port'];
         if ($controlPort <= 0) {
@@ -1066,7 +1180,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
             ControlMessage::command($action, $reloadType, $payload, (string)$endpoint['control_token']),
             $timeout,
             true,
-            $acceptedMessage
+            $acceptedMessage,
+            $deadlineMonotonic,
         );
 
         return ControlCommandResult::normalize($result, $instanceName, $action, $requestId, true);
@@ -1076,13 +1191,36 @@ class IpcControlGateway implements IpcControlGatewayInterface
      * @param resource $conn
      * @return array{success:bool,message:string,data:array,timed_out?:bool}
      */
-    private function readCommandResult($conn, float $timeout): array
+    private function readCommandResult(
+        $conn,
+        float $timeout,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        \stream_set_timeout($conn, (int)\ceil($timeout));
+        $startedAt = ControlMessage::monotonicSeconds();
+        $deadline = self::phaseDeadline(
+            $timeout,
+            $deadlineMonotonic,
+            $startedAt,
+        );
+        $phaseTimeout = \max(0.0, $deadline - $startedAt);
+        if ($phaseTimeout <= 0.0) {
+            return self::deadlineExhaustedResult();
+        }
+        if ($deadlineMonotonic === null) {
+            // Preserve the legacy socket metadata timeout exactly. The
+            // non-blocking select loop below remains the actual read bound.
+            \stream_set_timeout($conn, (int)\ceil($timeout));
+        } else {
+            $timeoutSeconds = (int)\floor($phaseTimeout);
+            $timeoutMicroseconds = (int)\floor(
+                ($phaseTimeout - $timeoutSeconds) * 1_000_000,
+            );
+            \stream_set_timeout($conn, $timeoutSeconds, $timeoutMicroseconds);
+        }
         \stream_set_blocking($conn, false);
 
         $buffer = '';
-        $deadline = ControlMessage::monotonicSeconds() + $timeout;
         while (ControlMessage::monotonicSeconds() < $deadline) {
             $remaining = $deadline - ControlMessage::monotonicSeconds();
             if ($remaining <= 0) {
@@ -1141,10 +1279,94 @@ class IpcControlGateway implements IpcControlGatewayInterface
 
         }
 
+        if ($deadlineMonotonic !== null
+            && self::deadlineIsExhausted($deadlineMonotonic)
+        ) {
+            return self::deadlineExhaustedResult();
+        }
+
         return [
             'success' => false,
-            'message' => (string)__('等待控制命令响应超时（%{1}s）。', [\round($timeout, 1)]),
+            'message' => (string)__('等待控制命令响应超时（%{1}s）。', [\round($phaseTimeout, 1)]),
             'data' => [],
+            'timed_out' => true,
+        ];
+    }
+
+    private static function deadlineIsExhausted(?float $deadlineMonotonic): bool
+    {
+        return $deadlineMonotonic !== null
+            && (!\is_finite($deadlineMonotonic)
+                || $deadlineMonotonic <= ControlMessage::monotonicSeconds());
+    }
+
+    private static function phaseDeadline(
+        float $localTimeout,
+        ?float $deadlineMonotonic,
+        float $monotonicNow,
+    ): float {
+        $localDeadline = $monotonicNow + \max(0.0, $localTimeout);
+        if ($deadlineMonotonic === null) {
+            return $localDeadline;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            return $monotonicNow;
+        }
+        return \min($localDeadline, $deadlineMonotonic);
+    }
+
+    private static function controlConnectTimeout(
+        float $readTimeout,
+        ?float $deadlineMonotonic,
+        float $monotonicNow,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return \max(Timeouts::CONTROL_MIN_CONNECT_TIMEOUT_SEC, $readTimeout);
+        }
+        return \max(
+            0.0,
+            self::phaseDeadline(
+                $readTimeout,
+                $deadlineMonotonic,
+                $monotonicNow,
+            ) - $monotonicNow,
+        );
+    }
+
+    private static function boundedRetryMicroseconds(
+        int $localMicroseconds,
+        ?float $deadlineMonotonic,
+        float $monotonicNow,
+    ): int {
+        if ($localMicroseconds < 1) {
+            return 0;
+        }
+        if ($deadlineMonotonic === null) {
+            return $localMicroseconds;
+        }
+        if (!\is_finite($deadlineMonotonic)
+            || $deadlineMonotonic <= $monotonicNow
+        ) {
+            return 0;
+        }
+        $remainingSeconds = $deadlineMonotonic - $monotonicNow;
+        if ($remainingSeconds >= $localMicroseconds / 1_000_000) {
+            return $localMicroseconds;
+        }
+        $remainingMicroseconds = (int)\floor($remainingSeconds * 1_000_000);
+        return \min($localMicroseconds, \max(0, $remainingMicroseconds));
+    }
+
+    /** @return array{success:false,message:string,data:array,timed_out:true} */
+    private static function deadlineExhaustedResult(): array
+    {
+        return [
+            'success' => false,
+            'message' => (string)__('控制命令绝对截止时间已耗尽。'),
+            'data' => [
+                'deadline_exhausted' => true,
+                'error_code' => 'deadline_exhausted',
+            ],
             'timed_out' => true,
         ];
     }
@@ -1157,16 +1379,24 @@ class IpcControlGateway implements IpcControlGatewayInterface
         string $command,
         float $timeout,
         bool $acceptWriteTimeoutAsAsyncAck = false,
-        string $acceptedMessage = ''
+        string $acceptedMessage = '',
+        ?float $deadlineMonotonic = null,
     ): array
     {
         $readTimeout = \max(0.05, $timeout);
-        $connectTimeout = \max(Timeouts::CONTROL_MIN_CONNECT_TIMEOUT_SEC, $readTimeout);
 
         $conn = null;
         $errno = 0;
         $errstr = '';
         for ($attempt = 1; $attempt <= Timeouts::CONTROL_CONNECT_ATTEMPTS; $attempt++) {
+            $connectTimeout = self::controlConnectTimeout(
+                $readTimeout,
+                $deadlineMonotonic,
+                ControlMessage::monotonicSeconds(),
+            );
+            if ($connectTimeout <= 0.0) {
+                return self::deadlineExhaustedResult();
+            }
             $conn = @\stream_socket_client(
                 "tcp://127.0.0.1:{$controlPort}",
                 $errno,
@@ -1177,7 +1407,15 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 break;
             }
             if ($attempt < Timeouts::CONTROL_CONNECT_ATTEMPTS) {
-                SchedulerSystem::usleep(Timeouts::CONTROL_CONNECT_RETRY_USEC);
+                $retryMicroseconds = self::boundedRetryMicroseconds(
+                    Timeouts::CONTROL_CONNECT_RETRY_USEC,
+                    $deadlineMonotonic,
+                    ControlMessage::monotonicSeconds(),
+                );
+                if ($retryMicroseconds < 1) {
+                    return self::deadlineExhaustedResult();
+                }
+                SchedulerSystem::usleep($retryMicroseconds);
             }
         }
         if (!$conn) {
@@ -1189,7 +1427,12 @@ class IpcControlGateway implements IpcControlGatewayInterface
         }
 
         try {
-            if (!$this->writeCommandFully($conn, $command, $readTimeout)) {
+            if (!$this->writeCommandFully(
+                $conn,
+                $command,
+                $readTimeout,
+                $deadlineMonotonic,
+            )) {
                 return [
                     'success' => false,
                     'message' => (string)__('发送控制命令失败，请检查 Orchestrator IPC 连接状态。'),
@@ -1197,8 +1440,15 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 ];
             }
 
-            $result = $this->readCommandResult($conn, $readTimeout);
-            if ($acceptWriteTimeoutAsAsyncAck && !empty($result['timed_out'])) {
+            $result = $this->readCommandResult(
+                $conn,
+                $readTimeout,
+                $deadlineMonotonic,
+            );
+            if ($acceptWriteTimeoutAsAsyncAck
+                && !empty($result['timed_out'])
+                && empty($result['data']['deadline_exhausted'])
+            ) {
                 return [
                     'success' => true,
                     'message' => $acceptedMessage !== '' ? $acceptedMessage : (string)__('控制命令已发送'),
@@ -1222,7 +1472,12 @@ class IpcControlGateway implements IpcControlGatewayInterface
     }
 
     /** @param resource $connection */
-    private function writeCommandFully($connection, string $command, float $timeout): bool
+    private function writeCommandFully(
+        $connection,
+        string $command,
+        float $timeout,
+        ?float $deadlineMonotonic = null,
+    ): bool
     {
         $length = \strlen($command);
         if ($length < 1 || $length > 1_048_577) {
@@ -1231,7 +1486,11 @@ class IpcControlGateway implements IpcControlGatewayInterface
         if (!@\stream_set_blocking($connection, false)) {
             return false;
         }
-        $deadline = ControlMessage::monotonicSeconds() + \max(0.05, $timeout);
+        $deadline = self::phaseDeadline(
+            \max(0.05, $timeout),
+            $deadlineMonotonic,
+            ControlMessage::monotonicSeconds(),
+        );
         $offset = 0;
         while ($offset < $length) {
             $remaining = $deadline - ControlMessage::monotonicSeconds();

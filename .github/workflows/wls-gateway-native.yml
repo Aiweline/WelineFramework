@@ -5,8 +5,10 @@ on:
   push:
     paths:
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
-      - "app/code/Weline/Server/Protocol/Http3/Native/**"
+      - "app/code/Weline/Server/Protocol/Http3/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPaths.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayWindowsNamedPipeTransport.php"
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxInstaller.php"
       - "app/code/Weline/Server/Service/Edge/Nginx/Runtime/NginxConfigPublication.php"
@@ -21,8 +23,10 @@ on:
   pull_request:
     paths:
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
-      - "app/code/Weline/Server/Protocol/Http3/Native/**"
+      - "app/code/Weline/Server/Protocol/Http3/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPaths.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayWindowsNamedPipeTransport.php"
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxInstaller.php"
       - "app/code/Weline/Server/Service/Edge/Nginx/Runtime/NginxConfigPublication.php"
@@ -35,6 +39,14 @@ on:
       - ".gitattributes"
       - ".github/workflows/wls-gateway-native.yml"
   workflow_dispatch:
+    inputs:
+      run_windows_production_capacity:
+        description: Run the dedicated Windows 10GiB/65536-inode capacity crash matrix.
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: '17 3 * * 2,5'
 
 permissions:
   contents: read
@@ -43,7 +55,7 @@ jobs:
   posix:
     name: ${{ matrix.platform }} ${{ matrix.arch }} native build
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -64,10 +76,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
-          extensions: sodium, openssl
+          extensions: sodium, openssl, ffi
           coverage: none
       - name: Verify native runner target
         run: >-
@@ -92,26 +105,127 @@ jobs:
           app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayReleaseWorkflowCoverageTest.php
       - name: Install libsodium on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config
-      - name: Install libsodium on macOS
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y --no-install-recommends
+          libsodium-dev pkg-config clang-18 llvm-18 build-essential perl
+          ca-certificates curl tar xz-utils binutils
+      - name: Install native dependencies on macOS
         if: runner.os == 'macOS'
-        run: brew install libsodium pkg-config
+        run: >-
+          brew install
+          libsodium pkgconf openssl@3 libngtcp2 libnghttp3 curl
+      - name: Materialize the production HTTP/3 dependency contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -d ffi.enable=true <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          require 'vendor/autoload.php';
+
+          $result = (new \Weline\Server\Protocol\Http3\NativeTransportCompiler())
+              ->ensure(true);
+          if (($result['ready'] ?? false) !== true) {
+              fwrite(STDERR, (string)($result['message'] ?? 'HTTP/3 build failed') . PHP_EOL);
+              fwrite(STDERR, (string)($result['output'] ?? ''));
+              exit(1);
+          }
+          $manifest = (array)($result['manifest'] ?? []);
+          if (($manifest['abi_version'] ?? null) !== 0x00020009
+              || !is_file((string)($manifest['library'] ?? ''))
+          ) {
+              fwrite(STDERR, "HTTP/3 compiler did not publish the expected ABI artifact.\n");
+              exit(1);
+          }
+          if (PHP_OS_FAMILY === 'Linux') {
+              $prefix = (string)($manifest['dependency_prefix'] ?? '');
+              $pkgConfigPath = $prefix . '/lib/pkgconfig';
+              if (($manifest['dependency_linkage'] ?? '') !== 'pic-static'
+                  || $prefix === '' || !is_dir($pkgConfigPath)
+                  || str_contains($pkgConfigPath, "\n")
+                  || str_contains($pkgConfigPath, "\r")
+              ) {
+                  fwrite(STDERR, "Linux HTTP/3 dependencies are not the pinned PIC-static bundle.\n");
+                  exit(1);
+              }
+              $githubEnvironment = getenv('GITHUB_ENV');
+              if (!is_string($githubEnvironment) || $githubEnvironment === '') {
+                  fwrite(STDERR, "GITHUB_ENV is unavailable.\n");
+                  exit(1);
+              }
+              // Prefer the pinned HTTP/3 bundle while retaining the runner's
+              // pkg-config defaults for unrelated dependencies such as sodium.
+              $lines = "PKG_CONFIG_PATH={$pkgConfigPath}\n";
+              if (file_put_contents($githubEnvironment, $lines, FILE_APPEND | LOCK_EX) === false) {
+                  fwrite(STDERR, "Unable to publish the pinned pkg-config path.\n");
+                  exit(1);
+              }
+          }
+          fwrite(STDOUT, json_encode([
+              'abi_version' => $manifest['abi_version'],
+              'platform' => $manifest['platform'] ?? '',
+              'architecture' => $manifest['architecture'] ?? '',
+              'library_sha256' => $manifest['library_sha256'] ?? '',
+              'dependency_linkage' => $manifest['dependency_linkage'] ?? '',
+          ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL);
+          PHP
       - name: Configure
         run: >-
           cmake
           -S app/code/Weline/Server/Service/Edge/Gateway/Native
           -B build/wls-gateway-native
           -DCMAKE_BUILD_TYPE=Release
+          -DWLS_BUILD_HTTP3_TRANSPORT=ON
           -DWLS_RELEASE_PUBLIC_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000
       - name: Build
         run: cmake --build build/wls-gateway-native --config Release --parallel
+      - name: Verify generated BPF header is byte-for-byte current
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_in="app/code/Weline/Server/Protocol/Http3/Native/wls_linux_reuseport_bpf_code.h"
+          generated="build/wls-gateway-native/wls_linux_reuseport_bpf_generated.h"
+          if ! cmp --silent "$checked_in" "$generated"; then
+            echo "The checked-in BPF header is stale; regenerate it with the bounded clang-18 generator." >&2
+            exit 1
+          fi
       - name: Native Broker self-test
         run: ./build/wls-gateway-native/wls-gateway-broker --self-test
+      - name: Controller-only recovery source contract
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/NativeGatewayControllerOnlyRecoveryContractTest.php
       - name: Native launcher self-test
         run: ./build/wls-gateway-native/wls-gateway-launcher --self-test
+      - name: Stable launcher rollback-target proof self-test
+        run: ./build/wls-gateway-native/wls-gateway-launcher --rollback-target-proof-self-test
+      - name: Stable launcher recovery-ledger self-test
+        run: ./build/wls-gateway-native/wls-gateway-launcher --recovery-ledger-self-test
       - name: Linux HTTP/3 reuseport ABI and runtime self-test
         if: runner.os == 'Linux'
-        run: ./build/wls-gateway-native/wls-http3-reuseport-self-test
+        shell: bash
+        run: |
+          set -uo pipefail
+          h3_status=0
+          ./build/wls-gateway-native/wls-http3-reuseport-self-test \
+            ./build/wls-gateway-native/wls_linux_reuseport_bpf.o || h3_status=$?
+          case "$h3_status" in
+            0)
+              echo "Linux HTTP/3 transport, generated BPF header, and runtime passed."
+              ;;
+            77)
+              echo "::notice::Kernel eBPF activation skipped only after compile/header/non-privileged runtime gates passed."
+              echo "### Linux eBPF activation: SKIP (permission/capability unavailable)" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "Linux HTTP/3 native self-test failed with exit code $h3_status." >&2
+              exit "$h3_status"
+              ;;
+          esac
       - name: Controller self-test
         run: php app/code/Weline/Server/bin/wls_gateway_controller.php --self-test
       - name: Native atomic candidate recovery contract
@@ -156,6 +270,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
@@ -232,6 +347,21 @@ jobs:
       - name: Native Broker self-test
         shell: pwsh
         run: ./build/wls-gateway-native/Release/wls-gateway-broker.exe --self-test
+      - name: Native Guardian self-test
+        shell: pwsh
+        run: ./build/wls-gateway-native/Release/wls-gateway-guardian.exe --self-test
+      - name: Controller-only recovery source contract
+        shell: pwsh
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/NativeGatewayControllerOnlyRecoveryContractTest.php
+      - name: Windows data-plane security source contract
+        shell: pwsh
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/NativeGatewayWindowsDataPlaneSecurityContractTest.php
       - name: Windows path security integration
         shell: pwsh
         env:
@@ -243,9 +373,40 @@ jobs:
       - name: Native launcher self-test
         shell: pwsh
         run: ./build/wls-gateway-native/Release/wls-gateway-launcher.exe --self-test
+      - name: Native capacity batching contract
+        shell: pwsh
+        run: >-
+          ./build/wls-gateway-native/Release/wls-gateway-launcher.exe
+          --capacity-reserve-contract-self-test
+      - name: Windows physical rebootstrap capacity integration
+        shell: pwsh
+        env:
+          WLS_RUN_NATIVE_GATEWAY_WINDOWS_CAPACITY_INTEGRATION: "1"
+        run: >-
+          php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php
+          capacity-test
+          "--launcher=build/wls-gateway-native/Release/wls-gateway-launcher.exe"
+      - name: Stable launcher rollback-target proof self-test
+        shell: pwsh
+        run: ./build/wls-gateway-native/Release/wls-gateway-launcher.exe --rollback-target-proof-self-test
+      - name: Stable launcher recovery-ledger self-test
+        shell: pwsh
+        run: ./build/wls-gateway-native/Release/wls-gateway-launcher.exe --recovery-ledger-self-test
       - name: Native bounded-command self-test
         shell: pwsh
         run: ./build/wls-gateway-native/Release/wls-bounded-command.exe --self-test
+      - name: Native bounded-command named-pipe deadline self-test
+        shell: pwsh
+        run: >-
+          ./build/wls-gateway-native/Release/wls-bounded-command.exe
+          --pipe-deadline-self-test
+      - name: Windows named-pipe absolute-deadline source contract
+        shell: pwsh
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayClientTimeoutPolicyTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayBoundedCommandRunnerDeadlineTest.php
       - name: Windows bounded-command tree integration
         shell: pwsh
         env:
@@ -276,16 +437,6 @@ jobs:
           --bootstrap vendor/autoload.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/ManagedNginxInstallerAtomicRecoveryTest.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/Runtime/NginxConfigPublicationTest.php
-      - name: Windows SCM recovery integration
-        shell: pwsh
-        env:
-          WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION: "1"
-        run: >-
-          php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php
-          service-test
-          "--key-file=$env:WLS_TEST_KEY_FILE"
-          "--launcher=build/wls-gateway-native/Release/wls-gateway-launcher.exe"
-          "--test-broker=build/wls-gateway-native/Release/wls-gateway-test-broker.exe"
       - name: Remove ephemeral Windows integration key
         if: always()
         shell: pwsh
@@ -303,3 +454,54 @@ jobs:
               throw "Ephemeral Windows integration key directory was not removed."
             }
           }
+
+  windows-production-capacity:
+    name: Windows production 10GiB capacity crash matrix
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_windows_production_capacity == true)
+    runs-on: [self-hosted, Windows, X64, wls-gateway-capacity]
+    concurrency:
+      group: wls-windows-production-capacity-${{ github.repository }}
+      cancel-in-progress: false
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
+        with:
+          php-version: "8.4"
+          extensions: sodium, openssl
+          coverage: none
+      - name: Install locked PHP dependencies
+        shell: pwsh
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Build the signed Windows capacity launcher
+        shell: pwsh
+        run: >
+          cmake
+          -S app/code/Weline/Server/Service/Edge/Gateway/Native
+          -B build/wls-gateway-native-production-capacity
+          -A x64
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DWLS_RELEASE_PUBLIC_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000
+          -DWLS_BUILD_TEST_HELPERS=ON
+      - name: Compile the Windows capacity launcher with /W4 /WX
+        shell: pwsh
+        run: cmake --build build/wls-gateway-native-production-capacity --config Release --parallel
+      - name: Run explicit ProgramData 10GiB/65536 capacity crash matrix
+        shell: pwsh
+        env:
+          WLS_RUN_NATIVE_GATEWAY_WINDOWS_PRODUCTION_CAPACITY_INTEGRATION: "1"
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WLS_PRODUCTION_CAPACITY_HOME) -or
+              [string]::IsNullOrWhiteSpace($env:WLS_PRODUCTION_CAPACITY_PLATFORM_DEFINITION)) {
+            throw "Dedicated capacity runner must provide WLS_PRODUCTION_CAPACITY_HOME and WLS_PRODUCTION_CAPACITY_PLATFORM_DEFINITION."
+          }
+          php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php `
+            capacity-production-test `
+            "--launcher=build/wls-gateway-native-production-capacity/Release/wls-gateway-launcher.exe" `
+            "--home=$env:WLS_PRODUCTION_CAPACITY_HOME" `
+            "--platform-definition=$env:WLS_PRODUCTION_CAPACITY_PLATFORM_DEFINITION"

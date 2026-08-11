@@ -135,6 +135,35 @@ final class ManagedNginxServiceAtomicRecoveryTest extends TestCase
         self::assertLessThan(1.0, $elapsed);
     }
 
+    public function testProcessIdentityLockSharesTheOuterLifecycleDeadline(): void
+    {
+        $lockFile = $this->paths->runDir() . DIRECTORY_SEPARATOR
+            . 'nginx.process-identity.json.lock';
+        self::assertSame(0, \file_put_contents($lockFile, ''));
+        $holder = \fopen($lockFile, 'r+b');
+        self::assertIsResource($holder);
+        self::assertTrue(\flock($holder, LOCK_EX | LOCK_NB));
+        try {
+            $started = \hrtime(true) / 1_000_000_000;
+            $result = $this->service->stop($started + 0.08);
+            $elapsed = (\hrtime(true) / 1_000_000_000) - $started;
+        } finally {
+            self::assertTrue(\flock($holder, LOCK_UN));
+            self::assertTrue(\fclose($holder));
+        }
+
+        self::assertFalse($result['ok']);
+        self::assertStringContainsString(
+            'process identity',
+            \strtolower((string)$result['message']),
+        );
+        self::assertStringContainsString(
+            'lifecycle deadline',
+            \strtolower((string)$result['message']),
+        );
+        self::assertLessThan(1.0, $elapsed);
+    }
+
     public function testLifecycleLockPreservesOwnerBackupWhenPairedTargetIsInvalidOrMissing(): void
     {
         $ownerFile = $this->paths->ownerFile();
@@ -178,12 +207,18 @@ final class ManagedNginxServiceAtomicRecoveryTest extends TestCase
 
     public function testOwnerIntentFinalizationCollectsSameTransactionBackup(): void
     {
+        $config = 'events {} http {}';
         $intent = [
             ...$this->minimalOwner(),
             'transaction_id' => \str_repeat('1', 32),
-            'config_sha256' => \str_repeat('2', 64),
+            'config_sha256' => \hash('sha256', $config),
         ];
         $intentFile = $this->paths->ownerIntentFile();
+        self::assertSame(\strlen($config), \file_put_contents(
+            $this->paths->confFile(),
+            $config,
+        ));
+        $this->writeOwnerFixture($this->paths->ownerFile(), $intent);
         self::assertNotFalse(\file_put_contents($intentFile, \json_encode(
             $intent,
             JSON_THROW_ON_ERROR,
@@ -196,6 +231,45 @@ final class ManagedNginxServiceAtomicRecoveryTest extends TestCase
 
         self::assertFileDoesNotExist($intentFile);
         self::assertFileDoesNotExist($backup);
+    }
+
+    public function testOwnerCommitAcceptsExactAfterImageWhenDirectorySyncReportsFailure(): void
+    {
+        $config = 'events {} http { server { listen 19506; } }';
+        self::assertSame(\strlen($config), \file_put_contents($this->paths->confFile(), $config));
+        $intent = [
+            ...$this->minimalOwner(),
+            'transaction_id' => \str_repeat('a', 32),
+            'config_generation' => \str_repeat('b', 32),
+            'config_sha256' => \hash('sha256', $config),
+            'config_rollback_expected' => false,
+            'previous_config_sha256' => '',
+            'owner_rollback_expected' => false,
+            'previous_owner_sha256' => '',
+        ];
+        $this->writeOwnerFixture($this->paths->ownerIntentFile(), $intent);
+        $readOwnerFile = new \ReflectionMethod($this->service, 'readOwnerFile');
+        $normalized = $readOwnerFile->invoke($this->service, $this->paths->ownerIntentFile());
+        self::assertIsArray($normalized);
+
+        $this->withPostRenameSyncFailure(
+            $this->paths->ownerFile(),
+            function () use ($normalized): void {
+                $commit = new \ReflectionMethod($this->service, 'commitOwnerIntent');
+                $commit->invoke($this->service, $normalized);
+            },
+        );
+
+        self::assertFileExists($this->paths->ownerFile());
+        self::assertSame(
+            $intent['config_sha256'],
+            (string)(\json_decode(
+                (string)\file_get_contents($this->paths->ownerFile()),
+                true,
+                64,
+                JSON_THROW_ON_ERROR,
+            )['config_sha256'] ?? ''),
+        );
     }
 
     public function testInvalidNginxConfigKeepsActiveBackupUnderLifecycleLock(): void
@@ -367,6 +441,211 @@ final class ManagedNginxServiceAtomicRecoveryTest extends TestCase
         self::assertSame($active, \file_get_contents($this->paths->confFile()));
     }
 
+    public function testStrictRecoveryWithRollbackRestoresPairedOwnerAndConfigBeforeImages(): void
+    {
+        $oldConfig = 'events {} http { server { listen 19507; } }';
+        $newConfig = 'events {} http { server { listen 19508; } }';
+        $previousOwner = [
+            ...$this->minimalOwner(),
+            'config_generation' => \str_repeat('c', 32),
+            'config_sha256' => \hash('sha256', $oldConfig),
+        ];
+        $previousOwnerJson = \json_encode($previousOwner, JSON_THROW_ON_ERROR);
+        $intent = $this->strictOwnerIntent(
+            \str_repeat('d', 32),
+            $newConfig,
+            $oldConfig,
+            $previousOwnerJson,
+        );
+        self::assertSame(\strlen($newConfig), \file_put_contents($this->paths->confFile(), $newConfig));
+        $this->writeOwnerFixture($this->paths->ownerFile(), $intent);
+        $this->writeOwnerFixture($this->paths->ownerIntentFile(), $intent);
+        $configRollback = (new ManagedNginxConfigWriter($this->paths))
+            ->rollbackPathForTransaction((string)$intent['transaction_id']);
+        self::assertSame(\strlen($oldConfig), \file_put_contents($configRollback, $oldConfig));
+        $ownerRollback = $this->paths->ownerFile() . '.rollback.' . $intent['transaction_id'];
+        self::assertSame(\strlen($previousOwnerJson), \file_put_contents(
+            $ownerRollback,
+            $previousOwnerJson,
+        ));
+
+        $this->recoverOwnerPublication();
+
+        self::assertSame($oldConfig, \file_get_contents($this->paths->confFile()));
+        self::assertSame($previousOwnerJson, \file_get_contents($this->paths->ownerFile()));
+        self::assertFileDoesNotExist($configRollback);
+        self::assertFileDoesNotExist($ownerRollback);
+        self::assertFileDoesNotExist($this->paths->ownerIntentFile());
+    }
+
+    public function testStrictRecoveryWithoutRollbackAcceptsOnlyExactCommittedClosure(): void
+    {
+        $oldConfig = 'events {} http { server { listen 19509; } }';
+        $newConfig = 'events {} http { server { listen 19510; } }';
+        $previousOwner = [
+            ...$this->minimalOwner(),
+            'config_generation' => \str_repeat('e', 32),
+            'config_sha256' => \hash('sha256', $oldConfig),
+        ];
+        $previousOwnerJson = \json_encode($previousOwner, JSON_THROW_ON_ERROR);
+        $intent = $this->strictOwnerIntent(
+            \str_repeat('f', 32),
+            $newConfig,
+            $oldConfig,
+            $previousOwnerJson,
+        );
+        self::assertSame(\strlen($newConfig), \file_put_contents($this->paths->confFile(), $newConfig));
+        self::assertSame(\strlen($oldConfig), \file_put_contents(
+            $this->paths->confFile() . '.last-good',
+            $oldConfig,
+        ));
+        $this->writeOwnerFixture($this->paths->ownerFile(), $intent);
+        $this->writeOwnerFixture($this->paths->ownerIntentFile(), $intent);
+        $ownerRollback = $this->paths->ownerFile() . '.rollback.' . $intent['transaction_id'];
+        self::assertSame(\strlen($previousOwnerJson), \file_put_contents(
+            $ownerRollback,
+            $previousOwnerJson,
+        ));
+
+        $this->recoverOwnerPublication();
+
+        self::assertSame($newConfig, \file_get_contents($this->paths->confFile()));
+        self::assertFileExists($this->paths->ownerFile());
+        self::assertFileDoesNotExist($ownerRollback);
+        self::assertFileDoesNotExist($this->paths->ownerIntentFile());
+    }
+
+    public function testStrictRecoveryRetainsEvidenceForAmbiguousOwnerConfigPair(): void
+    {
+        $oldConfig = 'events {} http { server { listen 19511; } }';
+        $newConfig = 'events {} http { server { listen 19512; } }';
+        $damagedConfig = 'events {} http { server { listen 19513; } }';
+        $previousOwner = [
+            ...$this->minimalOwner(),
+            'config_generation' => \str_repeat('1', 32),
+            'config_sha256' => \hash('sha256', $oldConfig),
+        ];
+        $previousOwnerJson = \json_encode($previousOwner, JSON_THROW_ON_ERROR);
+        $intent = $this->strictOwnerIntent(
+            \str_repeat('2', 32),
+            $newConfig,
+            $oldConfig,
+            $previousOwnerJson,
+        );
+        self::assertSame(\strlen($damagedConfig), \file_put_contents(
+            $this->paths->confFile(),
+            $damagedConfig,
+        ));
+        self::assertSame(\strlen($previousOwnerJson), \file_put_contents(
+            $this->paths->ownerFile(),
+            $previousOwnerJson,
+        ));
+        $this->writeOwnerFixture($this->paths->ownerIntentFile(), $intent);
+        $ownerRollback = $this->paths->ownerFile() . '.rollback.' . $intent['transaction_id'];
+        self::assertSame(\strlen($previousOwnerJson), \file_put_contents(
+            $ownerRollback,
+            $previousOwnerJson,
+        ));
+
+        try {
+            $this->recoverOwnerPublication();
+            self::fail('Ambiguous owner/config state must fail closed and retain evidence.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('ambiguous', \strtolower($exception->getMessage()));
+        }
+
+        self::assertSame($damagedConfig, \file_get_contents($this->paths->confFile()));
+        self::assertSame($previousOwnerJson, \file_get_contents($this->paths->ownerFile()));
+        self::assertFileExists($ownerRollback);
+        self::assertFileExists($this->paths->ownerIntentFile());
+    }
+
+    public function testHttp3DegradationRequiresExactFailedQuicEvidence(): void
+    {
+        $generation = \str_repeat('3', 32);
+        $digest = \str_repeat('4', 64);
+        $config = [
+            'http3_enabled' => true,
+            'config_generation' => $generation,
+            'config_sha256' => $digest,
+        ];
+        $result = [
+            'ok' => false,
+            'evidence' => [
+                'http3_verifier_available' => true,
+                'http3_status' => 'failed',
+                'http3_config_generation' => $generation,
+                'http3_config_sha256' => $digest,
+            ],
+        ];
+        $eligible = new \ReflectionMethod($this->service, 'http3FailureCanDegrade');
+
+        self::assertTrue($eligible->invoke($this->service, $config, $result));
+        $result['evidence']['http3_config_sha256'] = \str_repeat('5', 64);
+        self::assertFalse($eligible->invoke($this->service, $config, $result));
+        $result['evidence']['http3_config_sha256'] = $digest;
+        $result['evidence']['http3_verifier_available'] = false;
+        self::assertFalse($eligible->invoke($this->service, $config, $result));
+    }
+
+    public function testHttp3DegradedCandidateCannotRetainQuicOrAltSvc(): void
+    {
+        $candidate = $this->paths->confDir() . DIRECTORY_SEPARATOR . 'h2-only.conf';
+        self::assertSame(18, \file_put_contents($candidate, "events {}\nhttp {}\n"));
+        $certificate = \str_repeat('6', 64);
+        $current = [
+            'http' => 19514,
+            'https' => 19515,
+            'server_names' => ['localhost'],
+            'upstreams' => ['127.0.0.1:19502'],
+            'ssl_certificate_sha256' => $certificate,
+            'certificate_generation_managed' => false,
+            'http3_enabled' => true,
+        ];
+        $degraded = [
+            ...$current,
+            'ssl' => true,
+            'http2_enabled' => true,
+            'http3_enabled' => false,
+            'config_generation' => \str_repeat('7', 32),
+            'config_sha256' => \hash('sha256', "events {}\nhttp {}\n"),
+        ];
+        $assertIdentity = new \ReflectionMethod(
+            $this->service,
+            'assertHttp3DegradedConfigIdentity',
+        );
+        $assertIdentity->invoke($this->service, $current, $degraded, $candidate);
+
+        $unsafe = "events {}\nhttp { add_header Alt-Svc h3; }\n";
+        self::assertSame(\strlen($unsafe), \file_put_contents($candidate, $unsafe));
+        try {
+            $assertIdentity->invoke($this->service, $current, $degraded, $candidate);
+            self::fail('H2/H1 fallback must not retain Alt-Svc advertisement.');
+        } catch (\ReflectionException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            self::assertStringContainsString('still advertises', $exception->getMessage());
+        }
+    }
+
+    public function testTlsProbeHostUsesConcreteWildcardNameAndRejectsInvalidCandidates(): void
+    {
+        $resolve = new \ReflectionMethod($this->service, 'resolveTlsProbeHost');
+
+        self::assertSame(
+            'wls-probe.example.test',
+            $resolve->invoke($this->service, ['*.Example.Test.']),
+        );
+        self::assertSame(
+            'tenant.example.test',
+            $resolve->invoke($this->service, ['_', '*.*.example.test', 'tenant.example.test']),
+        );
+        self::assertSame(
+            'localhost',
+            $resolve->invoke($this->service, ['_', '*.*.example.test', '[::1]']),
+        );
+    }
+
     /** @return array<string,mixed> */
     private function minimalOwner(): array
     {
@@ -377,6 +656,55 @@ final class ManagedNginxServiceAtomicRecoveryTest extends TestCase
             'config_generation' => \str_repeat('0', 32),
             'updated_at' => '2026-08-06T00:00:00+00:00',
         ];
+    }
+
+    private function strictOwnerIntent(
+        string $transactionId,
+        string $newConfig,
+        string $oldConfig,
+        string $previousOwnerJson,
+    ): array {
+        return [
+            ...$this->minimalOwner(),
+            'transaction_id' => $transactionId,
+            'config_generation' => \substr(\hash('sha256', $newConfig), 0, 32),
+            'config_sha256' => \hash('sha256', $newConfig),
+            'config_rollback_expected' => true,
+            'previous_config_sha256' => \hash('sha256', $oldConfig),
+            'owner_rollback_expected' => true,
+            'previous_owner_sha256' => \hash('sha256', $previousOwnerJson),
+        ];
+    }
+
+    private function withPostRenameSyncFailure(string $target, callable $operation): void
+    {
+        $previousMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $previousFailure = \getenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE');
+        $previousTarget = \getenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256',
+        );
+        \putenv('WLS_GATEWAY_TEST_MODE=1');
+        \putenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE=directory_fsync_after_rename_failed',
+        );
+        \putenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256=' . \hash('sha256', $target),
+        );
+        try {
+            $operation();
+        } finally {
+            $previousMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $previousMode);
+            $previousFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE=' . $previousFailure);
+            $previousTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256=' . $previousTarget,
+                );
+        }
     }
 
     /** @param array<string,mixed> $owner */

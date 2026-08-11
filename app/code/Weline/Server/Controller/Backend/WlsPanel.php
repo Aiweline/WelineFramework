@@ -10,7 +10,6 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Server\Service\WlsPanelDashboardDataService;
-use Weline\Server\Service\WlsPanelGatewaySettingsService;
 use Weline\Server\Service\WlsPanelPluginDiscoveryService;
 use Weline\Server\Service\WlsPanelPluginRefreshService;
 use Weline\Server\Service\WlsPanelProjectConfigCenterService;
@@ -121,9 +120,6 @@ class WlsPanel extends BackendController
         if (!empty($result['success'])) {
             $params['panel_notice'] = 'project_saved';
             $params['edit_project_id'] = (int)($result['project_id'] ?? 0);
-            if (empty($result['gateway_applied']) && !empty($result['gateway_apply_message'])) {
-                $params['panel_error'] = (string)$result['gateway_apply_message'];
-            }
         } else {
             $params['panel_error'] = (string)($result['message'] ?? __('托管项目保存失败。'));
             $projectId = (int)($result['project_id'] ?? 0);
@@ -142,36 +138,14 @@ class WlsPanel extends BackendController
         /** @var WlsPanelProjectRegistryService $projectRegistry */
         $projectRegistry = ObjectManager::getInstance(WlsPanelProjectRegistryService::class);
         $result = $projectRegistry->deleteFromPanel(
-            (int)$this->request->getPost('project_id', 0),
-            (array)$this->request->getPost()
+            (int)$this->request->getPost('project_id', 0)
         );
 
         $params = !empty($result['success'])
             ? ['panel_notice' => 'project_removed']
             : ['panel_error' => (string)($result['message'] ?? __('托管项目删除失败。'))];
-        if (!empty($result['success']) && empty($result['gateway_applied']) && !empty($result['gateway_apply_message'])) {
-            $params['panel_error'] = (string)$result['gateway_apply_message'];
-        }
 
         $this->redirectToProjectsPanel($params);
-        return '';
-    }
-
-    #[Acl('Weline_Server::wls_panel_gateway_apply', '应用 WLS 网关路由', 'mdi-router-network', '应用 WLS 网关路由', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
-    public function postGatewayApply(): string
-    {
-        $this->redirectToGatewayPanel([
-            'panel_error' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
-        ]);
-        return '';
-    }
-
-    #[Acl('Weline_Server::wls_panel_gateway_save', '保存 WLS 网关配置', 'mdi-content-save-cog-outline', '保存 WLS 网关配置', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
-    public function postGatewaySave(): string
-    {
-        $this->redirectToGatewayPanel([
-            'panel_error' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
-        ]);
         return '';
     }
 
@@ -246,8 +220,6 @@ class WlsPanel extends BackendController
         $dashboardDataService = ObjectManager::getInstance(WlsPanelDashboardDataService::class);
         /** @var WlsPanelProjectRegistryService $projectRegistry */
         $projectRegistry = ObjectManager::getInstance(WlsPanelProjectRegistryService::class);
-        /** @var WlsPanelGatewaySettingsService $gatewaySettings */
-        $gatewaySettings = ObjectManager::getInstance(WlsPanelGatewaySettingsService::class);
         /** @var WlsPanelSecurityDataService $securityDataService */
         $securityDataService = ObjectManager::getInstance(WlsPanelSecurityDataService::class);
         $panelDashboardData = $dashboardDataService->getDashboardData();
@@ -256,10 +228,6 @@ class WlsPanel extends BackendController
         $this->assign('activePage', $activePage);
         $this->assign('title', $title);
         $this->assign('panelDashboardData', $panelDashboardData);
-        $this->assign(
-            'panelGatewaySettings',
-            $gatewaySettings->getSettingsData((string)$this->request->getGet('gateway_instance', ''))
-        );
         $this->assign(
             'panelSecurityData',
             $securityDataService->getSecurityDataFromFilters([
@@ -697,15 +665,6 @@ class WlsPanel extends BackendController
     /**
      * @param array<string, mixed> $params
      */
-    private function redirectToGatewayPanel(array $params): void
-    {
-        $url = $this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/gateway', $params);
-        $this->request->getResponse()->redirect(\rtrim($url, '?&'));
-    }
-
-    /**
-     * @param array<string, mixed> $params
-     */
     private function redirectToSecurityPanel(array $params): void
     {
         $url = $this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/security', $params);
@@ -744,8 +703,6 @@ class WlsPanel extends BackendController
         return match ($code) {
             'project_saved' => (string)__('托管项目已保存。'),
             'project_removed' => (string)__('托管项目已删除。'),
-            'gateway_applied' => (string)__('网关路由已应用。'),
-            'gateway_saved' => (string)__('网关模式配置已保存。监听变更需要重启或重载目标 WLS 实例后生效。'),
             'security_rules_saved' => (string)__('安全规则已保存。'),
             'plugins_refreshed' => (string)__('面板插件能力已刷新。'),
             default => '',

@@ -197,13 +197,154 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
         $systemd = $this->read('env/gateway/systemd.service.template');
         $launchd = $this->read('env/gateway/launchd.plist.template');
 
-        self::assertStringContainsString('KillMode=control-group', $systemd);
+        self::assertStringContainsString('KillMode=mixed', $systemd);
+        self::assertStringContainsString('TimeoutStopSec=330', $systemd);
         self::assertStringContainsString('SendSIGKILL=yes', $systemd);
         self::assertStringContainsString('Restart=on-failure', $systemd);
         self::assertStringContainsString('<key>AbandonProcessGroup</key>', $launchd);
         self::assertStringContainsString(
             "<key>AbandonProcessGroup</key>\n  <false/>",
             $launchd,
+        );
+        self::assertStringContainsString(
+            "<key>ExitTimeOut</key>\n  <integer>330</integer>",
+            $launchd,
+        );
+    }
+
+    public function testPosixTerminalPlatformShutdownDrainsAttestedNginxOnly(): void
+    {
+        $launcher = $this->read(
+            'Service/Edge/Gateway/Native/posix/wls_gateway_launcher.c',
+        );
+        $broker = $this->read(
+            'Service/Edge/Gateway/Native/posix/wls_gateway_broker.c',
+        );
+
+        self::assertStringContainsString(
+            '#define WLS_BROKER_TERM_GRACE_MILLISECONDS 5000LL',
+            $launcher,
+        );
+        self::assertStringContainsString(
+            '#define WLS_PLATFORM_SHUTDOWN_GRACE_MILLISECONDS 300000LL',
+            $launcher,
+        );
+        self::assertStringContainsString(
+            'wls_gracefully_terminate_broker(broker_pid)',
+            $launcher,
+        );
+        self::assertStringContainsString(
+            '#define WLS_PLATFORM_SHUTDOWN_GRACE_MILLISECONDS 300000ULL',
+            $broker,
+        );
+        self::assertStringContainsString(
+            'wls_platform_shutdown_attested_nginx(',
+            $broker,
+        );
+        self::assertStringContainsString(
+            'wls_process_attestation_authority_current(',
+            $broker,
+        );
+        self::assertMatchesRegularExpression(
+            '/"QUIT"\s*,\s*NULL\s*,\s*0U/s',
+            $broker,
+        );
+        self::assertMatchesRegularExpression(
+            '/"-s",\s*"quit"/s',
+            $broker,
+        );
+    }
+
+    public function testPosixCapacityAllocationDirectoryIsDurableBeforeCredits(): void
+    {
+        $source = $this->read(
+            'Service/Edge/Gateway/Native/posix/wls_gateway_launcher.c',
+        );
+        $allocation = $this->between(
+            $source,
+            'mkdirat(capacity_fd, allocating, 0700)',
+            'if (wls_capacity_platform_reserve_create(',
+        );
+
+        self::assertStringContainsString('fsync(capacity_fd)', $allocation);
+    }
+
+    public function testLinuxRemovalFencePublishesEachDestructivePhaseBeforeContinuing(): void
+    {
+        $installer = $this->read(
+            'Service/Edge/Gateway/GatewayPlatformServiceInstaller.php',
+        );
+        $source = $this->between(
+            $installer,
+            'if (\is_array($linuxSystemdRemoval)) {',
+            'public function renderDefinition(',
+        );
+        $linkRemoval = \strpos(
+            $source,
+            '->removeCurrentCanonicalFixedLink(',
+        );
+        $linkPhase = \strpos(
+            $source,
+            '$removalFence[\'phase\'] = \'canonical-removed\';',
+        );
+        $linkPhasePublish = \strpos(
+            $source,
+            '$this->atomicWrite(',
+            ($linkPhase ?: 0),
+        );
+        $targetRemoval = \strpos(
+            $source,
+            '->removeCurrentTargetAfterFixedLink(',
+        );
+        $targetPhase = \strpos(
+            $source,
+            '$removalFence[\'phase\'] = \'definition-removed\';',
+            ($targetRemoval ?: 0),
+        );
+        $targetPhasePublish = \strpos(
+            $source,
+            '$this->atomicWrite(',
+            ($targetPhase ?: 0),
+        );
+        $metadataRemoval = \strpos(
+            $source,
+            '$this->removeVerifiedRegularFile($metadata)',
+        );
+        $fenceRemoval = \strpos(
+            $source,
+            "'completed gateway platform removal fence'",
+        );
+
+        foreach ([
+            $linkRemoval,
+            $linkPhase,
+            $linkPhasePublish,
+            $targetRemoval,
+            $targetPhase,
+            $targetPhasePublish,
+            $metadataRemoval,
+            $fenceRemoval,
+        ] as $position) {
+            self::assertNotFalse($position);
+        }
+        self::assertLessThan($linkPhase, $linkRemoval);
+        self::assertLessThan($linkPhasePublish, $linkPhase);
+        self::assertLessThan($targetRemoval, $linkPhasePublish);
+        self::assertLessThan($targetPhase, $targetRemoval);
+        self::assertLessThan($targetPhasePublish, $targetPhase);
+        self::assertLessThan($metadataRemoval, $targetPhasePublish);
+        self::assertLessThan($fenceRemoval, $metadataRemoval);
+        self::assertStringContainsString(
+            'elseif ((int)$removalFence[\'schema\'] === 1)',
+            $installer,
+        );
+        self::assertStringContainsString(
+            '->removeExactLegacyDefinition(',
+            $source,
+        );
+        self::assertStringContainsString(
+            '->assertLegacyDefinitionRemoved()',
+            $source,
         );
     }
 
@@ -216,7 +357,12 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
         );
         $initialFence = \strpos(
             $source,
-            '$this->prepareCandidateAttestationFence(\'ACTIVATING\');',
+            '$this->prepareCandidateAttestationFence(',
+        );
+        $initialFenceDeadline = \strpos(
+            $source,
+            '$publicationDeadline,',
+            $initialFence ?: 0,
         );
         $initialSwitch = \strpos(
             $source,
@@ -228,8 +374,13 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
         );
         $fallbackFence = \strpos(
             $source,
-            '$this->prepareCandidateAttestationFence(\'ACTIVATING\');',
+            '$this->prepareCandidateAttestationFence(',
             ($initialFence ?: 0) + 1,
+        );
+        $fallbackFenceDeadline = \strpos(
+            $source,
+            '$publicationDeadline,',
+            $fallbackFence ?: 0,
         );
         $fallbackSwitch = \strpos(
             $source,
@@ -237,13 +388,17 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
         );
 
         self::assertNotFalse($initialFence);
+        self::assertNotFalse($initialFenceDeadline);
         self::assertNotFalse($initialSwitch);
         self::assertLessThan($initialSwitch, $initialFence);
+        self::assertLessThan($initialSwitch, $initialFenceDeadline);
         self::assertNotFalse($fallbackDigest);
         self::assertNotFalse($fallbackFence);
+        self::assertNotFalse($fallbackFenceDeadline);
         self::assertNotFalse($fallbackSwitch);
         self::assertLessThan($fallbackFence, $fallbackDigest);
         self::assertLessThan($fallbackSwitch, $fallbackFence);
+        self::assertLessThan($fallbackSwitch, $fallbackFenceDeadline);
     }
 
     public function testCandidateFenceBindsControllerTransactionRuntimeAndPhase(): void
@@ -447,7 +602,11 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
             "'SERVICE_TREE_RETIREMENT_PENDING'",
             $rebind,
         );
-        self::assertStringContainsString('$this->nginxStatus(true)', $rebind);
+        self::assertMatchesRegularExpression(
+            '/\$status = \$this->nginxStatus\(\s*true,\s*true,\s*'
+                . '\$deadlineMonotonic,\s*\);/s',
+            $rebind,
+        );
         self::assertStringContainsString(
             '$this->nativeProcessTreeRetirementIntent(',
             $rebind,
@@ -505,8 +664,13 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
         );
         $replacementAttestation = \strpos(
             $retire,
-            '$replacementStatus = $this->nginxStatus(true);',
+            '$replacementStatus = $this->nginxStatus(',
             $obsolete ?: 0,
+        );
+        $replacementDeadline = \strpos(
+            $retire,
+            '$deadlineMonotonic,',
+            $replacementAttestation ?: 0,
         );
         $activation = \strpos(
             $retire,
@@ -516,9 +680,11 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
         self::assertNotFalse($completed);
         self::assertNotFalse($obsolete);
         self::assertNotFalse($replacementAttestation);
+        self::assertNotFalse($replacementDeadline);
         self::assertNotFalse($activation);
         self::assertLessThan($obsolete, $completed);
         self::assertLessThan($replacementAttestation, $obsolete);
+        self::assertLessThan($activation, $replacementDeadline);
         self::assertLessThan($activation, $replacementAttestation);
         self::assertStringContainsString(
             '} elseif ($this->pidRunningState($currentPid) === false) {',
@@ -569,8 +735,9 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
             "'SERVICE_TREE_RETIREMENT_PENDING',",
             $pending,
         );
-        self::assertStringContainsString(
-            '$this->prepareCandidateAttestationFence(\'ACTIVATING\');',
+        self::assertMatchesRegularExpression(
+            '/\$this->prepareCandidateAttestationFence\(\s*'
+                . '\'ACTIVATING\',\s*\$activationRecoveryDeadline,\s*\);/s',
             $recovery,
         );
         self::assertStringContainsString(
@@ -584,19 +751,33 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
         $activeDurable = \strpos($recovery, '$activeFenceDurable =');
         $lostAckClear = \strpos(
             $recovery,
-            '$this->clearCandidateAttestationFence()',
+            '$this->clearCandidateAttestationFence(',
             $activeDurable ?: 0,
+        );
+        $lostAckDeadline = \strpos(
+            $recovery,
+            '$activationRecoveryDeadline,',
+            $lostAckClear ?: 0,
         );
         $rebind = \strpos(
             $recovery,
-            '$this->prepareCandidateAttestationFence(\'ACTIVATING\');',
+            '$this->prepareCandidateAttestationFence(',
             $lostAckClear ?: 0,
+        );
+        $rebindDeadline = \strpos(
+            $recovery,
+            '$activationRecoveryDeadline,',
+            $rebind ?: 0,
         );
         self::assertNotFalse($activeDurable);
         self::assertNotFalse($lostAckClear);
+        self::assertNotFalse($lostAckDeadline);
         self::assertNotFalse($rebind);
+        self::assertNotFalse($rebindDeadline);
         self::assertLessThan($lostAckClear, $activeDurable);
+        self::assertLessThan($rebind, $lostAckDeadline);
         self::assertLessThan($rebind, $lostAckClear);
+        self::assertLessThan($rebindDeadline, $rebind);
     }
 
     public function testPostSwitchExceptionKeepsPublicationForReconciliation(): void
@@ -666,15 +847,22 @@ final class GatewayPlatformRetirementRecoverySourceTest extends TestCase
         $persist = \strpos($source, '$this->persistState();', $active ?: 0);
         $clear = \strpos(
             $source,
-            '$this->clearCandidateAttestationFence()',
+            '$this->clearCandidateAttestationFence(',
             $persist ?: 0,
+        );
+        $clearDeadline = \strpos(
+            $source,
+            '$retirementDeadline ?? $publicationDeadline,',
+            $clear ?: 0,
         );
 
         self::assertNotFalse($active);
         self::assertNotFalse($persist);
         self::assertNotFalse($clear);
+        self::assertNotFalse($clearDeadline);
         self::assertLessThan($persist, $active);
         self::assertLessThan($clear, $persist);
+        self::assertLessThan($clearDeadline, $clear);
     }
 
     private function read(string $relative): string

@@ -23,10 +23,20 @@ final class GatewayStartupDecision
     /** @var resource|null */
     private mixed $reservedListener = null;
 
+    private const DEFAULT_RESERVATION_BUDGET_SECONDS = 5.0;
+
+    private ?GatewayPortLeaseAllocator $ports;
+
+    private GatewayStartupBootstrapperInterface $bootstrapper;
+
     public function __construct(
-        private readonly GatewayHostManager $gateway = new GatewayHostManager(),
-        private readonly GatewayPortLeaseAllocator $ports = new GatewayPortLeaseAllocator(),
+        private readonly GatewayStartupHostInterface $gateway = new GatewayHostManager(),
+        ?GatewayPortLeaseAllocator $ports = null,
+        ?GatewayStartupBootstrapperInterface $bootstrapper = null,
     ) {
+        $this->ports = $ports;
+        $this->bootstrapper = $bootstrapper
+            ?? new GatewayInitialBootstrapCoordinator();
     }
 
     public function decide(
@@ -37,7 +47,9 @@ final class GatewayStartupDecision
         string $bindHost = '127.0.0.1',
         ?int $exactPort = null,
         bool $reserveListener = true,
+        ?float $deadlineMonotonic = null,
     ): EdgeRuntimeDecision {
+        $deadlineMonotonic = self::operationDeadline($deadlineMonotonic);
         $requested = \strtolower(\trim($requested));
         $source = self::boundedDecisionText($source, 128, 'runtime');
         if (!\in_array($requested, self::MODES, true)) {
@@ -65,6 +77,7 @@ final class GatewayStartupDecision
                 $instanceName,
                 $bindHost,
                 $portExplicit ? $exactPort : null,
+                $deadlineMonotonic,
             );
             $fallbackPort = (string)($lease['allocation_scope'] ?? '') === 'stable_range'
                 ? (int)($lease['port'] ?? 0)
@@ -91,15 +104,23 @@ final class GatewayStartupDecision
             );
         }
 
-        // Ordinary project startup is discovery/join only. Installation,
+        // Startup discovers a trusted gateway first. Only a host classified
+        // INSTALL_REQUIRED may enter the signed-package bootstrap election;
         // upgrade and repair remain explicit administrator commands.
         try {
-            $observed = $this->gateway->status(5.0);
+            $statusDeadline = \min(
+                $deadlineMonotonic,
+                (\hrtime(true) / 1_000_000_000) + 5.0,
+            );
+            $observed = $this->gateway->status(5.0, $statusDeadline);
             if (!(($observed['ok'] ?? false) === true)) {
                 // prepare() accepts the already-read status and performs only
-                // read-only host classification. Startup never binds 80/443,
-                // installs a service, asks for credentials or stops an owner.
-                $observed = $this->gateway->prepare($observed);
+                // read-only host classification. It never binds 80/443, asks
+                // for credentials or stops an owner.
+                $observed = $this->gateway->prepare(
+                    $observed,
+                    $deadlineMonotonic,
+                );
             }
         } catch (\Throwable $throwable) {
             $observed = [
@@ -138,9 +159,57 @@ final class GatewayStartupDecision
                 gateway: $gatewayObservation,
             );
         }
+        if (\hash_equals('INSTALL_REQUIRED', (string)($observed['state'] ?? ''))) {
+            try {
+                $observed = $this->bootstrapper->bootstrap(
+                    $observed,
+                    $deadlineMonotonic,
+                );
+            } catch (\Throwable $throwable) {
+                $observed = [
+                    'ok' => false,
+                    'ready' => false,
+                    'state' => 'BOOTSTRAP_UNAVAILABLE',
+                    'reason' => self::boundedDecisionText(
+                        $throwable->getMessage(),
+                        256,
+                        'Initial gateway bootstrap failed.',
+                    ),
+                    'data_plane' => ['running' => false],
+                ];
+            }
+            $gatewayObservation = self::boundedGatewayObservation($observed);
+            $controlAcceptsRegistration = GatewayHostManager::controlPlaneAcceptsRegistration(
+                $observed,
+            );
+            $publicDataPlanePresent = ($observed['data_plane']['running'] ?? false) === true
+                && (string)($observed['state'] ?? '') !== 'DATA_PLANE_DOWN';
+            if (self::shouldJoinTrustedGateway(
+                $requested,
+                $controlAcceptsRegistration,
+            ) && ($publicDataPlanePresent || $requested === self::MODE_GATEWAY)) {
+                return new EdgeRuntimeDecision(
+                    adapter: \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+                    requestedMode: $requested,
+                    mode: self::MODE_GATEWAY,
+                    scope: EdgeRuntimeDecision::SCOPE_HOST_GATEWAY,
+                    source: $source,
+                    reason: ($observed['ready'] ?? false) === true
+                        ? 'The first project established and joined the trusted WLS 2.0 host gateway.'
+                        : 'The trusted WLS 2.0 control plane accepted explicit project replay while its data plane recovers.',
+                    gateway: $gatewayObservation,
+                );
+            }
+        }
         if ($requested === self::MODE_GATEWAY) {
             throw new \RuntimeException(
-                'Explicit gateway mode failed: '
+                'Explicit gateway mode failed ['
+                    . self::boundedDecisionText(
+                        (string)($observed['state'] ?? ''),
+                        64,
+                        'GATEWAY_UNAVAILABLE',
+                    )
+                    . ']: '
                     . self::boundedDecisionText(
                         (string)($observed['reason'] ?? ''),
                         256,
@@ -171,6 +240,7 @@ final class GatewayStartupDecision
             $instanceName,
             $bindHost,
             null,
+            $deadlineMonotonic,
         );
         $fallbackPort = (string)($lease['allocation_scope'] ?? '') === 'stable_range'
             ? (int)($lease['port'] ?? 0)
@@ -199,7 +269,9 @@ final class GatewayStartupDecision
         string $instanceName,
         string $bindHost,
         int $exactPort,
+        ?float $deadlineMonotonic = null,
     ): EdgeRuntimeDecision {
+        $deadlineMonotonic = self::operationDeadline($deadlineMonotonic);
         if ($decision->mode !== self::MODE_WLS
             || $decision->portLease !== []
             || $exactPort < 1
@@ -214,6 +286,7 @@ final class GatewayStartupDecision
             $instanceName,
             $bindHost,
             $decision->requestedMode === self::MODE_AUTO ? null : $exactPort,
+            $deadlineMonotonic,
         );
         $fallbackPort = (string)($lease['allocation_scope'] ?? '') === 'stable_range'
             ? (int)($lease['port'] ?? 0)
@@ -323,8 +396,10 @@ final class GatewayStartupDecision
         string $instanceName,
         string $bindHost,
         ?int $exactPort = null,
+        ?float $deadlineMonotonic = null,
     ): array
     {
+        $deadlineMonotonic = self::operationDeadline($deadlineMonotonic);
         if (\is_resource($this->reservedListener)) {
             throw new \RuntimeException(
                 'This WLS startup decision already owns a retained public listener.',
@@ -342,7 +417,18 @@ final class GatewayStartupDecision
             );
         }
         $bindHost = \strtolower($normalized);
-        $lease = $this->ports->reserveBound(
+        // Default construction is intentionally lazy: a deferred restart may
+        // spend its drain budget before materializing the listener. Create one
+        // bounded allocator when this decision actually reserves, not when the
+        // decision object was instantiated and not once per candidate port.
+        $ports = $this->ports;
+        if ($ports === null) {
+            $ports = new GatewayPortLeaseAllocator(
+                operationDeadlineMonotonic: $deadlineMonotonic,
+            );
+            $this->ports = $ports;
+        }
+        $lease = $ports->reserveBound(
             $instanceName,
             static function (int $port) use ($bindHost): mixed {
                 $address = 'tcp://'
@@ -359,7 +445,7 @@ final class GatewayStartupDecision
             true,
             $exactPort,
         );
-        $this->reservedListener = $this->ports->takeRetainedBoundSocket(
+        $this->reservedListener = $ports->takeRetainedBoundSocket(
             (string)$lease['lease_id'],
         );
         if (!\is_resource($this->reservedListener)) {
@@ -368,5 +454,19 @@ final class GatewayStartupDecision
             );
         }
         return $lease;
+    }
+
+    private static function operationDeadline(?float $deadlineMonotonic): float
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if ($deadlineMonotonic === null) {
+            return $now + self::DEFAULT_RESERVATION_BUDGET_SECONDS;
+        }
+        if (!\is_finite($deadlineMonotonic) || $deadlineMonotonic <= $now) {
+            throw new \RuntimeException(
+                'WLS edge startup decision deadline was exhausted.',
+            );
+        }
+        return $deadlineMonotonic;
     }
 }

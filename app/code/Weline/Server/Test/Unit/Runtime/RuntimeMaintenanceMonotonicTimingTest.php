@@ -12,7 +12,6 @@ use Weline\Server\Service\BatchManager;
 use Weline\Server\Service\FileWatcher;
 use Weline\Server\Service\MemoryStateFacade;
 use Weline\Server\Service\SessionStateFacade;
-use Weline\Server\Service\WlsGateway;
 use Weline\Server\Service\WlsPerformanceTraceStore;
 
 final class RuntimeMaintenanceMonotonicTimingTest extends TestCase
@@ -61,14 +60,6 @@ final class RuntimeMaintenanceMonotonicTimingTest extends TestCase
         self::assertSame(BatchManager::STATE_TIMEOUT, $manager->getOperation($id)['state']);
     }
 
-    public function testGatewayLivenessCadenceDoesNotUseEpochTime(): void
-    {
-        $source = (string)\file_get_contents((new \ReflectionClass(WlsGateway::class))->getFileName());
-
-        self::assertStringNotContainsString('\\time()', $source);
-        self::assertStringNotContainsString(' time()', $source);
-    }
-
     /** @return iterable<string,array{class-string}> */
     public static function runtimeMaintenanceClassProvider(): iterable
     {
@@ -79,7 +70,6 @@ final class RuntimeMaintenanceMonotonicTimingTest extends TestCase
         yield 'file watcher debounce and cooldown' => [FileWatcher::class];
         yield 'memory facade trace elapsed time' => [MemoryStateFacade::class];
         yield 'session facade trace elapsed time' => [SessionStateFacade::class];
-        yield 'gateway READY retry cadence' => [WlsGateway::class];
         yield 'performance trace memory retry' => [WlsPerformanceTraceStore::class];
     }
 }

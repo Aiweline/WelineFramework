@@ -714,7 +714,8 @@ final class MemoryPressureIpcAndReclaimTest extends TestCase
             self::fail('Expected the boot identity probe to time out.');
         } catch (\RuntimeException $exception) {
             self::assertMatchesRegularExpression(
-                '/probe (?:timed out|failed: .*isolated process group)/',
+                '/probe (?:timed out|failed: (?:.*isolated process group|'
+                    . 'The bounded POSIX command deadline was exhausted (?:before|during) launch\.))/',
                 $exception->getMessage(),
             );
         }

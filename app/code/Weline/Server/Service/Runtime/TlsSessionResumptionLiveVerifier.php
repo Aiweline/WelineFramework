@@ -1152,7 +1152,11 @@ final class TlsSessionResumptionLiveVerifier
         $captured = null;
         $ssl = [
             'verify_peer' => false,
-            'verify_peer_name' => false,
+            // The instance certificate is pinned below by its exact SHA-256
+            // fingerprint.  Keep hostname verification independent from CA
+            // trust so a valid-but-wrong instance certificate cannot satisfy
+            // this destructive release gate.
+            'verify_peer_name' => true,
             'allow_self_signed' => true,
             'peer_name' => $sni,
             'SNI_enabled' => true,

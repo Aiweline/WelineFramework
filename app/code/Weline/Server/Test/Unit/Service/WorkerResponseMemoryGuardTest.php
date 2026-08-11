@@ -128,7 +128,15 @@ final class WorkerResponseMemoryGuardTest extends TestCase
         );
     }
 
-    public function testSharedListenerFairnessRemainsSingleAcceptOutsideLinuxEvent(): void
+    public function testDarwinSharedEventListenerDrainsBoundedAcceptBatch(): void
+    {
+        self::assertSame(
+            64,
+            WorkerResponseMemoryGuard::listenerAcceptBatchLimit(true, 'Darwin', 'event')
+        );
+    }
+
+    public function testSharedListenerFairnessRemainsSingleAcceptForSelect(): void
     {
         self::assertSame(
             1,
@@ -136,7 +144,7 @@ final class WorkerResponseMemoryGuardTest extends TestCase
         );
         self::assertSame(
             1,
-            WorkerResponseMemoryGuard::listenerAcceptBatchLimit(true, 'Darwin', 'event')
+            WorkerResponseMemoryGuard::listenerAcceptBatchLimit(true, 'Darwin', 'select')
         );
     }
 

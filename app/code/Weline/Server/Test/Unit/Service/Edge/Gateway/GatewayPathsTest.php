@@ -44,6 +44,177 @@ final class GatewayPathsTest extends TestCase
         (new GatewayPaths())->home();
     }
 
+    public function testWindowsProductionHomeUsesKnownFolderAuthorityAndAtomicAclCreation(): void
+    {
+        $gatewayDirectory = \dirname(__DIR__, 5)
+            . '/Service/Edge/Gateway';
+        $pathsSource = (string)\file_get_contents(
+            $gatewayDirectory . '/GatewayPaths.php',
+        );
+        $authoritySource = (string)\file_get_contents(
+            $gatewayDirectory . '/GatewayWindowsHostRootAuthority.php',
+        );
+
+        self::assertStringNotContainsString("getenv('PROGRAMDATA')", $pathsSource);
+        self::assertStringContainsString(
+            'GatewayWindowsHostRootAuthority::resolveHome()',
+            $pathsSource,
+        );
+        self::assertStringContainsString(
+            'GatewayWindowsHostRootAuthority::ensureHome()',
+            $pathsSource,
+        );
+        self::assertStringContainsString(
+            'GatewayWindowsHostRootAuthority::ensureBootstrapDirectories(',
+            $pathsSource,
+        );
+        self::assertStringContainsString(
+            'assertProductionPosixDirectoryAuthority(',
+            $pathsSource,
+        );
+        foreach ([
+            'SHGetKnownFolderPath',
+            '0x62AB5D82',
+            'GetDriveTypeW',
+            'FILE_FLAG_OPEN_REPARSE_POINT',
+            'GetFinalPathNameByHandleW',
+            'SECURITY_ATTRIBUTES',
+            'CreateDirectoryW',
+            'D:P(A;;FA;;;SY)(A;;FA;;;BA)',
+            'FILE_DELETE_CHILD',
+            'WRITE_DAC',
+            'WRITE_OWNER',
+            'snapshot-candidates-v2',
+            'O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)',
+            '0x1200a9',
+            'ensureBootstrapDirectories',
+            'SeRestorePrivilege',
+            'OpenProcessToken',
+            'AdjustTokenPrivileges',
+            'ERROR_NOT_ALL_ASSIGNED',
+            'withRestorePrivilege',
+            'captureExactPathSddl',
+            'applyExactPathSddl',
+            'GetSecurityDescriptorOwner',
+            'GetSecurityDescriptorDacl',
+            'PROTECTED_DACL_SECURITY_INFORMATION',
+            'SetSecurityInfo',
+            'BY_HANDLE_FILE_INFORMATION',
+            'handleLegacyIdentity',
+            'target identity changed before authority access',
+            'target identity changed after authority access',
+        ] as $contract) {
+            self::assertStringContainsString($contract, $authoritySource);
+        }
+        self::assertStringNotContainsString('FILE_SHARE_DELETE', $authoritySource);
+        self::assertStringNotContainsString(';;;RX', $authoritySource);
+
+        $captureStart = \strpos(
+            $authoritySource,
+            'public static function captureExactPathSddl(',
+        );
+        self::assertNotFalse($captureStart);
+        $applyStart = \strpos(
+            $authoritySource,
+            'public static function applyExactPathSddl(',
+            $captureStart,
+        );
+        self::assertNotFalse($applyStart);
+        $captureSource = \substr(
+            $authoritySource,
+            $captureStart,
+            $applyStart - $captureStart,
+        );
+        self::assertStringNotContainsString(
+            'withRestorePrivilege(',
+            $captureSource,
+            'Read-only authority capture must never enable SeRestorePrivilege.',
+        );
+        $canonicalStart = \strpos(
+            $authoritySource,
+            'public static function canonicalizeSddl(',
+            $applyStart,
+        );
+        self::assertNotFalse($canonicalStart);
+        $applySource = \substr(
+            $authoritySource,
+            $applyStart,
+            $canonicalStart - $applyStart,
+        );
+        self::assertStringContainsString('withRestorePrivilege(', $applySource);
+        self::assertStringContainsString('SetSecurityInfo(', $applySource);
+        self::assertStringNotContainsString('runCommand(', $applySource);
+
+        $ensureMethod = new \ReflectionMethod(GatewayPaths::class, 'ensureDirectories');
+        $ensureSource = \implode("\n", \array_slice(
+            \explode("\n", $pathsSource),
+            $ensureMethod->getStartLine() - 1,
+            $ensureMethod->getEndLine() - $ensureMethod->getStartLine() + 1,
+        ));
+        self::assertStringContainsString(
+            'if ($testMode)',
+            $ensureSource,
+            'Fixed snapshot roots may only be added by the isolated test branch.',
+        );
+        self::assertStringContainsString(
+            '$directories[] = $this->sealedSnapshotsDir();',
+            $ensureSource,
+        );
+        self::assertStringContainsString(
+            '$directories[] = $this->snapshotCandidatesDir();',
+            $ensureSource,
+        );
+        self::assertStringContainsString(
+            'if (!$testMode)',
+            $ensureSource,
+            'Production directory checks must validate without chmod mutation.',
+        );
+        self::assertStringContainsString(
+            '$profiles[$directory] ?? []',
+            $pathsSource,
+            'Missing production identities must not silently accept a bootstrap profile.',
+        );
+        self::assertStringContainsString(
+            'productionBootstrapAuthorityAllowed()',
+            $pathsSource,
+        );
+
+        $installerSource = (string)\file_get_contents(
+            $gatewayDirectory . '/GatewayPlatformServiceInstaller.php',
+        );
+        $fixedNamespaceStart = \strpos(
+            $installerSource,
+            'private function applyWindowsFixedNamespaceAcl(',
+        );
+        self::assertNotFalse($fixedNamespaceStart);
+        $fixedNamespaceEnd = \strpos(
+            $installerSource,
+            'private function applyWindowsAcl(',
+            $fixedNamespaceStart,
+        );
+        self::assertNotFalse($fixedNamespaceEnd);
+        $fixedNamespaceSource = \substr(
+            $installerSource,
+            $fixedNamespaceStart,
+            $fixedNamespaceEnd - $fixedNamespaceStart,
+        );
+        self::assertStringContainsString(
+            'GatewayWindowsHostRootAuthority::applyExactPathSddl(',
+            $fixedNamespaceSource,
+            'SYSTEM-owned DACL projection must remain in-process and handle-bound.',
+        );
+        self::assertStringContainsString(
+            '$before,',
+            $fixedNamespaceSource,
+            'The held Windows handle must bind the caller preflight identity.',
+        );
+        self::assertStringNotContainsString(
+            'withRestorePrivilege(',
+            $fixedNamespaceSource,
+            'A privileged child command could outlive its parent token scope.',
+        );
+    }
+
     public function testIsolatedTestRootRequiresHighExplicitPorts(): void
     {
         \putenv('WLS_GATEWAY_TEST_MODE=1');
@@ -60,10 +231,53 @@ final class GatewayPathsTest extends TestCase
         self::assertStringStartsWith($expectedRoot, $paths->runDir());
         self::assertStringEndsWith('project.sock', $paths->projectSocketFile());
         self::assertStringEndsWith('admin.sock', $paths->adminSocketFile());
+        self::assertSame(
+            $paths->trustDir() . DIRECTORY_SEPARATOR
+                . 'guardian-transition.retirement',
+            $paths->guardianTransitionRetirementFile(),
+        );
         $paths->ensureDirectories();
         self::assertDirectoryExists($paths->slotsDir());
+        self::assertDirectoryExists($paths->sealedSnapshotsDir());
+        self::assertDirectoryExists($paths->snapshotCandidatesDir());
         self::assertDirectoryDoesNotExist($paths->slotDir('A'));
         self::assertDirectoryDoesNotExist($paths->slotDir('B'));
+    }
+
+    public function testSystemdDedicatedDefinitionLayoutKeepsTestModeOutOfEtc(): void
+    {
+        \putenv('WLS_GATEWAY_TEST_MODE=1');
+        \putenv('WLS_GATEWAY_HOME=' . $this->root);
+        \putenv('WLS_GATEWAY_LISTEN_HTTP=21080');
+        \putenv('WLS_GATEWAY_LISTEN_HTTPS=21443');
+
+        $paths = new GatewayPaths();
+        $expectedDirectory = $paths->stateDir() . DIRECTORY_SEPARATOR
+            . 'systemd-definition';
+        $expectedTarget = $expectedDirectory . DIRECTORY_SEPARATOR
+            . 'weline-wls-gateway-v2.service';
+        $expectedLink = $paths->stateDir() . DIRECTORY_SEPARATOR
+            . 'systemd-service-link.test';
+
+        self::assertSame($expectedDirectory, $paths->systemdDefinitionDirectory());
+        self::assertSame($expectedTarget, $paths->systemdServiceDefinitionFile());
+        self::assertSame($expectedLink, $paths->systemdServiceLinkFile());
+        self::assertSame($expectedLink, $paths->legacySystemdServiceDefinitionFile());
+        self::assertStringNotContainsString('/etc/', $paths->systemdDefinitionDirectory());
+        self::assertStringNotContainsString('/etc/', $paths->systemdServiceLinkFile());
+
+        try {
+            $paths->assertSystemdDefinitionDirectoryAuthority();
+            self::fail('Read-only systemd directory verification must not create a missing directory.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('definition directory', $exception->getMessage());
+        }
+
+        $paths->ensureSystemdDefinitionDirectory();
+
+        self::assertDirectoryExists($expectedDirectory);
+        self::assertSame(0700, \fileperms($expectedDirectory) & 0777);
+        $paths->assertSystemdDefinitionDirectoryAuthority();
     }
 
     public function testTestRootAndPrivilegedPortEscapeAreRejected(): void

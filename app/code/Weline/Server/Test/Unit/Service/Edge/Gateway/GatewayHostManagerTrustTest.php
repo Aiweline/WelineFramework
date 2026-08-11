@@ -217,7 +217,7 @@ final class GatewayHostManagerTrustTest extends TestCase
         $failClosed = \strpos($source, 'if ($failClosedOnTimeout)');
         $forcedUnregister = \strpos(
             $source,
-            '$unregistered = $this->unregister($instanceName);',
+            '$unregistered = $this->unregister(',
         );
         self::assertIsInt($failClosed);
         self::assertIsInt($forcedUnregister);
@@ -341,7 +341,7 @@ final class GatewayHostManagerTrustTest extends TestCase
         self::assertSame(2, $receipt->getNumberOfParameters());
         $receiptSource = self::methodSource($receipt);
         self::assertStringContainsString(
-            '$this->remainingOperationDeadline($deadlineMonotonic);',
+            '$deadlineMonotonic = $this->boundedOperationDeadline(',
             $receiptSource,
         );
         self::assertStringContainsString(
@@ -454,6 +454,536 @@ final class GatewayHostManagerTrustTest extends TestCase
             'B',
             $generation,
         ));
+    }
+
+    public function testLatePortRaceRequiresStructuredCurrentRuntimeProof(): void
+    {
+        $method = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'hostStatusIsTrustedPortTaken',
+        );
+        $generation = \str_repeat('c', 64);
+        $trusted = [
+            ...self::trustedControl(),
+            'ready' => false,
+            'host_boot_id' => GatewayHostBootIdentity::current(),
+            'active_slot' => 'B',
+            'runtime_generation' => $generation,
+            'state' => 'PORT_TAKEN',
+            'recovery' => ['stage' => 'PORT_TAKEN'],
+            'data_plane' => [
+                'ok' => true,
+                'running' => false,
+            ],
+            // Free-form diagnostics are deliberately outside the authority
+            // boundary used to dismantle a newly installed platform service.
+            'reason' => 'arbitrary text',
+        ];
+
+        self::assertTrue($method->invoke(null, $trusted, 'B', $generation));
+
+        foreach ([
+            'ready contradiction' => ['ready' => true],
+            'control plane unavailable' => ['control_plane_ready' => false],
+            'stale host boot' => ['host_boot_id' => \str_repeat('f', 64)],
+            'different active slot' => ['active_slot' => 'A'],
+            'different runtime generation' => [
+                'runtime_generation' => \str_repeat('d', 64),
+            ],
+            'generic health failure' => ['state' => 'DATA_PLANE_DOWN'],
+            'generic recovery stage' => [
+                'recovery' => ['stage' => 'FAST_RESTART'],
+            ],
+            'unproven data-plane identity' => [
+                'data_plane' => ['ok' => false, 'running' => false],
+            ],
+            'owned data plane still running' => [
+                'data_plane' => ['ok' => true, 'running' => true],
+            ],
+        ] as $label => $override) {
+            self::assertFalse(
+                $method->invoke(
+                    null,
+                    [...$trusted, ...$override],
+                    'B',
+                    $generation,
+                ),
+                $label,
+            );
+        }
+
+        self::assertFalse($method->invoke(null, [
+            ...$trusted,
+            'state' => 'DATA_PLANE_DOWN',
+            'recovery' => ['stage' => 'FAST_RESTART'],
+            'reason' => 'PORT_TAKEN',
+        ], 'B', $generation));
+
+        $install = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'install',
+        ));
+        $promotion = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'activateLegacyPromotion',
+        ));
+        self::assertStringContainsString(
+            'self::hostStatusIsTrustedPortTaken(',
+            $install,
+        );
+        self::assertStringContainsString(
+            'rollbackInitialActivationAfterReadinessFailure(',
+            $install,
+        );
+        self::assertStringContainsString(
+            'self::hostStatusIsTrustedPortTaken(',
+            $promotion,
+        );
+        self::assertStringContainsString(
+            'failLegacyPromotionForTrustedPortTaken(',
+            $promotion,
+        );
+    }
+
+    public function testRebootstrapSealsTheRetainedBackupBeforeStartAuthorizationIsConsumed(): void
+    {
+        $source = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'startRebootstrapGeneration',
+        ));
+        $quiescent = \strpos(
+            $source,
+            '$this->assertRebootstrapQuiescent(',
+        );
+        $seal = \strpos(
+            $source,
+            '$this->platform->secureRebootstrapBackup(',
+        );
+        $closure = \strpos(
+            $source,
+            '$this->packages->assertRebootstrapPreStartClosure(',
+        );
+        $consumeIntent = \strpos(
+            $source,
+            '$cleared = $this->clearAdminStoppedIntent(',
+        );
+        $start = \strpos($source, '$this->platform->start(');
+
+        self::assertIsInt($quiescent);
+        self::assertIsInt($seal);
+        self::assertIsInt($closure);
+        self::assertIsInt($consumeIntent);
+        self::assertIsInt($start);
+        self::assertTrue(
+            $quiescent < $seal
+                && $seal < $closure
+                && $closure < $consumeIntent
+                && $consumeIntent < $start,
+            'The stopped old generation must be proven, sealed and closed before its intent is consumed.',
+        );
+        self::assertMatchesRegularExpression(
+            '/secureRebootstrapBackup\(\s*\$nonce,\s*\$forwardDeadline,?\s*\)/',
+            $source,
+        );
+    }
+
+    public function testRebootstrapCapacityIsHeldBeforeStopAndReleasedBeforeMutation(): void
+    {
+        $forward = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'rebootstrap',
+        ));
+        $rollback = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'performRebootstrapRollback',
+        ));
+        $rollbackRelease = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'releaseRebootstrapCapacityForRollback',
+        ));
+
+        $ensure = \strpos(
+            $forward,
+            '->ensureRebootstrapCapacityReserve(',
+        );
+        $verify = \strpos(
+            $forward,
+            '->verifyRebootstrapCapacityReserveHeld(',
+            \is_int($ensure) ? $ensure : 0,
+        );
+        $publicStop = \strpos(
+            $forward,
+            '$this->client->request(\'stop\'',
+        );
+        $forwardRelease = \strpos(
+            $forward,
+            '->releaseRebootstrapCapacityReserve(',
+        );
+        $publish = \strpos(
+            $forward,
+            '$this->packages->publishRebootstrapGeneration(',
+            \is_int($forwardRelease) ? $forwardRelease : 0,
+        );
+        self::assertIsInt($ensure);
+        self::assertIsInt($verify);
+        self::assertIsInt($publicStop);
+        self::assertIsInt($forwardRelease);
+        self::assertIsInt($publish);
+        self::assertTrue(
+            $ensure < $verify
+                && $verify < $publicStop
+                && $forwardRelease < $publish,
+            'Forward rebootstrap must hold capacity before public stop and release it before generation publication.',
+        );
+
+        $rollbackReleaseCall = \strpos(
+            $rollback,
+            '$this->releaseRebootstrapCapacityForRollback(',
+        );
+        $beginRollback = \strpos(
+            $rollback,
+            '$this->packages->beginRebootstrapRollback(',
+        );
+        $platformStop = \strpos(
+            $rollbackRelease,
+            '$this->platform->stop(',
+        );
+        $quiescent = \strpos(
+            $rollbackRelease,
+            '$this->assertRebootstrapQuiescent(',
+        );
+        $release = \strpos(
+            $rollbackRelease,
+            '->releaseRebootstrapCapacityReserve(',
+        );
+        self::assertIsInt($rollbackReleaseCall);
+        self::assertIsInt($beginRollback);
+        self::assertIsInt($platformStop);
+        self::assertIsInt($quiescent);
+        self::assertIsInt($release);
+        self::assertTrue(
+            $rollbackReleaseCall < $beginRollback
+                && $platformStop < $quiescent
+                && $quiescent < $release,
+            'Rollback must prove the old generation quiescent, release capacity, then persist ROLLING_BACK.',
+        );
+    }
+
+    public function testRebootstrapRollbackConsumesItsExactStopFenceAndRestartsTheRestoredPlatform(): void
+    {
+        $rollback = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'performRebootstrapRollback',
+        ));
+        $startGeneration = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'startRebootstrapRollbackGeneration',
+        ));
+        $authorizeStart = \strpos(
+            $rollback,
+            "'ROLLBACK_START_AUTHORIZED'",
+        );
+        $startStateMachine = \strpos(
+            $rollback,
+            '$this->startRebootstrapRollbackGeneration(',
+        );
+        $terminal = \strpos(
+            $rollback,
+            '$this->packages->completeRebootstrapRollback(',
+        );
+        $cleanup = \strpos(
+            $rollback,
+            '$this->packages->assertNoActiveRebootstrap(',
+        );
+        $closure = \strpos(
+            $startGeneration,
+            '$this->packages->assertRebootstrapRollbackPreStartClosure(',
+        );
+        $consumeIntent = \strpos(
+            $startGeneration,
+            '$cleared = $this->clearAdminStoppedIntent(',
+        );
+        $start = \strpos($startGeneration, '$this->platform->start(');
+        $observe = \strpos(
+            $startGeneration,
+            "'ROLLBACK_OBSERVING'",
+            \is_int($start) ? $start : 0,
+        );
+
+        self::assertIsInt($authorizeStart);
+        self::assertIsInt($startStateMachine);
+        self::assertIsInt($terminal);
+        self::assertIsInt($cleanup);
+        self::assertIsInt($closure);
+        self::assertIsInt($consumeIntent);
+        self::assertIsInt($start);
+        self::assertIsInt($observe);
+        self::assertTrue(
+            $authorizeStart < $startStateMachine
+                && $startStateMachine < $terminal
+                && $terminal < $cleanup,
+            'Rollback start must remain journaled until the restored generation has started and the terminal transaction can be cleaned up.',
+        );
+        self::assertTrue(
+            $closure < $consumeIntent
+                && $consumeIntent < $start
+                && $start < $observe,
+            'The exact stop fence must be consumed only after closure and before the restored generation starts and enters observation.',
+        );
+        self::assertMatchesRegularExpression(
+            '/\$cleared\s*=\s*\$this->clearAdminStoppedIntent\([\s\S]*?'
+                . '!\\\\hash_equals\(\$expectedIntent,\s*\$cleared\)/',
+            $startGeneration,
+        );
+        self::assertMatchesRegularExpression(
+            '/\$this->platform->start\(\s*\(string\)\$snapshot\[\'kind\'\],'
+                . '\s*\$forwardDeadline,?\s*\)/',
+            $startGeneration,
+        );
+    }
+
+    public function testForwardRebootstrapSealsBackupBeforeStartAuthorization(): void
+    {
+        $forward = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'rebootstrap',
+        ));
+        $branchStart = \strpos(
+            $forward,
+            "if (\\hash_equals('PLATFORM_REFRESHED', \$phase))",
+        );
+        $nextBranch = \strpos(
+            $forward,
+            "if (\\hash_equals('START_AUTHORIZED', \$phase))",
+            \is_int($branchStart) ? $branchStart : 0,
+        );
+        self::assertIsInt($branchStart);
+        self::assertIsInt($nextBranch);
+        $branch = \substr($forward, $branchStart, $nextBranch - $branchStart);
+        $seal = \strpos(
+            $branch,
+            '$this->platform->secureRebootstrapBackup(',
+        );
+        $fault = \strpos(
+            $branch,
+            'forward:after-backup-sealed-before-start-authorization',
+        );
+        $authorize = \strpos(
+            $branch,
+            '$this->packages->advanceRebootstrapPhase(',
+        );
+        self::assertIsInt($seal);
+        self::assertIsInt($fault);
+        self::assertIsInt($authorize);
+        self::assertTrue(
+            $seal < $fault && $fault < $authorize,
+            'The retained generation must be sealed and crash-replayable before START_AUTHORIZED is written.',
+        );
+    }
+
+    public function testRollbackObservationFailureResetsAndCompensatesBeforeReplay(): void
+    {
+        $rollback = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'performRebootstrapRollback',
+        ));
+        $compensation = self::methodSource(new \ReflectionMethod(
+            GatewayHostManager::class,
+            'compensateFailedGatewayStart',
+        ));
+        $reserve = \strpos(
+            $rollback,
+            'operationDeadlineWithRequiredCompensation(',
+        );
+        $observe = \strpos($rollback, '$this->awaitRebootstrapRollbackIdentity(');
+        $intent = \strpos(
+            $rollback,
+            '$expectedIntent ??= $this->packages',
+        );
+        $postStartTry = \strrpos(
+            \substr($rollback, 0, $intent),
+            'try {',
+        );
+        $startRollback = \strpos(
+            $rollback,
+            '$this->startRebootstrapRollbackGeneration(',
+        );
+        $failureHandler = \substr($rollback, $observe);
+        self::assertIsString($failureHandler);
+        $reset = \strpos(
+            $failureHandler,
+            '$this->packages->retryRebootstrapRollbackObservation(',
+        );
+        $resetDeadline = \strpos(
+            $failureHandler,
+            '$resetDeadline = $this',
+        );
+        $compensate = \strpos(
+            $failureHandler,
+            '$this->compensateFailedGatewayStart(',
+        );
+        self::assertIsInt($reserve);
+        self::assertIsInt($observe);
+        self::assertIsInt($reset);
+        self::assertIsInt($resetDeadline);
+        self::assertIsInt($intent);
+        self::assertIsInt($postStartTry);
+        self::assertIsInt($startRollback);
+        self::assertIsInt($compensate);
+        self::assertTrue(
+            $reserve < $observe
+                && $postStartTry < $startRollback
+                && $startRollback < $intent
+                && $intent < $observe
+                && $resetDeadline < $reset
+                && $reset < $compensate,
+            'A resumed rollback must acquire its fence inside the post-start fail-closed region, reserve compensation time, then stop even if journal reset fails.',
+        );
+        self::assertStringContainsString(
+            'SERVICE_START_COMPENSATION_RESERVE_SECONDS',
+            \substr(
+                $failureHandler,
+                $resetDeadline,
+                $reset - $resetDeadline,
+            ),
+        );
+        self::assertStringContainsString(
+            '$expectedIntent !== null,',
+            \substr($failureHandler, $compensate, 320),
+            'Rollback observation compensation must require an exact fence only when acquisition succeeded.',
+        );
+        self::assertStringContainsString(
+            '$expectedIntent,',
+            \substr($rollback, $startRollback, $intent - $startRollback),
+            'A fresh rollback start must carry its already-verified fence into observation.',
+        );
+        self::assertStringContainsString(
+            'reset to ROLLING_BACK for bounded replay',
+            $rollback,
+        );
+        self::assertStringContainsString(
+            'SERVICE_START_COMPENSATION_RESERVE_SECONDS',
+            $rollback,
+        );
+
+        $stop = \strpos($compensation, '$this->platform->stop(');
+        $restore = \strpos($compensation, '$this->restoreAdminStoppedIntent(');
+        $proof = \strpos($compensation, '$this->platform->persistentStoppedProof(');
+        $intentProof = \strpos(
+            $compensation,
+            '$this->readVerifiedAdminStoppedIntent(',
+        );
+        self::assertIsInt($stop);
+        self::assertIsInt($restore);
+        self::assertIsInt($proof);
+        self::assertIsInt($intentProof);
+        self::assertTrue(
+            $stop < $restore && $restore < $proof && $proof < $intentProof,
+            'Rollback-observation compensation must stop the platform, restore the exact ADMIN_STOPPED fence, and prove both before replay.',
+        );
+        self::assertStringContainsString(
+            '$requireExactIntent',
+            $compensation,
+        );
+        self::assertStringContainsString(
+            '!\\hash_equals($expectedIntent, $observedIntent)',
+            $compensation,
+        );
+    }
+
+    public function testRebootstrapTrustRotationBindsOnlyANewAuthenticatedEpoch(): void
+    {
+        $method = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'assertRebootstrapObservedEpoch',
+        );
+        $manager = new GatewayHostManager();
+        $runtimeGeneration = \str_repeat('c', 64);
+        $oldEpoch = \str_repeat('a', 32);
+        $newEpoch = \str_repeat('d', 32);
+        $status = [
+            ...self::trustedControl(),
+            'host_boot_id' => GatewayHostBootIdentity::current(),
+            'active_slot' => 'A',
+            'runtime_generation' => $runtimeGeneration,
+            'epoch' => $newEpoch,
+        ];
+        $transaction = [
+            'runtime_generation' => $runtimeGeneration,
+            'old_gateway_epoch' => $oldEpoch,
+            'new_gateway_epoch' => '',
+            'trust_rotation' => true,
+        ];
+
+        self::assertSame(
+            $newEpoch,
+            $method->invoke($manager, $transaction, $status),
+        );
+
+        try {
+            $method->invoke(
+                $manager,
+                $transaction,
+                [...$status, 'epoch' => $oldEpoch],
+            );
+            self::fail('A CA rotation must not reuse the old gateway epoch.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'violates its trust-generation contract',
+                $exception->getMessage(),
+            );
+        }
+
+        try {
+            $method->invoke(
+                $manager,
+                [...$transaction, 'new_gateway_epoch' => $newEpoch],
+                [...$status, 'epoch' => \str_repeat('e', 32)],
+            );
+            self::fail('Recovery must not rebind an already observed epoch.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'violates its trust-generation contract',
+                $exception->getMessage(),
+            );
+        }
+    }
+
+    public function testLauncherOnlyRebootstrapRequiresTheOldEpochToRemainExact(): void
+    {
+        $method = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'assertRebootstrapObservedEpoch',
+        );
+        $manager = new GatewayHostManager();
+        $runtimeGeneration = \str_repeat('c', 64);
+        $oldEpoch = \str_repeat('a', 32);
+        $status = [
+            ...self::trustedControl(),
+            'host_boot_id' => GatewayHostBootIdentity::current(),
+            'active_slot' => 'A',
+            'runtime_generation' => $runtimeGeneration,
+            'epoch' => $oldEpoch,
+        ];
+        $transaction = [
+            'runtime_generation' => $runtimeGeneration,
+            'old_gateway_epoch' => $oldEpoch,
+            'new_gateway_epoch' => $oldEpoch,
+            'trust_rotation' => false,
+        ];
+
+        self::assertSame(
+            $oldEpoch,
+            $method->invoke($manager, $transaction, $status),
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('violates its trust-generation contract');
+        $method->invoke(
+            $manager,
+            $transaction,
+            [...$status, 'epoch' => \str_repeat('d', 32)],
+        );
     }
 
     /** @return array<string,mixed> */

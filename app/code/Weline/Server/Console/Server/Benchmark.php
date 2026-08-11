@@ -17,6 +17,7 @@ use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 use Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection;
@@ -487,7 +488,7 @@ class Benchmark extends CommandAbstract
         array $target = [],
     ): bool
     {
-        if (!$info->isMasterRunning()) {
+        if (!$this->isBenchmarkMasterRunning($info, $instanceName)) {
             $this->printer->error(__('实例 [%{1}] 未运行，已拒绝将端口占用者归因为该实例。', [$instanceName]));
             return false;
         }
@@ -581,6 +582,39 @@ class Benchmark extends CommandAbstract
         }
 
         return true;
+    }
+
+    protected function isBenchmarkMasterRunning(
+        ServerInstanceInfo $info,
+        string $instanceName,
+    ): bool {
+        if (!\hash_equals($info->name, $instanceName)) {
+            return false;
+        }
+        if ($info->isMasterRunning()) {
+            return true;
+        }
+        if ($info->controlPort <= 0) {
+            return false;
+        }
+
+        try {
+            $status = $this->readBenchmarkMasterStatus($instanceName);
+        } catch (\Throwable) {
+            return false;
+        }
+        $data = \is_array($status['data'] ?? null) ? $status['data'] : [];
+
+        return ($status['success'] ?? false) === true
+            && \hash_equals($instanceName, (string)($status['instance'] ?? ''))
+            && ($data['running'] ?? false) === true
+            && ($data['shutting_down'] ?? false) !== true;
+    }
+
+    /** @return array<string,mixed> */
+    protected function readBenchmarkMasterStatus(string $instanceName): array
+    {
+        return (new IpcControlGateway())->getStatusBrief($instanceName, 0.5);
     }
 
     /**
@@ -796,7 +830,10 @@ class Benchmark extends CommandAbstract
                 } catch (\RuntimeException) {
                     continue;
                 }
-                if (!\is_array($endpoint) || $info === null || !$info->isMasterRunning()) {
+                if (!\is_array($endpoint)
+                    || $info === null
+                    || !$this->isBenchmarkMasterRunning($info, $persistedName)
+                ) {
                     continue;
                 }
                 $backendHost = \trim((string)($endpoint['host'] ?? ''));
@@ -931,7 +968,7 @@ class Benchmark extends CommandAbstract
                 }
                 continue;
             }
-            if ($info === null || !$info->isMasterRunning()) {
+            if ($info === null || !$this->isBenchmarkMasterRunning($info, $name)) {
                 continue;
             }
             $target = $this->buildInstanceTarget($name, $raw);
@@ -1059,6 +1096,22 @@ class Benchmark extends CommandAbstract
                     'ssl' => $fallbackHttps,
                 ],
             ];
+        }
+        $fallbackObservation = $this->runtimeFallbackServingObservation($endpoint);
+        if (\is_array($fallbackObservation)
+            && ($fallbackObservation['authority_host'] ?? null) === null
+        ) {
+            $this->printer->error(__(
+                '该 WLS 备用入口只有通配符路由，自动压测无法推导具体 TLS Host/SNI。'
+            ));
+            $this->printer->note(__(
+                '监听：%{1}；路由域名：%{2}。请显式提供匹配证书的具体目标域名后重试。',
+                [
+                    (string)($fallbackObservation['bind_endpoint'] ?? ''),
+                    \implode(', ', (array)($fallbackObservation['route_domains'] ?? [])),
+                ],
+            ));
+            return null;
         }
         if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
             $pureWlsEndpoint = $this->runtimeExplicitPureWlsServingEndpoint($endpoint);
@@ -1232,6 +1285,12 @@ class Benchmark extends CommandAbstract
     protected function runtimeFallbackServingEndpoint(array $endpoint): ?array
     {
         return GatewayRuntimeServingProjection::fallbackServingEndpoint($endpoint);
+    }
+
+    /** @param array<string,mixed> $endpoint @return array<string,mixed>|null */
+    protected function runtimeFallbackServingObservation(array $endpoint): ?array
+    {
+        return GatewayRuntimeServingProjection::fallbackServingObservation($endpoint);
     }
 
     /**
@@ -2838,7 +2897,7 @@ class Benchmark extends CommandAbstract
         \ksort($workers);
         \ksort($readyFingerprint);
         $missingCanonicalSlots = \array_keys(\array_diff_key($canonicalSlots, $activeCanonicalSlots));
-        $masterRunning = $info->isMasterRunning();
+        $masterRunning = $this->isBenchmarkMasterRunning($info, $instanceName);
         $healthy = $masterRunning
             && $duplicateSlots === []
             && $unexpectedReadySlots === []

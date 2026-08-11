@@ -99,6 +99,7 @@ class ChildMasterGuard
             $this->masterPid,
             $this->masterEpoch,
             $this->masterToken,
+            $this->strictLeaseFreshness,
         );
         if (($validation['authorized'] ?? false) === true) {
             return '';

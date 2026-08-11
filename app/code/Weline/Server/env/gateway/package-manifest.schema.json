@@ -13,6 +13,7 @@
     "protocol_max",
     "security_profile",
     "implementation_level",
+    "durable_state_contract",
     "package_profile",
     "release_ready",
     "signing_key_id",
@@ -29,6 +30,30 @@
     "protocol_max": {"type": "integer", "minimum": 2},
     "security_profile": {"const": "native-broker-v1"},
     "implementation_level": {"const": "wls-2.0"},
+    "durable_state_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "security_ledger_read_schema",
+        "security_ledger_write_schema",
+        "snapshot_receipt_read_schema",
+        "snapshot_receipt_write_schema",
+        "snapshot_namespace",
+        "nonce_wal_schema",
+        "nginx_test_schema"
+      ],
+      "properties": {
+        "schema_version": {"const": 2},
+        "security_ledger_read_schema": {"const": 8},
+        "security_ledger_write_schema": {"const": 8},
+        "snapshot_receipt_read_schema": {"const": 2},
+        "snapshot_receipt_write_schema": {"const": 2},
+        "snapshot_namespace": {"const": "snapshots-v2"},
+        "nonce_wal_schema": {"const": 1},
+        "nginx_test_schema": {"const": 1}
+      }
+    },
     "package_profile": {"enum": ["production", "test"]},
     "release_ready": {"type": "boolean"},
     "signing_key_id": {"type": "string"},
@@ -39,18 +64,48 @@
     },
     "capabilities": {
       "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "broker_sideband_actions",
+        "certificate_public_trust_bundle",
+        "certificate_snapshot_seal",
+        "dual_control_channels",
+        "native_peer_identity",
+        "neutral_default_certificate",
+        "no_follow_snapshot",
+        "physical_rebootstrap_capacity_reserve",
+        "privilege_separation",
+        "self_contained_nginx",
+        "self_contained_php",
+        "singleton_fencing",
+        "stable_launcher_rollback_target_proof"
+      ],
       "properties": {
-        "windows_kernel32_ffi_atomic_write": {"type": "boolean"}
-      },
-      "additionalProperties": {"type": "boolean"}
+        "broker_sideband_actions": {"type": "boolean"},
+        "certificate_public_trust_bundle": {"const": true},
+        "certificate_snapshot_seal": {"type": "boolean"},
+        "dual_control_channels": {"type": "boolean"},
+        "native_peer_identity": {"type": "boolean"},
+        "neutral_default_certificate": {"type": "boolean"},
+        "no_follow_snapshot": {"type": "boolean"},
+        "physical_rebootstrap_capacity_reserve": {"const": true},
+        "privilege_separation": {"type": "boolean"},
+        "self_contained_nginx": {"type": "boolean"},
+        "self_contained_php": {"type": "boolean"},
+        "singleton_fencing": {"type": "boolean"},
+        "stable_launcher_rollback_target_proof": {"const": true},
+        "windows_kernel32_ffi_atomic_write": {"type": "boolean"},
+        "windows_named_pipe_deadline_transport": {"type": "boolean"}
+      }
     },
     "components": {
       "type": "object",
-      "minProperties": 8,
+      "minProperties": 9,
       "required": [
         "app/controller.php",
         "LICENSES.txt",
         "provenance.json",
+        "share/ca-bundle.pem",
         "sbom.cdx.json"
       ],
       "additionalProperties": {
@@ -74,13 +129,29 @@
       "then": {
         "properties": {
           "capabilities": {
-            "required": ["windows_kernel32_ffi_atomic_write"],
+            "required": [
+              "windows_kernel32_ffi_atomic_write",
+              "windows_named_pipe_deadline_transport"
+            ],
             "properties": {
-              "windows_kernel32_ffi_atomic_write": {"const": true}
+              "windows_kernel32_ffi_atomic_write": {"const": true},
+              "windows_named_pipe_deadline_transport": {"const": true}
             }
           },
           "components": {
             "required": ["bin/wls-bounded-command.exe"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "capabilities": {
+            "not": {
+              "anyOf": [
+                {"required": ["windows_kernel32_ffi_atomic_write"]},
+                {"required": ["windows_named_pipe_deadline_transport"]}
+              ]
+            }
           }
         }
       }

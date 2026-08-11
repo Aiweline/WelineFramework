@@ -22,6 +22,7 @@ final class ManagedNginxProcessManager
     private const GRACEFUL_STOP_TIMEOUT_SECONDS = 30.0;
     private const RELOAD_OLD_WORKER_TIMEOUT_SECONDS = 15.0;
     private const CONFIG_TEST_LOCK_WAIT_SECONDS = 45.0;
+    private const DEFAULT_LIFECYCLE_TIMEOUT_SECONDS = 90.0;
     private const CONFIG_TEST_PREFIX = 'wls-nginx-config-test-';
     private const LEGACY_CONFIG_TEST_PID_PREFIX = 'nginx-config-test-';
     private const CONFIG_TEST_LOCK_LEAF = 'managed-nginx.config-test.lock';
@@ -51,8 +52,20 @@ final class ManagedNginxProcessManager
     /**
      * @return array{ok:bool,running:bool,pid:int|null,message:string}
      */
-    public function status(): array
+    public function status(?float $deadlineMonotonic = null): array
     {
+        try {
+            $deadlineMonotonic = $this->lifecycleDeadline(
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'running' => false,
+                'pid' => null,
+                'message' => $throwable->getMessage(),
+            ];
+        }
         try {
             $pid = $this->readPid();
         } catch (\Throwable $throwable) {
@@ -65,7 +78,9 @@ final class ManagedNginxProcessManager
         }
         if ($pid === null) {
             try {
-                $recordedPid = $this->processIdentity->recordedPid();
+                $recordedPid = $this->processIdentity->recordedPid(
+                    $deadlineMonotonic,
+                );
             } catch (\Throwable $throwable) {
                 return [
                     'ok' => false,
@@ -99,7 +114,9 @@ final class ManagedNginxProcessManager
         $pidState = $this->pidState($pid);
         if ($pidState === Processer::PROCESS_STATE_EXITED) {
             try {
-                $recordedPid = $this->processIdentity->recordedPid();
+                $recordedPid = $this->processIdentity->recordedPid(
+                    $deadlineMonotonic,
+                );
             } catch (\Throwable $throwable) {
                 return [
                     'ok' => false,
@@ -140,7 +157,7 @@ final class ManagedNginxProcessManager
         if ($pidState !== Processer::PROCESS_STATE_RUNNING) {
             return ['ok' => false, 'running' => false, 'pid' => $pid, 'message' => 'pid state is unknown'];
         }
-        $identity = $this->inspectPidIdentity($pid);
+        $identity = $this->inspectPidIdentity($pid, $deadlineMonotonic);
         if (!($identity['ok'] ?? false)) {
             return [
                 'ok' => false,
@@ -162,8 +179,19 @@ final class ManagedNginxProcessManager
     /**
      * @return array{ok:bool,message:string,pid:int|null}
      */
-    public function start(): array
+    public function start(?float $deadlineMonotonic = null): array
     {
+        try {
+            $deadlineMonotonic = $this->lifecycleDeadline(
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => $throwable->getMessage(),
+                'pid' => null,
+            ];
+        }
         if (!$this->paths->isInstalled()) {
             return [
                 'ok' => false,
@@ -183,7 +211,7 @@ final class ManagedNginxProcessManager
                 'pid' => null,
             ];
         }
-        $status = $this->status();
+        $status = $this->status($deadlineMonotonic);
         if (!($status['ok'] ?? false)) {
             return [
                 'ok' => false,
@@ -196,7 +224,18 @@ final class ManagedNginxProcessManager
         }
 
         $this->paths->ensureRuntimeDirectories();
-        $recordedPid = $this->processIdentity->recordedPid();
+        try {
+            $recordedPid = $this->processIdentity->recordedPid(
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx process identity lock failed: '
+                    . $throwable->getMessage(),
+                'pid' => null,
+            ];
+        }
         if ($recordedPid !== null) {
             $recordedState = $this->pidState($recordedPid);
             if ($recordedState === Processer::PROCESS_STATE_RUNNING) {
@@ -213,9 +252,21 @@ final class ManagedNginxProcessManager
                     'pid' => $recordedPid,
                 ];
             }
-            $this->processIdentity->clear($recordedPid);
+            try {
+                $this->processIdentity->clear(
+                    $recordedPid,
+                    $deadlineMonotonic,
+                );
+            } catch (\Throwable $throwable) {
+                return [
+                    'ok' => false,
+                    'message' => 'stale managed nginx process identity could not be cleared: '
+                        . $throwable->getMessage(),
+                    'pid' => $recordedPid,
+                ];
+            }
         }
-        $test = $this->runNginx(['-t']);
+        $test = $this->runNginx(['-t'], null, $deadlineMonotonic);
         if (($test['code'] ?? 1) !== 0) {
             return [
                 'ok' => false,
@@ -243,7 +294,7 @@ final class ManagedNginxProcessManager
             }
         }
 
-        $started = $this->startNginx();
+        $started = $this->startNginx($deadlineMonotonic);
         if (($started['code'] ?? 1) !== 0) {
             return [
                 'ok' => false,
@@ -254,26 +305,309 @@ final class ManagedNginxProcessManager
 
         for ($i = 0; $i < 20; $i++) {
             SchedulerSystem::usleep(100000);
-            $startedStatus = $this->status();
+            try {
+                $startedStatus = $this->status($deadlineMonotonic);
+            } catch (\Throwable $throwable) {
+                return $this->stopFailedLaunchCandidate(
+                    'started nginx PID identity inspection failed: '
+                        . $throwable->getMessage(),
+                    null,
+                    $deadlineMonotonic,
+                );
+            }
             if (!($startedStatus['ok'] ?? false)) {
-                return [
-                    'ok' => false,
-                    'message' => 'started nginx PID identity could not be verified: '
+                return $this->stopFailedLaunchCandidate(
+                    'started nginx PID identity could not be verified: '
                         . (string)($startedStatus['message'] ?? 'unknown'),
-                    'pid' => $startedStatus['pid'],
-                ];
+                    \is_int($startedStatus['pid'] ?? null)
+                        ? (int)$startedStatus['pid']
+                        : null,
+                    $deadlineMonotonic,
+                );
             }
             if ($startedStatus['running']) {
                 return ['ok' => true, 'message' => 'started', 'pid' => $startedStatus['pid']];
             }
         }
 
+        return $this->stopFailedLaunchCandidate(
+            'nginx did not establish a verified master after start; check '
+                . $this->paths->logsDir() . DIRECTORY_SEPARATOR . 'error.log',
+            null,
+            $deadlineMonotonic,
+        );
+    }
+
+    /**
+     * startNginx() may have committed process creation even when the first
+     * manifest/status read fails. Select only the authoritative PID (or the
+     * same PID-bound record), prove its immutable argv/runtime and kernel birth,
+     * then terminate that exact birth. An ambiguous process is never signalled.
+     *
+     * @return array{ok:false,message:string,pid:int|null}
+     */
+    private function stopFailedLaunchCandidate(
+        string $failure,
+        ?int $pidHint,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        try {
+            $deadlineMonotonic = $this->lifecycleDeadline(
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => $failure . '; lifecycle deadline exhausted before exact cleanup; no signal was sent: '
+                    . $throwable->getMessage(),
+                'pid' => $pidHint,
+            ];
+        }
+        try {
+            $pidFilePid = $this->readPid();
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => $failure . '; failed launch PID file is unsafe: '
+                    . $throwable->getMessage(),
+                'pid' => $pidHint,
+            ];
+        }
+        if ($pidFilePid !== null && $pidHint !== null && $pidFilePid !== $pidHint) {
+            return [
+                'ok' => false,
+                'message' => $failure
+                    . '; failed launch PID changed before exact cleanup; no signal was sent',
+                'pid' => $pidFilePid,
+            ];
+        }
+        $pid = $pidFilePid ?? $pidHint;
+        if ($pid === null || $pid < 1) {
+            return [
+                'ok' => false,
+                'message' => $failure . '; no authoritative live master PID was published',
+                'pid' => null,
+            ];
+        }
+
+        $state = $this->pidState($pid);
+        if ($state === Processer::PROCESS_STATE_EXITED) {
+            $finalized = $this->finalizeExitedMasterPidFile(
+                $pid,
+                $deadlineMonotonic,
+            );
+            return [
+                'ok' => false,
+                'message' => $failure . '; launched master already exited; '
+                    . (string)($finalized['message'] ?? 'cleanup incomplete'),
+                'pid' => $pid,
+            ];
+        }
+        if ($state !== Processer::PROCESS_STATE_RUNNING) {
+            return [
+                'ok' => false,
+                'message' => $failure
+                    . '; failed launch process state is indeterminate; no signal was sent',
+                'pid' => $pid,
+            ];
+        }
+
+        $command = Processer::getProcessCommandLine($pid, true);
+        $candidate = $this->processIdentity->inspectLaunchCandidate($pid, $command);
+        if (!($candidate['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'message' => $failure
+                    . '; failed launch did not match the immutable managed Nginx runtime; '
+                    . 'no signal was sent: ' . (string)($candidate['reason'] ?? 'unknown'),
+                'pid' => $pid,
+            ];
+        }
+
+        try {
+            $runtimeIdentity = new MasterLeaseRuntimeIdentity();
+            $exactBirth = $runtimeIdentity->captureProcessIdentity($pid);
+            $pidFileRecheck = $this->readPid();
+            $commandRecheck = Processer::getProcessCommandLine($pid, true);
+            $candidateRecheck = $this->processIdentity
+                ->inspectLaunchCandidate($pid, $commandRecheck);
+            if (($pidFileRecheck !== null && $pidFileRecheck !== $pid)
+                || !($candidateRecheck['ok'] ?? false)
+                || !\hash_equals(
+                    (string)$candidate['process_start_identity'],
+                    (string)($candidateRecheck['process_start_identity'] ?? ''),
+                )
+            ) {
+                return [
+                    'ok' => false,
+                    'message' => $failure
+                        . '; failed launch identity changed before cleanup; no signal was sent',
+                    'pid' => $pid,
+                ];
+            }
+            $terminated = $runtimeIdentity->terminateExactProcessIdentity(
+                $pid,
+                (string)$exactBirth['birth'],
+                (string)$exactBirth['pid_namespace_id'],
+                \min(
+                    5.0,
+                    $this->remainingLifecycleBudget($deadlineMonotonic),
+                ),
+            );
+            if (!(bool)($terminated['released'] ?? false)
+                && \in_array(\PHP_OS_FAMILY, ['Darwin', 'Linux'], true)
+                && \in_array((string)($terminated['reason'] ?? ''), [
+                    'stable_process_handle_unavailable_on_darwin',
+                    'linux_pidfd_ffi_unavailable',
+                    'linux_pidfd_open_unavailable',
+                    'linux_pidfd_open_failed',
+                ], true)
+            ) {
+                $terminated = $this->terminatePosixFailedLaunchCandidate(
+                    $pid,
+                    (string)$candidate['process_start_identity'],
+                    $runtimeIdentity,
+                    (string)$exactBirth['birth'],
+                    (string)$exactBirth['pid_namespace_id'],
+                    $deadlineMonotonic,
+                );
+            }
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => $failure . '; exact failed-launch cleanup errored: '
+                    . $throwable->getMessage(),
+                'pid' => $pid,
+            ];
+        }
+        if (!(bool)($terminated['released'] ?? false)) {
+            return [
+                'ok' => false,
+                'message' => $failure . '; exact failed-launch cleanup was not proven: '
+                    . (string)($terminated['reason'] ?? 'unknown'),
+                'pid' => $pid,
+            ];
+        }
+        $finalized = $this->finalizeExitedMasterPidFile(
+            $pid,
+            $deadlineMonotonic,
+        );
         return [
             'ok' => false,
-            'message' => 'nginx exited immediately after start; check '
-                . $this->paths->logsDir() . DIRECTORY_SEPARATOR . 'error.log',
-            'pid' => null,
+            'message' => $failure . '; exact newly launched master was stopped; '
+                . (string)($finalized['message'] ?? 'state cleanup incomplete'),
+            'pid' => $pid,
         ];
+    }
+
+    /**
+     * When Darwin has no stable process handle, or Linux pidfd is unavailable,
+     * the newly launched Nginx master still has a safer native control path. The
+     * lifecycle lock plus an unchanged authoritative pidfile, immutable
+     * argv/runtime attestation, and kernel-birth re-observation allow the
+     * matching Nginx binary to deliver its own graceful control signal. No raw
+     * PID signal is emitted by this fallback.
+     *
+     * @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int}
+     */
+    private function terminatePosixFailedLaunchCandidate(
+        int $pid,
+        string $processStartIdentity,
+        MasterLeaseRuntimeIdentity $runtimeIdentity,
+        string $kernelBirth,
+        string $pidNamespaceId,
+        float $deadlineMonotonic,
+    ): array {
+        $unknown = static fn(string $reason): array => [
+            'released' => false,
+            'terminated' => false,
+            'reason' => $reason,
+            'owner_state' => MasterLeaseRuntimeIdentity::OWNER_UNKNOWN,
+            'pid' => $pid,
+        ];
+        $pidFile = $this->paths->pidFile();
+        $pidFileIdentity = @\lstat($pidFile);
+        if (!\is_array($pidFileIdentity) || $this->readPid() !== $pid) {
+            return $unknown('posix_launch_pidfile_identity_unavailable');
+        }
+        $command = Processer::getProcessCommandLine($pid, true);
+        $candidate = $this->processIdentity->inspectLaunchCandidate($pid, $command);
+        if (!($candidate['ok'] ?? false)
+            || !\hash_equals(
+                $processStartIdentity,
+                (string)($candidate['process_start_identity'] ?? ''),
+            )
+        ) {
+            return $unknown('posix_launch_identity_changed_before_control');
+        }
+        $ownerState = $runtimeIdentity->observeProcessIdentity(
+            $pid,
+            $kernelBirth,
+            $pidNamespaceId,
+        );
+        if (\in_array($ownerState, [
+            MasterLeaseRuntimeIdentity::OWNER_MISSING,
+            MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
+        ], true)) {
+            return [
+                'released' => true,
+                'terminated' => false,
+                'reason' => 'posix_launch_identity_released_without_signal',
+                'owner_state' => $ownerState,
+                'pid' => $pid,
+            ];
+        }
+        if ($ownerState !== MasterLeaseRuntimeIdentity::OWNER_MATCH) {
+            return $unknown('posix_launch_identity_unknown_before_control');
+        }
+        $pidFileRecheck = @\lstat($pidFile);
+        if (!\is_array($pidFileRecheck)
+            || !$this->sameConfigTestStableState($pidFileIdentity, $pidFileRecheck)
+            || $this->readPid() !== $pid
+        ) {
+            return $unknown('posix_launch_pidfile_changed_before_control');
+        }
+
+        try {
+            $this->remainingLifecycleBudget($deadlineMonotonic);
+        } catch (\Throwable) {
+            return $unknown('posix_launch_lifecycle_deadline_exhausted_before_control');
+        }
+        $control = $this->runNginx(
+            ['-s', 'quit'],
+            null,
+            $deadlineMonotonic,
+        );
+        $deadline = (\hrtime(true) / 1_000_000_000) + 5.0;
+        $deadline = \min($deadline, $deadlineMonotonic);
+        do {
+            $ownerState = $runtimeIdentity->observeProcessIdentity(
+                $pid,
+                $kernelBirth,
+                $pidNamespaceId,
+            );
+            if (\in_array($ownerState, [
+                MasterLeaseRuntimeIdentity::OWNER_MISSING,
+                MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
+            ], true)) {
+                return [
+                    'released' => true,
+                    'terminated' => true,
+                    'reason' => 'posix_nginx_control_released_exact_launch_identity',
+                    'owner_state' => $ownerState,
+                    'pid' => $pid,
+                ];
+            }
+            if (($control['code'] ?? 1) !== 0) {
+                return $unknown(
+                    'posix_nginx_control_failed: '
+                        . \substr(\trim((string)($control['output'] ?? '')), 0, 160),
+                );
+            }
+            SchedulerSystem::usleep(50_000);
+        } while ((\hrtime(true) / 1_000_000_000) < $deadline);
+
+        return $unknown('posix_nginx_control_did_not_release_exact_launch_identity');
     }
 
     /**
@@ -366,17 +700,33 @@ final class ManagedNginxProcessManager
     }
 
     /** @return array{code:int,output:string} */
-    public function testConfig(string $configFile): array
+    public function testConfig(
+        string $configFile,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         if (!\is_file($configFile) || \dirname($configFile) !== $this->paths->confDir()) {
             return ['code' => 1, 'output' => 'managed nginx candidate config is outside the isolated conf directory'];
         }
 
         try {
+            $deadlineMonotonic = $this->lifecycleDeadline(
+                $deadlineMonotonic,
+            );
+            $lockWait = \min(
+                self::CONFIG_TEST_LOCK_WAIT_SECONDS,
+                $this->remainingLifecycleBudget($deadlineMonotonic),
+            );
             return GatewayProjectStateFilesystem::withExclusiveLock(
                 $this->configTestLockFile(),
-                fn(): array => $this->testConfigLocked($configFile),
-                waitTimeoutSeconds: self::CONFIG_TEST_LOCK_WAIT_SECONDS,
+                function () use ($configFile, $deadlineMonotonic): array {
+                    $this->remainingLifecycleBudget($deadlineMonotonic);
+                    return $this->testConfigLocked(
+                        $configFile,
+                        $deadlineMonotonic,
+                    );
+                },
+                waitTimeoutSeconds: $lockWait,
             );
         } catch (\Throwable $throwable) {
             return [
@@ -388,9 +738,14 @@ final class ManagedNginxProcessManager
     }
 
     /** @return array{code:int,output:string} */
-    private function testConfigLocked(string $configFile): array
+    private function testConfigLocked(
+        string $configFile,
+        float $deadlineMonotonic,
+    ): array
     {
+        $this->remainingLifecycleBudget($deadlineMonotonic);
         $this->cleanupConfigTestArtifacts($configFile);
+        $this->remainingLifecycleBudget($deadlineMonotonic);
 
         try {
             $config = GatewayProjectStateFilesystem::read(
@@ -442,7 +797,11 @@ final class ManagedNginxProcessManager
             ];
         }
         try {
-            $result = $this->runNginx(['-t'], $testConfig);
+            $result = $this->runNginx(
+                ['-t'],
+                $testConfig,
+                $deadlineMonotonic,
+            );
         } catch (\Throwable $throwable) {
             $result = [
                 'code' => 1,
@@ -527,7 +886,7 @@ final class ManagedNginxProcessManager
                     ? self::MAX_CONFIG_TEST_PID_BYTES
                     : self::MAX_CONFIG_BYTES,
                 'managed Nginx config-test recovery artifact',
-                $artifact['kind'] === 'staging',
+                \in_array($artifact['kind'], ['staging', 'pid'], true),
             );
             $identity = @\lstat($artifact['path']);
             if (!\is_array($identity)
@@ -539,13 +898,15 @@ final class ManagedNginxProcessManager
                 );
             }
             if ($artifact['kind'] === 'pid') {
-                $pid = $this->parseConfigTestPid($contents);
+                $pid = $contents === '' ? 0 : $this->parseConfigTestPid($contents);
                 if ($pid !== $artifact['pid']) {
                     throw new \RuntimeException(
                         'Managed Nginx config-test PID changed during final preflight.',
                     );
                 }
-                $this->assertConfigTestPidExited($pid);
+                if ($pid > 0) {
+                    $this->assertConfigTestPidExited($pid);
+                }
             }
         }
         foreach ($rechecked['directories'] as $directory => $identity) {
@@ -576,14 +937,17 @@ final class ManagedNginxProcessManager
                     $artifact['path'],
                     self::MAX_CONFIG_TEST_PID_BYTES,
                     'managed Nginx config-test PID artifact',
+                    true,
                 );
-                $pid = $this->parseConfigTestPid($contents);
+                $pid = $contents === '' ? 0 : $this->parseConfigTestPid($contents);
                 if ($pid !== $artifact['pid']) {
                     throw new \RuntimeException(
                         'Managed Nginx config-test PID changed before removal.',
                     );
                 }
-                $this->assertConfigTestPidExited($pid);
+                if ($pid > 0) {
+                    $this->assertConfigTestPidExited($pid);
+                }
             }
             if (!GatewayProjectStateFilesystem::removeRegular(
                 $artifact['path'],
@@ -673,12 +1037,14 @@ final class ManagedNginxProcessManager
                         $path,
                         $maximumBytes,
                         'managed Nginx config-test recovery artifact',
-                        $classification['kind'] === 'staging',
+                        \in_array($classification['kind'], ['staging', 'pid'], true),
                     );
                     $pid = null;
                     if ($classification['kind'] === 'pid') {
-                        $pid = $this->parseConfigTestPid($contents);
-                        $this->assertConfigTestPidExited($pid);
+                        $pid = $contents === '' ? 0 : $this->parseConfigTestPid($contents);
+                        if ($pid > 0) {
+                            $this->assertConfigTestPidExited($pid);
+                        }
                     } elseif ($classification['kind'] === 'config') {
                         $this->assertConfigTestArtifactContents(
                             $contents,
@@ -764,32 +1130,33 @@ final class ManagedNginxProcessManager
                 $foldedLeaf,
                 $legacyPrefix,
             ) && \str_contains($foldedLeaf, '.test.');
-            if ($looksLikeLegacyTest
-                && \preg_match($legacyPattern . 'i', $leaf) === 1
-                && \preg_match($legacyPattern, $leaf, $match) !== 1
-            ) {
+            if (!$looksLikeLegacyTest) {
+                return null;
+            }
+            $match = [];
+            $caseInsensitiveMatch = \preg_match(
+                $legacyPattern . 'i',
+                $leaf,
+            );
+            $canonicalMatch = \preg_match($legacyPattern, $leaf, $match);
+            if ($caseInsensitiveMatch === 1 && $canonicalMatch !== 1) {
                 throw new \RuntimeException(
                     'Managed Nginx legacy config-test recovery found a non-canonical case alias.',
                 );
             }
-            if ($looksLikeLegacyTest
-                && \preg_match($legacyPattern, $leaf, $match) !== 1
-            ) {
+            if ($canonicalMatch !== 1) {
                 throw new \RuntimeException(
                     'Managed Nginx legacy config-test recovery found a malformed reserved leaf.',
                 );
             }
-            if ($looksLikeLegacyTest) {
-                $token = (string)$match[1];
-                return [
-                    'kind' => isset($match[2])
-                        ? 'staging'
-                        : 'config',
-                    'token' => $token,
-                    'pid_leaf' => self::LEGACY_CONFIG_TEST_PID_PREFIX . $token . '.pid',
-                ];
-            }
-            return null;
+            $token = (string)$match[1];
+            return [
+                'kind' => isset($match[2])
+                    ? 'staging'
+                    : 'config',
+                'token' => $token,
+                'pid_leaf' => self::LEGACY_CONFIG_TEST_PID_PREFIX . $token . '.pid',
+            ];
         }
 
         if (\hash_equals(
@@ -904,17 +1271,39 @@ final class ManagedNginxProcessManager
      * @param list<string> $extra
      * @return array{code:int,output:string}
      */
-    private function runNginx(array $extra, ?string $configFile = null): array
+    private function runNginx(
+        array $extra,
+        ?string $configFile = null,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $cmd = \array_merge($this->baseCommand($configFile), $extra);
-        return GatewayBoundedCommandRunner::run($cmd, self::COMMAND_TIMEOUT_SECONDS);
+        if ($deadlineMonotonic === null) {
+            $commandBudget = self::COMMAND_TIMEOUT_SECONDS;
+        } else {
+            try {
+                $commandBudget = $this->lifecycleCommandBudget(
+                    $deadlineMonotonic,
+                );
+            } catch (\Throwable $throwable) {
+                return ['code' => 124, 'output' => $throwable->getMessage()];
+            }
+        }
+        return GatewayBoundedCommandRunner::run($cmd, $commandBudget);
     }
 
     /** @return array{code:int,output:string} */
-    private function startNginx(): array
+    private function startNginx(?float $deadlineMonotonic = null): array
     {
         if (\PHP_OS_FAMILY !== 'Windows') {
-            return $this->runNginx([]);
+            return $this->runNginx([], null, $deadlineMonotonic);
+        }
+        if ($deadlineMonotonic !== null) {
+            try {
+                $this->remainingLifecycleBudget($deadlineMonotonic);
+            } catch (\Throwable $throwable) {
+                return ['code' => 124, 'output' => $throwable->getMessage()];
+            }
         }
         // Cross a WMI-created broker before Start-Process so nginx cannot keep
         // the lifecycle command's console or remote-exec handles alive.
@@ -949,14 +1338,23 @@ final class ManagedNginxProcessManager
      */
     public function stop(?float $deadlineMonotonic = null): array
     {
-        $initialBudget = $this->remainingStopBudget($deadlineMonotonic);
-        if ($deadlineMonotonic !== null && $initialBudget < 23.0) {
+        try {
+            $deadlineMonotonic = $this->lifecycleDeadline(
+                $deadlineMonotonic,
+            );
+            $initialBudget = $this->remainingLifecycleBudget(
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable $throwable) {
+            return ['ok' => false, 'message' => $throwable->getMessage()];
+        }
+        if ($initialBudget < 23.0) {
             return [
                 'ok' => false,
                 'message' => 'managed nginx stop deadline cannot contain process identity verification',
             ];
         }
-        $status = $this->status();
+        $status = $this->status($deadlineMonotonic);
         $this->remainingStopBudget($deadlineMonotonic);
         if (!($status['ok'] ?? false)) {
             return ['ok' => false, 'message' => 'refusing stop: ' . (string)$status['message']];
@@ -1031,13 +1429,19 @@ final class ManagedNginxProcessManager
                 ];
             }
             if ($masterState === Processer::PROCESS_STATE_EXITED) {
-                return $this->finalizeExitedMasterPidFile($masterPid);
+                return $this->finalizeExitedMasterPidFile(
+                    $masterPid,
+                    $deadlineMonotonic,
+                );
             }
         } while ((\hrtime(true) / 1_000_000_000) < $deadline);
 
         $masterState = $this->pidState($masterPid);
         if ($masterState === Processer::PROCESS_STATE_EXITED) {
-            return $this->finalizeExitedMasterPidFile($masterPid);
+            return $this->finalizeExitedMasterPidFile(
+                $masterPid,
+                $deadlineMonotonic,
+            );
         }
         if ($masterState !== Processer::PROCESS_STATE_RUNNING) {
             return [
@@ -1045,7 +1449,7 @@ final class ManagedNginxProcessManager
                 'message' => 'nginx master state remained unknown after graceful stop timeout',
             ];
         }
-        if (!$this->pidIdentityMatches($masterPid)) {
+        if (!$this->pidIdentityMatches($masterPid, $deadlineMonotonic)) {
             return [
                 'ok' => false,
                 'message' => 'nginx master remained alive with an unverifiable identity after graceful stop timeout',
@@ -1061,9 +1465,20 @@ final class ManagedNginxProcessManager
     /**
      * @return array{ok:bool,message:string,exit_code:int|null}
      */
-    public function reload(): array
+    public function reload(?float $deadlineMonotonic = null): array
     {
-        $status = $this->status();
+        try {
+            $deadlineMonotonic = $this->lifecycleDeadline(
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => $throwable->getMessage(),
+                'exit_code' => null,
+            ];
+        }
+        $status = $this->status($deadlineMonotonic);
         if (!($status['ok'] ?? false)) {
             return [
                 'ok' => false,
@@ -1088,7 +1503,10 @@ final class ManagedNginxProcessManager
                 'exit_code' => null,
             ];
         }
-        $test = $this->testConfig($this->paths->confFile());
+        $test = $this->testConfig(
+            $this->paths->confFile(),
+            $deadlineMonotonic,
+        );
         if (($test['code'] ?? 1) !== 0) {
             return [
                 'ok' => false,
@@ -1098,7 +1516,18 @@ final class ManagedNginxProcessManager
             ];
         }
         $cmd = \array_merge($this->baseCommand(), ['-s', 'reload']);
-        $reloadCommand = GatewayBoundedCommandRunner::run($cmd, self::COMMAND_TIMEOUT_SECONDS);
+        try {
+            $commandBudget = $this->lifecycleCommandBudget(
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => $throwable->getMessage(),
+                'exit_code' => null,
+            ];
+        }
+        $reloadCommand = GatewayBoundedCommandRunner::run($cmd, $commandBudget);
         $code = (int)($reloadCommand['code'] ?? 1);
         $output = (string)($reloadCommand['output'] ?? '');
         $remainingOldWorkerPids = \is_array($oldWorkerPids) ? $oldWorkerPids : [];
@@ -1106,6 +1535,7 @@ final class ManagedNginxProcessManager
         if ($code === 0 && $remainingOldWorkerPids !== []) {
             $deadline = (\hrtime(true) / 1_000_000_000)
                 + self::RELOAD_OLD_WORKER_TIMEOUT_SECONDS;
+            $deadline = \min($deadline, $deadlineMonotonic);
             do {
                 SchedulerSystem::usleep(100000);
                 $currentWorkerPids = $this->childWorkerPids($masterPid);
@@ -1123,7 +1553,7 @@ final class ManagedNginxProcessManager
         } else {
             SchedulerSystem::usleep(100000);
         }
-        $finalStatus = $this->status();
+        $finalStatus = $this->status($deadlineMonotonic);
         $running = (bool)($finalStatus['ok'] ?? false) && (bool)($finalStatus['running'] ?? false);
         $workersReplaced = !$workerProbeFailed && $remainingOldWorkerPids === [];
         return [
@@ -1208,8 +1638,10 @@ final class ManagedNginxProcessManager
     }
 
     /** @return array{ok:bool,message:string} */
-    private function finalizeExitedMasterPidFile(int $masterPid): array
-    {
+    private function finalizeExitedMasterPidFile(
+        int $masterPid,
+        ?float $deadlineMonotonic = null,
+    ): array {
         try {
             $pidFilePid = $this->readPid();
         } catch (\Throwable $throwable) {
@@ -1219,6 +1651,22 @@ final class ManagedNginxProcessManager
             ];
         }
         if ($pidFilePid === null) {
+            try {
+                if ($this->processIdentity->recordedPid(
+                    $deadlineMonotonic,
+                ) === $masterPid) {
+                    $this->processIdentity->clear(
+                        $masterPid,
+                        $deadlineMonotonic,
+                    );
+                }
+            } catch (\Throwable $throwable) {
+                return [
+                    'ok' => false,
+                    'message' => 'nginx stopped but its process identity could not be cleared: '
+                        . $throwable->getMessage(),
+                ];
+            }
             return ['ok' => true, 'message' => 'stopped'];
         }
         if ($pidFilePid !== $masterPid) {
@@ -1239,7 +1687,10 @@ final class ManagedNginxProcessManager
             ];
         }
         try {
-            $this->processIdentity->clear($masterPid);
+            $this->processIdentity->clear(
+                $masterPid,
+                $deadlineMonotonic,
+            );
         } catch (\Throwable $throwable) {
             return [
                 'ok' => false,
@@ -1251,20 +1702,34 @@ final class ManagedNginxProcessManager
         return ['ok' => true, 'message' => 'stopped'];
     }
 
-    private function pidIdentityMatches(int $pid): bool
+    private function pidIdentityMatches(
+        int $pid,
+        ?float $deadlineMonotonic = null,
+    ): bool
     {
-        return (bool)($this->inspectPidIdentity($pid)['ok'] ?? false);
+        return (bool)($this->inspectPidIdentity(
+            $pid,
+            $deadlineMonotonic,
+        )['ok'] ?? false);
     }
 
     /** @return array<string,mixed> */
-    private function inspectPidIdentity(int $pid): array
+    private function inspectPidIdentity(
+        int $pid,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $command = Processer::getProcessCommandLine($pid, true);
         if ($command === '') {
             return ['ok' => false, 'reason' => 'process command line is unavailable'];
         }
 
-        return $this->processIdentity->inspect($pid, $command, true);
+        return $this->processIdentity->inspect(
+            $pid,
+            $command,
+            true,
+            $deadlineMonotonic,
+        );
     }
 
     /** @return list<string> */
@@ -1308,7 +1773,10 @@ final class ManagedNginxProcessManager
             $processIdentity = $runtimeIdentity->captureProcessIdentity($pid);
         } catch (\Throwable $throwable) {
             if ($this->pidState($pid) === Processer::PROCESS_STATE_EXITED) {
-                return $this->finalizeExitedMasterPidFile($pid);
+                return $this->finalizeExitedMasterPidFile(
+                    $pid,
+                    $deadlineMonotonic,
+                );
             }
 
             return [
@@ -1319,12 +1787,15 @@ final class ManagedNginxProcessManager
         }
         $state = $this->pidState($pid);
         if ($state === Processer::PROCESS_STATE_EXITED) {
-            return $this->finalizeExitedMasterPidFile($pid);
+            return $this->finalizeExitedMasterPidFile(
+                $pid,
+                $deadlineMonotonic,
+            );
         }
         if ($state !== Processer::PROCESS_STATE_RUNNING) {
             return ['ok' => false, 'message' => 'refusing to kill a PID whose process state is unknown'];
         }
-        if (!$this->pidIdentityMatches($pid)) {
+        if (!$this->pidIdentityMatches($pid, $deadlineMonotonic)) {
             return ['ok' => false, 'message' => 'refusing to kill a PID that does not match managed nginx identity'];
         }
         $result = $runtimeIdentity->terminateExactProcessIdentity(
@@ -1334,7 +1805,10 @@ final class ManagedNginxProcessManager
             \min(0.5, $this->remainingStopBudget($deadlineMonotonic)),
         );
         if ((bool)($result['released'] ?? false)) {
-            return $this->finalizeExitedMasterPidFile($pid);
+            return $this->finalizeExitedMasterPidFile(
+                $pid,
+                $deadlineMonotonic,
+            );
         }
 
         return [
@@ -1344,18 +1818,69 @@ final class ManagedNginxProcessManager
         ];
     }
 
+    private function lifecycleDeadline(?float $deadlineMonotonic): float
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException(
+                'Managed Nginx lifecycle monotonic clock is unavailable.',
+            );
+        }
+        $deadlineMonotonic ??= $now
+            + self::DEFAULT_LIFECYCLE_TIMEOUT_SECONDS;
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Managed Nginx lifecycle deadline is invalid.',
+            );
+        }
+        if ($deadlineMonotonic <= $now) {
+            throw new \RuntimeException(
+                'Managed Nginx lifecycle deadline was exhausted.',
+            );
+        }
+        return $deadlineMonotonic;
+    }
+
+    private function remainingLifecycleBudget(float $deadlineMonotonic): float
+    {
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Managed Nginx lifecycle deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic
+            - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Managed Nginx lifecycle deadline was exhausted.',
+            );
+        }
+        return $remaining;
+    }
+
+    private function lifecycleCommandBudget(float $deadlineMonotonic): float
+    {
+        $remaining = $this->remainingLifecycleBudget($deadlineMonotonic);
+        // Windows may require up to twelve additional seconds to prove Job
+        // containment after the child deadline. Reserve that time inside the
+        // same absolute lifecycle budget.
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $remaining -= 12.0;
+        }
+        $budget = \min(self::COMMAND_TIMEOUT_SECONDS, $remaining);
+        if ($budget < 0.1) {
+            throw new \RuntimeException(
+                'Managed Nginx lifecycle deadline cannot contain command cleanup.',
+            );
+        }
+        return $budget;
+    }
+
     private function remainingStopBudget(?float $deadlineMonotonic): float
     {
         if ($deadlineMonotonic === null) {
             return 60.0;
         }
-        if (!\is_finite($deadlineMonotonic)) {
-            throw new \RuntimeException('Managed Nginx stop deadline is invalid.');
-        }
-        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
-        if ($remaining <= 0.0) {
-            throw new \RuntimeException('Managed Nginx stop deadline was exhausted.');
-        }
-        return $remaining;
+        return $this->remainingLifecycleBudget($deadlineMonotonic);
     }
 }

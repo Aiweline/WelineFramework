@@ -20,7 +20,14 @@ final class GatewayEmergencyRevocationClient
         private readonly GatewayPaths $paths = new GatewayPaths(),
         private readonly GatewayCredentialStore $credentials = new GatewayCredentialStore(),
         private readonly float $timeoutSeconds = 3.0,
+        private readonly GatewayWindowsNamedPipeTransport $windowsPipeTransport =
+            new GatewayWindowsNamedPipeTransport(),
     ) {
+        if (!\is_finite($this->timeoutSeconds) || $this->timeoutSeconds <= 0.0) {
+            throw new \InvalidArgumentException(
+                'Emergency gateway revocation timeout must be a positive finite number.',
+            );
+        }
     }
 
     /**
@@ -32,6 +39,11 @@ final class GatewayEmergencyRevocationClient
         ?float $deadlineMonotonic = null,
     ): array
     {
+        // Keep credential loading, connect, partial writes and acknowledgement
+        // read under one budget even when the convenience caller omits a
+        // deadline. Per-I/O stream timeouts must never accumulate.
+        $deadlineMonotonic ??= (\hrtime(true) / 1_000_000_000)
+            + $this->timeoutSeconds;
         $this->remainingDeadlineSeconds($deadlineMonotonic);
         $credential = $this->credentials->load();
         $projectUuid = (string)$credential['project_uuid'];
@@ -89,24 +101,69 @@ final class GatewayEmergencyRevocationClient
             \max(0.5, \min(10.0, $this->timeoutSeconds)),
             $this->remainingDeadlineSeconds($deadlineMonotonic),
         );
-        $socket = $endpoint['transport'] === 'pipe'
-            ? @\fopen($endpoint['address'], 'r+b')
-            : @\stream_socket_client(
+        if ($endpoint['transport'] === 'pipe') {
+            $transportStarted = \hrtime(true) / 1_000_000_000;
+            $transportDeadline = $transportStarted + \min(
+                \max(0.001, $this->timeoutSeconds),
+                $this->remainingDeadlineSeconds($deadlineMonotonic),
+            );
+            if ($deadlineMonotonic !== null) {
+                $transportDeadline = \min(
+                    $transportDeadline,
+                    $deadlineMonotonic,
+                );
+            }
+            try {
+                $line = $this->windowsPipeTransport->exchange(
+                    'project',
+                    $frame,
+                    self::MAX_FRAME_BYTES,
+                    $transportDeadline,
+                    $connectTimeout,
+                );
+            } catch (GatewayWindowsNamedPipeTransportException $exception) {
+                if (!$exception->retryable()) {
+                    throw $exception;
+                }
+                throw new \RuntimeException(
+                    'Native gateway guardian endpoint is unavailable: '
+                        . 'native named-pipe transport did not return an acknowledgement.',
+                    0,
+                    $exception,
+                );
+            }
+        } else {
+            $socket = @\stream_socket_client(
                 $endpoint['address'],
                 $errno,
                 $error,
                 $connectTimeout,
                 \STREAM_CLIENT_CONNECT,
             );
-        if (!\is_resource($socket)) {
-            throw new \RuntimeException(
-                'Native gateway guardian endpoint is unavailable: '
-                    . ($error !== '' ? $error : (string)$errno),
-            );
-        }
-        try {
-            $offset = 0;
-            while ($offset < \strlen($frame)) {
+            if (!\is_resource($socket)) {
+                throw new \RuntimeException(
+                    'Native gateway guardian endpoint is unavailable: '
+                        . ($error !== '' ? $error : (string)$errno),
+                );
+            }
+            try {
+                $offset = 0;
+                while ($offset < \strlen($frame)) {
+                    $this->setStreamDeadlineTimeout(
+                        $socket,
+                        \min(
+                            \max(0.001, $this->timeoutSeconds),
+                            $this->remainingDeadlineSeconds($deadlineMonotonic),
+                        ),
+                    );
+                    $written = @\fwrite($socket, \substr($frame, $offset));
+                    if (!\is_int($written) || $written < 1) {
+                        throw new \RuntimeException(
+                            'Unable to send emergency gateway revocation.',
+                        );
+                    }
+                    $offset += $written;
+                }
                 $this->setStreamDeadlineTimeout(
                     $socket,
                     \min(
@@ -114,24 +171,10 @@ final class GatewayEmergencyRevocationClient
                         $this->remainingDeadlineSeconds($deadlineMonotonic),
                     ),
                 );
-                $written = @\fwrite($socket, \substr($frame, $offset));
-                if (!\is_int($written) || $written < 1) {
-                    throw new \RuntimeException(
-                        'Unable to send emergency gateway revocation.',
-                    );
-                }
-                $offset += $written;
+                $line = @\fgets($socket, self::MAX_FRAME_BYTES + 1);
+            } finally {
+                @\fclose($socket);
             }
-            $this->setStreamDeadlineTimeout(
-                $socket,
-                \min(
-                    \max(0.001, $this->timeoutSeconds),
-                    $this->remainingDeadlineSeconds($deadlineMonotonic),
-                ),
-            );
-            $line = @\fgets($socket, self::MAX_FRAME_BYTES + 1);
-        } finally {
-            @\fclose($socket);
         }
         if (!\is_string($line)
             || !\str_ends_with($line, "\n")

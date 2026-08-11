@@ -73,7 +73,12 @@ final class SubprocessControlKernel
      * processes must not use instance JSON as runtime topology or recovery
      * consensus after this initial lookup.
      */
-    public static function resolveControlPort(string $instanceName, int $controlPort = 0, int $maxWaitSec = self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC): int
+    public static function resolveControlPort(
+        string $instanceName,
+        int $controlPort = 0,
+        int $maxWaitSec = self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC,
+        ?float $deadlineMonotonic = null,
+    ): int
     {
         // 优先级 1：命令行参数
         if ($controlPort > 0) {
@@ -82,7 +87,13 @@ final class SubprocessControlKernel
 
         $endpointFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
         $maxWaitSec = \max(0, \min(self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC, $maxWaitSec));
-        $deadline = ControlMessage::monotonicSeconds() + $maxWaitSec;
+        $nowMonotonic = ControlMessage::monotonicSeconds();
+        $deadline = $nowMonotonic + $maxWaitSec;
+        if ($deadlineMonotonic !== null) {
+            $deadline = \is_finite($deadlineMonotonic)
+                ? \min($deadline, $deadlineMonotonic)
+                : $nowMonotonic;
+        }
         $masterHeartbeatTimeout = self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC;
 
         // Wait for the Master endpoint pointer to appear during bootstrap.
@@ -109,7 +120,15 @@ final class SubprocessControlKernel
                 break;
             }
 
-            SchedulerSystem::usleep(self::CONTROL_PORT_POLL_USEC);
+            $sleepMicroseconds = self::boundedDeadlineSleepMicroseconds(
+                $deadline,
+                ControlMessage::monotonicSeconds(),
+                self::CONTROL_PORT_POLL_USEC,
+            );
+            if ($sleepMicroseconds < 1) {
+                break;
+            }
+            SchedulerSystem::usleep($sleepMicroseconds);
         } while (ControlMessage::monotonicSeconds() < $deadline);
 
         return 0;
@@ -140,9 +159,37 @@ final class SubprocessControlKernel
         return \min($delayMs, self::E2E_READY_DELAY_LIMIT_MS);
     }
 
-    public function connectAndRegister(int $controlPort, bool $sendReady = true): bool
+    public function connectAndRegister(
+        int $controlPort,
+        bool $sendReady = true,
+        ?float $deadlineMonotonic = null,
+    ): bool
+    {
+        $deadlineMonotonic = self::materializeDeadline(
+            $deadlineMonotonic,
+            self::CONTROL_CONNECT_SELF_HEAL_TIMEOUT_MS / 1000,
+        );
+        try {
+            return $this->connectAndRegisterBeforeDeadline(
+                $controlPort,
+                $sendReady,
+                $deadlineMonotonic,
+            );
+        } finally {
+            $this->setClientOperationDeadline(null);
+        }
+    }
+
+    private function connectAndRegisterBeforeDeadline(
+        int $controlPort,
+        bool $sendReady,
+        float $deadlineMonotonic,
+    ): bool
     {
         if ($controlPort <= 0 && !$this->shouldUseSupervisorTransport() && !\is_callable($this->clientFactory)) {
+            return false;
+        }
+        if (self::deadlineIsExhausted($deadlineMonotonic)) {
             return false;
         }
 
@@ -157,6 +204,9 @@ final class SubprocessControlKernel
         $lastError = '';
 
         while ($retryAttempt < $maxStartupRetries) {
+            if (self::deadlineIsExhausted($deadlineMonotonic)) {
+                return false;
+            }
             $retryAttempt++;
             $client = $this->createClient();
             if ($client instanceof SupervisorChildClient) {
@@ -165,8 +215,15 @@ final class SubprocessControlKernel
                     $helloAuthSecret !== ''
                         || $this->identity->role === ControlMessage::ROLE_GATEWAY_AGENT,
                 );
+            } elseif ($client instanceof ControlClient) {
+                // Windows and explicit classic-TCP deployments do not use the
+                // Supervisor transport. Authenticate the same managed-child
+                // launch tuple during REGISTER instead of trusting role/PID
+                // fields supplied by an arbitrary loopback client.
+                $client->setManagedChildCredential($helloAuthSecret);
             }
             $this->client = $client;
+            $this->setClientOperationDeadline($deadlineMonotonic);
             if ($client instanceof BeforeReadyGuardAwareClientInterface) {
                 $client->setBeforeReadyGuard($this->beforeReadyGuard);
             }
@@ -195,12 +252,19 @@ final class SubprocessControlKernel
             });
 
             $this->lastControlPort = $controlPort;
-            if (!$client->connect('127.0.0.1', $controlPort)) {
+            if (self::deadlineIsExhausted($deadlineMonotonic)
+                || !$client->connect('127.0.0.1', $controlPort)
+            ) {
                 $connectError = \method_exists($client, 'getLastConnectError') ? (string) $client->getLastConnectError() : '';
                 $lastError = $connectError !== '' ? "[连接失败: {$connectError}]" : '[连接失败]';
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("连接 Master 失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试... {$lastError}");
-                    SchedulerSystem::usleep($retryDelayMs * 1000);
+                    if (!self::sleepBeforeDeadline(
+                        $deadlineMonotonic,
+                        $retryDelayMs * 1000,
+                    )) {
+                        return false;
+                    }
                     continue;
                 }
                 $this->log("连接 Master 失败，次数上限已达 {$maxStartupRetries}，{$lastError}");
@@ -219,23 +283,38 @@ final class SubprocessControlKernel
                 $this->instanceCode,
                 $this->identity->launchId !== '' ? $this->identity->launchId : ''
             );
-            if (!$registered) {
+            if (self::deadlineIsExhausted($deadlineMonotonic) || !$registered) {
                 $lastError = "[注册失败]";
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("向 Master 注册失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    SchedulerSystem::usleep($retryDelayMs * 1000);
+                    if (!self::sleepBeforeDeadline(
+                        $deadlineMonotonic,
+                        $retryDelayMs * 1000,
+                    )) {
+                        return false;
+                    }
                     continue;
                 }
                 return false;
             }
             
-            if (!$client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC)) {
+            if (self::deadlineIsExhausted($deadlineMonotonic)
+                || !$client->flushPendingWrites(self::remainingLocalBudget(
+                    $deadlineMonotonic,
+                    self::IPC_FLUSH_BUDGET_SEC,
+                ))
+            ) {
                 $lastError = "[刷新缓冲失败]";
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("向 Master 发送消息失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    SchedulerSystem::usleep($retryDelayMs * 1000);
+                    if (!self::sleepBeforeDeadline(
+                        $deadlineMonotonic,
+                        $retryDelayMs * 1000,
+                    )) {
+                        return false;
+                    }
                     continue;
                 }
                 return false;
@@ -246,7 +325,10 @@ final class SubprocessControlKernel
                 return true;
             }
 
-            $this->applyE2EReadyDelayIfNeeded();
+            if (!$this->applyE2EReadyDelayIfNeeded($deadlineMonotonic)) {
+                $client->close();
+                return false;
+            }
 
             $ready = $client->sendReady(
                 $this->identity->role,
@@ -256,23 +338,38 @@ final class SubprocessControlKernel
                 $this->identity->launchId,
                 $this->identity->launchId !== '' ? $this->identity->launchId : ''
             );
-            if (!$ready) {
+            if (self::deadlineIsExhausted($deadlineMonotonic) || !$ready) {
                 $lastError = "[Ready 消息失败]";
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("发送 Ready 消息失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    SchedulerSystem::usleep($retryDelayMs * 1000);
+                    if (!self::sleepBeforeDeadline(
+                        $deadlineMonotonic,
+                        $retryDelayMs * 1000,
+                    )) {
+                        return false;
+                    }
                     continue;
                 }
                 return false;
             }
             
-            if (!$client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC)) {
+            if (self::deadlineIsExhausted($deadlineMonotonic)
+                || !$client->flushPendingWrites(self::remainingLocalBudget(
+                    $deadlineMonotonic,
+                    self::IPC_FLUSH_BUDGET_SEC,
+                ))
+            ) {
                 $lastError = "[Ready 刷新失败]";
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("发送 Ready 消息后刷新失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    SchedulerSystem::usleep($retryDelayMs * 1000);
+                    if (!self::sleepBeforeDeadline(
+                        $deadlineMonotonic,
+                        $retryDelayMs * 1000,
+                    )) {
+                        return false;
+                    }
                     continue;
                 }
                 return false;
@@ -315,36 +412,78 @@ final class SubprocessControlKernel
         );
     }
 
-    public function sendReady(): bool
+    public function sendReady(?float $deadlineMonotonic = null): bool
     {
         if ($this->client === null || !$this->client->isConnected()) {
             return false;
         }
 
-        $this->applyE2EReadyDelayIfNeeded();
-        if (!$this->client->sendReady(
-            $this->identity->role,
-            $this->identity->workerId,
-            $this->identity->port,
-            $this->identity->epoch,
-            $this->identity->launchId,
-            $this->identity->launchId !== '' ? $this->identity->launchId : ''
-        )) {
+        if ($deadlineMonotonic !== null
+            && self::deadlineIsExhausted($deadlineMonotonic)
+        ) {
             return false;
         }
+        $this->setClientOperationDeadline($deadlineMonotonic);
+        try {
+            if (!$this->applyE2EReadyDelayIfNeeded($deadlineMonotonic)) {
+                return false;
+            }
+            if (!$this->client->sendReady(
+                $this->identity->role,
+                $this->identity->workerId,
+                $this->identity->port,
+                $this->identity->epoch,
+                $this->identity->launchId,
+                $this->identity->launchId !== '' ? $this->identity->launchId : ''
+            )) {
+                return false;
+            }
+            if ($deadlineMonotonic !== null
+                && self::deadlineIsExhausted($deadlineMonotonic)
+            ) {
+                return false;
+            }
 
-        return $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
+            $flushBudget = $deadlineMonotonic === null
+                ? self::IPC_FLUSH_BUDGET_SEC
+                : self::remainingLocalBudget(
+                    $deadlineMonotonic,
+                    self::IPC_FLUSH_BUDGET_SEC,
+                );
+            return $flushBudget > 0.0
+                && $this->client->flushPendingWrites($flushBudget);
+        } finally {
+            $this->setClientOperationDeadline(null);
+        }
     }
 
-    private function applyE2EReadyDelayIfNeeded(): void
+    private function applyE2EReadyDelayIfNeeded(
+        ?float $deadlineMonotonic = null,
+    ): bool
     {
         $delayMs = self::resolveReadyDelayMilliseconds($this->identity->role);
         if ($delayMs <= 0) {
-            return;
+            return $deadlineMonotonic === null
+                || !self::deadlineIsExhausted($deadlineMonotonic);
         }
 
         $this->log("E2E startup hook: delaying READY by {$delayMs}ms");
-        SchedulerSystem::usleep($delayMs * 1000);
+        if ($deadlineMonotonic === null) {
+            SchedulerSystem::usleep($delayMs * 1000);
+            return true;
+        }
+
+        $delayMicroseconds = $delayMs * 1000;
+        if (self::boundedDeadlineSleepMicroseconds(
+            $deadlineMonotonic,
+            ControlMessage::monotonicSeconds(),
+            $delayMicroseconds,
+        ) < $delayMicroseconds) {
+            return false;
+        }
+        SchedulerSystem::usleep($delayMicroseconds);
+
+        return !self::deadlineIsExhausted($deadlineMonotonic);
     }
 
     public function tick(): void
@@ -366,12 +505,25 @@ final class SubprocessControlKernel
         return $this->client !== null && $this->client->hasPendingWrites();
     }
 
-    public function reconnect(): bool
+    public function reconnect(?float $deadlineMonotonic = null): bool
     {
         if ($this->client === null) {
             return false;
         }
-        return $this->client->tryReconnect();
+        if ($deadlineMonotonic !== null
+            && self::deadlineIsExhausted($deadlineMonotonic)
+        ) {
+            return false;
+        }
+        $this->setClientOperationDeadline($deadlineMonotonic);
+        try {
+            $reconnected = $this->client->tryReconnect();
+            return $reconnected
+                && ($deadlineMonotonic === null
+                    || !self::deadlineIsExhausted($deadlineMonotonic));
+        } finally {
+            $this->setClientOperationDeadline(null);
+        }
     }
 
     public function isConnected(): bool
@@ -504,6 +656,81 @@ final class SubprocessControlKernel
     public function log(string $message): void
     {
         WlsLogger::info_("[{$this->selfTag}] {$message}");
+    }
+
+    private function setClientOperationDeadline(?float $deadlineMonotonic): void
+    {
+        if ($this->client instanceof OperationDeadlineAwareClientInterface) {
+            $this->client->setOperationDeadlineMonotonic($deadlineMonotonic);
+        }
+    }
+
+    private static function materializeDeadline(
+        ?float $deadlineMonotonic,
+        float $defaultTimeoutSeconds,
+    ): float {
+        if ($deadlineMonotonic !== null) {
+            return $deadlineMonotonic;
+        }
+
+        return ControlMessage::monotonicSeconds()
+            + \max(0.0, $defaultTimeoutSeconds);
+    }
+
+    private static function deadlineIsExhausted(float $deadlineMonotonic): bool
+    {
+        return !\is_finite($deadlineMonotonic)
+            || $deadlineMonotonic <= ControlMessage::monotonicSeconds();
+    }
+
+    private static function remainingLocalBudget(
+        float $deadlineMonotonic,
+        float $localBudgetSeconds,
+    ): float {
+        if (!\is_finite($deadlineMonotonic)) {
+            return 0.0;
+        }
+
+        return \max(0.0, \min(
+            \max(0.0, $localBudgetSeconds),
+            $deadlineMonotonic - ControlMessage::monotonicSeconds(),
+        ));
+    }
+
+    private static function boundedDeadlineSleepMicroseconds(
+        float $deadlineMonotonic,
+        float $monotonicNow,
+        int $maximumMicroseconds,
+    ): int {
+        if (!\is_finite($deadlineMonotonic)
+            || !\is_finite($monotonicNow)
+            || $maximumMicroseconds < 1
+            || $deadlineMonotonic <= $monotonicNow
+        ) {
+            return 0;
+        }
+        $remainingMicroseconds = (int)\floor(
+            ($deadlineMonotonic - $monotonicNow) * 1_000_000,
+        );
+
+        return \min($maximumMicroseconds, \max(0, $remainingMicroseconds));
+    }
+
+    private static function sleepBeforeDeadline(
+        float $deadlineMonotonic,
+        int $maximumMicroseconds,
+    ): bool {
+        $sleepMicroseconds = self::boundedDeadlineSleepMicroseconds(
+            $deadlineMonotonic,
+            ControlMessage::monotonicSeconds(),
+            $maximumMicroseconds,
+        );
+        if ($sleepMicroseconds < 1) {
+            return false;
+        }
+        SchedulerSystem::usleep($sleepMicroseconds);
+
+        return !self::deadlineIsExhausted($deadlineMonotonic);
     }
 
     private function shouldUseSupervisorTransport(): bool

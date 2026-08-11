@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service\Edge\Nginx;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxInstaller;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
 
@@ -213,6 +214,215 @@ final class ManagedNginxInstallerAtomicRecoveryTest extends TestCase
         self::assertFileExists($this->paths->binary());
     }
 
+    public function testPublicationRetriesTransientDirectorySyncAfterExactRename(): void
+    {
+        $candidate = $this->createValidInstallCandidate(\str_repeat('5', 16));
+        $syncs = 0;
+        $installer = new ManagedNginxInstaller(
+            $this->paths,
+            static function (string $directory) use (&$syncs): void {
+                ++$syncs;
+                if ($syncs === 2) {
+                    throw new \RuntimeException('injected transient directory sync failure');
+                }
+                GatewayProjectStateFilesystem::syncDirectory($directory);
+            },
+        );
+
+        (new \ReflectionMethod($installer, 'publishInstallCandidate'))->invoke(
+            $installer,
+            $candidate,
+            $this->paths->installRoot(),
+            true,
+        );
+
+        self::assertGreaterThanOrEqual(4, $syncs);
+        self::assertDirectoryDoesNotExist($candidate);
+        self::assertDirectoryDoesNotExist($this->paths->installRoot() . '.wls-rollback');
+        self::assertFileExists($this->paths->binary());
+        self::assertTrue($installer->ensureInstalled()['ok']);
+    }
+
+    public function testPersistentCandidatePublishSyncFailurePreservesVerifiedAfterImageAndRollback(): void
+    {
+        $candidate = $this->createValidInstallCandidate(\str_repeat('6', 16));
+        $syncs = 0;
+        $installer = new ManagedNginxInstaller(
+            $this->paths,
+            static function (string $directory) use (&$syncs): void {
+                ++$syncs;
+                if ($syncs >= 2) {
+                    throw new \RuntimeException('injected persistent directory sync failure');
+                }
+                GatewayProjectStateFilesystem::syncDirectory($directory);
+            },
+        );
+
+        $failure = null;
+        try {
+            (new \ReflectionMethod($installer, 'publishInstallCandidate'))->invoke(
+                $installer,
+                $candidate,
+                $this->paths->installRoot(),
+                true,
+            );
+        } catch (\Throwable $throwable) {
+            $failure = $throwable;
+        }
+
+        self::assertInstanceOf(\RuntimeException::class, $failure);
+        self::assertStringContainsString('parent-directory sync failed', $failure->getMessage());
+        self::assertDirectoryDoesNotExist($candidate);
+        self::assertFileExists($this->paths->binary());
+        self::assertDirectoryExists($this->paths->installRoot() . '.wls-rollback');
+
+        $recovered = (new ManagedNginxInstaller($this->paths))->ensureInstalled();
+
+        self::assertTrue($recovered['ok'], (string)($recovered['message'] ?? 'recovery failed'));
+        self::assertDirectoryDoesNotExist($this->paths->installRoot() . '.wls-rollback');
+        self::assertFileExists($this->paths->binary());
+    }
+
+    public function testRollbackRestorationRetriesTransientDirectorySync(): void
+    {
+        $rollback = $this->paths->installRoot() . '.wls-rollback';
+        self::assertTrue(\rename($this->paths->installRoot(), $rollback));
+        $syncs = 0;
+        $installer = new ManagedNginxInstaller(
+            $this->paths,
+            static function (string $directory) use (&$syncs): void {
+                ++$syncs;
+                if ($syncs === 1) {
+                    throw new \RuntimeException('injected transient rollback sync failure');
+                }
+                GatewayProjectStateFilesystem::syncDirectory($directory);
+            },
+        );
+
+        $result = $installer->ensureInstalled();
+
+        self::assertTrue($result['ok'], (string)($result['message'] ?? 'recovery failed'));
+        self::assertSame(2, $syncs);
+        self::assertDirectoryDoesNotExist($rollback);
+        self::assertFileExists($this->paths->binary());
+    }
+
+    public function testNeverCreatedInstallParentNeedsNoRecoveryBarrier(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows install roots ignore the project-relative install_root fixture.');
+        }
+        $paths = new ManagedNginxPaths($this->root, [
+            'install_root' => 'never-created/nginx-install',
+            'runtime_root' => 'never-created-runtime',
+        ]);
+        $syncs = 0;
+        $installer = new ManagedNginxInstaller(
+            $paths,
+            static function (string $directory) use (&$syncs): void {
+                ++$syncs;
+                GatewayProjectStateFilesystem::syncDirectory($directory);
+            },
+        );
+
+        (new \ReflectionMethod($installer, 'reconcileInterruptedInstallPublication'))
+            ->invoke($installer);
+
+        self::assertSame(0, $syncs);
+        self::assertDirectoryDoesNotExist(\dirname($paths->installRoot()));
+    }
+
+    public function testValidPrefixCollectsPartialRollbackCleanupResidue(): void
+    {
+        $rollback = $this->paths->installRoot() . '.wls-rollback';
+        self::assertTrue(\mkdir(
+            $rollback . DIRECTORY_SEPARATOR . 'partial',
+            0700,
+            true,
+        ));
+        self::assertSame(8, \file_put_contents(
+            $rollback . DIRECTORY_SEPARATOR . 'partial' . DIRECTORY_SEPARATOR . 'evidence',
+            'retained',
+        ));
+
+        $result = $this->installer->ensureInstalled();
+
+        self::assertTrue($result['ok'], (string)($result['message'] ?? 'recovery failed'));
+        self::assertDirectoryDoesNotExist($rollback);
+        self::assertFileExists($this->paths->binary());
+    }
+
+    public function testDownloadPublicationRetriesTransientDirectorySync(): void
+    {
+        $cache = $this->root . DIRECTORY_SEPARATOR . 'download-cache';
+        self::assertTrue(\mkdir($cache, 0700));
+        $temporary = $cache . DIRECTORY_SEPARATOR . 'nginx.tar.gz.part';
+        $destination = $cache . DIRECTORY_SEPARATOR . 'nginx.tar.gz';
+        self::assertSame(2048, \file_put_contents($temporary, \str_repeat('d', 2048)));
+        $syncs = 0;
+        $installer = new ManagedNginxInstaller(
+            $this->paths,
+            static function (string $directory) use (&$syncs): void {
+                ++$syncs;
+                if ($syncs === 1) {
+                    throw new \RuntimeException('injected transient download sync failure');
+                }
+                GatewayProjectStateFilesystem::syncDirectory($directory);
+            },
+        );
+
+        (new \ReflectionMethod($installer, 'publishDownloadedFile'))->invoke(
+            $installer,
+            $temporary,
+            $destination,
+        );
+
+        self::assertSame(2, $syncs);
+        self::assertFileDoesNotExist($temporary);
+        self::assertSame(\str_repeat('d', 2048), \file_get_contents($destination));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertSame(0600, ((int)\fileperms($destination)) & 0777);
+        }
+    }
+
+    public function testDownloadCollisionCleanupRetriesTransientDirectorySync(): void
+    {
+        $cache = $this->root . DIRECTORY_SEPARATOR . 'download-collision-cache';
+        self::assertTrue(\mkdir($cache, 0700));
+        $temporary = $cache . DIRECTORY_SEPARATOR . 'nginx.tar.gz.part';
+        $destination = $cache . DIRECTORY_SEPARATOR . 'nginx.tar.gz';
+        self::assertSame(2048, \file_put_contents($temporary, \str_repeat('t', 2048)));
+        self::assertSame(2048, \file_put_contents($destination, \str_repeat('o', 2048)));
+        $syncs = 0;
+        $installer = new ManagedNginxInstaller(
+            $this->paths,
+            static function (string $directory) use (&$syncs): void {
+                ++$syncs;
+                if ($syncs === 1) {
+                    throw new \RuntimeException('injected transient cleanup sync failure');
+                }
+                GatewayProjectStateFilesystem::syncDirectory($directory);
+            },
+        );
+
+        $failure = null;
+        try {
+            (new \ReflectionMethod($installer, 'publishDownloadedFile'))->invoke(
+                $installer,
+                $temporary,
+                $destination,
+            );
+        } catch (\Throwable $throwable) {
+            $failure = $throwable;
+        }
+
+        self::assertInstanceOf(\RuntimeException::class, $failure);
+        self::assertStringContainsString('destination appeared', $failure->getMessage());
+        self::assertSame(2, $syncs);
+        self::assertFileDoesNotExist($temporary);
+        self::assertSame(\str_repeat('o', 2048), \file_get_contents($destination));
+    }
+
     public function testInvalidCommittedInstallPreservesCrashCandidate(): void
     {
         $candidate = \dirname($this->paths->installRoot()) . DIRECTORY_SEPARATOR
@@ -314,6 +524,24 @@ final class ManagedNginxInstallerAtomicRecoveryTest extends TestCase
         self::assertTrue($result['ok'], (string)$result['message']);
         self::assertStringContainsString('legacy manifest upgraded', (string)$result['message']);
         self::assertDirectoryDoesNotExist($candidate);
+    }
+
+    private function createValidInstallCandidate(string $token): string
+    {
+        self::assertMatchesRegularExpression('/\A[a-f0-9]{16}\z/D', $token);
+        $prefix = $this->paths->installRoot();
+        $candidate = \dirname($prefix) . DIRECTORY_SEPARATOR
+            . 'install-candidate-' . $token;
+        $relativeBinary = \substr($this->paths->binary(), \strlen($prefix) + 1);
+        $candidateBinary = $candidate . DIRECTORY_SEPARATOR . $relativeBinary;
+        self::assertTrue(\mkdir(\dirname($candidateBinary), 0700, true));
+        self::assertTrue(\copy($this->paths->binary(), $candidateBinary));
+        self::assertTrue(\chmod($candidateBinary, 0700));
+        self::assertTrue(\copy(
+            $this->paths->manifestFile(),
+            $candidate . DIRECTORY_SEPARATOR . \basename($this->paths->manifestFile()),
+        ));
+        return $candidate;
     }
 
     private function writeValidManifest(): void

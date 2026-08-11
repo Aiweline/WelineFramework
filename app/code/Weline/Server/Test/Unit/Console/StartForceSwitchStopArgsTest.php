@@ -126,7 +126,6 @@ final class StartForceSwitchStopArgsTest extends TestCase
             'weline-wls-redirect',
             'weline-wls-worker',
             'weline-wls-maintenance',
-            'weline-wls-gateway',
             'weline-wls-runtime-watchdog',
         ] as $expectedPrefix) {
             self::assertStringContainsString($expectedPrefix, $joined);

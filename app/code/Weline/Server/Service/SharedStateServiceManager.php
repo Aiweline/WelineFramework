@@ -527,7 +527,11 @@ class SharedStateServiceManager
                 $runtime['healthy_at'] = \date('c');
                 $runtime['created_now'] = true;
                 $runtime['shared_service'] = true;
-                $this->writeRuntimeFile($roleKey, $runtime);
+                $runtime = $this->selectLifecycleGeneration(
+                    $roleKey,
+                    $runtime,
+                    $this->createRegistry(),
+                );
                 $done[$roleKey] = $runtime;
                 unset($pending[$roleKey]);
             }
@@ -2395,11 +2399,29 @@ class SharedStateServiceManager
 
         $registry = $this->createRegistry();
         $previousRuntime = $this->readRuntimeFile($role);
-        $authority = self::highestLifecycleAuthority(
-            $role,
-            $registry->getRecord($role),
-            $previousRuntime,
-        );
+        $record = $registry->getRecord($role);
+        try {
+            $authority = self::highestLifecycleAuthority(
+                $role,
+                $record,
+                $previousRuntime,
+            );
+        } catch (\RuntimeException $exception) {
+            $authority = self::authenticatedConflictRecoveryAuthority(
+                $role,
+                $record,
+                $previousRuntime,
+                $runtime,
+            );
+            if ($authority === []) {
+                throw $exception;
+            }
+            unset(
+                $runtime['lifecycle_schema'],
+                $runtime['lifecycle_generation'],
+                $runtime['lifecycle_identity_digest'],
+            );
+        }
         $candidateBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
             $role,
             $runtime,
@@ -2430,6 +2452,58 @@ class SharedStateServiceManager
         }
 
         return $runtime;
+    }
+
+    /**
+     * An authenticated live sidecar is a stronger identity observation than
+     * two stale files that disagree at the same generation. Use one of the
+     * conflicting tuples only as the monotonic generation floor; the caller
+     * will publish the verified identity at the next generation. Read-only,
+     * stop and unauthenticated paths continue to fail closed.
+     *
+     * @param array<string,mixed> $record
+     * @param array<string,mixed> $previousRuntime
+     * @param array<string,mixed> $candidate
+     * @return array<string,mixed>
+     */
+    private static function authenticatedConflictRecoveryAuthority(
+        string $role,
+        array $record,
+        array $previousRuntime,
+        array $candidate,
+    ): array {
+        if (($candidate['_authenticated_identity_verified'] ?? false) !== true
+            || !SharedStateServiceRegistry::hasExactLifecycleBinding($role, $record)
+            || !SharedStateServiceRegistry::hasExactLifecycleBinding($role, $previousRuntime)
+        ) {
+            return [];
+        }
+        $recordGeneration = (int)($record['lifecycle_generation'] ?? 0);
+        $runtimeGeneration = (int)($previousRuntime['lifecycle_generation'] ?? 0);
+        $recordDigest = (string)($record['lifecycle_identity_digest'] ?? '');
+        $runtimeDigest = (string)($previousRuntime['lifecycle_identity_digest'] ?? '');
+        if ($recordGeneration < 1
+            || $recordGeneration !== $runtimeGeneration
+            || \hash_equals($recordDigest, $runtimeDigest)
+        ) {
+            return [];
+        }
+        $candidateDigest = SharedStateServiceRegistry::lifecycleIdentityDigest(
+            $role,
+            $candidate,
+        );
+        if ($candidateDigest === '') {
+            return [];
+        }
+        foreach ([$record, $previousRuntime] as $authority) {
+            if (!\hash_equals(
+                (string)($authority['lifecycle_identity_digest'] ?? ''),
+                $candidateDigest,
+            )) {
+                return $authority;
+            }
+        }
+        return [];
     }
 
     /**

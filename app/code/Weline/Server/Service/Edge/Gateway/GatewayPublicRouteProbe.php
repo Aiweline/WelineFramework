@@ -33,6 +33,7 @@ final class GatewayPublicRouteProbe
         array $registration,
         int $httpsPort,
         ?array $activeRouteIds = null,
+        ?float $deadlineMonotonic = null,
     ): bool
     {
         if ($httpsPort < 1 || $httpsPort > 65535) {
@@ -96,6 +97,15 @@ final class GatewayPublicRouteProbe
         );
         $startedAt = $this->monotonicNow();
         $deadline = $startedAt + self::PROBE_BUDGET_SECONDS;
+        if ($deadlineMonotonic !== null) {
+            if (!\is_finite($deadlineMonotonic)) {
+                return false;
+            }
+            $deadline = \min($deadline, $deadlineMonotonic);
+        }
+        if ($deadline <= $startedAt) {
+            return false;
+        }
         $routes = $probeRoutes;
         $count = \count($routes);
         $start = $this->routeCursor % $count;
@@ -201,21 +211,21 @@ final class GatewayPublicRouteProbe
                 'SNI_enabled' => true,
                 'capture_peer_cert' => true,
                 'verify_peer' => false,
-                'verify_peer_name' => false,
+                'verify_peer_name' => true,
                 'allow_self_signed' => true,
                 'disable_compression' => true,
                 'crypto_method' => \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
             ],
         ]);
         $remaining = $deadline - $this->monotonicNow();
-        if ($remaining <= 0.0) {
+        if ($remaining < 0.001) {
             return false;
         }
         $socket = @\stream_socket_client(
             'tls://127.0.0.1:' . $httpsPort,
             $errno,
             $error,
-            \max(0.001, \min(0.25, $remaining)),
+            \min(0.25, $remaining),
             STREAM_CLIENT_CONNECT,
             $context,
         );
@@ -502,10 +512,15 @@ final class GatewayPublicRouteProbe
             return false;
         }
         $seconds = (int)\floor($remaining);
-        $microseconds = (int)\max(
-            1,
-            \min(999_999, \ceil(($remaining - $seconds) * 1_000_000)),
+        $microseconds = (int)\ceil(
+            ($remaining - $seconds) * 1_000_000,
         );
+        if ($microseconds >= 1_000_000) {
+            $seconds++;
+            $microseconds = 0;
+        } elseif ($seconds === 0 && $microseconds < 1) {
+            $microseconds = 1;
+        }
         return @\stream_set_timeout($socket, $seconds, $microseconds);
     }
 

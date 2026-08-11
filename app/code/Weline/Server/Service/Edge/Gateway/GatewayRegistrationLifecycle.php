@@ -231,8 +231,11 @@ final class GatewayRegistrationLifecycle
      *
      * @return array{nonce:string,previous_state:string,attempt_sequence:int,fact:array<string,mixed>,endpoint:array<string,mixed>}
      */
-    public function claimRetirement(string $instanceName): array
-    {
+    public function claimRetirement(
+        string $instanceName,
+        float $waitTimeoutSeconds = 5.0,
+        ?float $deadlineMonotonic = null,
+    ): array {
         self::assertInstanceName($instanceName);
         $nonce = \bin2hex(\random_bytes(16));
         $result = [];
@@ -287,8 +290,8 @@ final class GatewayRegistrationLifecycle
                 ];
                 return $endpoint;
             },
-            5.0,
-            null,
+            $waitTimeoutSeconds,
+            $deadlineMonotonic,
             static function (array $endpoint) use (&$result): ?bool {
                 $expected = \is_array($result['fact'] ?? null)
                     ? $result['fact']
@@ -304,13 +307,22 @@ final class GatewayRegistrationLifecycle
         return $result;
     }
 
-    public function cancelRetirement(string $instanceName, string $nonce): bool
-    {
+    public function cancelRetirement(
+        string $instanceName,
+        string $nonce,
+        float $waitTimeoutSeconds = self::CLEANUP_LOCK_WAIT_SECONDS,
+        ?float $cleanupDeadlineMonotonic = null,
+    ): bool {
         self::assertInstanceName($instanceName);
         $nonce = \strtolower(\trim($nonce));
         if (\preg_match('/\A[a-f0-9]{32}\z/D', $nonce) !== 1) {
             return false;
         }
+        // Cancellation is failure compensation after the retirement operation
+        // has stopped. It must not inherit an already-exhausted host deadline,
+        // but it also must never regain the old five-minute lock default.
+        $cleanupDeadlineMonotonic ??= $this->monotonicNow()
+            + self::CLEANUP_DEADLINE_SECONDS;
         $cancelled = false;
         $expectedFact = [];
         $this->update(
@@ -377,8 +389,8 @@ final class GatewayRegistrationLifecycle
                 $cancelled = true;
                 return $endpoint;
             },
-            5.0,
-            null,
+            $waitTimeoutSeconds,
+            $cleanupDeadlineMonotonic,
             static function (array $endpoint) use (&$expectedFact): ?bool {
                 return $expectedFact === []
                     ? null
@@ -398,12 +410,20 @@ final class GatewayRegistrationLifecycle
         string $instanceName,
         string $nonce,
         string $reason,
+        float $waitTimeoutSeconds = self::CLEANUP_LOCK_WAIT_SECONDS,
+        ?float $cleanupDeadlineMonotonic = null,
     ): bool {
         self::assertInstanceName($instanceName);
         $nonce = \strtolower(\trim($nonce));
         if (\preg_match('/\A[a-f0-9]{32}\z/D', $nonce) !== 1) {
             return false;
         }
+        // Host retirement/absence is already authoritative at this point.
+        // Persist the local terminal fact under a fresh, deliberately tiny
+        // compensation budget instead of laundering the expired host budget
+        // or waiting long enough for a later launch to replace the fence.
+        $cleanupDeadlineMonotonic ??= $this->monotonicNow()
+            + self::CLEANUP_DEADLINE_SECONDS;
         $reason = self::boundedReason($reason);
         $completed = false;
         $expectedFact = [];
@@ -449,8 +469,8 @@ final class GatewayRegistrationLifecycle
                 $completed = true;
                 return $endpoint;
             },
-            5.0,
-            null,
+            $waitTimeoutSeconds,
+            $cleanupDeadlineMonotonic,
             static function (array $endpoint) use (&$expectedFact): ?bool {
                 return $expectedFact === []
                     ? null

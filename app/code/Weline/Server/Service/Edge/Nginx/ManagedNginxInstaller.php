@@ -50,8 +50,10 @@ final class ManagedNginxInstaller
     /** Official Windows zip SHA-256 (nginx.org release package). */
     public const WINDOWS_ZIP_SHA256 = '159294214d403f34f0bb4ae598801ab1f6a0d8c8da707f8f08748e294a222a01';
 
-    public function __construct(private readonly ManagedNginxPaths $paths = new ManagedNginxPaths())
-    {
+    public function __construct(
+        private readonly ManagedNginxPaths $paths = new ManagedNginxPaths(),
+        private readonly ?\Closure $directorySynchronizer = null,
+    ) {
     }
 
     /**
@@ -586,6 +588,23 @@ final class ManagedNginxInstaller
         $prefix = $this->paths->installRoot();
         $rollback = $prefix . '.wls-rollback';
         if (!\file_exists($rollback) && !\is_link($rollback)) {
+            // A prior rename/unlink may have reached its exact after-image but
+            // reported an indeterminate parent-directory barrier. Repeating the
+            // barrier here makes an observed valid install or exact absence
+            // durable before it is used as recovery authority.
+            if ($this->committedInstallPrefixFullyValid()
+                || (!\file_exists($prefix) && !\is_link($prefix))
+            ) {
+                $parent = \dirname($prefix);
+                // A never-installed project may not have created the managed
+                // parent yet; there is no namespace mutation to synchronize.
+                if (\is_array(@\lstat($parent))
+                    || \file_exists($parent)
+                    || \is_link($parent)
+                ) {
+                    $this->syncInstallerDirectory($parent);
+                }
+            }
             return;
         }
         if (\PHP_OS_FAMILY !== 'Windows') {
@@ -594,20 +613,32 @@ final class ManagedNginxInstaller
         if (!\is_dir($rollback) || \is_link($rollback)) {
             throw new \RuntimeException('The managed nginx rollback slot is linked or special.');
         }
-        if (!$this->managedRollbackMatches($rollback)) {
-            throw new \RuntimeException(
-                'The managed nginx rollback slot has no complete WLS ownership proof; manual recovery is required.'
-            );
-        }
-
         if (!\file_exists($prefix) && !\is_link($prefix)) {
-            if (!@\rename($rollback, $prefix)) {
-                throw new \RuntimeException('Unable to restore the verified managed nginx rollback slot.');
+            if (!$this->managedRollbackMatches($rollback)) {
+                throw new \RuntimeException(
+                    'The managed nginx rollback slot has no complete WLS ownership proof; manual recovery is required.'
+                );
             }
+            $this->durablyRenameInstallerPath(
+                $rollback,
+                $prefix,
+                true,
+                'verified managed nginx rollback restoration',
+            );
             if (!$this->paths->isInstalled() || !$this->manifestMatches()) {
-                if (!@\rename($prefix, $rollback)) {
+                try {
+                    $this->durablyRenameInstallerPath(
+                        $prefix,
+                        $rollback,
+                        true,
+                        'invalid managed nginx rollback restoration reversal',
+                    );
+                } catch (\Throwable $rollbackFailure) {
                     throw new \RuntimeException(
-                        'Restored managed nginx rollback failed verification and could not be returned to its slot.'
+                        'Restored managed nginx rollback failed verification and could not be returned to its slot: '
+                            . $rollbackFailure->getMessage(),
+                        0,
+                        $rollbackFailure,
                     );
                 }
                 throw new \RuntimeException('Restored managed nginx rollback failed verification.');
@@ -625,7 +656,15 @@ final class ManagedNginxInstaller
                 'Both managed nginx target and rollback slots exist, but the target is invalid; manual recovery is required.'
             );
         }
-        $this->removeTree($rollback);
+        // Once the committed prefix is complete, the rollback namespace is no
+        // longer authority. It may be only a bounded partial tree if cleanup
+        // was interrupted; requiring its manifest to remain complete would
+        // strand an otherwise healthy installation forever.
+        $this->assertSafeTree($rollback, 'managed nginx obsolete rollback slot');
+        $this->removeTreeDurably(
+            $rollback,
+            'managed nginx obsolete rollback slot',
+        );
     }
 
     /**
@@ -705,7 +744,10 @@ final class ManagedNginxInstaller
             );
         }
         foreach ($candidates as $candidate) {
-            $this->removeTree($candidate);
+            $this->removeTreeDurably(
+                $candidate,
+                'managed nginx interrupted install candidate',
+            );
         }
     }
 
@@ -1574,6 +1616,12 @@ final class ManagedNginxInstaller
             throw new \RuntimeException('Managed nginx install candidate is linked, missing, or special.');
         }
         $this->assertSafeTree($candidate, 'managed nginx install candidate');
+        $candidateIdentity = @\lstat($candidate);
+        if (!\is_array($candidateIdentity)) {
+            throw new \RuntimeException(
+                'Managed nginx install candidate disappeared before publication.'
+            );
+        }
         if (\file_exists($prefix) || \is_link($prefix)) {
             if (!$hadPrevious || \is_link($prefix)) {
                 throw new \RuntimeException('Managed nginx install target is linked or special.');
@@ -1592,22 +1640,49 @@ final class ManagedNginxInstaller
                 'Managed nginx rollback slot is occupied; interrupted-publication recovery must complete first.'
             );
         }
-        if ($hadPrevious && !@\rename($prefix, $rollback)) {
-            throw new \RuntimeException('Unable to stage the existing managed nginx install for rollback.');
+        if ($hadPrevious) {
+            $this->durablyRenameInstallerPath(
+                $prefix,
+                $rollback,
+                true,
+                'existing managed nginx install rollback staging',
+            );
         }
 
         try {
-            if (!@\rename($candidate, $prefix)) {
-                throw new \RuntimeException('Unable to atomically publish the managed nginx install candidate.');
-            }
+            $this->durablyRenameInstallerPath(
+                $candidate,
+                $prefix,
+                true,
+                'managed nginx install candidate publication',
+            );
             if (!$this->paths->isInstalled() || !$this->manifestMatches()) {
                 throw new \RuntimeException('Published managed nginx install failed binary/manifest validation.');
             }
         } catch (\Throwable $e) {
+            $publishedCandidate = @\lstat($prefix);
+            if (\is_array($publishedCandidate)
+                && $this->sameInstallerObjectIdentity(
+                    $candidateIdentity,
+                    $publishedCandidate,
+                )
+                && $this->committedInstallPrefixFullyValid()
+                && !\file_exists($candidate)
+                && !\is_link($candidate)
+            ) {
+                // The candidate rename reached the exact, fully verified
+                // after-image. Preserve both it and the durable rollback when
+                // only the directory barrier is still failing; a later locked
+                // recovery pass can finish without destroying either truth.
+                throw $e;
+            }
             $candidateCleanupFailure = null;
             try {
                 if (\is_dir($prefix)) {
-                    $this->removeTree($prefix);
+                    $this->removeTreeDurably(
+                        $prefix,
+                        'failed managed nginx install candidate',
+                    );
                 }
             } catch (\Throwable $cleanupFailure) {
                 $candidateCleanupFailure = $cleanupFailure;
@@ -1622,21 +1697,53 @@ final class ManagedNginxInstaller
                     $e,
                 );
             }
-            if ($hadPrevious && !@\rename($rollback, $prefix)) {
-                throw new \RuntimeException(
-                    'Managed nginx install failed and rollback restoration failed; previous install remains at '
-                    . $rollback
-                    . ': '
-                    . $e->getMessage(),
-                    0,
-                    $e,
-                );
+            if ($hadPrevious) {
+                $rollbackIdentity = @\lstat($rollback);
+                try {
+                    $this->durablyRenameInstallerPath(
+                        $rollback,
+                        $prefix,
+                        true,
+                        'managed nginx failed-install rollback restoration',
+                    );
+                } catch (\Throwable $restoreFailure) {
+                    $restoredIdentity = @\lstat($prefix);
+                    if (\is_array($rollbackIdentity)
+                        && \is_array($restoredIdentity)
+                        && $this->sameInstallerObjectIdentity(
+                            $rollbackIdentity,
+                            $restoredIdentity,
+                        )
+                        && !\file_exists($rollback)
+                        && !\is_link($rollback)
+                        && $this->committedInstallPrefixFullyValid()
+                    ) {
+                        throw new \RuntimeException(
+                            'Managed nginx install failed; the previous install reached its exact restored '
+                                . 'after-image but its parent-directory sync remains pending: '
+                                . $restoreFailure->getMessage(),
+                            0,
+                            $e,
+                        );
+                    }
+                    throw new \RuntimeException(
+                        'Managed nginx install failed and rollback restoration failed; previous install remains at '
+                        . $rollback
+                        . ': '
+                        . $restoreFailure->getMessage(),
+                        0,
+                        $e,
+                    );
+                }
             }
             throw $e;
         }
 
         if ($hadPrevious) {
-            $this->removeTree($rollback);
+            $this->removeTreeDurably(
+                $rollback,
+                'committed managed nginx rollback slot',
+            );
             if (\file_exists($rollback) || \is_link($rollback)) {
                 throw new \RuntimeException('Managed nginx install succeeded but rollback cleanup failed: ' . $rollback);
             }
@@ -1685,25 +1792,26 @@ final class ManagedNginxInstaller
     {
         if (\file_exists($destination) || \is_link($destination)) {
             if ($this->validDownloadedFile($destination)) {
+                $this->syncInstallerDirectory(\dirname($destination));
                 return;
             }
             if (\is_dir($destination) && !\is_link($destination)) {
                 throw new \RuntimeException('download cache target is an unexpected directory: ' . $destination);
             }
-            if (!@\unlink($destination)
-                && (\file_exists($destination) || \is_link($destination))
-            ) {
-                throw new \RuntimeException('unable to remove invalid cached download: ' . $destination);
-            }
+            $this->removeInstallerLeafDurably(
+                $destination,
+                'invalid cached managed nginx download',
+            );
         }
         $tmp = $destination . '.part';
         if (\file_exists($tmp) || \is_link($tmp)) {
             if (\is_dir($tmp) && !\is_link($tmp)) {
                 throw new \RuntimeException('partial download target is an unexpected directory: ' . $tmp);
             }
-            if (!@\unlink($tmp) && (\file_exists($tmp) || \is_link($tmp))) {
-                throw new \RuntimeException('unable to remove stale partial download: ' . $tmp);
-            }
+            $this->removeInstallerLeafDurably(
+                $tmp,
+                'stale partial managed nginx download',
+            );
         }
 
         $deadline = $this->monotonicSeconds() + self::DOWNLOAD_DEADLINE_SECONDS;
@@ -1754,20 +1862,31 @@ final class ManagedNginxInstaller
         } catch (\Throwable $throwable) {
             @\fclose($source);
             @\fclose($target);
-            if (\file_exists($tmp) && !@\unlink($tmp)) {
-                throw new \RuntimeException(
-                    'download failed and its partial file could not be removed: ' . $tmp,
-                    0,
-                    $throwable,
-                );
+            if (\file_exists($tmp) || \is_link($tmp)) {
+                try {
+                    $this->removeInstallerLeafDurably(
+                        $tmp,
+                        'failed partial managed nginx download',
+                    );
+                } catch (\Throwable $cleanupFailure) {
+                    throw new \RuntimeException(
+                        'download failed and its partial file could not be removed: '
+                            . $cleanupFailure->getMessage(),
+                        0,
+                        $throwable,
+                    );
+                }
             }
             throw $throwable;
         }
         @\fclose($source);
         @\fclose($target);
         if ($total <= 1000 || !$this->validDownloadedFile($tmp)) {
-            if (\file_exists($tmp) && !@\unlink($tmp)) {
-                throw new \RuntimeException('invalid partial download could not be removed: ' . $tmp);
+            if (\file_exists($tmp) || \is_link($tmp)) {
+                $this->removeInstallerLeafDurably(
+                    $tmp,
+                    'invalid partial managed nginx download',
+                );
             }
             throw new \RuntimeException('download is empty, truncated, or oversized: ' . $url);
         }
@@ -1908,22 +2027,51 @@ final class ManagedNginxInstaller
     private function publishDownloadedFile(string $temporary, string $destination): void
     {
         if (\file_exists($destination) || \is_link($destination)) {
-            if ((\file_exists($temporary) || \is_link($temporary)) && !@\unlink($temporary)) {
-                throw new \RuntimeException('download destination collision and partial cleanup failed: ' . $temporary);
+            if (\file_exists($temporary) || \is_link($temporary)) {
+                $this->removeInstallerLeafDurably(
+                    $temporary,
+                    'colliding partial managed nginx download',
+                );
             }
             throw new \RuntimeException('download destination appeared before publication: ' . $destination);
         }
-        if (!$this->validDownloadedFile($temporary) || !@\rename($temporary, $destination)) {
-            if ((\file_exists($temporary) || \is_link($temporary)) && !@\unlink($temporary)) {
-                throw new \RuntimeException('download publication and cleanup both failed: ' . $temporary);
+        if (!$this->validDownloadedFile($temporary)) {
+            if (\file_exists($temporary) || \is_link($temporary)) {
+                $this->removeInstallerLeafDurably(
+                    $temporary,
+                    'invalid partial managed nginx download publication',
+                );
             }
             throw new \RuntimeException('unable to publish validated download: ' . $destination);
         }
-        if (\PHP_OS_FAMILY !== 'Windows' && !@\chmod($destination, 0600)) {
-            if (!@\unlink($destination) && (\file_exists($destination) || \is_link($destination))) {
-                throw new \RuntimeException('download permission sealing and cleanup both failed: ' . $destination);
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            if (!@\chmod($temporary, 0600)) {
+                $this->removeInstallerLeafDurably(
+                    $temporary,
+                    'unsealed partial managed nginx download',
+                );
+                throw new \RuntimeException('unable to seal downloaded artifact permissions: ' . $destination);
             }
-            throw new \RuntimeException('unable to seal downloaded artifact permissions: ' . $destination);
+            $this->synchronizeInstallerRegularFile(
+                $temporary,
+                'sealed partial managed nginx download',
+            );
+        }
+        $this->durablyRenameInstallerPath(
+            $temporary,
+            $destination,
+            false,
+            'managed nginx downloaded artifact publication',
+        );
+        $publishedStatus = @\lstat($destination);
+        if (!$this->validDownloadedFile($destination)
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && (!\is_array($publishedStatus)
+                    || ((((int)($publishedStatus['mode'] ?? 0)) & 0777) !== 0600)))
+        ) {
+            throw new \RuntimeException(
+                'Published managed nginx download changed after its durability barrier.'
+            );
         }
     }
 
@@ -1934,9 +2082,10 @@ final class ManagedNginxInstaller
         }
         $actual = $this->sha256RegularFile($file, self::MAX_DOWNLOAD_BYTES);
         if (!\is_string($actual) || !\hash_equals(\strtolower($expected), \strtolower($actual))) {
-            if (!@\unlink($file) && (\file_exists($file) || \is_link($file))) {
-                throw new \RuntimeException('SHA-256 mismatch and artifact cleanup failed for ' . $file);
-            }
+            $this->removeInstallerLeafDurably(
+                $file,
+                'SHA-256-mismatched managed nginx download',
+            );
             throw new \RuntimeException('SHA-256 mismatch for ' . $file);
         }
     }
@@ -2287,6 +2436,401 @@ final class ManagedNginxInstaller
             return \mb_substr($text, -$max);
         }
         return \substr($text, -$max);
+    }
+
+    private function syncInstallerDirectory(string $directory): void
+    {
+        if ($this->directorySynchronizer instanceof \Closure) {
+            ($this->directorySynchronizer)($directory);
+            return;
+        }
+        GatewayProjectStateFilesystem::syncDirectory($directory);
+    }
+
+    private function durablyRenameInstallerPath(
+        string $source,
+        string $target,
+        bool $directory,
+        string $label,
+    ): void {
+        $parent = \dirname($source);
+        if (!\hash_equals($parent, \dirname($target))) {
+            throw new \RuntimeException(
+                'Managed nginx installer rename must remain within one parent directory.'
+            );
+        }
+        $parentBefore = @\lstat($parent);
+        $sourceBefore = @\lstat($source);
+        $expectedType = $directory ? 0040000 : 0100000;
+        if (!\is_array($parentBefore)
+            || \is_link($parent)
+            || ((((int)($parentBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+            || !\is_array($sourceBefore)
+            || \is_link($source)
+            || ((((int)($sourceBefore['mode'] ?? 0)) & 0170000) !== $expectedType)
+            || (!$directory && (int)($sourceBefore['nlink'] ?? 0) !== 1)
+            || \file_exists($target)
+            || \is_link($target)
+        ) {
+            throw new \RuntimeException(
+                'Unable to stage a safe ' . $label . ' rename.'
+            );
+        }
+
+        $renamed = @\rename($source, $target);
+        if (!$renamed
+            && !$this->installerRenameAfterImageMatches(
+                $source,
+                $target,
+                $directory,
+                $sourceBefore,
+                $parent,
+                $parentBefore,
+            )
+        ) {
+            throw new \RuntimeException('Unable to atomically publish ' . $label . '.');
+        }
+        if (!$this->installerRenameAfterImageMatches(
+            $source,
+            $target,
+            $directory,
+            $sourceBefore,
+            $parent,
+            $parentBefore,
+        )) {
+            throw new \RuntimeException(
+                'The ' . $label . ' rename did not reach its exact after-image.'
+            );
+        }
+
+        try {
+            $this->syncInstallerDirectory($parent);
+        } catch (\Throwable $firstFailure) {
+            if (!$this->installerRenameAfterImageMatches(
+                $source,
+                $target,
+                $directory,
+                $sourceBefore,
+                $parent,
+                $parentBefore,
+            )) {
+                throw new \RuntimeException(
+                    'The ' . $label . ' after-image changed after its directory sync failed.',
+                    0,
+                    $firstFailure,
+                );
+            }
+            try {
+                $this->syncInstallerDirectory($parent);
+            } catch (\Throwable $secondFailure) {
+                if (!$this->installerRenameAfterImageMatches(
+                    $source,
+                    $target,
+                    $directory,
+                    $sourceBefore,
+                    $parent,
+                    $parentBefore,
+                )) {
+                    throw new \RuntimeException(
+                        'The ' . $label . ' after-image changed during directory sync retry.',
+                        0,
+                        $secondFailure,
+                    );
+                }
+                throw new \RuntimeException(
+                    'The ' . $label
+                        . ' reached its exact after-image but its parent-directory sync failed: '
+                        . $secondFailure->getMessage(),
+                    0,
+                    $secondFailure,
+                );
+            }
+        }
+        if (!$this->installerRenameAfterImageMatches(
+            $source,
+            $target,
+            $directory,
+            $sourceBefore,
+            $parent,
+            $parentBefore,
+        )) {
+            throw new \RuntimeException(
+                'The ' . $label . ' after-image changed across its durability barrier.'
+            );
+        }
+    }
+
+    /**
+     * @param array<string|int,mixed> $sourceBefore
+     * @param array<string|int,mixed> $parentBefore
+     */
+    private function installerRenameAfterImageMatches(
+        string $source,
+        string $target,
+        bool $directory,
+        array $sourceBefore,
+        string $parent,
+        array $parentBefore,
+    ): bool {
+        if (\is_array(@\lstat($source))
+            || \file_exists($source)
+            || \is_link($source)
+        ) {
+            return false;
+        }
+        $targetAfter = @\lstat($target);
+        $parentAfter = @\lstat($parent);
+        $expectedType = $directory ? 0040000 : 0100000;
+        return \is_array($targetAfter)
+            && !\is_link($target)
+            && ((((int)($targetAfter['mode'] ?? 0)) & 0170000) === $expectedType)
+            && ($directory || (int)($targetAfter['nlink'] ?? 0) === 1)
+            && $this->sameInstallerObjectIdentity($sourceBefore, $targetAfter)
+            && ($directory
+                || (int)($sourceBefore['size'] ?? -1) === (int)($targetAfter['size'] ?? -2))
+            && \is_array($parentAfter)
+            && !\is_link($parent)
+            && ((((int)($parentAfter['mode'] ?? 0)) & 0170000) === 0040000)
+            && $this->sameInstallerObjectIdentity($parentBefore, $parentAfter);
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameInstallerObjectIdentity(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'nlink'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return (((int)($before['mode'] ?? 0)) & 0170000)
+            === (((int)($after['mode'] ?? 0)) & 0170000);
+    }
+
+    /**
+     * Removing a child directory legitimately changes the parent's link count,
+     * so only the stable directory object identity is compared here.
+     *
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameInstallerParentIdentity(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return (((int)($before['mode'] ?? 0)) & 0170000) === 0040000
+            && (((int)($after['mode'] ?? 0)) & 0170000) === 0040000;
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameInstallerFileState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function removeTreeDurably(string $directory, string $label): void
+    {
+        $parent = \dirname($directory);
+        $parentBefore = @\lstat($parent);
+        if (!\is_array($parentBefore)
+            || \is_link($parent)
+            || ((((int)($parentBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException($label . ' parent directory is unsafe.');
+        }
+        $this->removeTree($directory);
+        $this->synchronizeInstallerRemovalAfterImage(
+            $directory,
+            $parent,
+            $parentBefore,
+            $label,
+        );
+    }
+
+    private function removeInstallerLeafDurably(string $path, string $label): void
+    {
+        $selected = @\lstat($path);
+        if (!\is_array($selected)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException($label . ' path is unsafe.');
+            }
+            return;
+        }
+        if (\is_link($path)
+            || ((((int)($selected['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($selected['nlink'] ?? 0) !== 1
+        ) {
+            throw new \RuntimeException($label . ' is linked or special.');
+        }
+        $parent = \dirname($path);
+        $parentBefore = @\lstat($parent);
+        if (!\is_array($parentBefore)
+            || \is_link($parent)
+            || ((((int)($parentBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException($label . ' parent directory is unsafe.');
+        }
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to verify ' . $label . ' before removal.');
+        }
+        $removed = false;
+        $verified = null;
+        try {
+            $opened = @\fstat($handle);
+            $namedBeforeRemove = @\lstat($path);
+            if (!\is_array($opened)
+                || !\is_array($namedBeforeRemove)
+                || !$this->sameInstallerFileState($selected, $opened)
+                || !$this->sameInstallerFileState($opened, $namedBeforeRemove)
+            ) {
+                throw new \RuntimeException($label . ' changed before removal.');
+            }
+            $verified = $opened;
+            if (\PHP_OS_FAMILY !== 'Windows') {
+                if (!@\unlink($path)) {
+                    throw new \RuntimeException('Unable to remove ' . $label . '.');
+                }
+                $removed = true;
+            }
+        } finally {
+            @\fclose($handle);
+        }
+        if (!$removed) {
+            $namedAfterClose = @\lstat($path);
+            if (!\is_array($verified)
+                || !\is_array($namedAfterClose)
+                || !$this->sameInstallerFileState($verified, $namedAfterClose)
+                || !@\unlink($path)
+            ) {
+                throw new \RuntimeException('Unable to safely remove ' . $label . '.');
+            }
+        }
+        $this->synchronizeInstallerRemovalAfterImage(
+            $path,
+            $parent,
+            $parentBefore,
+            $label,
+        );
+    }
+
+    /** @param array<string|int,mixed> $parentBefore */
+    private function synchronizeInstallerRemovalAfterImage(
+        string $removedPath,
+        string $parent,
+        array $parentBefore,
+        string $label,
+    ): void {
+        $matches = function () use ($removedPath, $parent, $parentBefore): bool {
+            $parentAfter = @\lstat($parent);
+            return !\is_array(@\lstat($removedPath))
+                && !\file_exists($removedPath)
+                && !\is_link($removedPath)
+                && \is_array($parentAfter)
+                && !\is_link($parent)
+                && ((((int)($parentAfter['mode'] ?? 0)) & 0170000) === 0040000)
+                && $this->sameInstallerParentIdentity($parentBefore, $parentAfter);
+        };
+        if (!$matches()) {
+            throw new \RuntimeException($label . ' removal did not reach its exact after-image.');
+        }
+        try {
+            $this->syncInstallerDirectory($parent);
+        } catch (\Throwable $firstFailure) {
+            if (!$matches()) {
+                throw new \RuntimeException(
+                    $label . ' removal after-image changed after directory sync failure.',
+                    0,
+                    $firstFailure,
+                );
+            }
+            try {
+                $this->syncInstallerDirectory($parent);
+            } catch (\Throwable $secondFailure) {
+                if (!$matches()) {
+                    throw new \RuntimeException(
+                        $label . ' removal after-image changed during directory sync retry.',
+                        0,
+                        $secondFailure,
+                    );
+                }
+                throw new \RuntimeException(
+                    $label . ' was removed but its parent-directory sync failed: '
+                        . $secondFailure->getMessage(),
+                    0,
+                    $secondFailure,
+                );
+            }
+        }
+        if (!$matches()) {
+            throw new \RuntimeException(
+                $label . ' removal after-image changed across its durability barrier.'
+            );
+        }
+    }
+
+    private function synchronizeInstallerRegularFile(string $path, string $label): void
+    {
+        $named = @\lstat($path);
+        if (!\is_array($named)
+            || \is_link($path)
+            || ((((int)($named['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($named['nlink'] ?? 0) !== 1
+        ) {
+            throw new \RuntimeException($label . ' is linked, missing, or special.');
+        }
+        $handle = @\fopen($path, 'r+b');
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to open ' . $label . ' for synchronization.');
+        }
+        try {
+            $opened = @\fstat($handle);
+            if (!\is_array($opened)
+                || !$this->sameInstallerFileState($named, $opened)
+            ) {
+                throw new \RuntimeException($label . ' changed while being opened.');
+            }
+            if (!@\fflush($handle)
+                || (\function_exists('fsync') && !@\fsync($handle))
+            ) {
+                throw new \RuntimeException('Unable to synchronize ' . $label . '.');
+            }
+            $openedAfter = @\fstat($handle);
+            $namedAfter = @\lstat($path);
+            if (!\is_array($openedAfter)
+                || !\is_array($namedAfter)
+                || !$this->sameInstallerObjectIdentity($opened, $openedAfter)
+                || !$this->sameInstallerObjectIdentity($openedAfter, $namedAfter)
+                || (int)($opened['size'] ?? -1) !== (int)($openedAfter['size'] ?? -2)
+                || (int)($openedAfter['size'] ?? -1) !== (int)($namedAfter['size'] ?? -2)
+            ) {
+                throw new \RuntimeException($label . ' changed during synchronization.');
+            }
+        } finally {
+            @\fclose($handle);
+        }
     }
 
     private function removeTree(string $dir): void

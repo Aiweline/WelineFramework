@@ -195,6 +195,83 @@ final class NginxConfigPublication
         }
     }
 
+    /**
+     * Replace the already-published candidate inside the same lifecycle
+     * transaction while preserving its original before-image rollback. This is
+     * used for protocol-only degradation (for example QUIC -> H2/H1) after the
+     * first candidate has already reached the live data plane.
+     *
+     * @return array{conf:string,rollback:string|null}
+     */
+    public function replacePublishedCandidate(
+        string $candidate,
+        string $transactionId,
+        ?string $rollback,
+        string $expectedActiveSha256,
+    ): array {
+        $this->assertCandidatePath($candidate);
+        $this->assertTransactionId($transactionId);
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $expectedActiveSha256) !== 1) {
+            throw new \InvalidArgumentException(
+                \ucfirst($this->scope) . ' active config digest is invalid.',
+            );
+        }
+        if ($rollback !== null) {
+            $expectedRollback = $this->rollbackPathForTransaction($transactionId);
+            if (!\hash_equals($expectedRollback, $rollback)) {
+                throw new \InvalidArgumentException(
+                    \ucfirst($this->scope) . ' rollback does not belong to this transaction.',
+                );
+            }
+            $this->readRegularFile($rollback, 'rollback');
+        }
+        $activeContents = $this->readRegularFile($this->activeConfig, 'active config');
+        if (!\hash_equals($expectedActiveSha256, \hash('sha256', $activeContents))) {
+            throw new \RuntimeException(
+                \ucfirst($this->scope) . ' active config changed before in-transaction replacement.',
+            );
+        }
+        $candidateContents = $this->readRegularFile($candidate, 'candidate');
+        $candidateSha256 = \hash('sha256', $candidateContents);
+        try {
+            GatewayProjectStateFilesystem::atomicWrite(
+                $this->activeConfig,
+                $candidateContents,
+                0600,
+            );
+        } catch (\Throwable $throwable) {
+            $this->reconcileWriteAfterImageDurability(
+                $this->activeConfig,
+                $candidateSha256,
+                'active config replacement after-image',
+                $throwable,
+            );
+        }
+        try {
+            GatewayProjectStateFilesystem::removeRegular(
+                $candidate,
+                \ucfirst($this->scope) . ' replacement candidate config',
+            );
+        } catch (\Throwable $throwable) {
+            if ($this->pathExistsNoFollow($candidate)
+                || !$this->fileHasExactDigest(
+                    $this->activeConfig,
+                    $candidateSha256,
+                    'active config replacement after-image',
+                )
+            ) {
+                throw $throwable;
+            }
+            $this->reconcileRemovalAfterImageDurability(
+                $candidate,
+                $candidateSha256,
+                $throwable,
+            );
+        }
+
+        return ['conf' => $this->activeConfig, 'rollback' => $rollback];
+    }
+
     public function recoverInterruptedPublication(): void
     {
         $this->recoverOrphanRollbacks();
@@ -894,6 +971,91 @@ final class NginxConfigPublication
             self::MAX_CONFIG_BYTES,
             \ucfirst($this->scope) . ' ' . $kind,
         );
+    }
+
+    private function fileHasExactDigest(string $file, string $digest, string $kind): bool
+    {
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1) {
+            return false;
+        }
+        try {
+            $contents = $this->readRegularFile($file, $kind);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return \hash_equals($digest, \hash('sha256', $contents));
+    }
+
+    private function reconcileWriteAfterImageDurability(
+        string $file,
+        string $digest,
+        string $kind,
+        \Throwable $original,
+    ): void {
+        if (!$this->fileHasExactDigest($file, $digest, $kind)) {
+            throw $original;
+        }
+        try {
+            GatewayProjectStateFilesystem::syncDirectory(\dirname($file));
+        } catch (\Throwable $syncFailure) {
+            throw new \RuntimeException(
+                \ucfirst($this->scope) . ' ' . $kind
+                    . ' is exact but its directory durability remains unproven: '
+                    . $syncFailure->getMessage(),
+                0,
+                $original,
+            );
+        }
+        if (!$this->fileHasExactDigest($file, $digest, $kind)) {
+            throw new \RuntimeException(
+                \ucfirst($this->scope) . ' ' . $kind
+                    . ' changed while directory durability was reconciled.',
+                0,
+                $original,
+            );
+        }
+    }
+
+    private function reconcileRemovalAfterImageDurability(
+        string $candidate,
+        string $activeDigest,
+        \Throwable $original,
+    ): void {
+        if ($this->pathExistsNoFollow($candidate)
+            || !$this->fileHasExactDigest(
+                $this->activeConfig,
+                $activeDigest,
+                'active config replacement after-image',
+            )
+        ) {
+            throw $original;
+        }
+        try {
+            GatewayProjectStateFilesystem::syncDirectory(\dirname($candidate));
+        } catch (\Throwable $syncFailure) {
+            throw new \RuntimeException(
+                \ucfirst($this->scope)
+                    . ' replacement candidate is absent but directory durability remains unproven: '
+                    . $syncFailure->getMessage(),
+                0,
+                $original,
+            );
+        }
+        if ($this->pathExistsNoFollow($candidate)
+            || !$this->fileHasExactDigest(
+                $this->activeConfig,
+                $activeDigest,
+                'active config replacement after-image',
+            )
+        ) {
+            throw new \RuntimeException(
+                \ucfirst($this->scope)
+                    . ' replacement after-image changed during directory reconciliation.',
+                0,
+                $original,
+            );
+        }
     }
 
     /** @phpstan-impure */

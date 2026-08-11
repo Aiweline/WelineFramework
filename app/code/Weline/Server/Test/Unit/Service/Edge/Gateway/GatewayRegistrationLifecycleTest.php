@@ -380,6 +380,74 @@ final class GatewayRegistrationLifecycleTest extends TestCase
         );
     }
 
+    public function testRetirementClaimRejectsAnExpiredCallerDeadlineBeforeCas(): void
+    {
+        $now = 600.0;
+        $atomicCalls = 0;
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            atomicUpdater: static function (
+                string $file,
+                callable $modifier,
+                float $timeout,
+            ) use (&$atomicCalls): bool {
+                unset($file, $modifier, $timeout);
+                $atomicCalls++;
+                return true;
+            },
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+
+        try {
+            $lifecycle->claimRetirement('shop', 0.25, 600.0);
+            self::fail('An expired retirement deadline must fail before CAS.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('deadline was exhausted', $exception->getMessage());
+        }
+
+        self::assertSame(0, $atomicCalls);
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_NEVER_ATTEMPTED,
+            $this->fact()['state'],
+        );
+    }
+
+    public function testRetirementTerminalWritesUseFreshBoundedCompensationDeadlines(): void
+    {
+        $now = 700.0;
+        $lifecycle = new GatewayRegistrationLifecycle(
+            instanceFileResolver: fn (string $instance): string => $this->file,
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+        );
+
+        $claim = $lifecycle->claimRetirement('shop', 0.25, 701.0);
+        $now = 800.0;
+        self::assertTrue($lifecycle->cancelRetirement(
+            'shop',
+            (string)$claim['nonce'],
+        ));
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_NEVER_ATTEMPTED,
+            $this->fact()['state'],
+        );
+
+        $claim = $lifecycle->claimRetirement('shop', 0.25, 801.0);
+        $now = 900.0;
+        self::assertTrue($lifecycle->completeRetirement(
+            'shop',
+            (string)$claim['nonce'],
+            'host retirement already committed',
+        ));
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_RETIRED,
+            $this->fact()['state'],
+        );
+    }
+
     public function testRetirementMutationsRecoverExactlyCommittedFacts(): void
     {
         $lifecycle = new GatewayRegistrationLifecycle(

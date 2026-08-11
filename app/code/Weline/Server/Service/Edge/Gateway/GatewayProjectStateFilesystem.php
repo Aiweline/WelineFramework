@@ -103,6 +103,10 @@ final class GatewayProjectStateFilesystem
      * @param float $waitTimeoutSeconds Maximum monotonic time spent waiting
      *        for another process to release this lock. The callback duration
      *        is deliberately not included.
+     * @param float|null $deadlineMonotonic Optional caller-owned absolute
+     *        monotonic deadline for the complete safe-open and acquisition
+     *        path. The callback remains responsible for checking the same
+     *        deadline before each blocking operation or mutation.
      * @return TResult
      */
     public static function withExclusiveLock(
@@ -110,6 +114,7 @@ final class GatewayProjectStateFilesystem
         \Closure $callback,
         ?\Closure $seal = null,
         float $waitTimeoutSeconds = self::DEFAULT_LOCK_WAIT_SECONDS,
+        ?float $deadlineMonotonic = null,
     ): mixed {
         if (!\is_finite($waitTimeoutSeconds)
             || $waitTimeoutSeconds <= 0.0
@@ -119,12 +124,22 @@ final class GatewayProjectStateFilesystem
                 'WLS state lock wait timeout must be within (0, 300] seconds.'
             );
         }
+        if ($deadlineMonotonic !== null
+            && (!\is_finite($deadlineMonotonic)
+                || $deadlineMonotonic <= 0.0)
+        ) {
+            throw new \InvalidArgumentException(
+                'WLS state lock absolute deadline is invalid.'
+            );
+        }
+        self::assertLockDeadlineAvailable($deadlineMonotonic);
         self::assertParentDirectory($path);
         $before = false;
         $created = false;
         $handle = false;
         $openingChanged = false;
         for ($attempt = 0; $attempt < 8; ++$attempt) {
+            self::assertLockDeadlineAvailable($deadlineMonotonic);
             \clearstatcache(true, $path);
             $before = @\lstat($path);
             $created = false;
@@ -181,7 +196,12 @@ final class GatewayProjectStateFilesystem
             // lstat but before fopen(x). Re-resolve and open that exact inode;
             // never downgrade to fopen(c), which follows links and truncates
             // the distinction between creation and an existing lock.
-            \usleep(2_000);
+            if ($attempt < 7) {
+                \usleep(self::lockRetryMicroseconds(
+                    2_000,
+                    $deadlineMonotonic,
+                ));
+            }
         }
         if (!\is_resource($handle)) {
             throw new \RuntimeException($openingChanged
@@ -192,6 +212,14 @@ final class GatewayProjectStateFilesystem
         try {
             $startedAt = self::monotonicSeconds();
             $deadline = $startedAt + $waitTimeoutSeconds;
+            if ($deadlineMonotonic !== null) {
+                $deadline = \min($deadline, $deadlineMonotonic);
+            }
+            if ($startedAt >= $deadline) {
+                throw new \RuntimeException(
+                    'Timed out acquiring the WLS state lock.'
+                );
+            }
             do {
                 if (@\flock($handle, LOCK_EX | LOCK_NB)) {
                     $locked = true;
@@ -201,18 +229,16 @@ final class GatewayProjectStateFilesystem
                 if ($now >= $deadline) {
                     break;
                 }
-                $remainingUsec = (int)\max(
-                    1,
-                    \min(
-                        self::LOCK_RETRY_USEC,
-                        \ceil(($deadline - $now) * 1_000_000),
-                    ),
+                $remainingUsec = self::lockRetryMicroseconds(
+                    self::LOCK_RETRY_USEC,
+                    $deadline,
                 );
                 \usleep($remainingUsec);
             } while (true);
             if (!$locked) {
                 throw new \RuntimeException('Timed out acquiring the WLS state lock.');
             }
+            self::assertLockDeadlineAvailable($deadlineMonotonic);
             $afterLock = @\fstat($handle);
             \clearstatcache(true, $path);
             $pathAfterLock = @\lstat($path);
@@ -244,6 +270,7 @@ final class GatewayProjectStateFilesystem
                 }
                 self::syncDirectory(\dirname($path));
             }
+            self::assertLockDeadlineAvailable($deadlineMonotonic);
             return $callback();
         } finally {
             if ($locked) {
@@ -261,6 +288,40 @@ final class GatewayProjectStateFilesystem
         }
 
         return $now;
+    }
+
+    private static function assertLockDeadlineAvailable(
+        ?float $deadlineMonotonic,
+    ): void {
+        if ($deadlineMonotonic !== null
+            && self::monotonicSeconds() >= $deadlineMonotonic
+        ) {
+            throw new \RuntimeException(
+                'Timed out acquiring the WLS state lock.'
+            );
+        }
+    }
+
+    private static function lockRetryMicroseconds(
+        int $maximumMicroseconds,
+        ?float $deadlineMonotonic,
+    ): int {
+        if ($maximumMicroseconds < 1) {
+            throw new \InvalidArgumentException(
+                'WLS state lock retry interval is invalid.'
+            );
+        }
+        if ($deadlineMonotonic === null) {
+            return $maximumMicroseconds;
+        }
+        $remaining = $deadlineMonotonic - self::monotonicSeconds();
+        $remainingMicroseconds = (int)\floor($remaining * 1_000_000);
+        if ($remainingMicroseconds < 1) {
+            throw new \RuntimeException(
+                'Timed out acquiring the WLS state lock.'
+            );
+        }
+        return \min($maximumMicroseconds, $remainingMicroseconds);
     }
 
     public static function read(
@@ -476,6 +537,81 @@ final class GatewayProjectStateFilesystem
                 );
             }
         }
+    }
+
+    /**
+     * Discard only uncommitted staging leaves from a first-publication write.
+     *
+     * The caller must hold the target writer lock and must independently
+     * prove that publication of the missing target is the commit fence for
+     * every later mutation. A retained ReplaceFileW backup is never eligible:
+     * it proves that a prior target existed and requires semantic recovery.
+     */
+    public static function discardUnpairedFirstPublicationStaging(
+        string $target,
+        int $maximumBytes,
+        string $label,
+    ): void {
+        $targetStatus = @\lstat($target);
+        if (\is_array($targetStatus)
+            || \file_exists($target)
+            || \is_link($target)
+        ) {
+            throw new \RuntimeException(
+                $label . ' first-publication target is not absent.'
+            );
+        }
+        $artifacts = self::atomicWriteRecoveryArtifacts(
+            $target,
+            $maximumBytes,
+            $label,
+        );
+        if ($artifacts === []) {
+            return;
+        }
+        foreach ($artifacts as $artifact) {
+            if (!\hash_equals('staging file', $artifact['kind'])) {
+                throw new \RuntimeException(
+                    $label . ' has a retained backup and is not an uncommitted first publication.'
+                );
+            }
+        }
+        $rechecked = self::atomicWriteRecoveryArtifacts(
+            $target,
+            $maximumBytes,
+            $label,
+        );
+        if (\array_keys($artifacts) !== \array_keys($rechecked)) {
+            throw new \RuntimeException(
+                $label . ' first-publication staging set changed before cleanup.'
+            );
+        }
+        foreach ($artifacts as $path => $artifact) {
+            $current = $rechecked[$path] ?? null;
+            if (!\is_array($current)
+                || !\hash_equals('staging file', (string)$current['kind'])
+                || !self::sameState(
+                    $artifact['identity'],
+                    $current['identity'],
+                )
+            ) {
+                throw new \RuntimeException(
+                    $label . ' first-publication staging changed before cleanup.'
+                );
+            }
+        }
+        foreach ($rechecked as $artifact) {
+            if (!self::removeRegular(
+                $artifact['path'],
+                $label . ' uncommitted first-publication staging',
+                $artifact['identity'],
+            )) {
+                throw new \RuntimeException(
+                    'Unable to discard ' . $label . ' first-publication staging.'
+                );
+            }
+        }
+        self::syncDirectory(\dirname($target));
     }
 
     /**
@@ -783,6 +919,11 @@ final class GatewayProjectStateFilesystem
             && ((((int)($published['mode'] ?? 0)) & 0777) !== $mode)
         ) {
             throw new \RuntimeException('Published WLS state file mode is unsafe.');
+        }
+        if (self::injectedPostRenameDirectorySyncFailure($path)) {
+            throw new \RuntimeException(
+                'Unable to synchronize the WLS state parent directory after publication.'
+            );
         }
         self::syncDirectory(\dirname($path));
     }
@@ -2037,6 +2178,343 @@ final class GatewayProjectStateFilesystem
         } finally {
             @\fclose($handle);
         }
+    }
+
+    /**
+     * Move one already-verified regular file or directory within a filesystem
+     * without replacing the destination. The destination parent is made
+     * durable before the source parent so a crash cannot durably unlink the
+     * only name before its new name is committed.
+     */
+    public static function moveNoReplace(
+        string $source,
+        string $destination,
+        string $label,
+    ): void {
+        if ($source === ''
+            || $destination === ''
+            || $label === ''
+            || \hash_equals($source, $destination)
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway durable move boundary is invalid.',
+            );
+        }
+        if (\file_exists($destination) || \is_link($destination)) {
+            throw new \RuntimeException($label . ' destination already exists.');
+        }
+        $sourceIdentity = GatewayBoundedTreeWalker::identity($source);
+        $sourceParent = \dirname($source);
+        $destinationParent = \dirname($destination);
+        $sourceParentIdentity = GatewayBoundedTreeWalker::identity(
+            $sourceParent,
+        );
+        $destinationParentIdentity = GatewayBoundedTreeWalker::identity(
+            $destinationParent,
+        );
+        if (($sourceParentIdentity['directory'] ?? false) !== true
+            || ($destinationParentIdentity['directory'] ?? false) !== true
+            || !\hash_equals(
+                (string)$sourceParentIdentity['device'],
+                (string)$destinationParentIdentity['device'],
+            )
+        ) {
+            throw new \RuntimeException(
+                $label . ' must remain on one verified filesystem.',
+            );
+        }
+
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::windowsMoveNoReplaceWriteThrough($source, $destination, $label);
+        } elseif (\PHP_OS_FAMILY === 'Darwin') {
+            self::darwinMoveNoReplace($source, $destination, $label);
+        } else {
+            self::linuxMoveNoReplace($source, $destination, $label);
+        }
+        if (\file_exists($source) || \is_link($source)) {
+            throw new \RuntimeException($label . ' source remained after move.');
+        }
+        self::assertMovedIdentity($destination, $sourceIdentity, $label);
+        self::syncDirectory($destinationParent);
+        if (!\hash_equals($sourceParent, $destinationParent)) {
+            self::syncDirectory($sourceParent);
+        }
+        self::assertMovedIdentity($destination, $sourceIdentity, $label);
+    }
+
+    /**
+     * Finish the only supported cross-parent crash replay that exposes both
+     * names for one moved regular-file identity.
+     */
+    public static function reconcileMovedRegularAlias(
+        string $source,
+        string $destination,
+        string $label,
+    ): void {
+        $sourceIdentity = GatewayBoundedTreeWalker::identity($source, true);
+        $destinationIdentity = GatewayBoundedTreeWalker::identity(
+            $destination,
+            true,
+        );
+        if (($sourceIdentity['directory'] ?? true) !== false
+            || ($destinationIdentity['directory'] ?? true) !== false
+            || !\hash_equals(
+                (string)$sourceIdentity['device'],
+                (string)$destinationIdentity['device'],
+            )
+            || !\hash_equals(
+                (string)$sourceIdentity['inode'],
+                (string)$destinationIdentity['inode'],
+            )
+        ) {
+            throw new \RuntimeException(
+                $label . ' exposes two different move identities.',
+            );
+        }
+        self::syncDirectory(\dirname($destination));
+        $sourceAgain = GatewayBoundedTreeWalker::identity($source, true);
+        $destinationAgain = GatewayBoundedTreeWalker::identity(
+            $destination,
+            true,
+        );
+        if (!\hash_equals(
+                (string)$sourceIdentity['device'],
+                (string)$sourceAgain['device'],
+            )
+            || !\hash_equals(
+                (string)$sourceIdentity['inode'],
+                (string)$sourceAgain['inode'],
+            )
+            || !\hash_equals(
+                (string)$destinationIdentity['device'],
+                (string)$destinationAgain['device'],
+            )
+            || !\hash_equals(
+                (string)$destinationIdentity['inode'],
+                (string)$destinationAgain['inode'],
+            )
+            || !@\unlink($source)
+        ) {
+            throw new \RuntimeException(
+                'Unable to reconcile ' . $label . ' source alias.',
+            );
+        }
+        self::syncDirectory(\dirname($source));
+        self::assertMovedIdentity($destination, $destinationIdentity, $label);
+    }
+
+    /**
+     * Exercise the exact supported file and directory move primitives on the
+     * host rebootstrap filesystem before any maintenance stop is authorized.
+     */
+    public static function assertMoveNoReplaceRuntimeCapability(
+        string $rebootstrapRoot,
+    ): void {
+        $rootIdentity = GatewayBoundedTreeWalker::identity($rebootstrapRoot);
+        if (($rootIdentity['directory'] ?? false) !== true) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap move-probe root is not a directory.',
+            );
+        }
+        $probe = $rebootstrapRoot . DIRECTORY_SEPARATOR
+            . 'move-capability.probe';
+        if (\file_exists($probe) || \is_link($probe)) {
+            self::removeMoveCapabilityProbe($probe);
+        }
+        if (!@\mkdir($probe, 0700)
+            || !@\mkdir($probe . DIRECTORY_SEPARATOR . 'source', 0700)
+            || !@\mkdir($probe . DIRECTORY_SEPARATOR . 'destination', 0700)
+        ) {
+            throw new \RuntimeException(
+                'Unable to create the gateway durable-move capability probe.',
+            );
+        }
+        self::syncDirectory($rebootstrapRoot);
+        try {
+            $sourceParent = $probe . DIRECTORY_SEPARATOR . 'source';
+            $destinationParent = $probe . DIRECTORY_SEPARATOR . 'destination';
+            $fileSource = $sourceParent . DIRECTORY_SEPARATOR . 'file.source';
+            $fileDestination = $destinationParent . DIRECTORY_SEPARATOR
+                . 'file.destination';
+            self::atomicWrite($fileSource, "wls-move-probe\n", 0600);
+            self::moveNoReplace(
+                $fileSource,
+                $fileDestination,
+                'Gateway regular-file durable-move capability probe',
+            );
+            $directorySource = $sourceParent . DIRECTORY_SEPARATOR
+                . 'directory.source';
+            $directoryDestination = $destinationParent . DIRECTORY_SEPARATOR
+                . 'directory.destination';
+            if (!@\mkdir($directorySource, 0700)) {
+                throw new \RuntimeException(
+                    'Unable to create the gateway directory-move capability probe.',
+                );
+            }
+            self::atomicWrite(
+                $directorySource . DIRECTORY_SEPARATOR . 'proof',
+                "wls-directory-move-probe\n",
+                0600,
+            );
+            self::moveNoReplace(
+                $directorySource,
+                $directoryDestination,
+                'Gateway directory durable-move capability probe',
+            );
+        } finally {
+            if (\file_exists($probe) || \is_link($probe)) {
+                self::removeMoveCapabilityProbe($probe);
+            }
+        }
+    }
+
+    private static function removeMoveCapabilityProbe(string $probe): void
+    {
+        $entries = GatewayBoundedTreeWalker::collect(
+            $probe,
+            true,
+            true,
+            32,
+            8,
+        );
+        foreach ($entries as $entry) {
+            GatewayBoundedTreeWalker::revalidate($entry);
+            $removed = ($entry['directory'] ?? false) === true
+                ? @\rmdir((string)$entry['path'])
+                : @\unlink((string)$entry['path']);
+            if (!$removed) {
+                throw new \RuntimeException(
+                    'Unable to remove the verified gateway move capability probe.',
+                );
+            }
+        }
+        self::syncDirectory(\dirname($probe));
+    }
+
+    /** @param array<string,mixed> $expected */
+    private static function assertMovedIdentity(
+        string $path,
+        array $expected,
+        string $label,
+    ): void {
+        $actual = GatewayBoundedTreeWalker::identity($path);
+        if (($actual['directory'] ?? null) !== ($expected['directory'] ?? null)
+            || !\hash_equals(
+                (string)($expected['device'] ?? ''),
+                (string)($actual['device'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)($expected['inode'] ?? ''),
+                (string)($actual['inode'] ?? ''),
+            )
+        ) {
+            throw new \RuntimeException($label . ' identity changed during move.');
+        }
+    }
+
+    private static function darwinMoveNoReplace(
+        string $source,
+        string $destination,
+        string $label,
+    ): void {
+        try {
+            $ffi = \FFI::cdef(
+                'int renamex_np(const char*, const char*, unsigned int);',
+                '/usr/lib/libSystem.B.dylib',
+            );
+            if ((int)$ffi->renamex_np($source, $destination, 0x00000004) !== 0) {
+                throw new \RuntimeException($label . ' native renamex_np failed.');
+            }
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                $label . ' requires the locked macOS native no-replace move runtime.',
+                0,
+                $throwable,
+            );
+        }
+    }
+
+    private static function linuxMoveNoReplace(
+        string $source,
+        string $destination,
+        string $label,
+    ): void {
+        try {
+            $ffi = \FFI::cdef(
+                'int renameat2(int, const char*, int, const char*, unsigned int);',
+                null,
+            );
+            if ((int)$ffi->renameat2(
+                -100,
+                $source,
+                -100,
+                $destination,
+                0x00000001,
+            ) !== 0) {
+                throw new \RuntimeException($label . ' native renameat2 failed.');
+            }
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                $label . ' requires the locked Linux native no-replace move runtime.',
+                0,
+                $throwable,
+            );
+        }
+    }
+
+    private static function windowsMoveNoReplaceWriteThrough(
+        string $source,
+        string $destination,
+        string $label,
+    ): void {
+        self::assertAtomicWriteRuntimeCapability();
+        try {
+            $ffi = \FFI::cdef(
+                'typedef int BOOL; typedef unsigned long DWORD;'
+                    . ' typedef unsigned short WCHAR;'
+                    . ' BOOL MoveFileExW(const WCHAR*, const WCHAR*, DWORD);'
+                    . ' DWORD GetLastError(void);',
+                'kernel32.dll',
+            );
+            $sourceWide = self::windowsWidePath($ffi, $source);
+            $destinationWide = self::windowsWidePath($ffi, $destination);
+            if ((int)$ffi->MoveFileExW(
+                $sourceWide,
+                $destinationWide,
+                0x00000008,
+            ) === 0) {
+                throw new \RuntimeException(
+                    $label . ' MoveFileExW failed with Win32 error '
+                        . (int)$ffi->GetLastError() . '.',
+                );
+            }
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                $label . ' requires the locked Windows write-through move runtime.',
+                0,
+                $throwable,
+            );
+        }
+    }
+
+    /**
+     * Test-only fault injection for the ambiguous commit boundary after a
+     * successful atomic rename. The exact target is addressed by digest so a
+     * test cannot accidentally poison unrelated project state writes.
+     */
+    private static function injectedPostRenameDirectorySyncFailure(
+        string $path,
+    ): bool {
+        $targetDigest = \strtolower(\trim((string)\getenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256',
+        )));
+        return (string)\getenv('WLS_GATEWAY_TEST_MODE') === '1'
+            && \hash_equals(
+                'directory_fsync_after_rename_failed',
+                (string)\getenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE'),
+            )
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $targetDigest) === 1
+            && \hash_equals($targetDigest, \hash('sha256', $path));
     }
 
     /** @param resource $handle */

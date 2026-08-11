@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Edge\Nginx;
 
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxConfigPublication;
 use Weline\Server\Service\SslCertificateService;
 
@@ -52,6 +53,7 @@ final class ManagedNginxConfigWriter
         bool $candidate = false,
         bool $http3Enabled = false,
         array $upstreamPorts = [],
+        ?array $certificateGeneration = null,
     ): array
     {
         $this->paths->ensureRuntimeDirectories();
@@ -59,7 +61,7 @@ final class ManagedNginxConfigWriter
         $upstreamHost = $this->normalizeLoopbackUpstreamHost($upstreamHost);
         $upstreamPorts = $this->normalizeUpstreamPorts($upstreamPort, $upstreamPorts, $ports);
         $names = $this->resolveServerNames($serverNames);
-        $ssl = $this->resolveSslMaterial($names);
+        $ssl = $this->resolveSslMaterial($names, $certificateGeneration);
         $sslCertificateSha256 = $ssl !== null
             ? $this->certificateFingerprint($ssl['cert'])
             : null;
@@ -243,7 +245,7 @@ NGINX;
         $conf = <<<NGINX
 worker_processes  {$workerProcesses};
 worker_rlimit_nofile  {$rlimit};
-worker_shutdown_timeout 10s;
+worker_shutdown_timeout 300s;
 error_log  logs/error.log  warn;
 pid        run/nginx.pid;
 
@@ -384,6 +386,14 @@ NGINX;
             'upstreams' => $upstreams,
             'ssl' => $ssl !== null,
             'ssl_certificate_sha256' => $sslCertificateSha256,
+            'certificate_generation_managed'
+                => (bool)($ssl['generation_managed'] ?? false),
+            'certificate_domain' => (string)($ssl['domain'] ?? ''),
+            'certificate_generation' => (int)($ssl['generation'] ?? 0),
+            'certificate_source_digest' => (string)($ssl['source_digest'] ?? ''),
+            'certificate_cert_sha256' => (string)($ssl['cert_sha256'] ?? ''),
+            'certificate_key_sha256' => (string)($ssl['key_sha256'] ?? ''),
+            'certificate_chain_sha256' => (string)($ssl['chain_sha256'] ?? ''),
             'server_names' => $names,
             'edge_cache' => $edgeCache,
             'edge_cache_ttl_sec' => $ttl,
@@ -807,10 +817,20 @@ NGINX;
 
     /**
      * @param list<string> $serverNames
-     * @return array{cert:string,key:string}|null
+     * @param array<string,mixed>|null $certificateGeneration
+     * @return array<string,mixed>|null
      */
-    private function resolveSslMaterial(array $serverNames): ?array
+    private function resolveSslMaterial(
+        array $serverNames,
+        ?array $certificateGeneration = null,
+    ): ?array
     {
+        if ($certificateGeneration !== null) {
+            return $this->resolveManagedCertificateGeneration(
+                $serverNames,
+                $certificateGeneration,
+            );
+        }
         $sslRoot = $this->paths->projectRoot() . DIRECTORY_SEPARATOR . 'app'
             . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl';
         foreach ($serverNames as $name) {
@@ -842,6 +862,98 @@ NGINX;
             }
         }
         return null;
+    }
+
+    /**
+     * Bind WLS 2.0 managed Nginx to the same immutable certificate selector
+     * already activated by Start. Mutable app/etc/ssl source paths remain a
+     * legacy-only compatibility path when no generation is supplied.
+     *
+     * @param list<string> $serverNames
+     * @param array<string,mixed> $expected
+     * @return array<string,mixed>
+     */
+    private function resolveManagedCertificateGeneration(
+        array $serverNames,
+        array $expected,
+    ): array {
+        $domain = \strtolower(\trim((string)($expected['domain'] ?? '')));
+        $generation = (int)($expected['generation'] ?? 0);
+        $sourceDigest = \strtolower(\trim((string)(
+            $expected['source_digest'] ?? ''
+        )));
+        if ($domain === ''
+            || $generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+            || !\in_array($domain, $serverNames, true)
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx certificate generation identity is incomplete or outside server_name.'
+            );
+        }
+        $active = (new ProjectCertificateGenerationStore($this->paths->projectRoot()))
+            ->active($domain);
+        if (!\is_array($active)) {
+            throw new \RuntimeException(
+                'Managed Nginx certificate generation is not active for its domain.'
+            );
+        }
+        if ((int)($active['generation'] ?? 0) !== $generation
+            || !\hash_equals(
+                $sourceDigest,
+                \strtolower((string)($active['source_digest'] ?? '')),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx certificate generation changed before config rendering.'
+            );
+        }
+        foreach ([
+            'cert_path',
+            'key_path',
+            'chain_path',
+            'leaf_fingerprint_sha256',
+            'cert_sha256',
+            'key_sha256',
+            'chain_sha256',
+        ] as $field) {
+            if (!\array_key_exists($field, $expected)
+                || !\is_string($expected[$field])
+                || !\hash_equals(
+                    (string)$expected[$field],
+                    (string)($active[$field] ?? ''),
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx certificate generation after-image changed at ' . $field . '.'
+                );
+            }
+        }
+        $localized = $this->localizeSslMaterial(
+            (string)$active['cert_path'],
+            (string)$active['key_path'],
+        );
+        $fingerprint = $this->certificateFingerprint($localized['cert']);
+        if (!\is_string($fingerprint)
+            || !\hash_equals(
+                \strtolower((string)$active['leaf_fingerprint_sha256']),
+                \strtolower($fingerprint),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx immutable certificate fingerprint changed while rendering.'
+            );
+        }
+        return [
+            ...$localized,
+            'generation_managed' => true,
+            'domain' => $domain,
+            'generation' => $generation,
+            'source_digest' => $sourceDigest,
+            'cert_sha256' => (string)$active['cert_sha256'],
+            'key_sha256' => (string)$active['key_sha256'],
+            'chain_sha256' => (string)$active['chain_sha256'],
+        ];
     }
 
     /** @return array{cert:string,key:string} */

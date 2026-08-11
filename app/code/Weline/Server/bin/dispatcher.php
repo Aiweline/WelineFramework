@@ -72,7 +72,7 @@ $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $masterLeaseFile = '';
 $masterToken = '';
-$protocolEdgeTokenFile = '';
+$gatewayBackendTokenFile = '';
 $edgeAdapterName = 'nginx';
 $listenFd = 0;
 $gatewayHostLeaseId = '';
@@ -105,8 +105,19 @@ foreach ($argv as $arg) {
         exit(1);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
-    } elseif (\str_starts_with($arg, '--protocol-edge-token-file=')) {
-        $protocolEdgeTokenFile = (string)\substr($arg, 27);
+    } elseif (\str_starts_with($arg, '--gateway-backend-token-file=')) {
+        $candidate = \trim((string)\substr(
+            $arg,
+            \strlen('--gateway-backend-token-file='),
+        ));
+        if ($gatewayBackendTokenFile !== ''
+            && !\hash_equals($gatewayBackendTokenFile, $candidate)
+        ) {
+            throw new \RuntimeException(
+                'Dispatcher received conflicting gateway backend token arguments.',
+            );
+        }
+        $gatewayBackendTokenFile = $candidate;
     } elseif (\str_starts_with($arg, '--edge-adapter=')) {
         $edgeAdapterName = \strtolower(\trim((string)\substr($arg, 15)));
     } elseif (\str_starts_with($arg, '--listen-fd=')) {
@@ -154,6 +165,58 @@ foreach ($argv as $arg) {
         )));
     }
 }
+$configuredEnvironmentPath = static function (string $name): string {
+    $values = [];
+    foreach ([
+        $_SERVER[$name] ?? null,
+        $_ENV[$name] ?? null,
+        \getenv($name),
+    ] as $value) {
+        if (!\is_string($value) || \trim($value) === '') {
+            continue;
+        }
+        $value = \trim($value);
+        if (\str_contains($value, "\0")) {
+            throw new \RuntimeException($name . ' contains a null byte.');
+        }
+        $identity = PHP_OS_FAMILY === 'Windows'
+            ? \strtolower(\str_replace('\\', '/', $value))
+            : \str_replace('\\', '/', $value);
+        $values[$identity] = $value;
+    }
+    if (\count($values) > 1) {
+        throw new \RuntimeException($name . ' has conflicting environment values.');
+    }
+    return $values === [] ? '' : (string)\reset($values);
+};
+$mergeConfiguredPath = static function (
+    string $argument,
+    string $environment,
+    string $label,
+): string {
+    if ($argument === '') {
+        return $environment;
+    }
+    if ($environment === '') {
+        return $argument;
+    }
+    $argumentIdentity = \str_replace('\\', '/', $argument);
+    $environmentIdentity = \str_replace('\\', '/', $environment);
+    if (PHP_OS_FAMILY === 'Windows') {
+        $argumentIdentity = \strtolower($argumentIdentity);
+        $environmentIdentity = \strtolower($environmentIdentity);
+    }
+    if (!\hash_equals($argumentIdentity, $environmentIdentity)) {
+        throw new \RuntimeException($label . ' argument and environment paths disagree.');
+    }
+    return $argument;
+};
+$gatewayBackendTokenFile = $mergeConfiguredPath(
+    $gatewayBackendTokenFile,
+    $configuredEnvironmentPath('WLS_GATEWAY_BACKEND_TOKEN_FILE'),
+    'Dispatcher gateway backend token',
+);
+unset($configuredEnvironmentPath, $mergeConfiguredPath);
 @\ini_set('memory_limit', $wlsMemoryLimit);
 if (!\in_array($edgeAdapterName, ['nginx', 'wls'], true)) {
     \fwrite(\STDERR, "[Dispatcher] --edge-adapter must be nginx or wls.\n");
@@ -242,6 +305,17 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 
 // 先完成自动加载；控制面解析与框架 bootstrap 可能较慢，主端口须尽快 listen，否则客户端会得到 ERR_CONNECTION_REFUSED（无法进入 503 启动页）。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+$gatewayBackendTokenConfiguration = \Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore::resolveConfiguredTokenFile(
+    $gatewayBackendTokenFile,
+);
+$gatewayBackendTokenFile = $gatewayBackendTokenConfiguration['path'];
+$gatewayBackendToken = $gatewayBackendTokenConfiguration['token'];
+if ($gatewayBackendTokenFile !== '') {
+    $_SERVER['WLS_GATEWAY_BACKEND_TOKEN_FILE'] = $gatewayBackendTokenFile;
+    $_ENV['WLS_GATEWAY_BACKEND_TOKEN_FILE'] = $gatewayBackendTokenFile;
+    @\putenv('WLS_GATEWAY_BACKEND_TOKEN_FILE=' . $gatewayBackendTokenFile);
+}
+unset($gatewayBackendTokenConfiguration);
 
 $masterLeaseManager = new \Weline\Server\Service\MasterLeaseManager();
 $masterToken = $masterLeaseManager->resolveProtectedCredentialFromArguments(
@@ -593,16 +667,6 @@ $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
 $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
 $startupProtectionConfig = \is_array($wlsConfig['startup_protection'] ?? null) ? $wlsConfig['startup_protection'] : [];
 $dispatcherConfig = \is_array($wlsConfig['dispatcher'] ?? null) ? $wlsConfig['dispatcher'] : [];
-$protocolEdgeToken = '';
-if ($protocolEdgeTokenFile !== '') {
-    if (!\is_file($protocolEdgeTokenFile) || !\is_readable($protocolEdgeTokenFile)) {
-        throw new \RuntimeException('Dispatcher protocol-edge token file is not readable.');
-    }
-    $protocolEdgeToken = \strtolower(\trim((string)@\file_get_contents($protocolEdgeTokenFile)));
-    if (\preg_match('/^[a-f0-9]{64}$/D', $protocolEdgeToken) !== 1) {
-        throw new \RuntimeException('Dispatcher protocol-edge token is invalid.');
-    }
-}
 $warmupHosts = [];
 $addWarmupHost = static function (string $candidate) use (&$warmupHosts, $port): void {
     $candidate = \trim($candidate);
@@ -761,11 +825,11 @@ if ($warmupPathObserversEnabled) {
 }
 $dispatcher->configure([
     'sni_routing_enabled' => true,
-    'protocol_edge_ingress_enabled' => $protocolEdgeToken !== '',
+    'gateway_backend_ingress_enabled' => $gatewayBackendToken !== '',
     'proxy_protocol_v2_enabled' => true,
     'proxy_protocol_v2_secret' => $masterRuntimeCredential,
     'proxy_protocol_v2_require_auth' => true,
-    'worker_protocol_edge_token' => $protocolEdgeToken,
+    'worker_gateway_backend_token' => $gatewayBackendToken,
     'learning_mode_enabled' => true,
     'connection_timeout' => 300,
     'main_loop_unblocked_log_every' => \Weline\Server\Service\MainLoopUnblockedLogConfig::resolve($wlsConfig, ['dispatcher']),

@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\Server\Supervisor\Client;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\IPC\ChildControl\BeforeReadyGuardAwareClientInterface;
 use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
+use Weline\Server\IPC\ChildControl\OperationDeadlineAwareClientInterface;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Policy\DispatcherPolicyControl;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
@@ -12,7 +14,10 @@ use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 
-final class SupervisorChildClient implements ChildControlClientInterface, BeforeReadyGuardAwareClientInterface
+final class SupervisorChildClient implements
+    ChildControlClientInterface,
+    BeforeReadyGuardAwareClientInterface,
+    OperationDeadlineAwareClientInterface
 {
     private static function monotonicSeconds(): float
     {
@@ -41,6 +46,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
     private int $reconnectFailCount = 0;
     private float $lastReconnectAt = 0.0;
     private float $reconnectIntervalSec = 2.0;
+    private ?float $operationDeadlineMonotonic = null;
 
     /**
      * @var null|callable(array, self): void
@@ -79,10 +85,20 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
     {
         unset($host, $port);
         $endpoint = $this->endpoint ?? $this->endpointResolver->resolve($this->instanceName);
+        $connectTimeout = $this->remainingOperationTimeout(3.0);
+        if ($connectTimeout <= 0.0) {
+            $this->lastConnectError = 'operation_deadline_exhausted';
+            return false;
+        }
         $errno = 0;
         $errstr = '';
         $uri = $endpoint->uri();
-        $this->socket = @\stream_socket_client($uri, $errno, $errstr, 3);
+        $this->socket = @\stream_socket_client(
+            $uri,
+            $errno,
+            $errstr,
+            $connectTimeout,
+        );
         if (!\is_resource($this->socket)) {
             $this->socket = null;
             $this->lastConnectError = \trim("supervisor_uri={$uri}, errno={$errno}, errstr={$errstr}");
@@ -154,6 +170,11 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
     public function setBeforeReadyGuard(?callable $guard): void
     {
         $this->beforeReadyGuard = $guard;
+    }
+
+    public function setOperationDeadlineMonotonic(?float $deadlineMonotonic): void
+    {
+        $this->operationDeadlineMonotonic = $deadlineMonotonic;
     }
 
     public function setVerboseLog(bool $verbose): void
@@ -432,7 +453,9 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
             return true;
         }
 
-        $deadline = $timeBudgetSec > 0.0 ? (self::monotonicSeconds() + $timeBudgetSec) : 0.0;
+        $deadline = $timeBudgetSec > 0.0
+            ? $this->operationPhaseDeadline($timeBudgetSec)
+            : 0.0;
         do {
             $written = $this->flushWriteBufferChunk($deadline);
             if ($written < 0) {
@@ -532,6 +555,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
                 '',
             );
             if (!$registered) {
+                $this->close();
                 return false;
             }
             if ($this->readyDesired) {
@@ -678,7 +702,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
      */
     private function waitForResponse(string $type, float $timeoutSec): ?array
     {
-        $deadline = self::monotonicSeconds() + $timeoutSec;
+        $deadline = $this->operationPhaseDeadline($timeoutSec);
         while (self::monotonicSeconds() < $deadline) {
             if (\is_callable($this->progressCallback)) {
                 ($this->progressCallback)();
@@ -688,10 +712,39 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
                     return $message;
                 }
             }
-            \usleep(10000);
+            $remainingMicroseconds = (int)\floor(
+                \max(0.0, $deadline - self::monotonicSeconds()) * 1_000_000,
+            );
+            if ($remainingMicroseconds < 1) {
+                break;
+            }
+            SchedulerSystem::usleep(\min(10_000, $remainingMicroseconds));
         }
 
         return null;
+    }
+
+    private function operationPhaseDeadline(float $localTimeoutSeconds): float
+    {
+        $now = self::monotonicSeconds();
+        $localDeadline = $now + \max(0.0, $localTimeoutSeconds);
+        if ($this->operationDeadlineMonotonic === null) {
+            return $localDeadline;
+        }
+        if (!\is_finite($this->operationDeadlineMonotonic)) {
+            return $now;
+        }
+
+        return \min($localDeadline, $this->operationDeadlineMonotonic);
+    }
+
+    private function remainingOperationTimeout(float $localTimeoutSeconds): float
+    {
+        $now = self::monotonicSeconds();
+        return \max(
+            0.0,
+            $this->operationPhaseDeadline($localTimeoutSeconds) - $now,
+        );
     }
 
     /**

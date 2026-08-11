@@ -37,8 +37,14 @@ final class WlsGatewayPackageBuilderTest extends TestCase
             $licenses,
             "WLS fixture: test-only\nPHP: PHP License\nNginx: BSD-2-Clause\n",
         ));
+        $caBundle = $this->root . DIRECTORY_SEPARATOR . 'ca-bundle.pem';
+        self::assertNotFalse(\file_put_contents(
+            $caBundle,
+            $this->certificateAuthority(),
+        ));
         $this->inputs = [
             'controller' => $controller,
+            'ca-bundle' => $caBundle,
             'php' => $this->executable('php', ''),
             'nginx' => $this->executable('nginx', '-V'),
             'wls-gateway-broker' => $this->executable(
@@ -72,12 +78,33 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         self::assertFileDoesNotExist($output . DIRECTORY_SEPARATOR . 'manifest.sig');
         $manifest = $this->json($output . DIRECTORY_SEPARATOR . 'manifest.json');
         self::assertFalse($manifest['release_ready']);
+        self::assertTrue($manifest['capabilities']['certificate_snapshot_seal']);
+        self::assertTrue(
+            $manifest['capabilities']['stable_launcher_rollback_target_proof'],
+        );
+        self::assertTrue(
+            $manifest['capabilities']['physical_rebootstrap_capacity_reserve'],
+        );
         self::assertFalse($manifest['capabilities']['self_contained_php']);
         self::assertFalse($manifest['capabilities']['self_contained_nginx']);
-        self::assertCount(8, $manifest['components']);
+        self::assertSame(
+            HostGatewayPackageManager::DURABLE_STATE_CONTRACT,
+            $manifest['durable_state_contract'],
+        );
+        self::assertCount(9, $manifest['components']);
+        self::assertTrue(
+            $manifest['capabilities']['certificate_public_trust_bundle'],
+        );
         self::assertSame(
             'CycloneDX',
             $this->json($output . DIRECTORY_SEPARATOR . 'sbom.cdx.json')['bomFormat'],
+        );
+        self::assertSame(
+            "--self-test\n--rollback-target-proof-self-test\n--recovery-ledger-self-test\n--capacity-reserve-contract-self-test\n",
+            (string)\file_get_contents(
+                $this->inputs['wls-gateway-launcher'] . '.executed',
+            ),
+            'A package must execute the launcher proof test before it can claim the capability.',
         );
 
         $previousTestMode = \getenv('WLS_GATEWAY_TEST_MODE');
@@ -94,6 +121,207 @@ final class WlsGatewayPackageBuilderTest extends TestCase
                 ? \putenv('WLS_GATEWAY_TEST_MODE')
                 : \putenv('WLS_GATEWAY_TEST_MODE=' . $previousTestMode);
         }
+    }
+
+    public function testPackageBuilderFailsClosedWhenLauncherProofTestIsUnavailable(): void
+    {
+        $this->inputs['wls-gateway-launcher'] = $this->executable(
+            'wls-gateway-launcher-without-proof',
+            '--self-test',
+        );
+        $output = $this->root . DIRECTORY_SEPARATOR . 'unproved-launcher-package';
+
+        try {
+            (new \WlsGatewayPackageBuilder())->build($this->options(
+                $output,
+                'test',
+            ));
+            self::fail('An unproved stable launcher must not produce a package manifest.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'component self-test failed',
+                $exception->getMessage(),
+            );
+        }
+        self::assertDirectoryDoesNotExist($output);
+    }
+
+    public function testManifestSchemaLocksStableLauncherProofCapability(): void
+    {
+        $schema = $this->json(
+            \dirname(__DIR__, 5)
+                . DIRECTORY_SEPARATOR . 'env'
+                . DIRECTORY_SEPARATOR . 'gateway'
+                . DIRECTORY_SEPARATOR . 'package-manifest.schema.json',
+        );
+        $capabilities = $schema['properties']['capabilities'];
+
+        self::assertContains(
+            'stable_launcher_rollback_target_proof',
+            $capabilities['required'],
+        );
+        self::assertContains(
+            'physical_rebootstrap_capacity_reserve',
+            $capabilities['required'],
+        );
+        self::assertSame(
+            ['const' => true],
+            $capabilities['properties']['stable_launcher_rollback_target_proof'],
+        );
+        self::assertSame(
+            ['const' => true],
+            $capabilities['properties']['physical_rebootstrap_capacity_reserve'],
+        );
+        self::assertFalse($capabilities['additionalProperties']);
+
+        $schemaRequired = $capabilities['required'];
+        $signerRequired = (new \ReflectionClass(\WlsGatewayPackageSigner::class))
+            ->getReflectionConstant('REQUIRED_CAPABILITIES');
+        $managerRequired = (new \ReflectionClass(HostGatewayPackageManager::class))
+            ->getReflectionConstant('REQUIRED_CAPABILITIES');
+        self::assertInstanceOf(\ReflectionClassConstant::class, $signerRequired);
+        self::assertInstanceOf(\ReflectionClassConstant::class, $managerRequired);
+        $signerRequired = $signerRequired->getValue();
+        $managerRequired = $managerRequired->getValue();
+        self::assertIsArray($signerRequired);
+        self::assertIsArray($managerRequired);
+        \sort($schemaRequired, SORT_STRING);
+        \sort($signerRequired, SORT_STRING);
+        \sort($managerRequired, SORT_STRING);
+        self::assertSame($schemaRequired, $signerRequired);
+        self::assertSame($schemaRequired, $managerRequired);
+    }
+
+    public function testWindowsManifestLocksNativeNamedPipeDeadlineTransport(): void
+    {
+        $schema = $this->json(
+            \dirname(__DIR__, 5)
+                . DIRECTORY_SEPARATOR . 'env'
+                . DIRECTORY_SEPARATOR . 'gateway'
+                . DIRECTORY_SEPARATOR . 'package-manifest.schema.json',
+        );
+        $windowsRule = $schema['allOf'][0]['then']['properties']['capabilities'];
+        self::assertContains(
+            'windows_named_pipe_deadline_transport',
+            $windowsRule['required'],
+        );
+        self::assertSame(
+            ['const' => true],
+            $windowsRule['properties']['windows_named_pipe_deadline_transport'],
+        );
+
+        $builder = (string)\file_get_contents(
+            \dirname(__DIR__, 9) . '/dev/tools/wls-gateway-package.php',
+        );
+        self::assertStringContainsString(
+            "\$capabilities['windows_named_pipe_deadline_transport'] = true;",
+            $builder,
+        );
+        self::assertStringContainsString(
+            "\$expectedCapabilities[] = 'windows_named_pipe_deadline_transport';",
+            $builder,
+        );
+        self::assertStringContainsString(
+            "'--pipe-deadline-self-test'",
+            $builder,
+        );
+    }
+
+    public function testReleaseAuditRejectsNonExactDurableStateContract(): void
+    {
+        $fixture = $this->productionSigningFixture('durable-contract-tamper');
+        $manifestFile = $fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.json';
+        $manifest = $this->json($manifestFile);
+        $manifest['durable_state_contract']['security_ledger_read_schema'] = 6;
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode(
+                $manifest,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . PHP_EOL,
+        ));
+        $receipt = $this->root . DIRECTORY_SEPARATOR
+            . 'durable-contract-tamper-second-audit.json';
+
+        try {
+            $fixture['signer']->audit([
+                'package' => $fixture['package'],
+                'receipt-output' => $receipt,
+            ]);
+            self::fail('The release auditor must reject a non-v2 durable-state contract.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'unsigned production candidate',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileDoesNotExist($receipt);
+    }
+
+    public function testAuditorAndSignerRejectStableLauncherProofDowngrades(): void
+    {
+        $fixture = $this->productionSigningFixture('launcher-proof-downgrade');
+        $manifestFile = $fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.json';
+        $original = $this->json($manifestFile);
+        $mutations = [
+            'missing' => static function (array &$manifest): void {
+                unset($manifest['capabilities']['stable_launcher_rollback_target_proof']);
+            },
+            'false' => static function (array &$manifest): void {
+                $manifest['capabilities']['stable_launcher_rollback_target_proof'] = false;
+            },
+            'type-wrong' => static function (array &$manifest): void {
+                $manifest['capabilities']['stable_launcher_rollback_target_proof'] = 'true';
+            },
+            'unknown-downgrade' => static function (array &$manifest): void {
+                $manifest['capabilities']['stable_launcher_rollback_target_proof_v1'] = true;
+            },
+        ];
+
+        foreach ($mutations as $name => $mutate) {
+            $manifest = $original;
+            $mutate($manifest);
+            self::assertNotFalse(\file_put_contents(
+                $manifestFile,
+                \json_encode(
+                    $manifest,
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                ) . PHP_EOL,
+            ));
+            $expected = $name === 'unknown-downgrade'
+                ? 'capability topology'
+                : 'lacks capability: stable_launcher_rollback_target_proof';
+            $receipt = $this->root . DIRECTORY_SEPARATOR
+                . 'launcher-proof-' . $name . '.audit.json';
+
+            foreach (['audit', 'sign'] as $operation) {
+                try {
+                    if ($operation === 'audit') {
+                        $fixture['signer']->audit([
+                            'package' => $fixture['package'],
+                            'receipt-output' => $receipt,
+                        ]);
+                    } else {
+                        $fixture['signer']->sign($fixture['sign_options']);
+                    }
+                    self::fail(
+                        $operation . ' must reject stable-launcher proof mutation: ' . $name,
+                    );
+                } catch (\RuntimeException $exception) {
+                    self::assertStringContainsString(
+                        $expected,
+                        $exception->getMessage(),
+                        $operation . ' accepted mutation: ' . $name,
+                    );
+                }
+            }
+            self::assertFileDoesNotExist($receipt);
+        }
+
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            $fixture['unsigned_manifest'],
+        ));
     }
 
     public function testProductionPackageRequiresTrustedKeyAndSelfContainedProvenance(): void
@@ -124,6 +352,7 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         $definitions = [];
         foreach ([
             'controller',
+            'ca-bundle',
             'php',
             'nginx',
             'wls-gateway-broker',
@@ -161,6 +390,14 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         self::assertFileDoesNotExist($output . DIRECTORY_SEPARATOR . 'manifest.sig');
         $executionMarker = $this->inputs['wls-gateway-launcher'] . '.executed';
         self::assertFileExists($executionMarker);
+        self::assertSame(
+            "--self-test\n--rollback-target-proof-self-test\n--recovery-ledger-self-test\n--capacity-reserve-contract-self-test\n",
+            (string)\file_get_contents($executionMarker),
+        );
+        self::assertTrue(
+            $this->json($output . DIRECTORY_SEPARATOR . 'manifest.json')
+                ['capabilities']['stable_launcher_rollback_target_proof'],
+        );
         self::assertTrue(\unlink($executionMarker));
         $auditReceipt = $this->root . DIRECTORY_SEPARATOR
             . 'production-package-audit.json';
@@ -893,6 +1130,54 @@ OUTPUT;
         );
     }
 
+    private function certificateAuthority(): string
+    {
+        $config = $this->root . DIRECTORY_SEPARATOR . 'openssl-ca.cnf';
+        self::assertNotFalse(\file_put_contents(
+            $config,
+            <<<'CONFIG'
+[ req ]
+distinguished_name = req_distinguished_name
+prompt = no
+x509_extensions = v3_ca
+
+[ req_distinguished_name ]
+CN = WLS Gateway Package Test Root
+O = Weline Test
+
+[ v3_ca ]
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,keyCertSign,cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+CONFIG
+                . PHP_EOL,
+        ));
+        $options = [
+            'config' => $config,
+            'digest_alg' => 'sha256',
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'x509_extensions' => 'v3_ca',
+        ];
+        $key = \openssl_pkey_new($options);
+        self::assertNotFalse($key);
+        $csr = \openssl_csr_new([], $key, $options);
+        self::assertNotFalse($csr);
+        $certificate = \openssl_csr_sign(
+            $csr,
+            null,
+            $key,
+            3650,
+            $options,
+            1,
+        );
+        self::assertNotFalse($certificate);
+        $pem = '';
+        self::assertTrue(\openssl_x509_export($certificate, $pem, true));
+        return \rtrim($pem) . "\n";
+    }
+
     /**
      * @return array<string,string>
      */
@@ -936,11 +1221,22 @@ int main(int argc, char **argv) {
         }
         return argc == 3 && strcmp(argv[2], "--self-test") == 0 ? 0 : 1;
     }
-    FILE *marker = fopen({$markerLiteral}, "wb");
+    if (argc != 2) {
+        return 1;
+    }
+        if (strcmp(argv[1], expected) != 0
+            && !(strcmp(name, "wls-gateway-launcher") == 0
+            && (strcmp(argv[1], "--rollback-target-proof-self-test") == 0
+                || strcmp(argv[1], "--recovery-ledger-self-test") == 0
+                || strcmp(argv[1], "--capacity-reserve-contract-self-test") == 0))) {
+        return 1;
+    }
+    FILE *marker = fopen({$markerLiteral}, "ab");
     if (marker != NULL) {
+        fprintf(marker, "%s\\n", argv[1]);
         fclose(marker);
     }
-    return argc == 2 && strcmp(argv[1], expected) == 0 ? 0 : 1;
+    return 0;
 }
 C,
         ));
@@ -1009,6 +1305,7 @@ C,
         $definitions = [];
         foreach ([
             'controller',
+            'ca-bundle',
             'php',
             'nginx',
             'wls-gateway-broker',
@@ -1021,7 +1318,11 @@ C,
                 'source_sha256' => \hash_file('sha256', $path),
                 'binary_sha256' => \hash_file('sha256', $path),
                 'license' => 'test-only',
-                'self_contained' => $component !== 'controller',
+                'self_contained' => !\in_array(
+                    $component,
+                    ['controller', 'ca-bundle'],
+                    true,
+                ),
             ];
         }
         $provenance = $this->root . DIRECTORY_SEPARATOR . $name . '.provenance.json';

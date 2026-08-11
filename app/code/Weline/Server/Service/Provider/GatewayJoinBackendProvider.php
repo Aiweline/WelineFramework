@@ -9,7 +9,7 @@ use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\MasterProcess;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
 
 /**
  * Supplemental loopback H1 application backend used while a pure-WLS project
@@ -131,8 +131,8 @@ final class GatewayJoinBackendProvider extends AbstractServiceProvider
             '--wls-runtime-topology=direct',
             '--wls-listener-mode=' . $listenerMode,
             '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context),
-            '--protocol-edge-token-file='
-                . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName),
+            '--gateway-backend-token-file='
+                . GatewayBackendIngressTokenStore::ensureTokenFile($context->instanceName),
             '--gateway-project-uuid=' . $projectUuid,
             '--gateway-instance-generation=' . $instanceGeneration,
             '--gateway-instance-launch-id=' . $instanceLaunchId,

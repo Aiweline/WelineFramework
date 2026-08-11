@@ -138,7 +138,7 @@ final class GatewayProjectEndpointReader
         $endpoints = [];
         foreach (\array_keys($names) as $name) {
             self::assertDeadline($deadlineMonotonic);
-            $endpoint = $this->read($name);
+            $endpoint = $this->read($name, $deadlineMonotonic);
             self::assertDeadline($deadlineMonotonic);
             if (!\is_array($endpoint)) {
                 throw new \RuntimeException(
@@ -166,14 +166,19 @@ final class GatewayProjectEndpointReader
     }
 
     /** @return array<string,mixed>|null */
-    public function read(string $instanceName): ?array
+    public function read(
+        string $instanceName,
+        ?float $deadlineMonotonic = null,
+    ): ?array
     {
+        self::assertDeadline($deadlineMonotonic);
         self::assertInstanceName($instanceName);
         $encoded = GatewayProjectStateFilesystem::readOptional(
             $this->instances->getInstanceFile($instanceName),
             self::MAX_ENDPOINT_BYTES,
             'gateway project endpoint',
         );
+        self::assertDeadline($deadlineMonotonic);
         if ($encoded === null) {
             return null;
         }
@@ -189,6 +194,7 @@ final class GatewayProjectEndpointReader
         if (!\is_array($endpoint) || \array_is_list($endpoint)) {
             throw new \RuntimeException('Gateway project endpoint payload is invalid.');
         }
+        self::assertDeadline($deadlineMonotonic);
         return $endpoint;
     }
 

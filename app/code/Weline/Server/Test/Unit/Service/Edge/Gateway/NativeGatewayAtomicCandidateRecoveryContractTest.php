@@ -37,11 +37,12 @@ final class NativeGatewayAtomicCandidateRecoveryContractTest extends TestCase
             self::assertStringContainsString('"' . $target . '"', $posixInventory);
             self::assertStringContainsString('L"' . $target . '"', $windowsInventory);
         }
+        self::assertStringContainsString('"nginx-test-restore-failed"', $posixInventory);
         self::assertStringContainsString('L"broker-launch.receipt"', $windowsInventory);
         self::assertStringContainsString('L"nginx-process.identity"', $windowsInventory);
 
         self::assertStringContainsString(
-            'WLS_ATOMIC_RECOVERY_TARGET_COUNT 9U',
+            'WLS_ATOMIC_RECOVERY_TARGET_COUNT 10U',
             $posix,
         );
         self::assertStringContainsString(

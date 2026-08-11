@@ -46,7 +46,7 @@ $wlsRuntimeTopology = '';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
-$protocolEdgeTokenFile = '';
+$gatewayBackendTokenFile = '';
 $gatewayProjectUuid = '';
 $gatewayInstanceGeneration = 0;
 $gatewayInstanceLaunchId = '';
@@ -101,8 +101,19 @@ foreach ($argv as $arg) {
         $wlsRuntimeTopology = \strtolower(\trim((string)\substr($arg, 23)));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
-    } elseif (\str_starts_with($arg, '--protocol-edge-token-file=')) {
-        $protocolEdgeTokenFile = (string)\substr($arg, 27);
+    } elseif (\str_starts_with($arg, '--gateway-backend-token-file=')) {
+        $candidate = \trim((string)\substr(
+            $arg,
+            \strlen('--gateway-backend-token-file='),
+        ));
+        if ($gatewayBackendTokenFile !== ''
+            && !\hash_equals($gatewayBackendTokenFile, $candidate)
+        ) {
+            throw new \RuntimeException(
+                'Worker received conflicting gateway backend token arguments.',
+            );
+        }
+        $gatewayBackendTokenFile = $candidate;
     } elseif (\str_starts_with($arg, '--gateway-project-uuid=')) {
         $gatewayProjectUuid = \strtolower(\trim((string)\substr($arg, 23)));
     } elseif (\str_starts_with($arg, '--gateway-instance-generation=')) {
@@ -165,6 +176,58 @@ foreach ($argv as $arg) {
         )));
     }
 }
+$configuredEnvironmentPath = static function (string $name): string {
+    $values = [];
+    foreach ([
+        $_SERVER[$name] ?? null,
+        $_ENV[$name] ?? null,
+        \getenv($name),
+    ] as $value) {
+        if (!\is_string($value) || \trim($value) === '') {
+            continue;
+        }
+        $value = \trim($value);
+        if (\str_contains($value, "\0")) {
+            throw new \RuntimeException($name . ' contains a null byte.');
+        }
+        $identity = PHP_OS_FAMILY === 'Windows'
+            ? \strtolower(\str_replace('\\', '/', $value))
+            : \str_replace('\\', '/', $value);
+        $values[$identity] = $value;
+    }
+    if (\count($values) > 1) {
+        throw new \RuntimeException($name . ' has conflicting environment values.');
+    }
+    return $values === [] ? '' : (string)\reset($values);
+};
+$mergeConfiguredPath = static function (
+    string $argument,
+    string $environment,
+    string $label,
+): string {
+    if ($argument === '') {
+        return $environment;
+    }
+    if ($environment === '') {
+        return $argument;
+    }
+    $argumentIdentity = \str_replace('\\', '/', $argument);
+    $environmentIdentity = \str_replace('\\', '/', $environment);
+    if (PHP_OS_FAMILY === 'Windows') {
+        $argumentIdentity = \strtolower($argumentIdentity);
+        $environmentIdentity = \strtolower($environmentIdentity);
+    }
+    if (!\hash_equals($argumentIdentity, $environmentIdentity)) {
+        throw new \RuntimeException($label . ' argument and environment paths disagree.');
+    }
+    return $argument;
+};
+$gatewayBackendTokenFile = $mergeConfiguredPath(
+    $gatewayBackendTokenFile,
+    $configuredEnvironmentPath('WLS_GATEWAY_BACKEND_TOKEN_FILE'),
+    'Worker gateway backend token',
+);
+unset($configuredEnvironmentPath, $mergeConfiguredPath);
 @\ini_set('memory_limit', $wlsMemoryLimit);
 $normalizedListenerHost = \strtolower(\trim((string)$host));
 if (!\in_array($normalizedListenerHost, ['127.0.0.1', '::1'], true)) {
@@ -182,7 +245,7 @@ if ($controlPort <= 0
     \fwrite(\STDERR, "Authenticated Master identity is required.\n");
     exit(1);
 }
-if ($protocolEdgeTokenFile !== ''
+if ($gatewayBackendTokenFile !== ''
     && (
         \preg_match(
             '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D',
@@ -276,7 +339,8 @@ if (!\in_array($wlsListenerMode, ['single', 'reuseport', 'shared_fd', 'worker_po
     \fwrite(\STDERR, "--wls-listener-mode must be single, reuseport, shared_fd, or worker_ports.\n");
     exit(1);
 }
-$privateListenerRequired = $isMaintenanceWorker || \trim($protocolEdgeTokenFile) !== '';
+$privateListenerRequired = $isMaintenanceWorker
+    || \trim($gatewayBackendTokenFile) !== '';
 $privateListenerHost = \strtolower(\trim((string)$host));
 if ($privateListenerRequired
     && !\in_array($privateListenerHost, ['127.0.0.1', '::1'], true)
@@ -320,6 +384,11 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 // Autoload before resolving the Master bootstrap endpoint.
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
+$gatewayBackendTokenConfiguration = \Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore::resolveConfiguredTokenFile(
+    $gatewayBackendTokenFile,
+);
+$gatewayBackendTokenFile = $gatewayBackendTokenConfiguration['path'];
+unset($gatewayBackendTokenConfiguration);
 
 if ($windowsListenerHandoffPresent
     && !\hash_equals(
@@ -418,8 +487,8 @@ if (!\defined('WLS_WORKER_MASTER_EPOCH')) {
 if (!\defined('WLS_WORKER_LAUNCH_ID')) {
     \define('WLS_WORKER_LAUNCH_ID', $orchestratorLaunchId);
 }
-if (!\defined('WLS_WORKER_PROTOCOL_EDGE_TOKEN_FILE')) {
-    \define('WLS_WORKER_PROTOCOL_EDGE_TOKEN_FILE', $protocolEdgeTokenFile);
+if (!\defined('WLS_WORKER_GATEWAY_BACKEND_TOKEN_FILE')) {
+    \define('WLS_WORKER_GATEWAY_BACKEND_TOKEN_FILE', $gatewayBackendTokenFile);
 }
 if (!\defined('WLS_WORKER_GATEWAY_PROJECT_UUID')) {
     \define('WLS_WORKER_GATEWAY_PROJECT_UUID', $gatewayProjectUuid);
@@ -450,10 +519,10 @@ if ($publicOrigin !== '') {
     $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
 }
-if ($protocolEdgeTokenFile !== '') {
-    $_SERVER['WLS_PROTOCOL_EDGE_TOKEN_FILE'] = $protocolEdgeTokenFile;
-    $_ENV['WLS_PROTOCOL_EDGE_TOKEN_FILE'] = $protocolEdgeTokenFile;
-    @\putenv('WLS_PROTOCOL_EDGE_TOKEN_FILE=' . $protocolEdgeTokenFile);
+if ($gatewayBackendTokenFile !== '') {
+    $_SERVER['WLS_GATEWAY_BACKEND_TOKEN_FILE'] = $gatewayBackendTokenFile;
+    $_ENV['WLS_GATEWAY_BACKEND_TOKEN_FILE'] = $gatewayBackendTokenFile;
+    @\putenv('WLS_GATEWAY_BACKEND_TOKEN_FILE=' . $gatewayBackendTokenFile);
     $_SERVER['WLS_GATEWAY_PROJECT_UUID'] = $gatewayProjectUuid;
     $_ENV['WLS_GATEWAY_PROJECT_UUID'] = $gatewayProjectUuid;
     @\putenv('WLS_GATEWAY_PROJECT_UUID=' . $gatewayProjectUuid);
@@ -1155,12 +1224,12 @@ try {
     $maxBufferedRequestBytes = $requestFramingLimits['max_buffer_bytes'];
     WlsLogger::info_('[PolicyKernel] ready topology=' . $wlsRuntimeTopology
         . ' digest=' . $workerPolicyKernel->policyDigest());
-    if ($wlsRuntimeTopology === 'direct' && $protocolEdgeTokenFile === '') {
+    if ($wlsRuntimeTopology === 'direct' && $gatewayBackendTokenFile === '') {
         $workerOrdinal = ($workerId - 1) % \max(1, $workerCount);
         $workerPolicyKernel->bootConnectionAcceptGatePool(\max(0, $workerOrdinal));
         WlsLogger::info_('[AcceptGate] direct public accept enabled ordinal=' . \max(0, $workerOrdinal));
-    } elseif ($protocolEdgeTokenFile !== '') {
-        WlsLogger::info_('[AcceptGate] public connection gate owned by authenticated protocol edge; Worker L7 policy remains enabled');
+    } elseif ($gatewayBackendTokenFile !== '') {
+        WlsLogger::info_('[AcceptGate] public connection gate owned by authenticated Nginx gateway backend; Worker L7 policy remains enabled');
     }
 } catch (\Throwable $policyError) {
     WlsLogger::error_('[PolicyKernel] bootstrap failed: ' . $policyError->getMessage());
@@ -2940,7 +3009,7 @@ while (true) {
         $requestBuffers,
         $connectionLastActivity,
         $connectionPeerIps,
-        $protocolEdgeTokenFile !== '',
+        $gatewayBackendTokenFile !== '',
         \Weline\Server\Service\WorkerResponseMemoryGuard::listenerAcceptBatchLimit(
             $sharedListenerBound,
             \PHP_OS_FAMILY,
@@ -3470,7 +3539,7 @@ function wlsAcceptHttpConnections(
     array &$requestBuffers,
     array &$connectionLastActivity,
     array &$connectionPeerIps,
-    bool $protocolEdgeIngressEnabled = false,
+    bool $gatewayBackendIngressEnabled = false,
     int $maxAcceptPerLoop = 64,
 ): void {
     if (!$socket || !\is_resource($socket) || !\in_array($socket, $read, true)) {
@@ -3500,13 +3569,13 @@ function wlsAcceptHttpConnections(
         if ($acceptGates !== null) {
             $peer = @\stream_socket_get_name($conn, true);
             $peer = \is_string($peer) ? $peer : '';
-            $trustedProtocolEdge = $protocolEdgeIngressEnabled
+            $trustedGatewayBackend = $gatewayBackendIngressEnabled
                 && \Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($peer);
             $decision = $acceptGates->accept(
                 (string)$connId,
                 $peer,
                 null,
-                $trustedProtocolEdge,
+                $trustedGatewayBackend,
             );
             if (!$decision->allowed) {
                 @\fclose($conn);
@@ -5339,7 +5408,7 @@ function handleRequest(
         $gatewayProbeNonce = \strtolower(\trim((string)(
             $policyDecision->headers['x-wls-probe-nonce'] ?? ''
         )));
-        if (\trim((string)WLS_WORKER_PROTOCOL_EDGE_TOKEN_FILE) !== ''
+        if (\trim((string)WLS_WORKER_GATEWAY_BACKEND_TOKEN_FILE) !== ''
             && \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayProbeNonce) === 1
         ) {
             $gatewayProbeLaunchId = \strtolower(\trim((string)(
@@ -5422,7 +5491,7 @@ function handleRequest(
                     WLS_WORKER_GATEWAY_SESSION_CAPABILITY_EVIDENCE_DIGEST
                 )));
                 $edgeSecret = wlsWorkerReadStableEdgeSecret(
-                    \trim((string)WLS_WORKER_PROTOCOL_EDGE_TOKEN_FILE),
+                    \trim((string)WLS_WORKER_GATEWAY_BACKEND_TOKEN_FILE),
                 );
                 $projectUuid = \strtolower(\trim((string)WLS_WORKER_GATEWAY_PROJECT_UUID));
                 $launchId = \strtolower(\trim((string)(

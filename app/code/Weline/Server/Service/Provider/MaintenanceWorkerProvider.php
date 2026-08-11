@@ -8,8 +8,8 @@ use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
 use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * 维护 Worker 服务提供者
@@ -122,8 +122,8 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             $context->getConfig('edge_mode', ''),
         ))) === GatewayStartupDecision::MODE_GATEWAY;
         if ($gatewayBackend) {
-            $arguments[] = '--protocol-edge-token-file='
-                . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
+            $arguments[] = '--gateway-backend-token-file='
+                . GatewayBackendIngressTokenStore::ensureTokenFile($context->instanceName);
             $projectUuid = \strtolower(\trim((string)$context->getConfig(
                 'wls.gateway.project_uuid',
                 '',

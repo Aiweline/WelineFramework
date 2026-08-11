@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\SharedStateRuntimeResolver;
+use Weline\Server\Service\SharedStateRuntimeScope;
 
 final class SharedStateRuntimeResolverTest extends TestCase
 {
@@ -73,7 +74,13 @@ final class SharedStateRuntimeResolverTest extends TestCase
             null
         );
 
-        self::assertSame('session_server.26425.token', $runtime['session']['token_file_name']);
-        self::assertSame('memory_server.26424.token', $runtime['memory']['token_file_name']);
+        self::assertSame(
+            SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', 26425),
+            $runtime['session']['token_file_name'],
+        );
+        self::assertSame(
+            SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', 26424),
+            $runtime['memory']['token_file_name'],
+        );
     }
 }

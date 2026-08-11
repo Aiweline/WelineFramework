@@ -676,7 +676,7 @@ final class GatewayHostManagerAsyncPublicationTest extends TestCase
             $drain,
         );
         self::assertStringContainsString(
-            '(float)\\min(90, \\max(1, $seconds))',
+            '(float)\\min(90, $boundedSeconds)',
             $drain,
         );
         self::assertStringNotContainsString(

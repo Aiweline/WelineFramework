@@ -126,7 +126,7 @@ final class StopRedirectPortOwnershipTest extends TestCase
         ]));
     }
 
-    public function testKillWlsProcessOnPortTerminatesResolvedManagedRootTree(): void
+    public function testKillWlsProcessOnPortRejectsPortOnlyManagedLookingEvidence(): void
     {
         $stop = new class extends Stop {
             public array $killedPids = [];
@@ -188,7 +188,7 @@ final class StopRedirectPortOwnershipTest extends TestCase
             }
         };
 
-        self::assertTrue($stop->killWlsProcessOnPort(80));
-        self::assertSame([654], $stop->killedPids);
+        self::assertFalse($stop->killWlsProcessOnPort(80));
+        self::assertSame([], $stop->killedPids);
     }
 }

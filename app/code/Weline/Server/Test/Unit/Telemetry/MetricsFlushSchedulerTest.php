@@ -100,6 +100,32 @@ class FakeServerTrafficMetricForScheduler extends ServerTrafficMetric
 
 class MetricsFlushSchedulerTest extends TestCase
 {
+    public function testHighProcessMemoryKeepsTheBoundedRetryQueueDrainable(): void
+    {
+        $model = new FakeServerTrafficMetricForScheduler();
+        $scheduler = new class($model) extends MetricsFlushScheduler {
+            protected function currentMemoryUsageBytes(): int
+            {
+                return 128 * 1024 * 1024;
+            }
+        };
+
+        self::assertTrue($scheduler->upsertMetric(
+            'inst-high-memory',
+            '127.0.0.1',
+            1774603500,
+            'traffic',
+            [
+                'request_count' => 1,
+                'error_count' => 0,
+                'bytes_out' => 10,
+                'latency_total_ms' => 8,
+                'latency_max_ms' => 8,
+            ],
+        ));
+        self::assertNotNull($model->getBucketRow());
+    }
+
     public function testUpsertMetricCanInsertNewBucket(): void
     {
         $model = new FakeServerTrafficMetricForScheduler();
@@ -141,4 +167,3 @@ class MetricsFlushSchedulerTest extends TestCase
         $this->assertSame(70, (int)($bucket[ServerTrafficMetric::schema_fields_LATENCY_MAX_MS] ?? 0));
     }
 }
-

@@ -6,7 +6,9 @@ namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
+use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateRenewalIntentStore;
 
 final class ProjectCertificateRenewalIntentStoreTest extends TestCase
@@ -148,6 +150,185 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
         }
     }
 
+    public function testAcknowledgementAuthenticatesReceiptOutsideStateLockAndForwardsDeadline(): void
+    {
+        $root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'wls-renewal-ack-lock-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(@\mkdir(
+            $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl',
+            0700,
+            true,
+        ));
+        $receipt = [];
+        $resolverObservedUnlockedState = false;
+        $resolverDeadline = null;
+        $stateLock = $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR
+            . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR
+            . '.wls-renewal-intents' . DIRECTORY_SEPARATOR . 'state.lock';
+        try {
+            $store = new ProjectCertificateRenewalIntentStore(
+                $root,
+                leaseReceiptResolver: static function (
+                    string $instanceName,
+                    ?float $deadlineMonotonic,
+                ) use (
+                    &$receipt,
+                    &$resolverObservedUnlockedState,
+                    &$resolverDeadline,
+                    $stateLock,
+                ): array {
+                    self::assertSame('default', $instanceName);
+                    $resolverDeadline = $deadlineMonotonic;
+                    $handle = @\fopen($stateLock, 'c+b');
+                    self::assertIsResource($handle);
+                    try {
+                        $resolverObservedUnlockedState = @\flock(
+                            $handle,
+                            LOCK_EX | LOCK_NB,
+                        );
+                        if ($resolverObservedUnlockedState) {
+                            @\flock($handle, LOCK_UN);
+                        }
+                    } finally {
+                        @\fclose($handle);
+                    }
+                    return $receipt;
+                },
+            );
+            $registration = $this->registration(1, '8');
+            $routeId = (string)$registration['routes'][0]['route_id'];
+            $store->enqueueFromRegistration($registration);
+            $store->recordAttempt($registration, 'default', [
+                'action' => 'register',
+                'gateway_epoch' => \str_repeat('2', 32),
+                'expected_route_generations' => [],
+            ]);
+            $receipt = $this->leaseReceipt(
+                $registration,
+                [$routeId => 3],
+                9,
+                \str_repeat('9', 64),
+            );
+            $status = [
+                ...$this->statusForReceipt($receipt),
+                'non_certificate_desired_digest' =>
+                    (string)$registration['non_certificate_desired_digest'],
+                'active_routes' => [[
+                    'project_uuid' => (string)$registration['project_uuid'],
+                    'route_id' => $routeId,
+                    'domain' => 'renewal.example.test',
+                    'status' => 'ACTIVE',
+                    'route_generation' => 3,
+                    'certificate' => $this->activeCertificateFacts(
+                        'renewal.example.test',
+                        1,
+                        \str_repeat('8', 64),
+                    ),
+                ]],
+            ];
+            $deadline = (\hrtime(true) / 1_000_000_000) + 2.0;
+
+            self::assertTrue($store->acknowledge(
+                $registration,
+                'default',
+                'register',
+                $status,
+                1.0,
+                $deadline,
+            ));
+            self::assertTrue($resolverObservedUnlockedState);
+            self::assertSame($deadline, $resolverDeadline);
+            self::assertNull($store->pendingReplay());
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
+    public function testAcknowledgementRejectsAttemptChangedDuringReceiptAuthentication(): void
+    {
+        $root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'wls-renewal-ack-cas-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(@\mkdir(
+            $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl',
+            0700,
+            true,
+        ));
+        $store = null;
+        $registration = $this->registration(1, '8');
+        $receipt = [];
+        try {
+            $store = new ProjectCertificateRenewalIntentStore(
+                $root,
+                leaseReceiptResolver: static function (
+                    string $instanceName,
+                    ?float $deadlineMonotonic,
+                ) use (
+                    &$store,
+                    $registration,
+                    &$receipt,
+                ): array {
+                    self::assertSame('default', $instanceName);
+                    self::assertNull($deadlineMonotonic);
+                    self::assertInstanceOf(
+                        ProjectCertificateRenewalIntentStore::class,
+                        $store,
+                    );
+                    $store->recordAttempt($registration, 'default', [
+                        'action' => 'register',
+                        'gateway_epoch' => \str_repeat('2', 32),
+                        'expected_route_generations' => [],
+                    ]);
+                    return $receipt;
+                },
+            );
+            $routeId = (string)$registration['routes'][0]['route_id'];
+            $store->enqueueFromRegistration($registration);
+            $store->recordAttempt($registration, 'default', [
+                'action' => 'register',
+                'gateway_epoch' => \str_repeat('2', 32),
+                'expected_route_generations' => [],
+            ]);
+            $receipt = $this->leaseReceipt(
+                $registration,
+                [$routeId => 3],
+                9,
+                \str_repeat('9', 64),
+            );
+            $status = [
+                ...$this->statusForReceipt($receipt),
+                'non_certificate_desired_digest' =>
+                    (string)$registration['non_certificate_desired_digest'],
+                'active_routes' => [[
+                    'project_uuid' => (string)$registration['project_uuid'],
+                    'route_id' => $routeId,
+                    'domain' => 'renewal.example.test',
+                    'status' => 'ACTIVE',
+                    'route_generation' => 3,
+                    'certificate' => $this->activeCertificateFacts(
+                        'renewal.example.test',
+                        1,
+                        \str_repeat('8', 64),
+                    ),
+                ]],
+            ];
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage(
+                'replay attempt changed while authenticating acknowledgement',
+            );
+            $store->acknowledge(
+                $registration,
+                'default',
+                'register',
+                $status,
+            );
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
     public function testStoreRejectsFilesystemProjectRoot(): void
     {
         $root = \realpath(\sys_get_temp_dir());
@@ -247,6 +428,11 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
         $requestDigest = \str_repeat('c', 64);
         $nonCertificateDigest = \str_repeat('d', 64);
         $sourceDigest = \str_repeat('e', 64);
+        $certificateFacts = $this->activeCertificateFacts(
+            'example.test',
+            3,
+            $sourceDigest,
+        );
         $facts = [
             'project_uuid' => $projectUuid,
             'project_generation' => 9,
@@ -258,6 +444,10 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
                 'state' => 'active',
                 'certificate_generation' => 3,
                 'source_digest' => $sourceDigest,
+                'trust_profile' => $certificateFacts['trust_profile'],
+                'provider' => $certificateFacts['provider'],
+                'material_class' => $certificateFacts['material_class'],
+                'provenance_digest' => $certificateFacts['provenance_digest'],
                 'pending' => false,
             ]],
         ];
@@ -281,12 +471,7 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
                 'domain' => 'example.test',
                 'status' => 'ACTIVE',
                 'route_generation' => 7,
-                'certificate' => [
-                    'state' => 'active',
-                    'generation' => 3,
-                    'source_digest' => $sourceDigest,
-                    'pending' => false,
-                ],
+                'certificate' => $certificateFacts,
             ]],
         ];
 
@@ -335,6 +520,10 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
             'sha256',
             "wls-pending-certificate\0pending.example.test",
         );
+        $certificateFacts = $this->pendingCertificateFacts(
+            'pending.example.test',
+            $pendingDigest,
+        );
         $activeDigest = \str_repeat('9', 64);
         $facts = [
             'project_uuid' => $projectUuid,
@@ -347,6 +536,10 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
                 'state' => 'pending',
                 'certificate_generation' => 0,
                 'source_digest' => $pendingDigest,
+                'trust_profile' => $certificateFacts['trust_profile'],
+                'provider' => $certificateFacts['provider'],
+                'material_class' => $certificateFacts['material_class'],
+                'provenance_digest' => $certificateFacts['provenance_digest'],
                 'pending' => true,
             ]],
         ];
@@ -370,12 +563,7 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
                 'domain' => 'pending.example.test',
                 'status' => 'PENDING_CERTIFICATE',
                 'route_generation' => 2,
-                'certificate' => [
-                    'state' => 'pending',
-                    'generation' => 0,
-                    'source_digest' => $pendingDigest,
-                    'pending' => true,
-                ],
+                'certificate' => $certificateFacts,
             ]],
         ];
         $method->invoke($store, $status, $facts, [$routeId => 2], $receipt);
@@ -455,7 +643,7 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
         string $activeConfigDigest,
     ): array {
         return [
-            'schema_version' => 2,
+            'schema_version' => GatewayHostManager::LEASE_RECEIPT_SCHEMA_VERSION,
             'protocol' => GatewayPaths::PROTOCOL,
             'host_id' => \str_repeat('1', 64),
             'project_uuid' => (string)$facts['project_uuid'],
@@ -472,6 +660,9 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
             'active_config_digest' => $activeConfigDigest,
             'host_boot_id' => \str_repeat('6', 64),
             'issued_monotonic' => 1.0,
+            'lifecycle_state' => 'ACTIVE',
+            'drain_operation_id' => '',
+            'drain_started_monotonic' => 0.0,
             'lease_sequence' => 7,
             'lease_ttl_seconds' => 45,
             'route_generations' => $routeGenerations,
@@ -538,9 +729,12 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174090';
         $domain = 'renewal.example.test';
+        $sourceDigest = \str_repeat($seed, 64);
         return [
             'project_uuid' => $projectUuid,
             'instance_id' => 'default',
+            'certificate_trust_profile'
+                => ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
             'project_generation' => $generation,
             'request_digest' => \str_repeat($seed, 64),
             'non_certificate_desired_digest' => \str_repeat('c', 64),
@@ -551,12 +745,62 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
                     32,
                 ),
                 'domain' => $domain,
-                'certificate' => [
-                    'generation' => $generation,
-                    'source_digest' => \str_repeat($seed, 64),
-                    'pending' => false,
-                ],
+                'certificate' => $this->activeCertificateFacts(
+                    $domain,
+                    $generation,
+                    $sourceDigest,
+                ),
             ]],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function activeCertificateFacts(
+        string $domain,
+        int $generation,
+        string $sourceDigest,
+    ): array {
+        $trustProfile = ProjectCertificateGenerationStore::TRUST_PROFILE_TEST;
+        $provider = ProjectCertificateGenerationStore::PROVIDER_SELF_SIGNED;
+        $materialClass = ProjectCertificateGenerationStore::MATERIAL_CLASS_SELF_SIGNED;
+        return [
+            'state' => 'active',
+            'generation' => $generation,
+            'source_digest' => $sourceDigest,
+            'trust_profile' => $trustProfile,
+            'provider' => $provider,
+            'material_class' => $materialClass,
+            'provenance_digest' => ProjectCertificateGenerationStore::provenanceDigest(
+                $domain,
+                $sourceDigest,
+                $trustProfile,
+                $provider,
+                $materialClass,
+            ),
+            'pending' => false,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function pendingCertificateFacts(string $domain, string $sourceDigest): array
+    {
+        $trustProfile = ProjectCertificateGenerationStore::TRUST_PROFILE_TEST;
+        return [
+            'state' => 'pending',
+            'generation' => 0,
+            'source_digest' => $sourceDigest,
+            'trust_profile' => $trustProfile,
+            'provider' => 'none',
+            'material_class' => 'none',
+            'provenance_digest'
+                => ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                    $domain,
+                    'pending',
+                    $sourceDigest,
+                    0,
+                    $trustProfile,
+                ),
+            'pending' => true,
         ];
     }
 

@@ -373,6 +373,95 @@ final class PromoteOwnershipTest extends TestCase
         self::assertSame([], $result['probes'] ?? null);
     }
 
+    public function testPromotionDeadlineFaultInjectionPreservesRollbackReserveBeforeCutover(): void
+    {
+        $reflection = new \ReflectionClass(Promote::class);
+        $command = $reflection->newInstanceWithoutConstructor();
+        $derive = new \ReflectionMethod(
+            Promote::class,
+            'promotionForwardDeadline',
+        );
+        $reserve = $reflection->getReflectionConstant(
+            'PROMOTION_ROLLBACK_RESERVE_SECONDS',
+        )?->getValue();
+        self::assertIsFloat($reserve);
+        self::assertSame(120.0, $reserve);
+
+        $rejection = null;
+        try {
+            $derive->invoke(
+                $command,
+                (\hrtime(true) / 1_000_000_000) + ($reserve / 2.0),
+            );
+        } catch (\RuntimeException $exception) {
+            $rejection = $exception;
+        }
+        self::assertInstanceOf(\RuntimeException::class, $rejection);
+        self::assertStringContainsString(
+            'rollback reserve',
+            \strtolower($rejection->getMessage()),
+        );
+
+        $outerDeadline = (\hrtime(true) / 1_000_000_000) + $reserve + 5.0;
+        self::assertEqualsWithDelta(
+            $outerDeadline - $reserve,
+            $derive->invoke($command, $outerDeadline),
+            0.000001,
+        );
+
+        $file = $reflection->getFileName();
+        self::assertIsString($file);
+        $source = (string)\file_get_contents($file);
+        $executeAt = \strpos($source, 'private function executePromotionLocked(');
+        $rollbackAt = \strpos($source, 'private function rollbackPromotionFromJournal(');
+        self::assertIsInt($executeAt);
+        self::assertIsInt($rollbackAt);
+        $execute = \substr($source, $executeAt, $rollbackAt - $executeAt);
+        $budgetGuard = \strpos(
+            $execute,
+            '$this->remainingPromotionDeadline($forwardDeadlineMonotonic);',
+        );
+        $stop = \strpos($execute, '$stopped = $legacy->stopForInstance(');
+        self::assertIsInt($budgetGuard);
+        self::assertIsInt($stop);
+        self::assertTrue(
+            $budgetGuard < $stop,
+            'The rollback budget must be proven before legacy Nginx can be stopped.',
+        );
+        foreach ([
+            'stopForInstance',
+            'activateLegacyPromotion',
+            'enrollCurrentProjectForPromotion',
+            'GatewayBackendIngressTokenStore::ensureTokenFile',
+            'persistPromotedInstanceEdgeMode',
+            'setProjectGatewayAgentEnabled',
+            'awaitPromotionProjectActivation',
+            'commitProjectGatewayAgentPromotion',
+        ] as $operation) {
+            self::assertMatchesRegularExpression(
+                '/' . $operation . '\(.*?\$forwardDeadlineMonotonic,?\s*\)/s',
+                $execute,
+                $operation . ' must not consume the rollback reserve.',
+            );
+        }
+        self::assertMatchesRegularExpression(
+            '/awaitPromotionProjectActivation\(\s*instanceName:\s*\$owner,\s*projectRoot:\s*\$projectRoot,\s*deadlineMonotonic:\s*\$forwardDeadlineMonotonic,\s*\)/s',
+            $execute,
+            'The promotion deadline must use the named deadline parameter, not the timeoutSeconds position.',
+        );
+
+        $rollback = \substr($source, $rollbackAt);
+        self::assertStringNotContainsString(
+            '$forwardDeadlineMonotonic',
+            $rollback,
+            'Rollback must retain the complete outer promotion deadline.',
+        );
+        self::assertStringContainsString(
+            '$gateway->quiesceLegacyPromotion($staged, $deadlineMonotonic)',
+            $rollback,
+        );
+    }
+
     public function testPromotionJournalCollectsRetainedBackupOnlyAfterValidatingCurrentTarget(): void
     {
         $previousMode = \getenv('WLS_GATEWAY_TEST_MODE');

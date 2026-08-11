@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\SharedStateRuntimeScope;
 use Weline\Server\Service\SharedStateServiceRegistry;
 use Weline\Server\Service\SharedStateServiceManager;
 
@@ -768,7 +769,13 @@ final class SharedStateServiceManagerTest extends TestCase
             false
         );
 
-        self::assertSame('session_server.token', $resolved);
+        self::assertSame(
+            SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                ControlMessage::ROLE_SESSION_SERVER,
+                $defaultPort,
+            ),
+            $resolved,
+        );
     }
 
     public function testSharedServicePortPrefersCanonicalProjectPortBeforeStaleRuntimePort(): void
@@ -894,7 +901,13 @@ final class SharedStateServiceManagerTest extends TestCase
             false
         );
 
-        self::assertSame("memory_server.{$resolvedPort}.token", $resolved);
+        self::assertSame(
+            SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                ControlMessage::ROLE_MEMORY_SERVER,
+                $resolvedPort,
+            ),
+            $resolved,
+        );
     }
 
     public function testEnsureRegistersRequesterAsTrackedConsumer(): void

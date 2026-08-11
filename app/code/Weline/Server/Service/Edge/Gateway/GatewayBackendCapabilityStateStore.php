@@ -27,7 +27,10 @@ final class GatewayBackendCapabilityStateStore
      * @param array<string,mixed> $observation
      * @return array<string,mixed>
      */
-    public function stabilize(array $observation): array
+    public function stabilize(
+        array $observation,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         if (!$this->validObservation($observation)) {
             return $this->failClosed($observation, 'capability_observation_invalid');
@@ -59,7 +62,12 @@ final class GatewayBackendCapabilityStateStore
             $lockFile = $file . '.lock';
             return GatewayProjectStateFilesystem::withExclusiveLock(
                 $lockFile,
-                function () use ($file, $observation): array {
+                function () use (
+                    $file,
+                    $observation,
+                    $deadlineMonotonic,
+                ): array {
+                    self::deadlineRemaining($deadlineMonotonic);
                     $this->cleanupStateRecoveryBackups($file);
                     $state = $this->readState($file);
                     [$next, $result] = $this->transition($state, $observation);
@@ -68,10 +76,36 @@ final class GatewayBackendCapabilityStateStore
                     }
                     return $result;
                 },
+                waitTimeoutSeconds: self::lockWaitTimeout($deadlineMonotonic),
             );
         } catch (\Throwable) {
             return $this->failClosed($observation, 'capability_state_unavailable');
         }
+    }
+
+    private static function lockWaitTimeout(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        return \min(0.25, self::deadlineRemaining($deadlineMonotonic));
+    }
+
+    private static function deadlineRemaining(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('Gateway backend capability deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Gateway backend capability deadline was exhausted.',
+            );
+        }
+        return $remaining;
     }
 
     /**

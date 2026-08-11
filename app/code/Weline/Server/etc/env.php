@@ -14,8 +14,6 @@ return [
             // HTTP/3 只由 Nginx 提供。
             'protocols' => ['h1'],
             'preferred' => 'h1',
-            'protocol_edge' => 'disabled',
-            'protocol_edge_binary' => '',
             'tls_session_resumption' => false,
             'alt_svc' => false,
         ],
