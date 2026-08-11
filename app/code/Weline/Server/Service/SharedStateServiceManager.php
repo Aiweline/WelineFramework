@@ -2422,6 +2422,11 @@ class SharedStateServiceManager
                 $runtime['lifecycle_identity_digest'],
             );
         }
+        $runtime = self::discardAuthenticatedStaleCandidateBinding(
+            $role,
+            $runtime,
+            $authority,
+        );
         $candidateBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
             $role,
             $runtime,
@@ -2452,6 +2457,49 @@ class SharedStateServiceManager
         }
 
         return $runtime;
+    }
+
+    /**
+     * A sidecar may already carry the registry's older binding while a stale
+     * runtime file claims a higher generation for a dead process. A fresh,
+     * protocol-authenticated identity may advance from that monotonic floor,
+     * but its lower binding must not be treated as authority. Unauthenticated
+     * candidates and genuinely newer bindings remain subject to the normal
+     * generation CAS.
+     *
+     * @param array<string,mixed> $candidate
+     * @param array<string,mixed> $authority
+     * @return array<string,mixed>
+     */
+    private static function discardAuthenticatedStaleCandidateBinding(
+        string $role,
+        array $candidate,
+        array $authority,
+    ): array {
+        if (($candidate['_authenticated_identity_verified'] ?? false) !== true
+            || !SharedStateServiceRegistry::hasExactLifecycleBinding($role, $authority)
+        ) {
+            return $candidate;
+        }
+        $candidateDigest = SharedStateServiceRegistry::lifecycleIdentityDigest(
+            $role,
+            $candidate,
+        );
+        $authorityDigest = (string)($authority['lifecycle_identity_digest'] ?? '');
+        if ($candidateDigest === '' || \hash_equals($authorityDigest, $candidateDigest)) {
+            return $candidate;
+        }
+        $candidateGeneration = (int)($candidate['lifecycle_generation'] ?? 0);
+        $authorityGeneration = (int)($authority['lifecycle_generation'] ?? 0);
+        if ($authorityGeneration < 1 || $candidateGeneration > $authorityGeneration) {
+            return $candidate;
+        }
+        unset(
+            $candidate['lifecycle_schema'],
+            $candidate['lifecycle_generation'],
+            $candidate['lifecycle_identity_digest'],
+        );
+        return $candidate;
     }
 
     /**
