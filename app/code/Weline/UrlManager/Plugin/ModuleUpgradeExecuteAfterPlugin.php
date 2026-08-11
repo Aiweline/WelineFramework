@@ -19,7 +19,8 @@ use Weline\UrlManager\Model\UrlManager;
 
 class ModuleUpgradeExecuteAfterPlugin
 {
-    private const ROUTE_BATCH_SIZE = 500;
+    // 每行固定写入 6 个字段；100 行最多约 600 个绑定变量，兼容旧 SQLite 的 999 上限。
+    private const ROUTE_BATCH_SIZE = 100;
     private const ROUTE_IMPORT_MEMORY_LIMIT = '512M';
 
     private $urlManager =  null;

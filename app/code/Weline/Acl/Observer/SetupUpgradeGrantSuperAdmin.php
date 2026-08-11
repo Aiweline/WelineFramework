@@ -28,6 +28,8 @@ use Weline\Framework\Output\Cli\Printing;
 class SetupUpgradeGrantSuperAdmin implements ObserverInterface
 {
     private const SUPER_ADMIN_ROLE_ID = 1;
+    /** 两列绑定参数按 250 行分批，兼容 SQLite 旧版 999 变量上限。 */
+    private const ROLE_ACCESS_BATCH_SIZE = 250;
 
     public function __construct(
         private Acl $acl,
@@ -85,10 +87,12 @@ class SetupUpgradeGrantSuperAdmin implements ObserverInterface
 
             $this->roleAccess->beginTransaction();
             try {
-                $this->roleAccess->reset()->insert(
-                    $toInsert,
-                    [RoleAccess::schema_fields_ROLE_ID, RoleAccess::schema_fields_SOURCE_ID]
-                )->fetch();
+                foreach (array_chunk($toInsert, self::ROLE_ACCESS_BATCH_SIZE) as $roleAccessBatch) {
+                    $this->roleAccess->reset()->insert(
+                        $roleAccessBatch,
+                        [RoleAccess::schema_fields_ROLE_ID, RoleAccess::schema_fields_SOURCE_ID]
+                    )->fetch();
+                }
                 $this->roleAccess->commit();
             } catch (\Throwable $e) {
                 $this->roleAccess->rollBack();
