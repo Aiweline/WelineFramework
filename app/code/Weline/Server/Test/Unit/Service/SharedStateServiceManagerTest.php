@@ -136,16 +136,53 @@ final class SharedStateServiceManagerTest extends TestCase
 
     public function testEnsureShortCircuitsHealthyProbeBeforeSlowInspection(): void
     {
-        $manager = new class extends SharedStateServiceManager {
+        $registry = new class extends SharedStateServiceRegistry {
+            /** @var array<string,array<string,mixed>> */
+            public array $records = [];
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                $previous = $this->records[$role] ?? [];
+                $record = self::bindLifecycleGeneration(
+                    $role,
+                    $updater($previous),
+                    $previous,
+                );
+                $this->records[$role] = $record;
+
+                return $record;
+            }
+
+            public function getConsumers(string $role): array
+            {
+                return [];
+            }
+        };
+        $manager = new class($registry) extends SharedStateServiceManager {
             public array $runtimeFiles = [];
 
-            public function __construct()
-            {
+            public function __construct(
+                private readonly SharedStateServiceRegistry $registry,
+            ) {
                 $this->runtimeFiles[ControlMessage::ROLE_MEMORY_SERVER] = [
                     'port' => 19971,
                     'pid' => (int) \getmypid(),
                     'started_at' => '2026-03-27T01:55:49+00:00',
                 ];
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function recoverRuntimeFileForMutation(string $role): void
+            {
             }
 
             protected function readRuntimeFile(string $role): array
@@ -193,6 +230,10 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame((int) \getmypid(), $runtime['pid'] ?? null);
         self::assertSame(19971, $runtime['port'] ?? null);
         self::assertSame('memory_server.token', $runtime['token_file_name'] ?? null);
+        self::assertSame(
+            (int) \getmypid(),
+            $registry->getRecord(ControlMessage::ROLE_MEMORY_SERVER)['pid'] ?? null,
+        );
     }
 
     public function testEnsureRuntimeReusesHealthySharedServicesDirectly(): void
@@ -222,6 +263,9 @@ final class SharedStateServiceManagerTest extends TestCase
         };
 
         $manager = new class($registry) extends SharedStateServiceManager {
+            /** @var array<string,array<string,mixed>> */
+            public array $runtimeFiles = [];
+
             public function __construct(private readonly SharedStateServiceRegistry $registry)
             {
             }
@@ -229,6 +273,20 @@ final class SharedStateServiceManagerTest extends TestCase
             protected function createRegistry(): SharedStateServiceRegistry
             {
                 return $this->registry;
+            }
+
+            protected function recoverRuntimeFileForMutation(string $role): void
+            {
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return $this->runtimeFiles[$role] ?? [];
+            }
+
+            protected function writeRuntimeFile(string $role, array $runtime): void
+            {
+                $this->runtimeFiles[$role] = $runtime;
             }
 
             protected function probeDefinition(array $definition): array
