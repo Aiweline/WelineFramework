@@ -18,6 +18,7 @@ final class GatewayAcmeChallengePublisher
      * @param (\Closure(string,int,array,string): bool)|null $sync
      * @param (\Closure(): array<string,mixed>)|null $statusProvider
      * @param (\Closure(string): array<string,mixed>)|null $leaseReceiptProvider
+     * @param (\Closure(string): array<string,mixed>)|null $servingManifestProvider
      */
     public function __construct(
         private readonly ?\Closure $endpointProvider = null,
@@ -25,6 +26,7 @@ final class GatewayAcmeChallengePublisher
         private readonly ?\Closure $sync = null,
         private readonly ?\Closure $statusProvider = null,
         private readonly ?\Closure $leaseReceiptProvider = null,
+        private readonly ?\Closure $servingManifestProvider = null,
     ) {
     }
 
@@ -70,6 +72,7 @@ final class GatewayAcmeChallengePublisher
         }
 
         $gatewayIntentObserved = false;
+        $gatewayMembershipUnresolved = false;
         $participatingInstances = [];
         $completeCandidateInstances = [];
         $projectUuid = '';
@@ -87,13 +90,29 @@ final class GatewayAcmeChallengePublisher
             }
             $instanceName = (string)$instanceName;
             $participatingInstances[$instanceName] = true;
-            if ($requiredDomain === null
-                || $this->endpointAdvertisesDomain($endpoint, $requiredDomain)
-            ) {
+            $endpointMembershipResolved = $requiredDomain === null
+                || $this->endpointAdvertisesDomain($endpoint, $requiredDomain);
+            if ($endpointMembershipResolved) {
                 $gatewayIntentObserved = true;
+            }
+            $manifestDomains = $this->servingManifestDomains(
+                $instanceName,
+                $endpoint,
+                $deadlineMonotonic,
+            );
+            if ($manifestDomains !== null) {
+                $endpointMembershipResolved = true;
+                if ($requiredDomain !== null
+                    && isset($manifestDomains[$requiredDomain])
+                ) {
+                    $gatewayIntentObserved = true;
+                }
             }
             $masterPid = (int)($endpoint['master_pid'] ?? 0);
             if ($masterPid < 1 || !Processer::processExists($masterPid)) {
+                if (!$endpointMembershipResolved) {
+                    $gatewayMembershipUnresolved = true;
+                }
                 continue;
             }
             try {
@@ -113,12 +132,18 @@ final class GatewayAcmeChallengePublisher
                         $deadlineMonotonic,
                     );
             } catch (\Throwable) {
+                if (!$endpointMembershipResolved) {
+                    $gatewayMembershipUnresolved = true;
+                }
                 continue;
             }
             if (!\is_array($registration)
                 || !\is_array($receipt)
                 || !$this->deadlineAvailable($deadlineMonotonic)
             ) {
+                if (!$endpointMembershipResolved) {
+                    $gatewayMembershipUnresolved = true;
+                }
                 continue;
             }
             $registrationProjectUuid = \strtolower(\trim((string)(
@@ -134,9 +159,15 @@ final class GatewayAcmeChallengePublisher
                     $instanceName,
                 )
             ) {
+                if (!$endpointMembershipResolved) {
+                    $gatewayMembershipUnresolved = true;
+                }
                 continue;
             }
             if ($projectUuid !== '' && !\hash_equals($projectUuid, $registrationProjectUuid)) {
+                if (!$endpointMembershipResolved) {
+                    $gatewayMembershipUnresolved = true;
+                }
                 continue;
             }
             $projectUuid = $registrationProjectUuid;
@@ -165,6 +196,9 @@ final class GatewayAcmeChallengePublisher
                 }
             }
             if ($routes !== []) {
+                // A receipt-bound registration is a complete desired-state
+                // view and can positively prove an unrelated pure-WLS domain.
+                $endpointMembershipResolved = true;
                 $candidates[] = [
                     'instance_id' => $instanceName,
                     'receipt' => $receipt,
@@ -173,6 +207,9 @@ final class GatewayAcmeChallengePublisher
                 ];
                 $completeCandidateInstances[$instanceName] = true;
             }
+            if (!$endpointMembershipResolved) {
+                $gatewayMembershipUnresolved = true;
+            }
         }
 
         // A required domain that belongs only to pure WLS must not be blocked
@@ -180,7 +217,7 @@ final class GatewayAcmeChallengePublisher
         // domain, however, publication is a full project replay: accepting a
         // partial endpoint view could delete another instance's challenges.
         if ($requiredDomain !== null && !$gatewayIntentObserved) {
-            return true;
+            return !$gatewayMembershipUnresolved;
         }
         if ($participatingInstances === []) {
             return true;
@@ -349,6 +386,137 @@ final class GatewayAcmeChallengePublisher
             }
         }
         return false;
+    }
+
+    /**
+     * Resolve the complete project-owned desired route set independently of a
+     * live Master. A null result means that gateway membership is not proven
+     * and callers must fail closed rather than treating the domain as pure WLS.
+     *
+     * @param array<string,mixed> $endpoint
+     * @return array<string,true>|null
+     */
+    private function servingManifestDomains(
+        string $instanceName,
+        array $endpoint,
+        ?float $deadlineMonotonic,
+    ): ?array {
+        if (!$this->deadlineAvailable($deadlineMonotonic)) {
+            return null;
+        }
+        try {
+            $manifest = $this->servingManifestProvider !== null
+                ? ($this->servingManifestProvider)($instanceName)
+                : (new ProjectServingManifestStore())->current($instanceName);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!\is_array($manifest)
+            || !\is_array($manifest['payload'] ?? null)
+            || !$this->deadlineAvailable($deadlineMonotonic)
+        ) {
+            return null;
+        }
+        $payload = $manifest['payload'];
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $projectUuid = \strtolower(\trim((string)(
+            $payload['project_uuid'] ?? ''
+        )));
+        $endpointProjectUuid = \strtolower(\trim((string)(
+            $gateway['project_uuid'] ?? ''
+        )));
+        if (\preg_match(
+            '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+            $projectUuid,
+        ) !== 1
+            || !\hash_equals($instanceName, (string)($payload['instance_id'] ?? ''))
+            || ($endpointProjectUuid !== ''
+                && !\hash_equals($endpointProjectUuid, $projectUuid))
+        ) {
+            return null;
+        }
+        foreach ([
+            'instance_generation' => (int)($gateway['instance_generation'] ?? 0),
+            'master_epoch' => (int)(
+                $endpoint['master_epoch'] ?? $gateway['master_epoch'] ?? 0
+            ),
+        ] as $field => $expected) {
+            if ($expected > 0 && (int)($payload[$field] ?? 0) !== $expected) {
+                return null;
+            }
+        }
+        $launchId = \strtolower(\trim((string)($gateway['launch_id'] ?? '')));
+        if ($launchId !== ''
+            && !\hash_equals(
+                $launchId,
+                \strtolower(\trim((string)($payload['launch_id'] ?? ''))),
+            )
+        ) {
+            return null;
+        }
+
+        $desiredRouteCount = (int)($payload['desired_route_count'] ?? -1);
+        $desiredRoutes = $payload['desired_routes'] ?? null;
+        if (!\is_array($desiredRoutes)
+            || !\array_is_list($desiredRoutes)
+            || $desiredRouteCount < 1
+            || $desiredRouteCount > ProjectServingManifestStore::MAX_ROUTES
+            || \count($desiredRoutes) !== $desiredRouteCount
+        ) {
+            // Legacy manifests can prove whole-project membership only when
+            // their serving route set is explicitly complete.
+            $routes = $payload['routes'] ?? null;
+            if (($payload['converged'] ?? false) !== true
+                || !\is_array($routes)
+                || !\array_is_list($routes)
+                || $desiredRouteCount < 1
+                || $desiredRouteCount > ProjectServingManifestStore::MAX_ROUTES
+                || \count($routes) !== $desiredRouteCount
+            ) {
+                return null;
+            }
+            $desiredRoutes = $routes;
+        }
+
+        $domains = [];
+        $seenRouteIds = [];
+        $seenDomains = [];
+        foreach ($desiredRoutes as $route) {
+            if (!\is_array($route)) {
+                return null;
+            }
+            try {
+                $domain = ProjectServingManifestStore::normalizeHost(
+                    (string)($route['domain'] ?? ''),
+                );
+            } catch (\Throwable) {
+                return null;
+            }
+            $routeId = \strtolower(\trim((string)($route['route_id'] ?? '')));
+            $expectedRouteId = \substr(
+                \hash('sha256', $projectUuid . "\0" . $domain),
+                0,
+                32,
+            );
+            if (!\hash_equals($expectedRouteId, $routeId)
+                || isset($seenRouteIds[$routeId])
+                || isset($seenDomains[$domain])
+            ) {
+                return null;
+            }
+            $seenRouteIds[$routeId] = true;
+            $seenDomains[$domain] = true;
+            // Wildcard certificates use DNS-01. They remain part of the
+            // complete membership proof but cannot authorize an exact HTTP-01
+            // lease in the Controller.
+            if (\str_starts_with($domain, '*.')) {
+                continue;
+            }
+            $domains[$domain] = true;
+        }
+        return $domains;
     }
 
     /** @param array<string,mixed> $receipt @param array<string,mixed> $registration */

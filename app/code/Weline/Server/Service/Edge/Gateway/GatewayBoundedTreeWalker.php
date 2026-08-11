@@ -16,7 +16,7 @@ final class GatewayBoundedTreeWalker
 {
     public const MAX_ENTRIES = 8192;
     public const MAX_DEPTH = 64;
-    private const HARD_MAX_ENTRIES = 16_384;
+    private const HARD_MAX_ENTRIES = 65_536;
     private const MAX_PATH_BYTES = 32768;
 
     /**
@@ -35,6 +35,7 @@ final class GatewayBoundedTreeWalker
         bool $childFirst = false,
         int $maximumEntries = self::MAX_ENTRIES,
         int $maximumDepth = self::MAX_DEPTH,
+        ?\Closure $progress = null,
     ): array {
         if ($maximumEntries < 1
             || $maximumEntries > self::HARD_MAX_ENTRIES
@@ -117,6 +118,9 @@ final class GatewayBoundedTreeWalker
                     if ($leaf === '.' || $leaf === '..') {
                         continue;
                     }
+                    if (($visited & 255) === 0 && $progress !== null) {
+                        $progress();
+                    }
                     if (++$visited > $maximumEntries) {
                         throw new \RuntimeException(
                             'Gateway bounded tree exceeds its fixed entry safety limit.'
@@ -189,6 +193,40 @@ final class GatewayBoundedTreeWalker
     }
 
     /**
+     * Return the native no-follow identity of one regular file or directory
+     * without traversing its children.
+     *
+     * @return array{path:string,depth:int,directory:bool,executable:bool,device:string,inode:string}
+     */
+    public static function identity(
+        string $path,
+        bool $allowHardlinkedRegular = false,
+    ): array
+    {
+        $status = @\lstat($path);
+        $directory = self::isDirectoryStatus($status);
+        $regular = self::isRegularStatus($status);
+        if (!\is_array($status)
+            || \is_link($path)
+            || (!$directory && !$regular)
+            || ($regular
+                && !$allowHardlinkedRegular
+                && (int)($status['nlink'] ?? 0) !== 1)
+        ) {
+            throw new \RuntimeException(
+                'Gateway bounded identity target is missing, linked, or special: '
+                    . $path,
+            );
+        }
+        return self::record(
+            $path,
+            0,
+            $status,
+            $allowHardlinkedRegular,
+        );
+    }
+
+    /**
      * Revalidate a collected name immediately before a path-based mutation.
      *
      * PHP does not expose portable openat/fchmodat primitives. Retaining and
@@ -244,10 +282,20 @@ final class GatewayBoundedTreeWalker
      *   inode:string
      * }
      */
-    private static function record(string $path, int $depth, array $status): array
+    private static function record(
+        string $path,
+        int $depth,
+        array $status,
+        bool $allowHardlinkedRegular = false,
+    ): array
     {
         $directory = self::isDirectoryStatus($status);
-        $identity = self::filesystemIdentity($path, $status, $directory);
+        $identity = self::filesystemIdentity(
+            $path,
+            $status,
+            $directory,
+            $allowHardlinkedRegular,
+        );
         return [
             'path' => $path,
             'depth' => $depth,
@@ -274,9 +322,14 @@ final class GatewayBoundedTreeWalker
         string $path,
         array $status,
         bool $directory,
+        bool $allowHardlinkedRegular = false,
     ): array {
         if (\PHP_OS_FAMILY === 'Windows') {
-            return self::windowsFilesystemIdentity($path, $directory);
+            return self::windowsFilesystemIdentity(
+                $path,
+                $directory,
+                $allowHardlinkedRegular,
+            );
         }
         if (!\array_key_exists('dev', $status)
             || !\array_key_exists('ino', $status)
@@ -295,6 +348,7 @@ final class GatewayBoundedTreeWalker
     private static function windowsFilesystemIdentity(
         string $path,
         bool $directory,
+        bool $allowHardlinkedRegular = false,
     ): array {
         $ffi = self::windowsKernel32();
         $widePath = self::windowsWidePath($ffi, $path);
@@ -308,6 +362,8 @@ final class GatewayBoundedTreeWalker
             null,
         );
         $information = $ffi->new('BY_HANDLE_FILE_INFORMATION');
+        $result = null;
+        $failure = null;
         try {
             if ((int)$ffi->GetFileInformationByHandle(
                 $handle,
@@ -324,7 +380,9 @@ final class GatewayBoundedTreeWalker
             $indexLow = (int)$information->nFileIndexLow;
             if (($attributes & 0x00000400) !== 0
                 || $directory !== $isDirectory
-                || (!$directory && (int)$information->nNumberOfLinks !== 1)
+                || (!$directory
+                    && !$allowHardlinkedRegular
+                    && (int)$information->nNumberOfLinks !== 1)
                 || ($indexHigh === 0 && $indexLow === 0)
             ) {
                 throw new \RuntimeException(
@@ -332,19 +390,46 @@ final class GatewayBoundedTreeWalker
                         . $path
                 );
             }
-            return [
+            $result = [
                 'device' => \sprintf(
                     '%08x',
                     (int)$information->dwVolumeSerialNumber,
                 ),
                 'inode' => \sprintf('%08x%08x', $indexHigh, $indexLow),
             ];
-        } finally {
-            try {
-                $ffi->CloseHandle($handle);
-            } catch (\Throwable) {
-            }
+        } catch (\Throwable $throwable) {
+            $failure = $throwable;
         }
+        $closeFailure = null;
+        try {
+            if ((int)$ffi->CloseHandle($handle) === 0) {
+                $closeFailure = new \RuntimeException(
+                    'Gateway bounded Windows identity handle did not close cleanly.',
+                );
+            }
+        } catch (\Throwable $throwable) {
+            $closeFailure = new \RuntimeException(
+                'Gateway bounded Windows identity handle close failed.',
+                0,
+                $throwable,
+            );
+        }
+        if ($closeFailure !== null) {
+            throw new \RuntimeException(
+                $closeFailure->getMessage(),
+                0,
+                $failure ?? $closeFailure->getPrevious(),
+            );
+        }
+        if ($failure !== null) {
+            throw $failure;
+        }
+        if (!\is_array($result)) {
+            throw new \RuntimeException(
+                'Gateway bounded Windows identity result was not produced.',
+            );
+        }
+        return $result;
     }
 
     private static function windowsKernel32(): \FFI

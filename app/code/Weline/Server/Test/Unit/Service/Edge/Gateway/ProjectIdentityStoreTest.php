@@ -394,6 +394,126 @@ final class ProjectIdentityStoreTest extends TestCase
         );
     }
 
+    public function testInstanceGenerationDeadlineBoundsProjectLockContention(): void
+    {
+        $sandbox = $this->makeSandbox();
+        $project = $this->makeProject(
+            $sandbox . DIRECTORY_SEPARATOR . 'bounded-instance-counter',
+        );
+        $store = new ProjectIdentityStore(
+            $project,
+            $sandbox . DIRECTORY_SEPARATOR . 'host-state',
+            $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json',
+        );
+        $lockPath = $project . DIRECTORY_SEPARATOR . 'app/etc/.wls-project.lock';
+        $lock = @\fopen($lockPath, 'c+b');
+        self::assertIsResource($lock);
+        self::assertTrue(@\flock($lock, LOCK_EX | LOCK_NB));
+        $started = \hrtime(true) / 1_000_000_000;
+        try {
+            $store->advanceInstanceGeneration(
+                'default',
+                deadlineMonotonic:
+                    (\hrtime(true) / 1_000_000_000) + 0.15,
+            );
+            self::fail('Instance generation must not inherit a 300-second lock wait.');
+        } catch (\RuntimeException) {
+            self::assertLessThan(
+                1.0,
+                (\hrtime(true) / 1_000_000_000) - $started,
+            );
+        } finally {
+            @\flock($lock, LOCK_UN);
+            @\fclose($lock);
+        }
+    }
+
+    public function testInstanceGenerationWaitsForItsOperationDeadlineInsteadOfTheGenericLockCap(): void
+    {
+        $sandbox = $this->makeSandbox();
+        $project = $this->makeProject(
+            $sandbox . DIRECTORY_SEPARATOR . 'instance-generation-operation-deadline',
+        );
+        $store = new ProjectIdentityStore(
+            $project,
+            $sandbox . DIRECTORY_SEPARATOR . 'host-state',
+            $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json',
+        );
+        self::assertSame(1, $store->advanceInstanceGeneration('default')['generation']);
+        $lockPath = $project . DIRECTORY_SEPARATOR . 'app/etc/.wls-project.lock';
+        [$process, $pipes] = $this->startExclusiveLockHolder($lockPath, 400_000);
+        try {
+            $started = \hrtime(true) / 1_000_000_000;
+            $next = $store->advanceInstanceGeneration(
+                'default',
+                deadlineMonotonic: $started + 1.5,
+            );
+            $elapsed = (\hrtime(true) / 1_000_000_000) - $started;
+
+            self::assertSame(2, $next['generation']);
+            self::assertGreaterThanOrEqual(0.30, $elapsed);
+            self::assertLessThan(1.5, $elapsed);
+        } finally {
+            $this->closeLockHolder($process, $pipes);
+        }
+    }
+
+    public function testOrdinaryIdentityLocksKeepTheGenericQuarterSecondWaitCap(): void
+    {
+        $sandbox = $this->makeSandbox();
+        $project = $this->makeProject(
+            $sandbox . DIRECTORY_SEPARATOR . 'ordinary-identity-lock-cap',
+        );
+        $store = new ProjectIdentityStore(
+            $project,
+            $sandbox . DIRECTORY_SEPARATOR . 'host-state',
+            $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json',
+        );
+        $method = new \ReflectionMethod($store, 'identityLockWaitTimeout');
+        $method->setAccessible(true);
+
+        self::assertSame(0.25, $method->invoke($store, null));
+        self::assertLessThanOrEqual(
+            0.25,
+            $method->invoke(
+                $store,
+                (\hrtime(true) / 1_000_000_000) + 1.0,
+            ),
+        );
+    }
+
+    public function testConcurrentProcessesAllocateStrictlySequentialInstanceGenerations(): void
+    {
+        $sandbox = $this->makeSandbox();
+        $project = $this->makeProject(
+            $sandbox . DIRECTORY_SEPARATOR . 'instance-generation-concurrent-processes',
+        );
+        $hostState = $sandbox . DIRECTORY_SEPARATOR . 'host-state';
+        $legacy = $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json';
+        [$firstProcess, $firstPipes] = $this->startInstanceGenerationWorker(
+            $project,
+            $hostState,
+            $legacy,
+        );
+        [$secondProcess, $secondPipes] = $this->startInstanceGenerationWorker(
+            $project,
+            $hostState,
+            $legacy,
+        );
+
+        $first = $this->closeInstanceGenerationWorker($firstProcess, $firstPipes);
+        $second = $this->closeInstanceGenerationWorker($secondProcess, $secondPipes);
+        $generations = [(int)$first['generation'], (int)$second['generation']];
+        \sort($generations, SORT_NUMERIC);
+
+        self::assertSame([1, 2], $generations);
+        self::assertSame(
+            3,
+            (new ProjectIdentityStore($project, $hostState, $legacy))
+                ->advanceInstanceGeneration('default')['generation'],
+        );
+    }
+
     public function testMissingIdentityInReadOnlyProjectFailsWithoutTemporaryUuid(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
@@ -477,6 +597,104 @@ final class ProjectIdentityStoreTest extends TestCase
             $sandbox . DIRECTORY_SEPARATOR . 'host-state',
             $legacy,
         );
+    }
+
+    /** @return array{0:resource,1:array<int,resource>} */
+    private function startExclusiveLockHolder(string $lockPath, int $microseconds): array
+    {
+        $script = <<<'PHP'
+$handle = fopen($argv[1], 'r+b');
+if (!is_resource($handle) || !flock($handle, LOCK_EX)) {
+    fwrite(STDERR, "lock failed\n");
+    exit(2);
+}
+fwrite(STDOUT, "locked\n");
+fflush(STDOUT);
+usleep((int)$argv[2]);
+flock($handle, LOCK_UN);
+fclose($handle);
+PHP;
+        $pipes = [];
+        $process = \proc_open(
+            [PHP_BINARY, '-r', $script, $lockPath, (string)$microseconds],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        self::assertSame("locked\n", \fgets($pipes[1]));
+        return [$process, $pipes];
+    }
+
+    /** @param resource $process @param array<int,resource> $pipes */
+    private function closeLockHolder($process, array $pipes): void
+    {
+        foreach ($pipes as $pipe) {
+            if (\is_resource($pipe)) {
+                @\fclose($pipe);
+            }
+        }
+        $status = \proc_close($process);
+        self::assertSame(0, $status);
+    }
+
+    /** @return array{0:resource,1:array<int,resource>} */
+    private function startInstanceGenerationWorker(
+        string $project,
+        string $hostState,
+        string $legacy,
+    ): array {
+        $script = <<<'PHP'
+require $argv[1];
+$store = new \Weline\Server\Service\Edge\Gateway\ProjectIdentityStore(
+    $argv[2],
+    $argv[3],
+    $argv[4],
+);
+$result = $store->advanceInstanceGeneration(
+    'default',
+    deadlineMonotonic: hrtime(true) / 1000000000 + 4.0,
+);
+fwrite(STDOUT, json_encode($result, JSON_THROW_ON_ERROR));
+PHP;
+        $pipes = [];
+        $process = \proc_open(
+            [
+                PHP_BINARY,
+                '-r',
+                $script,
+                \dirname(__DIR__, 9) . '/vendor/autoload.php',
+                $project,
+                $hostState,
+                $legacy,
+            ],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        @\fclose($pipes[0]);
+        return [$process, $pipes];
+    }
+
+    /** @param resource $process @param array<int,resource> $pipes @return array<string,mixed> */
+    private function closeInstanceGenerationWorker($process, array $pipes): array
+    {
+        $stdout = \stream_get_contents($pipes[1]);
+        $stderr = \stream_get_contents($pipes[2]);
+        @\fclose($pipes[1]);
+        @\fclose($pipes[2]);
+        $status = \proc_close($process);
+        self::assertSame(0, $status, $stderr);
+        $result = \json_decode($stdout, true, 16, JSON_THROW_ON_ERROR);
+        self::assertIsArray($result);
+        return $result;
     }
 
     private function makeSandbox(): string

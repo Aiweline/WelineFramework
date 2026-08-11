@@ -25,6 +25,22 @@ final class RuntimeProbeMonotonicTimingTest extends TestCase
         self::assertStringContainsString('\\hrtime(true)', $source, $class);
     }
 
+    public function testTlsLiveVerifierPinsCertificateAndRequiresHostnameMatch(): void
+    {
+        $source = (string)\file_get_contents(
+            (new \ReflectionClass(TlsSessionResumptionLiveVerifier::class))->getFileName(),
+        );
+
+        self::assertStringContainsString("'capture_peer_cert' => true", $source);
+        self::assertStringContainsString("'verify_peer_name' => true", $source);
+        self::assertStringNotContainsString("'verify_peer_name' => false", $source);
+        self::assertStringContainsString('openssl_x509_fingerprint', $source);
+        self::assertStringContainsString(
+            "TLS peer certificate does not match the bound instance certificate.",
+            $source,
+        );
+    }
+
     /** @return iterable<string,array{class-string}> */
     public static function runtimeProbeClassProvider(): iterable
     {

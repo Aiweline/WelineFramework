@@ -45,6 +45,11 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
         );
         $config = \file_get_contents($result['conf']);
         self::assertIsString($config);
+        self::assertStringContainsString(
+            'worker_shutdown_timeout 300s;',
+            $config,
+            'Reload recovery must preserve long-lived streams for the full drain window.',
+        );
 
         $sseStart = \strpos($config, 'location = /api/framework/stream {');
         $genericStart = \strpos($config, 'location / {');

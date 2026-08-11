@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\ChildControl\ChildProcessIdentity;
 use Weline\Server\IPC\ChildControl\MasterOrphanGuard;
+use Weline\Server\IPC\ChildControl\OperationDeadlineAwareClientInterface;
 use Weline\Server\IPC\ChildControl\RoleControlHandlerInterface;
 use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
 use Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler;
@@ -59,6 +60,109 @@ final class SubprocessControlKernelTest extends TestCase
             self::assertSame(0, SubprocessControlKernel::resolveControlPort($instanceName, 0, 0));
         } finally {
             @\unlink($instanceFile);
+        }
+    }
+
+    public function testOneAbsoluteDeadlineBoundsEndpointResolutionStartupAndReconnect(): void
+    {
+        $instanceName = 'ut-kernel-deadline-' . \bin2hex(\random_bytes(4));
+        $startedAt = ControlMessage::monotonicSeconds();
+        self::assertSame(0, SubprocessControlKernel::resolveControlPort(
+            $instanceName,
+            0,
+            30,
+            $startedAt + 0.05,
+        ));
+        self::assertLessThan(
+            0.5,
+            ControlMessage::monotonicSeconds() - $startedAt,
+            'The caller deadline must cap endpoint discovery instead of opening a fresh 30-second wait.',
+        );
+
+        $probe = \stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($probe, (string)$errstr);
+        $address = \stream_socket_get_name($probe, false);
+        self::assertIsString($address);
+        $separator = \strrpos($address, ':');
+        self::assertIsInt($separator);
+        $port = (int)\substr($address, $separator + 1);
+        \fclose($probe);
+
+        $identity = new ChildProcessIdentity(
+            ControlMessage::ROLE_GATEWAY_AGENT,
+            \getmypid() ?: 1,
+            0,
+            1,
+            1,
+            'ut-deadline-launch',
+        );
+        $handler = new class implements RoleControlHandlerInterface {
+            public function onMessage(array $message, SubprocessControlKernel $kernel): void
+            {
+            }
+
+            public function onDisconnect(bool $receivedShutdown, SubprocessControlKernel $kernel): void
+            {
+            }
+        };
+        $kernel = new SubprocessControlKernel(
+            $identity,
+            $handler,
+            'UT-Deadline',
+            false,
+            $instanceName,
+        );
+        $previousSupervisor = \getenv('WLS_SUPERVISOR_ENABLED');
+        $previousRetries = \getenv('WLS_STARTUP_CONNECT_RETRIES');
+        $previousRetryDelay = \getenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS');
+        \putenv('WLS_SUPERVISOR_ENABLED=0');
+        \putenv('WLS_STARTUP_CONNECT_RETRIES=120');
+        \putenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS=50');
+        try {
+            $startedAt = ControlMessage::monotonicSeconds();
+            self::assertFalse($kernel->connectAndRegister(
+                $port,
+                false,
+                $startedAt + 0.12,
+            ));
+            self::assertLessThan(
+                0.75,
+                ControlMessage::monotonicSeconds() - $startedAt,
+                'Retry count must not multiply per-attempt socket timeouts past the absolute deadline.',
+            );
+            self::assertInstanceOf(
+                OperationDeadlineAwareClientInterface::class,
+                $kernel->getClient(),
+            );
+
+            $server = \stream_socket_server(
+                "tcp://127.0.0.1:{$port}",
+                $errno,
+                $errstr,
+            );
+            self::assertIsResource($server, (string)$errstr);
+            try {
+                self::assertFalse($kernel->reconnect(
+                    ControlMessage::monotonicSeconds() - 1.0,
+                ));
+                self::assertFalse(
+                    @\stream_socket_accept($server, 0.0),
+                    'An expired reconnect must not open a control connection.',
+                );
+            } finally {
+                \fclose($server);
+            }
+        } finally {
+            $kernel->close();
+            $previousSupervisor === false
+                ? \putenv('WLS_SUPERVISOR_ENABLED')
+                : \putenv('WLS_SUPERVISOR_ENABLED=' . $previousSupervisor);
+            $previousRetries === false
+                ? \putenv('WLS_STARTUP_CONNECT_RETRIES')
+                : \putenv('WLS_STARTUP_CONNECT_RETRIES=' . $previousRetries);
+            $previousRetryDelay === false
+                ? \putenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS')
+                : \putenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS=' . $previousRetryDelay);
         }
     }
 

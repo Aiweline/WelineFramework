@@ -26,6 +26,9 @@ class MasterControlServer implements ControlPlaneServerInterface
     private string $expectedInstanceCode = '';
     private string $expectedControlToken = '';
 
+    /** @var null|callable(array<string,mixed>):string */
+    private $managedChildCredentialResolver = null;
+
     // ========== Worker 状态常量 ==========
 
     /** 控制面一次性连接（CLI/status/reload/stop 等） */
@@ -130,6 +133,12 @@ class MasterControlServer implements ControlPlaneServerInterface
     public function setExpectedControlToken(string $controlToken): void
     {
         $this->expectedControlToken = \trim($controlToken);
+    }
+
+    /** @param null|callable(array<string,mixed>):string $resolver */
+    public function setManagedChildCredentialResolver(?callable $resolver): void
+    {
+        $this->managedChildCredentialResolver = $resolver;
     }
 
     public function registerExternalReadableSource(string $id, mixed $stream, callable $handler): void
@@ -456,6 +465,7 @@ class MasterControlServer implements ControlPlaneServerInterface
         if (!\is_array($client)
             || (string)($client['role'] ?? '') !== ControlMessage::ROLE_GATEWAY_AGENT
             || (string)($client['state'] ?? '') !== self::STATE_READY
+            || ($client['managed_child_authenticated'] ?? false) !== true
         ) {
             return false;
         }
@@ -538,7 +548,7 @@ class MasterControlServer implements ControlPlaneServerInterface
         }
         $parts = [];
         foreach ($payload as $k => $v) {
-            if ((string)$k === 'control_token') {
+            if (\in_array((string)$k, ['control_token', 'managed_child_credential'], true)) {
                 $parts[] = "{$k}=[redacted]";
                 continue;
             }
@@ -590,6 +600,7 @@ class MasterControlServer implements ControlPlaneServerInterface
             'peer_name'             => $peerName,
             'message_count'         => 0,
             'last_message_type'     => '',
+            'managed_child_authenticated' => false,
         ];
         $this->ipcLog("[IPC-Master] CONNECT 新客户端连接 #{$clientId} from {$peerName}");
     }
@@ -643,6 +654,7 @@ class MasterControlServer implements ControlPlaneServerInterface
                 'peer_name'             => $peerName,
                 'message_count'         => 0,
                 'last_message_type'     => '',
+                'managed_child_authenticated' => false,
             ];
             $this->ipcLog("[IPC-Master] CONNECT 新客户端连接 #{$clientId} from {$peerName}");
             $accepted[] = $clientId;
@@ -755,7 +767,8 @@ class MasterControlServer implements ControlPlaneServerInterface
 
     private function dispatchDecodedControlMessage(int $clientId, array $msg): void
     {
-        if (($msg['type'] ?? '') === ControlMessage::TYPE_COMMAND
+        $type = (string)($msg['type'] ?? '');
+        if ($type === ControlMessage::TYPE_COMMAND
             && !$this->isAuthorizedControlCommand($clientId, $msg)
         ) {
             $this->clients[$clientId]['role'] = self::ROLE_CONTROL;
@@ -768,8 +781,26 @@ class MasterControlServer implements ControlPlaneServerInterface
             return;
         }
 
+        if ($type === ControlMessage::TYPE_READY) {
+            $client = $this->clients[$clientId] ?? null;
+            $registered = \is_array($client)
+                && (string)($client['role'] ?? '') !== ''
+                && \in_array(
+                    (string)($client['state'] ?? ''),
+                    [self::STATE_REGISTERED, self::STATE_READY],
+                    true,
+                );
+            $authenticated = $this->managedChildCredentialResolver === null
+                || ($client['managed_child_authenticated'] ?? false) === true;
+            if (!$registered || !$authenticated) {
+                $this->ipcLog('[IPC-Master] REJECT READY before authenticated REGISTER');
+                $this->removeClient($clientId, 'ready_before_register');
+                return;
+            }
+        }
+
         $this->classifyClientFromMessage($clientId, $msg);
-        $type = $msg['type'] ?? 'unknown';
+        $type = $type !== '' ? $type : 'unknown';
         $tag  = $this->formatClientTag($clientId);
         if ($type !== ControlMessage::TYPE_LOG) {
             $this->ipcVerboseLog("[IPC-Master] RECV <-- {$tag}: type={$type}" . $this->formatMsgPayload($msg));
@@ -777,6 +808,12 @@ class MasterControlServer implements ControlPlaneServerInterface
 
         if ($type === ControlMessage::TYPE_REGISTER) {
             $this->handleRegister($clientId, $msg);
+            if (!isset($this->clients[$clientId])) {
+                return;
+            }
+            // The credential authenticates the connection; it is never part
+            // of the Orchestrator protocol and must not survive dispatch.
+            unset($msg['managed_child_credential']);
         }
 
         if ($type === ControlMessage::TYPE_READY) {
@@ -873,6 +910,36 @@ class MasterControlServer implements ControlPlaneServerInterface
             );
             $this->removeClient($clientId, 'instance_code_mismatch');
             return;
+        }
+
+        if ($this->managedChildCredentialResolver !== null) {
+            $providedCredential = \strtolower(\trim((string)($msg['managed_child_credential'] ?? '')));
+            $expectedCredential = '';
+            try {
+                $resolved = ($this->managedChildCredentialResolver)([
+                    'instance' => $instanceCode,
+                    'role' => (string)$role,
+                    'slot_id' => $slotId,
+                    'launch_nonce' => $launchId,
+                    'lease_id' => $leaseId,
+                    'generation' => $generation,
+                    'pid' => $pid,
+                ]);
+                if (\is_string($resolved)) {
+                    $expectedCredential = \strtolower(\trim($resolved));
+                }
+            } catch (\Throwable) {
+                $expectedCredential = '';
+            }
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $providedCredential) !== 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedCredential) !== 1
+                || !\hash_equals($expectedCredential, $providedCredential)
+            ) {
+                $this->ipcLog('[IPC-Master] REJECT managed-child register: credential verification failed');
+                $this->removeClient($clientId, 'managed_child_auth_failed');
+                return;
+            }
+            $this->clients[$clientId]['managed_child_authenticated'] = true;
         }
 
         $this->clients[$clientId]['role']         = $role;

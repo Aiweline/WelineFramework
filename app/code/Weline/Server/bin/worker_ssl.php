@@ -156,6 +156,7 @@ $servingManifestPath = '';
 $servingManifestGeneration = 0;
 $servingManifestDigest = '';
 $servingInstanceGeneration = 0;
+$servingCertificateTrustProfile = '';
 $gatewayInstanceGenerationArgument = 0;
 
 // 先提取位置参数（跳过以 -- 开头的参数）
@@ -228,6 +229,11 @@ foreach ($argv as $arg) {
             $arg,
             \strlen('--serving-instance-generation='),
         );
+    } elseif (\str_starts_with($arg, '--serving-certificate-trust-profile=')) {
+        $servingCertificateTrustProfile = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--serving-certificate-trust-profile='),
+        )));
     } elseif (\str_starts_with($arg, '--gateway-instance-generation=')) {
         $gatewayInstanceGenerationArgument = (int)\substr(
             $arg,
@@ -566,9 +572,6 @@ try {
     $wlsEndpointHttpSelection =
         \Weline\Server\Service\Runtime\HttpProtocolSelection::fromArray($selectionData);
     $wlsEndpointHttpSelection->assertCompatibleEdgeAdapter($wlsEndpointEdge);
-    if ($wlsEndpointHttpSelection->isCaddyProtocolEdge()) {
-        throw new \RuntimeException('SSL Worker cannot own a Caddy protocol-edge endpoint.');
-    }
     $wlsEndpointHttp3Activation = $http3Activation;
     $http3Activated = $http3Activation['enabled'] && $http3Activation['runtime_verified'];
     if ($http3Activation['enabled'] !== $http3Activation['runtime_verified']
@@ -577,19 +580,9 @@ try {
         throw new \RuntimeException('Worker HTTP/3 argv does not match endpoint activation.');
     }
     if ($http3Activated) {
-        $activationDigest = \strtolower(\trim((string)($http3Activation['native_digest'] ?? '')));
-        $activationFingerprint = \strtolower(\trim((string)($http3Activation['fingerprint'] ?? '')));
-        if ($wlsEndpointEdge !== 'wls'
-            || !$wlsEndpointHttpSelection->isNativeProtocolEdge()
-            || !$wlsEndpointHttpSelection->supports(
-                \Weline\Server\Service\Runtime\HttpProtocolSelection::HTTP_3,
-            )
-            || !$wlsEndpointHttpSelection->altSvc
-            || !\hash_equals($wlsHttp3ExpectedNativeDigest, $activationDigest)
-            || !\hash_equals($wlsHttp3ExpectedNativeFingerprint, $activationFingerprint)
-        ) {
-            throw new \RuntimeException('Worker HTTP/3 activation is outside the endpoint protocol policy.');
-        }
+        throw new \RuntimeException(
+            'Worker HTTP/3 activation is forbidden; public HTTP/3 belongs to managed Nginx.',
+        );
     } elseif (\trim((string)($http3Activation['reason'] ?? '')) === '') {
         throw new \RuntimeException('Disabled Worker HTTP/3 activation requires a reason.');
     }
@@ -972,6 +965,7 @@ function wlsLoadServingManifestSnapshot(
     int $instanceGeneration,
     int $masterPid,
     int $masterEpoch,
+    string $requiredTrustProfile,
 ): array {
     $store = new \Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore((string)BP);
     $fence = [
@@ -991,6 +985,17 @@ function wlsLoadServingManifestSnapshot(
         );
     }
     $payload = (array)$manifest['payload'];
+    $manifestTrustProfile = \Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore::normalizeTrustProfile(
+        (string)($payload['certificate_trust_profile'] ?? ''),
+    );
+    $requiredTrustProfile = \Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore::normalizeTrustProfile(
+        $requiredTrustProfile,
+    );
+    if (!\hash_equals($requiredTrustProfile, $manifestTrustProfile)) {
+        throw new \RuntimeException(
+            'WLS serving manifest trust profile differs from the Worker launch fence.',
+        );
+    }
     $routes = [];
     $httpRoutes = [];
     $certs = [];
@@ -1280,6 +1285,12 @@ function wlsGatewayFallbackTlsContextIsUsable(
             $domain = (string)($route['domain'] ?? '');
             $generation = (int)($route['certificate_generation'] ?? 0);
             $sourceDigest = (string)($route['certificate_source_digest'] ?? '');
+            $trustProfile = (string)($route['certificate_trust_profile'] ?? '');
+            $provider = (string)($route['certificate_provider'] ?? '');
+            $materialClass = (string)($route['certificate_material_class'] ?? '');
+            $provenanceDigest = (string)(
+                $route['certificate_provenance_digest'] ?? ''
+            );
             $certificate = \is_array($route['certificate'] ?? null)
                 ? $route['certificate']
                 : [];
@@ -1290,7 +1301,7 @@ function wlsGatewayFallbackTlsContextIsUsable(
                 ? $route['certificate_snapshot']
                 : [];
             $pair = $sniServerCerts[$domain] ?? null;
-            $active = $generations->active($domain, $deadline);
+            $active = $generations->active($domain, $deadline, $trustProfile);
             if (!\is_array($pair)
                 || !\is_array($active)
                 || $generation < 1
@@ -1298,6 +1309,19 @@ function wlsGatewayFallbackTlsContextIsUsable(
                 || !\hash_equals(
                     $sourceDigest,
                     (string)($active['source_digest'] ?? ''),
+                )
+                || !\hash_equals(
+                    $trustProfile,
+                    (string)($active['trust_profile'] ?? ''),
+                )
+                || !\hash_equals($provider, (string)($active['provider'] ?? ''))
+                || !\hash_equals(
+                    $materialClass,
+                    (string)($active['material_class'] ?? ''),
+                )
+                || !\hash_equals(
+                    $provenanceDigest,
+                    (string)($active['provenance_digest'] ?? ''),
                 )
                 || !\hash_equals(
                     (string)($certificate['path'] ?? ''),
@@ -1523,7 +1547,7 @@ function wlsSendGatewayFallbackListenerAck(
  * connection may still own the old SSL_CTX even though the route key remains.
  *
  * @param array<string,array<string,mixed>> $routes
- * @return array<string,array{domain:string,generation:int,source_digest:string}>
+ * @return array<string,array{domain:string,generation:int,source_digest:string,trust_profile:string,provider:string,material_class:string,provenance_digest:string}>
  */
 function wlsServingManifestContextIdentitySet(array $routes): array
 {
@@ -1537,15 +1561,33 @@ function wlsServingManifestContextIdentitySet(array $routes): array
         $sourceDigest = \strtolower(\trim((string)(
             $route['certificate_source_digest'] ?? ''
         )));
+        $trustProfile = \strtolower(\trim((string)(
+            $route['certificate_trust_profile'] ?? ''
+        )));
+        $provider = \strtolower(\trim((string)(
+            $route['certificate_provider'] ?? ''
+        )));
+        $materialClass = \strtolower(\trim((string)(
+            $route['certificate_material_class'] ?? ''
+        )));
+        $provenanceDigest = \strtolower(\trim((string)(
+            $route['certificate_provenance_digest'] ?? ''
+        )));
         if ($domain === ''
             || $generation < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+            || !\in_array($trustProfile, ['production', 'test'], true)
+            || $provider === ''
+            || $materialClass === ''
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
         ) {
             throw new \RuntimeException('TLS serving route context identity is incomplete.');
         }
         $contextId = \hash(
             'sha256',
-            $domain . "\0" . $generation . "\0" . $sourceDigest,
+            $domain . "\0" . $generation . "\0" . $sourceDigest . "\0"
+                . $trustProfile . "\0" . $provider . "\0" . $materialClass
+                . "\0" . $provenanceDigest,
         );
         if (isset($identities[$contextId])) {
             throw new \RuntimeException('TLS serving route context identity is duplicated.');
@@ -1554,6 +1596,10 @@ function wlsServingManifestContextIdentitySet(array $routes): array
             'domain' => $domain,
             'generation' => $generation,
             'source_digest' => $sourceDigest,
+            'trust_profile' => $trustProfile,
+            'provider' => $provider,
+            'material_class' => $materialClass,
+            'provenance_digest' => $provenanceDigest,
         ];
     }
     \ksort($identities, SORT_STRING);
@@ -1973,6 +2019,9 @@ if ($gatewayInstanceGenerationArgument > 0
 ) {
     throw new \RuntimeException('TLS Worker instance generation arguments disagree.');
 }
+$servingCertificateTrustProfile = \Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore::normalizeTrustProfile(
+    $servingCertificateTrustProfile,
+);
 if ($servingManifestPath === ''
     || $servingManifestGeneration < 1
     || $servingInstanceGeneration < 1
@@ -2003,6 +2052,7 @@ $servingSnapshot = wlsLoadServingManifestSnapshot(
     $servingInstanceGeneration,
     $masterPid,
     $orchestratorEpoch,
+    $servingCertificateTrustProfile,
 );
 $sniServerCerts = $servingSnapshot['certs'];
 $servingManifestRoutes = $servingSnapshot['routes'];
@@ -3264,7 +3314,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, $isGatewayFallbackWorker, &$gatewayFallbackListenerState, &$gatewayFallbackListenerDraining, &$gatewayFallbackDrainAcknowledged, &$gatewayFallbackDrainTransition, &$gatewayFallbackUndrainTransition, &$gatewayFallbackRetiredTransitions, $gatewayFallbackExpectedTransitionIdentity, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, $isGatewayFallbackWorker, &$gatewayFallbackListenerState, &$gatewayFallbackListenerDraining, &$gatewayFallbackDrainAcknowledged, &$gatewayFallbackDrainTransition, &$gatewayFallbackUndrainTransition, &$gatewayFallbackRetiredTransitions, $gatewayFallbackExpectedTransitionIdentity, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $servingCertificateTrustProfile, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -3772,6 +3822,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                             $servingInstanceGeneration,
                             $masterPid,
                             $orchestratorEpoch,
+                            $servingCertificateTrustProfile,
                         );
                         $nextCerts = $nextSnapshot['certs'];
                         $nextRoutes = $nextSnapshot['routes'];

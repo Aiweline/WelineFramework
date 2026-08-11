@@ -353,6 +353,15 @@ final class SslCertificateStorageSecurityTest extends TestCase
         };
         $replay = $methodSource('replayPendingCertificateRetirements');
         self::assertStringContainsString('withRetirementReplayLease(', $replay);
+        self::assertStringContainsString(
+            '$budgetDeadline = $now + $totalBudgetSeconds;',
+            $replay,
+        );
+        self::assertStringContainsString(
+            ': \\min($budgetDeadline, $deadlineMonotonic);',
+            $replay,
+        );
+        self::assertStringContainsString('}, $deadline);', $replay);
         self::assertStringContainsString('pendingRetirementBatch(', $replay);
         self::assertStringContainsString('$maximumIntents,', $replay);
         self::assertStringContainsString('$deadline,', $replay);
@@ -429,11 +438,16 @@ final class SslCertificateStorageSecurityTest extends TestCase
             'syncWildcardToSubdomains',
         ] as $writer) {
             self::assertStringContainsString(
-                'withCertificateLifecycleLock(',
+                'withCertificateOperationLifecycleLock(',
                 $methodSource($writer),
                 $writer,
             );
         }
+        self::assertStringContainsString(
+            'withCertificateLifecycleLock(',
+            $methodSource('withCertificateOperationLifecycleLock'),
+            'The operation wrapper must acquire the project certificate lifecycle lock.',
+        );
         foreach ([
             'applyWildcardToSubdomainIfExistsLocked',
             'generateLocalCaSignedCertificateLocked',

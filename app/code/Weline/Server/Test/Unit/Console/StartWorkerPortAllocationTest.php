@@ -162,9 +162,22 @@ final class StartWorkerPortAllocationTest extends TestCase
                 'started_timestamp' => \time(),
             ], JSON_PRETTY_PRINT)
         );
-
-        $start = new class($runtimeDir) extends Start {
+        $instanceManager = new class($runtimeDir) extends ServerInstanceManager {
             public function __construct(private readonly string $runtimeDir)
+            {
+            }
+
+            public function getInstanceDir(): string
+            {
+                return $this->runtimeDir . DIRECTORY_SEPARATOR;
+            }
+        };
+
+        $start = new class($runtimeDir, $instanceManager) extends Start {
+            public function __construct(
+                private readonly string $runtimeDir,
+                private readonly ServerInstanceManager $instanceManager,
+            )
             {
             }
 
@@ -177,6 +190,11 @@ final class StartWorkerPortAllocationTest extends TestCase
             protected function getInstanceRuntimeDir(): string
             {
                 return $this->runtimeDir . DIRECTORY_SEPARATOR;
+            }
+
+            protected function getInstanceManager(): ServerInstanceManager
+            {
+                return $this->instanceManager;
             }
 
             protected function isWorkerPortReservationActive(array $instanceData, string $instanceFile = ''): bool
@@ -259,10 +277,21 @@ final class StartWorkerPortAllocationTest extends TestCase
                 ];
             }
         };
-        $start = new class($runtimeDir, $leaseManager) extends Start {
+        $instanceManager = new class($runtimeDir) extends ServerInstanceManager {
+            public function __construct(private readonly string $runtimeDir)
+            {
+            }
+
+            public function getInstanceDir(): string
+            {
+                return $this->runtimeDir . DIRECTORY_SEPARATOR;
+            }
+        };
+        $start = new class($runtimeDir, $leaseManager, $instanceManager) extends Start {
             public function __construct(
                 private readonly string $runtimeDir,
                 private readonly MasterLeaseManager $leaseManager,
+                private readonly ServerInstanceManager $instanceManager,
             )
             {
             }
@@ -281,6 +310,11 @@ final class StartWorkerPortAllocationTest extends TestCase
             protected function getMasterLeaseManager(): MasterLeaseManager
             {
                 return $this->leaseManager;
+            }
+
+            protected function getInstanceManager(): ServerInstanceManager
+            {
+                return $this->instanceManager;
             }
         };
 

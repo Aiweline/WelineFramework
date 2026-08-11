@@ -138,6 +138,12 @@ final class ProcesserDetachedSpawnSecurityTest extends TestCase
 
     public function testParentLaunchesThroughTheRestrictedProductionSpool(): void
     {
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('BP')) {
+            \define('BP', \dirname(__DIR__, 8) . \DIRECTORY_SEPARATOR);
+        }
         $this->requirePosixHelperRuntime();
         $directory = $this->createPrivateTemporaryDirectory();
         $sentinel = $directory . DIRECTORY_SEPARATOR . 'parent-executed';

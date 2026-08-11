@@ -12,6 +12,7 @@ use Weline\Framework\Runtime\Policy\RuntimePolicyBundle;
 use Weline\Framework\Runtime\Policy\RuntimePolicyDescriptor;
 use Weline\Server\Service\AttackLogService;
 use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressProtocol;
 use Weline\Server\Service\MemoryStateFacade;
 use Weline\Server\Service\Policy\RuntimePolicyCompiler;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
@@ -34,9 +35,9 @@ final class WorkerPolicyKernel
         return \hrtime(true) / 1_000_000_000;
     }
 
-    private const EDGE_AUTH_HEADER = 'x-wls-edge-token';
+    private const EDGE_AUTH_HEADER = GatewayBackendIngressProtocol::AUTH_HEADER_KEY;
 
-    private const EDGE_CLIENT_PROTOCOL_HEADER = 'x-wls-client-protocol';
+    private const EDGE_CLIENT_PROTOCOL_HEADER = GatewayBackendIngressProtocol::CLIENT_PROTOCOL_HEADER_KEY;
 
     private const MAX_ATTACK_URI_BYTES = 8192;
 
@@ -128,7 +129,7 @@ final class WorkerPolicyKernel
     private float $lastStateReconnectAttempt = 0.0;
 
     /** Empty for Direct and explicit compatibility/diagnostic Dispatcher transports. */
-    private string $protocolEdgeToken = '';
+    private string $gatewayBackendToken = '';
 
     private function __construct(
         private readonly string $instanceName,
@@ -198,7 +199,7 @@ final class WorkerPolicyKernel
             $state,
             $bundle,
         );
-        $instance->configureProtocolEdgeFromEnvironment();
+        $instance->configureGatewayBackendFromEnvironment();
 
         return self::$instance = $instance;
     }
@@ -319,7 +320,7 @@ final class WorkerPolicyKernel
         $parsed['client_protocol'] = $parsed['protocol'];
 
         $trustedProxyCidrs = $this->trustedProxyCidrs;
-        if ($this->protocolEdgeToken !== '') {
+        if ($this->gatewayBackendToken !== '') {
             $transportIp = $this->identityResolver->normalizePeer($transportPeer);
             $loopbackTransport = $transportIp !== '' && (
                 $this->identityResolver->matchesCidr($transportIp, '127.0.0.0/8')
@@ -327,14 +328,14 @@ final class WorkerPolicyKernel
             );
             $receivedToken = \trim((string)($parsed['headers'][self::EDGE_AUTH_HEADER] ?? ''));
             if (!$loopbackTransport
-                || \strlen($receivedToken) !== \strlen($this->protocolEdgeToken)
-                || !\hash_equals($this->protocolEdgeToken, $receivedToken)
+                || \strlen($receivedToken) !== \strlen($this->gatewayBackendToken)
+                || !\hash_equals($this->gatewayBackendToken, $receivedToken)
             ) {
                 unset(
                     $parsed['headers'][self::EDGE_AUTH_HEADER],
                     $parsed['headers'][self::EDGE_CLIENT_PROTOCOL_HEADER],
                 );
-                return $this->deny($parsed, $transportIp ?: '0.0.0.0', false, 403, 'protocol_edge_auth');
+                return $this->deny($parsed, $transportIp ?: '0.0.0.0', false, 403, 'gateway_backend_auth');
             }
 
             $clientProtocol = $this->normalizeEdgeClientProtocol(
@@ -345,7 +346,7 @@ final class WorkerPolicyKernel
                     $parsed['headers'][self::EDGE_AUTH_HEADER],
                     $parsed['headers'][self::EDGE_CLIENT_PROTOCOL_HEADER],
                 );
-                return $this->deny($parsed, $transportIp, false, 400, 'protocol_edge_protocol');
+                return $this->deny($parsed, $transportIp, false, 400, 'gateway_backend_protocol');
             }
             $parsed['client_protocol'] = $clientProtocol;
             $trustedProxyCidrs = \array_values(\array_unique([
@@ -425,27 +426,10 @@ final class WorkerPolicyKernel
         );
     }
 
-    private function configureProtocolEdgeFromEnvironment(): void
+    private function configureGatewayBackendFromEnvironment(): void
     {
-        $path = \trim((string)(
-            $_SERVER['WLS_PROTOCOL_EDGE_TOKEN_FILE']
-            ?? $_ENV['WLS_PROTOCOL_EDGE_TOKEN_FILE']
-            ?? \getenv('WLS_PROTOCOL_EDGE_TOKEN_FILE')
-            ?: ''
-        ));
-        if ($path === '') {
-            $this->protocolEdgeToken = '';
-            return;
-        }
-        if (!\is_file($path) || !\is_readable($path)) {
-            throw new \RuntimeException('Configured WLS protocol-edge token file is not readable.');
-        }
-        $token = \strtolower(\trim((string)@\file_get_contents($path)));
-        if (\preg_match('/^[a-f0-9]{64}$/D', $token) !== 1) {
-            throw new \RuntimeException('Configured WLS protocol-edge token is invalid.');
-        }
-
-        $this->protocolEdgeToken = $token;
+        $configured = \Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore::resolveConfiguredTokenEnvironment();
+        $this->gatewayBackendToken = $configured['token'];
     }
 
     private function normalizeEdgeClientProtocol(string $protocol): string

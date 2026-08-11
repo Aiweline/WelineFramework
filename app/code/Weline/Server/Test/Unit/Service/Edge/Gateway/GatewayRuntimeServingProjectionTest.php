@@ -52,7 +52,7 @@ final class GatewayRuntimeServingProjectionTest extends TestCase
     {
         $this->listener?->close();
         Processer::removePidFile('--name=' . $this->processName);
-        if ($this->originalProcessTitle !== '' && \function_exists('cli_set_process_title')) {
+        if (\function_exists('cli_set_process_title')) {
             @\cli_set_process_title($this->originalProcessTitle);
         }
         if ($this->originalStateHome === false) {
@@ -79,6 +79,59 @@ final class GatewayRuntimeServingProjectionTest extends TestCase
         $view = GatewayStartupRuntimeView::resolve($endpoint);
         self::assertSame(GatewayStartupRuntimeView::SOURCE_FALLBACK_WLS, $view['source']);
         self::assertTrue($view['public_proven']);
+    }
+
+    public function testExpiredProjectionDeadlineFailsClosedWithoutLeaseReadFallback(): void
+    {
+        $endpoint = $this->initialAutoFallbackEndpoint();
+        $expired = (\hrtime(true) / 1_000_000_000) - 1.0;
+
+        self::assertFalse(
+            GatewayRuntimeServingProjection::fallbackWlsIsServing(
+                $endpoint,
+                $expired,
+            ),
+        );
+        self::assertNull(
+            GatewayRuntimeServingProjection::fallbackServingEndpoint(
+                $endpoint,
+                $expired,
+            ),
+        );
+        self::assertNull(
+            GatewayRuntimeServingProjection::fallbackServingObservation(
+                $endpoint,
+                $expired,
+            ),
+        );
+        self::assertNull(
+            GatewayRuntimeServingProjection::explicitPureWlsServingEndpoint(
+                $endpoint,
+                $expired,
+            ),
+        );
+    }
+
+    public function testLeaseProjectionInjectsOneAbsoluteDeadlineIntoEveryAllocator(): void
+    {
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(
+                GatewayRuntimeServingProjection::class,
+            ))->getFileName(),
+        );
+
+        self::assertStringContainsString('READ_BUDGET_SECONDS = 1.0', $source);
+        self::assertSame(
+            2,
+            \substr_count(
+                $source,
+                'operationDeadlineMonotonic: $deadlineMonotonic',
+            ),
+        );
+        self::assertStringNotContainsString(
+            'new GatewayPortLeaseAllocator();',
+            $source,
+        );
     }
 
     public function testPlainInstanceLeaseCannotCrossFallbackRolesOrModes(): void

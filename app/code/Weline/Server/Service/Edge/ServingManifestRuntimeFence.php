@@ -6,6 +6,7 @@ namespace Weline\Server\Service\Edge;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 
 /**
@@ -13,17 +14,22 @@ use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
  *
  * The mutable endpoint and current pointer are never read by a Worker. The
  * Master resolves one exact content-addressed generation, validates its full
- * launch fence, then serializes only these four scalars into child argv.
+ * launch fence and certificate trust profile, then serializes that immutable
+ * authority into child argv.
  */
 final class ServingManifestRuntimeFence
 {
+    private const PUBLICATION_BUDGET_SECONDS = 30.0;
+
     /**
      * Publish and attach the exact native-WLS serving generation for one
      * already-authoritative Master context. This operation must precede every
      * TLS child start, including an in-process full-restart epoch advance.
      */
-    public static function publishForContext(ServiceContext $context): ServiceContext
-    {
+    public static function publishForContext(
+        ServiceContext $context,
+        ?float $deadlineMonotonic = null,
+    ): ServiceContext {
         if (!$context->sslEnabled
             || \strtolower(\trim((string)$context->getConfig(
                 'wls.edge.adapter',
@@ -41,8 +47,12 @@ final class ServingManifestRuntimeFence
                 'Native WLS TLS requires a monotonic project instance generation.',
             );
         }
+        $deadlineMonotonic ??= self::monotonicNow()
+            + self::PUBLICATION_BUDGET_SECONDS;
+        self::remainingPublicationSeconds($deadlineMonotonic);
         $publication = (new GatewayRegistrationBuilder())->buildServingManifest(
             $context->instanceName,
+            $deadlineMonotonic,
         );
         $fence = self::fromPublication(
             $publication,
@@ -50,8 +60,13 @@ final class ServingManifestRuntimeFence
             $instanceGeneration,
             $context->masterPid,
             $context->epoch,
+            self::requiredTrustProfile($context),
         );
         $file = (new ServerInstanceManager())->getInstanceFile($context->instanceName);
+        $endpointTimeout = \min(
+            5.0,
+            self::remainingPublicationSeconds($deadlineMonotonic),
+        );
         if (!ServerInstanceManager::updateJsonFileAtomically(
             $file,
             static function (array $endpoint) use ($context, $fence, $publication): array {
@@ -78,6 +93,7 @@ final class ServingManifestRuntimeFence
                 $endpoint['gateway'] = $gateway;
                 return $endpoint;
             },
+            $endpointTimeout,
         )) {
             throw new \RuntimeException(
                 'Native WLS serving manifest endpoint fence could not be published.',
@@ -87,13 +103,43 @@ final class ServingManifestRuntimeFence
         return self::withContext($context, $fence);
     }
 
-    /** @return array{path:string,generation:int,digest:string,instance_generation:int} */
+    private static function remainingPublicationSeconds(float $deadlineMonotonic): float
+    {
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'WLS serving manifest publication deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - self::monotonicNow();
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'WLS serving manifest publication deadline was exhausted.',
+            );
+        }
+
+        return $remaining;
+    }
+
+    private static function monotonicNow(): float
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException(
+                'WLS serving manifest monotonic clock is invalid.',
+            );
+        }
+
+        return $now;
+    }
+
+    /** @return array{path:string,generation:int,digest:string,instance_generation:int,certificate_trust_profile:string} */
     public static function fromPublication(
         array $publication,
         string $instanceId,
         int $instanceGeneration,
         int $masterPid,
         int $masterEpoch,
+        ?string $requiredTrustProfile = null,
     ): array {
         $path = (string)($publication['path'] ?? '');
         $generation = (int)($publication['generation'] ?? 0);
@@ -112,16 +158,29 @@ final class ServingManifestRuntimeFence
                 'master_epoch' => $masterEpoch,
             ],
         );
+        $manifestTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($bound['payload']['certificate_trust_profile'] ?? ''),
+        );
+        $requiredTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            $requiredTrustProfile
+                ?? ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
+        );
+        if (!\hash_equals($requiredTrustProfile, $manifestTrustProfile)) {
+            throw new \RuntimeException(
+                'WLS serving manifest trust profile differs from the runtime policy.',
+            );
+        }
 
         return [
             'path' => (string)$bound['path'],
             'generation' => (int)$bound['generation'],
             'digest' => (string)$bound['digest'],
             'instance_generation' => $instanceGeneration,
+            'certificate_trust_profile' => $manifestTrustProfile,
         ];
     }
 
-    /** @return array{path:string,generation:int,digest:string,instance_generation:int} */
+    /** @return array{path:string,generation:int,digest:string,instance_generation:int,certificate_trust_profile:string} */
     public static function fromContext(ServiceContext $context): array
     {
         return self::validate([
@@ -132,11 +191,15 @@ final class ServingManifestRuntimeFence
                 'wls.serving_instance_generation',
                 0,
             ),
+            'certificate_trust_profile' => $context->getConfig(
+                'wls.serving_certificate_trust_profile',
+                '',
+            ),
         ]);
     }
 
     /**
-     * @param array{path:string,generation:int,digest:string,instance_generation:int} $fence
+     * @param array{path:string,generation:int,digest:string,instance_generation:int,certificate_trust_profile:string} $fence
      */
     public static function withContext(ServiceContext $context, array $fence): ServiceContext
     {
@@ -147,6 +210,8 @@ final class ServingManifestRuntimeFence
         $env['wls']['serving_manifest_generation'] = $fence['generation'];
         $env['wls']['serving_manifest_digest'] = $fence['digest'];
         $env['wls']['serving_instance_generation'] = $fence['instance_generation'];
+        $env['wls']['serving_certificate_trust_profile'] =
+            $fence['certificate_trust_profile'];
         if (\is_array($env['wls']['gateway'] ?? null)) {
             unset($env['wls']['gateway'][NativeServingManifestStartupRecovery::CONFIG_KEY]);
         }
@@ -198,16 +263,22 @@ final class ServingManifestRuntimeFence
             '--serving-manifest-generation=' . $fence['generation'],
             '--serving-manifest-digest=' . $fence['digest'],
             '--serving-instance-generation=' . $fence['instance_generation'],
+            '--serving-certificate-trust-profile=' . $fence[
+                'certificate_trust_profile'
+            ],
         ];
     }
 
-    /** @return array{path:string,generation:int,digest:string,instance_generation:int} */
+    /** @return array{path:string,generation:int,digest:string,instance_generation:int,certificate_trust_profile:string} */
     private static function validate(array $fence): array
     {
         $path = \trim((string)($fence['path'] ?? ''));
         $generation = (int)($fence['generation'] ?? 0);
         $digest = \strtolower(\trim((string)($fence['digest'] ?? '')));
         $instanceGeneration = (int)($fence['instance_generation'] ?? 0);
+        $certificateTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($fence['certificate_trust_profile'] ?? ''),
+        );
         $absolute = PHP_OS_FAMILY === 'Windows'
             ? \preg_match('/\A(?:[A-Za-z]:[\\\\\/]|\\\\\\\\[^\\\\\/]+[\\\\\/][^\\\\\/]+)/D', $path) === 1
             : \str_starts_with($path, '/');
@@ -226,6 +297,20 @@ final class ServingManifestRuntimeFence
             'generation' => $generation,
             'digest' => $digest,
             'instance_generation' => $instanceGeneration,
+            'certificate_trust_profile' => $certificateTrustProfile,
         ];
+    }
+
+    private static function requiredTrustProfile(ServiceContext $context): string
+    {
+        return ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+            $context->getConfig(
+                'wls.gateway.certificate_profile',
+                $context->getConfig(
+                    'wls.certificate_profile',
+                    ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
+                ),
+            )
+        ));
     }
 }

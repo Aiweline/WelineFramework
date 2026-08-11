@@ -749,11 +749,13 @@ int wls_linux_h3_route_bind(
     route, config->namespace_key, error, error_capacity);
   if (result != WLS_TRANSPORT_OK) {
     route->state = WLS_H3_LINUX_ROUTE_FAILED;
+    wls_linux_h3_route_close(route);
     return result;
   }
   result = wls_linux_open_lock(route, error, error_capacity);
   if (result != WLS_TRANSPORT_OK) {
     route->state = WLS_H3_LINUX_ROUTE_FAILED;
+    wls_linux_h3_route_close(route);
     return result;
   }
   result = wls_linux_lock(route, error, error_capacity);
@@ -1032,6 +1034,12 @@ void wls_linux_h3_route_close(wls_linux_h3_route *route) {
   if (route->listen_map_fd >= 0) {
     close(route->listen_map_fd);
   }
+  if (route->connection_fd >= 0) {
+    close(route->connection_fd);
+  }
+  if (route->listener_fd >= 0) {
+    close(route->listener_fd);
+  }
   if (route->wait_fd >= 0) {
     close(route->wait_fd);
   }
@@ -1043,6 +1051,8 @@ void wls_linux_h3_route_close(wls_linux_h3_route *route) {
   route->count_map_fd = -1;
   route->worker_map_fd = -1;
   route->listen_map_fd = -1;
+  route->connection_fd = -1;
+  route->listener_fd = -1;
   route->wait_fd = -1;
   route->lock_fd = -1;
   route->state = WLS_H3_LINUX_ROUTE_DISABLED;

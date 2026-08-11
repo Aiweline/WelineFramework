@@ -23,7 +23,14 @@ final class GatewayClient
         private readonly GatewayPaths $paths = new GatewayPaths(),
         private readonly float $timeoutSeconds = 2.0,
         private readonly GatewayCredentialStore $credentials = new GatewayCredentialStore(),
+        private readonly GatewayWindowsNamedPipeTransport $windowsPipeTransport =
+            new GatewayWindowsNamedPipeTransport(),
     ) {
+        if (!\is_finite($this->timeoutSeconds) || $this->timeoutSeconds <= 0.0) {
+            throw new \InvalidArgumentException(
+                'WLS Gateway client timeout must be a positive finite number.',
+            );
+        }
     }
 
     /**
@@ -73,15 +80,25 @@ final class GatewayClient
         ?float $deadlineMonotonic,
     ): array
     {
+        $normalizedOperation = \strtolower(\trim($operation));
+        // A nullable caller deadline is a convenience API, not permission for
+        // connect, partial writes, response reads and pagination to each open
+        // a fresh timeout window. Materialize one absolute budget before the
+        // first credential or endpoint read and carry it through every page.
+        $deadlineMonotonic ??= (\hrtime(true) / 1_000_000_000)
+            + \max(
+                0.001,
+                $this->responseTimeoutSeconds($channel, $normalizedOperation),
+            );
         $response = $this->requestSingleWithChannel(
             $channel,
-            $operation,
+            $normalizedOperation,
             $payload,
             $deadlineMonotonic,
         );
         return $this->collectPaginatedResponse(
             $channel,
-            \strtolower(\trim($operation)),
+            $normalizedOperation,
             $payload,
             $response,
             $deadlineMonotonic,
@@ -165,95 +182,118 @@ final class GatewayClient
                 $this->timeoutSeconds,
                 $this->remainingDeadlineSeconds($deadlineMonotonic),
             );
-            $socket = $endpoint['transport'] === 'pipe'
-                ? @\fopen($endpoint['address'], 'r+b')
-                : @\stream_socket_client(
+            $responseTimeout = \min(
+                $this->responseTimeoutSeconds($channel, $request['operation']),
+                $this->remainingDeadlineSeconds($deadlineMonotonic),
+            );
+            if ($endpoint['transport'] === 'pipe') {
+                $transportStarted = \hrtime(true) / 1_000_000_000;
+                $transportDeadline = $transportStarted + $responseTimeout;
+                if ($deadlineMonotonic !== null) {
+                    $transportDeadline = \min(
+                        $transportDeadline,
+                        $deadlineMonotonic,
+                    );
+                }
+                try {
+                    $line = $this->windowsPipeTransport->exchange(
+                        $channel,
+                        $encoded . "\n",
+                        self::MAX_FRAME_BYTES,
+                        $transportDeadline,
+                        $connectTimeout,
+                    );
+                } catch (GatewayWindowsNamedPipeTransportException $exception) {
+                    if (!$exception->retryable()) {
+                        throw $exception;
+                    }
+                    throw new \RuntimeException(
+                        'WLS Gateway ' . $channel . ' endpoint unavailable: '
+                            . 'native named-pipe transport did not return a frame.',
+                        0,
+                        $exception,
+                    );
+                }
+            } else {
+                $socket = @\stream_socket_client(
                     $endpoint['address'],
                     $errno,
                     $error,
                     $connectTimeout,
                     \STREAM_CLIENT_CONNECT,
                 );
-            if (!\is_resource($socket)) {
-                throw new \RuntimeException(
-                    'WLS Gateway ' . $channel . ' endpoint unavailable: '
-                    . ($error !== '' ? $error : (string)$errno)
-                );
-            }
-            try {
-                $this->setStreamDeadlineTimeout(
-                    $socket,
-                    \min(
+                if (!\is_resource($socket)) {
+                    throw new \RuntimeException(
+                        'WLS Gateway ' . $channel . ' endpoint unavailable: '
+                        . ($error !== '' ? $error : (string)$errno)
+                    );
+                }
+                try {
+                    $this->setStreamDeadlineTimeout($socket, $responseTimeout);
+                    if (!$this->writeAll(
+                        $socket,
+                        $encoded . "\n",
+                        $deadlineMonotonic,
                         $this->responseTimeoutSeconds($channel, $request['operation']),
-                        $this->remainingDeadlineSeconds($deadlineMonotonic),
-                    ),
-                );
-                if (!$this->writeAll(
-                    $socket,
-                    $encoded . "\n",
-                    $deadlineMonotonic,
-                    $this->responseTimeoutSeconds(
-                        $channel,
-                        $request['operation'],
-                    ),
-                )) {
-                    throw new \RuntimeException('Unable to send WLS Gateway request.');
-                }
-                $this->setStreamDeadlineTimeout(
-                    $socket,
-                    \min(
-                        $this->responseTimeoutSeconds($channel, $request['operation']),
-                        $this->remainingDeadlineSeconds($deadlineMonotonic),
-                    ),
-                );
-                $line = @\fgets($socket, self::MAX_FRAME_BYTES + 1);
-                if (!\is_string($line)
-                    || $line === ''
-                    || !\str_ends_with($line, "\n")
-                    || \strlen($line) > self::MAX_FRAME_BYTES
-                    || \trim($line) === ''
-                ) {
-                    throw new \RuntimeException(self::UNPROVEN_RESPONSE_ERROR);
-                }
-                $response = \json_decode($line, true);
-                if (!\is_array($response)
-                    || (string)($response['protocol'] ?? '') !== GatewayPaths::PROTOCOL
-                    || !\hash_equals((string)$request['request_id'], (string)($response['request_id'] ?? ''))
-                ) {
-                    throw new \RuntimeException('WLS Gateway returned an invalid protocol response.');
-                }
-                $signature = \strtolower((string)($response['signature'] ?? ''));
-                unset($response['signature']);
-                $expected = \hash_hmac('sha256', self::canonicalJson($response), $secret);
-                $authenticated = \preg_match('/\A[a-f0-9]{64}\z/D', $signature) === 1
-                    && \hash_equals($expected, $signature);
-                if (!$authenticated && \preg_match('/\A[a-f0-9]{64}\z/D', $signature) === 1) {
-                    try {
-                        // A host slot and a project can legitimately run adjacent
-                        // PHP patch versions. Re-decoding a signed JSON float and
-                        // encoding it with the other runtime can change its
-                        // shortest decimal representation, even though the value
-                        // is unchanged. Preserve numeric lexemes from the wire for
-                        // this compatibility verification; all object keys are
-                        // still recursively sorted and the HMAC remains mandatory.
-                        $wireExpected = \hash_hmac(
-                            'sha256',
-                            self::canonicalResponseFromWire($line, $signature),
-                            $secret,
-                        );
-                        $authenticated = \hash_equals($wireExpected, $signature);
-                    } catch (\Throwable) {
-                        $authenticated = false;
+                    )) {
+                        throw new \RuntimeException('Unable to send WLS Gateway request.');
                     }
+                    $this->setStreamDeadlineTimeout(
+                        $socket,
+                        \min(
+                            $this->responseTimeoutSeconds($channel, $request['operation']),
+                            $this->remainingDeadlineSeconds($deadlineMonotonic),
+                        ),
+                    );
+                    $line = @\fgets($socket, self::MAX_FRAME_BYTES + 1);
+                } finally {
+                    @\fclose($socket);
                 }
-                if (!$authenticated) {
-                    throw new \RuntimeException('WLS Gateway response authentication failed.');
-                }
-                $response['signature'] = $signature;
-                return self::sanitizeAuthenticatedResponse($response, $channel, $request);
-            } finally {
-                @\fclose($socket);
             }
+            if (!\is_string($line)
+                || $line === ''
+                || !\str_ends_with($line, "\n")
+                || \strlen($line) > self::MAX_FRAME_BYTES
+                || \trim($line) === ''
+            ) {
+                throw new \RuntimeException(self::UNPROVEN_RESPONSE_ERROR);
+            }
+            $response = \json_decode($line, true);
+            if (!\is_array($response)
+                || (string)($response['protocol'] ?? '') !== GatewayPaths::PROTOCOL
+                || !\hash_equals((string)$request['request_id'], (string)($response['request_id'] ?? ''))
+            ) {
+                throw new \RuntimeException('WLS Gateway returned an invalid protocol response.');
+            }
+            $signature = \strtolower((string)($response['signature'] ?? ''));
+            unset($response['signature']);
+            $expected = \hash_hmac('sha256', self::canonicalJson($response), $secret);
+            $authenticated = \preg_match('/\A[a-f0-9]{64}\z/D', $signature) === 1
+                && \hash_equals($expected, $signature);
+            if (!$authenticated && \preg_match('/\A[a-f0-9]{64}\z/D', $signature) === 1) {
+                try {
+                    // A host slot and a project can legitimately run adjacent
+                    // PHP patch versions. Re-decoding a signed JSON float and
+                    // encoding it with the other runtime can change its
+                    // shortest decimal representation, even though the value
+                    // is unchanged. Preserve numeric lexemes from the wire for
+                    // this compatibility verification; all object keys are
+                    // still recursively sorted and the HMAC remains mandatory.
+                    $wireExpected = \hash_hmac(
+                        'sha256',
+                        self::canonicalResponseFromWire($line, $signature),
+                        $secret,
+                    );
+                    $authenticated = \hash_equals($wireExpected, $signature);
+                } catch (\Throwable) {
+                    $authenticated = false;
+                }
+            }
+            if (!$authenticated) {
+                throw new \RuntimeException('WLS Gateway response authentication failed.');
+            }
+            $response['signature'] = $signature;
+            return self::sanitizeAuthenticatedResponse($response, $channel, $request);
         } finally {
             if (isset($secret) && \function_exists('sodium_memzero')) {
                 \sodium_memzero($secret);
@@ -527,6 +567,10 @@ final class GatewayClient
                     'backends',
                     'backend_instances',
                     'backend_identity',
+                    'reseal_required',
+                    'snapshot_receipt_schema_current',
+                    'snapshot_receipt_schema_target',
+                    're_register_required',
                     'certificate',
                     'route_generation',
                     'domain_security_generation',
@@ -582,6 +626,12 @@ final class GatewayClient
                         && (!\is_int($route['drain_until'])
                             || (int)$route['drain_until'] < 0))
                     || !\is_bool($route['force_https'] ?? null)
+                    || !\is_bool($route['reseal_required'] ?? null)
+                    || !\is_int($route['snapshot_receipt_schema_current'] ?? null)
+                    || (int)$route['snapshot_receipt_schema_current'] < 0
+                    || !\is_int($route['snapshot_receipt_schema_target'] ?? null)
+                    || (int)$route['snapshot_receipt_schema_target'] < 1
+                    || !\is_bool($route['re_register_required'] ?? null)
                     || !\is_bool($route['force_root_to_www'] ?? null)
                     || !\is_string($route['root_to_www_target'] ?? null)
                     || !\is_bool($route['root_to_www_target_ready'] ?? null)
@@ -630,7 +680,23 @@ final class GatewayClient
                         'WLS Gateway route listener projection is not one exact transport closure.',
                     );
                 }
-                $certificate = $this->assertWireCertificate($route['certificate']);
+                $certificate = $this->assertWireCertificate(
+                    $route['certificate'],
+                    $domain,
+                );
+                foreach ([
+                    'reseal_required',
+                    'snapshot_receipt_schema_current',
+                    'snapshot_receipt_schema_target',
+                ] as $receiptField) {
+                    if (($route[$receiptField] ?? null)
+                        !== ($certificate[$receiptField] ?? null)
+                    ) {
+                        throw new \RuntimeException(
+                            'WLS Gateway route and certificate receipt projections differ.',
+                        );
+                    }
+                }
                 if ($status === 'ACTIVE'
                     && ($backends === []
                         || $backendInstances === []
@@ -982,7 +1048,7 @@ final class GatewayClient
     }
 
     /** @return array<string,mixed> */
-    private function assertWireCertificate(mixed $value): array
+    private function assertWireCertificate(mixed $value, string $domain): array
     {
         if (!\is_array($value) || \array_is_list($value)) {
             throw new \RuntimeException('WLS Gateway certificate projection is malformed.');
@@ -992,13 +1058,74 @@ final class GatewayClient
             'valid',
             'pending',
             'source_digest',
+            'trust_profile',
+            'provider',
+            'material_class',
+            'provenance_digest',
             'snapshot_digest',
+            'snapshot_manifest_schema',
+            'snapshot_manifest_sha256',
+            'snapshot_receipt_schema_current',
+            'snapshot_receipt_schema_target',
+            'reseal_required',
+            'leaf_fingerprint_sha256',
+            'san_names',
             'generation',
+            'not_before',
             'not_after',
         ], 'certificate');
         $sourceDigest = $value['source_digest'] ?? null;
         $snapshotDigest = $value['snapshot_digest'] ?? null;
         $state = $value['state'] ?? null;
+        $trustProfile = \strtolower(\trim((string)($value['trust_profile'] ?? '')));
+        $provider = \strtolower(\trim((string)($value['provider'] ?? '')));
+        $materialClass = \strtolower(\trim((string)(
+            $value['material_class'] ?? ''
+        )));
+        $provenanceDigest = \strtolower(\trim((string)(
+            $value['provenance_digest'] ?? ''
+        )));
+        $generation = (int)($value['generation'] ?? -1);
+        $activeProvenanceValid = false;
+        $inactiveProvenanceValid = false;
+        try {
+            $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+                $trustProfile,
+            );
+            if ($state === 'active') {
+                $provider = ProjectCertificateGenerationStore::normalizeProvider($provider);
+                $activeProvenanceValid = \hash_equals(
+                    ProjectCertificateGenerationStore::provenanceDigest(
+                        $domain,
+                        (string)$sourceDigest,
+                        $trustProfile,
+                        $provider,
+                        $materialClass,
+                    ),
+                    $provenanceDigest,
+                ) && ($trustProfile
+                        !== ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION
+                    || $materialClass
+                        === ProjectCertificateGenerationStore::MATERIAL_CLASS_PUBLIC_TRUST);
+            } elseif (\in_array($state, ['pending', 'disabled'], true)
+                && $provider === 'none'
+                && $materialClass === 'none'
+            ) {
+                $inactiveProvenanceValid = \hash_equals(
+                    ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                        $domain,
+                        (string)$state,
+                        (string)$sourceDigest,
+                        $generation,
+                        $trustProfile,
+                    ),
+                    $provenanceDigest,
+                );
+            }
+        } catch (\Throwable) {
+            $activeProvenanceValid = false;
+            $inactiveProvenanceValid = false;
+        }
         if (!\is_string($state)
             || !\in_array($state, ['active', 'pending', 'disabled'], true)
             || !\is_bool($value['valid'] ?? null)
@@ -1009,25 +1136,64 @@ final class GatewayClient
             || !\is_string($snapshotDigest)
             || ($snapshotDigest !== ''
                 && \preg_match('/\A[a-f0-9]{64}\z/D', $snapshotDigest) !== 1)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
+            || ($state === 'active' ? !$activeProvenanceValid : !$inactiveProvenanceValid)
+            || !\is_int($value['snapshot_manifest_schema'] ?? null)
+            || (int)$value['snapshot_manifest_schema'] < 0
+            || !\is_string($value['snapshot_manifest_sha256'] ?? null)
+            || ((string)$value['snapshot_manifest_sha256'] !== ''
+                && \preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    (string)$value['snapshot_manifest_sha256'],
+                ) !== 1)
+            || !\is_int($value['snapshot_receipt_schema_current'] ?? null)
+            || (int)$value['snapshot_receipt_schema_current'] < 0
+            || !\is_int($value['snapshot_receipt_schema_target'] ?? null)
+            || (int)$value['snapshot_receipt_schema_target'] < 1
+            || !\is_bool($value['reseal_required'] ?? null)
+            || !\is_string($value['leaf_fingerprint_sha256'] ?? null)
+            || ((string)$value['leaf_fingerprint_sha256'] !== ''
+                && \preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    (string)$value['leaf_fingerprint_sha256'],
+                ) !== 1)
+            || !\is_array($value['san_names'] ?? null)
+            || !\array_is_list($value['san_names'])
             || !\is_int($value['generation'] ?? null)
-            || (int)$value['generation'] < 0
+            || $generation < 0
+            || !\is_int($value['not_before'] ?? null)
+            || (int)$value['not_before'] < 0
             || !\is_int($value['not_after'] ?? null)
             || (int)$value['not_after'] < 0
             || ($state === 'active'
                 && (($value['valid'] ?? false) !== true
                     || ($value['pending'] ?? true) !== false
-                    || (int)$value['generation'] < 1))
+                    || $generation < 1
+                    || (int)$value['snapshot_manifest_schema'] < 1
+                    || (string)$value['snapshot_manifest_sha256'] === ''
+                    || (string)$value['leaf_fingerprint_sha256'] === ''
+                    || (int)$value['not_before'] < 1))
             || ($state === 'pending'
                 && (($value['valid'] ?? true) !== false
                     || ($value['pending'] ?? false) !== true
                     || (int)$value['generation'] !== 0
                     || $snapshotDigest !== ''
+                    || (int)$value['snapshot_manifest_schema'] !== 0
+                    || (string)$value['snapshot_manifest_sha256'] !== ''
+                    || (string)$value['leaf_fingerprint_sha256'] !== ''
+                    || $value['san_names'] !== []
+                    || (int)$value['not_before'] !== 0
                     || (int)$value['not_after'] !== 0))
             || ($state === 'disabled'
                 && (($value['valid'] ?? true) !== false
                     || ($value['pending'] ?? false) !== true
                     || (int)$value['generation'] < 1
                     || $snapshotDigest !== ''
+                    || (int)$value['snapshot_manifest_schema'] !== 0
+                    || (string)$value['snapshot_manifest_sha256'] !== ''
+                    || (string)$value['leaf_fingerprint_sha256'] !== ''
+                    || $value['san_names'] !== []
+                    || (int)$value['not_before'] !== 0
                     || (int)$value['not_after'] !== 0))
             || (($value['valid'] ?? false) === true
                 && (\preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1

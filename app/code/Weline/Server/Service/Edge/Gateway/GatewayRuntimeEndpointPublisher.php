@@ -57,6 +57,7 @@ final class GatewayRuntimeEndpointPublisher
             $status,
             $nativeEdgeState,
             $servingProof,
+            $deadlineMonotonic,
         )) {
             return true;
         }
@@ -76,12 +77,17 @@ final class GatewayRuntimeEndpointPublisher
                 $servingProof,
                 $now,
                 $monotonicNow,
+                $deadlineMonotonic,
                 &$casApplied,
             ): array {
                 if (!self::endpointRuntimeFenceMatches($endpoint, $fence)) {
                     return $endpoint;
                 }
-                if (!self::servingManifestProofIsCurrent($endpoint, $servingProof)) {
+                if (!self::servingManifestProofIsCurrent(
+                    $endpoint,
+                    $servingProof,
+                    $deadlineMonotonic,
+                )) {
                     return $endpoint;
                 }
                 $casApplied = true;
@@ -122,7 +128,10 @@ final class GatewayRuntimeEndpointPublisher
         if ($fence === null) {
             return false;
         }
-        $servingManifest = self::currentServingManifestForEndpoint($current);
+        $servingManifest = self::currentServingManifestForEndpoint(
+            $current,
+            $deadlineMonotonic,
+        );
         if ((int)($servingManifest['route_count'] ?? 0) < 1) {
             throw new \RuntimeException(
                 'HTTP-only project state has no TLS route for a fallback endpoint.',
@@ -133,9 +142,13 @@ final class GatewayRuntimeEndpointPublisher
             $current,
             $leaseObservation,
             $servingManifest,
+            $deadlineMonotonic,
         );
         $gateway = \is_array($current['gateway'] ?? null) ? $current['gateway'] : [];
-        if (GatewayRuntimeServingProjection::fallbackWlsIsServing($current)
+        if (GatewayRuntimeServingProjection::fallbackWlsIsServing(
+            $current,
+            $deadlineMonotonic,
+        )
             && (string)($gateway['fallback_state'] ?? '') === 'DEGRADED_WLS'
             && (int)($gateway['public_https'] ?? 0) === $httpsPort
             && (string)($gateway['degraded_reason'] ?? '') === $reason
@@ -163,6 +176,7 @@ final class GatewayRuntimeEndpointPublisher
                 $reason,
                 $now,
                 $monotonicNow,
+                $deadlineMonotonic,
                 &$casApplied,
             ): array {
                 if (!self::endpointRuntimeFenceMatches($endpoint, $fence)) {
@@ -172,6 +186,7 @@ final class GatewayRuntimeEndpointPublisher
                     $endpoint,
                     (int)$leaseProof['serving_manifest_generation'],
                     (string)$leaseProof['serving_manifest_digest'],
+                    $deadlineMonotonic,
                 )) {
                     return $endpoint;
                 }
@@ -277,7 +292,12 @@ final class GatewayRuntimeEndpointPublisher
             ? '[' . $bindHost . ']'
             : $bindHost;
         $publicAuthority = (string)$leaseProof['authority_host'];
+        $routeDomains = (array)($leaseProof['route_domains'] ?? []);
         $gateway['serving_mode'] = 'fallback_wls';
+        // applyFallbackObservation() is also the CAS after-image used when an
+        // auto start falls back before any healthy gateway observation has
+        // ever been published. Make that projection independently complete.
+        $gateway['protocol'] = GatewayPaths::PROTOCOL;
         $gateway['public_http'] = 0;
         $gateway['public_https'] = $httpsPort;
         $gateway['degraded_reason'] = self::normalizeReason($reason);
@@ -294,8 +314,18 @@ final class GatewayRuntimeEndpointPublisher
         // can never advertise an address different from the retained listener.
         $gateway['fallback_bind_host'] = $bindHost;
         $gateway['fallback_bind'] = $bindAuthority . ':' . $httpsPort;
-        $gateway['fallback_urls'] = [
-            'https://' . self::formatUrlHost($publicAuthority) . ':' . $httpsPort,
+        $gateway['fallback_urls'] = $publicAuthority !== ''
+            ? ['https://' . self::formatUrlHost($publicAuthority) . ':' . $httpsPort]
+            : [];
+        $gateway['fallback_route_domains'] = $routeDomains;
+        $gateway['fallback_limitations'] = [
+            'not_public_80_443',
+            'dns_mapping_required',
+            'firewall_or_load_balancer_may_block',
+            ...($publicAuthority === '' ? [
+                'hostname_and_sni_required',
+                'wildcard_route_requires_concrete_hostname',
+            ] : []),
         ];
         // Retain the last authenticated gateway project proof while native
         // fallback serves. It remains historical evidence only; serving-mode
@@ -321,7 +351,10 @@ final class GatewayRuntimeEndpointPublisher
         $https = (int)($status['public_https'] ?? 0);
         self::statusHostBootId($status);
         if (($status['ok'] ?? false) !== true
-            || ($status['project_ready'] ?? false) !== true
+            // `project_ready` is intentionally whole-project only. A fully
+            // authenticated ACTIVE subset must keep serving while another
+            // route waits for its first certificate.
+            || ($status['route_serving_ready'] ?? false) !== true
             || ($status['data_plane']['running'] ?? false) !== true
             || (string)($status['state'] ?? '') === 'DATA_PLANE_DOWN'
             || !\hash_equals(GatewayPaths::PROTOCOL, (string)($status['protocol'] ?? ''))
@@ -345,6 +378,7 @@ final class GatewayRuntimeEndpointPublisher
         array $status,
         string $nativeEdgeState,
         array $servingProof,
+        ?float $deadlineMonotonic = null,
     ): bool {
         $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
         $nativeState = \strtoupper(\trim($nativeEdgeState));
@@ -354,7 +388,10 @@ final class GatewayRuntimeEndpointPublisher
             default => 'NATIVE_EDGE_STANDBY',
         };
 
-        return GatewayRuntimeServingProjection::gatewayIsServing($endpoint)
+        return GatewayRuntimeServingProjection::gatewayIsServing(
+            $endpoint,
+            $deadlineMonotonic,
+        )
             && self::observationWasRecentlyPublished($gateway)
             && \hash_equals(GatewayPaths::PROTOCOL, (string)($gateway['protocol'] ?? ''))
             && \hash_equals(
@@ -589,6 +626,18 @@ final class GatewayRuntimeEndpointPublisher
                 $localCertificate['source_digest'] ?? ''
             )));
             $certificateGeneration = (int)($localCertificate['generation'] ?? 0);
+            $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $localCertificate['trust_profile'] ?? ''
+            ));
+            $provider = ProjectCertificateGenerationStore::normalizeProvider((string)(
+                $localCertificate['provider'] ?? ''
+            ));
+            $materialClass = \strtolower(\trim((string)(
+                $localCertificate['material_class'] ?? ''
+            )));
+            $provenanceDigest = \strtolower(\trim((string)(
+                $localCertificate['provenance_digest'] ?? ''
+            )));
             $backend = self::backendInstanceForServingProof(
                 $remote['backend_instances'] ?? null,
                 $instanceName,
@@ -629,6 +678,32 @@ final class GatewayRuntimeEndpointPublisher
                     $sourceDigest,
                     (string)($remoteCertificate['source_digest'] ?? ''),
                 )
+                || !\hash_equals(
+                    $trustProfile,
+                    (string)($remoteCertificate['trust_profile'] ?? ''),
+                )
+                || !\hash_equals(
+                    $provider,
+                    (string)($remoteCertificate['provider'] ?? ''),
+                )
+                || !\hash_equals(
+                    $materialClass,
+                    (string)($remoteCertificate['material_class'] ?? ''),
+                )
+                || !\hash_equals(
+                    $provenanceDigest,
+                    (string)($remoteCertificate['provenance_digest'] ?? ''),
+                )
+                || !\hash_equals(
+                    $provenanceDigest,
+                    ProjectCertificateGenerationStore::provenanceDigest(
+                        (string)$local['domain'],
+                        $sourceDigest,
+                        $trustProfile,
+                        $provider,
+                        $materialClass,
+                    ),
+                )
                 || !\hash_equals($projectUuid, (string)($identity['project_uuid'] ?? ''))
                 || !\hash_equals($instanceName, (string)($identity['instance_id'] ?? ''))
                 || (int)($identity['generation'] ?? 0)
@@ -657,6 +732,10 @@ final class GatewayRuntimeEndpointPublisher
                 'route_generation' => (int)$remote['route_generation'],
                 'certificate_generation' => $certificateGeneration,
                 'certificate_source_digest' => $sourceDigest,
+                'certificate_trust_profile' => $trustProfile,
+                'certificate_provider' => $provider,
+                'certificate_material_class' => $materialClass,
+                'certificate_provenance_digest' => $provenanceDigest,
                 'backend_public_digest' => $publicDigest,
                 'force_https' => (bool)$local['force_https'],
                 'force_root_to_www' => $forceRootToWww,
@@ -681,9 +760,12 @@ final class GatewayRuntimeEndpointPublisher
             $deadlineMonotonic,
         );
         $proof = [
-            'schema_version' => 2,
+            'schema_version' => 3,
             'project_uuid' => $projectUuid,
             'instance_id' => $instanceName,
+            'certificate_trust_profile' => ProjectCertificateGenerationStore::normalizeTrustProfile(
+                (string)($registration['certificate_trust_profile'] ?? ''),
+            ),
             'project_generation' => (int)$registration['project_generation'],
             'request_digest' => (string)$registration['request_digest'],
             'non_certificate_desired_digest' => (string)(
@@ -810,7 +892,10 @@ final class GatewayRuntimeEndpointPublisher
             ? $proof['active_routes']
             : [];
         $hostBootId = self::statusHostBootId($status);
-        if (($proof['schema_version'] ?? null) !== 2
+        $proofTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+            $proof['certificate_trust_profile'] ?? ''
+        ));
+        if (($proof['schema_version'] ?? null) !== 3
             || ($proof['public_probe_verified'] ?? false) !== true
             || !\array_is_list($routes)
             || \count($routes) > 256
@@ -821,6 +906,12 @@ final class GatewayRuntimeEndpointPublisher
             || !\hash_equals(
                 (string)($gateway['instance_id'] ?? ''),
                 (string)($proof['instance_id'] ?? ''),
+            )
+            || !\hash_equals(
+                ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                    $gateway['certificate_profile'] ?? ''
+                )),
+                $proofTrustProfile,
             )
             || !\hash_equals(
                 (string)($status['project_uuid'] ?? ''),
@@ -891,10 +982,39 @@ final class GatewayRuntimeEndpointPublisher
             }
             $routeId = (string)($route['route_id'] ?? '');
             $domain = (string)($route['domain'] ?? '');
+            $sourceDigest = \strtolower(\trim((string)(
+                $route['certificate_source_digest'] ?? ''
+            )));
+            $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $route['certificate_trust_profile'] ?? ''
+            ));
+            $provider = ProjectCertificateGenerationStore::normalizeProvider((string)(
+                $route['certificate_provider'] ?? ''
+            ));
+            $materialClass = \strtolower(\trim((string)(
+                $route['certificate_material_class'] ?? ''
+            )));
+            $provenanceDigest = \strtolower(\trim((string)(
+                $route['certificate_provenance_digest'] ?? ''
+            )));
             $rootTarget = (string)($route['root_to_www_target'] ?? '');
             if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
                 || isset($seenRoutes[$routeId])
                 || $domain === ''
+                || (int)($route['certificate_generation'] ?? 0) < 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+                || !\hash_equals($proofTrustProfile, $trustProfile)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
+                || !\hash_equals(
+                    ProjectCertificateGenerationStore::provenanceDigest(
+                        $domain,
+                        $sourceDigest,
+                        $trustProfile,
+                        $provider,
+                        $materialClass,
+                    ),
+                    $provenanceDigest,
+                )
                 || !\is_bool($route['force_https'] ?? null)
                 || !\is_bool($route['force_root_to_www'] ?? null)
                 || ($route['root_to_www_target_ready'] ?? null) !== true
@@ -954,17 +1074,23 @@ final class GatewayRuntimeEndpointPublisher
     }
 
     /** @return array<string,mixed> */
-    private static function currentServingManifestForEndpoint(array $endpoint): array
+    private static function currentServingManifestForEndpoint(
+        array $endpoint,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
         $fence = self::endpointRuntimeFence($endpoint);
         if ($fence === null) {
             throw new \RuntimeException('WLS serving manifest has no current endpoint fence.');
         }
-        $manifest = (new ProjectServingManifestStore())->currentForFence([
-            ...$fence,
-            'instance_id' => (string)($gateway['instance_id'] ?? ''),
-        ]);
+        $manifest = (new ProjectServingManifestStore())->currentForFence(
+            [
+                ...$fence,
+                'instance_id' => (string)($gateway['instance_id'] ?? ''),
+            ],
+            $deadlineMonotonic,
+        );
         $payload = \is_array($manifest['payload'] ?? null) ? $manifest['payload'] : [];
         if ((int)($payload['desired_route_count'] ?? 0) < 1
             || (int)($manifest['route_count'] ?? -1) < 0
@@ -984,16 +1110,21 @@ final class GatewayRuntimeEndpointPublisher
     private static function servingManifestProofIsCurrent(
         array $endpoint,
         array $proof,
+        ?float $deadlineMonotonic = null,
     ): bool {
         if (!self::servingManifestReferenceIsCurrent(
             $endpoint,
             (int)($proof['serving_manifest_generation'] ?? 0),
             (string)($proof['serving_manifest_digest'] ?? ''),
+            $deadlineMonotonic,
         )) {
             return false;
         }
         try {
-            $manifest = self::currentServingManifestForEndpoint($endpoint);
+            $manifest = self::currentServingManifestForEndpoint(
+                $endpoint,
+                $deadlineMonotonic,
+            );
         } catch (\Throwable) {
             return false;
         }
@@ -1014,13 +1145,17 @@ final class GatewayRuntimeEndpointPublisher
         array $endpoint,
         int $generation,
         string $digest,
+        ?float $deadlineMonotonic = null,
     ): bool {
         $digest = \strtolower(\trim($digest));
         if ($generation < 1 || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1) {
             return false;
         }
         try {
-            $manifest = self::currentServingManifestForEndpoint($endpoint);
+            $manifest = self::currentServingManifestForEndpoint(
+                $endpoint,
+                $deadlineMonotonic,
+            );
         } catch (\Throwable) {
             return false;
         }
@@ -1051,6 +1186,7 @@ final class GatewayRuntimeEndpointPublisher
         array $endpoint,
         array $observation,
         array $servingManifest,
+        ?float $deadlineMonotonic = null,
     ): array {
         $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
         $projectUuid = \strtolower(\trim((string)($gateway['project_uuid'] ?? '')));
@@ -1072,7 +1208,9 @@ final class GatewayRuntimeEndpointPublisher
                 'Fallback lease observation does not match the current project endpoint.'
             );
         }
-        $live = (new GatewayPortLeaseAllocator())->liveServingLeaseForAnyOwner(
+        $live = (new GatewayPortLeaseAllocator(
+            operationDeadlineMonotonic: $deadlineMonotonic,
+        ))->liveServingLeaseForAnyOwner(
             $leaseInstanceId,
             $bindHost,
             $port,
@@ -1087,6 +1225,7 @@ final class GatewayRuntimeEndpointPublisher
             $endpoint,
             $servingManifest,
         );
+        $routeDomains = self::fallbackRouteDomainsForManifest($servingManifest);
         $proof = [
             'schema_version' => 2,
             'project_uuid' => $projectUuid,
@@ -1095,6 +1234,7 @@ final class GatewayRuntimeEndpointPublisher
             'lease_id' => $leaseId,
             'bind_host' => (string)$live['bind_host'],
             'authority_host' => $authorityHost,
+            'route_domains' => $routeDomains,
             'port' => $port,
             'master_pid' => $masterPid,
             'worker_launch_id' => $workerLaunchId,
@@ -1121,14 +1261,23 @@ final class GatewayRuntimeEndpointPublisher
         $unsigned = $proof;
         $digest = \strtolower(\trim((string)($unsigned['proof_digest'] ?? '')));
         unset($unsigned['proof_digest']);
+        $rawAuthorityHost = (string)($proof['authority_host'] ?? '');
         try {
-            $authorityHost = ProjectServingManifestStore::normalizeHost(
-                (string)($proof['authority_host'] ?? ''),
-                false,
+            $authorityHost = $rawAuthorityHost === ''
+                ? ''
+                : ProjectServingManifestStore::normalizeHost(
+                    $rawAuthorityHost,
+                    false,
+                );
+            $routeDomains = self::normalizeFallbackRouteDomains(
+                $proof['route_domains'] ?? null,
             );
         } catch (\Throwable) {
             throw new \RuntimeException('Gateway fallback authority proof is invalid.');
         }
+        $authorityCovered = $authorityHost !== ''
+            ? self::routeDomainsCoverHost($routeDomains, $authorityHost)
+            : self::routeDomainsRequireConcreteHostname($routeDomains);
         if (($proof['schema_version'] ?? null) !== 2
             || !\hash_equals((string)($gateway['project_uuid'] ?? ''), (string)(
                 $proof['project_uuid'] ?? ''
@@ -1151,7 +1300,8 @@ final class GatewayRuntimeEndpointPublisher
             )) !== 1
             || !self::validLiteralBindHost((string)($proof['bind_host'] ?? ''))
             || \str_starts_with($authorityHost, '*.')
-            || !\hash_equals($authorityHost, (string)($proof['authority_host'] ?? ''))
+            || !\hash_equals($authorityHost, $rawAuthorityHost)
+            || !$authorityCovered
             || (int)($proof['port'] ?? 0) !== $httpsPort
             || (int)($proof['master_pid'] ?? 0) !== (int)($endpoint['master_pid'] ?? 0)
             || !\hash_equals('ACTIVE', (string)($proof['state'] ?? ''))
@@ -1323,9 +1473,84 @@ final class GatewayRuntimeEndpointPublisher
                 return $domain;
             }
         }
-        throw new \RuntimeException(
-            'Fallback serving manifest requires one concrete certificate authority host.',
-        );
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $servingManifest
+     * @return list<string>
+     */
+    private static function fallbackRouteDomainsForManifest(
+        array $servingManifest,
+    ): array {
+        $payload = \is_array($servingManifest['payload'] ?? null)
+            ? $servingManifest['payload']
+            : [];
+        return self::normalizeFallbackRouteDomains($payload['routes'] ?? null, true);
+    }
+
+    /** @return list<string> */
+    private static function normalizeFallbackRouteDomains(
+        mixed $value,
+        bool $routes = false,
+    ): array {
+        if (!\is_array($value)
+            || !\array_is_list($value)
+            || $value === []
+            || \count($value) > 256
+        ) {
+            throw new \RuntimeException('Gateway fallback route-domain proof is invalid.');
+        }
+        $domains = [];
+        foreach ($value as $entry) {
+            $candidate = $routes && \is_array($entry)
+                ? ($entry['domain'] ?? null)
+                : $entry;
+            if (!\is_string($candidate)) {
+                throw new \RuntimeException('Gateway fallback route-domain proof is invalid.');
+            }
+            $domain = ProjectServingManifestStore::normalizeHost($candidate);
+            if (isset($domains[$domain])) {
+                throw new \RuntimeException('Gateway fallback route-domain proof is duplicated.');
+            }
+            $domains[$domain] = true;
+        }
+        \ksort($domains, SORT_STRING);
+        $normalized = \array_keys($domains);
+        if (!$routes && $normalized !== $value) {
+            throw new \RuntimeException('Gateway fallback route-domain proof is not canonical.');
+        }
+        return $normalized;
+    }
+
+    /** @param list<string> $routeDomains */
+    private static function routeDomainsCoverHost(
+        array $routeDomains,
+        string $host,
+    ): bool {
+        foreach ($routeDomains as $domain) {
+            if (\hash_equals($domain, $host)) {
+                return true;
+            }
+            if (\str_starts_with($domain, '*.')
+                && \str_ends_with($host, \substr($domain, 1))
+                && \substr_count($host, '.') === \substr_count($domain, '.')
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @param list<string> $routeDomains */
+    private static function routeDomainsRequireConcreteHostname(array $routeDomains): bool
+    {
+        foreach ($routeDomains as $domain) {
+            if (!\str_starts_with($domain, '*.')) {
+                return false;
+            }
+        }
+        return $routeDomains !== [];
     }
 
     /** @param array<string,mixed> $payload */

@@ -13,7 +13,8 @@ interface IpcControlGatewayInterface
         string $action,
         string $reloadType = '',
         array $payload = [],
-        float $timeout = 6.0
+        float $timeout = 6.0,
+        ?float $deadlineMonotonic = null,
     ): array;
 
     /**
@@ -96,12 +97,6 @@ interface IpcControlGatewayInterface
         string $reason,
         float $timeoutSeconds = 8.0,
     ): array;
-
-    /**
-     * @param array<int, array<string, mixed>> $routes
-     * @return array{success:bool,message:string,data:array}
-     */
-    public function proxyApply(string $instanceName = 'default', array $routes = [], float $timeout = 5.0): array;
 
     /**
      * @return array{success:bool,message:string,data:array}

@@ -777,17 +777,36 @@ final class MasterChildCredentialStore
         int $masterPid,
         int $masterEpoch,
         string $credential,
+        bool $requireFreshness = true,
     ): array {
         try {
             if (\preg_match('/\A[a-f0-9]{64}\z/D', $credential) !== 1) {
                 throw new \RuntimeException('Managed-child credential is malformed.');
             }
-            $lease = $this->requireRunningMaster(
+            $validation = $this->leaseManager->validateRunningLease(
                 $leaseFile,
                 $instance,
                 $masterPid,
                 $masterEpoch,
+                requireManagedName: true,
             );
+            $authorized = $requireFreshness
+                ? (($validation['authorized'] ?? false) === true)
+                : (($validation['identity_authorized'] ?? false) === true);
+            if (!$authorized || !\is_array($validation['lease'] ?? null)) {
+                $reason = (string)($validation['reason'] ?? 'unknown reason');
+                if (!$requireFreshness
+                    && ($validation['same_boot'] ?? false) === true
+                    && ($validation['owner_status'] ?? '') !== MasterLeaseRuntimeIdentity::OWNER_MATCH
+                ) {
+                    $reason = 'Master owner evidence is not observable.';
+                }
+                throw new \RuntimeException(
+                    'Managed-child Master lease is not authorized: '
+                    . $reason,
+                );
+            }
+            $lease = $validation['lease'];
             $state = $this->requireStateForMaster($this->readState($instance), $lease);
             $matches = [];
             $pid = (int)\getmypid();

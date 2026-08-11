@@ -1,8 +1,9 @@
 # WLS 2.0 Gateway 使用指南
 
 > 状态：实现检查点完成、跨平台发布验收中。edge 决策、稳定项目身份、纯 WLS 降级、Native Platform Broker、
-> 双通道鉴权、enrollment、证书快照、事务发布、A/B/LKG/熔断和 Controller/Nginx
-> 恢复链均已有实现与专项验证；Linux systemd、真实 80/443、宿主 reboot、legacy
+> 双通道鉴权、enrollment、证书快照、事务发布、A/B/LKG 和 Controller/Nginx
+> 恢复链均已有实现与专项验证；平台守护的有界维护重试、熔断收敛和
+> `next_retry` 状态仍属发布阻断项。Linux systemd、真实 80/443、宿主 reboot、legacy
 > 显式提升、fallback/rejoin、双租户 H2/H3 百万和撤销墓碑不变量已在隔离 VM 通过。
 > macOS 原生 Broker/Launcher/数据面已在随机端口实测；macOS/Windows 系统服务 ACL
 > 与 reboot、Windows 实机、首次 ACME 和剩余发布门禁尚未全部完成。
@@ -21,17 +22,25 @@ Client / 本机运维探针
 ```
 
 - Gateway 是宿主基础设施，不属于引导它的首个项目。
-- 普通 `server:start` 只能 discover/join；不能隐式 install、upgrade 或 repair。
+- 项目发布合同要求最终发行物在 `extend/server/wls-gateway/<target-profile>` 携带完整、
+  签名且按平台锁定的 Gateway/Nginx 包；发布后必须满足。开发树或尚未被最终组装消费的
+  overlay 不算已携带。该包是首次建立的受信来源，不是运行中宿主服务目录。
+- 普通 `server:start --edge=auto|gateway` 可以在无既有网关时执行一次 fail-closed 的
+  初始 install；不能借此 upgrade、repair、rebootstrap、promote 或接管未知服务。
 - 项目持有域名、证书源、续签记录、UUID 和 generation。
 - 宿主保存的 enrollment、路由、租约、证书快照和端口声明都是可重建派生状态。
+- Linux systemd Controller 与项目共享宿主文件系统命名空间，不启用 `PrivateTmp`；因此
+  enrollment 明确授权的 `/tmp`、`/var/tmp` 项目根或证书源不会在注册成功后变为不可见。
+  该可见性不扩大读取权限：路径仍受 enrollment ACL、no-follow、普通文件/权限检查、
+  复制前后摘要校验和内容寻址快照约束。
 - 未知 80/443 owner 不受 WLS 管理；WLS 不询问、不停止、不修改该进程。
 
 ## 2. 启动模式
 
 | 命令 | 行为 |
 |---|---|
-| `php bin/w server:start app --edge=auto` | 加入既有受信网关；不可用时自动启动 loopback 高端口纯 WLS |
-| `php bin/w server:start app --edge=gateway` | 必须加入既有网关；失败非零退出且不创建实例残留 |
+| `php bin/w server:start app --edge=auto` | 加入既有受信网关；若不存在且安全前置齐全，由首项目自动建立宿主独立网关并加入；其余情况启动 loopback 高端口纯 WLS |
+| `php bin/w server:start app --edge=gateway` | 必须加入既有网关，或在安全前置齐全时完成首次建立；失败非零退出且不创建实例残留 |
 | `php bin/w server:start app -p 9986 --edge=wls` | 完全绕过网关，纯 WLS 直接提供 TLS |
 | `php bin/w server:start app -p 9986 --no-nginx` | `--edge=wls` 兼容别名 |
 
@@ -46,6 +55,112 @@ WLS 1.x 配置识别，随后可由运行时内部持久化为 `edge_mode=legacy
 
 auto fallback 默认只监听 `127.0.0.1`，输出会同时给出项目公开主机与高端口。该地址
 不是 80/443 的透明替代；防火墙、DNS 或外部负载均衡是否可达必须单独确认。
+
+### 2.1 首项目自动建立
+
+首次建立只在宿主状态精确分类为 `INSTALL_REQUIRED` 时进入：平台原生查询必须明确证明
+同名 service registration 不存在，current/legacy definition、metadata/link、slot、Launcher、
+Guardian、active pointer 与安装/rebootstrap 事务等语义残留均不存在，80/443 没有未知
+listener，并且固定项目分发路径存在匹配当前平台/架构的生产包。只有安全空目录、诊断
+日志和已知 root-only lock scaffolding 可保留；未知或残留状态要求显式 repair。
+WLS 先对项目路径逐级 no-follow，再用宿主包管理器校验 `release_ready`、签名、目标
+profile、组件摘要与来源；校验失败时不得创建宿主 bootstrap 锁或信任根副作用。
+
+预检通过后，启动进程在 root-only `package-bootstrap.lock` 下重查宿主状态。并发中的
+胜者执行 stage → 平台定义 → activate → start → trusted status，且全程共用调用方的
+同一绝对 deadline；等待者取锁后发现可信网关便直接加入，不能重复 stage。安装逻辑在
+锁内重新从固定项目根解析包，并比较 canonical root/path、target/listen profile 及
+manifest/package/signature digest，以阻断父目录替换和 TOCTOU。首装采用持久 journal 覆盖
+stage → definition → activate → start → trusted status；只允许同一 fingerprint 幂等恢复，
+其它残留要求显式 repair。只有控制面可注册、平台 ready、Nginx 数据面运行且不是
+`DATA_PLANE_DOWN` 才算建立成功。安装内容复制到宿主 A/B 槽并交给平台守护后，首项目
+停止或迁移不会停止网关。
+
+未知 owner、权限不足、包缺失/无效或平台建立失败时，`auto` 只报告原因并降级纯 WLS
+高端口；`gateway` 失败退出。WLS 不会因 PATH 或系统中“安装过 Nginx”就采用它，也不会
+停止或修改实际占用 80/443 的未知进程。`edge=wls` 在决策入口即绕过宿主发现和建立。
+
+发布边界必须单独验收：`wls-gateway-package.yml` 目前产出
+`wls-gateway-project-distribution-*` overlay，同时包含目标平台签名包和启用公钥 inventory；
+最终项目发布组装必须消费这个 overlay，并验证 manifest 的 signing key id 与 inventory
+一致。当前仓库没有另一个会自动消费该 artifact 的最终组装 workflow，因此“artifact 已上传”
+不能写成“所有现有项目已携带包”。未完成该发布集成，或发行工程没有注入启用公钥时，
+项目目录会保持缺包/空信任库，生产 `auto` 必须 fail closed 到纯 WLS，`gateway` 必须失败。
+
+### 2.2 稳定 Launcher 整代重引导
+
+普通 A/B 升级只能在已冻结的宿主 Launcher 摘要下切换运行时槽位；
+`restartControlPlane` 也只会重启这个已安装 Launcher，不能借此加载项目包中
+已变更的 Launcher。需要更换 Launcher 或跨不兼容宿主运行时边界时，管理员必须显式执行：
+
+```bash
+php bin/w server:gateway:rebootstrap \
+  --package=/absolute/path/to/signed-gateway-package \
+  --profile=default \
+  --nonce=<32-lowercase-hex> \
+  --confirm
+```
+
+重引导先在 A/B 外封存并完整验证签名候选包，再要求 stop 回执同时证明
+`accepted=true`、`data_plane_stopped=true` 和 `manual_cleanup_required=false`。平台守护已持久
+停用、受管进程全部退出且 80/443 双重 bind 检查均通过后，才会将
+Launcher 与 A/B 整代备份、原子发布，并在保持原 gateway epoch 的前提下连续观察
+新数据面至少 15 秒。未知 80/443 owner 始终只读检查，WLS 不会终止或修改它。
+
+WLS 2.0 v1 不在宿主启动时无人值守推进未完成的重引导事务。管理员在崩溃或断电后
+必须重新执行完全相同的签名包、nonce 和 profile；签名 schema 3 日志会从精确持久阶段
+幂等续传。已经发布 `START_AUTHORIZED` 或 `ROLLBACK_START_AUTHORIZED` 的精确代可以由
+平台守护重新拉起，但守护不会替管理员推进、提交或结束事务。stop 之后任一步失败，
+会先撤销候选启动授权，再回滚整代运行时、平台定义、派生状态和旧 gateway epoch；旧代
+必须通过精确身份探针并连续健康至少 15 秒，才会完成回滚并重新开放入口。若回滚恢复
+本身失败，则保留 `ADMIN_STOPPED` 和可重放 journal，不会以未知代开放 80/443。旧代备份
+在签名 boot ID 与单调时钟证据下保留至少 24 小时；跨宿主启动或发现未来单调时间时，
+重新起算完整 24 小时，不会提前回收。该 24 小时目前是经认证的恢复源/取证保留，
+不等于 `COMMITTED` 之后已有可执行回滚入口。普通 A/B 升级的五分钟自动旧槽回退
+不得冒充为稳定 Launcher/CA 整代重引导的提交后恢复能力。在独立 Recovery
+Guardian、提交试用期与单调 generation-head 补齐前，不得宣称后者可自动回滚。
+
+### 2.3 Linux systemd 定义与 Recovery Guardian 边界
+
+Linux 的完整 unit 定义固定放在
+`/etc/weline-gateway/weline-wls-gateway-v2.service`。该目录必须是
+`root:root`、`0700` 且无 ACL；unit 的 `ReadWritePaths` 只额外授予此专用目录，
+不会放开 `/etc/systemd/system`。系统搜索路径中的
+`/etc/systemd/system/weline-wls-gateway-v2.service` 只能是指向前述绝对路径的
+精确符号链接。安装以绝对 definition path 执行 `systemctl enable --now`，由 systemd
+建立链接；后续 stop/restart 才使用已加载的 unit name。
+
+Recovery Guardian 只会在专用目录中以同目录临时文件加原子 rename 恢复 definition，
+并在恢复、对账和 live proof 时同时验证 canonical link 的 owner、无 ACL 的父目录和
+精确 `readlink` 目标。链接缺失、相对链接、外来 regular file 或权限异常全部 fail-closed，
+不会覆盖 `/etc/systemd/system` 中的对象。旧 schema-1 的 canonical regular unit 仅在
+已证明为 WLS 自有的精确旧定义时由安装事务迁移；运营人员不要手工替换该链接或复制 unit。
+
+`/var/lib/weline-gateway` 与 `/etc/weline-gateway` 可以是不同文件系统。重引导维护会
+继续在 home 文件系统保留完整 generation reserve，并始终在 definition 同目录保留受
+nonce 绑定的 4 MiB / 2 inode reserve（两个各 2 MiB 的精确文件，覆盖同目录原子发布的
+staging 与 backup）。即使两个路径的 `st_dev` 相同，definition 目录仍单独预留，避免将
+目录配额或 inode 预算错误地视作与 home 共用。`begin-release` 先持久化 home 侧
+`TRANSITION` 标记并复验完整 reserve，再同步删除这两个专用目录 credits；因此 Guardian
+实际原子写入前确实能使用预留容量。若在删除中崩溃，带标记的重放只会清理由名称、
+no-follow、owner、mode、ACL、设备和实际块数共同证明的剩余 credit；`complete-release`
+只幂等确认其已缺失，绝不再次消耗容量。两个文件系统各自保留各自的容量/原子写保护，
+不会以跨文件系统 rename 换取“可用”，也不会因为独立 `/var` 挂载错误拒绝安全的 Linux
+布局。
+
+预停机取消遇到 PHP journal 已持久为 ALLOCATING 时，POSIX Launcher 先执行
+--capacity-reserve=inspect，成功输出必须严格等于
+{"schema":"wls-capacity-inspect/1","state":"NONE|ALLOCATING|HELD|RELEASING"}。
+NONE 与经 no-follow/owner/ACL/内容验证的部分 ALLOCATING 只能使用无 manifest 的
+complete-release cancel 清理，随后写入零容量、HMAC 签名、绑定 host/nonce/package/
+profile/launcher/bytes/inodes 的 RELEASED receipt；它们绝不能触发重新分配或获得
+HELD manifest。只有完整 HELD 才会由幂等 create 再验证后绑定 manifest，并走正常
+begin-release/complete-release。RELEASING、多个 live state（exit 78）、外来或
+损坏对象（exit 77）、参数错误（exit 64）以及 JSON schema 漂移都 fail-closed；任何
+状态都不从 stderr 推断。receipt 在 journal 之前已发布的崩溃窗口只接受精确的零容量
+cancel receipt、空 manifest 绑定和最终 NONE 原生 inspect，之后才可提升 journal。
+Windows 在提供同一 inspect 与 definition-side direct reserve 合同前必须保持该路径
+fail-closed。
 
 ## 3. 项目身份
 
@@ -208,7 +323,7 @@ Master 的受保护 lease 是运行中实例的代际事实源。status、Benchm
   实测证明仅使用不同的 per-route ticket key 不能可靠隔离 TLS 1.3 恢复会话，因此
   v1 采用 fail-closed 策略；同一域名和跨域名恢复都必须重新握手。
 - 状态盘为普通发布保留至少 16 MiB 安全阈值，并维护以不可压缩内容实际写入的独立 recovery reserve。任一原子 write/fsync/rename 或 reserve 重建失败会保留原 active/LKG、清理 staging、释放 reserve 并建立 `DISK_PRESSURE` marker；marker 即使剩余空间恢复也继续锁住新持久操作。Controller 带 marker 重启不重新分配 reserve，也不修复/隔离 state、security ledger、journal 或清理 stale runtime，周期维护只做数据面只读观察与有界快照 GC。管理员确认存储恢复后才重建 reserve、补齐待完成的 security-ledger bootstrap、清 marker，再对账 A/B 槽和中断发布。
-- 宿主 A/B、LKG、熔断、隔离 503 和 Controller/Nginx 恢复逻辑已有专项覆盖；
+- 宿主 A/B、LKG、隔离 503 和 Controller/Nginx 恢复逻辑已有专项覆盖；
   Linux 隔离 VM 已证明宿主 reboot 后先恢复 TLS/503、项目恢复后逐路由 ACTIVE，
   以及 90 秒故障触发、30 秒健康回切、301 秒排空释放。每个发布持久化边界的 kill
   恢复已在任务隔离 Controller/Nginx 中覆盖。
@@ -260,10 +375,11 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   12.054 秒，宿主 systemd/专用用户接管 80/443；项目正常停止只注销自身，宿主
   MainPID 保持不变，重新启动后同一路由恢复 ACTIVE；
 - 同一签名 Linux 网关已完成真实 B→A 全包切换。实测证明项目运行时可能比已安装的
-  稳定 Launcher 新：若升级只发送新版 HUP/SCM 控制信号，旧 Launcher 可正常退出，
-  `Restart=on-failure` 不会重新拉起，回滚也会因无 MainPID 失败。因此 A/B 事务使用
-  平台完整 service restart 作为跨版本边界，确保加载新 Launcher，旧进程已退出时也能
-  启动回退槽。修复后连续三次终止身份已验证的 A 槽 Broker，失败计数 1→2→3，第三次
+  稳定 Launcher 新：若升级发送新版 HUP/SCM 控制信号，旧 Launcher 可正常退出，
+  `Restart=on-failure` 不会重新拉起。因此普通 A/B 事务只能在已冻结 Launcher 摘要下
+  执行平台完整 service restart，保证已经退出时仍可启动回退槽；加载变更 Launcher 必须走
+  签名、持久停机的整代 `server:gateway:rebootstrap` 事务。修复后连续三次终止身份已验证的
+  A 槽 Broker，失败计数 1→2→3，第三次
   自动切回 B；systemd、ACTIVE route、项目 Master 及 H1/H2 200/133089-byte 响应正常。
   Windows restart 在 stop/start 间按 SCM 数字状态进行 100ms 有界轮询，分别等待
   STOPPED/RUNNING，单阶段最长 30 秒；该逻辑已有解析/合同回归，仍不替代 Windows 实机；

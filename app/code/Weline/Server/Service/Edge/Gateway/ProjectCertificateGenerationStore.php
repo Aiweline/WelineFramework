@@ -14,7 +14,21 @@ namespace Weline\Server\Service\Edge\Gateway;
  */
 final class ProjectCertificateGenerationStore
 {
-    public const SCHEMA_VERSION = 1;
+    public const SCHEMA_VERSION = 2;
+    public const TRUST_PROFILE_PRODUCTION = 'production';
+    public const TRUST_PROFILE_TEST = 'test';
+    public const PROVIDER_EXTERNAL = 'external';
+    public const PROVIDER_LETS_ENCRYPT = 'letsencrypt';
+    public const PROVIDER_LITESSL = 'litessl';
+    public const PROVIDER_SELF_SIGNED = 'self_signed';
+    public const PROVIDER_LOCAL_CA = 'local_ca';
+    public const MATERIAL_CLASS_PUBLIC_TRUST = 'public_trusted';
+    public const MATERIAL_CLASS_PRIVATE_CA = 'private_ca';
+    public const MATERIAL_CLASS_SELF_SIGNED = 'self_signed';
+    public const MATERIAL_CLASS_LOCAL_CA = 'local_ca';
+    private const SNAPSHOT_SCHEMA_VERSION = 1;
+    private const PROVENANCE_SCHEMA = 'wls-certificate-provenance/1';
+    private const LOCAL_CA_ISSUER = 'Weline Local Development CA';
     public const RETIREMENT_PHASE_PREPARED = 'prepared';
     public const RETIREMENT_PHASE_RUNTIME_PENDING = 'runtime_pending';
     public const RETIREMENT_PHASE_RUNTIME_RETIRED = 'runtime_retired';
@@ -128,7 +142,11 @@ final class ProjectCertificateGenerationStore
         string $chain = '',
         array $sourceRoots = [],
         ?float $deadlineMonotonic = null,
+        string $trustProfile = self::TRUST_PROFILE_PRODUCTION,
+        string $provider = self::PROVIDER_EXTERNAL,
     ): array {
+        $trustProfile = self::normalizeTrustProfile($trustProfile);
+        $provider = self::normalizeProvider($provider);
         $this->ensureStoreDirectories();
         return $this->withCertificateLifecycleLock(
             fn (): array => $this->activateWithinLifecycleLock(
@@ -138,8 +156,11 @@ final class ProjectCertificateGenerationStore
                 $chain,
                 $sourceRoots,
                 $deadlineMonotonic,
+                $trustProfile,
+                $provider,
             ),
             $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
+            $deadlineMonotonic,
         );
     }
 
@@ -151,6 +172,7 @@ final class ProjectCertificateGenerationStore
     public function withCertificateLifecycleLock(
         callable $callback,
         float $waitTimeoutSeconds = 10.0,
+        ?float $deadlineMonotonic = null,
     ): mixed
     {
         $this->ensureStoreDirectories();
@@ -163,6 +185,7 @@ final class ProjectCertificateGenerationStore
         ) {
             self::$heldLifecycleLocks[$path]['depth']++;
             try {
+                $this->retirementDeadlineRemaining($deadlineMonotonic);
                 return $callback();
             } finally {
                 self::$heldLifecycleLocks[$path]['depth']--;
@@ -175,7 +198,13 @@ final class ProjectCertificateGenerationStore
         }
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $path,
-            function () use ($path, $callback, $executionOwner): mixed {
+            function () use (
+                $path,
+                $callback,
+                $executionOwner,
+                $deadlineMonotonic,
+            ): mixed {
+                $this->retirementDeadlineRemaining($deadlineMonotonic);
                 self::$heldLifecycleLocks[$path] = [
                     'owner' => $executionOwner,
                     'depth' => 1,
@@ -191,6 +220,10 @@ final class ProjectCertificateGenerationStore
                 $handle,
             ),
             waitTimeoutSeconds: $waitTimeoutSeconds,
+            deadlineMonotonic: $this->lockAcquisitionDeadline(
+                $deadlineMonotonic,
+                $waitTimeoutSeconds,
+            ),
         );
     }
 
@@ -273,6 +306,10 @@ final class ProjectCertificateGenerationStore
         ?float $deadlineMonotonic,
         float $defaultWaitSeconds = 300.0,
     ): mixed {
+        $waitTimeoutSeconds = $this->retirementLockWaitTimeout(
+            $deadlineMonotonic,
+            $defaultWaitSeconds,
+        );
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $path,
             function () use ($callback, $deadlineMonotonic): mixed {
@@ -285,11 +322,34 @@ final class ProjectCertificateGenerationStore
             },
             fn ($handle, string $lockPath): mixed => $this
                 ->preserveProjectArtifactOwnership($lockPath, $handle),
-            waitTimeoutSeconds: $this->retirementLockWaitTimeout(
+            waitTimeoutSeconds: $waitTimeoutSeconds,
+            deadlineMonotonic: $this->lockAcquisitionDeadline(
                 $deadlineMonotonic,
-                $defaultWaitSeconds,
+                $waitTimeoutSeconds,
             ),
         );
+    }
+
+    /**
+     * GatewayProjectStateFilesystem uses the process monotonic clock. Tests
+     * may inject a project retirement clock, so translate the already-bounded
+     * acquisition window instead of passing an absolute value from a different
+     * clock domain.
+     */
+    private function lockAcquisitionDeadline(
+        ?float $callerDeadlineMonotonic,
+        float $waitTimeoutSeconds,
+    ): ?float {
+        if ($callerDeadlineMonotonic === null) {
+            return null;
+        }
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException(
+                'Certificate lock monotonic clock is unavailable.',
+            );
+        }
+        return $now + $waitTimeoutSeconds;
     }
 
     /**
@@ -300,7 +360,7 @@ final class ProjectCertificateGenerationStore
      *
      * The caller must already hold certificateLifecycleLockPath().
      *
-     * @return array{required:bool,domain:string,source_digest:string,intent_id:string}
+     * @return array{required:bool,domain:string,source_digest:string,provenance_digest:string,intent_id:string}
      */
     public function issueExplicitReenableIntent(
         string $domain,
@@ -309,8 +369,12 @@ final class ProjectCertificateGenerationStore
         string $chain = '',
         array $sourceRoots = [],
         ?float $deadlineMonotonic = null,
+        string $trustProfile = self::TRUST_PROFILE_PRODUCTION,
+        string $provider = self::PROVIDER_EXTERNAL,
     ): array {
         $domain = $this->normalizeDomain($domain);
+        $trustProfile = self::normalizeTrustProfile($trustProfile);
+        $provider = self::normalizeProvider($provider);
         $this->ensureStoreDirectories();
         $this->assertCertificateLifecycleLockHeld();
         return $this->withRetirementStateLock(
@@ -322,8 +386,17 @@ final class ProjectCertificateGenerationStore
                 $chain,
                 $sourceRoots,
                 $deadlineMonotonic,
+                $trustProfile,
+                $provider,
             ): array {
-                $active = $this->readActiveUnlocked($domain, false);
+                try {
+                    $active = $this->readActiveUnlocked($domain, false);
+                } catch (CertificateTrustProvenanceException $throwable) {
+                    if ($this->legacyActiveGenerationFloor($domain) < 1) {
+                        throw $throwable;
+                    }
+                    $active = null;
+                }
                 $disabled = $this->readDisabledUnlocked($domain);
                 $this->assertExplicitRetirementAllowsReenable($disabled);
                 $this->assertSourcesInsideRoots(
@@ -335,12 +408,23 @@ final class ProjectCertificateGenerationStore
                     $certificate,
                     $privateKey,
                     $chain,
+                    $trustProfile,
+                    $provider,
                 );
                 $snapshot = $this->publishSnapshot(
                     $material,
                     $deadlineMonotonic,
                 );
+                $this->assertSourceMaterialUnchanged(
+                    $material,
+                    $domain,
+                    $certificate,
+                    $privateKey,
+                    $chain,
+                    $deadlineMonotonic,
+                );
                 $sourceDigest = (string)$snapshot['source_digest'];
+                $provenanceDigest = (string)$material['provenance_digest'];
                 if ($disabled === null
                     || ($active !== null
                         && (int)$active['generation'] > (int)$disabled['generation'])
@@ -350,6 +434,7 @@ final class ProjectCertificateGenerationStore
                         'required' => false,
                         'domain' => $domain,
                         'source_digest' => $sourceDigest,
+                        'provenance_digest' => $provenanceDigest,
                         'intent_id' => '',
                     ];
                 }
@@ -358,14 +443,16 @@ final class ProjectCertificateGenerationStore
                     (int)$disabled['generation'],
                     (string)$disabled['source_digest'],
                     $sourceDigest,
+                    $provenanceDigest,
                 );
                 $intent = [
-                    'schema' => 'wls-project-certificate-reenable/1',
+                    'schema' => 'wls-project-certificate-reenable/2',
                     'state' => 'authorized',
                     'domain' => $domain,
                     'disabled_generation' => (int)$disabled['generation'],
                     'disabled_source_digest' => (string)$disabled['source_digest'],
                     'target_source_digest' => $sourceDigest,
+                    'target_provenance_digest' => $provenanceDigest,
                     'intent_id' => $intentId,
                     'issued_at' => \gmdate(DATE_ATOM),
                 ];
@@ -382,6 +469,7 @@ final class ProjectCertificateGenerationStore
                     'required' => true,
                     'domain' => $domain,
                     'source_digest' => $sourceDigest,
+                    'provenance_digest' => $provenanceDigest,
                     'intent_id' => $intentId,
                 ];
             },
@@ -398,6 +486,8 @@ final class ProjectCertificateGenerationStore
         string $chain = '',
         array $sourceRoots = [],
         ?float $deadlineMonotonic = null,
+        string $trustProfile = self::TRUST_PROFILE_PRODUCTION,
+        string $provider = self::PROVIDER_EXTERNAL,
     ): array {
         $domain = $this->normalizeDomain($domain);
         $this->ensureStoreDirectories();
@@ -411,10 +501,25 @@ final class ProjectCertificateGenerationStore
                 $chain,
                 $sourceRoots,
                 $deadlineMonotonic,
+                $trustProfile,
+                $provider,
             ): array {
             // An expired generation is still the historical generation floor,
             // but it must not prevent a valid replacement from being activated.
-            $active = $this->readActiveUnlocked($domain, false);
+            $legacyGenerationFloor = 0;
+            try {
+                $active = $this->readActiveUnlocked($domain, false);
+            } catch (CertificateTrustProvenanceException $throwable) {
+                $legacyGenerationFloor = $this->legacyActiveGenerationFloor($domain);
+                if ($legacyGenerationFloor < 1) {
+                    throw $throwable;
+                }
+                // A legacy selector is never serving authority. An explicit
+                // activation may nevertheless replace it after the source is
+                // re-read, system-trust checked, and published with schema-2
+                // provenance strictly above the old generation floor.
+                $active = null;
+            }
             $disabled = $this->readDisabledUnlocked($domain);
             $this->assertExplicitRetirementAllowsReenable($disabled);
             if (\is_array($disabled)
@@ -426,6 +531,7 @@ final class ProjectCertificateGenerationStore
                     $active,
                 );
             }
+            $activationCandidate = null;
             try {
                 $this->assertSourcesInsideRoots(
                     [$certificate, $privateKey, $chain],
@@ -436,9 +542,19 @@ final class ProjectCertificateGenerationStore
                     $certificate,
                     $privateKey,
                     $chain,
+                    $trustProfile,
+                    $provider,
                 );
                 $snapshot = $this->publishSnapshot(
                     $material,
+                    $deadlineMonotonic,
+                );
+                $this->assertSourceMaterialUnchanged(
+                    $material,
+                    $domain,
+                    $certificate,
+                    $privateKey,
+                    $chain,
                     $deadlineMonotonic,
                 );
                 $reenableIntent = null;
@@ -458,6 +574,10 @@ final class ProjectCertificateGenerationStore
                             (string)$snapshot['source_digest'],
                             (string)$reenableIntent['target_source_digest'],
                         )
+                        || !\hash_equals(
+                            (string)$material['provenance_digest'],
+                            (string)$reenableIntent['target_provenance_digest'],
+                        )
                     ) {
                         throw new \RuntimeException(
                             'Certificate is disabled; only an exact explicit re-enable intent may cross its tombstone.',
@@ -470,6 +590,10 @@ final class ProjectCertificateGenerationStore
                     && \hash_equals(
                         (string)$active['source_digest'],
                         (string)$snapshot['source_digest'],
+                    )
+                    && \hash_equals(
+                        (string)$active['provenance_digest'],
+                        (string)$material['provenance_digest'],
                     )
                 ) {
                     $this->transitionCertificateSnapshotReferences(
@@ -490,12 +614,17 @@ final class ProjectCertificateGenerationStore
                     0,
                     (int)($active['generation'] ?? 0),
                     (int)($disabled['generation'] ?? 0),
+                    $legacyGenerationFloor,
                 ));
                 $next = [
                     'schema_version' => self::SCHEMA_VERSION,
                     'domain' => $domain,
                     'generation' => $generation,
                     'source_digest' => (string)$snapshot['source_digest'],
+                    'trust_profile' => (string)$material['trust_profile'],
+                    'provider' => (string)$material['provider'],
+                    'material_class' => (string)$material['material_class'],
+                    'provenance_digest' => (string)$material['provenance_digest'],
                     'cert_path' => (string)$snapshot['cert_path'],
                     'key_path' => (string)$snapshot['key_path'],
                     'chain_path' => (string)$snapshot['chain_path'],
@@ -508,11 +637,16 @@ final class ProjectCertificateGenerationStore
                     'previous' => $active === null ? null : [
                         'generation' => (int)$active['generation'],
                         'source_digest' => (string)$active['source_digest'],
+                        'trust_profile' => (string)$active['trust_profile'],
+                        'provider' => (string)$active['provider'],
+                        'material_class' => (string)$active['material_class'],
+                        'provenance_digest' => (string)$active['provenance_digest'],
                         'cert_path' => (string)$active['cert_path'],
                         'key_path' => (string)$active['key_path'],
                         'chain_path' => (string)$active['chain_path'],
                     ],
                 ];
+                $activationCandidate = $next;
                 $previousSnapshotReferences = $this
                     ->activeManifestSnapshotDigestSet($active);
                 $nextSnapshotReferences = $this
@@ -552,6 +686,61 @@ final class ProjectCertificateGenerationStore
                     'activation_error' => '',
                 ];
             } catch (\Throwable $throwable) {
+                if (\is_array($activationCandidate)) {
+                    $committed = null;
+                    try {
+                        $committed = $this->readActiveUnlocked($domain, true);
+                    } catch (\Throwable) {
+                        $committed = null;
+                    }
+                    if ($committed !== null
+                        && ($disabled === null
+                            || (int)$committed['generation']
+                                > (int)$disabled['generation'])
+                        && $this->activeManifestMatchesCandidate(
+                            $committed,
+                            $activationCandidate,
+                        )
+                    ) {
+                        // The selector rename is the commit point, but the
+                        // project remains the certificate fact source only
+                        // after its parent-directory durability barrier is
+                        // proven. Retry that barrier before reporting the new
+                        // generation to a local edge or shared gateway.
+                        try {
+                            GatewayProjectStateFilesystem::syncDirectory(
+                                \dirname($this->activeManifestFile($domain)),
+                            );
+                            $durable = $this->readActiveUnlocked($domain, true);
+                        } catch (\Throwable $durabilityFailure) {
+                            throw new \RuntimeException(
+                                'Certificate activation after-image is committed but its '
+                                    . 'selector durability remains unconfirmed: '
+                                    . $durabilityFailure->getMessage(),
+                                0,
+                                $throwable,
+                            );
+                        }
+                        if ($durable === null
+                            || !$this->activeManifestMatchesCandidate(
+                                $durable,
+                                $activationCandidate,
+                            )
+                        ) {
+                            throw new \RuntimeException(
+                                'Certificate activation selector changed during durability reconciliation.',
+                                0,
+                                $throwable,
+                            );
+                        }
+                        return \array_replace($durable, [
+                            'retained_previous' => false,
+                            'activation_error' =>
+                                'Certificate activation was committed and reconciled after a post-commit failure: '
+                                . $throwable->getMessage(),
+                        ]);
+                    }
+                }
                 $retained = null;
                 if ($active !== null) {
                     try {
@@ -561,8 +750,16 @@ final class ProjectCertificateGenerationStore
                                 || (int)$candidate['generation']
                                     > (int)$disabled['generation'])
                             && \hash_equals(
+                                $trustProfile,
+                                (string)($candidate['trust_profile'] ?? ''),
+                            )
+                            && \hash_equals(
                                 (string)$active['source_digest'],
                                 (string)$candidate['source_digest'],
+                            )
+                            && \hash_equals(
+                                (string)($active['provenance_digest'] ?? ''),
+                                (string)($candidate['provenance_digest'] ?? ''),
                             )
                         ) {
                             $retained = $candidate;
@@ -577,6 +774,9 @@ final class ProjectCertificateGenerationStore
                         'retained_previous' => true,
                         'activation_error' => $throwable->getMessage(),
                     ]);
+                }
+                if ($throwable instanceof CertificateTrustProvenanceException) {
+                    throw $throwable;
                 }
                 throw new \RuntimeException(
                     'No valid active certificate generation is available for ' . $domain
@@ -620,6 +820,11 @@ final class ProjectCertificateGenerationStore
             ) {
                 throw new \RuntimeException(
                     'Enrolled certificate source root must be a canonical directory.'
+                );
+            }
+            if (!$this->pathInside($canonical, $this->projectRoot)) {
+                throw new \RuntimeException(
+                    'Enrolled certificate source roots must stay inside the project root.'
                 );
             }
             $rootOwner = \is_int($status['uid'] ?? null)
@@ -686,13 +891,17 @@ final class ProjectCertificateGenerationStore
     public function active(
         string $domain,
         ?float $deadlineMonotonic = null,
+        ?string $requiredTrustProfile = null,
     ): ?array
     {
         $domain = $this->normalizeDomain($domain);
+        $requiredTrustProfile = $requiredTrustProfile === null
+            ? null
+            : self::normalizeTrustProfile($requiredTrustProfile);
         $this->ensureStoreDirectories();
         return $this->withRetirementStateLock(
             $this->storeRoot . DIRECTORY_SEPARATOR . 'activation.lock',
-            function () use ($domain): ?array {
+            function () use ($domain, $requiredTrustProfile): ?array {
                 $active = $this->readActiveUnlocked($domain);
                 if ($active === null) {
                     return null;
@@ -707,8 +916,148 @@ final class ProjectCertificateGenerationStore
                     // effective revocation instead of reviving the old PEM.
                     return null;
                 }
+                if ($requiredTrustProfile !== null
+                    && !\hash_equals(
+                        $requiredTrustProfile,
+                        (string)$active['trust_profile'],
+                    )
+                ) {
+                    throw new CertificateTrustProvenanceException(
+                        'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: active certificate trust profile '
+                            . 'does not match the requested WLS serving profile.',
+                    );
+                }
                 return $active;
             },
+            $deadlineMonotonic,
+        );
+    }
+
+    /**
+     * Read every certificate selector and tombstone from one activation-lock
+     * snapshot. Native cold recovery uses this authority to distinguish a
+     * legitimate monotonic transition from same-generation tampering or
+     * rollback; ordinary serving-manifest consumers remain strictly exact.
+     *
+     * @param list<string> $domains
+     * @return array<string,array{
+     *   domain:string,
+     *   effective_state:string,
+     *   generation:int,
+     *   selector_generation:int,
+     *   active:array<string,mixed>|null,
+     *   disabled:array<string,mixed>|null
+     * }>
+     */
+    public function authoritySnapshot(
+        array $domains,
+        ?float $deadlineMonotonic = null,
+        ?string $requiredTrustProfile = null,
+    ): array {
+        if (!\array_is_list($domains)
+            || $domains === []
+            || \count($domains) > self::MAX_ACTIVE_MANIFESTS
+        ) {
+            throw new \InvalidArgumentException(
+                'Certificate authority snapshot domain set is outside bounds.',
+            );
+        }
+        $requiredTrustProfile = $requiredTrustProfile === null
+            ? null
+            : self::normalizeTrustProfile($requiredTrustProfile);
+        $normalized = [];
+        foreach ($domains as $domain) {
+            if (!\is_string($domain)) {
+                throw new \InvalidArgumentException(
+                    'Certificate authority snapshot domains must be strings.',
+                );
+            }
+            $domain = $this->normalizeDomain($domain);
+            if (isset($normalized[$domain])) {
+                throw new \InvalidArgumentException(
+                    'Certificate authority snapshot domains must be unique.',
+                );
+            }
+            $normalized[$domain] = true;
+        }
+        \ksort($normalized, SORT_STRING);
+        $this->ensureStoreDirectories();
+        return $this->withCertificateLifecycleLock(
+            function () use (
+                $normalized,
+                $requiredTrustProfile,
+                $deadlineMonotonic,
+            ): array {
+                $snapshot = [];
+                foreach (\array_keys($normalized) as $domain) {
+                    $this->retirementDeadlineRemaining($deadlineMonotonic);
+                    // Read the raw selector first so an expired generation is
+                    // still a monotonic authority floor instead of looking
+                    // indistinguishable from a missing selector.
+                    $rawActive = $this->readActiveUnlocked($domain, false);
+                    $disabled = $this->readDisabledUnlocked($domain);
+                    $activeGeneration = \is_array($rawActive)
+                        ? (int)($rawActive['generation'] ?? 0)
+                        : 0;
+                    $disabledGeneration = \is_array($disabled)
+                        ? (int)($disabled['generation'] ?? 0)
+                        : 0;
+                    if ($activeGeneration > 0
+                        && $activeGeneration === $disabledGeneration
+                    ) {
+                        // Every supported retirement allocates a generation
+                        // strictly above the selector it revokes. Equal
+                        // generations can only be rollback/corrupt state.
+                        throw new \RuntimeException(
+                            'Certificate selector and tombstone share an invalid generation.',
+                        );
+                    }
+                    $effectiveState = $activeGeneration > $disabledGeneration
+                        ? 'active'
+                        : ($disabledGeneration > 0 ? 'disabled' : 'absent');
+                    $active = null;
+                    if ($effectiveState === 'active') {
+                        // Serving authority also proves current validity. The
+                        // second stable read must describe the exact selector
+                        // observed for the monotonic comparison above.
+                        $active = $this->readActiveUnlocked($domain, true);
+                        if (!\is_array($active)
+                            || !\hash_equals(
+                                GatewayClient::canonicalJson($rawActive),
+                                GatewayClient::canonicalJson($active),
+                            )
+                        ) {
+                            throw new \RuntimeException(
+                                'Certificate selector changed inside its authority snapshot.',
+                            );
+                        }
+                    }
+                    if ($effectiveState === 'active'
+                        && $requiredTrustProfile !== null
+                        && !\hash_equals(
+                            $requiredTrustProfile,
+                            (string)($active['trust_profile'] ?? ''),
+                        )
+                    ) {
+                        throw new CertificateTrustProvenanceException(
+                            'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: active certificate trust '
+                                . 'profile does not match the requested authority snapshot.',
+                        );
+                    }
+                    $snapshot[$domain] = [
+                        'domain' => $domain,
+                        'effective_state' => $effectiveState,
+                        'generation' => $effectiveState === 'active'
+                            ? $activeGeneration
+                            : $disabledGeneration,
+                        'selector_generation' => $activeGeneration,
+                        'active' => $active,
+                        'disabled' => $disabled,
+                    ];
+                }
+                return $snapshot;
+            },
+            $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
             $deadlineMonotonic,
         );
     }
@@ -965,21 +1314,32 @@ final class ProjectCertificateGenerationStore
         );
     }
 
-    /**
-     * Serialize replay across every project instance while keeping the lock
-     * wait outside the caller's total work budget.
-     */
-    public function withRetirementReplayLease(callable $callback): mixed
+    /** Serialize replay across every project instance within one caller deadline. */
+    public function withRetirementReplayLease(
+        callable $callback,
+        ?float $deadlineMonotonic = null,
+    ): mixed
     {
         $this->ensureStoreDirectories();
+        $waitTimeoutSeconds = $this->retirementLockWaitTimeout(
+            $deadlineMonotonic,
+            0.25,
+        );
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $this->storeRoot . DIRECTORY_SEPARATOR . 'retirement-replay.lock',
-            fn (): mixed => $callback(),
+            function () use ($callback, $deadlineMonotonic): mixed {
+                $this->retirementDeadlineRemaining($deadlineMonotonic);
+                return $callback();
+            },
             fn ($handle, string $path): mixed => $this->preserveProjectArtifactOwnership(
                 $path,
                 $handle,
             ),
-            waitTimeoutSeconds: 0.25,
+            waitTimeoutSeconds: $waitTimeoutSeconds,
+            deadlineMonotonic: $this->lockAcquisitionDeadline(
+                $deadlineMonotonic,
+                $waitTimeoutSeconds,
+            ),
         );
     }
 
@@ -1100,6 +1460,7 @@ final class ProjectCertificateGenerationStore
                 10.0,
             ),
             $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
+            $deadlineMonotonic,
         );
     }
 
@@ -1250,6 +1611,7 @@ final class ProjectCertificateGenerationStore
                 $deadlineMonotonic,
             ),
             $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
+            $deadlineMonotonic,
         );
     }
 
@@ -1354,6 +1716,7 @@ final class ProjectCertificateGenerationStore
                 $deadlineMonotonic,
             ),
             $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
+            $deadlineMonotonic,
         );
     }
 
@@ -1413,6 +1776,7 @@ final class ProjectCertificateGenerationStore
                 $deadlineMonotonic,
             ),
             $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
+            $deadlineMonotonic,
         );
     }
 
@@ -1436,6 +1800,7 @@ final class ProjectCertificateGenerationStore
                 $deadlineMonotonic,
             ),
             $this->retirementLockWaitTimeout($deadlineMonotonic, 10.0),
+            $deadlineMonotonic,
         );
     }
 
@@ -1613,11 +1978,70 @@ final class ProjectCertificateGenerationStore
         string $certificate,
         string $privateKey,
         string $chain,
+        string $trustProfile,
+        string $provider,
     ): array {
         $certificatePem = $this->readStableFile($certificate, false);
         $keyPem = $this->readStableFile($privateKey, true);
         $chainPem = $chain === '' ? '' : $this->readStableFile($chain, false);
-        return $this->validateMaterial($domain, $certificatePem, $keyPem, $chainPem);
+        $material = $this->validateMaterial(
+            $domain,
+            $certificatePem,
+            $keyPem,
+            $chainPem,
+        );
+        return $this->withTrustProvenance(
+            $domain,
+            $material,
+            $trustProfile,
+            $provider,
+        );
+    }
+
+    /**
+     * Fence the immutable snapshot publication against a source replacement
+     * between the first validated read and publication. The project remains
+     * the certificate fact source, so a snapshot may become active only when
+     * a second stable no-follow read proves the exact same material.
+     *
+     * @param array<string,string> $expected
+     */
+    private function assertSourceMaterialUnchanged(
+        array $expected,
+        string $domain,
+        string $certificate,
+        string $privateKey,
+        string $chain,
+        ?float $deadlineMonotonic,
+    ): void {
+        $this->retirementDeadlineRemaining($deadlineMonotonic);
+        $observed = $this->validateSourceMaterial(
+            $domain,
+            $certificate,
+            $privateKey,
+            $chain,
+            (string)$expected['trust_profile'],
+            (string)$expected['provider'],
+        );
+        foreach ([
+            'source_digest',
+            'cert_sha256',
+            'key_sha256',
+            'chain_sha256',
+            'leaf_fingerprint_sha256',
+            'material_class',
+            'provenance_digest',
+        ] as $field) {
+            if (!\hash_equals(
+                (string)($expected[$field] ?? ''),
+                (string)($observed[$field] ?? ''),
+            )) {
+                throw new \RuntimeException(
+                    'Certificate source changed while publishing its immutable snapshot.',
+                );
+            }
+        }
+        $this->retirementDeadlineRemaining($deadlineMonotonic);
     }
 
     /**
@@ -1726,7 +2150,285 @@ final class ProjectCertificateGenerationStore
                 'sha256',
                 $normalizedChainPem,
             ),
+            'material_class' => $this->certificateMaterialClass(
+                $leaf,
+                $public,
+                $parsed,
+                (string)$leafMatch[0],
+                $normalizedChainPem,
+            ),
         ];
+    }
+
+    /**
+     * Bind a serving policy to cryptographically classified certificate bytes.
+     * The content digest remains a pure PEM address; provenance has its own
+     * digest so one immutable public certificate can be used by an explicitly
+     * test-scoped instance without changing the snapshot directory.
+     *
+     * @param array<string,string> $material
+     * @return array<string,string>
+     */
+    private function withTrustProvenance(
+        string $domain,
+        array $material,
+        string $trustProfile,
+        string $provider,
+    ): array {
+        $trustProfile = self::normalizeTrustProfile($trustProfile);
+        $provider = self::normalizeProvider($provider);
+        $materialClass = (string)($material['material_class'] ?? '');
+        if (!\in_array($materialClass, [
+            self::MATERIAL_CLASS_PUBLIC_TRUST,
+            self::MATERIAL_CLASS_PRIVATE_CA,
+            self::MATERIAL_CLASS_SELF_SIGNED,
+            self::MATERIAL_CLASS_LOCAL_CA,
+        ], true)) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: certificate material class is invalid.',
+            );
+        }
+        $expectedProvider = match ($materialClass) {
+            self::MATERIAL_CLASS_SELF_SIGNED => self::PROVIDER_SELF_SIGNED,
+            self::MATERIAL_CLASS_LOCAL_CA => self::PROVIDER_LOCAL_CA,
+            default => null,
+        };
+        // Provider is descriptive metadata, never trust authority. Canonicalize
+        // local material from the certificate itself and collapse an impossible
+        // local-provider claim on non-local material to external.
+        if ($expectedProvider !== null) {
+            $provider = $expectedProvider;
+        } elseif (\in_array($provider, [
+            self::PROVIDER_SELF_SIGNED,
+            self::PROVIDER_LOCAL_CA,
+        ], true)) {
+            $provider = self::PROVIDER_EXTERNAL;
+        }
+        if ($trustProfile === self::TRUST_PROFILE_PRODUCTION
+            && $materialClass !== self::MATERIAL_CLASS_PUBLIC_TRUST
+        ) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: production WLS cannot activate '
+                    . 'self-signed or Weline local-CA certificate material.',
+            );
+        }
+        $sourceDigest = (string)($material['source_digest'] ?? '');
+        $provenanceDigest = self::provenanceDigest(
+            $domain,
+            $sourceDigest,
+            $trustProfile,
+            $provider,
+            $materialClass,
+        );
+        return \array_replace($material, [
+            'trust_profile' => $trustProfile,
+            'provider' => $provider,
+            'material_class' => $materialClass,
+            'provenance_digest' => $provenanceDigest,
+        ]);
+    }
+
+    /** @param array<string,mixed> $parsed */
+    private function certificateMaterialClass(
+        \OpenSSLCertificate $certificate,
+        \OpenSSLAsymmetricKey $publicKey,
+        array $parsed,
+        string $leafPem,
+        string $chainPem,
+    ): string {
+        $issuer = \is_array($parsed['issuer'] ?? null) ? $parsed['issuer'] : [];
+        $issuerCommonName = $issuer['CN'] ?? '';
+        if (\is_array($issuerCommonName)) {
+            $issuerCommonName = \implode(',', \array_map('strval', $issuerCommonName));
+        }
+        if (\str_contains(
+            \strtolower((string)$issuerCommonName),
+            \strtolower(self::LOCAL_CA_ISSUER),
+        )) {
+            return self::MATERIAL_CLASS_LOCAL_CA;
+        }
+        $subject = \is_array($parsed['subject'] ?? null) ? $parsed['subject'] : [];
+        if ($subject !== []
+            && $issuer !== []
+            && \hash_equals(
+                GatewayClient::canonicalJson($subject),
+                GatewayClient::canonicalJson($issuer),
+            )
+            && @\openssl_x509_verify($certificate, $publicKey) === 1
+        ) {
+            return self::MATERIAL_CLASS_SELF_SIGNED;
+        }
+        return $this->certificateHasSystemTrust($leafPem, $chainPem)
+            ? self::MATERIAL_CLASS_PUBLIC_TRUST
+            : self::MATERIAL_CLASS_PRIVATE_CA;
+    }
+
+    /**
+     * Verify the exact leaf/intermediate closure against the OpenSSL trust store
+     * configured for this PHP runtime. Project-writable roots are deliberately
+     * not accepted here: authorizing a private CA as production trust is a host
+     * policy decision, not a certificate-source fact.
+     */
+    private function certificateHasSystemTrust(string $leafPem, string $chainPem): bool
+    {
+        $untrustedPath = null;
+        $handle = null;
+        try {
+            if ($chainPem !== '') {
+                $untrustedPath = $this->storeRoot . DIRECTORY_SEPARATOR . '.trust-'
+                    . \bin2hex(\random_bytes(16)) . '.pem';
+                $handle = @\fopen($untrustedPath, 'x+b');
+                if (!\is_resource($handle)
+                    || !@\chmod($untrustedPath, 0600)
+                    || \is_link($untrustedPath)
+                ) {
+                    throw new CertificateTrustProvenanceException(
+                        'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: unable to create a private '
+                            . 'system-trust verification file.',
+                    );
+                }
+                $offset = 0;
+                $length = \strlen($chainPem);
+                while ($offset < $length) {
+                    $written = @\fwrite($handle, \substr($chainPem, $offset));
+                    if (!\is_int($written) || $written < 1) {
+                        throw new CertificateTrustProvenanceException(
+                            'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: unable to stage the '
+                                . 'certificate chain for system-trust verification.',
+                        );
+                    }
+                    $offset += $written;
+                }
+                if (!@\fflush($handle)) {
+                    throw new CertificateTrustProvenanceException(
+                        'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: unable to flush the '
+                            . 'certificate chain for system-trust verification.',
+                    );
+                }
+                @\fclose($handle);
+                $handle = null;
+            }
+            $result = @\openssl_x509_checkpurpose(
+                $leafPem,
+                X509_PURPOSE_SSL_SERVER,
+                [],
+                $untrustedPath,
+            );
+            return $result === true || $result === 1;
+        } finally {
+            if (\is_resource($handle)) {
+                @\fclose($handle);
+            }
+            if ($untrustedPath !== null) {
+                $status = @\lstat($untrustedPath);
+                if (\is_array($status)
+                    && !\is_link($untrustedPath)
+                    && ((((int)($status['mode'] ?? 0)) & 0170000) === 0100000)
+                ) {
+                    @\unlink($untrustedPath);
+                }
+            }
+        }
+    }
+
+    public static function normalizeTrustProfile(string $trustProfile): string
+    {
+        $trustProfile = \strtolower(\trim($trustProfile));
+        if (!\in_array($trustProfile, [
+            self::TRUST_PROFILE_PRODUCTION,
+            self::TRUST_PROFILE_TEST,
+        ], true)) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: certificate trust profile must be '
+                    . 'production or test.',
+            );
+        }
+        return $trustProfile;
+    }
+
+    public static function normalizeProvider(string $provider): string
+    {
+        $provider = \strtolower(\trim($provider));
+        $provider = match ($provider) {
+            '', 'manual', 'configured', 'unknown' => self::PROVIDER_EXTERNAL,
+            'letsencrypt', "let's encrypt", 'le' => self::PROVIDER_LETS_ENCRYPT,
+            'lite-ssl', 'lite_ssl' => self::PROVIDER_LITESSL,
+            'self-signed', 'selfsigned' => self::PROVIDER_SELF_SIGNED,
+            'local-ca', 'localca', 'dev-ca', 'dev_ca' => self::PROVIDER_LOCAL_CA,
+            default => $provider,
+        };
+        if (!\in_array($provider, [
+            self::PROVIDER_EXTERNAL,
+            self::PROVIDER_LETS_ENCRYPT,
+            self::PROVIDER_LITESSL,
+            self::PROVIDER_SELF_SIGNED,
+            self::PROVIDER_LOCAL_CA,
+        ], true)) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: certificate provider is unsupported.',
+            );
+        }
+        return $provider;
+    }
+
+    public static function provenanceDigest(
+        string $domain,
+        string $sourceDigest,
+        string $trustProfile,
+        string $provider,
+        string $materialClass,
+    ): string {
+        $domain = \strtolower(\rtrim(\trim($domain), '.'));
+        $sourceDigest = \strtolower(\trim($sourceDigest));
+        $trustProfile = self::normalizeTrustProfile($trustProfile);
+        $provider = self::normalizeProvider($provider);
+        if ($domain === ''
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+            || !\in_array($materialClass, [
+                self::MATERIAL_CLASS_PUBLIC_TRUST,
+                self::MATERIAL_CLASS_PRIVATE_CA,
+                self::MATERIAL_CLASS_SELF_SIGNED,
+                self::MATERIAL_CLASS_LOCAL_CA,
+            ], true)
+        ) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: certificate provenance facts are malformed.',
+            );
+        }
+        return \hash(
+            'sha256',
+            self::PROVENANCE_SCHEMA . "\0" . $domain . "\0" . $sourceDigest . "\0"
+                . $trustProfile . "\0" . $provider . "\0" . $materialClass,
+        );
+    }
+
+    public static function inactiveProvenanceDigest(
+        string $domain,
+        string $state,
+        string $sourceDigest,
+        int $generation,
+        string $trustProfile,
+    ): string {
+        $domain = \strtolower(\rtrim(\trim($domain), '.'));
+        $state = \strtolower(\trim($state));
+        $sourceDigest = \strtolower(\trim($sourceDigest));
+        $trustProfile = self::normalizeTrustProfile($trustProfile);
+        if ($domain === ''
+            || !\in_array($state, ['pending', 'disabled'], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+            || ($state === 'pending' && $generation !== 0)
+            || ($state === 'disabled' && $generation < 1)
+        ) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: inactive certificate provenance '
+                    . 'facts are malformed.',
+            );
+        }
+        return \hash(
+            'sha256',
+            "wls-inactive-certificate-provenance/1\0" . $domain . "\0" . $state
+                . "\0" . $sourceDigest . "\0" . $generation . "\0" . $trustProfile,
+        );
     }
 
     private function validateCertificateBundle(string $pem): void
@@ -1984,7 +2686,7 @@ final class ProjectCertificateGenerationStore
             $this->publishManifest(
                 $temporary . DIRECTORY_SEPARATOR . 'snapshot.json',
                 [
-                    'schema_version' => self::SCHEMA_VERSION,
+                    'schema_version' => self::SNAPSHOT_SCHEMA_VERSION,
                     'source_digest' => $digest,
                     'leaf_fingerprint_sha256' => (string)$material['leaf_fingerprint_sha256'],
                     'cert_sha256' => (string)$material['cert_sha256'],
@@ -2513,6 +3215,9 @@ final class ProjectCertificateGenerationStore
         \Closure $callback,
         ?float $deadlineMonotonic = null,
     ): mixed {
+        $waitTimeoutSeconds = $this->retirementLockWaitTimeout(
+            $deadlineMonotonic,
+        );
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $this->storeRoot . DIRECTORY_SEPARATOR . 'snapshot-retirement.lock',
             function () use ($callback, $deadlineMonotonic): mixed {
@@ -2521,8 +3226,10 @@ final class ProjectCertificateGenerationStore
             },
             fn ($handle, string $path): mixed => $this
                 ->preserveProjectArtifactOwnership($path, $handle),
-            waitTimeoutSeconds: $this->retirementLockWaitTimeout(
+            waitTimeoutSeconds: $waitTimeoutSeconds,
+            deadlineMonotonic: $this->lockAcquisitionDeadline(
                 $deadlineMonotonic,
+                $waitTimeoutSeconds,
             ),
         );
     }
@@ -2739,7 +3446,7 @@ final class ProjectCertificateGenerationStore
         $certHash = \hash('sha256', $cert);
         $keyHash = \hash('sha256', $key);
         $chainHash = $chain === '' ? '' : \hash('sha256', $chain);
-        if ((int)($manifest['schema_version'] ?? 0) !== self::SCHEMA_VERSION
+        if ((int)($manifest['schema_version'] ?? 0) !== self::SNAPSHOT_SCHEMA_VERSION
             || !\hash_equals($digest, (string)($manifest['source_digest'] ?? ''))
             || !\hash_equals($certHash, (string)($manifest['cert_sha256'] ?? ''))
             || !\hash_equals($keyHash, (string)($manifest['key_sha256'] ?? ''))
@@ -2853,6 +3560,37 @@ final class ProjectCertificateGenerationStore
                     throw new \RuntimeException(
                         'Active certificate generation reference is corrupt.',
                     );
+                }
+                if (($manifest['schema_version'] ?? null) === 1) {
+                    // A schema-1 selector is never serving authority, but its
+                    // exact immutable snapshot remains a GC reference until a
+                    // schema-2 activation safely supersedes it. This preserves
+                    // the migration generation floor without inventing trust
+                    // provenance for legacy material.
+                    if ($this->legacyActiveGenerationFloor($domain)
+                        !== (int)($manifest['generation'] ?? 0)
+                    ) {
+                        throw new CertificateTrustProvenanceException(
+                            'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: legacy active '
+                                . 'certificate reference has an invalid generation floor.',
+                        );
+                    }
+                } else {
+                    $verifiedActive = $this->readActiveUnlocked($domain, false);
+                    if (!\is_array($verifiedActive)
+                        || (int)$verifiedActive['generation']
+                            !== (int)($manifest['generation'] ?? 0)
+                        || !\hash_equals(
+                            $current,
+                            (string)$verifiedActive['source_digest'],
+                        )
+                    ) {
+                        throw new CertificateTrustProvenanceException(
+                            'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: active certificate '
+                                . 'reference lacks a verified schema-2 provenance closure.',
+                        );
+                    }
+                    $manifest = $verifiedActive;
                 }
                 $snapshot = $inventory[$current] ?? null;
                 if (!\is_array($snapshot)
@@ -2994,6 +3732,36 @@ final class ProjectCertificateGenerationStore
     }
 
     /**
+     * Return only the monotonic floor from the exact legacy selector. No path,
+     * certificate byte, or trust claim from schema 1 is authorized for serving.
+     */
+    private function legacyActiveGenerationFloor(string $domain): int
+    {
+        $file = $this->activeManifestFile($domain);
+        if (!\file_exists($file) && !\is_link($file)) {
+            return 0;
+        }
+        $this->preserveProjectArtifactOwnership($file);
+        $manifest = $this->readManifest($file);
+        $generation = $manifest['generation'] ?? null;
+        $sourceDigest = \strtolower(\trim((string)(
+            $manifest['source_digest'] ?? ''
+        )));
+        if (($manifest['schema_version'] ?? null) !== 1
+            || !\hash_equals($domain, (string)($manifest['domain'] ?? ''))
+            || !\is_int($generation)
+            || $generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+        ) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: legacy active certificate selector '
+                    . 'cannot provide a safe migration generation floor.',
+            );
+        }
+        return $generation;
+    }
+
+    /**
      * @return array<string,mixed>|null
      */
     private function readActiveUnlocked(
@@ -3007,8 +3775,23 @@ final class ProjectCertificateGenerationStore
         }
         $this->preserveProjectArtifactOwnership($file);
         $manifest = $this->readManifest($file);
-        if (($manifest['schema_version'] ?? null) !== self::SCHEMA_VERSION
-            || !\hash_equals($domain, (string)($manifest['domain'] ?? ''))
+        if (($manifest['schema_version'] ?? null) !== self::SCHEMA_VERSION) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: active certificate generation '
+                    . 'uses a legacy schema without trust provenance.',
+            );
+        }
+        $trustProfile = self::normalizeTrustProfile((string)(
+            $manifest['trust_profile'] ?? ''
+        ));
+        $provider = self::normalizeProvider((string)($manifest['provider'] ?? ''));
+        $materialClass = \strtolower(\trim((string)(
+            $manifest['material_class'] ?? ''
+        )));
+        $provenanceDigest = \strtolower(\trim((string)(
+            $manifest['provenance_digest'] ?? ''
+        )));
+        if (!\hash_equals($domain, (string)($manifest['domain'] ?? ''))
             || !\is_int($manifest['generation'] ?? null)
             || (int)$manifest['generation'] < 1
             || !\is_string($manifest['source_digest'] ?? null)
@@ -3016,6 +3799,13 @@ final class ProjectCertificateGenerationStore
                 '/\A[a-f0-9]{64}\z/D',
                 (string)($manifest['source_digest'] ?? ''),
             ) !== 1
+            || !\in_array($materialClass, [
+                self::MATERIAL_CLASS_PUBLIC_TRUST,
+                self::MATERIAL_CLASS_PRIVATE_CA,
+                self::MATERIAL_CLASS_SELF_SIGNED,
+                self::MATERIAL_CLASS_LOCAL_CA,
+            ], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
         ) {
             throw new \RuntimeException('Active certificate generation manifest is invalid.');
         }
@@ -3058,6 +3848,26 @@ final class ProjectCertificateGenerationStore
         )) {
             throw new \RuntimeException('Active certificate source digest is invalid.');
         }
+        $validated = $this->withTrustProvenance(
+            $domain,
+            $validated,
+            $trustProfile,
+            $provider,
+        );
+        if (!\hash_equals(
+                $materialClass,
+                (string)$validated['material_class'],
+            )
+            || !\hash_equals(
+                $provenanceDigest,
+                (string)$validated['provenance_digest'],
+            )
+        ) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: active certificate provenance '
+                    . 'does not match its immutable material.',
+            );
+        }
         $manifestFingerprint = \strtolower(\trim(
             (string)($manifest['leaf_fingerprint_sha256'] ?? ''),
         ));
@@ -3071,6 +3881,10 @@ final class ProjectCertificateGenerationStore
             throw new \RuntimeException('Active certificate leaf fingerprint is invalid.');
         }
         return \array_replace($manifest, [
+            'trust_profile' => $trustProfile,
+            'provider' => $provider,
+            'material_class' => $materialClass,
+            'provenance_digest' => $provenanceDigest,
             'leaf_fingerprint_sha256' => (string)$validated['leaf_fingerprint_sha256'],
             'cert_path' => $certPath,
             'key_path' => $keyPath,
@@ -3078,6 +3892,50 @@ final class ProjectCertificateGenerationStore
             'retained_previous' => false,
             'activation_error' => '',
         ]);
+    }
+
+    /**
+     * A rename may have committed the new selector before directory fsync or
+     * a later cleanup reports failure. Reconcile only the complete expected
+     * after-image; generation/source digest alone are insufficient authority.
+     *
+     * @param array<string,mixed> $active
+     * @param array<string,mixed> $candidate
+     */
+    private function activeManifestMatchesCandidate(
+        array $active,
+        array $candidate,
+    ): bool {
+        if ((int)($active['generation'] ?? 0)
+            !== (int)($candidate['generation'] ?? 0)
+        ) {
+            return false;
+        }
+        foreach ([
+            'domain',
+            'source_digest',
+            'trust_profile',
+            'provider',
+            'material_class',
+            'provenance_digest',
+            'cert_path',
+            'key_path',
+            'chain_path',
+            'leaf_fingerprint_sha256',
+            'cert_sha256',
+            'key_sha256',
+            'chain_sha256',
+        ] as $field) {
+            $expected = (string)($candidate[$field] ?? '');
+            $observed = (string)($active[$field] ?? '');
+            if (!\hash_equals($expected, $observed)) {
+                return false;
+            }
+        }
+        return \hash_equals(
+            GatewayClient::canonicalJson($candidate['previous'] ?? null),
+            GatewayClient::canonicalJson($active['previous'] ?? null),
+        );
     }
 
     /** @return array<string,mixed>|null */
@@ -3720,6 +4578,7 @@ final class ProjectCertificateGenerationStore
      *   disabled_generation:int,
      *   disabled_source_digest:string,
      *   target_source_digest:string,
+     *   target_provenance_digest:string,
      *   intent_id:string,
      *   issued_at:string
      * }|null
@@ -3755,9 +4614,12 @@ final class ProjectCertificateGenerationStore
         $targetDigest = \strtolower(\trim((string)(
             $intent['target_source_digest'] ?? ''
         )));
+        $targetProvenanceDigest = \strtolower(\trim((string)(
+            $intent['target_provenance_digest'] ?? ''
+        )));
         $intentId = \strtolower(\trim((string)($intent['intent_id'] ?? '')));
         if (!\hash_equals(
-                'wls-project-certificate-reenable/1',
+                'wls-project-certificate-reenable/2',
                 (string)($intent['schema'] ?? ''),
             )
             || !\hash_equals('authorized', (string)($intent['state'] ?? ''))
@@ -3765,6 +4627,7 @@ final class ProjectCertificateGenerationStore
             || $generation < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $disabledDigest) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $targetDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $targetProvenanceDigest) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $intentId) !== 1
             || !\hash_equals(
                 $this->disabledSourceDigest($domain, $generation),
@@ -3776,6 +4639,7 @@ final class ProjectCertificateGenerationStore
                     $generation,
                     $disabledDigest,
                     $targetDigest,
+                    $targetProvenanceDigest,
                 ),
                 $intentId,
             )
@@ -3790,6 +4654,7 @@ final class ProjectCertificateGenerationStore
             'disabled_generation' => $generation,
             'disabled_source_digest' => $disabledDigest,
             'target_source_digest' => $targetDigest,
+            'target_provenance_digest' => $targetProvenanceDigest,
             'intent_id' => $intentId,
             'issued_at' => (string)$intent['issued_at'],
         ];
@@ -3800,10 +4665,12 @@ final class ProjectCertificateGenerationStore
         int $disabledGeneration,
         string $disabledSourceDigest,
         string $targetSourceDigest,
+        string $targetProvenanceDigest,
     ): string {
         if ($disabledGeneration < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $disabledSourceDigest) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $targetSourceDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $targetProvenanceDigest) !== 1
         ) {
             throw new \RuntimeException('Certificate re-enable authority is invalid.');
         }
@@ -3811,7 +4678,7 @@ final class ProjectCertificateGenerationStore
             'sha256',
             "wls-certificate-reenable\0" . $domain . "\0"
                 . $disabledGeneration . "\0" . $disabledSourceDigest . "\0"
-                . $targetSourceDigest,
+                . $targetSourceDigest . "\0" . $targetProvenanceDigest,
         );
     }
 
@@ -3911,10 +4778,25 @@ final class ProjectCertificateGenerationStore
             $variant = \defined('INTL_IDNA_VARIANT_UTS46')
                 ? \constant('INTL_IDNA_VARIANT_UTS46')
                 : 0;
-            $ascii = @\idn_to_ascii($base, IDNA_DEFAULT, $variant);
-            if (\is_string($ascii) && $ascii !== '') {
-                $base = \strtolower($ascii);
+            $flags = \defined('IDNA_DEFAULT')
+                ? (int)\constant('IDNA_DEFAULT')
+                : 0;
+            $ascii = @\idn_to_ascii($base, $flags, $variant);
+            if (!\is_string($ascii) || $ascii === '') {
+                throw new \InvalidArgumentException(
+                    'TLS domain IDNA conversion failed: ' . $domain,
+                );
             }
+            $base = \strtolower($ascii);
+        } elseif (\preg_match('/[^\x00-\x7f]/D', $base) === 1
+            || \preg_match('/(?:\A|\.)xn--/i', $base) === 1
+        ) {
+            // Without an IDNA implementation neither U-labels nor A-labels
+            // can be validated. Ordinary ASCII DNS names remain available,
+            // but every IDNA-dependent identity fails closed.
+            throw new \InvalidArgumentException(
+                'TLS domain IDNA normalization is unavailable: ' . $domain,
+            );
         }
         if (\strlen($base) > 253
             || \preg_match(

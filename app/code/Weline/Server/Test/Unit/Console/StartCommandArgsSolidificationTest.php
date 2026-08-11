@@ -22,6 +22,26 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertTrue((bool)($config['no_ssl'] ?? false));
     }
 
+    public function testExplicitPureWlsPersistsItsActiveCertificateSource(): void
+    {
+        $start = $this->createProbe();
+
+        self::assertTrue($start->shouldPersistCertificateSource(
+            sslEnabled: true,
+            certificatePending: false,
+            gatewayMode: false,
+            pureWlsMode: true,
+            requestedMode: 'wls',
+        ));
+        self::assertFalse($start->shouldPersistCertificateSource(
+            sslEnabled: true,
+            certificatePending: false,
+            gatewayMode: false,
+            pureWlsMode: false,
+            requestedMode: 'legacy',
+        ));
+    }
+
     public function testNoSslSkipsManagedWildcardCertificatePreparation(): void
     {
         $start = $this->createProbe();
@@ -30,7 +50,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame(0, $start->managedWildcardCertificateCalls);
     }
 
-    public function testReusablePrimaryCertificateDoesNotSkipManagedWildcardValidation(): void
+    public function testWls2ReusablePrimaryCertificateDefersLegacyWildcardMutation(): void
     {
         $sslService = $this->createMock(SslCertificateService::class);
         $sslService->method('canReuseConfiguredCertificate')->willReturn(true);
@@ -45,7 +65,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
 
         $start->resolveConfig('default', []);
 
-        self::assertSame(1, $start->managedWildcardCertificateCalls);
+        self::assertSame(0, $start->managedWildcardCertificateCalls);
     }
 
     public function testHttpOnlyAliasAlsoForcesHttpOnlyMode(): void
@@ -131,6 +151,395 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $this->createProbe()->normalizeEdgeCli('system-nginx');
     }
 
+    public function testLegacyAdapterIntentIsMappedAcrossSavedAndEnvShapes(): void
+    {
+        $cases = [
+            'saved flat wls' => [['edge_adapter' => 'wls'], [], 'default', 'wls'],
+            'saved nested wls' => [['edge' => ['adapter' => 'wls']], [], 'default', 'wls'],
+            'saved flat nginx' => [['edge_adapter' => 'nginx'], [], 'default', 'legacy'],
+            'saved nested nginx' => [['edge' => ['adapter' => 'nginx']], [], 'default', 'legacy'],
+            'env flat wls' => [null, ['wls' => ['edge_adapter' => 'wls']], 'default', 'wls'],
+            'env nested nginx' => [null, ['wls' => ['edge' => ['adapter' => 'nginx']]], 'default', 'legacy'],
+            'instance env flat nginx' => [
+                null,
+                ['wls' => ['servers' => ['shop' => ['edge_adapter' => 'nginx']]]],
+                'shop',
+                'legacy',
+            ],
+            'instance env nested wls' => [
+                null,
+                ['wls' => ['servers' => ['shop' => ['edge' => ['adapter' => 'wls']]]]],
+                'shop',
+                'wls',
+            ],
+        ];
+
+        foreach ($cases as $label => [$saved, $env, $instance, $expected]) {
+            $config = $this->createProbe($saved, $env)->resolveConfig(
+                $instance,
+                ['no-ssl' => true],
+            );
+            self::assertSame($expected, $config['edge_mode'] ?? null, $label);
+            self::assertSame(
+                $expected === 'wls' ? 'wls' : 'nginx',
+                $config['edge_adapter'] ?? null,
+                $label,
+            );
+        }
+    }
+
+    public function testEdgeIntentPriorityIsCliThenSavedThenInstanceEnvThenBaseEnv(): void
+    {
+        $env = ['wls' => [
+            'edge_adapter' => 'nginx',
+            'servers' => ['shop' => ['edge_adapter' => 'wls']],
+        ]];
+        $instanceEnv = $this->createProbe(null, $env)->resolveConfig(
+            'shop',
+            ['no-ssl' => true],
+        );
+        self::assertSame('wls', $instanceEnv['edge_mode'] ?? null);
+
+        $saved = $this->createProbe(['edge_adapter' => 'nginx'], $env)
+            ->resolveConfig('shop', ['no-ssl' => true]);
+        self::assertSame('legacy', $saved['edge_mode'] ?? null);
+
+        $cli = $this->createProbe(['edge_adapter' => 'nginx'], $env)
+            ->resolveConfig('shop', ['edge' => 'gateway', 'no-ssl' => true]);
+        self::assertSame('gateway', $cli['edge_mode'] ?? null);
+        self::assertSame('nginx', $cli['edge_adapter'] ?? null);
+    }
+
+    public function testExplicitModeOutranksLegacyAdapterWithinTheSameLayer(): void
+    {
+        $config = $this->createProbe([
+            'edge_mode' => 'auto',
+            'edge_adapter' => 'nginx',
+        ])->resolveConfig('default', ['no-ssl' => true]);
+
+        self::assertSame('auto', $config['edge']['mode'] ?? null);
+        self::assertSame('nginx', $config['edge_adapter'] ?? null);
+    }
+
+    public function testDefaultNginxAdapterDoesNotImplicitlySelectLegacyMode(): void
+    {
+        $config = $this->createProbe()->resolveConfig(
+            'default',
+            ['no-ssl' => true],
+        );
+
+        self::assertSame('auto', $config['edge']['mode'] ?? null);
+    }
+
+    public function testStartupFallbackKeepsRedispatchingTheSameEnvelopeUntilProjection(): void
+    {
+        $method = new \ReflectionMethod(
+            Start::class,
+            'requestAutoGatewayStartupFallback',
+        );
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertGreaterThanOrEqual(
+            2,
+            \substr_count($source, 'sendAutoGatewayStartupFallbackRequest('),
+            'A forwarded request must be replayed after an Agent reconnect until a serving projection exists.',
+        );
+        self::assertStringContainsString(
+            'startupFallbackRequestRedispatchSeconds()',
+            $source,
+        );
+        self::assertStringNotContainsString("['request_id'] =", $source);
+        self::assertStringNotContainsString("['request_digest'] =", $source);
+        $manifestAt = \strpos(
+            $source,
+            'buildAutoGatewayStartupFallbackServingManifest(',
+        );
+        $issueAt = \strpos($source, 'GatewayStartupFallbackRequest::issue(');
+        self::assertIsInt($manifestAt);
+        self::assertIsInt($issueAt);
+        self::assertLessThan(
+            $issueAt,
+            $manifestAt,
+            'Project TLS serving truth must be published before the request is issued.',
+        );
+        self::assertStringContainsString(
+            'activeCertificateFenceForDomain(',
+            $source,
+        );
+        self::assertStringContainsString(
+            'fallbackServingObservation($latest, $projectionDeadline)',
+            $source,
+        );
+        self::assertSame(
+            2,
+            \substr_count($source, 'sleepWithinStartupFallbackDeadline('),
+            'Both fallback polling loops must clip their sleep to the owning absolute deadline.',
+        );
+        self::assertStringNotContainsString(
+            'SchedulerSystem::usleep(100_000)',
+            $source,
+        );
+        self::assertMatchesRegularExpression(
+            '/sendAutoGatewayStartupFallbackRequest\(\s*\$instanceName,\s*'
+                . '\$request,\s*\$requestDeadline,\s*\)/s',
+            $source,
+        );
+        self::assertMatchesRegularExpression(
+            '/sendAutoGatewayStartupFallbackRequest\(\s*\$instanceName,\s*'
+                . '\$request,\s*\$projectionDeadline,\s*\)/s',
+            $source,
+        );
+        $dispatch = new \ReflectionMethod(
+            Start::class,
+            'sendAutoGatewayStartupFallbackRequest',
+        );
+        $dispatchSource = \implode('', \array_slice(
+            $lines,
+            $dispatch->getStartLine() - 1,
+            $dispatch->getEndLine() - $dispatch->getStartLine() + 1,
+        ));
+        self::assertMatchesRegularExpression(
+            '/->command\(\s*\$instanceName,.*?1\.0,\s*'
+                . '\$deadlineMonotonic,\s*\)/s',
+            $dispatchSource,
+        );
+        self::assertStringNotContainsString('ProjectCertificateGenerationStore', $source);
+    }
+
+    public function testStartupFallbackSleepNeverExceedsRemainingDeadlineBudget(): void
+    {
+        $bounded = new \ReflectionMethod(
+            Start::class,
+            'boundedStartupFallbackSleepMicroseconds',
+        );
+
+        self::assertSame(100_000, $bounded->invoke(null, 10.5, 10.0));
+        self::assertSame(100_000, $bounded->invoke(null, PHP_FLOAT_MAX, 10.0));
+        self::assertSame(62_500, $bounded->invoke(null, 10.0625, 10.0));
+        self::assertSame(0, $bounded->invoke(null, 10.0, 10.0));
+        self::assertSame(0, $bounded->invoke(null, 9.0, 10.0));
+        self::assertSame(0, $bounded->invoke(null, INF, 10.0));
+    }
+
+    public function testExistingStartupPollDeadlinesClipTheirFinalSleep(): void
+    {
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(Start::class))->getFileName(),
+        );
+
+        self::assertGreaterThanOrEqual(
+            5,
+            \substr_count(
+                $source,
+                'boundedNanosecondDeadlineSleepMicroseconds(',
+            ),
+        );
+        self::assertGreaterThanOrEqual(
+            3,
+            \substr_count(
+                $source,
+                'boundedMonotonicDeadlineSleepMicroseconds(',
+            ),
+        );
+        self::assertStringContainsString(
+            '$sleepMilliseconds = \min($waitStepMs, $remainingWaitMs);',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            'SchedulerSystem::usleep(300000)',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            'SchedulerSystem::usleep(25_000)',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            'SchedulerSystem::usleep(20_000)',
+            $source,
+        );
+
+        $seconds = new \ReflectionMethod(
+            Start::class,
+            'boundedMonotonicDeadlineSleepMicroseconds',
+        );
+        self::assertSame(62_500, $seconds->invoke(null, 10.0625, 10.0, 300_000));
+        self::assertSame(0, $seconds->invoke(null, 10.0, 10.0, 300_000));
+
+        $nanoseconds = new \ReflectionMethod(
+            Start::class,
+            'boundedNanosecondDeadlineSleepMicroseconds',
+        );
+        self::assertSame(
+            20_000,
+            $nanoseconds->invoke(null, 100_000_000, 0, 20_000),
+        );
+        self::assertSame(
+            15_625,
+            $nanoseconds->invoke(null, 15_625_000, 0, 20_000),
+        );
+        self::assertSame(0, $nanoseconds->invoke(null, 100, 100, 20_000));
+    }
+
+    public function testStartupCertificateSelectorsShareBoundedAbsoluteDeadlines(): void
+    {
+        $start = (string)\file_get_contents(
+            (string)(new \ReflectionClass(Start::class))->getFileName(),
+        );
+
+        self::assertStringContainsString(
+            'STARTUP_CERTIFICATE_STATE_BUDGET_SECONDS = 8.0',
+            $start,
+        );
+        self::assertMatchesRegularExpression(
+            '/->activate\([\s\S]*?\$certificateRoots,\s*'
+                . '\$this->startupCertificateStateDeadline\(\),\s*'
+                . '\$certificateTrustProfile,\s*'
+                . '\$this->resolveCertificateProvider\(\$sslResult\),\s*\)/',
+            $start,
+        );
+        self::assertMatchesRegularExpression(
+            '/->disabled\(\s*\$certificateHost,\s*\$deadlineMonotonic,\s*\)/',
+            $start,
+        );
+        self::assertMatchesRegularExpression(
+            '/->active\(\s*\$certificateHost,\s*\$deadlineMonotonic,\s*'
+                . '\$trustProfile,\s*\)/',
+            $start,
+        );
+        self::assertStringContainsString(
+            '->buildServingManifest($instanceName, $deadlineMonotonic)',
+            $start,
+        );
+        self::assertMatchesRegularExpression(
+            '/activeProjectCertificateResult\(\s*\$certificateHost,\s*'
+                . '\$sslService,\s*\$activeGeneration,\s*true,\s*'
+                . '\$trustProfile,\s*\)/',
+            $start,
+        );
+        self::assertStringContainsString(
+            'Active certificate after-image is incomplete before edge launch.',
+            $start,
+        );
+    }
+
+    public function testLegacyCertificateSelectorMigrationRequiresCompleteExplicitPair(): void
+    {
+        $method = new \ReflectionMethod(
+            Start::class,
+            'hasExplicitCertificatePairForLegacySelectorMigration',
+        );
+
+        self::assertTrue($method->invoke(new Start(), [
+            'ssl_cert' => '/project/app/etc/ssl/unit/fullchain.pem',
+            'ssl_key' => '/project/app/etc/ssl/unit/privkey.pem',
+        ]));
+        self::assertFalse($method->invoke(new Start(), [
+            'ssl_cert' => '/project/app/etc/ssl/unit/fullchain.pem',
+            'ssl_key' => '',
+        ]));
+        self::assertFalse($method->invoke(new Start(), [
+            'ssl_cert' => '',
+            'ssl_key' => '/project/app/etc/ssl/unit/privkey.pem',
+        ]));
+        self::assertFalse($method->invoke(new Start(), []));
+
+        $ensure = new \ReflectionMethod(Start::class, 'ensureSslCertificate');
+        $source = (string)\file_get_contents((string)$ensure->getFileName());
+        self::assertStringContainsString(
+            '$this->hasExplicitCertificatePairForLegacySelectorMigration($config)',
+            $source,
+        );
+    }
+
+    public function testStartupListenerLeaseOperationsShareBoundedPhaseDeadlines(): void
+    {
+        $start = (string)\file_get_contents(
+            (string)(new \ReflectionClass(Start::class))->getFileName(),
+        );
+
+        self::assertStringContainsString(
+            'STARTUP_LISTENER_STATE_BUDGET_SECONDS = 120.0',
+            $start,
+        );
+        self::assertStringContainsString(
+            'STARTUP_LISTENER_CLEANUP_BUDGET_SECONDS = 1.0',
+            $start,
+        );
+        self::assertGreaterThanOrEqual(
+            3,
+            \substr_count(
+                $start,
+                'operationDeadlineMonotonic: $this->startupListenerStateDeadline()',
+            ),
+        );
+        self::assertStringContainsString(
+            'createGatewayStartupDecisionForListenerPhase()',
+            $start,
+        );
+        self::assertStringContainsString(
+            'operationDeadlineMonotonic: $cleanupDeadline',
+            $start,
+        );
+        self::assertMatchesRegularExpression(
+            '/->projectUuid\(\s*\$this->startupListenerStateDeadline\(\),\s*\)/',
+            $start,
+        );
+        self::assertMatchesRegularExpression(
+            '/->advanceInstanceGeneration\(\s*\$instanceName,\s*'
+                . 'deadlineMonotonic: \$this->startupListenerStateDeadline\(\),\s*\)/',
+            $start,
+        );
+        $identityDeadlineAt = \strpos(
+            $start,
+            '$this->beginStartupListenerStateDeadline();',
+        );
+        $projectIdentityAt = \strpos(
+            $start,
+            'new \\Weline\\Server\\Service\\Edge\\Gateway\\ProjectIdentityStore()',
+        );
+        self::assertIsInt($identityDeadlineAt);
+        self::assertIsInt($projectIdentityAt);
+        self::assertLessThan($projectIdentityAt, $identityDeadlineAt);
+        self::assertStringNotContainsString(
+            'new \\Weline\\Server\\Service\\Edge\\Gateway\\GatewayPortLeaseAllocator();',
+            $start,
+        );
+    }
+
+    public function testShutdownFallbackRetiresGatewayBeforeKillingTheAgent(): void
+    {
+        $method = new \ReflectionMethod(
+            Start::class,
+            'shutdownCleanupOrphanWlsProcessesIfNeeded',
+        );
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+        $retireAt = \strpos(
+            $source,
+            'retirePossibleGatewayRegistrationBeforeFailedStartupCleanup(',
+        );
+        $cleanupAt = \strpos($source, 'cleanupFailedStartupProcesses(');
+
+        self::assertNotFalse($retireAt);
+        self::assertNotFalse($cleanupAt);
+        self::assertLessThan(
+            $cleanupAt,
+            $retireAt,
+            'Host registration must be fenced while the exact Agent is still alive.',
+        );
+    }
+
     public function testGatewayWithoutPublicCertificateStartsChallengeOnly(): void
     {
         $result = $this->createProbe()->resolveMissingCertificate([
@@ -155,6 +564,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
             \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-pending-cert-does-not-exist' . DIRECTORY_SEPARATOR,
         );
         $sslService->method('hasValidLocalCertificate')->willReturn(false);
+        $sslService->expects(self::never())->method('replayPendingCertificateRetirements');
         $sslService->expects(self::never())->method('ensureCertificateStorageReady');
 
         $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('gateway-pending', [
@@ -168,6 +578,145 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertFalse((bool)($result['ssl_enabled'] ?? true));
         self::assertTrue((bool)($result['pending_certificate'] ?? false));
         self::assertSame('PENDING_CERTIFICATE', $result['code'] ?? null);
+    }
+
+    public function testPublicDevTldIsNotClassifiedAsLocalDevelopmentDomain(): void
+    {
+        $sslService = new SslCertificateService(true);
+
+        self::assertFalse($sslService->isLocalDomain('shop.dev'));
+        self::assertTrue($sslService->isLocalDomain('shop.test'));
+        self::assertTrue($sslService->isLocalDomain('127.0.0.1'));
+        self::assertTrue($sslService->isLocalDomain('192.168.10.20'));
+        self::assertTrue($sslService->isLocalDomain('::1'));
+        self::assertTrue($sslService->isLocalDomain('fd12:3456:789a::1'));
+        self::assertTrue($sslService->isLocalDomain('fe80::1234'));
+        self::assertTrue($sslService->isLocalDomain('::ffff:192.168.10.20'));
+        self::assertFalse($sslService->isLocalDomain('8.8.8.8'));
+        self::assertFalse($sslService->isLocalDomain('::ffff:8.8.8.8'));
+        self::assertFalse($sslService->isLocalDomain('2001:4860:4860::8888'));
+    }
+
+    public function testPublicDomainNeedsExplicitDevelopmentProfileBeforePrivateDnsCanSelfSign(): void
+    {
+        $production = new SslCertificateDomainPolicyProbe(false, [
+            'shop.dev' => ['127.0.0.1'],
+            'missing.dev' => [],
+        ]);
+        $development = new SslCertificateDomainPolicyProbe(true, [
+            'shop.dev' => ['127.0.0.1'],
+            'missing.dev' => [],
+        ]);
+
+        self::assertFalse($production->needsSelfSignedCertificate('shop.dev'));
+        self::assertTrue($development->needsSelfSignedCertificate('shop.dev'));
+        self::assertFalse($production->needsSelfSignedCertificate('missing.dev'));
+        self::assertFalse($development->needsSelfSignedCertificate('missing.dev'));
+        self::assertTrue($production->needsSelfSignedCertificate('shop.test'));
+    }
+
+    public function testPublicDevGatewayStartsChallengeOnlyWithoutSelfSigningOrRetirementReplay(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('needsSelfSignedCertificate')->with('shop.dev')->willReturn(false);
+        $sslService->method('getCertificateDir')->willReturn(
+            \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-public-dev-gateway-missing' . DIRECTORY_SEPARATOR,
+        );
+        $sslService->method('hasValidLocalCertificate')->with('shop.dev')->willReturn(false);
+        $sslService->expects(self::never())->method('replayPendingCertificateRetirements');
+        $sslService->expects(self::never())->method('ensureCertificateStorageReady');
+        $sslService->expects(self::never())->method('generateSelfSignedCertificate');
+
+        $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('gateway-public-dev', [
+            'host' => 'shop.dev',
+            'public_host' => 'shop.dev',
+            'edge_mode' => 'gateway',
+            'gateway' => ['mode' => 'gateway'],
+        ]);
+
+        self::assertTrue((bool)($result['success'] ?? false));
+        self::assertSame('PENDING_CERTIFICATE', $result['code'] ?? null);
+        self::assertTrue((bool)($result['pending_certificate'] ?? false));
+    }
+
+    public function testPublicDevPureWlsFailsClosedWithoutImplicitSelfSigning(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('needsSelfSignedCertificate')->with('shop.dev')->willReturn(false);
+        $sslService->method('getCertificateDir')->willReturn(
+            \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-public-dev-standalone-missing' . DIRECTORY_SEPARATOR,
+        );
+        $sslService->method('hasValidLocalCertificate')->with('shop.dev')->willReturn(false);
+        $sslService->expects(self::never())->method('replayPendingCertificateRetirements');
+        $sslService->expects(self::once())->method('ensureCertificateStorageReady');
+        $sslService->expects(self::never())->method('generateSelfSignedCertificate');
+
+        $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('wls-public-dev', [
+            'host' => 'shop.dev',
+            'public_host' => 'shop.dev',
+            'edge_mode' => 'wls',
+            'gateway' => ['mode' => 'wls'],
+        ]);
+
+        self::assertFalse((bool)($result['success'] ?? true));
+        self::assertSame('TLS_CERTIFICATE_UNAVAILABLE', $result['code'] ?? null);
+    }
+
+    public function testLocalWlsCertificateStorageIsPreparedExactlyOnce(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('needsSelfSignedCertificate')->with('shop.test')->willReturn(true);
+        $sslService->method('getCertificateDir')->willReturn(
+            \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-local-cert-missing' . DIRECTORY_SEPARATOR,
+        );
+        $sslService->method('hasValidLocalCertificate')->with('shop.test')->willReturn(false);
+        $sslService->expects(self::never())->method('replayPendingCertificateRetirements');
+        $sslService->expects(self::once())->method('ensureCertificateStorageReady');
+        $sslService->method('ensureCertificate')->willReturn([
+            'success' => true,
+            'cert_path' => '/tmp/wls-local-cert.pem',
+            'key_path' => '/tmp/wls-local-key.pem',
+            'issuer' => 'unit-local-ca',
+            'is_new' => true,
+        ]);
+
+        $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('wls-local-cert', [
+            'host' => 'shop.test',
+            'public_host' => 'shop.test',
+            'edge_mode' => 'wls',
+            'certificate_profile' => 'test',
+            'gateway' => ['mode' => 'wls'],
+        ]);
+
+        self::assertTrue((bool)($result['success'] ?? false));
+    }
+
+    public function testLegacyCertificateStorageIsPreparedExactlyOnce(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('needsSelfSignedCertificate')->with('shop.example.com')->willReturn(false);
+        $sslService->method('getCertificateDir')->willReturn(
+            \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-legacy-cert-missing' . DIRECTORY_SEPARATOR,
+        );
+        $sslService->method('hasValidLocalCertificate')->with('shop.example.com')->willReturn(false);
+        $sslService->expects(self::never())->method('replayPendingCertificateRetirements');
+        $sslService->expects(self::once())->method('ensureCertificateStorageReady');
+        $sslService->method('generateSelfSignedCertificate')->willReturn([
+            'success' => true,
+            'cert_path' => '/tmp/wls-legacy-cert.pem',
+            'key_path' => '/tmp/wls-legacy-key.pem',
+            'issuer' => 'unit-legacy-ca',
+            'is_new' => true,
+        ]);
+
+        $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('legacy-cert', [
+            'host' => 'shop.example.com',
+            'public_host' => 'shop.example.com',
+            'edge_mode' => 'legacy',
+            'gateway' => ['mode' => 'legacy'],
+        ]);
+
+        self::assertTrue((bool)($result['success'] ?? false));
     }
 
     public function testGatewayConfigParsingWithMissingSavedCertificateDoesNotInitializeStorage(): void
@@ -217,6 +766,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
             \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-standalone-cert-does-not-exist' . DIRECTORY_SEPARATOR,
         );
         $sslService->method('hasValidLocalCertificate')->willReturn(false);
+        $sslService->expects(self::never())->method('replayPendingCertificateRetirements');
         $sslService->expects(self::once())->method('ensureCertificateStorageReady');
 
         $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('wls-no-cert', [
@@ -318,17 +868,20 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $probe = $this->createProbe();
 
         self::assertNull($probe->resolveMissingCertificate(
-            ['edge_mode' => 'wls'],
+            ['edge_mode' => 'wls', 'certificate_profile' => 'test'],
             'project.weline.test',
             true,
             false,
         ));
-        self::assertNull($probe->resolveMissingCertificate(
+        $gatewayPending = $probe->resolveMissingCertificate(
             ['edge_mode' => 'gateway'],
             'shop.example.com',
             false,
             true,
-        ));
+        );
+        self::assertIsArray($gatewayPending);
+        self::assertSame('PENDING_CERTIFICATE', $gatewayPending['code'] ?? null);
+        self::assertTrue((bool)($gatewayPending['pending_certificate'] ?? false));
         self::assertNull($probe->resolveMissingCertificate(
             ['edge_mode' => 'legacy'],
             'shop.example.com',
@@ -552,6 +1105,69 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame('demo.internal.example', (string)($config['host'] ?? ''));
     }
 
+    public function testRestartReusesSavedServingIdentityOverEnvironmentDefaults(): void
+    {
+        $start = $this->createProbe(
+            [
+                'host' => 'frz004.localhost',
+                'public_host' => 'frz004.localhost',
+                'ssl_domain' => 'frz004.localhost',
+                'ssl_cert' => '/saved/fullchain.pem',
+                'ssl_key' => '/saved/privkey.pem',
+                'certificate_profile' => 'test',
+                'edge_mode' => 'wls',
+            ],
+            ['wls' => [
+                'host' => 'environment.weline.test',
+                'public_host' => 'environment.weline.test',
+                'ssl_domain' => 'environment.weline.test',
+                'ssl_cert' => '/environment/fullchain.pem',
+                'ssl_key' => '/environment/privkey.pem',
+            ]],
+        );
+
+        $config = $start->resolveConfig('restart-saved-identity', [
+            'r' => true,
+            'no-ssl' => true,
+        ]);
+
+        self::assertSame('frz004.localhost', (string)($config['host'] ?? ''));
+        self::assertSame('frz004.localhost', (string)($config['public_host'] ?? ''));
+        self::assertSame('frz004.localhost', (string)($config['ssl_domain'] ?? ''));
+        self::assertSame('/saved/fullchain.pem', (string)($config['ssl_cert'] ?? ''));
+        self::assertSame('/saved/privkey.pem', (string)($config['ssl_key'] ?? ''));
+        self::assertSame('test', (string)($config['certificate_profile'] ?? ''));
+    }
+
+    public function testRestartBindsNativeManifestRecoveryToTheSolidifiedHost(): void
+    {
+        $method = new \ReflectionMethod(Start::class, 'execute');
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $configAt = \strpos($source, '$config = $this->getServerConfig($instanceName, $args);');
+        $hostAt = \strpos($source, '$host = $config[\'host\'];', $configAt ?: 0);
+        $manifestAt = \strpos(
+            $source,
+            'NativeServingManifestStartupRecovery::fromEndpoint(',
+            $configAt ?: 0,
+        );
+
+        self::assertIsInt($configAt);
+        self::assertIsInt($hostAt);
+        self::assertIsInt($manifestAt);
+        self::assertLessThan(
+            $manifestAt,
+            $hostAt,
+            'The requested Host must be solidified before native manifest recovery validates it.',
+        );
+    }
+
     public function testBaseGetEnvConfigReturnsArray(): void
     {
         $start = new StartBaseEnvConfigProbe();
@@ -598,12 +1214,72 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertInstanceOf(ServerInstanceManager::class, $start->readInstanceManager());
     }
 
+    public function testMaintenanceMutationAndPollingShareOneAbsoluteDeadline(): void
+    {
+        $method = new \ReflectionMethod(Start::class, 'syncWlsMaintenanceMode');
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $deadlineAt = \strpos($source, '$deadlineMonotonic = $deadlineNs / 1_000_000_000;');
+        $mutationAt = \strpos($source, 'setMaintenanceModeBeforeDeadline(');
+        self::assertIsInt($deadlineAt);
+        self::assertIsInt($mutationAt);
+        self::assertLessThan(
+            $mutationAt,
+            $deadlineAt,
+            'The maintenance deadline must be created before the first control mutation.',
+        );
+        self::assertMatchesRegularExpression(
+            '/setMaintenanceModeBeforeDeadline\(\s*\$instanceName,\s*'
+                . '\$enabled,\s*6\.0,\s*\$deadlineMonotonic,\s*\)/',
+            $source,
+        );
+        self::assertStringContainsString(
+            '$dispatchService->setMaintenanceModeBeforeDeadline(',
+            $source,
+        );
+        self::assertStringContainsString(
+            '$status = $gateway->getStatusBeforeDeadline(' . "\n"
+                . '                        $targetInstance,' . "\n"
+                . '                        \max(0.1, \min(0.75, $remainingSec)),' . "\n"
+                . '                        $deadlineMonotonic,',
+            $source,
+        );
+    }
+
     private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
     {
         $sslServiceMock = $this->createMock(SslCertificateService::class);
         ObjectManager::setInstance(SslCertificateService::class, $sslServiceMock);
 
         return new StartConfigProbe($savedConfig, $envConfig);
+    }
+}
+
+final class SslCertificateDomainPolicyProbe extends SslCertificateService
+{
+    /** @param array<string,list<string>> $resolvedIps */
+    public function __construct(
+        private readonly bool $development,
+        private readonly array $resolvedIps,
+    ) {
+        parent::__construct(true);
+    }
+
+    public function isDevelopmentEnvironment(): bool
+    {
+        return $this->development;
+    }
+
+    /** @return list<string> */
+    protected function resolveDomainIps(string $domain): array
+    {
+        return $this->resolvedIps[$domain] ?? [];
     }
 }
 
@@ -693,6 +1369,22 @@ final class StartConfigProbe extends Start
     public function resolveCertificateDomain(array $config, string $host): string
     {
         return $this->resolveCertificateHost($config, $host);
+    }
+
+    public function shouldPersistCertificateSource(
+        bool $sslEnabled,
+        bool $certificatePending,
+        bool $gatewayMode,
+        bool $pureWlsMode,
+        string $requestedMode,
+    ): bool {
+        return $this->shouldPersistGatewayCertificateSource(
+            $sslEnabled,
+            $certificatePending,
+            $gatewayMode,
+            $pureWlsMode,
+            $requestedMode,
+        );
     }
 
     /** @param array<string,mixed> $config */

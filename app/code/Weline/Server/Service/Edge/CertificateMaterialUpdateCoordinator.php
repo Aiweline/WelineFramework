@@ -168,7 +168,7 @@ final class CertificateMaterialUpdateCoordinator
                 $gatewayParticipationObserved = true;
             }
             $potentialNativeTls = $revocationCommitted
-                && $this->nativeReloadRequired($endpoint);
+                && $this->nativeReloadRequired($endpoint, $deadlineMonotonic);
             if ($potentialNativeTls) {
                 // Preserve the exact observed generation. Final retirement
                 // must close this generation independently from whatever
@@ -234,7 +234,10 @@ final class CertificateMaterialUpdateCoordinator
                 continue;
             }
             $liveProjectInstances[$instanceName] = $fence;
-            $nativeReloadRequired[$instanceName] = $this->nativeReloadRequired($endpoint);
+            $nativeReloadRequired[$instanceName] = $this->nativeReloadRequired(
+                $endpoint,
+                $deadlineMonotonic,
+            );
             if ($revocationCommitted && $potentialNativeTls) {
                 // A stale serving projection is not authority to skip a
                 // security transition. Exact reload or containment will prove
@@ -618,7 +621,10 @@ final class CertificateMaterialUpdateCoordinator
                     foreach ($currentEndpoints as $instanceName => $currentEndpoint) {
                         $instanceName = (string)$instanceName;
                         if (!\is_array($currentEndpoint)
-                            || !$this->nativeReloadRequired($currentEndpoint)
+                            || !$this->nativeReloadRequired(
+                                $currentEndpoint,
+                                $deadlineMonotonic,
+                            )
                             || isset($finalNativeContainmentTargets[$instanceName])
                         ) {
                             continue;
@@ -705,7 +711,10 @@ final class CertificateMaterialUpdateCoordinator
 
                         if (!\is_array($currentEndpoint)
                             || $sameEndpointSnapshot
-                            || !$this->nativeReloadRequired($currentEndpoint)
+                            || !$this->nativeReloadRequired(
+                                $currentEndpoint,
+                                $deadlineMonotonic,
+                            )
                         ) {
                             continue;
                         }
@@ -1627,6 +1636,7 @@ final class CertificateMaterialUpdateCoordinator
                 return $callback();
             },
             $waitTimeout,
+            $deadlineMonotonic,
         );
     }
 
@@ -2019,7 +2029,10 @@ final class CertificateMaterialUpdateCoordinator
     }
 
     /** @param array<string,mixed> $endpoint */
-    private function nativeReloadRequired(array $endpoint): bool
+    private function nativeReloadRequired(
+        array $endpoint,
+        ?float $deadlineMonotonic = null,
+    ): bool
     {
         $adapterIsWls = \hash_equals(
             EdgeAdapterInterface::NAME_WLS,
@@ -2043,11 +2056,15 @@ final class CertificateMaterialUpdateCoordinator
 
         $explicit = GatewayRuntimeServingProjection::explicitPureWlsServingEndpoint(
             $endpoint,
+            $deadlineMonotonic,
         );
         if (\is_array($explicit) && ($explicit['https'] ?? false) === true) {
             return true;
         }
-        if (GatewayRuntimeServingProjection::fallbackWlsIsServing($endpoint)) {
+        if (GatewayRuntimeServingProjection::fallbackWlsIsServing(
+            $endpoint,
+            $deadlineMonotonic,
+        )) {
             return true;
         }
         if (\in_array($fallbackState, ['DEGRADED_WLS', 'NATIVE_EDGE_DRAINING'], true)) {
@@ -2062,7 +2079,10 @@ final class CertificateMaterialUpdateCoordinator
         // before drain convergence.
         if ($adapterIsWls && ($endpoint['ssl_enabled'] ?? false) === true) {
             if (\hash_equals(GatewayStartupDecision::MODE_AUTO, $requestedMode)
-                && GatewayRuntimeServingProjection::gatewayIsServing($endpoint)
+                && GatewayRuntimeServingProjection::gatewayIsServing(
+                    $endpoint,
+                    $deadlineMonotonic,
+                )
                 && \hash_equals('GATEWAY_ACTIVE', $fallbackState)
                 && \hash_equals('DRAINED', $nativeState)
             ) {
@@ -2071,7 +2091,11 @@ final class CertificateMaterialUpdateCoordinator
             return true;
         }
 
-        $runtime = GatewayStartupRuntimeView::resolve($endpoint);
+        $runtime = GatewayStartupRuntimeView::resolve(
+            $endpoint,
+            false,
+            $deadlineMonotonic,
+        );
         return \hash_equals(
             GatewayStartupRuntimeView::SOURCE_AUTO_NATIVE_WLS,
             (string)($runtime['source'] ?? ''),

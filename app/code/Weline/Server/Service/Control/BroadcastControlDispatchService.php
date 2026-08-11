@@ -164,6 +164,41 @@ class BroadcastControlDispatchService
     }
 
     /**
+     * Dispatches one maintenance transition under the caller's single absolute
+     * deadline, including the multi-instance connect/write/ACK phase.
+     *
+     * @return array<string,mixed>
+     */
+    public function setMaintenanceModeBeforeDeadline(
+        bool $enabled,
+        ?string $instanceName,
+        float $timeout,
+        float $deadlineMonotonic,
+    ): array {
+        $label = $enabled ? (string) __('启用维护模式') : (string) __('禁用维护模式');
+
+        return $this->dispatchToRunningInstances(
+            $instanceName,
+            $label,
+            fn(string $name): array => $this->ipcControlGateway
+                ->setMaintenanceModeBeforeDeadline(
+                    $name,
+                    $enabled,
+                    $timeout,
+                    $deadlineMonotonic,
+                ),
+            fn(array $names): array => $this->ipcControlGateway
+                ->setMaintenanceModeManyBeforeDeadline(
+                    $names,
+                    $enabled,
+                    $timeout,
+                    $deadlineMonotonic,
+                    false,
+                ),
+        );
+    }
+
+    /**
      * @return array{
      *     success:bool,
      *     attempted:array<int,string>,

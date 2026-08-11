@@ -150,12 +150,14 @@ final class ProjectIdentityStore
      * argument is retained only for source compatibility with pre-release WLS
      * 2.0 callers and is deliberately ignored: endpoint/receipt caches are
      * host-derived observations and must never advance project-owned state.
+     * The third argument bounds the complete project-lock transaction.
      *
      * @return array{project_uuid:string,instance_id:string,generation:int}
      */
     public function advanceInstanceGeneration(
         string $instanceId,
         int $untrustedObservedFloor = 0,
+        ?float $deadlineMonotonic = null,
     ): array {
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceId) !== 1) {
             throw new \InvalidArgumentException(
@@ -164,6 +166,11 @@ final class ProjectIdentityStore
         }
 
         unset($untrustedObservedFloor);
+        // Start is a serialized lifecycle operation. Unlike ordinary identity
+        // reads/mutations it may legitimately wait behind a preceding start
+        // until the caller's operation deadline. Do not widen the 250ms cap
+        // used by every other project-identity path.
+        $operationLockWait = $this->identityDeadlineRemaining($deadlineMonotonic);
         return $this->withProjectLock(function (array $state) use ($instanceId): array {
             $instances = \is_array($state['instances'] ?? null)
                 ? $state['instances']
@@ -202,7 +209,7 @@ final class ProjectIdentityStore
                 'instance_id' => $instanceId,
                 'generation' => $generation,
             ]];
-        });
+        }, $deadlineMonotonic, false, $operationLockWait);
     }
 
     /**
@@ -391,7 +398,7 @@ final class ProjectIdentityStore
             return [];
         }
         $projectUuid = (string)$state['project_uuid'];
-        $claim = $this->hostClaimSnapshot($projectUuid);
+        $claim = $this->hostClaimSnapshot($projectUuid, $deadlineMonotonic);
         if (($claim['exists'] ?? false) !== true
             || $this->sameHostPath(
                 (string)($claim['project_root'] ?? ''),
@@ -461,6 +468,7 @@ final class ProjectIdentityStore
                 $oldProjectUuid,
                 $sourceProjectRoot,
                 $sourceClaimDigest,
+                $deadlineMonotonic,
             ): array {
                 $existing = \is_array($state['fresh_enrollment'] ?? null)
                     ? $state['fresh_enrollment']
@@ -494,7 +502,10 @@ final class ProjectIdentityStore
                         'WLS cloned identity changed before fresh enrollment preparation.',
                     );
                 }
-                $claim = $this->hostClaimSnapshot($oldProjectUuid);
+                $claim = $this->hostClaimSnapshot(
+                    $oldProjectUuid,
+                    $deadlineMonotonic,
+                );
                 $claimedStatus = @\lstat($sourceProjectRoot);
                 if (($claim['exists'] ?? false) !== true
                     || !\hash_equals(
@@ -596,9 +607,11 @@ final class ProjectIdentityStore
     }
 
     /** @return array<string,mixed> */
-    public function prepareRotation(): array
+    public function prepareRotation(?float $deadlineMonotonic = null): array
     {
-        return $this->withProjectLock(function (array $state): array {
+        return $this->withProjectLock(function (array $state) use (
+            $deadlineMonotonic,
+        ): array {
             $existing = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
             if ($existing !== []) {
                 return [$state, $existing];
@@ -616,14 +629,17 @@ final class ProjectIdentityStore
                 'new_credential_id' => '',
                 'prepare_receipt_digest' => '',
                 'commit_receipt' => null,
-                'old_claim' => $this->hostClaimSnapshot($oldUuid),
+                'old_claim' => $this->hostClaimSnapshot(
+                    $oldUuid,
+                    $deadlineMonotonic,
+                ),
                 'created_at' => \gmdate(DATE_ATOM),
                 'updated_at' => \gmdate(DATE_ATOM),
             ];
             $state['rotation'] = $rotation;
             $state['updated_at'] = (string)$rotation['updated_at'];
             return [$state, $rotation];
-        });
+        }, $deadlineMonotonic);
     }
 
     /** @return array<string,mixed> */
@@ -633,6 +649,7 @@ final class ProjectIdentityStore
         string $idempotencyKey,
         string $newCredentialId,
         string $prepareReceiptDigest,
+        ?float $deadlineMonotonic = null,
     ): array {
         return $this->updateRotation(
             $rotationId,
@@ -652,6 +669,7 @@ final class ProjectIdentityStore
                 ));
                 return $rotation;
             },
+            $deadlineMonotonic,
         );
     }
 
@@ -659,6 +677,7 @@ final class ProjectIdentityStore
     public function markRotationHostCommitted(
         string $rotationId,
         array $receipt,
+        ?float $deadlineMonotonic = null,
     ): array {
         return $this->updateRotation(
             $rotationId,
@@ -668,13 +687,16 @@ final class ProjectIdentityStore
                 $rotation['commit_receipt'] = $receipt;
                 return $rotation;
             },
+            $deadlineMonotonic,
         );
     }
 
     /** @return array<string,mixed> */
-    public function commitRotationIdentity(string $rotationId): array
-    {
-        $rotation = $this->rotationState();
+    public function commitRotationIdentity(
+        string $rotationId,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $rotation = $this->rotationState($deadlineMonotonic);
         if (!\hash_equals($rotationId, (string)($rotation['rotation_id'] ?? ''))
             || !\in_array((string)($rotation['phase'] ?? ''), [
                 'HOST_COMMITTED',
@@ -685,7 +707,7 @@ final class ProjectIdentityStore
             throw new \RuntimeException('WLS project rotation is not host-committed.');
         }
         $newUuid = (string)$rotation['new_project_uuid'];
-        $this->claimHostIdentity($newUuid);
+        $this->claimHostIdentity($newUuid, $deadlineMonotonic);
         return $this->withProjectLock(function (array $state) use (
             $rotationId,
             $newUuid,
@@ -752,12 +774,14 @@ final class ProjectIdentityStore
                 );
             }
             return [$state, $current];
-        });
+        }, $deadlineMonotonic);
     }
 
     /** @return array<string,mixed> */
-    public function markRotationLocalCommitted(string $rotationId): array
-    {
+    public function markRotationLocalCommitted(
+        string $rotationId,
+        ?float $deadlineMonotonic = null,
+    ): array {
         return $this->updateRotation(
             $rotationId,
             ['IDENTITY_COMMITTED', 'LOCAL_COMMITTED'],
@@ -766,13 +790,16 @@ final class ProjectIdentityStore
                 $rotation['local_committed_at'] ??= \gmdate(DATE_ATOM);
                 return $rotation;
             },
+            $deadlineMonotonic,
         );
     }
 
     /** @return array<string,mixed> */
-    public function finalizeRotation(string $rotationId): array
-    {
-        $pending = $this->rotationState();
+    public function finalizeRotation(
+        string $rotationId,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $pending = $this->rotationState($deadlineMonotonic);
         $this->assertRotationIdentity($pending, $rotationId);
         if ((string)($pending['phase'] ?? '') !== 'LOCAL_COMMITTED') {
             throw new \RuntimeException(
@@ -782,7 +809,10 @@ final class ProjectIdentityStore
         // Release first while the durable rotation journal still exists. A
         // crash after release can safely replay this idempotent step; clearing
         // the journal first would lose the only old-claim recovery fact.
-        $this->releaseHostClaim((string)$pending['old_project_uuid']);
+        $this->releaseHostClaim(
+            (string)$pending['old_project_uuid'],
+            $deadlineMonotonic,
+        );
         $result = $this->withProjectLock(function (array $state) use ($rotationId): array {
             $rotation = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
             $this->assertRotationIdentity($rotation, $rotationId);
@@ -806,12 +836,14 @@ final class ProjectIdentityStore
             unset($state['rotation']);
             $state['updated_at'] = $finishedAt;
             return [$state, $rotation];
-        });
+        }, $deadlineMonotonic);
         return $result;
     }
 
-    public function abortRotation(string $rotationId): void
-    {
+    public function abortRotation(
+        string $rotationId,
+        ?float $deadlineMonotonic = null,
+    ): void {
         $this->withProjectLock(function (array $state) use ($rotationId): array {
             $rotation = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
             $this->assertRotationIdentity($rotation, $rotationId);
@@ -826,13 +858,13 @@ final class ProjectIdentityStore
             unset($state['rotation']);
             $state['updated_at'] = \gmdate(DATE_ATOM);
             return [$state, null];
-        });
+        }, $deadlineMonotonic);
     }
 
     /** @return array<string,mixed> */
-    public function rotationState(): array
+    public function rotationState(?float $deadlineMonotonic = null): array
     {
-        $state = $this->ensure();
+        $state = $this->ensure($deadlineMonotonic);
         return \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
     }
 
@@ -894,6 +926,7 @@ final class ProjectIdentityStore
         string $rotationId,
         array $allowedPhases,
         callable $mutation,
+        ?float $deadlineMonotonic = null,
     ): array {
         return $this->withProjectLock(function (array $state) use (
             $rotationId,
@@ -912,7 +945,7 @@ final class ProjectIdentityStore
             $state['rotation'] = $rotation;
             $state['updated_at'] = $rotation['updated_at'];
             return [$state, $rotation];
-        });
+        }, $deadlineMonotonic);
     }
 
     /** @param array<string,mixed> $rotation */
@@ -927,14 +960,23 @@ final class ProjectIdentityStore
     }
 
     /** @return array{exists:bool,digest:string,project_root:string} */
-    private function hostClaimSnapshot(string $projectUuid): array
-    {
+    private function hostClaimSnapshot(
+        string $projectUuid,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $this->identityDeadlineRemaining($deadlineMonotonic);
         $claims = $this->ensureHostStateDirectory('project-identities');
         $claim = $claims . DIRECTORY_SEPARATOR . $projectUuid . '.json';
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $claim . '.lock',
-            function () use ($claim, $projectUuid): array {
+            function () use (
+                $claim,
+                $projectUuid,
+                $deadlineMonotonic,
+            ): array {
+                $this->identityDeadlineRemaining($deadlineMonotonic);
                 $this->cleanupHostClaimRecoveryBackups($claim, $projectUuid);
+                $this->identityDeadlineRemaining($deadlineMonotonic);
                 $raw = GatewayProjectStateFilesystem::readOptional(
                     $claim,
                     65_536,
@@ -953,6 +995,9 @@ final class ProjectIdentityStore
                     'project_root' => (string)$decoded['project_root'],
                 ];
             },
+            waitTimeoutSeconds: $this->identityLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
         );
     }
 
@@ -1011,6 +1056,7 @@ final class ProjectIdentityStore
         callable $callback,
         ?float $deadlineMonotonic = null,
         bool $allowForeignRotationClaim = false,
+        ?float $lockWaitTimeoutSeconds = null,
     ): mixed
     {
         $directory = $this->ensureProjectIdentityDirectory();
@@ -1073,9 +1119,8 @@ final class ProjectIdentityStore
                 $path,
                 $handle,
             ),
-            waitTimeoutSeconds: $this->identityLockWaitTimeout(
-                $deadlineMonotonic,
-            ),
+            waitTimeoutSeconds: $lockWaitTimeoutSeconds
+                ?? $this->identityLockWaitTimeout($deadlineMonotonic),
         );
     }
 
@@ -1217,20 +1262,24 @@ final class ProjectIdentityStore
     private function identityLockWaitTimeout(?float $deadlineMonotonic): float
     {
         if ($deadlineMonotonic === null) {
-            return 300.0;
+            return 0.25;
         }
         return \min(0.25, $this->identityDeadlineRemaining($deadlineMonotonic));
     }
 
-    private function releaseHostClaim(string $projectUuid): void
-    {
+    private function releaseHostClaim(
+        string $projectUuid,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $this->identityDeadlineRemaining($deadlineMonotonic);
         $claims = $this->ensureHostStateDirectory('project-identities');
         $claim = $claims
             . DIRECTORY_SEPARATOR . $projectUuid . '.json';
         $lockFile = $claim . '.lock';
         GatewayProjectStateFilesystem::withExclusiveLock(
             $lockFile,
-            function () use ($claim, $projectUuid): void {
+            function () use ($claim, $projectUuid, $deadlineMonotonic): void {
+                $this->identityDeadlineRemaining($deadlineMonotonic);
                 $this->cleanupHostClaimRecoveryBackups($claim, $projectUuid);
                 $raw = GatewayProjectStateFilesystem::readOptional(
                     $claim,
@@ -1251,6 +1300,9 @@ final class ProjectIdentityStore
                     );
                 }
             },
+            waitTimeoutSeconds: $this->identityLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
         );
     }
 

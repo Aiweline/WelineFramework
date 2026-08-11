@@ -26,7 +26,10 @@ final class SavedInstanceConfigStore
      *
      * @return array<string,mixed>|null
      */
-    public function load(string $instanceName): ?array
+    public function load(
+        string $instanceName,
+        ?float $deadlineMonotonic = null,
+    ): ?array
     {
         $file = $this->file($instanceName);
         $directory = \dirname($file);
@@ -68,7 +71,7 @@ final class SavedInstanceConfigStore
             }
             [$config] = $this->read($file, true);
             return $config;
-        });
+        }, $deadlineMonotonic);
     }
 
     /**
@@ -80,6 +83,7 @@ final class SavedInstanceConfigStore
         string $instanceName,
         \Closure $mutator,
         bool $requireExisting = false,
+        ?float $deadlineMonotonic = null,
     ): mixed {
         $file = $this->file($instanceName);
         return $this->withLock(
@@ -110,6 +114,7 @@ final class SavedInstanceConfigStore
                 $this->write($file, $encoded . "\n", $metadata);
                 return $mutation[1];
             },
+            $deadlineMonotonic,
         );
     }
 
@@ -125,6 +130,7 @@ final class SavedInstanceConfigStore
         string $instanceName,
         array $before,
         array $after,
+        ?float $deadlineMonotonic = null,
     ): array {
         if ($before === [] || \array_keys($before) !== \array_keys($after)) {
             throw new \RuntimeException('Saved instance configuration CAS snapshot is invalid.');
@@ -156,6 +162,7 @@ final class SavedInstanceConfigStore
                 return [$config, ['restored' => $restored, 'conflicts' => $conflicts]];
             },
             true,
+            $deadlineMonotonic,
         );
     }
 
@@ -275,7 +282,11 @@ final class SavedInstanceConfigStore
         }
     }
 
-    private function withLock(string $file, \Closure $operation): mixed
+    private function withLock(
+        string $file,
+        \Closure $operation,
+        ?float $deadlineMonotonic = null,
+    ): mixed
     {
         $directory = \dirname($file);
         $canonical = \realpath($directory);
@@ -315,7 +326,8 @@ final class SavedInstanceConfigStore
         }
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $file . '.lock',
-            function () use ($file, $operation): mixed {
+            function () use ($file, $operation, $deadlineMonotonic): mixed {
+                self::deadlineRemaining($deadlineMonotonic);
                 GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
                     $file,
                     self::MAXIMUM_BYTES,
@@ -328,7 +340,34 @@ final class SavedInstanceConfigStore
                 return $operation();
             },
             $seal,
+            waitTimeoutSeconds: self::lockWaitTimeout($deadlineMonotonic),
+            deadlineMonotonic: $deadlineMonotonic,
         );
+    }
+
+    private static function lockWaitTimeout(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        return \min(0.25, self::deadlineRemaining($deadlineMonotonic));
+    }
+
+    private static function deadlineRemaining(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('Saved instance configuration deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Saved instance configuration deadline was exhausted.',
+            );
+        }
+        return $remaining;
     }
 
     /**

@@ -27,7 +27,6 @@ use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Runtime\RuntimeSelection;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
 use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
 use Weline\Server\Service\ServerInstanceManager;
@@ -2800,7 +2799,6 @@ class Stop extends CommandAbstract
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-memory', $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(GatewayProvider::PROCESS_NAME_PREFIX, $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(GatewayFallbackProvider::PROCESS_NAME_PREFIX, $name));
-        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(RuntimeTaskWatchdogProvider::PROCESS_NAME_PREFIX, $name));
         
         // Global stale pid pruning is intentionally excluded from the stop hot path.
@@ -3037,7 +3035,6 @@ class Stop extends CommandAbstract
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
             MasterProcess::buildScopedProcessName(GatewayProvider::PROCESS_NAME_PREFIX, $name),
             MasterProcess::buildScopedProcessName(GatewayFallbackProvider::PROCESS_NAME_PREFIX, $name),
-            MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $name),
             MasterProcess::buildScopedProcessName(RuntimeTaskWatchdogProvider::PROCESS_NAME_PREFIX, $name),
         ];
 
@@ -3085,7 +3082,6 @@ class Stop extends CommandAbstract
             MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
             MasterProcess::buildScopedProcessName(GatewayProvider::PROCESS_NAME_PREFIX, $name),
             MasterProcess::buildScopedProcessName(GatewayFallbackProvider::PROCESS_NAME_PREFIX, $name),
-            MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $name),
             MasterProcess::buildScopedProcessName(RuntimeTaskWatchdogProvider::PROCESS_NAME_PREFIX, $name),
             'weline-wls-worker-http-' . $scopedInstance . '-',
             'weline-wls-worker-ssl-' . $scopedInstance . '-',

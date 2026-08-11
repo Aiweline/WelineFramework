@@ -61,7 +61,7 @@ final class WlsSharedStorage implements SessionStorageInterface
                         $data = $fileData;
                         if (\function_exists('w_log_warning')) {
                             w_log_warning(
-                                '[WlsSharedStorage] Session 已从文件回灌到共享存储（此前可能仅写入了 fallback 文件）。sid=' . \substr($sessionId, 0, 8) . '...',
+                                '[WlsSharedStorage] Session 已从文件回灌到共享存储（此前可能仅写入了 fallback 文件）。',
                                 ['keys' => \count($data)],
                                 'session'
                             );
@@ -75,7 +75,7 @@ final class WlsSharedStorage implements SessionStorageInterface
         }
         if (self::shouldLogSessionOperations()) {
             w_log_info(
-                '[WlsSharedStorage] read sid=' . \substr($sessionId, 0, 8) . '... keys=' . \count($data),
+                '[WlsSharedStorage] read keys=' . \count($data),
                 [],
                 'session'
             );
@@ -101,14 +101,14 @@ final class WlsSharedStorage implements SessionStorageInterface
         }
         if (self::shouldLogSessionOperations()) {
             w_log_info(
-                '[WlsSharedStorage] write sid=' . \substr($sessionId, 0, 8) . '... keys=' . \count($data) . ' ttl=' . $ttl . ' ok=' . ($ok ? '1' : '0'),
+                '[WlsSharedStorage] write keys=' . \count($data) . ' ttl=' . $ttl . ' ok=' . ($ok ? '1' : '0'),
                 [],
                 'session'
             );
         }
         if (!$ok && \function_exists('w_log_warning') && $facade !== null) {
             w_log_warning(
-                '[WlsSharedStorage] Session write failed, shared session facade is not healthy. sessionId=' . \substr($sessionId, 0, 8) . '...',
+                '[WlsSharedStorage] Session write failed, shared session facade is not healthy.',
                 ['connected' => false, 'fallback_reason' => $this->fallbackReason],
                 'session'
             );
@@ -132,7 +132,7 @@ final class WlsSharedStorage implements SessionStorageInterface
         }
         if (self::shouldLogSessionOperations()) {
             w_log_info(
-                '[WlsSharedStorage] destroy sid=' . \substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'),
+                '[WlsSharedStorage] destroy ok=' . ($ok ? '1' : '0'),
                 [],
                 'session'
             );
@@ -302,7 +302,7 @@ final class WlsSharedStorage implements SessionStorageInterface
         $ok = $this->fallbackStorage()->write($sessionId, $data, $ttl);
         if (!$ok && \function_exists('w_log_warning')) {
             w_log_warning(
-                '[WlsSharedStorage] Fallback mirror write failed. sessionId=' . \substr($sessionId, 0, 8) . '...',
+                '[WlsSharedStorage] Fallback mirror write failed.',
                 ['keys' => \count($data), 'ttl' => $ttl],
                 'session'
             );

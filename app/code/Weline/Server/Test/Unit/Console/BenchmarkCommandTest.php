@@ -6,6 +6,8 @@ namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Benchmark;
+use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 final class BenchmarkCommandTest extends TestCase
 {
@@ -212,6 +214,50 @@ final class BenchmarkCommandTest extends TestCase
         self::assertFalse($target['ssl']);
     }
 
+    public function testWildcardOnlyFallbackRefusesToBenchmarkBindIpAsTlsAuthority(): void
+    {
+        $command = new class extends Benchmark {
+            public function __construct()
+            {
+                $this->__init();
+            }
+
+            protected function runtimeGatewayIsServing(array $endpoint): bool
+            {
+                return false;
+            }
+
+            protected function runtimeFallbackServingEndpoint(array $endpoint): ?array
+            {
+                return null;
+            }
+
+            protected function runtimeFallbackServingObservation(array $endpoint): ?array
+            {
+                return [
+                    'bind_host' => '127.0.0.1',
+                    'bind_endpoint' => '127.0.0.1:27675',
+                    'connect_host' => '127.0.0.1',
+                    'authority_host' => null,
+                    'route_domains' => ['*.example.test'],
+                    'limitations' => ['hostname_and_sni_required'],
+                    'port' => 27675,
+                    'https' => true,
+                ];
+            }
+
+            public function buildTarget(string $name, array $endpoint): ?array
+            {
+                return (new \ReflectionMethod(Benchmark::class, 'buildInstanceTarget'))
+                    ->invoke($this, $name, $endpoint);
+            }
+        };
+        $endpoint = $this->gatewayEndpoint();
+        $endpoint['edge_adapter'] = 'wls';
+
+        self::assertNull($command->buildTarget('gateway-benchmark', $endpoint));
+    }
+
     public function testExplicitPureWlsRejectsPersistedOriginWithoutLiveLeaseProjection(): void
     {
         $endpoint = $this->gatewayEndpoint();
@@ -279,6 +325,67 @@ final class BenchmarkCommandTest extends TestCase
 
         self::assertFalse($gate['passed']);
         self::assertContains('worker_runtime_changed', $gate['failure_reasons']);
+    }
+
+    public function testAuthenticatedInstanceIpcKeepsBenchmarkAttributionWhenProcessTitleHidesLaunchId(): void
+    {
+        $command = new class extends Benchmark {
+            public array $status = [];
+
+            public function __construct()
+            {
+                $this->__init();
+            }
+
+            public function masterRunning(ServerInstanceInfo $info, string $instanceName): bool
+            {
+                return $this->isBenchmarkMasterRunning($info, $instanceName);
+            }
+
+            protected function readBenchmarkMasterStatus(string $instanceName): array
+            {
+                return $this->status;
+            }
+        };
+        $info = new ServerInstanceInfo(
+            name: 'benchmark-ipc',
+            masterPid: 999999999,
+            controlPort: 26001,
+            host: '127.0.0.1',
+            port: 26002,
+            sslEnabled: true,
+            runtimeSelection: RuntimeSelection::fromArray([
+                'requested_topology' => 'direct',
+                'effective_topology' => 'direct',
+                'topology_source' => 'test',
+                'os_family' => PHP_OS_FAMILY,
+                'event_loop_driver' => 'select',
+                'ssl_engine' => 'stream',
+                'listener_mode' => PHP_OS_FAMILY === 'Windows' ? 'worker_ports' : 'shared_fd',
+                'policy_compatible' => true,
+                'reason_codes' => ['test'],
+                'reason' => 'test fixture',
+            ]),
+            workerCount: 2,
+            workerBasePort: 26002,
+            httpRedirectPort: 0,
+            startedAt: '',
+            startedTimestamp: 0,
+            services: [],
+        );
+
+        $command->status = [
+            'success' => true,
+            'instance' => 'benchmark-ipc',
+            'data' => ['running' => true],
+        ];
+        self::assertTrue($command->masterRunning($info, 'benchmark-ipc'));
+
+        $command->status['instance'] = 'another-instance';
+        self::assertFalse($command->masterRunning($info, 'benchmark-ipc'));
+
+        $command->status = ['success' => false];
+        self::assertFalse($command->masterRunning($info, 'benchmark-ipc'));
     }
 
     private function createCommand(): object

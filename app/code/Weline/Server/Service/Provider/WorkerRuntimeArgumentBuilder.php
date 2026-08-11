@@ -145,7 +145,6 @@ final class WorkerRuntimeArgumentBuilder
         $httpConfig = \is_array($httpConfig) ? $httpConfig : [];
         unset($httpConfig['alt_svc']);
         $httpConfig['alt_svc'] = false;
-        $httpConfig['protocol_edge'] = 'disabled';
         $protocols = (array)($httpConfig['protocols'] ?? []);
         $normalizedProtocols = [];
         foreach ($protocols !== [] ? $protocols : ['h2', 'h1'] as $protocol) {

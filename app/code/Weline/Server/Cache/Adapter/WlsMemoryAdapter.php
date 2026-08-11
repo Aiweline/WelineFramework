@@ -9,6 +9,7 @@ use Weline\Framework\Cache\Contract\CacheAdapterHealthInterface;
 use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Server\Service\MemoryStateFacade;
 
 class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealthInterface, MemoryStoreInterface, StatsInterface
@@ -22,9 +23,12 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
      */
     private static array $remoteUnavailableUntil = [];
     private const REMOTE_FAILURE_COOLDOWN_SECONDS = 2.0;
+    private const EPOCH_NAMESPACE = 'wls_adapter_local_epoch';
 
     /** 进程内缓存（减少网络请求） */
     private array $localCache = [];
+    private int $localEpoch = 0;
+    private ?string $epochSyncedRequestId = null;
     private int $localCacheMaxSize = 100;
     private float $localCachePressureThreshold = 0.70;
     private float $localCacheHardPressureThreshold = 0.85;
@@ -76,6 +80,7 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
 
     public function get(string $key): mixed
     {
+        $this->syncLocalEpoch();
         $this->relieveLocalMemoryPressure(false);
 
         // 先查本地缓存
@@ -117,6 +122,7 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
 
     public function set(string $key, mixed $value, int $ttl = 0): bool
     {
+        $this->syncLocalEpoch();
         $this->relieveLocalMemoryPressure(true);
 
         if ($this->isLocalMemoryUnderPressure()) {
@@ -144,6 +150,7 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
 
     public function delete(string $key): bool
     {
+        $this->syncLocalEpoch();
         unset($this->localCache[$key]);
         if ($this->isRemoteUnavailable()) {
             return true;
@@ -163,21 +170,25 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
     {
         $this->localCache = [];
         if ($this->isRemoteUnavailable()) {
+            $this->bumpRemoteEpoch();
             return false;
         }
 
         try {
             $result = $this->memoryFacade()->clearCache($this->identity);
             $this->markRemoteAvailable();
+            $this->bumpRemoteEpoch();
             return $result;
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
+            $this->bumpRemoteEpoch();
             return false;
         }
     }
 
     public function compareAndSet(string $key, mixed $expected, mixed $value, int $ttl = 0): bool
     {
+        $this->syncLocalEpoch();
         $this->relieveLocalMemoryPressure(true);
 
         if ($this->isLocalMemoryUnderPressure()) {
@@ -250,6 +261,7 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
 
     public function has(string $key): bool
     {
+        $this->syncLocalEpoch();
         if ($this->isRemoteUnavailable()) {
             return false;
         }
@@ -546,6 +558,63 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         }
 
         return self::parseMemoryLimit((string) $limit);
+    }
+
+    private function currentRequestId(): ?string
+    {
+        if (!\class_exists(RequestContext::class)) {
+            return null;
+        }
+        $requestId = RequestContext::getId();
+
+        return \is_string($requestId) && $requestId !== '' ? $requestId : null;
+    }
+
+    /**
+     * Drop this Worker's localCache when another Worker cleared the pool.
+     * Epoch lives outside the cache identity so clearCache() cannot erase it.
+     * One remote read per request is enough; this Worker's own clear() bumps locally.
+     */
+    private function syncLocalEpoch(): void
+    {
+        $requestId = $this->currentRequestId();
+        if ($requestId !== null && $this->epochSyncedRequestId === $requestId) {
+            return;
+        }
+        if ($this->isRemoteUnavailable()) {
+            return;
+        }
+        try {
+            $remote = (int)($this->memoryFacade()->get(self::EPOCH_NAMESPACE, $this->identity) ?? 0);
+            $this->markRemoteAvailable();
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            return;
+        }
+        if ($remote !== $this->localEpoch) {
+            $this->localCache = [];
+            $this->localEpoch = $remote;
+        }
+        $this->epochSyncedRequestId = $requestId;
+    }
+
+    private function bumpRemoteEpoch(): void
+    {
+        $this->localCache = [];
+        if ($this->isRemoteUnavailable()) {
+            $this->localEpoch++;
+            $this->epochSyncedRequestId = $this->currentRequestId();
+            return;
+        }
+        try {
+            $next = $this->memoryFacade()->incr(self::EPOCH_NAMESPACE, $this->identity, 1);
+            $this->markRemoteAvailable();
+            $this->localEpoch = $next !== null ? \max(1, (int)$next) : ($this->localEpoch + 1);
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            $this->localEpoch++;
+        }
+        $this->epochSyncedRequestId = $this->currentRequestId();
     }
 
     private function memoryFacade(): SharedCacheStateInterface

@@ -7,19 +7,17 @@
 - **模块名**: `Weline_Server`
 - **类型**: 基础设施模块
 - **协议支持**: 默认由 Nginx 提供 TLS 1.3、HTTP/2 和 HTTP/1.1 回退，HTTP/3 可用且真实门禁通过时启用；显式 `--no-nginx` 时由纯 WLS 提供 TLS 1.3、HTTP/2 默认和 HTTP/1.1 自动回退
-- **公网入口**: 默认使用项目托管 Nginx；无法使用 Nginx 的环境可显式选择 `--no-nginx`。纯 WLS 不提供 HTTP/3，TLS Session Ticket/跨 Worker 恢复仍待实现和验证；详见 `doc/WLS模式部署指南.md`
+- **公网入口**: WLS 2.0 默认加入宿主级 Weline Gateway Nginx；在已证明的 virgin host 上，首项目可从最终发行物自带的签名包建立独立宿主网关。无法建立时 `auto` 降级到纯 WLS 高端口，也可显式选择 `--edge=wls`/`--no-nginx`。纯 WLS 不提供 HTTP/3，TLS Session Ticket/跨 Worker 恢复仍待实现和验证；详见 `doc/WLS模式部署指南.md`
 
 ## 🚀 快速开始
 
 ```bash
-# 首次使用前显式安装托管 Nginx
-php bin/w server:nginx:install
-
-# 默认启动项目托管 Nginx；WLS 自动固定 loopback 明文 H1；普通 start 不下载或编译
+# 默认 auto：加入可信网关；virgin host 从项目签名发行包首装宿主网关；否则纯 WLS 高端口
+# 首装只复制发行包到宿主 A/B 槽，不下载或编译 legacy Managed Nginx
 php bin/w server:start -p 9981
 
 # Nginx 不可用时显式退化为纯 WLS；默认 HTTPS + TLS 1.3 + H2/H1
-php bin/w server:start pure-wls -p 9982 --no-nginx
+php bin/w server:start pure-wls -p 9982 --edge=wls
 
 # 查看状态
 php bin/w server:status
@@ -154,17 +152,17 @@ Dispatcher 仍可在所有平台显式选择；在 Nginx 模式它是兼容/诊�
 启动服务器。
 
 ```bash
-php bin/w server:start [name] [-p port] [-c count] [-d] [--no-nginx]
+php bin/w server:start [name] [-p port] [-c count] [-d] [--edge=auto|gateway|wls]
 
 # 仅在运维明确允许本次安装副作用时使用
 php bin/w server:start [name] --install-deps
 ```
 
-普通 `server:start` 默认使用项目托管 Nginx，只探测当前 PHP、平台与已安装的 Nginx，不下载、安装或编译 PHP 扩展、Nginx 或协议组件。`--install-deps` 仅在运维显式允许时处理 PHP 运行依赖；项目托管 Nginx 缺失时，默认启动返回非零并提示单独执行 `server:nginx:install`。环境无法运行 Nginx 时可显式传入 `--no-nginx`，该模式不触碰 Nginx 生命周期并默认启用纯 WLS HTTPS。
+普通 `server:start` 默认使用 `edge=auto`：加入可信 WLS 2.0 宿主网关；不存在时，仅在平台查询明确证明 virgin host、80/443 安全且最终项目发行物自带的签名包通过校验时执行一次宿主首装并注册自身。该首装只把不可变包复制到宿主 A/B 槽并建立平台守护，不下载、构建或调用 legacy Managed Nginx 安装器。条件不足时 `auto` 报告原因并使用纯 WLS 高端口；`edge=gateway` 失败退出；`edge=wls`/`--no-nginx` 完全不触碰网关。`--install-deps` 仅在运维显式允许时处理 PHP 运行依赖。
 
 ### server:nginx:install
 
-项目托管 Nginx 只允许通过显式命令准备：
+WLS 1.x/legacy 项目托管 Nginx 只允许通过显式命令准备；WLS 2.0 auto/gateway 首装不调用此命令：
 
 ```bash
 php bin/w server:nginx:install
@@ -284,7 +282,7 @@ php bin/w server:benchmark --host 10.0.0.8 --authority-host app.weline.test -p 1
 
 ### 事件循环（最重要！）
 
-Weline Server 支持多种事件循环。普通 `server:start` 只检查当前 PHP 与已配置 Nginx，绝不下载、安装、编译或修改 PHP 配置，也不安装 Nginx。Linux `auto` 先只读验证 `sockets + SO_REUSEPORT` 并优先使用 `reuseport`；能力不可用时回退只要求 POSIX FD 原语的 `shared_fd`。Linux 两种监听与 macOS `shared_fd` 都要求预装 `ext-event`。只有运维显式传入 `--install-deps`，本次启动才允许调用 `env:install` 并用新 PHP 进程复验。
+Weline Server 支持多种事件循环。普通 `server:start` 只检查当前 PHP，不下载、编译或修改 PHP 配置，也不下载/构建 legacy Managed Nginx；`auto/gateway` 在 virgin host 上可以复制最终发行物自带的签名 Gateway/Nginx 包并建立宿主服务。Linux `auto` 先只读验证 `sockets + SO_REUSEPORT` 并优先使用 `reuseport`；能力不可用时回退只要求 POSIX FD 原语的 `shared_fd`。Linux 两种监听与 macOS `shared_fd` 都要求预装 `ext-event`。只有运维显式传入 `--install-deps`，本次启动才允许调用 `env:install` 并用新 PHP 进程复验。
 
 | 事件循环 | 性能 | 安装方式 | 说明 |
 |---------|------|---------|------|
@@ -296,7 +294,7 @@ Weline Server 支持多种事件循环。普通 `server:start` 只检查当前 P
 ```
 启动依赖决策：
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. 普通启动 → 只读探测，不安装、不编译、不修改 PHP       │
+│ 1. 普通启动 → 不下载/编译；auto/gateway 仅可复制签名发行包首装宿主网关 │
 │ 2. POSIX Direct 依赖齐全 → 直接使用 libevent              │
 │ 3. POSIX Direct 依赖缺失 → 停止并给出缺失项               │
 │ 4. POSIX 显式 --install-deps → 安装/配置独立 ini 并用新 PHP 复验 │
@@ -503,7 +501,7 @@ Worker::runAll();
 
 `Protocol\WebSocket` 仍是通用 Worker API 组件。项目托管 WLS 当前没有“公网 101 握手 + 帧往返”的发布证据，因此不把 WebSocket 列为本轮受支持 surface；Nginx 只透传精确的 `Upgrade: websocket`，其它 Upgrade 值一律剥离。
 
-边缘默认终结于 **Nginx**；显式 `--no-nginx` 时终结于纯 WLS。仓库中的 Caddy 与独立 Protocol Edge 仍属于不可达遗留代码，不是配置项、安装项或降级路径。
+边缘默认终结于宿主级 **Weline Gateway Nginx**；显式 `--edge=wls`（或兼容别名 `--no-nginx`）时终结于纯 WLS。WLS 2.0 仅提供这两种边缘数据面。
 
 ## 📁 目录结构
 

@@ -14,6 +14,8 @@ use Weline\Server\Service\Edge\Gateway\ProjectIdentityStore;
 
 final class Enroll extends AbstractGatewayCommand
 {
+    private const OPERATION_BUDGET_SECONDS = 120.0;
+
     public function execute(array $args = [], array $data = []): int
     {
         $json = $this->isJson($args);
@@ -24,9 +26,18 @@ final class Enroll extends AbstractGatewayCommand
                 'confirmation_required',
             );
         }
+        $deadlineMonotonic = (\hrtime(true) / 1_000_000_000)
+            + self::OPERATION_BUDGET_SECONDS;
         try {
             return (new ProjectIdentityStore())->withEnrollmentTransitionLock(
-                fn (): int => $this->executeConfirmed($args, $data, $json),
+                fn (): int => $this->executeConfirmed(
+                    $args,
+                    $data,
+                    $json,
+                    $deadlineMonotonic,
+                ),
+                5.0,
+                $deadlineMonotonic,
             );
         } catch (\Throwable $throwable) {
             return $this->failure(
@@ -38,8 +49,12 @@ final class Enroll extends AbstractGatewayCommand
         }
     }
 
-    private function executeConfirmed(array $args, array $data, bool $json): int
-    {
+    private function executeConfirmed(
+        array $args,
+        array $data,
+        bool $json,
+        float $deadlineMonotonic,
+    ): int {
         $rotate = isset($args['rotate-project-id']) || isset($args['rotate_project_id']);
         $abortRotation = isset($args['abort-rotation']) || isset($args['abort_rotation']);
         $freshIdentity = [];
@@ -47,12 +62,13 @@ final class Enroll extends AbstractGatewayCommand
             try {
                 $rotator = new GatewayProjectIdentityRotator();
                 if ($abortRotation) {
-                    $rotator->abort();
+                    $rotator->abort($deadlineMonotonic);
                     $result = ['state' => 'ABORTED'];
                 } else {
                     $result = $rotator->rotate(
                         isset($args['same-root-transfer'])
                             || isset($args['same_root_transfer']),
+                        $deadlineMonotonic,
                     );
                 }
                 if (!$abortRotation
@@ -153,7 +169,7 @@ final class Enroll extends AbstractGatewayCommand
                 'domain_required',
             );
         }
-        $projectUuid = $builder->projectUuid();
+        $projectUuid = $builder->projectUuid($deadlineMonotonic);
         $capabilities = [
             'acme_http_01' => !isset($args['no-acme-http-01'])
                 && !isset($args['no_acme_http_01']),
@@ -172,7 +188,11 @@ final class Enroll extends AbstractGatewayCommand
             ...$ownerProof,
         ]);
         try {
-            $response = $this->gateway()->request('enroll', $enrollment);
+            $response = $this->gateway()->request(
+                'enroll',
+                $enrollment,
+                $deadlineMonotonic,
+            );
             if (!($response['ok'] ?? false)) {
                 $error = (array)($response['error'] ?? []);
                 return $this->failure(
@@ -194,7 +214,11 @@ final class Enroll extends AbstractGatewayCommand
                 $enrollment,
             );
             try {
-                (new GatewayCredentialStore())->install($credential, $projectUuid);
+                (new GatewayCredentialStore())->install(
+                    $credential,
+                    $projectUuid,
+                    $deadlineMonotonic,
+                );
             } catch (\Throwable $throwable) {
                 return $this->failure(
                     __('宿主 enrollment 已提交，但本地项目凭据未持久化；修复 var 目录权限后重试相同命令即可幂等续传。'),
@@ -215,11 +239,14 @@ final class Enroll extends AbstractGatewayCommand
                 );
             }
             $identityStore = new ProjectIdentityStore();
-            $pendingFreshIdentity = $identityStore->freshEnrollmentState();
+            $pendingFreshIdentity = $identityStore->freshEnrollmentState(
+                $deadlineMonotonic,
+            );
             if ($pendingFreshIdentity !== []) {
                 try {
                     $completedFreshIdentity = $identityStore->completeFreshEnrollment(
                         $projectUuid,
+                        $deadlineMonotonic,
                     );
                 } catch (\Throwable $throwable) {
                     return $this->failure(

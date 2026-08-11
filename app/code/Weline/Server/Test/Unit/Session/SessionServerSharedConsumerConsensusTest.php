@@ -52,10 +52,30 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             'token_file_name' => $tokenFileName,
             'shared_consumer_lease_ttl_sec' => 5,
             'role' => self::ROLE,
+            'process_name' => 'weline-wls-session-unit-consensus',
+            'instance_name' => 'shared-session-unit-consensus',
+            'service_instance_name' => 'shared-session-unit-consensus',
         ]);
 
         try {
             self::assertTrue($server->start('127.0.0.1', 0));
+            $published = $registry->getRecord(self::ROLE);
+            self::assertSame(
+                'weline-wls-session-unit-consensus',
+                $published['process_name'] ?? null,
+            );
+            self::assertSame(
+                'shared-session-unit-consensus',
+                $published['instance_name'] ?? null,
+            );
+            self::assertSame(
+                'shared-session-unit-consensus',
+                $published['service_instance_name'] ?? null,
+            );
+            self::assertTrue(SharedStateServiceRegistry::hasExactLifecycleBinding(
+                self::ROLE,
+                $published,
+            ));
             $socket = \stream_socket_client('tcp://127.0.0.1:' . $server->getPort(), $errno, $errstr, 3);
             self::assertNotFalse($socket, $errstr);
             \stream_set_blocking($socket, false);

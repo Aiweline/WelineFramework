@@ -39,6 +39,24 @@ final class NginxProcessIdentityTest extends TestCase
         self::assertFileExists($processManifest);
     }
 
+    public function testAdoptionAcceptsExactManifestAfterPostRenameDirectorySyncFailure(): void
+    {
+        [$identity, $command, $generation, $processManifest] = $this->fixture(
+            'post-rename-manifest',
+        );
+
+        $result = $this->withPostRenameSyncFailure(
+            $processManifest,
+            static fn(): array => $identity->inspect(32123, $command, true),
+        );
+
+        self::assertTrue($result['ok'], $result['reason'] ?? 'missing reason');
+        self::assertTrue($result['adopted']);
+        self::assertSame($generation, $result['runtime_generation']);
+        self::assertSame(32123, $identity->recordedPid());
+        self::assertFileExists($processManifest);
+    }
+
     public function testDifferentPidCannotReuseExistingProcessGeneration(): void
     {
         [$identity, $command] = $this->fixture();
@@ -130,6 +148,56 @@ final class NginxProcessIdentityTest extends TestCase
         }
         self::assertFileDoesNotExist($processManifest);
         self::assertFileExists($backup);
+    }
+
+    public function testIdentityLockCompetitionHonorsAbsoluteLifecycleDeadline(): void
+    {
+        [$identity, $command, , $processManifest] = $this->fixture(
+            'deadline-competition',
+        );
+        self::assertTrue($identity->inspect(32123, $command, true)['ok']);
+        $lockFile = $processManifest . '.lock';
+        $lock = \fopen($lockFile, 'r+b');
+        self::assertIsResource($lock);
+        self::assertTrue(\flock($lock, LOCK_EX | LOCK_NB));
+        $started = \hrtime(true) / 1_000_000_000;
+        try {
+            $identity->recordedPid($started + 0.05);
+            self::fail('A competing identity lock must honor the lifecycle deadline.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'lock timed out before the lifecycle deadline',
+                $exception->getMessage(),
+            );
+        } finally {
+            self::assertTrue(\flock($lock, LOCK_UN));
+            self::assertTrue(\fclose($lock));
+        }
+        self::assertLessThan(
+            0.75,
+            (\hrtime(true) / 1_000_000_000) - $started,
+        );
+        self::assertSame(32123, $identity->recordedPid());
+    }
+
+    public function testExpiredLifecycleDeadlineCannotClearProcessIdentity(): void
+    {
+        [$identity, $command] = $this->fixture('deadline-exhausted');
+        self::assertTrue($identity->inspect(32123, $command, true)['ok']);
+
+        try {
+            $identity->clear(
+                32123,
+                (\hrtime(true) / 1_000_000_000) - 0.001,
+            );
+            self::fail('An expired deadline must not mutate process identity.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'deadline was exhausted',
+                $exception->getMessage(),
+            );
+        }
+        self::assertSame(32123, $identity->recordedPid());
     }
 
     public function testNormalizeProcessStartTimeRecoversBleedingNumericColumns(): void
@@ -290,6 +358,37 @@ final class NginxProcessIdentityTest extends TestCase
     private function quote(string $value): string
     {
         return '"' . $value . '"';
+    }
+
+    private function withPostRenameSyncFailure(string $target, callable $operation): mixed
+    {
+        $previousMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $previousFailure = \getenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE');
+        $previousTarget = \getenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256',
+        );
+        \putenv('WLS_GATEWAY_TEST_MODE=1');
+        \putenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE=directory_fsync_after_rename_failed',
+        );
+        \putenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256=' . \hash('sha256', $target),
+        );
+        try {
+            return $operation();
+        } finally {
+            $previousMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $previousMode);
+            $previousFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE=' . $previousFailure);
+            $previousTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256=' . $previousTarget,
+                );
+        }
     }
 
     private function removeTree(string $root): void

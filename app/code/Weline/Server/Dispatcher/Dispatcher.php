@@ -93,10 +93,10 @@ class Dispatcher
     private ConnectionAcceptGatePool $connectionAcceptGates;
 
     /**
-     * The Dispatcher is a private loopback upstream behind Protocol Edge.
+     * The Dispatcher is a private loopback upstream behind the WLS gateway.
      * Public client identity is then request-scoped and enforced by Workers.
      */
-    private bool $protocolEdgeIngressEnabled = false;
+    private bool $gatewayBackendIngressEnabled = false;
     
     /**
      * 实例名称
@@ -474,7 +474,7 @@ class Dispatcher
 
     /**
      * Detect whether the Dispatcher-to-Worker hop uses TLS. Public HTTPS is
-     * independent: when the protocol edge terminates TLS/QUIC, the private
+     * independent: when managed Nginx terminates TLS/QUIC, the private
      * Dispatcher backend is authenticated plain HTTP/1.1.
      */
     private function detectHttpsEnabled(string $instanceName): bool
@@ -483,9 +483,6 @@ class Dispatcher
         if (\is_file($instanceFile)) {
             $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
             if (\is_array($instData) && (string)($instData['edge_adapter'] ?? '') === 'nginx') {
-                return false;
-            }
-            if (\is_array($instData) && !empty($instData['protocol_edge_enabled'])) {
                 return false;
             }
             if (\is_array($instData) && \array_key_exists('ssl_enabled', $instData)) {
@@ -525,8 +522,8 @@ class Dispatcher
     {
         $this->passthroughCore->configure($config);
 
-        if (isset($config['protocol_edge_ingress_enabled'])) {
-            $this->protocolEdgeIngressEnabled = (bool)$config['protocol_edge_ingress_enabled'];
+        if (isset($config['gateway_backend_ingress_enabled'])) {
+            $this->gatewayBackendIngressEnabled = (bool)$config['gateway_backend_ingress_enabled'];
         }
         
         if (isset($config['connection_timeout'])) {
@@ -1156,7 +1153,9 @@ class Dispatcher
             return $client;
         }
 
-        return new ControlClient();
+        $client = new ControlClient();
+        $client->setManagedChildCredential($this->helloAuthSecret);
+        return $client;
     }
 
     private function resolveSupervisorChannelId(): string
@@ -2647,13 +2646,13 @@ class Dispatcher
             if (@\socket_getpeername($clientSocket, $addr)) {
                 $clientIp = $addr;
             }
-            $trustedProtocolEdge = $this->protocolEdgeIngressEnabled
+            $trustedGatewayBackend = $this->gatewayBackendIngressEnabled
                 && \Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($clientIp);
             $acceptDecision = $this->connectionAcceptGates->accept(
                 (string)$connId,
                 $clientIp,
                 null,
-                $trustedProtocolEdge,
+                $trustedGatewayBackend,
             );
             if (!$acceptDecision->allowed) {
                 @\socket_close($clientSocket);
@@ -3807,7 +3806,7 @@ HTML;
         // health probe; every ordinary plaintext request still receives HTTPS
         // redirection, and WorkerPolicyKernel verifies the token again.
         if (\str_starts_with(\strtoupper($peek), 'GET /_W')
-            && $this->shouldForwardProtocolEdgeHealthProbe($clientSocket, $clientIp)
+            && $this->shouldForwardGatewayBackendHealthProbe($clientSocket, $clientIp)
         ) {
             return false;
         }
@@ -3838,9 +3837,9 @@ HTML;
         return $this->sendInlineHttpRedirect($clientSocket, $connId, $clientIp);
     }
 
-    private function shouldForwardProtocolEdgeHealthProbe($clientSocket, string $clientIp): bool
+    private function shouldForwardGatewayBackendHealthProbe($clientSocket, string $clientIp): bool
     {
-        if (!$this->protocolEdgeIngressEnabled
+        if (!$this->gatewayBackendIngressEnabled
             || !\Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($clientIp)
         ) {
             return false;
@@ -3848,7 +3847,7 @@ HTML;
 
         $rawHeaders = $this->peekAcceptedHttpHeaderBlock($clientSocket, 8192, 0.05);
         return $rawHeaders !== ''
-            && $this->passthroughCore->isAuthenticatedProtocolEdgeHealthProbe($rawHeaders);
+            && $this->passthroughCore->isAuthenticatedGatewayBackendHealthProbe($rawHeaders);
     }
 
     private function peekAcceptedHttpHeaderBlock($clientSocket, int $maxBytes, float $timeoutSec): string

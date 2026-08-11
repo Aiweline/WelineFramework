@@ -86,6 +86,7 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             'app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php',
             'app/code/Weline/Server/Test/Unit/Worker/GatewayFallbackWorkerListenerTransitionContractTest.php',
             'app/code/Weline/Server/Test/Unit/Service/Runtime/VerifiedPersistentFileLockSafetyTest.php',
+            'app/code/Weline/Server/Test/Unit/Service/Runtime/DirectReloadSurgeIdAllocatorTest.php',
             'app/code/Weline/Server/Test/Unit/Service/Security/SecurityPolicyStateStoreTest.php',
             'app/code/Weline/Server/Test/Unit/Security/AttackDetectorStateTransactionTest.php',
             'app/code/Weline/Server/Test/Unit/Security/SecurityRulesReceiptWiringTest.php',
@@ -99,6 +100,27 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
                     $requiredPath,
                     $paths,
                     $requiredPath . ' must trigger the ' . $event . ' release gate.',
+                );
+            }
+        }
+        foreach ([
+            'app/code/Weline/Server/IPC/**',
+            'app/code/Weline/Server/Service/Control/**',
+            'app/code/Weline/Server/Dispatcher/**',
+            'app/code/Weline/Server/Supervisor/**',
+            'app/code/Weline/Server/Service/Runtime/**',
+            'app/code/Weline/Server/Service/Policy/**',
+            'app/code/Weline/Server/Test/Unit/ChildControl/**',
+            'app/code/Weline/Server/Test/Unit/Control/**',
+            'app/code/Weline/Server/Test/Unit/Dispatcher/**',
+            'app/code/Weline/Server/Test/Unit/Supervisor/**',
+        ] as $requiredPathGlob) {
+            foreach ($eventPaths as $event => $paths) {
+                self::assertContains(
+                    $requiredPathGlob,
+                    $paths,
+                    $requiredPathGlob . ' must trigger the ' . $event
+                        . ' release gate.',
                 );
             }
         }
@@ -165,6 +187,7 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             'app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php',
             'app/code/Weline/Server/Test/Unit/Worker/GatewayFallbackWorkerListenerTransitionContractTest.php',
             'app/code/Weline/Server/Test/Unit/Service/Runtime/VerifiedPersistentFileLockSafetyTest.php',
+            'app/code/Weline/Server/Test/Unit/Service/Runtime/DirectReloadSurgeIdAllocatorTest.php',
             'app/code/Weline/Server/Test/Unit/Service/Security/SecurityPolicyStateStoreTest.php',
             'app/code/Weline/Server/Test/Unit/Security/AttackDetectorStateTransactionTest.php',
             'app/code/Weline/Server/Test/Unit/Security/SecurityRulesReceiptWiringTest.php',
@@ -199,8 +222,8 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             'app/code/Weline/Server/Service/MasterLeaseManager.php',
             'app/code/Weline/Server/Test/Unit/Service/MasterLeaseManagerTest.php',
             'app/code/Weline/Server/Test/Unit/Service/EndpointPersistenceFailureTest.php',
-            'app/code/Weline/Server/Service/Runtime/ProtocolEdgeRuntime.php',
-            'app/code/Weline/Server/Test/Unit/Service/Runtime/ProtocolEdgeRuntimeOwnershipTest.php',
+            'app/code/Weline/Server/Service/Edge/Gateway/GatewayBackendIngressTokenStore.php',
+            'app/code/Weline/Server/Test/Unit/Service/Runtime/GatewayBackendIngressTokenStoreOwnershipTest.php',
             'app/code/Weline/Server/Service/Runtime/TlsTicketRingStore.php',
             'app/code/Weline/Server/Test/Unit/Service/Runtime/TlsTicketRingStoreRecoveryTest.php',
             'app/code/Weline/Server/Test/Unit/Service/Edge/Nginx/**',
@@ -238,7 +261,8 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             'GatewayProtocolSecurityTest.php',
             'MasterLeaseManagerTest.php',
             'EndpointPersistenceFailureTest.php',
-            'ProtocolEdgeRuntimeOwnershipTest.php',
+            'GatewayBackendIngressTokenStoreOwnershipTest.php',
+            'DirectReloadSurgeIdAllocatorTest.php',
             'TlsTicketRingStoreRecoveryTest.php',
             'SslCertificateReuseTest.php',
             'SslCertificateStorageSecurityTest.php',
@@ -277,6 +301,32 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             $workflow,
             'The release gate must execute the complete Gateway console unit-test directory.',
         );
+        foreach ([
+            'ChildControl',
+            'Control',
+            'Dispatcher',
+            'Supervisor',
+        ] as $controlTestDirectory) {
+            self::assertStringContainsString(
+                "\n          app/code/Weline/Server/Test/Unit/{$controlTestDirectory}\n",
+                $workflow,
+                'The release gate must execute the complete '
+                    . $controlTestDirectory . ' unit-test directory.',
+            );
+        }
+        foreach ([
+            'HybridControlPlaneServerTest.php',
+            'MasterProcessControlPlaneRuntimeTest.php',
+            'ServiceOrchestratorGatewayLeaseDeadlineTest.php',
+            'GatewayStartupFallbackControlTest.php',
+        ] as $controlTestLeaf) {
+            self::assertStringContainsString(
+                $controlTestLeaf,
+                $workflow,
+                $controlTestLeaf
+                    . ' must execute in the PostgreSQL release gate.',
+            );
+        }
         self::assertStringContainsString(
             'extensions: sodium, openssl, intl, pdo_pgsql, pcntl',
             $workflow,
@@ -372,14 +422,32 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             $nativeWorkflow,
         );
         self::assertStringContainsString('Verify native runner target', $nativeWorkflow);
+        foreach ([
+            'app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php',
+            'app/code/Weline/Server/Service/Edge/Gateway/GatewayWindowsNamedPipeTransport.php',
+        ] as $windowsRunnerPath) {
+            self::assertSame(
+                2,
+                \substr_count($nativeWorkflow, '- "' . $windowsRunnerPath . '"'),
+                $windowsRunnerPath . ' must trigger both native push and pull-request gates.',
+            );
+        }
+        foreach (['posix', 'windows', 'windows-production-capacity'] as $job) {
+            self::assertStringContainsString(
+                'composer install --no-interaction --prefer-dist --no-progress',
+                self::jobBlock($nativeWorkflow, $job),
+                $job . ' must install the locked PHP test dependencies.',
+            );
+        }
         self::assertSame(
             2,
             \substr_count(
                 $nativeWorkflow,
-                'composer install --no-interaction --prefer-dist --no-progress',
+                'NativeGatewayControllerOnlyRecoveryContractTest.php',
             ),
-            'Both POSIX and Windows native jobs must install the locked PHP test dependencies.',
+            'Both POSIX and Windows jobs must lock the Controller-only recovery contract.',
         );
+        self::assertStringNotContainsString('continue-on-error:', $nativeWorkflow);
         self::assertStringContainsString('workflow_call:', $nativeWorkflow);
         self::assertSame(
             2,
@@ -392,6 +460,18 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
         self::assertStringContainsString(
             'Guard native workflow contracts against self-bypass',
             $nativeWorkflow,
+        );
+        $windowsJob = self::jobBlock($nativeWorkflow, 'windows');
+        self::assertStringContainsString(
+            'GatewayBoundedCommandRunnerDeadlineTest.php',
+            $windowsJob,
+            'The Windows native job must execute the bounded runner deadline/reaper contract.',
+        );
+        self::assertMatchesRegularExpression(
+            '/name: Windows named-pipe absolute-deadline source contract'
+                . '[\s\S]*?--bootstrap app\/code\/Weline\/Server\/Test\/'
+                . 'bootstrap_pgsql\.php[\s\S]*?GatewayBoundedCommandRunnerDeadlineTest\.php/',
+            $windowsJob,
         );
         self::assertSame(
             2,
@@ -446,6 +526,350 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
         self::assertStringContainsString('wls_test_bind_lifecycle', $h3SelfTest);
         self::assertStringContainsString('wls_linux_h3_route_bind', $h3SelfTest);
         self::assertStringContainsString('wls_linux_h3_route_activate', $h3SelfTest);
+
+        $assemble = self::jobBlock($packageWorkflow, 'assemble-production');
+        self::assertStringContainsString(
+            "\$components += @('wls-bounded-command', 'wls-gateway-guardian')",
+            $assemble,
+            'Windows package assembly must download the Guardian alongside the bounded helper.',
+        );
+        self::assertStringContainsString(
+            '--wls-gateway-guardian=',
+            $assemble,
+            'Windows package assembly must bind the downloaded Guardian into the immutable package.',
+        );
+    }
+
+    public function testNativeWorkflowGuardsItsOwnRevisionAndReleaseWaitsForEveryNativeProfile(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $packageWorkflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-package.yml',
+        );
+        $nativeWorkflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-native.yml',
+        );
+        $guardian = 'app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/'
+            . 'GatewayReleaseWorkflowCoverageTest.php';
+
+        foreach (['push', 'pull_request'] as $event) {
+            self::assertContains(
+                '.github/workflows/wls-gateway-native.yml',
+                self::eventPaths($nativeWorkflow, $event),
+                'The native workflow must trigger its own guardian when its YAML changes.',
+            );
+            self::assertContains(
+                'app/code/Weline/Server/Protocol/Http3/**',
+                self::eventPaths($nativeWorkflow, $event),
+                'HTTP/3 compiler, dependency, runtime and native-source changes must all trigger the native gate.',
+            );
+        }
+
+        $posix = self::jobBlock($nativeWorkflow, 'posix');
+        $windows = self::jobBlock($nativeWorkflow, 'windows');
+        foreach (['posix' => $posix, 'windows' => $windows] as $job => $block) {
+            self::assertStringContainsString($guardian, $block, $job . ' must execute the guardian.');
+            self::assertStringContainsString(
+                'ref: ${{ github.sha }}',
+                $block,
+                $job . ' must build the exact caller commit instead of an implicit moving ref.',
+            );
+            self::assertStringNotContainsString('continue-on-error:', $block);
+        }
+
+        foreach ([
+            'runner: ubuntu-24.04',
+            'runner: ubuntu-24.04-arm',
+            'runner: macos-15-intel',
+            'runner: macos-15',
+        ] as $runner) {
+            self::assertStringContainsString($runner, $posix);
+        }
+        self::assertStringContainsString('runs-on: windows-2025', $windows);
+
+        $nativeGate = self::jobBlock($packageWorkflow, 'native-gate');
+        self::assertStringContainsString('uses: ./.github/workflows/wls-gateway-native.yml', $nativeGate);
+        self::assertStringNotContainsString('continue-on-error:', $nativeGate);
+        foreach (['assemble-production', 'sign-production'] as $job) {
+            self::assertMatchesRegularExpression(
+                '/needs:[\s\S]*?\n\s+- native-gate(?:\n|$)/',
+                self::jobBlock($packageWorkflow, $job),
+                $job . ' must wait for all five jobs in the reusable native workflow.',
+            );
+        }
+    }
+
+    public function testStableLauncherRollbackProofRunsOnBothPlatformsBeforeRelease(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $packageWorkflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-package.yml',
+        );
+        $nativeWorkflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-native.yml',
+        );
+        $builder = (string)\file_get_contents(
+            $root . '/dev/tools/wls-gateway-package.php',
+        );
+        $argument = '--rollback-target-proof-self-test';
+        $posixCommand = './build/wls-gateway-native/wls-gateway-launcher ' . $argument;
+        $windowsCommand = './build/wls-gateway-native/Release/'
+            . 'wls-gateway-launcher.exe ' . $argument;
+        $posix = self::jobBlock($nativeWorkflow, 'posix');
+        $windows = self::jobBlock($nativeWorkflow, 'windows');
+
+        self::assertSame(1, \substr_count($posix, $posixCommand));
+        self::assertSame(1, \substr_count($windows, $windowsCommand));
+        self::assertStringContainsString(
+            "      - name: Stable launcher rollback-target proof self-test\n"
+                . "        run: {$posixCommand}\n",
+            $posix,
+            'The POSIX proof step must be unconditional.',
+        );
+        self::assertStringContainsString(
+            "      - name: Stable launcher rollback-target proof self-test\n"
+                . "        shell: pwsh\n"
+                . "        run: {$windowsCommand}\n",
+            $windows,
+            'The Windows proof step must be unconditional.',
+        );
+        self::assertStringNotContainsString('continue-on-error:', $posix);
+        self::assertStringNotContainsString('continue-on-error:', $windows);
+        self::assertTrue(
+            \strpos($posix, 'cmake --build') < \strpos($posix, $posixCommand),
+            'The POSIX rollback proof must run against the freshly compiled stable launcher.',
+        );
+        self::assertTrue(
+            \strpos($windows, 'cmake --build') < \strpos($windows, $windowsCommand),
+            'The Windows rollback proof must run against the freshly compiled stable launcher.',
+        );
+
+        $assemble = self::jobBlock($packageWorkflow, 'assemble-production');
+        $audit = self::jobBlock($packageWorkflow, 'audit-production');
+        $sign = self::jobBlock($packageWorkflow, 'sign-production');
+        self::assertStringContainsString('- native-gate', $assemble);
+        self::assertStringContainsString('- assemble-production', $audit);
+        self::assertStringContainsString('- native-gate', $sign);
+        self::assertStringContainsString('- audit-production', $sign);
+
+        $selfTestCall = \strpos($builder, '$this->runComponentSelfTests(');
+        $capabilityManifest = \strpos($builder, '$capabilities = [');
+        self::assertIsInt($selfTestCall);
+        self::assertIsInt($capabilityManifest);
+        self::assertLessThan(
+            $capabilityManifest,
+            $selfTestCall,
+            'The builder must run native proofs before constructing capability claims.',
+        );
+        self::assertStringContainsString($argument, $builder);
+    }
+
+    public function testStableLauncherRecoveryLedgerProofRunsOnBothPlatformsBeforeRelease(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $nativeWorkflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-native.yml',
+        );
+        $builder = (string)\file_get_contents(
+            $root . '/dev/tools/wls-gateway-package.php',
+        );
+        $argument = '--recovery-ledger-self-test';
+        $posixCommand = './build/wls-gateway-native/wls-gateway-launcher ' . $argument;
+        $windowsCommand = './build/wls-gateway-native/Release/'
+            . 'wls-gateway-launcher.exe ' . $argument;
+        $posix = self::jobBlock($nativeWorkflow, 'posix');
+        $windows = self::jobBlock($nativeWorkflow, 'windows');
+
+        self::assertSame(1, \substr_count($posix, $posixCommand));
+        self::assertSame(1, \substr_count($windows, $windowsCommand));
+        self::assertStringContainsString(
+            "      - name: Stable launcher recovery-ledger self-test\n"
+                . "        run: {$posixCommand}\n",
+            $posix,
+        );
+        self::assertStringContainsString(
+            "      - name: Stable launcher recovery-ledger self-test\n"
+                . "        shell: pwsh\n"
+                . "        run: {$windowsCommand}\n",
+            $windows,
+        );
+        self::assertStringNotContainsString('continue-on-error:', $posix);
+        self::assertStringNotContainsString('continue-on-error:', $windows);
+        self::assertTrue(
+            \strpos($posix, 'cmake --build') < \strpos($posix, $posixCommand),
+        );
+        self::assertTrue(
+            \strpos($windows, 'cmake --build') < \strpos($windows, $windowsCommand),
+        );
+        self::assertStringContainsString($argument, $builder);
+    }
+
+    public function testReleaseContainersConsumeOnlyHostVerifiedImmutableImageOutputs(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $workflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-package.yml',
+        );
+
+        $verifier = self::jobBlock($workflow, 'verify-release-container-images');
+        self::assertStringContainsString('runs-on: ubuntu-24.04', $verifier);
+        self::assertStringContainsString('auditor_image:', $verifier);
+        self::assertStringContainsString('signer_image:', $verifier);
+        self::assertStringContainsString('${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}', $verifier);
+        self::assertStringContainsString('${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}', $verifier);
+        self::assertStringContainsString('docker pull --quiet', $verifier);
+        self::assertStringContainsString('docker image inspect', $verifier);
+        self::assertStringContainsString('@sha256:', $verifier);
+        self::assertStringContainsString('$GITHUB_OUTPUT', $verifier);
+        self::assertStringNotContainsString('container:', $verifier);
+
+        $audit = self::jobBlock($workflow, 'audit-production');
+        self::assertStringContainsString('- verify-release-container-images', $audit);
+        self::assertStringContainsString(
+            '${{ needs.verify-release-container-images.outputs.auditor_image }}',
+            $audit,
+        );
+        self::assertStringNotContainsString('${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}', $audit);
+        self::assertStringNotContainsString('docker pull --quiet', $audit);
+
+        $sign = self::jobBlock($workflow, 'sign-production');
+        self::assertStringContainsString('- verify-release-container-images', $sign);
+        self::assertStringContainsString(
+            '${{ needs.verify-release-container-images.outputs.signer_image }}',
+            $sign,
+        );
+        self::assertStringNotContainsString('${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}', $sign);
+        self::assertStringNotContainsString('docker pull --quiet', $sign);
+    }
+
+    public function testSignedGatewayReleaseIsPublishedAsAProjectBootstrapDistribution(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $workflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-package.yml',
+        );
+        $assemble = self::jobBlock($workflow, 'assemble-production');
+        $sign = self::jobBlock($workflow, 'sign-production');
+
+        self::assertStringContainsString(
+            'WLS_GATEWAY_RELEASE_PUBLIC_KEY_BASE64',
+            $assemble,
+        );
+        self::assertStringContainsString(
+            'Inject enabled release verification key',
+            $assemble,
+        );
+        self::assertStringContainsString(
+            'app/code/Weline/Server/env/gateway/trusted-release-keys.json',
+            $assemble,
+        );
+        self::assertStringContainsString("'enabled' => true", $assemble);
+
+        self::assertStringContainsString(
+            'Stage signed project bootstrap distribution',
+            $sign,
+        );
+        self::assertStringContainsString(
+            'extend/server/wls-gateway/${{ inputs.target_profile }}',
+            $sign,
+        );
+        self::assertStringContainsString(
+            'app/code/Weline/Server/env/gateway/trusted-release-keys.json',
+            $sign,
+        );
+        self::assertStringContainsString(
+            'wls-gateway-project-distribution-${{ github.run_id }}-${{ github.run_attempt }}',
+            $sign,
+        );
+        self::assertStringContainsString(
+            '${{ runner.temp }}/wls-gateway-project-distribution',
+            $sign,
+        );
+    }
+
+    public function testLinuxHttp3NativeGateCompilesProductionTransportAndNeverMasksBpfFailures(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $nativeWorkflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-native.yml',
+        );
+        $cmake = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Service/Edge/Gateway/Native/CMakeLists.txt',
+        );
+        $selfTest = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Service/Edge/Gateway/Native/posix/'
+                . 'wls_linux_reuseport_runtime_self_test.c',
+        );
+        $generator = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Service/Edge/Gateway/Native/posix/'
+                . 'wls_linux_reuseport_bpf_header_generator.php',
+        );
+        $generatedHeader = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Protocol/Http3/Native/'
+                . 'wls_linux_reuseport_bpf_code.h',
+        );
+
+        foreach ([
+            'wls_transport.c',
+            'PkgConfig::WLS_NGTCP2',
+            'PkgConfig::WLS_NGTCP2_CRYPTO_OSSL',
+            'PkgConfig::WLS_NGHTTP3',
+            'PkgConfig::WLS_OPENSSL',
+            '--target=bpfel',
+            'wls_linux_reuseport_bpf.c',
+            'wls_linux_reuseport_bpf.o',
+            'NAMES clang-18',
+            'WLS_BPF_CLANG_MAJOR',
+            'wls_linux_reuseport_bpf_header_generator.php',
+            'wls_linux_reuseport_bpf_generated.h',
+        ] as $requiredBuildContract) {
+            self::assertStringContainsString($requiredBuildContract, $cmake);
+        }
+        self::assertStringContainsString('WLS_BUILD_HTTP3_TRANSPORT=ON', $nativeWorkflow);
+        self::assertStringContainsString('NativeTransportCompiler', $nativeWorkflow);
+        self::assertStringContainsString('ensure(true)', $nativeWorkflow);
+        self::assertStringContainsString('h3_status=0', $nativeWorkflow);
+        self::assertStringContainsString('77)', $nativeWorkflow);
+        self::assertStringContainsString('$GITHUB_STEP_SUMMARY', $nativeWorkflow);
+        self::assertStringContainsString('clang-18 llvm-18', $nativeWorkflow);
+        self::assertStringContainsString('cmp --silent', $nativeWorkflow);
+        self::assertStringNotContainsString(
+            'wls-http3-reuseport-self-test || true',
+            $nativeWorkflow,
+        );
+
+        foreach ([
+            '#include <elf.h>',
+            'wls_test_compiled_bpf_header_sync',
+            'wls_test_nonprivileged_reuseport_io',
+            'WLS_SELF_TEST_SKIP',
+            'wls_missing_bpf_capabilities',
+            'wls_transport_get_versions',
+        ] as $requiredSelfTestContract) {
+            self::assertStringContainsString($requiredSelfTestContract, $selfTest);
+        }
+
+        foreach ([
+            "hash('sha256'",
+            'Unexpected ELF section',
+            'R_BPF_64_64',
+            'clang version 18',
+            'wls_linux_reuseport_bpf_code_sha256',
+        ] as $requiredGeneratorContract) {
+            self::assertStringContainsString($requiredGeneratorContract, $generator);
+        }
+        self::assertStringContainsString(
+            'WLS_LINUX_REUSEPORT_BPF_CLANG_MAJOR 18u',
+            $generatedHeader,
+        );
+        self::assertMatchesRegularExpression(
+            '/WLS_LINUX_REUSEPORT_BPF_SOURCE_SHA256 "[a-f0-9]{64}"/',
+            $generatedHeader,
+        );
+        self::assertMatchesRegularExpression(
+            '/WLS_LINUX_REUSEPORT_BPF_CODE_SHA256 "[a-f0-9]{64}"/',
+            $generatedHeader,
+        );
     }
 
     /**
@@ -492,5 +916,17 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             \preg_split('/(?=^      - name:)/m', $workflow) ?: [],
             static fn(string $step): bool => \str_contains($step, 'php vendor/bin/phpunit'),
         ));
+    }
+
+    private static function jobBlock(string $workflow, string $job): string
+    {
+        $matched = \preg_match(
+            '/^  ' . \preg_quote($job, '/') . ':[\s\S]*?(?=^  [a-zA-Z0-9_-]+:|\z)/m',
+            $workflow,
+            $matches,
+        );
+        self::assertSame(1, $matched, 'Workflow job is missing: ' . $job);
+
+        return (string)($matches[0] ?? '');
     }
 }

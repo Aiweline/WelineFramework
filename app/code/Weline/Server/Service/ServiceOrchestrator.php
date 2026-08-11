@@ -31,10 +31,12 @@ use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedText;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 use Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity;
-use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
+use Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection;
+use Weline\Server\Service\Edge\Gateway\GatewayStartupFallbackRequest;
 use Weline\Server\Service\Edge\EdgeAdapterInterface;
 use Weline\Server\Service\Edge\NativeServingManifestStartupRecovery;
 use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
@@ -55,10 +57,10 @@ use Weline\Server\Service\Policy\RuntimePolicyCompiler;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
 use Weline\Server\Service\Policy\RuntimePolicyValidator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
+use Weline\Server\Service\Runtime\DirectReloadSurgeIdAllocator;
 use Weline\Server\Service\Runtime\NamespaceInvalidationOperationQueue;
 use Weline\Server\Service\Runtime\NamespaceInvalidationProtocol;
 use Weline\Server\Service\Runtime\NamespaceInvalidationProtocolException;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\WorkerRestartBatchPlanner;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
@@ -97,9 +99,18 @@ class ServiceOrchestrator
     private const HOST_MEMORY_PRESSURE_COORDINATION_RETRY_SECONDS = 30.0;
     private const NGINX_UPSTREAM_DRAIN_SAFETY_MARGIN_SEC = 5.0;
     private const GATEWAY_FALLBACK_QUARANTINE_RETRY_SECONDS = 30.0;
+    private const GATEWAY_FALLBACK_PUBLICATION_CALLBACK_SECONDS = 3.0;
+    /**
+     * Windows detached-helper startup is deliberately configurable up to
+     * eight seconds and PID resolution has a separate bounded tail. Keep the
+     * immutable serving-manifest transaction alive across that cold start;
+     * the shorter three-second deadline remains sufficient for resume/drain
+     * transitions that do not spawn a process.
+     */
+    private const GATEWAY_FALLBACK_COLD_START_PUBLICATION_SECONDS = 15.0;
+    private const GATEWAY_PORT_LEASE_OPERATION_SECONDS = 3.0;
     private const GATEWAY_NATIVE_DRAIN_SECONDS = 300;
     private const GATEWAY_NATIVE_FINALIZE_GRACE_SECONDS = 15;
-    private const MAX_FALLBACK_CERTIFICATE_BYTES = 262_144;
     private const MAX_PROVIDER_VENDORS = 256;
     private const MAX_PROVIDER_MODULES_PER_VENDOR = 1024;
     private const MAX_PROVIDER_DEFINITION_BYTES = 262_144;
@@ -107,7 +118,6 @@ class ServiceOrchestrator
         ControlMessage::ROLE_WORKER,
         ControlMessage::ROLE_DISPATCHER,
         ControlMessage::ROLE_REDIRECT,
-        ProtocolEdgeRuntime::ROLE,
     ];
     private const GATEWAY_PROMOTION_MUTABLE_FIELDS = [
         'degraded_reason',
@@ -135,7 +145,6 @@ class ServiceOrchestrator
         ControlMessage::ROLE_DISPATCHER => true,
         ControlMessage::ROLE_REDIRECT => true,
         ControlMessage::ROLE_MAINTENANCE => true,
-        ProtocolEdgeRuntime::ROLE => true,
     ];
     private const BULK_LAUNCH_PORT_REPROBE_ROLES = [
         ControlMessage::ROLE_WORKER => true,
@@ -206,8 +215,6 @@ class ServiceOrchestrator
     private float $lastReconcileAt = 0.0;
     private float $lastSweepAt = 0.0;
     private string $lastDispatcherRouteTableSignature = '__unpublished__';
-    private string $lastProtocolEdgeRouteSignature = '__unpublished__';
-    private string $lastProtocolEdgeConfigDigest = '';
     private int $routeTableVersion = 0;
     private int $http3RouteEpoch = 0;
     private string $http3RouteSignature = '';
@@ -2645,12 +2652,10 @@ class ServiceOrchestrator
             MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-redirect', $instanceName),
-            MasterProcess::buildScopedProcessName('weline-wls-gateway', $instanceName),
             MasterProcess::buildScopedProcessName(
                 GatewayJoinBackendProvider::PROCESS_NAME_PREFIX,
                 $instanceName,
             ),
-            MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $instanceName),
         ];
 
         return \array_values(\array_unique($prefixes));
@@ -2943,6 +2948,7 @@ class ServiceOrchestrator
             'serving_manifest_generation',
             'serving_manifest_digest',
             'serving_instance_generation',
+            'serving_certificate_trust_profile',
         ] as $field) {
             unset($before['wls'][$field], $after['wls'][$field]);
         }
@@ -3923,10 +3929,6 @@ class ServiceOrchestrator
     private function resolveStartupAcceptanceMinReady(string $role, int $plannedCount): int
     {
         if ($plannedCount <= 0) {
-            return 0;
-        }
-
-        if ($role === ControlMessage::ROLE_GATEWAY) {
             return 0;
         }
 
@@ -5990,7 +5992,7 @@ class ServiceOrchestrator
         if ($lease === [] || $this->context === null) {
             return;
         }
-        $allocator = new GatewayPortLeaseAllocator();
+        $allocator = $this->boundedGatewayPortLeaseAllocator();
         if (!$this->publicEdgeLeaseConfirmed) {
             $allocator->confirmTransferred(
                 $this->context->instanceName,
@@ -6027,7 +6029,7 @@ class ServiceOrchestrator
         try {
             $lease = $this->publicEdgeLease();
             if ($lease !== []) {
-                (new GatewayPortLeaseAllocator())->release(
+                $this->boundedGatewayPortLeaseAllocator()->release(
                     $this->context->instanceName,
                     (int)$lease['port'],
                     (string)$lease['lease_id'],
@@ -6089,7 +6091,7 @@ class ServiceOrchestrator
         if ($lease === [] || $this->context === null) {
             return;
         }
-        $allocator = new GatewayPortLeaseAllocator();
+        $allocator = $this->boundedGatewayPortLeaseAllocator();
         if (!$this->gatewayInitialBackendLeaseConfirmed) {
             $allocator->confirmTransferred(
                 (string)$lease['instance'],
@@ -6126,7 +6128,7 @@ class ServiceOrchestrator
         try {
             $lease = $this->gatewayInitialBackendLease();
             if ($lease !== []) {
-                (new GatewayPortLeaseAllocator())->release(
+                $this->boundedGatewayPortLeaseAllocator()->release(
                     (string)$lease['instance'],
                     (int)$lease['port'],
                     (string)$lease['lease_id'],
@@ -6169,7 +6171,7 @@ class ServiceOrchestrator
         if ($this->context === null) {
             return;
         }
-        $allocator = new GatewayPortLeaseAllocator();
+        $allocator = $this->boundedGatewayPortLeaseAllocator();
         foreach ([
             GatewayLeaseIdentity::ROLE_BACKEND => [1, 65535],
             GatewayLeaseIdentity::ROLE_FALLBACK => [20000, 29999],
@@ -9945,16 +9947,6 @@ class ServiceOrchestrator
                 return ['status' => 'failed', 'ids' => $surgeIds];
             }
             if ($ready === \count($expectedIdentities)) {
-                if ($this->context?->isProtocolEdgeEnabled()) {
-                    $this->publishProtocolEdgeWorkerPoolFromRegistry(true);
-                    if (!$this->waitForProtocolEdgeRouteActivation(10.0, $imperialEpochSnap)) {
-                        $this->failWorkerBatchNotify(
-                            'reload',
-                            'Direct new-first surge is hot but protocol-edge route activation was not acknowledged'
-                        );
-                        return ['status' => 'failed', 'ids' => $surgeIds];
-                    }
-                }
                 WlsLogger::info_(
                     '[Orchestrator][DirectNewFirst] phase=surge_ready'
                     . ', surge_ids=[' . \implode(',', $surgeIds) . ']'
@@ -10010,11 +10002,11 @@ class ServiceOrchestrator
      */
     private function allocateDirectReloadSurgeWorkerIds(int $count): array
     {
-        $maxExistingId = ProtocolEdgeRuntime::DIRECT_RELOAD_SURGE_MIN_CANONICAL_ID;
+        $maxExistingId = DirectReloadSurgeIdAllocator::MIN_CANONICAL_ID;
         foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $instance) {
             $maxExistingId = \max($maxExistingId, (int)$instance->instanceId);
         }
-        $next = ProtocolEdgeRuntime::directReloadSurgeStartInstanceId($maxExistingId);
+        $next = DirectReloadSurgeIdAllocator::startInstanceId($maxExistingId);
         $ids = [];
         while (\count($ids) < $count) {
             if ($this->registry->getInstance(ControlMessage::ROLE_WORKER, $next) === null) {
@@ -10097,16 +10089,12 @@ class ServiceOrchestrator
             && (bool)($listenCapabilities['reuseport'] ?? false);
         $workerPortsListenerReady = $reportedListenerMode === 'worker_ports'
             && (bool)($listenCapabilities['bound'] ?? false);
-        $singleListenerReady = $reportedListenerMode === 'single'
-            && (bool)($listenCapabilities['bound'] ?? false);
-        $listenerReady = $this->context?->isProtocolEdgeEnabled()
-            ? $singleListenerReady
-            : match ($expectedListenerMode) {
-                'shared_fd' => $sharedListenerReady,
-                'reuseport' => $reusePortListenerReady,
-                'worker_ports' => $workerPortsListenerReady,
-                default => $sharedListenerReady || $reusePortListenerReady || $workerPortsListenerReady,
-            };
+        $listenerReady = match ($expectedListenerMode) {
+            'shared_fd' => $sharedListenerReady,
+            'reuseport' => $reusePortListenerReady,
+            'worker_ports' => $workerPortsListenerReady,
+            default => $sharedListenerReady || $reusePortListenerReady || $workerPortsListenerReady,
+        };
         $dynamicFirstRenderRejection = $this->validateBusinessDynamicFirstRenderReadiness([
             'readiness_protocol_version' => $instance->getMeta('readiness_protocol_version', 0),
             'readiness_capabilities' => $instance->getMeta('readiness_capabilities', []),
@@ -11362,27 +11350,6 @@ class ServiceOrchestrator
             return false;
         }
 
-        $protocolEdgeRouteFenced = false;
-        if ($this->context?->isProtocolEdgeEnabled()) {
-            foreach (\array_keys($instances) as $instanceId) {
-                $this->workerRoutePublishSuppressedInstanceIds[(int)$instanceId] = true;
-            }
-            $protocolEdgeRouteFenced = $this->publishProtocolEdgeWorkerPoolFromRegistry(true)
-                && $this->waitForProtocolEdgeRouteActivation(10.0);
-            if (!$protocolEdgeRouteFenced) {
-                foreach (\array_keys($instances) as $instanceId) {
-                    unset($this->workerRoutePublishSuppressedInstanceIds[(int)$instanceId]);
-                }
-                $this->publishProtocolEdgeWorkerPoolFromRegistry(true);
-                WlsLogger::error_(
-                    '[Orchestrator][DirectNewFirst] phase=surge_route_fence_failed'
-                    . ', surge_ids=[' . \implode(',', \array_keys($instances)) . ']'
-                    . ', admission=retained'
-                );
-                return false;
-            }
-        }
-
         $drainTimeout = $this->resolveWorkerReloadDrainTimeout();
         $workerSoftDrainTimeout = $this->resolveWorkerReloadSoftDrainTimeout($drainTimeout);
         WlsLogger::info_(
@@ -11445,9 +11412,6 @@ class ServiceOrchestrator
                 $this->registry->removeInstance(ControlMessage::ROLE_WORKER, (int)$instanceId);
             }
             unset($this->reloadWorkerProcessLeases[(int)$instanceId]);
-            if ($protocolEdgeRouteFenced) {
-                unset($this->workerRoutePublishSuppressedInstanceIds[(int)$instanceId]);
-            }
             $retired[] = (int)$instanceId;
         }
         $allRetired = \count($retired) === \count($instances);
@@ -12575,22 +12539,6 @@ class ServiceOrchestrator
 
         $newRoutePorts = $this->collectReadyWorkerPortsSorted();
         $this->syncDispatcherFullWorkerPoolFromRegistry(true);
-        if ($this->context->isProtocolEdgeEnabled()
-            && !$this->waitForProtocolEdgeRouteActivation(10.0, $imperialEpochSnap)
-        ) {
-            foreach ($instanceIds as $instanceId) {
-                $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
-                if ($worker !== null && $worker->state === ServiceInstance::STATE_DRAINING) {
-                    $worker->state = ServiceInstance::STATE_READY;
-                    $this->registry->updateInstance($worker);
-                }
-            }
-            $this->failWorkerBatchNotify(
-                $rollingOrReload,
-                'Batch ' . $batchList . ' protocol-edge route removal was not acknowledged before drain'
-            );
-            return 'failed';
-        }
         foreach ($drainRefs as $instanceId) {
             $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
             if ($worker !== null && $worker->ipcClientId !== null) {
@@ -16508,16 +16456,15 @@ class ServiceOrchestrator
     {
         $instance = $this->registry->getInstanceByIpcClient($clientId);
         if ($instance === null) {
-            // 某些平台/高压场景下可能出现 register 丢失但 ready 到达，先尝试补绑再处理。
-            $this->handleRegister($msg, $clientId);
-            $instance = $this->registry->getInstanceByIpcClient($clientId);
-            if ($instance === null) {
-                $role = (string)($msg['role'] ?? '');
-                $port = (int)($msg['port'] ?? 0);
-                WlsLogger::warning_("[Orchestrator] ready 消息但未找到实例: clientId={$clientId}, role={$role}, port={$port}");
-                $this->controlServer?->closeClient($clientId);
-                return;
-            }
+            // TCP and Supervisor transports both serialize authenticated
+            // REGISTER before READY. Reconstructing a missing registration
+            // from peer-controlled READY fields bypasses the child credential
+            // boundary and can bind an attacker to a live Registry slot.
+            $role = (string)($msg['role'] ?? '');
+            $port = (int)($msg['port'] ?? 0);
+            WlsLogger::warning_("[Orchestrator] ready 消息但未找到已注册实例: clientId={$clientId}, role={$role}, port={$port}");
+            $this->controlServer?->closeClient($clientId);
+            return;
         }
         if ($this->isRecoverySlotQuarantined($instance->role, $instance->instanceId)) {
             $this->rejectUntrustedChild(
@@ -16990,7 +16937,7 @@ class ServiceOrchestrator
             }
             try {
                 $ownerIdentity = $this->authorizedInstanceProcessIdentity($instance);
-                $lease = (new GatewayPortLeaseAllocator())->confirm(
+                $lease = $this->boundedGatewayPortLeaseAllocator()->confirm(
                     GatewayLeaseIdentity::forRole(
                         (string)($this->context?->instanceName ?? ''),
                         GatewayLeaseIdentity::ROLE_FALLBACK,
@@ -17274,7 +17221,7 @@ class ServiceOrchestrator
             $backendPort = (int)($instance->port ?? 0);
             try {
                 $ownerIdentity = $this->authorizedInstanceProcessIdentity($instance);
-                $lease = (new GatewayPortLeaseAllocator())->confirm(
+                $lease = $this->boundedGatewayPortLeaseAllocator()->confirm(
                     GatewayLeaseIdentity::forRole(
                         (string)($this->context?->instanceName ?? ''),
                         GatewayLeaseIdentity::ROLE_BACKEND,
@@ -18175,7 +18122,6 @@ class ServiceOrchestrator
             'control_token_created_at', 'epoch', 'master_epoch', 'host', 'public_host', 'public_origin',
             'port', 'main_port', 'count', 'daemon', 'ssl_enabled', 'ssl_cert', 'ssl_key',
             'http3', 'edge_adapter', 'http_protocol_selection',
-            'protocol_edge_enabled', 'protocol_edge_binary',
             'dispatcher_port', 'worker_port', 'worker_base_port', 'worker_memory_limit',
             'dispatcher_memory_limit', 'session_server_port', 'session_server_token_file_name',
             'memory_server_port', 'memory_server_token_file_name', 'shared_state', 'gateway',
@@ -18595,7 +18541,6 @@ class ServiceOrchestrator
      */
     private function convergeDispatcherRouteTableAfterWorkerReady(): void
     {
-        $this->publishProtocolEdgeWorkerPoolFromRegistry();
         if ($this->maintenanceMode) {
             // 维护模式中：先尝试根据当前 Registry 状态退出维护；若仍在维护中，则保持业务路由不变。
             $this->checkAndDisableMaintenanceIfReady();
@@ -18729,7 +18674,6 @@ class ServiceOrchestrator
      */
     private function syncDispatcherFullWorkerPoolFromRegistry(bool $force = false): void
     {
-        $this->publishProtocolEdgeWorkerPoolFromRegistry($force);
         if ($this->maintenanceMode) {
             $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
             return;
@@ -18768,111 +18712,6 @@ class ServiceOrchestrator
         $this->broadcastRoutingPolicyToWorkers();
         $this->lastDispatcherRouteTableSignature = $signature;
         WlsLogger::info_('[Orchestrator] Dispatcher route table is aligned with Registry: ' . $signature);
-    }
-
-    /**
-     * Direct + protocol-edge keeps the product topology direct: Caddy is only
-     * the TLS/QUIC transport adapter, while this READY registry remains the
-     * authoritative Worker route source. Config publication is atomic and the
-     * wrapper acknowledges the exact digest only after Caddy accepts reload.
-     */
-    private function publishProtocolEdgeWorkerPoolFromRegistry(bool $force = false): bool
-    {
-        if ($this->context === null
-            || !$this->context->isDirect()
-            || !$this->context->isProtocolEdgeEnabled()
-        ) {
-            return true;
-        }
-
-        $ports = [];
-        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $worker) {
-            if (isset($this->workerRoutePublishSuppressedInstanceIds[$worker->instanceId])) {
-                continue;
-            }
-            if ($worker->state !== ServiceInstance::STATE_READY
-                || $worker->port === null
-                || $worker->port <= 0
-            ) {
-                continue;
-            }
-            $ports[(int)$worker->port] = true;
-        }
-        $ports = \array_keys($ports);
-        \sort($ports, \SORT_NUMERIC);
-        if ($ports === []) {
-            WlsLogger::warning_(
-                '[Orchestrator][ProtocolEdgeRoute] refusing to publish an empty Direct Worker route set'
-            );
-            return false;
-        }
-
-        $signature = \implode(',', $ports);
-        $currentDigest = ProtocolEdgeRuntime::configDigest($this->context->instanceName);
-        if (!$force
-            && $signature === $this->lastProtocolEdgeRouteSignature
-            && $currentDigest !== ''
-        ) {
-            $this->lastProtocolEdgeConfigDigest = $currentDigest;
-            return true;
-        }
-
-        ProtocolEdgeRuntime::writeConfig($this->context, $ports);
-        $digest = ProtocolEdgeRuntime::configDigest($this->context->instanceName);
-        if ($digest === '') {
-            throw new \RuntimeException('Protocol-edge route config was written but could not be fingerprinted.');
-        }
-        $this->lastProtocolEdgeRouteSignature = $signature;
-        $this->lastProtocolEdgeConfigDigest = $digest;
-        WlsLogger::info_(
-            '[Orchestrator][ProtocolEdgeRoute] candidate published'
-            . ', upstream_ports=[' . $signature . ']'
-            . ', config_digest=' . \substr($digest, 0, 16)
-        );
-
-        return true;
-    }
-
-    private function waitForProtocolEdgeRouteActivation(
-        float $timeoutSec = 10.0,
-        ?int $imperialEpochSnap = null,
-    ): bool {
-        if ($this->context === null
-            || !$this->context->isDirect()
-            || !$this->context->isProtocolEdgeEnabled()
-        ) {
-            return true;
-        }
-
-        $expectedDigest = ProtocolEdgeRuntime::configDigest($this->context->instanceName);
-        if ($expectedDigest === '') {
-            return false;
-        }
-        $deadline = self::monotonicSeconds() + \max(0.25, $timeoutSec);
-        while (self::monotonicSeconds() < $deadline) {
-            if ($this->isStopFlowActive()
-                || ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap)
-            ) {
-                return false;
-            }
-            if (ProtocolEdgeRuntime::isConfigActive($this->context->instanceName, $expectedDigest)) {
-                $this->lastProtocolEdgeConfigDigest = $expectedDigest;
-                WlsLogger::info_(
-                    '[Orchestrator][ProtocolEdgeRoute] active config acknowledged'
-                    . ', config_digest=' . \substr($expectedDigest, 0, 16)
-                );
-                return true;
-            }
-            $this->yieldControlPlane(20000);
-        }
-
-        WlsLogger::error_(
-            '[Orchestrator][ProtocolEdgeRoute] activation timeout'
-            . ', expected_digest=' . \substr($expectedDigest, 0, 16)
-            . ', route_signature=' . $this->lastProtocolEdgeRouteSignature
-        );
-
-        return false;
     }
 
     /**
@@ -18938,6 +18777,41 @@ class ServiceOrchestrator
     {
         $instance = $this->registry->getInstanceByIpcClient($clientId);
         if ($instance === null) {
+            return;
+        }
+
+        $fallbackListenerPhase = (string)$instance->getMeta(
+            'fallback_listener_phase',
+            '',
+        );
+        if ($instance->role === ControlMessage::ROLE_GATEWAY_FALLBACK
+            && !$this->isRecoverySuspended()
+            && $instance->state !== ServiceInstance::STATE_DRAINING
+            && !\in_array($instance->state, [
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+            ], true)
+            && \in_array($fallbackListenerPhase, [
+                GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED,
+                GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+                GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED,
+            ], true)
+        ) {
+            // Reversible listener admission is independent from the terminal
+            // service-drain protocol. A stale/buggy generic completion may be
+            // ignored only while no global stop/restart/child-stop fence is
+            // active and the service itself was not put into DRAINING. Once a
+            // terminal drain owns the instance, its real completion must win
+            // over any older reversible-listener phase persisted in metadata.
+            $instance->state = ServiceInstance::STATE_READY;
+            $this->registry->updateInstance($instance);
+            if ($this->context !== null) {
+                $this->persistServicesInfo($this->context);
+            }
+            WlsLogger::warning_(
+                '[Orchestrator] Ignored generic draining_complete for reversible '
+                . 'gateway fallback phase ' . $fallbackListenerPhase . '.',
+            );
             return;
         }
 
@@ -19193,6 +19067,290 @@ class ServiceOrchestrator
             || \str_starts_with($reason, 'memory_pressure_drain');
     }
 
+    /**
+     * The launcher may request immediate fallback after the initial auto-mode
+     * registration transaction fails. The control-token client cannot bind a
+     * port: it may only ask the exact READY Agent to reuse its authenticated
+     * fallback path, where the host allocator owns the bind and lease fence.
+     *
+     * @param array<string,mixed> $msg
+     */
+    private function handleGatewayStartupFallbackRequest(
+        array $msg,
+        int $clientId,
+    ): void {
+        $messageId = (string)($msg['msg_id'] ?? '');
+        if ($this->context === null || $this->controlServer === null) {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway startup fallback requires a running project Master.',
+                $messageId,
+            ));
+            return;
+        }
+        if (!\hash_equals(
+            $this->context->instanceName,
+            \trim((string)($msg['instance_name'] ?? '')),
+        )) {
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway startup fallback rejected a cross-instance request.',
+                $messageId,
+            ));
+            return;
+        }
+
+        $agent = $this->registry->getInstance(GatewayProvider::ROLE, 1);
+        $agentClientId = $agent?->ipcClientId;
+        $registeredAgent = \is_int($agentClientId)
+            ? $this->registry->getInstanceByIpcClient($agentClientId)
+            : null;
+        if ($agent === null
+            || $agent->state !== ServiceInstance::STATE_READY
+            || !\is_int($agentClientId)
+            || $registeredAgent !== $agent
+            || !$this->controlServer->clientExists($agentClientId)
+        ) {
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway startup fallback requires the current READY project Agent.',
+                $messageId,
+            ));
+            return;
+        }
+
+        try {
+            $endpoint = $this->gatewayStartupFallbackEndpoint(
+                $this->context->instanceName,
+            );
+            if (!\is_array($endpoint)
+                || (int)($endpoint['master_pid'] ?? 0) !== $this->context->masterPid
+                || (int)($endpoint['master_epoch'] ?? 0) !== $this->context->epoch
+            ) {
+                throw new \RuntimeException(
+                    'Gateway startup fallback endpoint is not the current Master generation.',
+                );
+            }
+            if (GatewayRuntimeServingProjection::gatewayIsServing($endpoint)) {
+                throw new \RuntimeException(
+                    'Gateway startup fallback is not allowed while the gateway is serving.',
+                );
+            }
+            $domain = \strtolower(\rtrim(\trim((string)(
+                $msg['certificate_domain'] ?? ''
+            )), '.'));
+            $activeCertificate = $this->gatewayStartupFallbackCertificate($domain);
+            if (!\is_array($activeCertificate)) {
+                throw new \RuntimeException(
+                    'Gateway startup fallback active certificate is unavailable.',
+                );
+            }
+            $request = GatewayStartupFallbackRequest::assertMatches(
+                $msg,
+                $this->context->instanceName,
+                $endpoint,
+                $activeCertificate,
+            );
+            if (!$this->sendToInstance(
+                $agent,
+                ControlMessage::command(
+                    ControlMessage::ACTION_GATEWAY_STARTUP_FALLBACK_REQUEST,
+                    '',
+                    $request,
+                ),
+            )) {
+                throw new \RuntimeException(
+                    'Gateway startup fallback request could not reach the current Agent.',
+                );
+            }
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                true,
+                [
+                    'accepted' => true,
+                    'request_id' => (string)$request['request_id'],
+                    'requested_port' => 0,
+                    'agent_instance_id' => $agent->instanceId,
+                ],
+                'Gateway startup fallback request was forwarded to the current Agent.',
+                $messageId,
+            ));
+        } catch (\Throwable $throwable) {
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway startup fallback rejected: ' . GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    512,
+                    'validation failed',
+                ),
+                $messageId,
+            ));
+        }
+    }
+
+    /** @return array<string,mixed>|null */
+    protected function gatewayStartupFallbackEndpoint(string $instanceName): ?array
+    {
+        return (new ServerInstanceManager())->getRawInstanceData($instanceName);
+    }
+
+    /** @return array<string,mixed>|null */
+    protected function gatewayStartupFallbackCertificate(string $domain): ?array
+    {
+        if ($domain === '' || $this->context === null) {
+            return null;
+        }
+        $instanceGeneration = (int)$this->context->getConfig(
+            'wls.gateway.instance_generation',
+            0,
+        );
+        $launchId = \strtolower(\trim((string)$this->context->getConfig(
+            'wls.gateway.launch_id',
+            '',
+        )));
+        if ($instanceGeneration < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+        ) {
+            return null;
+        }
+        try {
+            $manifest = (new ProjectServingManifestStore((string)BP))->currentForFence([
+                'instance_id' => $this->context->instanceName,
+                'instance_generation' => $instanceGeneration,
+                'master_pid' => $this->context->masterPid,
+                'master_epoch' => $this->context->epoch,
+                'launch_id' => $launchId,
+            ]);
+            return ProjectServingManifestStore::activeCertificateFenceForDomain(
+                $manifest,
+                $domain,
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Revalidate the launcher envelope after it has crossed the authenticated
+     * Agent channel. The request cannot select a port, and a concurrently
+     * recovered gateway or rotated certificate invalidates the switch.
+     *
+     * @param array<string,mixed> $request
+     * @return array<string,int|string>
+     */
+    private function validateGatewayStartupFallbackAgentFence(
+        array $request,
+        int $port,
+    ): array {
+        if ($this->context === null || $port !== 0) {
+            throw new \RuntimeException(
+                'Gateway startup fallback Agent fence cannot select a port.',
+            );
+        }
+        $endpoint = $this->gatewayStartupFallbackEndpoint(
+            $this->context->instanceName,
+        );
+        if (!\is_array($endpoint)
+            || (int)($endpoint['master_pid'] ?? 0) !== $this->context->masterPid
+            || (int)($endpoint['master_epoch'] ?? 0) !== $this->context->epoch
+            || GatewayRuntimeServingProjection::gatewayIsServing($endpoint)
+        ) {
+            throw new \RuntimeException(
+                'Gateway startup fallback Agent fence is no longer current.',
+            );
+        }
+        $domain = \strtolower(\rtrim(\trim((string)(
+            $request['certificate_domain'] ?? ''
+        )), '.'));
+        $activeCertificate = $this->gatewayStartupFallbackCertificate($domain);
+        if (!\is_array($activeCertificate)) {
+            throw new \RuntimeException(
+                'Gateway startup fallback Agent certificate is unavailable.',
+            );
+        }
+        return GatewayStartupFallbackRequest::assertMatches(
+            $request,
+            $this->context->instanceName,
+            $endpoint,
+            $activeCertificate,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $message
+     * @return array{generation:int,digest:string,route_count:int}
+     */
+    private static function gatewayFallbackServingManifestExpectation(
+        array $message,
+    ): array {
+        $generation = $message['serving_manifest_generation'] ?? null;
+        $digest = $message['serving_manifest_digest'] ?? null;
+        $routeCount = $message['serving_manifest_route_count'] ?? null;
+        if (!\is_int($generation)
+            || $generation < 1
+            || !\is_string($digest)
+            || $digest !== \strtolower(\trim($digest))
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || !\is_int($routeCount)
+            || $routeCount < 1
+            || $routeCount > ProjectServingManifestStore::MAX_ROUTES
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback ENABLE requires an exact non-empty serving manifest.',
+            );
+        }
+
+        return [
+            'generation' => $generation,
+            'digest' => $digest,
+            'route_count' => $routeCount,
+        ];
+    }
+
+    /**
+     * @param array{generation:int,digest:string,route_count:int} $expectation
+     * @return array<string,mixed>
+     */
+    private function gatewayFallbackActiveTlsSelection(
+        ProjectServingManifestStore $store,
+        array $expectation,
+    ): array {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway fallback context is unavailable.');
+        }
+        $instanceGeneration = (int)$this->context->getConfig(
+            'wls.gateway.instance_generation',
+            0,
+        );
+        $launchId = \strtolower(\trim((string)$this->context->getConfig(
+            'wls.gateway.launch_id',
+            '',
+        )));
+        if ($instanceGeneration < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback project launch fence is unavailable.',
+            );
+        }
+
+        return $store->activeTlsSelectionForFence(
+            [
+                'instance_id' => $this->context->instanceName,
+                'instance_generation' => $instanceGeneration,
+                'master_pid' => $this->context->masterPid,
+                'master_epoch' => $this->context->epoch,
+                'launch_id' => $launchId,
+            ],
+            $expectation['generation'],
+            $expectation['digest'],
+            $expectation['route_count'],
+        );
+    }
+
     private function handleStopTestCommand(int $clientId): void
     {
         $canSchedule = !$this->stopAllInProgress
@@ -19241,6 +19399,55 @@ class ServiceOrchestrator
             return;
         }
         $port = (int)($msg['port'] ?? 0);
+        $startupRequest = null;
+        $servingManifestExpectation = null;
+        if ($action === ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE) {
+            try {
+                $servingManifestExpectation =
+                    self::gatewayFallbackServingManifestExpectation($msg);
+            } catch (\Throwable $throwable) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    [],
+                    'Gateway fallback serving manifest fence rejected: '
+                        . GatewayBoundedText::singleLine(
+                            $throwable->getMessage(),
+                            512,
+                            'validation failed',
+                        ),
+                    $messageId,
+                ));
+                return;
+            }
+        }
+        if ($action === ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE
+            && \array_key_exists('startup_request', $msg)
+        ) {
+            try {
+                if (!\is_array($msg['startup_request'])) {
+                    throw new \RuntimeException(
+                        'Gateway startup fallback Agent fence is malformed.',
+                    );
+                }
+                $startupRequest = $this->validateGatewayStartupFallbackAgentFence(
+                    $msg['startup_request'],
+                    $port,
+                );
+            } catch (\Throwable $throwable) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    [],
+                    'Gateway startup fallback Agent fence rejected: '
+                        . GatewayBoundedText::singleLine(
+                            $throwable->getMessage(),
+                            512,
+                            'validation failed',
+                        ),
+                    $messageId,
+                ));
+                return;
+            }
+        }
         $instance = $this->registry->getInstance(ControlMessage::ROLE_GATEWAY_FALLBACK, 1);
         if ($action === ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE) {
             // Reject an out-of-contract explicit fallback port before taking
@@ -19257,12 +19464,38 @@ class ServiceOrchestrator
                 ));
                 return;
             }
+            try {
+                if (!\is_array($servingManifestExpectation)) {
+                    throw new \RuntimeException(
+                        'Gateway fallback serving manifest fence is missing.',
+                    );
+                }
+                $servingManifestStore = new ProjectServingManifestStore((string)BP);
+                $this->gatewayFallbackActiveTlsSelection(
+                    $servingManifestStore,
+                    $servingManifestExpectation,
+                );
+            } catch (\Throwable $throwable) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    [],
+                    'Gateway fallback serving manifest is not current: '
+                        . GatewayBoundedText::singleLine(
+                            $throwable->getMessage(),
+                            512,
+                            'validation failed',
+                        ),
+                    $messageId,
+                ));
+                return;
+            }
             if ($instance !== null && $instance->isRunning()) {
                 $this->handleRunningGatewayFallbackEnable(
                     $instance,
                     $port,
                     $clientId,
                     $messageId,
+                    $servingManifestExpectation,
                 );
                 return;
             }
@@ -19282,7 +19515,7 @@ class ServiceOrchestrator
                         $this->context->instanceName,
                         GatewayLeaseIdentity::ROLE_FALLBACK,
                     );
-                    $staleLeases = new GatewayPortLeaseAllocator();
+                    $staleLeases = $this->boundedGatewayPortLeaseAllocator();
                     $staleLease = $staleLeases->status($staleLeaseName);
                     // The Master-held duplicate is the actual ownership
                     // fence. Close it before releasing the numeric lease so
@@ -19334,13 +19567,48 @@ class ServiceOrchestrator
             $reservation = [];
             $started = null;
             $fallbackLaunchAttemptedAt = self::monotonicSeconds();
+            $leaseName = null;
+            $leases = null;
+            $bindHost = '';
+            $publicationDeadline = self::monotonicSeconds()
+                + self::GATEWAY_FALLBACK_COLD_START_PUBLICATION_SECONDS;
             try {
-                $leaseName = GatewayLeaseIdentity::forRole(
+                $servingManifestStore->withCertificateAuthorityPublicationTransaction(
                     $this->context->instanceName,
-                    GatewayLeaseIdentity::ROLE_FALLBACK,
-                );
-                $leases = new GatewayPortLeaseAllocator();
-                $bindHost = $this->gatewayFallbackBindHost();
+                    function () use (
+                        $servingManifestStore,
+                        $servingManifestExpectation,
+                        $startupRequest,
+                        $clientId,
+                        $messageId,
+                        &$port,
+                        &$reservation,
+                        &$started,
+                        &$leaseName,
+                        &$leases,
+                        &$bindHost,
+                        $publicationDeadline,
+                    ): void {
+                        $this->assertGatewayFallbackPublicationDeadline(
+                            $publicationDeadline,
+                        );
+                        // Take the project publication lock before the first
+                        // bind attempt. A manifest change that won the lock
+                        // before us is rejected while no listener exists; a
+                        // later publisher waits until this exact child launch
+                        // has consumed the immutable after-image.
+                        $this->gatewayFallbackActiveTlsSelection(
+                            $servingManifestStore,
+                            $servingManifestExpectation,
+                        );
+                        $leaseName = GatewayLeaseIdentity::forRole(
+                            $this->context->instanceName,
+                            GatewayLeaseIdentity::ROLE_FALLBACK,
+                        );
+                        $leases = $this->boundedGatewayPortLeaseAllocator(
+                            $publicationDeadline,
+                        );
+                        $bindHost = $this->gatewayFallbackBindHost();
                 if ($port === 0) {
                     if ($this->isWindowsRuntime()) {
                         $reservation = $leases->reserveBound(
@@ -19425,12 +19693,29 @@ class ServiceOrchestrator
                         'Gateway fallback port must be inside 20000-29999.'
                     );
                 }
-                [$certificate, $privateKey] = $this->gatewayFallbackCertificateSource();
-                $this->context = $this->refreshServingManifestContext($this->context);
+                if ($startupRequest !== null) {
+                    // Port ownership is not service activation. Recheck the
+                    // launcher/certificate/gateway fence after reservation and
+                    // before any child can accept a request.
+                    $this->validateGatewayStartupFallbackAgentFence(
+                        $startupRequest,
+                        0,
+                    );
+                }
+                $activeTlsSelection = $this->gatewayFallbackActiveTlsSelection(
+                    $servingManifestStore,
+                    $servingManifestExpectation,
+                );
+                $certificate = (string)$activeTlsSelection['certificate'];
+                $privateKey = (string)$activeTlsSelection['private_key'];
+                $this->context = $this->refreshServingManifestContext(
+                    $this->context,
+                    (array)$activeTlsSelection['publication'],
+                );
                 $fallbackMetadata = $this->gatewayFallbackEndpointMetadata(
                     $bindHost,
                     $port,
-                    $certificate,
+                    (array)$activeTlsSelection['active_domains'],
                 );
                 $fallbackUrls = (array)($fallbackMetadata['fallback_urls'] ?? []);
                 $provider = new GatewayFallbackProvider(
@@ -19443,6 +19728,7 @@ class ServiceOrchestrator
                     runtimeEnabled: true,
                     hostLeaseId: (string)($reservation['lease_id'] ?? ''),
                 );
+                $this->assertGatewayFallbackPublicationDeadline($publicationDeadline);
                 $this->registry->registerProvider($provider);
                 $started = $this->startInstance($provider, 1, $this->context, $port, $port);
                 if ($started === null) {
@@ -19456,6 +19742,10 @@ class ServiceOrchestrator
                         'Gateway fallback listener could not reserve the requested port.'
                     );
                 }
+                // startInstance() can legitimately consume the configured
+                // Windows detached-helper budget. Once it returns a committed
+                // launch identity, do not retroactively reject and terminate
+                // that child using the pre-launch publication deadline.
                 foreach ($fallbackMetadata as $key => $value) {
                     $started->setMeta((string)$key, $value);
                 }
@@ -19472,6 +19762,9 @@ class ServiceOrchestrator
                         'bind_endpoint' => (string)$fallbackMetadata['fallback_bind'],
                         'url' => (string)($fallbackUrls[0] ?? ''),
                         'urls' => $fallbackUrls,
+                        'route_domains' => (array)(
+                            $fallbackMetadata['fallback_route_domains'] ?? []
+                        ),
                         'limitations' => (array)$fallbackMetadata['fallback_limitations'],
                         'lease_state' => 'RESERVED',
                         'listener_owner' => $this->isWindowsRuntime()
@@ -19481,6 +19774,10 @@ class ServiceOrchestrator
                     'Gateway fallback listener is starting under the current Master.',
                     $messageId,
                 ));
+                    },
+                    1.0,
+                    $publicationDeadline,
+                );
             } catch (\Throwable $throwable) {
                 $cleanupFallbacks = [];
                 if ($started instanceof ServiceInstance) {
@@ -19612,7 +19909,7 @@ class ServiceOrchestrator
                     return;
                 }
             }
-            $leases = new GatewayPortLeaseAllocator();
+            $leases = $this->boundedGatewayPortLeaseAllocator();
             $leaseName = GatewayLeaseIdentity::forRole(
                 $this->context->instanceName,
                 GatewayLeaseIdentity::ROLE_FALLBACK,
@@ -19706,7 +20003,7 @@ class ServiceOrchestrator
         }
         try {
             $this->suspendGatewayFallbackCredential($instance, 'fallback_final_disable');
-            $leases = new GatewayPortLeaseAllocator();
+            $leases = $this->boundedGatewayPortLeaseAllocator();
             $leaseName = GatewayLeaseIdentity::forRole(
                 $this->context->instanceName,
                 GatewayLeaseIdentity::ROLE_FALLBACK,
@@ -19750,7 +20047,7 @@ class ServiceOrchestrator
         string $messageId,
     ): void {
         try {
-            $leases = new GatewayPortLeaseAllocator();
+            $leases = $this->boundedGatewayPortLeaseAllocator();
             $leaseName = GatewayLeaseIdentity::forRole(
                 (string)$this->context?->instanceName,
                 GatewayLeaseIdentity::ROLE_FALLBACK,
@@ -19761,12 +20058,14 @@ class ServiceOrchestrator
             }
             $phase = (string)($lease['listener_phase'] ?? '');
             if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED) {
-                $instance->state = ServiceInstance::STATE_DRAINING;
+                $instance->state = ServiceInstance::STATE_READY;
+                $instance->setMeta('fallback_listener_phase', $phase);
                 $this->registry->updateInstance($instance);
+                $this->persistServicesInfo($this->context);
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
                     true,
                     [
-                        'state' => ServiceInstance::STATE_DRAINING,
+                        'state' => ServiceInstance::STATE_READY,
                         'listener_phase' => $phase,
                         'port' => $port,
                     ],
@@ -19944,7 +20243,7 @@ class ServiceOrchestrator
 
         try {
             $ack = ControlMessage::validateGatewayFallbackListenerAck($message);
-            $leases = new GatewayPortLeaseAllocator();
+            $leases = $this->boundedGatewayPortLeaseAllocator();
             $leaseName = GatewayLeaseIdentity::forRole(
                 $this->context->instanceName,
                 GatewayLeaseIdentity::ROLE_FALLBACK,
@@ -20079,7 +20378,7 @@ class ServiceOrchestrator
                 }
                 // Only an exact durable DRAIN_ACKED phase starts the 300-second
                 // clock and authorizes releasing the Master's duplicate FD.
-                $instance->state = ServiceInstance::STATE_DRAINING;
+                $instance->state = ServiceInstance::STATE_READY;
                 $instance->setMeta(
                     'fallback_listener_phase',
                     GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
@@ -20100,7 +20399,10 @@ class ServiceOrchestrator
             );
             try {
                 $currentFenceDigest = $this->gatewayFallbackServingFenceDigest($instance);
-                $undrainAllowed = $this->gatewayFallbackUndrainCommitAllowed($instance);
+                $undrainAllowed = $this->gatewayFallbackUndrainCommitAllowed(
+                    $instance,
+                    $currentFenceDigest,
+                );
             } catch (\Throwable) {
                 $currentFenceDigest = '';
                 $undrainAllowed = false;
@@ -20123,10 +20425,17 @@ class ServiceOrchestrator
             // certificate/manifest proof immediately before the lease commit.
             try {
                 $commitFenceDigest = $this->gatewayFallbackServingFenceDigest($instance);
+                $undrainAllowedAtCommit = $this->gatewayFallbackUndrainCommitAllowed(
+                    $instance,
+                    $commitFenceDigest,
+                );
             } catch (\Throwable) {
                 $commitFenceDigest = '';
+                $undrainAllowedAtCommit = false;
             }
-            if (!\hash_equals($preparedFenceDigest, $commitFenceDigest)) {
+            if (!$undrainAllowedAtCommit
+                || !\hash_equals($preparedFenceDigest, $commitFenceDigest)
+            ) {
                 $this->compensateGatewayFallbackToDrain(
                     $instance,
                     $leases,
@@ -20202,7 +20511,7 @@ class ServiceOrchestrator
                     (string)$this->context?->instanceName,
                     GatewayLeaseIdentity::ROLE_FALLBACK,
                 );
-                $leases = new GatewayPortLeaseAllocator();
+                $leases = $this->boundedGatewayPortLeaseAllocator();
                 $lease = $leases->status($leaseName);
                 $phase = \is_array($lease)
                     ? (string)($lease['listener_phase'] ?? '')
@@ -20306,7 +20615,7 @@ class ServiceOrchestrator
                 (string)$lease['listener_transition_digest'],
                 $identity,
             );
-            $instance->state = ServiceInstance::STATE_DRAINING;
+            $instance->state = ServiceInstance::STATE_READY;
             $instance->setMeta(
                 'fallback_listener_phase',
                 GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
@@ -20361,7 +20670,7 @@ class ServiceOrchestrator
         try {
             $phase = (string)($lease['listener_phase'] ?? '');
             if ($phase === GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED) {
-                $instance->state = ServiceInstance::STATE_DRAINING;
+                $instance->state = ServiceInstance::STATE_READY;
                 $instance->setMeta('fallback_listener_phase', $phase);
                 $instance->setMeta('fallback_undrain_fence_digest', null);
                 $this->registry->updateInstance($instance);
@@ -20459,6 +20768,7 @@ class ServiceOrchestrator
         int $requestedPort,
         int $clientId,
         string $messageId,
+        array $servingManifestExpectation,
     ): void {
         $port = (int)($instance->port ?? 0);
         $bindHost = (string)$instance->getMeta(
@@ -20466,15 +20776,46 @@ class ServiceOrchestrator
             $this->gatewayFallbackBindHost(),
         );
         try {
+            if ($this->context === null) {
+                throw new \RuntimeException('Gateway fallback context is unavailable.');
+            }
+            $publicationDeadline = self::monotonicSeconds()
+                + self::GATEWAY_FALLBACK_PUBLICATION_CALLBACK_SECONDS;
+            $servingManifestStore = new ProjectServingManifestStore((string)BP);
+            $servingManifestStore->withCertificateAuthorityPublicationTransaction(
+                $this->context->instanceName,
+                function () use (
+                    $servingManifestStore,
+                    $servingManifestExpectation,
+                    $instance,
+                    $requestedPort,
+                    $port,
+                    $bindHost,
+                    $clientId,
+                    $messageId,
+                    $publicationDeadline,
+                ): void {
+                    $this->assertGatewayFallbackPublicationDeadline(
+                        $publicationDeadline,
+                    );
+                    $this->gatewayFallbackActiveTlsSelection(
+                        $servingManifestStore,
+                        $servingManifestExpectation,
+                    );
             $servingFenceDigest = $this->gatewayFallbackServingFenceDigest($instance);
             if (($requestedPort !== 0 && $requestedPort !== $port)
-                || !$this->gatewayFallbackUndrainCommitAllowed($instance)
+                || !$this->gatewayFallbackUndrainCommitAllowed(
+                    $instance,
+                    $servingFenceDigest,
+                )
             ) {
                 throw new \RuntimeException(
                     'Gateway fallback enable is fenced by port, stop or certificate state.'
                 );
             }
-            $leases = new GatewayPortLeaseAllocator();
+            $leases = $this->boundedGatewayPortLeaseAllocator(
+                $publicationDeadline,
+            );
             $leaseName = GatewayLeaseIdentity::forRole(
                 (string)$this->context?->instanceName,
                 GatewayLeaseIdentity::ROLE_FALLBACK,
@@ -20594,6 +20935,7 @@ class ServiceOrchestrator
                     'Gateway fallback listener phase cannot be resumed: ' . $phase,
                 );
             }
+            $this->assertGatewayFallbackPublicationDeadline($publicationDeadline);
             $sent = $this->sendGatewayFallbackListenerTransition(
                 $instance,
                 ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN,
@@ -20613,10 +20955,19 @@ class ServiceOrchestrator
                     $actionDigest,
                     $identity,
                 );
+                $instance->state = ServiceInstance::STATE_READY;
                 $instance->setMeta('fallback_undrain_fence_digest', null);
                 $instance->setMeta(
                     'fallback_listener_phase',
                     GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+                );
+                $this->registry->updateInstance($instance);
+                $this->persistServicesInfo($this->context);
+            } else {
+                $instance->state = ServiceInstance::STATE_READY;
+                $instance->setMeta(
+                    'fallback_listener_phase',
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_UNDRAIN_PREPARED,
                 );
                 $this->registry->updateInstance($instance);
                 $this->persistServicesInfo($this->context);
@@ -20634,6 +20985,10 @@ class ServiceOrchestrator
                     : 'Gateway fallback undrain command was not delivered.',
                 $messageId,
             ));
+                },
+                1.0,
+                $publicationDeadline,
+            );
         } catch (\Throwable $throwable) {
             $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
                 false,
@@ -20659,8 +21014,24 @@ class ServiceOrchestrator
                 $this->formatGatewayFallbackBind($bindHost, (int)($instance->port ?? 0)),
             ),
             'urls' => (array)$instance->getMeta('fallback_urls', []),
+            'route_domains' => (array)$instance->getMeta(
+                'fallback_route_domains',
+                [],
+            ),
             'limitations' => (array)$instance->getMeta('fallback_limitations', []),
         ];
+    }
+
+    private function assertGatewayFallbackPublicationDeadline(
+        float $deadlineMonotonic,
+    ): void {
+        if (!\is_finite($deadlineMonotonic)
+            || self::monotonicSeconds() >= $deadlineMonotonic
+        ) {
+            throw new \RuntimeException(
+                'Gateway fallback publication exhausted its absolute deadline.',
+            );
+        }
     }
 
     /**
@@ -20843,7 +21214,10 @@ class ServiceOrchestrator
         );
     }
 
-    private function gatewayFallbackUndrainCommitAllowed(ServiceInstance $instance): bool
+    private function gatewayFallbackUndrainCommitAllowed(
+        ServiceInstance $instance,
+        ?string $servingFenceDigest = null,
+    ): bool
     {
         if ($this->context === null
             || $this->isStopFlowActive()
@@ -20857,9 +21231,10 @@ class ServiceOrchestrator
             return false;
         }
         try {
+            $servingFenceDigest ??= $this->gatewayFallbackServingFenceDigest($instance);
             return \preg_match(
                 '/\A[a-f0-9]{64}\z/D',
-                $this->gatewayFallbackServingFenceDigest($instance),
+                $servingFenceDigest,
             ) === 1;
         } catch (\Throwable) {
             return false;
@@ -20868,10 +21243,10 @@ class ServiceOrchestrator
 
     /**
      * Prove the exact immutable TLS generation currently loaded by the child.
-     * ProjectCertificateGenerationStore::active() revalidates the private-key
-     * match, SAN, current validity, permissions and snapshot digest.  The
-     * serving-manifest comparison then fences those facts to this Master and
-     * to the generation acknowledged by this exact fallback child.
+     * currentForFence() revalidates every no-follow certificate/private-key
+     * file fact in the immutable manifest. Do not reopen activation.lock while
+     * publication authority is held: certificate lifecycle publishers use the
+     * same serving transaction to advance this exact after-image.
      */
     private function gatewayFallbackServingFenceDigest(
         ServiceInstance $instance,
@@ -20887,11 +21262,21 @@ class ServiceOrchestrator
             );
         }
         $runtimeFence = ServingManifestRuntimeFence::fromContext($this->context);
+        $masterLaunchId = \strtolower(\trim((string)$this->context->getConfig(
+            'wls.gateway.launch_id',
+            '',
+        )));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $masterLaunchId) !== 1) {
+            throw new \RuntimeException(
+                'Gateway fallback Master launch identity is unavailable.',
+            );
+        }
         $manifest = (new ProjectServingManifestStore((string)BP))->currentForFence([
             'instance_id' => $this->context->instanceName,
             'instance_generation' => $runtimeFence['instance_generation'],
             'master_pid' => $this->context->masterPid,
             'master_epoch' => $this->context->epoch,
+            'launch_id' => $masterLaunchId,
         ]);
         $routeCount = (int)($manifest['route_count'] ?? -1);
         if ($routeCount < 1
@@ -20918,7 +21303,6 @@ class ServiceOrchestrator
                 'Gateway fallback serving manifest route count changed.'
             );
         }
-        $generations = new ProjectCertificateGenerationStore((string)BP);
         $certificateFacts = [];
         foreach ($routes as $route) {
             if (!\is_array($route)) {
@@ -20938,38 +21322,24 @@ class ServiceOrchestrator
             $snapshot = \is_array($route['certificate_snapshot'] ?? null)
                 ? $route['certificate_snapshot']
                 : [];
-            $active = $generations->active($domain);
-            if (!\is_array($active)
-                || $generation < 1
-                || (int)($active['generation'] ?? 0) !== $generation
-                || !\hash_equals(
-                    $sourceDigest,
-                    (string)($active['source_digest'] ?? ''),
-                )
-                || !\hash_equals(
-                    (string)($certificate['path'] ?? ''),
-                    (string)($active['cert_path'] ?? ''),
-                )
-                || !\hash_equals(
-                    (string)($privateKey['path'] ?? ''),
-                    (string)($active['key_path'] ?? ''),
-                )
-                || !\hash_equals(
-                    (string)($snapshot['leaf_fingerprint_sha256'] ?? ''),
-                    (string)($active['leaf_fingerprint_sha256'] ?? ''),
-                )
+            $certPath = (string)($certificate['path'] ?? '');
+            $keyPath = (string)($privateKey['path'] ?? '');
+            $fingerprint = (string)($snapshot['leaf_fingerprint_sha256'] ?? '');
+            if ($generation < 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+                || $certPath === ''
+                || $keyPath === ''
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $fingerprint) !== 1
             ) {
                 throw new \RuntimeException(
-                    'Gateway fallback certificate generation is no longer authoritative.'
+                    'Gateway fallback manifest certificate fence is no longer authoritative.'
                 );
             }
             $certificateFacts[] = [
                 'domain' => $domain,
                 'generation' => $generation,
                 'source_digest' => $sourceDigest,
-                'leaf_fingerprint_sha256' => (string)(
-                    $active['leaf_fingerprint_sha256'] ?? ''
-                ),
+                'leaf_fingerprint_sha256' => $fingerprint,
             ];
         }
         \usort(
@@ -20984,6 +21354,7 @@ class ServiceOrchestrator
             'instance_generation' => $runtimeFence['instance_generation'],
             'master_pid' => $this->context->masterPid,
             'master_epoch' => $this->context->epoch,
+            'master_launch_id' => $masterLaunchId,
             'manifest_path' => $runtimeFence['path'],
             'manifest_generation' => $runtimeFence['generation'],
             'manifest_digest' => $runtimeFence['digest'],
@@ -21187,23 +21558,42 @@ class ServiceOrchestrator
     private function gatewayFallbackEndpointMetadata(
         string $bindHost,
         int $port,
-        string $certificate,
+        array $activeDomains,
     ): array {
-        $urls = [];
-        foreach ($this->gatewayFallbackCertificateDomains($certificate) as $domain) {
-            try {
-                $urls[] = PureWlsPublicOrigin::fromHostAndPort($domain, $port, true);
-            } catch (\Throwable) {
+        $routeDomains = [];
+        foreach ($activeDomains as $activeDomain) {
+            if (!\is_string($activeDomain)) {
+                throw new \RuntimeException(
+                    'Gateway fallback ACTIVE route domain is malformed.',
+                );
             }
+            $domain = ProjectServingManifestStore::normalizeHost($activeDomain);
+            $routeDomains[$domain] = true;
         }
-        if ($urls === []) {
-            $reportHost = $bindHost;
-            if ($reportHost === '0.0.0.0') {
-                $reportHost = '127.0.0.1';
-            } elseif ($reportHost === '::') {
-                $reportHost = '::1';
+        if ($routeDomains === []) {
+            throw new \RuntimeException(
+                'Gateway fallback has no ACTIVE route to report.',
+            );
+        }
+        \ksort($routeDomains, SORT_STRING);
+
+        $urls = [];
+        foreach (\array_keys($routeDomains) as $domain) {
+            // A wildcard route remains visible in fallback_route_domains but
+            // cannot be represented as a directly navigable URL.
+            if (\str_starts_with($domain, '*.')) {
+                continue;
             }
-            $urls[] = PureWlsPublicOrigin::fromHostAndPort($reportHost, $port, true);
+            $urls[] = PureWlsPublicOrigin::fromHostAndPort($domain, $port, true);
+        }
+        $limitations = [
+            'not_public_80_443',
+            'dns_mapping_required',
+            'firewall_or_load_balancer_may_block',
+        ];
+        if ($urls === []) {
+            $limitations[] = 'hostname_and_sni_required';
+            $limitations[] = 'wildcard_route_requires_concrete_hostname';
         }
 
         return [
@@ -21211,165 +21601,9 @@ class ServiceOrchestrator
             'fallback_bind_host' => $bindHost,
             'fallback_bind' => $this->formatGatewayFallbackBind($bindHost, $port),
             'fallback_urls' => \array_values(\array_unique($urls)),
-            'fallback_limitations' => [
-                'not_public_80_443',
-                'dns_mapping_required',
-                'firewall_or_load_balancer_may_block',
-            ],
+            'fallback_route_domains' => \array_keys($routeDomains),
+            'fallback_limitations' => $limitations,
         ];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function gatewayFallbackCertificateDomains(string $certificate): array
-    {
-        if ($this->context === null) {
-            return [];
-        }
-        $source = $this->context->getConfig('wls.gateway.certificate_source', []);
-        $source = \is_array($source) ? $source : [];
-        $candidates = [];
-        foreach ((array)($source['domains'] ?? []) as $domain) {
-            if (\is_scalar($domain)) {
-                $candidates[] = (string)$domain;
-            }
-        }
-        $candidates[] = (string)($source['domain'] ?? '');
-        $candidates[] = (string)($this->context->publicHost ?? '');
-
-        if (\function_exists('openssl_x509_parse')) {
-            $certificatePem = $this->readBoundGatewayFallbackCertificate(
-                $certificate,
-            );
-            $parsed = @\openssl_x509_parse($certificatePem, false);
-            if (\is_array($parsed)) {
-                $subjectAltName = (string)($parsed['extensions']['subjectAltName'] ?? '');
-                foreach (\preg_split('/\s*,\s*/', $subjectAltName) ?: [] as $entry) {
-                    $entry = \trim((string)$entry);
-                    if (\str_starts_with($entry, 'DNS:')) {
-                        $candidates[] = \substr($entry, 4);
-                    } elseif (\str_starts_with($entry, 'IP Address:')) {
-                        $candidates[] = \substr($entry, 11);
-                    } elseif (\str_starts_with($entry, 'IP:')) {
-                        $candidates[] = \substr($entry, 3);
-                    }
-                }
-                if (\is_scalar($parsed['subject']['CN'] ?? null)) {
-                    $candidates[] = (string)$parsed['subject']['CN'];
-                }
-            }
-        }
-
-        $domains = [];
-        foreach ($candidates as $candidate) {
-            $domain = \strtolower(\trim((string)$candidate, " \t\n\r\0\x0B[]"));
-            if ($domain === ''
-                || \str_starts_with($domain, '*.')
-                || \in_array($domain, ['0.0.0.0', '::', '*'], true)
-            ) {
-                continue;
-            }
-            try {
-                PureWlsPublicOrigin::fromHostAndPort($domain, 443, true);
-            } catch (\Throwable) {
-                continue;
-            }
-            $domains[$domain] = true;
-            if (\count($domains) >= 64) {
-                break;
-            }
-        }
-
-        return \array_keys($domains);
-    }
-
-    private function readBoundGatewayFallbackCertificate(string $certificate): string
-    {
-        if ($this->context === null) {
-            throw new \RuntimeException('Gateway fallback certificate context is unavailable.');
-        }
-        $fence = ServingManifestRuntimeFence::fromContext($this->context);
-        $manifest = (new ProjectServingManifestStore((string)BP))->currentForFence([
-            'instance_id' => $this->context->instanceName,
-            'instance_generation' => $fence['instance_generation'],
-            'master_pid' => $this->context->masterPid,
-            'master_epoch' => $this->context->epoch,
-        ]);
-        if ((int)$manifest['generation'] !== $fence['generation']
-            || !\hash_equals($fence['digest'], (string)$manifest['digest'])
-            || !\hash_equals($fence['path'], (string)$manifest['path'])
-        ) {
-            throw new \RuntimeException(
-                'Gateway fallback certificate manifest fence changed before metadata read.',
-            );
-        }
-        $bound = false;
-        foreach ((array)($manifest['payload']['routes'] ?? []) as $route) {
-            $fact = \is_array($route['certificate'] ?? null)
-                ? $route['certificate']
-                : [];
-            if (\hash_equals($certificate, (string)($fact['path'] ?? ''))) {
-                $bound = true;
-                break;
-            }
-        }
-        if (!$bound || $certificate === '' || \is_link($certificate)) {
-            throw new \RuntimeException(
-                'Gateway fallback certificate is not bound to the active serving manifest.',
-            );
-        }
-
-        $before = @\lstat($certificate);
-        if (!\is_array($before)
-            || (((int)($before['mode'] ?? 0) & 0170000) !== 0100000)
-            || (int)($before['nlink'] ?? 0) !== 1
-            || (int)($before['size'] ?? -1) < 1
-            || (int)($before['size'] ?? -1) > self::MAX_FALLBACK_CERTIFICATE_BYTES
-        ) {
-            throw new \RuntimeException(
-                'Gateway fallback certificate is linked, special, empty, or oversized.',
-            );
-        }
-        $handle = @\fopen($certificate, 'rb');
-        if (!\is_resource($handle)) {
-            throw new \RuntimeException('Unable to open gateway fallback certificate.');
-        }
-        try {
-            $opened = @\fstat($handle);
-            $contents = @\stream_get_contents(
-                $handle,
-                self::MAX_FALLBACK_CERTIFICATE_BYTES + 1,
-            );
-            $after = @\fstat($handle);
-        } finally {
-            @\fclose($handle);
-        }
-        $latest = @\lstat($certificate);
-        if (!\is_string($contents)
-            || $contents === ''
-            || \strlen($contents) > self::MAX_FALLBACK_CERTIFICATE_BYTES
-            || !\is_array($opened)
-            || !\is_array($after)
-            || !\is_array($latest)
-            || (int)($opened['size'] ?? -1) !== \strlen($contents)
-        ) {
-            throw new \RuntimeException(
-                'Gateway fallback certificate changed or exceeded its read bound.',
-            );
-        }
-        foreach (['dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'size', 'mtime', 'ctime'] as $field) {
-            if ((int)($before[$field] ?? -1) !== (int)($opened[$field] ?? -2)
-                || (int)($opened[$field] ?? -1) !== (int)($after[$field] ?? -2)
-                || (int)($after[$field] ?? -1) !== (int)($latest[$field] ?? -2)
-            ) {
-                throw new \RuntimeException(
-                    'Gateway fallback certificate identity changed while reading.',
-                );
-            }
-        }
-
-        return $contents;
     }
 
     /**
@@ -21451,7 +21685,7 @@ class ServiceOrchestrator
                 GatewayLeaseIdentity::ROLE_BACKEND,
             );
             try {
-                $listenerLease = (new GatewayPortLeaseAllocator())->status(
+                $listenerLease = $this->boundedGatewayPortLeaseAllocator()->status(
                     $listenerLeaseName,
                 );
             } catch (\Throwable) {
@@ -21689,7 +21923,7 @@ class ServiceOrchestrator
             $this->context->instanceName,
             GatewayLeaseIdentity::ROLE_BACKEND,
         );
-        $leases = new GatewayPortLeaseAllocator();
+        $leases = $this->boundedGatewayPortLeaseAllocator();
         $port = 0;
         $startedBackends = [];
         $joinLaunchAttemptedAt = self::monotonicSeconds();
@@ -22562,7 +22796,7 @@ class ServiceOrchestrator
             'gateway promotion rollback',
         );
 
-        $leases = new GatewayPortLeaseAllocator();
+        $leases = $this->boundedGatewayPortLeaseAllocator();
         $leasePorts = [];
         $leaseIds = [];
         $errors = [];
@@ -23422,7 +23656,7 @@ class ServiceOrchestrator
         array $lease,
     ): array {
         try {
-            $liveLease = (new GatewayPortLeaseAllocator())->liveServingLease(
+            $liveLease = $this->boundedGatewayPortLeaseAllocator()->liveServingLease(
                 (string)($lease['instance'] ?? ''),
                 (string)($lease['bind_host'] ?? ''),
                 (int)($lease['port'] ?? 0),
@@ -23595,9 +23829,8 @@ class ServiceOrchestrator
         $tokenDigest = '';
         $tokenDigestError = '';
         try {
-            $tokenDigest = \hash(
-                'sha256',
-                ProtocolEdgeRuntime::readToken($this->context->instanceName),
+            $tokenDigest = GatewayBackendIngressTokenStore::digest(
+                $this->context->instanceName,
             );
         } catch (\Throwable $throwable) {
             $tokenDigestError = GatewayBoundedText::singleLine(
@@ -23622,7 +23855,9 @@ class ServiceOrchestrator
             $this->context->instanceName,
             GatewayLeaseIdentity::ROLE_BACKEND,
         );
-        $listenerLease = (new GatewayPortLeaseAllocator())->status($listenerLeaseName);
+        $listenerLease = $this->boundedGatewayPortLeaseAllocator()->status(
+            $listenerLeaseName,
+        );
         $listenerLease = \is_array($listenerLease) ? $listenerLease : [];
         $listenerLeaseValid = $listenerLease !== []
             && (int)($listenerLease['schema_version'] ?? 0)
@@ -24071,7 +24306,7 @@ class ServiceOrchestrator
             $this->closeDirectSharedListener();
         }
 
-        $allocator = new GatewayPortLeaseAllocator();
+        $allocator = $this->boundedGatewayPortLeaseAllocator();
         $current = $allocator->status($this->context->instanceName);
         if (!\is_array($current)
             || (int)($current['schema_version'] ?? 0)
@@ -24115,40 +24350,11 @@ class ServiceOrchestrator
         }
     }
 
-    /** @return array{0:string,1:string} */
-    private function gatewayFallbackCertificateSource(): array
-    {
-        if ($this->context === null) {
-            throw new \RuntimeException('Gateway fallback context is unavailable.');
-        }
-        $source = $this->context->getConfig('wls.gateway.certificate_source', []);
-        $source = \is_array($source) ? $source : [];
-        $domain = \trim((string)($source['domain']
-            ?? $this->context->getConfig('ssl_domain', '')
-            ?? $this->context->getConfig('public_host', '')));
-        if ($domain === '') {
-            throw new \RuntimeException(
-                'Gateway fallback certificate domain is unavailable.'
-            );
-        }
-        $generations = new ProjectCertificateGenerationStore();
-        $active = $generations->active($domain);
-        if ($active === null) {
-            // One-time migration for endpoint records created before project
-            // certificate generations were introduced.
-            $active = $generations->activate(
-                $domain,
-                (string)($source['cert_path'] ?? ''),
-                (string)($source['key_path'] ?? ''),
-            );
-        }
-        return [
-            (string)$active['cert_path'],
-            (string)$active['key_path'],
-        ];
-    }
-
-    private function refreshServingManifestContext(ServiceContext $context): ServiceContext
+    /** @param array<string,mixed> $publication */
+    private function refreshServingManifestContext(
+        ServiceContext $context,
+        array $publication,
+    ): ServiceContext
     {
         $instanceGeneration = (int)$context->getConfig(
             'wls.gateway.instance_generation',
@@ -24159,21 +24365,41 @@ class ServiceOrchestrator
                 'Gateway fallback requires a monotonic project instance generation.',
             );
         }
-        $publication = (new GatewayRegistrationBuilder())->buildServingManifest(
-            $context->instanceName,
-        );
+        $launchId = \strtolower(\trim((string)$context->getConfig(
+            'wls.gateway.launch_id',
+            '',
+        )));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1) {
+            throw new \RuntimeException(
+                'Gateway fallback requires its exact project Master launch identity.',
+            );
+        }
         $fence = ServingManifestRuntimeFence::fromPublication(
             $publication,
             $context->instanceName,
             $instanceGeneration,
             $context->masterPid,
             $context->epoch,
+            ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $context->getConfig(
+                    'wls.gateway.certificate_profile',
+                    $context->getConfig(
+                        'wls.certificate_profile',
+                        ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
+                    ),
+                )
+            )),
         );
         $manager = new ServerInstanceManager();
         $file = $manager->getInstanceFile($context->instanceName);
         if (!ServerInstanceManager::updateJsonFileAtomically(
             $file,
-            static function (array $endpoint) use ($context, $fence, $publication): array {
+            static function (array $endpoint) use (
+                $context,
+                $fence,
+                $publication,
+                $launchId,
+            ): array {
                 $gateway = \is_array($endpoint['gateway'] ?? null)
                     ? $endpoint['gateway']
                     : [];
@@ -24181,6 +24407,10 @@ class ServiceOrchestrator
                     || (int)($endpoint['master_epoch'] ?? 0) !== $context->epoch
                     || (int)($gateway['instance_generation'] ?? 0)
                         !== $fence['instance_generation']
+                    || !\hash_equals(
+                        $launchId,
+                        \strtolower(\trim((string)($gateway['launch_id'] ?? ''))),
+                    )
                 ) {
                     throw new \RuntimeException(
                         'Gateway fallback endpoint generation changed during manifest publication.',
@@ -24189,6 +24419,9 @@ class ServiceOrchestrator
                 $gateway['serving_manifest_path'] = $fence['path'];
                 $gateway['serving_manifest_generation'] = $fence['generation'];
                 $gateway['serving_manifest_digest'] = $fence['digest'];
+                $gateway['serving_manifest_route_count'] = (int)(
+                    $publication['route_count'] ?? -1
+                );
                 $gateway['serving_manifest_converged'] = (bool)(
                     $publication['converged'] ?? false
                 );
@@ -24253,6 +24486,11 @@ class ServiceOrchestrator
             ControlMessage::ACTION_GATEWAY_NATIVE_DRAIN,
         ], true)) {
             $this->handleGatewayJoinCommand($action, $msg, $clientId);
+            return;
+        }
+
+        if ($action === ControlMessage::ACTION_GATEWAY_STARTUP_FALLBACK_REQUEST) {
+            $this->handleGatewayStartupFallbackRequest($msg, $clientId);
             return;
         }
 
@@ -24467,10 +24705,6 @@ class ServiceOrchestrator
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, $data, 'Telemetry retrieved'));
                 break;
 
-            case ControlMessage::ACTION_PROXY_APPLY:
-                $this->handleProxyApplyCommand($clientId, $msg);
-                break;
-
             case ControlMessage::ACTION_FIBER_STATS:
                 $this->requestFiberPoolStats($clientId);
                 break;
@@ -24487,55 +24721,6 @@ class ServiceOrchestrator
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, [], 'Unknown command'));
                 break;
         }
-    }
-
-    private function handleProxyApplyCommand(int $clientId, array $msg): void
-    {
-        $msgId = (string)($msg['msg_id'] ?? '');
-        if ($this->controlServer === null) {
-            return;
-        }
-
-        $this->controlServer->sendTo(
-            $clientId,
-            ControlMessage::commandResult(
-                false,
-                ['routes' => 0, 'gateways' => 0, 'targets' => []],
-                (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
-                $msgId
-            )
-        );
-    }
-
-    /**
-     * @param array<int, mixed> $routes
-     * @return array<int, array{domain:string,backend_host:string,backend_port:int,backend_ssl:bool,priority:int}>
-     */
-    private function normalizeProxyApplyRoutes(array $routes): array
-    {
-        $normalized = [];
-        foreach ($routes as $route) {
-            if (!\is_array($route)) {
-                continue;
-            }
-
-            $domain = \strtolower(\trim((string)($route['domain'] ?? '')));
-            $backendHost = \trim((string)($route['backend_host'] ?? ''));
-            $backendPort = (int)($route['backend_port'] ?? 0);
-            if ($domain === '' || $backendHost === '' || $backendPort < 1 || $backendPort > 65535) {
-                continue;
-            }
-
-            $normalized[] = [
-                'domain' => $domain,
-                'backend_host' => $backendHost,
-                'backend_port' => $backendPort,
-                'backend_ssl' => (bool)($route['backend_ssl'] ?? false),
-                'priority' => (int)($route['priority'] ?? 0),
-            ];
-        }
-
-        return $normalized;
     }
 
     private function handleScalingStatusCommand(int $clientId, array $msg): void
@@ -27720,9 +27905,7 @@ class ServiceOrchestrator
 
     private function isTlsServingRole(string $role): bool
     {
-        if ($role === ControlMessage::ROLE_GATEWAY_FALLBACK
-            || $role === ProtocolEdgeRuntime::ROLE
-        ) {
+        if ($role === ControlMessage::ROLE_GATEWAY_FALLBACK) {
             return true;
         }
         if (!\in_array($role, [
@@ -30877,7 +31060,7 @@ class ServiceOrchestrator
                     (string)($this->context?->instanceName ?? ''),
                     GatewayLeaseIdentity::ROLE_BACKEND,
                 );
-                $listenerLease = (new GatewayPortLeaseAllocator())->status(
+                $listenerLease = $this->boundedGatewayPortLeaseAllocator()->status(
                     $listenerLeaseName,
                 );
                 $listenerLease = \is_array($listenerLease) ? $listenerLease : [];
@@ -31842,6 +32025,24 @@ class ServiceOrchestrator
         }
 
         return $now;
+    }
+
+    /**
+     * Host lease persistence is shared with Start and the project Agent.  The
+     * Master must never inherit the allocator's offline 300-second lock wait:
+     * READY, IPC acknowledgement, disconnect and shutdown all run on lifecycle
+     * critical paths.  A contended mutation therefore fails closed within this
+     * absolute operation window and is retried by the owning state machine.
+     */
+    private function boundedGatewayPortLeaseAllocator(
+        ?float $deadlineMonotonic = null,
+    ): GatewayPortLeaseAllocator {
+        $deadlineMonotonic ??= self::monotonicSeconds()
+            + self::GATEWAY_PORT_LEASE_OPERATION_SECONDS;
+
+        return new GatewayPortLeaseAllocator(
+            operationDeadlineMonotonic: $deadlineMonotonic,
+        );
     }
 
     private static function diagnosticWallSeconds(): float

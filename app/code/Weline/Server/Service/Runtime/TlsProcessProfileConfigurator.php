@@ -28,7 +28,11 @@ final class TlsProcessProfileConfigurator
      * @param array<string, mixed> $config
      * @return array{requested:string,effective:string,openssl_conf:?string,reason:string}
      */
-    public function activate(array $config, bool $sslEnabled): array
+    public function activate(
+        array $config,
+        bool $sslEnabled,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $selection = $this->resolveConfiguration($config);
         $requested = $selection['requested'];
@@ -75,7 +79,7 @@ final class TlsProcessProfileConfigurator
             ];
         }
 
-        $path = $this->writePerformanceConfig();
+        $path = $this->writePerformanceConfig($deadlineMonotonic);
         \putenv('OPENSSL_CONF=' . $path);
         $_ENV['OPENSSL_CONF'] = $path;
         $_SERVER['OPENSSL_CONF'] = $path;
@@ -90,7 +94,7 @@ final class TlsProcessProfileConfigurator
 
     /**
      * Resolve the transport-neutral TLS contract once so native PHP TLS and
-     * the public protocol edge cannot silently apply different versions or
+     * the public WLS gateway cannot silently apply different versions or
      * key-exchange profiles.
      *
      * @param array<string, mixed> $config
@@ -192,7 +196,7 @@ final class TlsProcessProfileConfigurator
         return $path !== '' ? $path : null;
     }
 
-    private function writePerformanceConfig(): string
+    private function writePerformanceConfig(?float $deadlineMonotonic = null): string
     {
         $content = <<<'CONF'
 openssl_conf = wls_init
@@ -215,7 +219,14 @@ CONF;
 
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . self::PUBLICATION_LOCK_LEAF,
-            function () use ($directory, $path, $content, $runtime): string {
+            function () use (
+                $directory,
+                $path,
+                $content,
+                $runtime,
+                $deadlineMonotonic,
+            ): string {
+                self::deadlineRemaining($deadlineMonotonic);
                 $this->recoverPerformanceConfigArtifactsLocked(
                     $directory,
                     $path,
@@ -265,8 +276,34 @@ CONF;
                 return $path;
             },
             $this->ownedFileSeal($runtime['uid']),
-            self::PUBLICATION_LOCK_WAIT_SECONDS,
+            self::lockWaitTimeout($deadlineMonotonic),
         );
+    }
+
+    private static function lockWaitTimeout(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return self::PUBLICATION_LOCK_WAIT_SECONDS;
+        }
+        return \min(
+            self::PUBLICATION_LOCK_WAIT_SECONDS,
+            self::deadlineRemaining($deadlineMonotonic),
+        );
+    }
+
+    private static function deadlineRemaining(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return self::PUBLICATION_LOCK_WAIT_SECONDS;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('WLS OpenSSL profile deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException('WLS OpenSSL profile deadline was exhausted.');
+        }
+        return $remaining;
     }
 
     /** @return array{directory:string,uid:int} */

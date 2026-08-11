@@ -112,7 +112,6 @@ final class ServiceContextGatewayEdgeTest extends TestCase
                     'http' => [
                         'protocols' => ['h1'],
                         'preferred' => 'h1',
-                        'protocol_edge' => 'disabled',
                         'tls_session_resumption' => false,
                         'alt_svc' => false,
                     ],
