@@ -9,8 +9,10 @@ use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Exception\DbException;
 
 /**
- * SQLite 3.45+ SQL 编译器
- * @since 1.0.0 支持 SQLite 3.45+
+ * SQLite SQL 编译器
+ *
+ * UPSERT 语法要求 SQLite 3.24+；RETURNING 仅在连接确认 SQLite 3.35+ 时生成。
+ * @since 1.0.0
  */
 final class SqliteCompiler extends AbstractCompiler
 {
@@ -25,6 +27,7 @@ final class SqliteCompiler extends AbstractCompiler
         $insertItems = $insert['insert'] ?? [];
         $insertOrUpdateItems = $insert['i_o_u'] ?? [];
         $identityField = $options['identity_field'] ?? 'id';
+        $supportsReturning = (bool)($options['supports_returning'] ?? true);
         $existUpdateSql = $options['exist_update_sql'] ?? '';
         $insertUpdateFields = $options['insert_update_fields'] ?? [];
         $insertUpdateWhereFields = $options['insert_update_where_fields'] ?? [];
@@ -101,7 +104,7 @@ final class SqliteCompiler extends AbstractCompiler
             }
         }
 
-        if ($identityField) {
+        if ($identityField && $supportsReturning) {
             $sql .= ' RETURNING ' . $this->dialect->quoteIdentifier($identityField);
         }
 

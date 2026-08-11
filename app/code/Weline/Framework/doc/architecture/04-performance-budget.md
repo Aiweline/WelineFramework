@@ -102,6 +102,7 @@ SQLite 的 `SQLITE_BUSY/SQLITE_LOCKED` 使用 `RetryBudget` 的单一、不可�
 - CLI/setup 默认沿用动态预算；只有显式配置 `db.retry.sqlite.cli_budget_ms` 才可扩大，硬上限为 `30000ms`，仍然只有一个 deadline。
 - deadline 是终止重试的唯一正常条件；32 次仅作为时钟/调度器异常的保险上限。退避基数为 `2ms`，按指数增长并加入不超过 10% 的抖动，实际等待永远不超过剩余预算。默认 `50ms` 下通常在第 6 次尝试前耗尽；显式 CLI 大预算可以实际获得更长但仍有界的等待。
 - Connector 在 PDO 打开后、任何可访问数据库文件的引导 SQL 之前立即设置 `PRAGMA busy_timeout = 0`。`case_sensitive_like`、`foreign_keys`、`pre_sql` 中的 journal/schema 引导以及 `sqlite_version()` 校验共享一个连接 deadline；不允许每个 PRAGMA 重置预算。
+- SQLite Query 首次编译 INSERT 时从当前 PDO 连接读取并缓存 `sqlite_version()`：版本低于 `3.35.0` 或检测异常时必须省略 `RETURNING`，`3.35.0+` 保留主键返回；该兼容分支不改变 SQLite 3.24+ 的 UPSERT 行为。
 - 原生 SQLite busy handler 会同步阻塞 PHP/WLS 线程，因此旧 `busy_timeout` 连接字段不再设置 native wait；`pre_sql` 中的 `PRAGMA busy_timeout=N` 保留原位置但强制收口为 `0`。需要等待时必须配置框架 retry budget，不能与 native timeout 叠加。
 - WLS 只有在 Scheduler 已激活、当前存在 Fiber 且输出缓冲允许安全让出时才等待；否则立即抛出 `DatabaseRetryTimeoutException`，`reason=cooperative_wait_unavailable`，不得退化成原生 `sleep/usleep`。
 - 只有 SQLite busy/locked 可重试。其他 PDO 异常保持原类型、错误码和调用栈；busy 表示当前 statement 或 write-intent begin 尚未提交，因此不会重放已完成的写操作，也不改变现有事务边界。
