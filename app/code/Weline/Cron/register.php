@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Cron',
     __DIR__,
-    '1.0.3',
+    '1.0.4',
     '<a href="https://bbs.aiweline.com">官网</a>提供计划任务调度。兼容win/linux（win7以上，linux支持crontab）',
     [
         'Weline_Admin'
