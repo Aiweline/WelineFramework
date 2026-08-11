@@ -154,7 +154,7 @@ class Set extends CommandAbstract
                 $this->printer->note('(￢_￢) ->：允许的部署模式：dev/prod');
                 return;
         }
-        if (Env::getInstance()->setConfig('deploy', $type)) {
+        if (Env::getInstance()->setConfig('system.deploy', $type)) {
             $this->printer->success('（●´∀｀）♪ 当前部署模式：' . $type);
         } else {
             $this->printer->error('╮(๑•́ ₃•̀๑)╭ 部署模式设置错误：' . $type);
