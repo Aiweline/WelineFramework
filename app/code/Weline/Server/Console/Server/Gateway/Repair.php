@@ -13,9 +13,10 @@ final class Repair extends AbstractGatewayCommand
         $json = $this->isJson($args);
         try {
             $payload = self::repairPayload($args);
-            if (isset($payload['accept_clock']) && \count($payload) > 1) {
+            $combinationError = self::repairPayloadValidationError($payload);
+            if ($combinationError !== '') {
                 return $this->failure(
-                    __('时钟信任恢复必须单独执行；请先仅运行 --accept-clock，再执行其他修复项。'),
+                    $combinationError,
                     $json,
                     'invalid_repair_combination',
                 );
@@ -46,9 +47,9 @@ final class Repair extends AbstractGatewayCommand
     }
 
     /**
-     * Only selected mutations are sent. CLOCK_UNTRUSTED intentionally accepts
-     * the exact admin payload {"accept_clock":true}; false/default fields would
-     * turn that recovery action into an unauthorized generic mutation.
+     * Only selected mutations are sent. CLOCK_UNTRUSTED accepts either the
+     * exact clock acknowledgement or the Controller's exact storage-recovery
+     * field set, which is required when both trust fences are active.
      *
      * @return array<string, true>
      */
@@ -58,14 +59,37 @@ final class Repair extends AbstractGatewayCommand
         if (isset($args['accept-clock']) || isset($args['accept_clock'])) {
             $payload['accept_clock'] = true;
         }
-        if (isset($args['accept-storage']) || isset($args['accept_storage'])) {
+        if (isset($args['accept-storage'])
+            || isset($args['accept_storage'])
+            || isset($args['accept-storage-recovery'])
+            || isset($args['accept_storage_recovery'])
+        ) {
             $payload['accept_storage_recovery'] = true;
+        }
+        if (isset($args['accept-journal-reset'])
+            || isset($args['accept_journal_reset'])
+        ) {
+            $payload['accept_journal_reset'] = true;
         }
         if (isset($args['retry-h3']) || isset($args['retry_h3'])) {
             $payload['retry_h3'] = true;
         }
 
         return $payload;
+    }
+
+    /** @param array<string,true> $payload */
+    private static function repairPayloadValidationError(array $payload): string
+    {
+        if (isset($payload['retry_h3']) && \count($payload) > 1) {
+            return __('H3 重新探测不能与时钟、存储或 journal 信任恢复合并执行。');
+        }
+        if (isset($payload['accept_journal_reset'])
+            && !isset($payload['accept_storage_recovery'])
+        ) {
+            return __('journal 信任重置必须同时指定 --accept-storage。');
+        }
+        return '';
     }
 
     public function help(): array|string
@@ -76,6 +100,8 @@ final class Repair extends AbstractGatewayCommand
             [
                 '--accept-clock' => __('管理员确认宿主时钟已校准并清除 CLOCK_UNTRUSTED'),
                 '--accept-storage' => __('确认磁盘/配额已恢复并重新验证 journal、重建恢复预留'),
+                '--accept-storage-recovery' => __('--accept-storage 的协议字段兼容别名'),
+                '--accept-journal-reset' => __('确认丢弃不可信 journal 链并从当前受信状态重新建立'),
                 '--retry-h3' => __('清除当前运行时的 H3 隔离并执行一次显式重新探测'),
                 '--json' => __('JSON 输出'),
             ],

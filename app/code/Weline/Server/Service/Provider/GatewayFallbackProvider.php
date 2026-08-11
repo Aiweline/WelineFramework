@@ -173,9 +173,10 @@ final class GatewayFallbackProvider extends AbstractServiceProvider
             $context->publicHost ?? '',
         ));
         if ($candidate === '' || \str_starts_with($candidate, '*.')) {
-            $candidate = \in_array($bindHost, ['0.0.0.0', '::'], true)
-                ? ($bindHost === '::' ? '::1' : '127.0.0.1')
-                : $bindHost;
+            // A wildcard certificate still requires a concrete hostname/SNI.
+            // The literal bind address is connectable transport metadata, not
+            // a valid TLS authority, so never turn it into a public URL.
+            return '';
         }
 
         return PureWlsPublicOrigin::fromHostAndPort($candidate, $this->port, true);

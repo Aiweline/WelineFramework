@@ -23,6 +23,7 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\System\Process\Processer;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Console\Console\Server\Stop as CliStop;
 use Weline\Server\Console\Server\Stop as MainStop;
 use Weline\Server\Service\CliServerService;
@@ -49,13 +50,14 @@ use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectEndpointReader;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
+use Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection;
+use Weline\Server\Service\Edge\Gateway\GatewayStartupFallbackRequest;
 use Weline\Server\Service\Runtime\PhpRuntimeSafetyProfile;
 use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
 use Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper;
 use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\DirectSharedListener;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
 use Weline\Server\Service\Runtime\WindowsListenerHandoff;
@@ -65,6 +67,7 @@ use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
 use Weline\Server\Service\Runtime\WlsRuntimeProfile;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
+use Weline\Server\Service\Edge\Gateway\CertificateTrustProvenanceException;
 use Weline\Server\Service\Provider\GatewayFallbackProvider;
 use Weline\Server\Service\Provider\GatewayJoinBackendProvider;
 use Weline\Server\Service\Provider\GatewayProvider;
@@ -75,6 +78,8 @@ use Weline\Server\Service\Provider\RuntimeTaskWatchdogProvider;
  */
 class Start extends CommandAbstract
 {
+    /** Exact one-release cleanup fence for the retired protocol sidecar. */
+
     /**
      * 默认 HTTP 端口（WLS 原生直连）
      */
@@ -98,6 +103,23 @@ class Start extends CommandAbstract
     private const PANEL_MODE_DEFAULT_MEMORY_LIMIT = '512M';
 
     private const PUBLIC_HOST_IP_PROBE_TIMEOUT_MS = 1200;
+
+    /**
+     * Project certificate selectors are local state and must never inherit the
+     * stores' compatibility 300-second lock wait during an interactive start.
+     */
+    private const STARTUP_CERTIFICATE_STATE_BUDGET_SECONDS = 8.0;
+
+    /**
+     * One retained startup listener must reach its immutable Master handoff
+     * within the allocator reservation lifetime. Every allocator observation
+     * in that phase receives this same absolute deadline, while each lock wait
+     * remains capped by GatewayPortLeaseAllocator at 250ms.
+     */
+    private const STARTUP_LISTENER_STATE_BUDGET_SECONDS = 120.0;
+
+    /** Failed-start reservation cleanup is best effort and must never stall shutdown. */
+    private const STARTUP_LISTENER_CLEANUP_BUDGET_SECONDS = 1.0;
 
     /**
      * 启动维护事务必须在一个总 deadline 内看到控制操作终态。
@@ -249,6 +271,18 @@ class Start extends CommandAbstract
     private ?WlsRuntimeProfile $latestRuntimeProfile = null;
     private ?string $latestRuntimeProfileListenHost = null;
 
+    private ?float $startupCertificateStateDeadlineMonotonic = null;
+
+    private ?float $startupListenerStateDeadlineMonotonic = null;
+
+    /** Native cold recovery discarded an authentic but superseded manifest. */
+    private bool $nativeServingManifestRebuildRequired = false;
+
+    /** @var list<string> */
+    private array $nativeServingManifestRebuildActiveDomains = [];
+
+    private ?SslCertificateService $deferredCertificatePreparationService = null;
+
     private string $latestRuntimeStrategy = RuntimeStrategyResolver::STRATEGY_AUTO;
 
     /**
@@ -286,6 +320,8 @@ class Start extends CommandAbstract
     public function execute(array $args = [], array $data = [])
     {
         $this->traceStartupPhase('(unparsed)', 'execute:enter');
+        $this->nativeServingManifestRebuildRequired = false;
+        $this->nativeServingManifestRebuildActiveDomains = [];
 
         if (\array_key_exists('independent', $args)
             || $this->hasCliArgvToken(['--independent', '-independent'])) {
@@ -540,8 +576,10 @@ class Start extends CommandAbstract
         LogConfig::bootstrapVerbose($enableLog);
 
         // 获取配置（命令行参数 > 已保存实例配置 > env配置 > 默认值）
+        $this->beginStartupListenerStateDeadline();
         $this->traceStartupPhase($instanceName, 'config:before');
         $config = $this->getServerConfig($instanceName, $args);
+        $host = $config['host'];
         $portExplicit = ($config['port_explicit'] ?? false) === true;
         $configuredEdgeMode = \strtolower(\trim((string)(
             $config['edge_mode']
@@ -550,12 +588,11 @@ class Start extends CommandAbstract
         if ($configuredEdgeMode === '') {
             $configuredEdgeMode = 'auto';
         }
-        if (($config['_saved_legacy_edge'] ?? false) && $edgeCliMode === null && !$noNginxRequested) {
-            $configuredEdgeMode = \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_LEGACY;
-        }
         try {
             $projectIdentity = new \Weline\Server\Service\Edge\Gateway\ProjectIdentityStore();
-            $projectUuid = $projectIdentity->projectUuid();
+            $projectUuid = $projectIdentity->projectUuid(
+                $this->startupListenerStateDeadline(),
+            );
             $launchId = \bin2hex(\random_bytes(16));
             $previousEndpoint = $this->getInstanceManager()->getRawInstanceData($instanceName);
             $previousGateway = \is_array($previousEndpoint['gateway'] ?? null)
@@ -602,6 +639,7 @@ class Start extends CommandAbstract
                     && Processer::isPortInUse($configuredStartupPort));
             $instanceGenerationState = $projectIdentity->advanceInstanceGeneration(
                 $instanceName,
+                deadlineMonotonic: $this->startupListenerStateDeadline(),
             );
             if (!\hash_equals(
                 $projectUuid,
@@ -633,7 +671,7 @@ class Start extends CommandAbstract
                     : $this->resolveServerListenHost(
                         (string)($config['host'] ?? '127.0.0.1'),
                     );
-            $startupDecision = new \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision();
+            $startupDecision = $this->createGatewayStartupDecisionForListenerPhase();
             // In auto/gateway modes `-p` is a loopback join-backend intent,
             // never a request to expose that number as the degraded public
             // WLS address. Only explicit pure-WLS mode owns a public exact
@@ -649,6 +687,7 @@ class Start extends CommandAbstract
                     $publicLeaseBindHost,
                     $publicPortExplicit ? (int)($config['port'] ?? 0) : null,
                     !$deferStartupListenerReservation,
+                    $this->startupListenerStateDeadline(),
                 );
             $this->startupPublicEdgeListener = $startupDecision->takeReservedListener();
         } catch (\Throwable $exception) {
@@ -751,23 +790,49 @@ class Start extends CommandAbstract
         if ($effectiveEdgeMode
             === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
         ) {
-            $manifestRecovery = \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::fromEndpoint(
-                \is_array($previousEndpoint) ? $previousEndpoint : [],
-                $instanceName,
-            );
-            if (\is_array($manifestRecovery)) {
-                // A schema-2 desired-state manifest outranks every configured
-                // or app/etc PEM fallback. It either supplies one active
-                // bootstrap snapshot or makes startup fail closed.
-                $config['gateway'][
-                    \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::CONFIG_KEY
-                ] = $manifestRecovery;
-                $manifestDecision = \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::validate(
-                    $manifestRecovery,
+            unset($config['gateway'][
+                \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::CONFIG_KEY
+            ]);
+            try {
+                $manifestRecovery = \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::fromEndpoint(
+                    \is_array($previousEndpoint) ? $previousEndpoint : [],
+                    $instanceName,
+                    $this->resolveCertificateTrustProfile($config),
+                    $this->startupCertificateStateDeadline(),
+                    $this->resolveCertificateHost($config, (string)$host),
                 );
-                $config['ssl_cert'] = (string)$manifestDecision['cert_path'];
-                $config['ssl_key'] = (string)$manifestDecision['key_path'];
-                $config['ssl_domain'] = (string)$manifestDecision['domain'];
+                if (\is_array($manifestRecovery)) {
+                    // A schema-3 desired-state manifest outranks every configured
+                    // or app/etc PEM fallback. It either supplies one active
+                    // bootstrap snapshot or makes startup fail closed.
+                    $config['gateway'][
+                        \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::CONFIG_KEY
+                    ] = $manifestRecovery;
+                    $manifestDecision = \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::validate(
+                        $manifestRecovery,
+                        $this->resolveCertificateTrustProfile($config),
+                        $this->startupCertificateStateDeadline(),
+                        $this->resolveCertificateHost($config, (string)$host),
+                    );
+                    $config['ssl_cert'] = (string)$manifestDecision['cert_path'];
+                    $config['ssl_key'] = (string)$manifestDecision['key_path'];
+                    $config['ssl_domain'] = (string)$manifestDecision['domain'];
+                }
+            } catch (\Weline\Server\Service\Edge\NativeServingManifestRebuildRequiredException $exception) {
+                // The endpoint proof was exact before certificate authority
+                // advanced. Discard it and let ensureSslCertificate consume
+                // only the current selector/tombstone; never reactivate its
+                // stale PEM paths as a new generation.
+                $this->nativeServingManifestRebuildRequired = true;
+                $this->nativeServingManifestRebuildActiveDomains = $exception->activeDomains;
+                unset($config['gateway'][
+                    \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::CONFIG_KEY
+                ]);
+            } catch (\Throwable $throwable) {
+                $this->printer->error(__('纯 WLS 启动拒绝损坏或不匹配的服务清单：%{1}', [
+                    $throwable->getMessage(),
+                ]));
+                return 1;
             }
         }
         if ($gatewayMode && !$deferStartupListenerReservation) {
@@ -903,7 +968,6 @@ class Start extends CommandAbstract
             $this->printer->note(__('使用已保存的实例配置：%{1} (%{2}:%{3})', [$instanceName, $savedHost, $savedPort]));
         }
         
-        $host = $config['host'];
         $port = $config['port'];
         $count = $config['worker_count'];
         $this->traceStartupPhase($instanceName, 'host-allowlist:before', [
@@ -924,6 +988,7 @@ class Start extends CommandAbstract
             return 1;
         }
         $config['public_host'] = $publicHost;
+        $this->beginStartupCertificateStateDeadline();
         if (($config['_certificate_preparation_deferred'] ?? false) === true) {
             $this->completeDeferredCertificatePreparation(
                 $instanceName,
@@ -984,6 +1049,8 @@ class Start extends CommandAbstract
         }
         $portExplicit = ($config['port_explicit'] ?? false) === true
             && !$edgeDecision->isAutoFallback();
+        $certificateTrustProfile = $this->resolveCertificateTrustProfile($config);
+        $config['gateway']['certificate_profile'] = $certificateTrustProfile;
         
         $this->traceStartupPhase($instanceName, 'ssl-ensure:before');
             $sslResult = $this->ensureSslCertificate($instanceName, $config);
@@ -1014,14 +1081,54 @@ class Start extends CommandAbstract
                 === true;
             if ($servingManifestRecovery) {
                 $activeCertificate = [
+                    'domain' => (string)($sslResult['domain'] ?? ''),
                     'generation' => (int)($sslResult['certificate_generation'] ?? 0),
                     'source_digest' => (string)(
                         $sslResult['certificate_source_digest'] ?? ''
                     ),
+                    'trust_profile' => (string)($sslResult['trust_profile'] ?? ''),
+                    'provider' => (string)($sslResult['provider'] ?? ''),
+                    'material_class' => (string)($sslResult['material_class'] ?? ''),
+                    'provenance_digest' => (string)(
+                        $sslResult['certificate_provenance_digest'] ?? ''
+                    ),
+                    'leaf_fingerprint_sha256' => (string)(
+                        $sslResult['leaf_fingerprint_sha256'] ?? ''
+                    ),
                     'cert_path' => (string)$sslCert,
                     'key_path' => (string)$sslKey,
                 ];
+            } elseif (($sslResult['project_generation_reused'] ?? false) === true) {
+                // The immutable selector is already the committed project
+                // authority. Re-running activate() would allocate a newer
+                // generation from the same bytes and can revive a manifest
+                // that was deliberately superseded during crash recovery.
+                $activeCertificate = [
+                    'domain' => (string)($sslResult['domain'] ?? ''),
+                    'generation' => (int)($sslResult['generation'] ?? 0),
+                    'source_digest' => (string)($sslResult['source_digest'] ?? ''),
+                    'trust_profile' => (string)($sslResult['trust_profile'] ?? ''),
+                    'provider' => (string)($sslResult['provider'] ?? ''),
+                    'material_class' => (string)($sslResult['material_class'] ?? ''),
+                    'provenance_digest' => (string)(
+                        $sslResult['provenance_digest'] ?? ''
+                    ),
+                    'leaf_fingerprint_sha256' => (string)(
+                        $sslResult['leaf_fingerprint_sha256'] ?? ''
+                    ),
+                    'cert_path' => (string)$sslCert,
+                    'key_path' => (string)$sslKey,
+                    'chain_path' => (string)($sslResult['chain_path'] ?? ''),
+                    'cert_sha256' => (string)($sslResult['cert_sha256'] ?? ''),
+                    'key_sha256' => (string)($sslResult['key_sha256'] ?? ''),
+                    'chain_sha256' => (string)($sslResult['chain_sha256'] ?? ''),
+                ];
             } elseif ($sslEnabled && $sslCert !== '' && $sslKey !== '') {
+                // ACME or local certificate generation may legitimately take
+                // longer than a state-lock budget. Activation is a new bounded
+                // local phase, and every selector read below shares its one
+                // absolute deadline.
+                $this->beginStartupCertificateStateDeadline();
                 try {
                     $projectRoot = \realpath((string)BP);
                     if (!\is_string($projectRoot) || $projectRoot === '') {
@@ -1047,6 +1154,9 @@ class Start extends CommandAbstract
                         (string)$sslKey,
                         '',
                         $certificateRoots,
+                        $this->startupCertificateStateDeadline(),
+                        $certificateTrustProfile,
+                        $this->resolveCertificateProvider($sslResult),
                     );
                     $sslCert = (string)$activeCertificate['cert_path'];
                     $sslKey = (string)$activeCertificate['key_path'];
@@ -1054,6 +1164,39 @@ class Start extends CommandAbstract
                         $this->printer->warning(__('新证书未通过完整校验，继续使用上一代有效证书：%{1}', [
                             (string)($activeCertificate['activation_error'] ?? ''),
                         ]));
+                    } elseif ((string)($activeCertificate['activation_error'] ?? '') !== '') {
+                        $this->printer->warning(__('新证书代际已提交并按完整 after-image 对账，但后置持久化确认异常：%{1}', [
+                            (string)$activeCertificate['activation_error'],
+                        ]));
+                    }
+                } catch (CertificateTrustProvenanceException $throwable) {
+                    if ($gatewayMode) {
+                        $this->printer->warning(__('%{1}；共享网关保持 challenge-only，未发布普通 443 路由。', [
+                            $throwable->getMessage(),
+                        ]));
+                        $activeCertificate = null;
+                        $sslEnabled = false;
+                        $certificatePending = true;
+                        $sslCert = '';
+                        $sslKey = '';
+                        $sslResult = [
+                            'success' => true,
+                            'message' => $throwable->getMessage(),
+                            'code' => 'PENDING_CERTIFICATE',
+                            'domain' => $this->resolveCertificateHost($config, (string)$host),
+                            'cert_path' => '',
+                            'key_path' => '',
+                            'ssl_enabled' => false,
+                            'pending_certificate' => true,
+                            'is_new' => false,
+                            'trust_profile' => $certificateTrustProfile,
+                            'provider' => ProjectCertificateGenerationStore::PROVIDER_EXTERNAL,
+                        ];
+                    } else {
+                        $this->printer->error(__('无法激活项目证书代际：%{1}', [
+                            $throwable->getMessage(),
+                        ]));
+                        return 1;
                     }
                 } catch (\Throwable $throwable) {
                     $this->printer->error(__('无法激活项目证书代际：%{1}', [
@@ -1064,21 +1207,79 @@ class Start extends CommandAbstract
             }
             $config['ssl_cert'] = $sslCert;
             $config['ssl_key'] = $sslKey;
-            $config['ssl_domain'] = $servingManifestRecovery
+            $config['ssl_domain'] = ($servingManifestRecovery
+                    || ($sslResult['project_generation_reused'] ?? false) === true)
                 ? (string)($sslResult['domain'] ?? '')
                 : $this->resolveCertificateHost($config, (string)$host);
-            if (!$servingManifestRecovery
-                && ($sslEnabled || $certificatePending)
-                && ($gatewayMode
-                    || $edgeDecision->requestedMode
-                        === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO)
-            ) {
+            if ($activeCertificate !== null) {
+                try {
+                    $activeDomain = $this->normalizeCertificateDomainCandidate(
+                        (string)$config['ssl_domain'],
+                    );
+                    $activeDigest = \strtolower(\trim((string)(
+                        $activeCertificate['source_digest'] ?? ''
+                    )));
+                    $activeProvenanceDigest = \strtolower(\trim((string)(
+                        $activeCertificate['provenance_digest'] ?? ''
+                    )));
+                    if ($activeDomain === ''
+                        || !\hash_equals(
+                            $activeDomain,
+                            $this->normalizeCertificateDomainCandidate((string)(
+                                $activeCertificate['domain'] ?? ''
+                            )),
+                        )
+                        || (int)($activeCertificate['generation'] ?? 0) < 1
+                        || \preg_match('/\A[a-f0-9]{64}\z/D', $activeDigest) !== 1
+                        || \preg_match('/\A[a-f0-9]{64}\z/D', $activeProvenanceDigest) !== 1
+                        || !\hash_equals(
+                            $certificateTrustProfile,
+                            (string)($activeCertificate['trust_profile'] ?? ''),
+                        )
+                        || !\hash_equals(
+                            (string)$sslCert,
+                            (string)($activeCertificate['cert_path'] ?? ''),
+                        )
+                        || !\hash_equals(
+                            (string)$sslKey,
+                            (string)($activeCertificate['key_path'] ?? ''),
+                        )
+                    ) {
+                        throw new \RuntimeException(
+                            'Active certificate after-image is incomplete before edge launch.'
+                        );
+                    }
+                    $activeCertificate['source_digest'] = $activeDigest;
+                    $activeCertificate['provenance_digest'] = $activeProvenanceDigest;
+                } catch (\Throwable $throwable) {
+                    $this->printer->error(__('无法确认边缘启动所需的项目证书代际：%{1}', [
+                        $throwable->getMessage(),
+                    ]));
+                    return 1;
+                }
+            }
+            if ($this->shouldPersistGatewayCertificateSource(
+                $sslEnabled,
+                $certificatePending,
+                $gatewayMode,
+                $noNginxRequested,
+                $edgeDecision->requestedMode,
+            )) {
                 $config['gateway']['certificate_source'] = [
                     'domain' => (string)$config['ssl_domain'],
                     'cert_path' => (string)$sslCert,
                     'key_path' => (string)$sslKey,
                     'generation' => (int)($activeCertificate['generation'] ?? 0),
                     'source_digest' => (string)($activeCertificate['source_digest'] ?? ''),
+                    'trust_profile' => (string)($activeCertificate['trust_profile']
+                        ?? $certificateTrustProfile),
+                    'provider' => (string)($activeCertificate['provider']
+                        ?? ProjectCertificateGenerationStore::PROVIDER_EXTERNAL),
+                    'material_class' => (string)($activeCertificate['material_class'] ?? ''),
+                    'provenance_digest' => (string)($activeCertificate['provenance_digest'] ?? ''),
+                    'leaf_fingerprint_sha256' => (string)(
+                        $activeCertificate['leaf_fingerprint_sha256'] ?? ''
+                    ),
                     'pending' => $certificatePending,
                 ];
                 $config['gateway']['certificate_pending'] = $certificatePending;
@@ -1219,19 +1420,6 @@ class Start extends CommandAbstract
             $this->printer->error(__('WLS HTTP 协议配置无效：%{1}', [$exception->getMessage()]));
             return 1;
         }
-        $configuredHttp = \is_array($config['http'] ?? null) ? $config['http'] : [];
-        $configuredProtocolEdgeBinary = \trim((string)(
-            $configuredHttp['protocol_edge_binary']
-            ?? $config['protocol_edge_binary']
-            ?? ''
-        ));
-        if ($configuredProtocolEdgeBinary !== ''
-            || $this->isTruthyCliFlagValue($configuredHttp['protocol_edge_enabled'] ?? false)
-            || $this->isTruthyCliFlagValue($config['protocol_edge_enabled'] ?? false)
-        ) {
-            $this->printer->error(__('WLS native/Caddy 协议边缘进程已退役；纯 WLS HTTP/2 由 PHP 进程内实现。'));
-            return 1;
-        }
         $configuredHttp3 = $config['http3'] ?? [];
         $configuredHttp3Enabled = \is_array($configuredHttp3)
             ? ($configuredHttp3['enabled'] ?? false)
@@ -1245,20 +1433,11 @@ class Start extends CommandAbstract
             $this->printer->error(__('纯 WLS HTTP/3 不可用；HTTP/3 仅由项目托管 Nginx 提供。'));
             return 1;
         }
-        $protocolEdgeBinary = '';
-        if ($httpProtocolSelection->isProtocolEdgeEnabled()) {
-            $this->printer->error(__('WLS native/Caddy 协议边缘进程已退役。'));
-            return 1;
-        }
         $config['http'] = \array_merge(
             \is_array($config['http'] ?? null) ? $config['http'] : [],
             $httpProtocolSelection->toConfig(),
-            ['protocol_edge_binary' => $protocolEdgeBinary],
         );
-        $protocolEdgeEnabled = false;
         $runtimeStrategy['http_protocol_selection'] = $httpProtocolSelection->toArray();
-        $runtimeStrategy['protocol_edge_enabled'] = false;
-        $runtimeStrategy['protocol_edge_binary'] = '';
         $this->printer->note($pureWls
             ? __('纯 WLS 协议：HTTP/2（默认）→ HTTP/1.1（自动回退）')
             : __('WLS 回源协议：HTTP/1.1（公网协议协商由 Nginx 负责）'));
@@ -1270,7 +1449,11 @@ class Start extends CommandAbstract
             }
         }
         try {
-            $tlsProcessProfile = (new TlsProcessProfileConfigurator())->activate($config, $backendSslEnabled);
+            $tlsProcessProfile = (new TlsProcessProfileConfigurator())->activate(
+                $config,
+                $backendSslEnabled,
+                $this->startupListenerStateDeadline(),
+            );
         } catch (\RuntimeException $exception) {
             $this->printer->error($exception->getMessage());
             return 1;
@@ -1632,6 +1815,12 @@ class Start extends CommandAbstract
         // one exact bind while the per-instance start lock is still held.
         if ($deferStartupListenerReservation) {
             try {
+                // The old generation may have spent its complete drain budget
+                // before releasing the endpoint. Listener ownership begins a
+                // new explicit phase here; reserve/read/transfer still share
+                // this one absolute deadline rather than resetting per call.
+                $this->beginStartupListenerStateDeadline();
+                $startupDecision = $this->createGatewayStartupDecisionForListenerPhase();
                 if ($gatewayMode) {
                     $port = $this->allocateGatewayInitialBackendPort(
                         $instanceName,
@@ -1647,6 +1836,7 @@ class Start extends CommandAbstract
                         $instanceName,
                         $publicLeaseBindHost,
                         $port,
+                        $this->startupListenerStateDeadline(),
                     );
                     $this->startupPublicEdgeListener =
                         $startupDecision->takeReservedListener();
@@ -1736,7 +1926,7 @@ class Start extends CommandAbstract
                 ->stabilize($capabilityResolver->resolve([
                     'gateway' => $config['gateway'],
                     'shared_state' => $sharedStateRuntime,
-                ]));
+                ]), $this->startupListenerStateDeadline());
             $config['gateway']['backend_capability_launch'] =
                 $capabilityResolver->createLaunchSnapshot(
                     $capability,
@@ -1822,14 +2012,9 @@ class Start extends CommandAbstract
 
         $reservedWorkerPorts = $this->getWorkerAllocationReservedPorts(
             $port,
-            $dispatcherEnabled || $protocolEdgeEnabled || $usesWorkerPorts,
+            $dispatcherEnabled || $usesWorkerPorts,
         );
-        if ($protocolEdgeEnabled) {
-            $reservedWorkerPorts[] = ProtocolEdgeRuntime::adminPortForInstance($instanceName, $port);
-            $reservedWorkerPorts = \array_values(\array_unique($reservedWorkerPorts));
-        }
-        $requiresWorkerPortAllocationLock = $protocolEdgeEnabled
-            || $usesWorkerPorts
+        $requiresWorkerPortAllocationLock = $usesWorkerPorts
             || (!$useDirectMode && $count > 1);
         $workerPortAllocationLocked = false;
         if ($requiresWorkerPortAllocationLock) {
@@ -1856,8 +2041,8 @@ class Start extends CommandAbstract
                 $port,
                 $workerBasePort,
                 $count,
-                $dispatcherEnabled || $protocolEdgeEnabled,
-                $useDirectMode && !$protocolEdgeEnabled,
+                $dispatcherEnabled,
+                $useDirectMode,
                 $usesWorkerPorts,
             );
 
@@ -1881,8 +2066,6 @@ class Start extends CommandAbstract
                 500,
                 $instanceName,
                 $reservedWorkerPorts,
-                $protocolEdgeEnabled,
-                $dispatcherEnabled,
             );
             if ($nextWorkerPort !== $workerPort) {
                 $this->printer->warning(__('Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}', [
@@ -1992,29 +2175,7 @@ class Start extends CommandAbstract
             'dispatcher' => $dispatcherEnabled,
             'skipped' => $skipPostStopPortInspection,
         ]);
-        if (!$skipPostStopPortInspection && $protocolEdgeEnabled) {
-            if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'HTTP Protocol Edge', $instanceName)) {
-                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
-                    $this->disableMaintenanceMode($instanceName);
-                }
-                return 1;
-            }
-            if (!$this->checkAndReleasePorts('127.0.0.1', $workerPort, $count, $forceRestart, $instanceName)) {
-                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
-                    $this->disableMaintenanceMode($instanceName);
-                }
-                return 1;
-            }
-            if ($dispatcherEnabled) {
-                $edgeDispatcherPort = ProtocolEdgeRuntime::dispatcherPortFromWorkerRange($workerPort, $count);
-                if (!$this->checkAndReleasePort('127.0.0.1', $edgeDispatcherPort, $forceRestart, 'Internal Dispatcher', $instanceName)) {
-                    if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
-                        $this->disableMaintenanceMode($instanceName);
-                    }
-                    return 1;
-                }
-            }
-        } elseif (!$skipPostStopPortInspection && $dispatcherEnabled) {
+        if (!$skipPostStopPortInspection && $dispatcherEnabled) {
             // Dispatcher 模式：检查主端口（Dispatcher 用）+ Worker 内网端口
             if (!$this->checkAndReleasePort($host, $port, $restartCleanupPerformed, 'Dispatcher', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
@@ -2307,6 +2468,20 @@ class Start extends CommandAbstract
         $this->wlsChildProcessesMayExist = true;
         $this->installStartupListenerInCurrentMaster($instanceName, $config);
         $this->runMasterProcess($instanceName, $config, $workerScript, '', '', $backendSslEnabled, $httpRedirectPort, $windowMode);
+    }
+
+    protected function shouldPersistGatewayCertificateSource(
+        bool $sslEnabled,
+        bool $certificatePending,
+        bool $gatewayMode,
+        bool $pureWlsMode,
+        string $requestedMode,
+    ): bool {
+        return ($sslEnabled || $certificatePending)
+            && ($gatewayMode
+                || $pureWlsMode
+                || $requestedMode
+                    === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO);
     }
 
     protected function resolveStartupCommandExitCode(bool $startupCompleted): int
@@ -2908,20 +3083,8 @@ class Start extends CommandAbstract
         ) {
             throw new \RuntimeException('Master-only startup rejected TLS on the private Nginx backend.');
         }
-        $protocolEdgeEnabled = false;
         if ((bool)($persistedHttp3['enabled'] ?? false)) {
             throw new \RuntimeException('Master-only startup rejected WLS native HTTP/3 activation.');
-        }
-        if (!\is_bool($data['protocol_edge_enabled'] ?? null)
-            || (bool)$data['protocol_edge_enabled'] !== $protocolEdgeEnabled
-        ) {
-            throw new \RuntimeException('Master-only startup rejected inconsistent protocol edge ownership.');
-        }
-        $protocolEdgeBinary = \trim((string)($data['protocol_edge_binary'] ?? ''));
-        if ($protocolEdgeBinary !== '') {
-            throw new \RuntimeException(
-                'Master-only startup rejected: protocol edge binary is not runnable.'
-            );
         }
         $workerScript = $this->ensureWorkerScript();
         $port = (int)($data['port'] ?? 443);
@@ -2963,9 +3126,7 @@ class Start extends CommandAbstract
             ],
             'loop' => ['driver' => $persistedRuntimeSelection->eventLoopDriver],
             'ssl' => ['engine' => $persistedRuntimeSelection->sslEngine],
-            'http' => \array_merge($httpProtocolSelection->toConfig(), [
-                'protocol_edge_binary' => $protocolEdgeBinary,
-            ]),
+            'http' => $httpProtocolSelection->toConfig(),
             'http3' => \is_array($data['http3'] ?? null) ? $data['http3'] : [],
             'supervisor' => ['enabled' => (bool)$data['supervisor_enabled']],
             'worker_port' => $workerPort,
@@ -3173,6 +3334,7 @@ class Start extends CommandAbstract
                     $listener,
                     $intent,
                     $spawnedMasterPid,
+                    $this->startupListenerStateDeadline(),
                 );
             }
         } catch (\Throwable $exception) {
@@ -3212,6 +3374,7 @@ class Start extends CommandAbstract
         );
         $waitStepMs = 50;
         $waitStartedNs = \hrtime(true);
+        $hardDeadlineNs = $waitStartedNs + ($hardWaitMs * 1_000_000);
         $waited = 0;
         $lastLivenessCheckMs = 0;
         $softDeadlineReported = false;
@@ -3231,7 +3394,15 @@ class Start extends CommandAbstract
         ]);
 
         while ($waited < $hardWaitMs) {
-            SchedulerSystem::usleep($waitStepMs * 1000);
+            $waitMicroseconds = self::boundedNanosecondDeadlineSleepMicroseconds(
+                $hardDeadlineNs,
+                \hrtime(true),
+                $waitStepMs * 1000,
+            );
+            if ($waitMicroseconds < 1) {
+                break;
+            }
+            SchedulerSystem::usleep($waitMicroseconds);
             $waited = (int)\max(
                 0,
                 \round((\hrtime(true) - $waitStartedNs) / 1_000_000)
@@ -3320,7 +3491,15 @@ class Start extends CommandAbstract
                 while (!\is_array($backgroundStartupData['runtime_selection'] ?? null)
                     && self::monotonicSeconds() < $metadataDeadline
                 ) {
-                    SchedulerSystem::usleep(25_000);
+                    $waitMicroseconds = self::boundedMonotonicDeadlineSleepMicroseconds(
+                        $metadataDeadline,
+                        self::monotonicSeconds(),
+                        25_000,
+                    );
+                    if ($waitMicroseconds < 1) {
+                        break;
+                    }
+                    SchedulerSystem::usleep($waitMicroseconds);
                     $backgroundStartupData = $this->readBackgroundStartupData($instanceFile);
                 }
                 if (!\is_array($backgroundStartupData['runtime_selection'] ?? null)
@@ -3403,6 +3582,7 @@ class Start extends CommandAbstract
                         (int)$port,
                         is_array($args) ? $args : [],
                         $instanceName,
+                        $activeCertificate,
                     );
                     if (!$managedNginxReady) {
                         $this->printer->warning($readyEdgeAction
@@ -3887,8 +4067,13 @@ class Start extends CommandAbstract
         }
 
         while ($waited < $hardMaxWaitMs) {
-            SchedulerSystem::usleep($waitStepMs * 1000);
-            $waited += $waitStepMs;
+            $remainingWaitMs = $hardMaxWaitMs - $waited;
+            $sleepMilliseconds = \min($waitStepMs, $remainingWaitMs);
+            if ($sleepMilliseconds < 1) {
+                break;
+            }
+            SchedulerSystem::usleep($sleepMilliseconds * 1000);
+            $waited += $sleepMilliseconds;
             $lastData = $this->readBackgroundStartupData($instanceFile);
             [$lastStartupEventSeq, $lastProgress] = $this->emitBackgroundStartupEvents($lastData, $lastStartupEventSeq, $lastProgress);
             $progress = $this->formatBackgroundStartupProgress($lastData, $waited);
@@ -4423,7 +4608,6 @@ class Start extends CommandAbstract
             MasterProcess::buildScopedProcessName('weline-wls-redirect', $instanceName),
             MasterProcess::buildScopedProcessName(GatewayProvider::PROCESS_NAME_PREFIX, $instanceName),
             MasterProcess::buildScopedProcessName(GatewayFallbackProvider::PROCESS_NAME_PREFIX, $instanceName),
-            MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $instanceName),
             MasterProcess::buildScopedProcessName(RuntimeTaskWatchdogProvider::PROCESS_NAME_PREFIX, $instanceName),
         ];
         $prefixes = [
@@ -4886,14 +5070,25 @@ class Start extends CommandAbstract
     protected function syncWlsMaintenanceMode(?string $instanceName, bool $enabled): void
     {
         $required = $this->wlsMaintenanceSyncRequired;
+        $maintenanceSyncTimeoutSec = \PHP_OS_FAMILY === 'Windows'
+            ? self::WINDOWS_MAINTENANCE_SYNC_TIMEOUT_SEC
+            : self::MAINTENANCE_SYNC_TIMEOUT_SEC;
         $startedAtNs = \hrtime(true);
+        $deadlineNs = $startedAtNs
+            + (int)($maintenanceSyncTimeoutSec * 1_000_000_000);
+        $deadlineMonotonic = $deadlineNs / 1_000_000_000;
         try {
             /** @var IpcControlGateway $gateway */
             $gateway = ObjectManager::getInstance(IpcControlGateway::class);
             if ($instanceName !== null && $instanceName !== '') {
                 // 启动刚完成时实例管理器的运行态缓存可能尚未收敛；显式实例必须
                 // 直接使用 Master endpoint，不能让广播层 attempted=[] 伪装成功。
-                $commandResult = $gateway->setMaintenanceMode($instanceName, $enabled);
+                $commandResult = $gateway->setMaintenanceModeBeforeDeadline(
+                    $instanceName,
+                    $enabled,
+                    6.0,
+                    $deadlineMonotonic,
+                );
                 $result = [
                     'success' => !empty($commandResult['success']),
                     'attempted' => [$instanceName],
@@ -4903,7 +5098,12 @@ class Start extends CommandAbstract
             } else {
                 /** @var BroadcastControlDispatchService $dispatchService */
                 $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
-                $result = $dispatchService->setMaintenanceMode($enabled, null);
+                $result = $dispatchService->setMaintenanceModeBeforeDeadline(
+                    $enabled,
+                    null,
+                    6.0,
+                    $deadlineMonotonic,
+                );
             }
 
             $attempted = \array_values(\array_filter(
@@ -4930,10 +5130,6 @@ class Start extends CommandAbstract
                 $pending[$targetInstance] = $operationId !== '' ? $operationId : null;
             }
 
-            $maintenanceSyncTimeoutSec = \PHP_OS_FAMILY === 'Windows'
-                ? self::WINDOWS_MAINTENANCE_SYNC_TIMEOUT_SEC
-                : self::MAINTENANCE_SYNC_TIMEOUT_SEC;
-            $deadlineNs = $startedAtNs + (int)($maintenanceSyncTimeoutSec * 1_000_000_000);
             $lastObserved = [];
 
             while ($pending !== [] && \hrtime(true) < $deadlineNs) {
@@ -4943,9 +5139,10 @@ class Start extends CommandAbstract
                         break 2;
                     }
 
-                    $status = $gateway->getStatus(
+                    $status = $gateway->getStatusBeforeDeadline(
                         $targetInstance,
-                        \max(0.1, \min(0.75, $remainingSec))
+                        \max(0.1, \min(0.75, $remainingSec)),
+                        $deadlineMonotonic,
                     );
                     if (empty($status['success'])) {
                         $lastObserved[$targetInstance] = (string)($status['message'] ?? 'status unavailable');
@@ -5041,6 +5238,10 @@ class Start extends CommandAbstract
             'hot_reload' => false,  // 默认关闭，可通过 wls.hot_reload=true 或 --hot-reload 启用
             'ssl_cert' => '',  // SSL 证书路径
             'ssl_key' => '',   // SSL 私钥路径
+            // WLS 2.0 never infers test trust from localhost, an IP, or a
+            // development-looking suffix. Test certificates require an exact
+            // explicit profile at the instance/config/CLI boundary.
+            'certificate_profile' => ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
             'worker_base_port' => 10000 + MasterProcess::getProjectPortOffset(),  // Dispatcher 模式下 Worker 内网端口基数 + 项目偏移
             'worker_memory_limit' => '256M',
             'runtime_strategy' => 'auto',
@@ -5058,8 +5259,6 @@ class Start extends CommandAbstract
                 // with H1 fallback.
                 'protocols' => HttpProtocolSelection::DEFAULT_PROTOCOLS,
                 'preferred' => HttpProtocolSelection::HTTP_2,
-                'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
-                'protocol_edge_binary' => '',
                 'tls_session_resumption' => true,
                 'alt_svc' => false,
             ],
@@ -5073,18 +5272,15 @@ class Start extends CommandAbstract
         // 历史配置继续保持 CLI > env > saved > defaults。WLS 2.0 edge intent
         // 是实例级持久选择，单独遵循 CLI > saved > env > auto。
         $savedConfig = $this->loadSavedInstanceConfig($instanceName);
-        $savedEdgeMode = null;
-        if (\is_array($savedConfig)) {
-            $savedEdgeCandidate = $savedConfig['edge_mode']
-                ?? (\is_array($savedConfig['edge'] ?? null)
-                    ? ($savedConfig['edge']['mode'] ?? null)
-                    : null);
-            if (\is_scalar($savedEdgeCandidate)
-                && \trim((string)$savedEdgeCandidate) !== ''
-            ) {
-                $savedEdgeMode = \strtolower(\trim((string)$savedEdgeCandidate));
-            }
-        }
+        $savedCertificateProfile = \is_array($savedConfig)
+            && \array_key_exists('certificate_profile', $savedConfig)
+                ? ProjectCertificateGenerationStore::normalizeTrustProfile(
+                    (string)$savedConfig['certificate_profile'],
+                )
+                : null;
+        $savedEdgeMode = \is_array($savedConfig)
+            ? $this->resolveConfiguredEdgeIntent($savedConfig)
+            : null;
         $savedPortExplicit = false;
         $savedRequestedPort = 0;
         if (\is_array($savedConfig)
@@ -5116,12 +5312,6 @@ class Start extends CommandAbstract
         }
         $savedWorkerCountExplicit = \is_array($savedConfig)
             && \array_key_exists('worker_count', $savedConfig);
-        $savedLegacyEdge = \is_array($savedConfig)
-            && \strtolower(\trim((string)($savedConfig['edge_adapter'] ?? '')))
-                === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
-            && !\array_key_exists('edge_mode', $savedConfig)
-            && !(\is_array($savedConfig['edge'] ?? null)
-                && \array_key_exists('mode', $savedConfig['edge']));
         if ($savedConfig) {
             // 移除已保存配置中的 worker_base_port，强制使用带项目偏移的默认值
             // 这确保了多项目部署时端口不会冲突（旧配置文件可能包含不带偏移的端口）
@@ -5129,15 +5319,14 @@ class Start extends CommandAbstract
             $config = \array_merge($config, $savedConfig);
             $config['source'] = __('已保存实例配置 (%{1})', [$instanceName]);
         }
-        if ($savedLegacyEdge) {
-            $config['_saved_legacy_edge'] = true;
-        }
-        
+
         // 读取 env 配置
         $envConfig = $this->getEnvConfig();
         
         $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
         $wlsServers = \is_array($wls['servers'] ?? null) ? $wls['servers'] : [];
+        $baseWlsEdgeMode = $this->resolveConfiguredEdgeIntent($wls);
+        $instanceWlsEdgeMode = null;
         $instanceTopologyExplicit = false;
         if ($wls !== []) {
             $baseWls = $wls;
@@ -5150,6 +5339,7 @@ class Start extends CommandAbstract
             && \is_array($wlsServers[$instanceName])
         ) {
             $instanceConfig = $wlsServers[$instanceName];
+            $instanceWlsEdgeMode = $this->resolveConfiguredEdgeIntent($instanceConfig);
             $instanceRuntime = \is_array($instanceConfig['runtime'] ?? null) ? $instanceConfig['runtime'] : [];
             $instanceTopologyExplicit = \array_key_exists('topology', $instanceRuntime);
             unset($instanceConfig['worker_base_port']);
@@ -5157,15 +5347,41 @@ class Start extends CommandAbstract
             $config['source'] = __('env.wls.servers.%{1}', [$instanceName]);
         }
 
+        // Legacy adapter values are intent only when explicitly present in a
+        // source layer. Never infer legacy mode from the default adapter.
+        $envEdgeMode = $instanceWlsEdgeMode ?? $baseWlsEdgeMode;
+        if ($envEdgeMode !== null) {
+            $config = $this->applyConfiguredEdgeIntent($config, $envEdgeMode);
+        }
+
         // Reapply only the persisted WLS 2.0 edge intent after env merging.
         // Other saved fields deliberately retain their historical lower priority.
         // CLI --edge is applied below and therefore remains authoritative.
         if ($savedEdgeMode !== null) {
-            $config['edge'] = \array_merge(
-                \is_array($config['edge'] ?? null) ? $config['edge'] : [],
-                ['mode' => $savedEdgeMode],
-            );
-            $config['edge_mode'] = $savedEdgeMode;
+            $config = $this->applyConfiguredEdgeIntent($config, $savedEdgeMode);
+        }
+        if ($savedCertificateProfile !== null) {
+            $config['certificate_profile'] = $savedCertificateProfile;
+        }
+        $restartRequested = isset($args['r']) || isset($args['restart']);
+        $savedRestartHost = \is_array($savedConfig)
+            ? \trim((string)($savedConfig['host'] ?? ''))
+            : '';
+        if ($restartRequested
+            && $savedRestartHost !== ''
+            && !$this->shouldUseDefaultHostFallback($savedRestartHost)
+        ) {
+            // A rolling restart must keep the serving identity of the running
+            // instance unless the CLI explicitly replaces it below. Letting a
+            // global env default replace these fields makes the active native
+            // manifest and the restart candidate describe different routes.
+            foreach (['host', 'public_host', 'ssl_domain', 'ssl_cert', 'ssl_key'] as $identityKey) {
+                if (\array_key_exists($identityKey, $savedConfig)
+                    && \is_string($savedConfig[$identityKey])
+                ) {
+                    $config[$identityKey] = $savedConfig[$identityKey];
+                }
+            }
         }
         if ($savedPortExplicit) {
             $config['port'] = $savedRequestedPort;
@@ -5310,7 +5526,21 @@ class Start extends CommandAbstract
             $config['edge_mode'] = $edgeCliMode;
             $config['source'] = __('命令行参数 --edge');
             $hasCliOverride = true;
-            unset($config['_saved_legacy_edge']);
+        }
+        $certificateProfileArg = $args['certificate-profile']
+            ?? $args['certificate_profile']
+            ?? null;
+        if ($certificateProfileArg !== null) {
+            $config['certificate_profile'] = ProjectCertificateGenerationStore::normalizeTrustProfile(
+                (string)$certificateProfileArg,
+            );
+            $config['source'] = __('命令行参数 --certificate-profile');
+            $hasCliOverride = true;
+        } else {
+            $config['certificate_profile'] = ProjectCertificateGenerationStore::normalizeTrustProfile(
+                (string)($config['certificate_profile']
+                    ?? ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION),
+            );
         }
         if (isset($args['count']) || isset($args['c'])) {
             $config['worker_count'] = (int) ($args['count'] ?? $args['c']);
@@ -5456,9 +5686,6 @@ class Start extends CommandAbstract
                 [
                     'protocols' => [HttpProtocolSelection::HTTP_2, HttpProtocolSelection::HTTP_1],
                     'preferred' => HttpProtocolSelection::HTTP_2,
-                    'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
-                    'protocol_edge_enabled' => false,
-                    'protocol_edge_binary' => '',
                     'tls_session_resumption' => true,
                     'alt_svc' => false,
                 ],
@@ -5791,6 +6018,51 @@ class Start extends CommandAbstract
         return $base;
     }
 
+    /**
+     * Resolve an explicitly configured WLS 2.0 mode, including WLS 1.x
+     * adapter-only records. A mode in the same layer always outranks its
+     * adapter compatibility field.
+     *
+     * @param array<string,mixed> $layer
+     */
+    protected function resolveConfiguredEdgeIntent(array $layer): ?string
+    {
+        $nested = \is_array($layer['edge'] ?? null) ? $layer['edge'] : [];
+        $mode = $layer['edge_mode'] ?? ($nested['mode'] ?? null);
+        if (\is_scalar($mode) && \trim((string)$mode) !== '') {
+            return \strtolower(\trim((string)$mode));
+        }
+
+        $adapter = $layer['edge_adapter'] ?? ($nested['adapter'] ?? null);
+        if (!\is_scalar($adapter) || \trim((string)$adapter) === '') {
+            return null;
+        }
+        return match (\strtolower(\trim((string)$adapter))) {
+            \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS =>
+                \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS,
+            \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX =>
+                \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_LEGACY,
+            default => null,
+        };
+    }
+
+    /** @param array<string,mixed> $config */
+    private function applyConfiguredEdgeIntent(array $config, string $mode): array
+    {
+        $mode = \strtolower(\trim($mode));
+        $adapter = $mode
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
+                ? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+                : \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
+        $config['edge'] = \array_merge(
+            \is_array($config['edge'] ?? null) ? $config['edge'] : [],
+            ['mode' => $mode, 'adapter' => $adapter],
+        );
+        $config['edge_mode'] = $mode;
+        $config['edge_adapter'] = $adapter;
+        return $config;
+    }
+
     /** @param array<string,mixed> $config */
     protected function isLegacyEdgeRuntimeConfig(array $config): bool
     {
@@ -5801,6 +6073,28 @@ class Start extends CommandAbstract
 
         return $mode
             === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_LEGACY;
+    }
+
+    /** @param array<string,mixed> $config */
+    private function resolveCertificateTrustProfile(array $config): string
+    {
+        return ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+            $config['certificate_profile']
+                ?? ($config['gateway']['certificate_profile']
+                    ?? ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION)
+        ));
+    }
+
+    /** @param array<string,mixed> $certificateResult */
+    private function resolveCertificateProvider(array $certificateResult): string
+    {
+        $provider = \strtolower(\trim((string)(
+            $certificateResult['provider'] ?? ''
+        )));
+        if ($provider !== '') {
+            return ProjectCertificateGenerationStore::normalizeProvider($provider);
+        }
+        return ProjectCertificateGenerationStore::PROVIDER_EXTERNAL;
     }
 
     /**
@@ -5824,6 +6118,70 @@ class Start extends CommandAbstract
      */
 
     
+    private function beginStartupCertificateStateDeadline(): float
+    {
+        $deadline = (\hrtime(true) / 1_000_000_000)
+            + self::STARTUP_CERTIFICATE_STATE_BUDGET_SECONDS;
+        $this->startupCertificateStateDeadlineMonotonic = $deadline;
+        return $deadline;
+    }
+
+    private function startupCertificateStateDeadline(): float
+    {
+        $deadline = $this->startupCertificateStateDeadlineMonotonic;
+        if ($deadline === null) {
+            // Protected certificate helpers are exercised independently by a
+            // few extension/test call sites; they still receive one bounded
+            // phase deadline rather than falling back to 300 seconds.
+            return $this->beginStartupCertificateStateDeadline();
+        }
+        if (!\is_finite($deadline)
+            || (\hrtime(true) / 1_000_000_000) >= $deadline
+        ) {
+            throw new \RuntimeException(
+                'WLS startup certificate-state deadline was exhausted.',
+            );
+        }
+        return $deadline;
+    }
+
+    private function beginStartupListenerStateDeadline(): float
+    {
+        $deadline = self::monotonicSeconds()
+            + self::STARTUP_LISTENER_STATE_BUDGET_SECONDS;
+        $this->startupListenerStateDeadlineMonotonic = $deadline;
+        return $deadline;
+    }
+
+    private function startupListenerStateDeadline(): float
+    {
+        $deadline = $this->startupListenerStateDeadlineMonotonic;
+        if ($deadline === null) {
+            // Preserve protected helper compatibility while guaranteeing that
+            // direct extension/test calls never inherit the allocator's legacy
+            // 300-second lock wait. The first call owns the phase deadline.
+            return $this->beginStartupListenerStateDeadline();
+        }
+        if (!\is_finite($deadline) || self::monotonicSeconds() >= $deadline) {
+            throw new \RuntimeException(
+                'WLS startup listener-state deadline was exhausted.',
+            );
+        }
+        return $deadline;
+    }
+
+    private function createGatewayStartupDecisionForListenerPhase():
+        \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision
+    {
+        $deadline = $this->startupListenerStateDeadline();
+        return new \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision(
+            new \Weline\Server\Service\Edge\Gateway\GatewayHostManager(),
+            new GatewayPortLeaseAllocator(
+                operationDeadlineMonotonic: $deadline,
+            ),
+        );
+    }
+
     /**
      * 确保 SSL 证书可用
      * 
@@ -5840,22 +6198,17 @@ class Start extends CommandAbstract
     {
         /** @var SslCertificateService $sslService */
         $sslService = $this->createSslCertificateService(true);
+        $sslService->setOperationDeadlineMonotonic(
+            $this->startupCertificateStateDeadline(),
+        );
         $host = $config['host'] ?? '127.0.0.1';
         $certificateHost = $this->resolveCertificateHost($config, (string)$host);
         $legacyCertificateRuntime = $this->isLegacyEdgeRuntimeConfig($config);
-        $retirementRecoveryError = '';
-        try {
-            $sslService->replayPendingCertificateRetirements(5.0, 2);
-        } catch (\Throwable $throwable) {
-            // Pending state remains durable and the Gateway Agent retries it
-            // from a bounded child. This startup must still reject any PEM
-            // fenced by the domain's tombstone below.
-            $retirementRecoveryError = $throwable->getMessage();
-            w_log_error(
-                '[WLS startup] pending certificate retirement replay failed: '
-                    . $retirementRecoveryError,
-            );
-        }
+        $effectiveEdgeMode = \strtolower(\trim((string)(
+            $config['edge_mode']
+            ?? ($config['edge']['mode'] ?? ($config['gateway']['mode'] ?? ''))
+        )));
+        $trustProfile = $this->resolveCertificateTrustProfile($config);
         if (!empty($config['no_ssl'])) {
             return [
                 'success' => true,
@@ -5868,10 +6221,18 @@ class Start extends CommandAbstract
                 'is_new' => false,
             ];
         }
+        // Startup consumes only the project-local tombstone and immutable
+        // certificate generation. Full retirement replay can reach
+        // PostgreSQL and therefore belongs to the bounded Gateway Agent /
+        // maintenance child; even standalone WLS with valid project PEM must
+        // remain independently bootable while project storage is unavailable.
+        $generationStore = new ProjectCertificateGenerationStore();
+        $deadlineMonotonic = $this->startupCertificateStateDeadline();
         try {
-            $generationStore = new \Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore();
-            $disabledGeneration = $generationStore->disabled($certificateHost);
-            $activeGeneration = $generationStore->active($certificateHost);
+            $disabledGeneration = $generationStore->disabled(
+                $certificateHost,
+                $deadlineMonotonic,
+            );
         } catch (\Throwable $throwable) {
             return [
                 'success' => false,
@@ -5886,15 +6247,166 @@ class Start extends CommandAbstract
                 'is_new' => false,
             ];
         }
+        try {
+            $activeGeneration = $generationStore->active(
+                $certificateHost,
+                $deadlineMonotonic,
+                $trustProfile,
+            );
+        } catch (CertificateTrustProvenanceException $throwable) {
+            if ($effectiveEdgeMode
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
+                || $this->hasExplicitCertificatePairForLegacySelectorMigration($config)
+            ) {
+                // A shared gateway can retain the exact HTTP-01 route while the
+                // project republishes a schema-2 production certificate. The
+                // untrusted/legacy generation is never exposed on 443. A
+                // complete explicit PEM pair may also proceed only as an
+                // activation candidate: the normal source, Host and trust
+                // profile validation below must replace schema 1 before use.
+                $activeGeneration = null;
+            } else {
+                return [
+                    'success' => false,
+                    'message' => $throwable->getMessage(),
+                    'code' => 'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE',
+                    'cert_path' => '',
+                    'key_path' => '',
+                    'domain' => $certificateHost,
+                    'ssl_enabled' => false,
+                    'pending_certificate' => false,
+                    'is_new' => false,
+                ];
+            }
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => 'TLS_CERTIFICATE_RETIREMENT_STATE_INVALID: '
+                    . $throwable->getMessage(),
+                'code' => 'TLS_CERTIFICATE_RETIREMENT_STATE_INVALID',
+                'cert_path' => '',
+                'key_path' => '',
+                'domain' => $certificateHost,
+                'ssl_enabled' => false,
+                'pending_certificate' => false,
+                'is_new' => false,
+            ];
+        }
+        if ($this->nativeServingManifestRebuildRequired) {
+            $rebuildDomains = [$certificateHost => true];
+            foreach ($this->nativeServingManifestRebuildActiveDomains as $candidateDomain) {
+                $candidateDomain = $this->normalizeCertificateDomainCandidate(
+                    (string)$candidateDomain,
+                );
+                if ($candidateDomain !== '') {
+                    $rebuildDomains[$candidateDomain] = true;
+                }
+            }
+            \ksort($rebuildDomains, SORT_STRING);
+            try {
+                $authorities = $generationStore->authoritySnapshot(
+                    \array_keys($rebuildDomains),
+                    $deadlineMonotonic,
+                    $trustProfile,
+                );
+            } catch (\Throwable $throwable) {
+                return [
+                    'success' => false,
+                    'message' => 'TLS_SERVING_MANIFEST_REBUILD_INVALID: unable to read the '
+                        . 'current whole-project certificate authority: '
+                        . $throwable->getMessage(),
+                    'code' => 'TLS_SERVING_MANIFEST_REBUILD_INVALID',
+                    'cert_path' => '',
+                    'key_path' => '',
+                    'domain' => $certificateHost,
+                    'ssl_enabled' => false,
+                    'pending_certificate' => false,
+                    'is_new' => false,
+                ];
+            }
+            $selectedDomain = null;
+            if ((string)($authorities[$certificateHost]['effective_state'] ?? '')
+                    === 'active'
+            ) {
+                $selectedDomain = $certificateHost;
+            } else {
+                foreach ($this->nativeServingManifestRebuildActiveDomains as $candidateDomain) {
+                    $candidateDomain = $this->normalizeCertificateDomainCandidate(
+                        (string)$candidateDomain,
+                    );
+                    if ($candidateDomain !== ''
+                        && (string)($authorities[$candidateDomain]['effective_state'] ?? '')
+                            === 'active'
+                    ) {
+                        $selectedDomain = $candidateDomain;
+                        break;
+                    }
+                }
+            }
+            if ($selectedDomain !== null) {
+                $currentActive = $authorities[$selectedDomain]['active'] ?? null;
+                $recovered = $this->activeProjectCertificateResult(
+                    $selectedDomain,
+                    $sslService,
+                    \is_array($currentActive) ? $currentActive : null,
+                    true,
+                    $trustProfile,
+                );
+                if ($recovered !== null) {
+                    $recovered['message'] = 'Rebuilt native WLS TLS bootstrap from the current '
+                        . 'project certificate authority after a monotonic manifest transition.';
+                    $recovered['code'] = 'TLS_SERVING_MANIFEST_REBUILT';
+                    return $recovered;
+                }
+                return [
+                    'success' => false,
+                    'message' => 'TLS_SERVING_MANIFEST_REBUILD_INVALID: current active '
+                        . 'certificate authority has no usable immutable material.',
+                    'code' => 'TLS_SERVING_MANIFEST_REBUILD_INVALID',
+                    'cert_path' => '',
+                    'key_path' => '',
+                    'domain' => $selectedDomain,
+                    'ssl_enabled' => false,
+                    'pending_certificate' => false,
+                    'is_new' => false,
+                ];
+            }
+            $hostAuthority = \is_array($authorities[$certificateHost] ?? null)
+                ? $authorities[$certificateHost]
+                : [];
+            $activeGeneration = null;
+            $disabledGeneration = (string)($hostAuthority['effective_state'] ?? '')
+                    === 'disabled'
+                && \is_array($hostAuthority['disabled'] ?? null)
+                    ? $hostAuthority['disabled']
+                    : null;
+            if (!\is_array($disabledGeneration)) {
+                return [
+                    'success' => false,
+                    'message' => 'TLS_SERVING_MANIFEST_REBUILD_INVALID: the stale manifest '
+                        . 'has neither a current certificate selector nor a tombstone for '
+                        . $certificateHost . '.',
+                    'code' => 'TLS_SERVING_MANIFEST_REBUILD_INVALID',
+                    'cert_path' => '',
+                    'key_path' => '',
+                    'domain' => $certificateHost,
+                    'ssl_enabled' => false,
+                    'pending_certificate' => false,
+                    'is_new' => false,
+                ];
+            }
+            // The ordinary tombstone branch immediately below is the only
+            // authorized outcome. It starts HTTP-only and cannot fall through
+            // to configured PEM, source files, ACME, or self-signed material.
+        }
         if (\is_array($disabledGeneration) && !\is_array($activeGeneration)) {
             return [
                 'success' => true,
                 'message' => 'TLS_CERTIFICATE_RETIRED_HTTP_ONLY: the project tombstone forbids serving '
                     . $certificateHost
-                    . ($retirementRecoveryError === ''
-                        ? '; starting an HTTP-only runtime without PEM material.'
-                        : '; retirement recovery remains pending: '
-                            . $retirementRecoveryError),
+                    . (\is_array($disabledGeneration['retirement_intent'] ?? null)
+                        ? '; retirement recovery remains pending in the background.'
+                        : '; starting an HTTP-only runtime without PEM material.'),
                 'code' => 'TLS_CERTIFICATE_RETIRED_HTTP_ONLY',
                 'cert_path' => '',
                 'key_path' => '',
@@ -5915,7 +6427,17 @@ class Start extends CommandAbstract
             try {
                 $manifestDecision = \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::validate(
                     $manifestRecoveryProof,
+                    $trustProfile,
+                    $deadlineMonotonic,
+                    $certificateHost,
                 );
+            } catch (\Weline\Server\Service\Edge\NativeServingManifestRebuildRequiredException $exception) {
+                $this->nativeServingManifestRebuildRequired = true;
+                $this->nativeServingManifestRebuildActiveDomains = $exception->activeDomains;
+                unset($config['gateway'][
+                    \Weline\Server\Service\Edge\NativeServingManifestStartupRecovery::CONFIG_KEY
+                ]);
+                return $this->ensureSslCertificate($instanceName, $config);
             } catch (\Throwable $throwable) {
                 return [
                     'success' => false,
@@ -5961,6 +6483,15 @@ class Start extends CommandAbstract
                 ],
                 'certificate_source_digest' => (string)$manifestDecision[
                     'certificate_source_digest'
+                ],
+                'trust_profile' => (string)$manifestDecision['trust_profile'],
+                'provider' => (string)$manifestDecision['provider'],
+                'material_class' => (string)$manifestDecision['material_class'],
+                'certificate_provenance_digest' => (string)$manifestDecision[
+                    'certificate_provenance_digest'
+                ],
+                'leaf_fingerprint_sha256' => (string)$manifestDecision[
+                    'leaf_fingerprint_sha256'
                 ],
                 'is_new' => false,
                 'storage_sync_deferred' => true,
@@ -6036,6 +6567,9 @@ class Start extends CommandAbstract
         $activeGeneration = $this->activeProjectCertificateResult(
             $certificateHost,
             $sslService,
+            $activeGeneration,
+            true,
+            $trustProfile,
         );
         if ($activeGeneration !== null) {
             return $activeGeneration;
@@ -6073,34 +6607,19 @@ class Start extends CommandAbstract
             return $startupCertResult;
         }
 
-        $effectiveEdgeMode = \strtolower(\trim((string)(
-            $config['edge_mode']
-            ?? ($config['edge']['mode'] ?? ($config['gateway']['mode'] ?? ''))
-        )));
-        $gatewayCertificatePendingCandidate = !$needsLocalCert
-            && $effectiveEdgeMode
-                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY;
+        $gatewayCertificatePendingCandidate = $effectiveEdgeMode
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
+            && ($trustProfile === ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION
+                || !$needsLocalCert);
+        $certificateStorageReady = false;
 
-        if (!$legacyCertificateRuntime) {
-            $missing = $this->resolveWls2MissingCertificateResult(
-                $config,
-                $domain,
-                $needsLocalCert,
-                false,
-            );
-            if ($missing === null) {
-                throw new \RuntimeException(
-                    'WLS 2.0 certificate resolution did not produce an immutable generation.',
-                );
-            }
-            return $missing;
-        }
-
-        // Standalone/legacy starts may restore project-owned PEM from PostgreSQL before
-        // failing or signing. A public gateway start deliberately skips this dependency:
-        // its challenge-only backend must become available even while project storage is down.
+        // Pure WLS and legacy starts may restore project-owned PEM from
+        // PostgreSQL before failing or signing. A public gateway start
+        // deliberately skips this dependency: its challenge-only backend must
+        // become available even while project storage is down.
         if (!$gatewayCertificatePendingCandidate) {
             $sslService->ensureCertificateStorageReady();
+            $certificateStorageReady = true;
             if ($this->restoreManagedCertificateForConfig($config, $sslService, (string)$host)) {
                 $restoredCertificate = $this->tryUseStartupCertificateFiles(
                     $sslService,
@@ -6118,6 +6637,23 @@ class Start extends CommandAbstract
                     );
                     return $restoredCertificate;
                 }
+            }
+        }
+
+        if (!$legacyCertificateRuntime) {
+            $missing = $this->resolveWls2MissingCertificateResult(
+                $config,
+                $domain,
+                $needsLocalCert,
+                false,
+            );
+            if ($missing !== null) {
+                return $missing;
+            }
+            if (!$needsLocalCert) {
+                throw new \RuntimeException(
+                    'WLS 2.0 certificate resolution did not produce an immutable generation.',
+                );
             }
         }
 
@@ -6154,7 +6690,9 @@ class Start extends CommandAbstract
 
         // 只有确实进入本地签发、legacy 签发或入库路径时才启用 ORM。
         // 此时损坏或不可达的默认 PostgreSQL 仍精确 fail-closed，不回退 SQLite。
-        $sslService->ensureCertificateStorageReady();
+        if (!$certificateStorageReady) {
+            $sslService->ensureCertificateStorageReady();
+        }
 
         // 冷启动阶段：如果此时无法保证 ACME HTTP-01 校验入口已经可用（例如 dispatcher/worker 尚未就绪），
         // 则不要直接进入公网 ACME 申请流程，否则会出现必然 404（/.well-known/acme-challenge/* 未响应）。
@@ -6242,6 +6780,14 @@ class Start extends CommandAbstract
         return $result;
     }
 
+    /** @param array<string,mixed> $config */
+    protected function hasExplicitCertificatePairForLegacySelectorMigration(
+        array $config,
+    ): bool {
+        return \trim((string)($config['ssl_cert'] ?? '')) !== ''
+            && \trim((string)($config['ssl_key'] ?? '')) !== '';
+    }
+
     /**
      * ProjectCertificateGenerationStore is the stable serving projection shared
      * by gateway and native WLS. `active()` validates the domain, expiry, key
@@ -6252,12 +6798,30 @@ class Start extends CommandAbstract
     protected function activeProjectCertificateResult(
         string $certificateHost,
         SslCertificateService $sslService,
+        ?array $resolvedActiveGeneration = null,
+        bool $activeGenerationWasResolved = false,
+        string $requiredTrustProfile = ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
     ): ?array {
-        try {
-            $active = (new ProjectCertificateGenerationStore())->active($certificateHost);
-        } catch (\Throwable) {
-            return null;
+        $requiredTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            $requiredTrustProfile,
+        );
+        if (!$activeGenerationWasResolved) {
+            try {
+                $resolvedActiveGeneration = (new ProjectCertificateGenerationStore())->active(
+                    $certificateHost,
+                    $this->startupCertificateStateDeadline(),
+                    $requiredTrustProfile,
+                );
+            } catch (\Throwable $throwable) {
+                throw new \RuntimeException(
+                    'TLS_CERTIFICATE_STATE_UNAVAILABLE: unable to read the active '
+                        . 'project certificate generation.',
+                    0,
+                    $throwable,
+                );
+            }
         }
+        $active = $resolvedActiveGeneration;
         if (!\is_array($active)) {
             return null;
         }
@@ -6266,17 +6830,53 @@ class Start extends CommandAbstract
         if ($certPath === '' || $keyPath === '') {
             return null;
         }
+        $sourceDigest = \strtolower(\trim((string)($active['source_digest'] ?? '')));
+        $provider = (string)($active['provider'] ?? '');
+        $materialClass = \strtolower(\trim((string)(
+            $active['material_class'] ?? ''
+        )));
+        $provenanceDigest = \strtolower(\trim((string)(
+            $active['provenance_digest'] ?? ''
+        )));
+        if (!\hash_equals($requiredTrustProfile, (string)($active['trust_profile'] ?? ''))
+            || !\hash_equals(
+                $provenanceDigest,
+                ProjectCertificateGenerationStore::provenanceDigest(
+                    $certificateHost,
+                    $sourceDigest,
+                    $requiredTrustProfile,
+                    $provider,
+                    $materialClass,
+                ),
+            )
+        ) {
+            throw new CertificateTrustProvenanceException(
+                'TLS_CERTIFICATE_PROVENANCE_UNAVAILABLE: active project certificate '
+                    . 'does not match the requested serving profile.',
+            );
+        }
         $certificate = $sslService->parseCertificate($certPath);
         return [
             'success' => true,
             'message' => 'Using the current immutable project certificate generation.',
             'cert_path' => $certPath,
             'key_path' => $keyPath,
+            'chain_path' => (string)($active['chain_path'] ?? ''),
             'domain' => $certificateHost,
             'issuer' => (string)($certificate['issuer'] ?? ''),
             'expires_at' => (string)($certificate['expires_at'] ?? ''),
             'generation' => (int)($active['generation'] ?? 0),
-            'source_digest' => (string)($active['source_digest'] ?? ''),
+            'source_digest' => $sourceDigest,
+            'trust_profile' => $requiredTrustProfile,
+            'provider' => $provider,
+            'material_class' => $materialClass,
+            'provenance_digest' => $provenanceDigest,
+            'leaf_fingerprint_sha256' => (string)(
+                $active['leaf_fingerprint_sha256'] ?? ''
+            ),
+            'cert_sha256' => (string)($active['cert_sha256'] ?? ''),
+            'key_sha256' => (string)($active['key_sha256'] ?? ''),
+            'chain_sha256' => (string)($active['chain_sha256'] ?? ''),
             'ssl_enabled' => true,
             'pending_certificate' => false,
             'is_new' => false,
@@ -6322,6 +6922,9 @@ class Start extends CommandAbstract
         }
 
         $sslService = $this->createSslCertificateService(true);
+        $sslService->setOperationDeadlineMonotonic(
+            $this->startupCertificateStateDeadline(),
+        );
         if ($gatewayMode && !$sslService->needsSelfSignedCertificate($publicHost)) {
             $this->traceStartupPhase($instanceName, 'certificate-preparation:skipped-public-gateway');
             return;
@@ -6340,12 +6943,18 @@ class Start extends CommandAbstract
             }
         }
 
-        if (!$filesReady) {
-            $this->ensureLocalSelfSignedCertificates($config);
-        }
-        $this->ensureManagedLocalWildcardCertificate();
-        if (!$filesReady) {
-            $this->generateCertificateMap();
+        $previousService = $this->deferredCertificatePreparationService;
+        $this->deferredCertificatePreparationService = $sslService;
+        try {
+            if (!$filesReady) {
+                $this->ensureLocalSelfSignedCertificates($config);
+            }
+            $this->ensureManagedLocalWildcardCertificate();
+            if (!$filesReady) {
+                $this->generateCertificateMap();
+            }
+        } finally {
+            $this->deferredCertificatePreparationService = $previousService;
         }
         $this->traceStartupPhase($instanceName, 'certificate-preparation:completed-after-edge-decision', [
             'files_ready' => $filesReady,
@@ -6360,8 +6969,8 @@ class Start extends CommandAbstract
      * A gateway project may start only its private HTTP backend so the exact
      * HTTP-01 challenge can be published. Pure WLS (including auto fallback)
      * owns its TLS listener and therefore cannot start without an already
-     * valid project certificate. Local/development domains and the internal
-     * legacy migration mode retain their existing certificate policy.
+     * valid project certificate. Only an explicit certificate_profile=test may
+     * use local/self-signed material; a domain suffix is never authorization.
      *
      * @return array<string,mixed>|null
      */
@@ -6371,7 +6980,10 @@ class Start extends CommandAbstract
         bool $needsLocalCertificate,
         bool $willReuseCertificate,
     ): ?array {
-        if ($willReuseCertificate) {
+        $trustProfile = $this->resolveCertificateTrustProfile($config);
+        if ($trustProfile === ProjectCertificateGenerationStore::TRUST_PROFILE_TEST
+            && ($willReuseCertificate || $needsLocalCertificate)
+        ) {
             return null;
         }
 
@@ -6414,10 +7026,6 @@ class Start extends CommandAbstract
                 'pending_certificate' => false,
             ];
         }
-        if ($needsLocalCertificate) {
-            return null;
-        }
-
         return null;
     }
 
@@ -6459,7 +7067,9 @@ class Start extends CommandAbstract
         ?int $exactPort = null,
     ): int
     {
-        $allocator = new \Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator();
+        $allocator = new GatewayPortLeaseAllocator(
+            operationDeadlineMonotonic: $this->startupListenerStateDeadline(),
+        );
         $leaseInstance = \Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity::forRole(
             $instanceName,
             \Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity::ROLE_INITIAL_BACKEND,
@@ -6558,7 +7168,9 @@ class Start extends CommandAbstract
             );
         }
         $lease = $proof['lease'];
-        $prepared = (new \Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator())
+        $prepared = (new GatewayPortLeaseAllocator(
+            operationDeadlineMonotonic: $this->startupListenerStateDeadline(),
+        ))
             ->prepareTransfer(
                 (string)$lease['instance'],
                 (string)$lease['lease_id'],
@@ -6667,7 +7279,11 @@ class Start extends CommandAbstract
             } else {
                 $this->startupGatewayBackendListener = null;
             }
-            WindowsListenerHandoff::installCurrentProcessSource($listener, $intent);
+            WindowsListenerHandoff::installCurrentProcessSource(
+                $listener,
+                $intent,
+                $this->startupListenerStateDeadline(),
+            );
             $this->startupWindowsListenerHandoffIntent = null;
             return;
         }
@@ -6738,7 +7354,10 @@ class Start extends CommandAbstract
                 'Windows listener handoff metadata cannot be consumed on POSIX.'
             );
         }
-        WindowsListenerHandoff::awaitInstallForMaster($intent);
+        WindowsListenerHandoff::awaitInstallForMaster(
+            $intent,
+            $this->startupListenerStateDeadline(),
+        );
         return true;
     }
 
@@ -7668,7 +8287,8 @@ class Start extends CommandAbstract
         }
 
         /** @var SslCertificateService $sslService */
-        $sslService = ObjectManager::getInstance(SslCertificateService::class);
+        $sslService = $this->deferredCertificatePreparationService
+            ?? ObjectManager::getInstance(SslCertificateService::class);
         $wildcard = LocalDomainPolicy::currentWildcardDomain();
 
         if ($sslService->hasValidLocalCertificate($wildcard)) {
@@ -7698,7 +8318,8 @@ class Start extends CommandAbstract
     protected function ensureLocalSelfSignedCertificates(array $config = []): void
     {
         /** @var SslCertificateService $sslService */
-        $sslService = ObjectManager::getInstance(SslCertificateService::class);
+        $sslService = $this->deferredCertificatePreparationService
+            ?? ObjectManager::getInstance(SslCertificateService::class);
         // 0.0.0.0 只是"监听所有网卡"的绑定地址，不是合法证书 CN，归一为 localhost
         $localDomains = [
             '127.0.0.1' => '127.0.0.1',
@@ -7754,7 +8375,8 @@ class Start extends CommandAbstract
         }
         
         /** @var SslCertificateService $sslService */
-        $sslService = ObjectManager::getInstance(SslCertificateService::class);
+        $sslService = $this->deferredCertificatePreparationService
+            ?? ObjectManager::getInstance(SslCertificateService::class);
         $sslService->reconcileCertificateFiles();
         $map = $sslService->getCertificateMap();
         
@@ -7977,8 +8599,11 @@ class Start extends CommandAbstract
         echo "\n";
 
         $endpoint = $this->readBackgroundStartupData($this->getRuntimeInstanceFile($instanceName));
+        $servingProjectionDeadline = self::monotonicSeconds() + 1.0;
         $edgeView = \Weline\Server\Service\Edge\Gateway\GatewayStartupRuntimeView::resolve(
             $endpoint,
+            false,
+            $servingProjectionDeadline,
         );
         $edgeSource = (string)($edgeView['source'] ?? 'unknown');
         $pureWls = \in_array($edgeSource, [
@@ -8016,12 +8641,41 @@ class Start extends CommandAbstract
             $this->showFunctionStatus();
             return;
         }
+        $fallbackObservation = $edgeSource
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupRuntimeView::SOURCE_FALLBACK_WLS
+                ? \Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection::
+                    fallbackServingObservation($endpoint, $servingProjectionDeadline)
+                : null;
+        if (\is_array($fallbackObservation)
+            && $fallbackObservation['authority_host'] === null
+        ) {
+            $this->printer->keyValue([
+                __('实例名称') => $instanceName,
+                __('WLS 降级 TLS 监听') => (string)$fallbackObservation['bind_endpoint'],
+                __('路由域名/SNI') => \implode(
+                    ', ',
+                    (array)$fallbackObservation['route_domains'],
+                ),
+                __('Worker 数') => $count . ' (CPU: ' . $this->getCpuCoreCount() . ')',
+                __('公网入口') => (string)__('需要匹配通配符证书的具体 hostname/SNI'),
+                __('运行模式') => $daemon ? __('后台运行（默认）') : __('前台运行'),
+                __('平台') => \PHP_OS_FAMILY,
+                __('配置来源') => $source ?: __('智能模式'),
+            ], '→', 20);
+            $this->printer->warning(__(
+                '监听地址仅表示 bind 端点，不能作为 HTTPS URL；请先配置具体域名、DNS/负载均衡及 SNI。'
+            ));
+            echo "\n";
+            $this->showFunctionStatus();
+            return;
+        }
         if ($pureWls) {
             if ($edgeSource
                 === \Weline\Server\Service\Edge\Gateway\GatewayStartupRuntimeView::SOURCE_FALLBACK_WLS
             ) {
                 $fallbackEndpoint = \Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection::fallbackServingEndpoint(
                     $endpoint,
+                    $servingProjectionDeadline,
                 );
                 if (\is_array($fallbackEndpoint)) {
                     $port = (int)$fallbackEndpoint['port'];
@@ -8876,7 +9530,9 @@ class Start extends CommandAbstract
             );
         }
 
-        $allocator = new \Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator();
+        $allocator = new GatewayPortLeaseAllocator(
+            operationDeadlineMonotonic: $this->startupListenerStateDeadline(),
+        );
         $durable = $allocator->currentReservedLease(
             $expectedInstance,
             (string)$lease['lease_id'],
@@ -9225,7 +9881,14 @@ class Start extends CommandAbstract
             if ($remainingNanoseconds <= 0) {
                 break;
             }
-            $waitMicroseconds = (int)\min(100_000, \max(1_000, \intdiv($remainingNanoseconds, 1_000)));
+            $waitMicroseconds = self::boundedNanosecondDeadlineSleepMicroseconds(
+                $deadline,
+                \hrtime(true),
+                100_000,
+            );
+            if ($waitMicroseconds < 1) {
+                break;
+            }
             SchedulerSystem::usleep($waitMicroseconds);
         }
 
@@ -9334,7 +9997,6 @@ class Start extends CommandAbstract
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName),
-            MasterProcess::buildScopedProcessName('weline-wls-gateway', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-runtime-watchdog', $instanceName),
         ];
     }
@@ -9471,7 +10133,15 @@ class Start extends CommandAbstract
             if ($remaining === []) {
                 return true;
             }
-            SchedulerSystem::usleep(300000);
+            $waitMicroseconds = self::boundedMonotonicDeadlineSleepMicroseconds(
+                $deadline,
+                self::monotonicSeconds(),
+                300_000,
+            );
+            if ($waitMicroseconds < 1) {
+                break;
+            }
+            SchedulerSystem::usleep($waitMicroseconds);
         } while (self::monotonicSeconds() < $deadline);
 
         Processer::clearPortCache();
@@ -9700,8 +10370,6 @@ class Start extends CommandAbstract
         int $maxScan = 500,
         ?string $ignoreInstanceName = null,
         array $extraReservedPorts = [],
-        bool $protocolEdgeEnabled = false,
-        bool $protocolEdgeDispatcherEnabled = false,
     ): int
     {
         $reservedPorts = $this->getReservedWorkerPortsFromOtherInstances($ignoreInstanceName);
@@ -9717,16 +10385,12 @@ class Start extends CommandAbstract
             \max($startPort, 1),
             0,
             $count,
-            $protocolEdgeEnabled,
-            $protocolEdgeDispatcherEnabled,
         );
         for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
             $hasConflict = false;
             foreach ($this->buildWorkerAllocationCandidatePorts(
                 $base,
                 $count,
-                $protocolEdgeEnabled,
-                $protocolEdgeDispatcherEnabled,
             ) as $port) {
                 if ($this->isWorkerPortAllocated($port) || isset($reservedPortLookup[$port])) {
                     $hasConflict = true;
@@ -9748,8 +10412,6 @@ class Start extends CommandAbstract
     protected function buildWorkerAllocationCandidatePorts(
         int $workerPort,
         int $count,
-        bool $protocolEdgeEnabled = false,
-        bool $protocolEdgeDispatcherEnabled = false,
     ): array
     {
         if ($workerPort <= 0) {
@@ -9765,16 +10427,6 @@ class Start extends CommandAbstract
         $maintenancePort = $workerPort + $count + 99;
         for ($i = 0; $i < $maintenanceCount; $i++) {
             $ports[] = $maintenancePort + $i;
-        }
-
-        if ($protocolEdgeEnabled) {
-            $ports = \array_merge(
-                $ports,
-                ProtocolEdgeRuntime::directReloadSurgePortsFromWorkerRange($workerPort, $count),
-            );
-            if ($protocolEdgeDispatcherEnabled) {
-                $ports[] = ProtocolEdgeRuntime::dispatcherPortFromWorkerRange($workerPort, $count);
-            }
         }
 
         return \array_values(\array_filter(
@@ -9815,14 +10467,10 @@ class Start extends CommandAbstract
         int $candidate,
         int $mainPort,
         int $workerCount,
-        bool $protocolEdgeEnabled = false,
-        bool $protocolEdgeDispatcherEnabled = false,
     ): int {
         if (!$this->workerPortPlanTouchesEphemeralRange(
             $candidate,
             $workerCount,
-            $protocolEdgeEnabled,
-            $protocolEdgeDispatcherEnabled,
         )) {
             return $candidate;
         }
@@ -9842,14 +10490,10 @@ class Start extends CommandAbstract
             $ports = $this->buildWorkerAllocationCandidatePorts(
                 $base,
                 $workerCount,
-                $protocolEdgeEnabled,
-                $protocolEdgeDispatcherEnabled,
             );
             if (!$this->workerPortPlanTouchesEphemeralRange(
                 $base,
                 $workerCount,
-                $protocolEdgeEnabled,
-                $protocolEdgeDispatcherEnabled,
             ) && ($mainPort <= 0 || !\in_array($mainPort, $ports, true))) {
                 return $base;
             }
@@ -9863,14 +10507,10 @@ class Start extends CommandAbstract
     protected function workerPortPlanTouchesEphemeralRange(
         int $base,
         int $workerCount,
-        bool $protocolEdgeEnabled = false,
-        bool $protocolEdgeDispatcherEnabled = false,
     ): bool {
         $ports = $this->buildWorkerAllocationCandidatePorts(
             $base,
             $workerCount,
-            $protocolEdgeEnabled,
-            $protocolEdgeDispatcherEnabled,
         );
         if ($base < 1024 || $ports === []) {
             return true;
@@ -9945,7 +10585,9 @@ class Start extends CommandAbstract
     protected function getReservedWorkerPortsFromOtherInstances(?string $ignoreInstanceName = null): array
     {
         $reservedPortLookup = [];
-        foreach ((new GatewayProjectEndpointReader())->all() as $instanceName => $data) {
+        foreach ((new GatewayProjectEndpointReader($this->getInstanceManager()))->all(
+            $this->startupListenerStateDeadline(),
+        ) as $instanceName => $data) {
             if ($ignoreInstanceName !== null && $instanceName === $ignoreInstanceName) {
                 continue;
             }
@@ -10253,8 +10895,6 @@ class Start extends CommandAbstract
             'http_protocol_selection' => \is_array($runtimeMetadata['http_protocol_selection'] ?? null)
                 ? $runtimeMetadata['http_protocol_selection']
                 : [],
-            'protocol_edge_enabled' => (bool)($runtimeMetadata['protocol_edge_enabled'] ?? false),
-            'protocol_edge_binary' => (string)($runtimeMetadata['protocol_edge_binary'] ?? ''),
             'policy_digest' => (string)($runtimeMetadata['policy_digest'] ?? ''),
             'container_registry_digest' => $containerRegistryDigest,
             'supervisor_enabled' => (bool)($runtimeMetadata['supervisor_enabled'] ?? false),
@@ -10318,7 +10958,11 @@ class Start extends CommandAbstract
         ];
 
         $runtimeSelection->assertCanonicalEndpoint($instanceData);
-        $this->getInstanceManager()->saveInstance($instanceName, $instanceData);
+        $instanceManager = $this->getInstanceManager();
+        $instanceManager->setEndpointPublicationDeadlineMonotonic(
+            $this->startupListenerStateDeadline(),
+        );
+        $instanceManager->saveInstance($instanceName, $instanceData);
     }
 
     /**
@@ -10763,7 +11407,14 @@ class Start extends CommandAbstract
         }
 
         if ($launcherPid > 0) {
-            $this->getInstanceManager()->saveInstance($instanceName, ['launcher_pid' => $launcherPid]);
+            $instanceManager = $this->getInstanceManager();
+            $instanceManager->setEndpointPublicationDeadlineMonotonic(
+                $this->startupListenerStateDeadline(),
+            );
+            $instanceManager->saveInstance(
+                $instanceName,
+                ['launcher_pid' => $launcherPid],
+            );
         }
 
         return $launcherPid;
@@ -10843,7 +11494,7 @@ class Start extends CommandAbstract
     protected function loadSavedInstanceConfig(string $instanceName): ?array
     {
         $data = (new SavedInstanceConfigStore($this->getInstanceConfigDir()))
-            ->load($instanceName);
+            ->load($instanceName, $this->startupListenerStateDeadline());
         if ($data === null) {
             return null;
         }
@@ -10895,6 +11546,7 @@ class Start extends CommandAbstract
             'ssl_cert',
             'ssl_key',
             'ssl_domain',
+            'certificate_profile',
             'worker_base_port',
             'worker_memory_limit',
             'dispatcher_memory_limit',
@@ -11015,6 +11667,7 @@ class Start extends CommandAbstract
                 $next['saved_at'] = $savedAt;
                 return [$next, null];
             },
+            deadlineMonotonic: $this->startupListenerStateDeadline(),
         );
     }
     
@@ -11490,8 +12143,11 @@ PHP;
     protected function showUsageInfo(string $host, int $port, string $instanceName, bool $sslEnabled = false): void
     {
         $endpoint = $this->readBackgroundStartupData($this->getRuntimeInstanceFile($instanceName));
+        $servingProjectionDeadline = self::monotonicSeconds() + 1.0;
         $edgeView = \Weline\Server\Service\Edge\Gateway\GatewayStartupRuntimeView::resolve(
             $endpoint,
+            false,
+            $servingProjectionDeadline,
         );
         $edgeSource = (string)($edgeView['source'] ?? 'unknown');
         $pureWls = \in_array($edgeSource, [
@@ -11555,11 +12211,38 @@ PHP;
             $this->printer->separator('─');
             return;
         }
+        $fallbackObservation = $edgeSource
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupRuntimeView::SOURCE_FALLBACK_WLS
+                ? \Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection::
+                    fallbackServingObservation($endpoint, $servingProjectionDeadline)
+                : null;
+        if (\is_array($fallbackObservation)
+            && $fallbackObservation['authority_host'] === null
+        ) {
+            echo "\n";
+            $this->printer->title(__('WLS 降级入口'), '═');
+            $this->printer->keyValue([
+                __('TLS 监听') => (string)$fallbackObservation['bind_endpoint'],
+                __('路由域名/SNI') => \implode(
+                    ', ',
+                    (array)$fallbackObservation['route_domains'],
+                ),
+                __('公网地址') => (string)__('未生成：需要匹配通配符证书的具体 hostname'),
+                __('查看状态') => 'php bin/w server:status ' . $instanceName,
+                __('停止服务') => 'php bin/w server:stop ' . $instanceName,
+            ], '→', 18);
+            $this->printer->warning(__(
+                '不得将 bind IP 当作 HTTPS 权威；请配置具体域名解析/负载均衡，并在请求中携带匹配的 Host 与 SNI。'
+            ));
+            $this->printer->separator('─');
+            return;
+        }
         if ($pureWls) {
             $fallbackEndpoint = $edgeSource
                 === \Weline\Server\Service\Edge\Gateway\GatewayStartupRuntimeView::SOURCE_FALLBACK_WLS
                     ? \Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection::fallbackServingEndpoint(
                         $endpoint,
+                        $servingProjectionDeadline,
                     )
                     : null;
             $publicPort = \is_array($fallbackEndpoint)
@@ -11785,6 +12468,7 @@ PHP;
                 '-f' => __('与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）'),
                 '--ssl-cert <path>' => __('公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--ssl-key <path>' => __('公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
+                '--certificate-profile <profile>' => __('WLS 2.0 证书信任范围：production（默认）或显式 test；域名后缀不会自动启用 test'),
                 '--worker-memory-limit <size>' => __('Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）'),
                 '--dispatcher-memory-limit <size>' => __('Dispatcher 进程 PHP memory_limit（默认跟随 Worker）'),
                 '--runtime-strategy <mode>' => __('运行策略：auto/performance/stability（默认 auto）'),
@@ -11803,7 +12487,7 @@ PHP;
                 __('配置优先级') => __('命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值'),
                 __('拓扑优先级') => __('--direct/--dispatcher > 当前实例 wls.runtime.topology > 全局 wls.runtime.topology > auto'),
                 __('默认边缘') => __('auto 加入可信 wls-edge/2 网关；无法建立时不接管未知端口 owner，自动分配 20000–29999 纯 WLS 地址'),
-                __('启动副作用') => __('建立网关前需要显式安装项目钉死版本 Nginx；网关复制到宿主 A/B 槽后不依赖引导项目'),
+                __('启动副作用') => __('auto/gateway 仅在 virgin host 上从最终项目发行物自带的签名包首装宿主网关；不下载或编译 legacy Nginx，复制到宿主 A/B 槽后不依赖引导项目'),
                 __('多项目支持') => __('多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离'),
                 __('配置记忆') => __('首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用'),
                 __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
@@ -12210,7 +12894,15 @@ PHP;
             if ($result === $pid || $result === -1) {
                 return true;
             }
-            SchedulerSystem::usleep(20_000);
+            $waitMicroseconds = self::boundedNanosecondDeadlineSleepMicroseconds(
+                $deadline,
+                \hrtime(true),
+                20_000,
+            );
+            if ($waitMicroseconds < 1) {
+                break;
+            }
+            SchedulerSystem::usleep($waitMicroseconds);
         } while (\hrtime(true) < $deadline);
 
         return false;
@@ -12228,7 +12920,15 @@ PHP;
             if (!\is_array($status) || !($status['running'] ?? false)) {
                 return true;
             }
-            SchedulerSystem::usleep(20_000);
+            $waitMicroseconds = self::boundedNanosecondDeadlineSleepMicroseconds(
+                $deadline,
+                \hrtime(true),
+                20_000,
+            );
+            if ($waitMicroseconds < 1) {
+                break;
+            }
+            SchedulerSystem::usleep($waitMicroseconds);
         } while (\hrtime(true) < $deadline);
 
         return false;
@@ -12533,6 +13233,20 @@ PHP;
         if ($instanceName === '') {
             return;
         }
+        // The ordinary daemon failure return retires before cleanup. Keep the
+        // same ordering for an exception/fatal that escapes the background
+        // READY/public-edge transaction: killing Agent first would remove the
+        // strongest exact-generation unregister path and leave a committed
+        // host route alive until lease expiry. Retirement failure must not
+        // suppress the subsequent exact-process cleanup.
+        try {
+            $this->retirePossibleGatewayRegistrationBeforeFailedStartupCleanup(
+                $instanceName,
+            );
+        } catch (\Throwable) {
+            // The helper normally contains its own warning path. Shutdown must
+            // still continue if diagnostic output itself is unavailable.
+        }
         try {
             if ($this->cleanupFailedStartupProcesses($instanceName, 16)) {
                 $this->wlsChildProcessesMayExist = false;
@@ -12554,17 +13268,21 @@ PHP;
         ];
         $this->startupPublicEdgeLease = null;
         $this->startupGatewayBackendLease = null;
+        $cleanupDeadline = self::monotonicSeconds()
+            + self::STARTUP_LISTENER_CLEANUP_BUDGET_SECONDS;
+        $allocator = new GatewayPortLeaseAllocator(
+            operationDeadlineMonotonic: $cleanupDeadline,
+        );
         foreach ($leases as $lease) {
             if (!\is_array($lease) || $lease === []) {
                 continue;
             }
             try {
-                (new \Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator())
-                    ->cancelReservation(
-                        (string)($lease['instance'] ?? ''),
-                        (int)($lease['port'] ?? 0),
-                        (string)($lease['lease_id'] ?? ''),
-                    );
+                $allocator->cancelReservation(
+                    (string)($lease['instance'] ?? ''),
+                    (int)($lease['port'] ?? 0),
+                    (string)($lease['lease_id'] ?? ''),
+                );
             } catch (\Throwable) {
                 // ACTIVE means the Master already adopted the exact lease. Any
                 // other mismatch is left intact for bounded stale-lease recovery.
@@ -12672,11 +13390,13 @@ PHP;
      * After WLS is READY, optionally start the per-project managed nginx edge.
      *
      * @param array<string, mixed> $args
+     * @param array<string, mixed>|null $activeCertificate
      */
     private function maybeStartManagedNginxAfterReady(
         int $upstreamPort,
         array $args,
         string $instanceName,
+        ?array $activeCertificate,
     ): bool
     {
         if (isset($args['no-nginx']) || isset($args['no_nginx'])) {
@@ -12684,6 +13404,9 @@ PHP;
             return false;
         }
         $gatewayRetirementRequired = false;
+        $gatewayRuntimeAttempted = false;
+        $autoStartupFallback = false;
+        $endpoint = [];
         try {
             $endpoint = $this->getInstanceManager()->getRawInstanceData($instanceName);
             $gatewayRuntime = \is_array($endpoint['gateway'] ?? null)
@@ -12692,13 +13415,24 @@ PHP;
             if ((string)($gatewayRuntime['mode'] ?? '')
                 === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
             ) {
+                $gatewayRuntimeAttempted = true;
+                $autoStartupFallback = \hash_equals(
+                    \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO,
+                    \strtolower(\trim((string)(
+                        $gatewayRuntime['requested_mode'] ?? ''
+                    ))),
+                );
                 // From this point every failure path owns a possible host-side
                 // registration outcome. Even register() throwing can mean the
                 // Controller committed before receipt/lifecycle publication
                 // failed, so rollback must inspect authenticated own-status
                 // under the same retirement fence rather than guessing from
                 // the PHP return value.
-                $gatewayRetirementRequired = true;
+                // Explicit gateway remains fail-closed and retires immediately.
+                // Auto first attempts a same-Master Agent fallback; only the
+                // outer failed-startup cleanup may retire it if that request
+                // is rejected or never reaches a verified serving projection.
+                $gatewayRetirementRequired = !$autoStartupFallback;
                 $registration = (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())
                     ->register($instanceName);
                 $routes = \is_array($registration['routes'] ?? null)
@@ -12790,6 +13524,7 @@ PHP;
                 $serverNames,
                 $instanceName,
                 $edgeAdapterName,
+                $activeCertificate,
             );
             if (!($result['ok'] ?? false)) {
                 $this->printer->warning(__('托管 Nginx 启动失败：%{1}', [(string)$result['message']]));
@@ -12837,13 +13572,40 @@ PHP;
             if ($verifiedProtocols !== []) {
                 $this->printer->note(__('公网已验证协议：%{1}', [\implode(' → ', $verifiedProtocols)]));
             }
-            if ((bool)($details['http3_configured'] ?? false)
+            if ((bool)($details['http3_capable'] ?? false)
                 && !(bool)($details['http3_runtime_verified'] ?? false)
             ) {
-                $this->printer->warning(__('Nginx HTTP/3 已配置并发布 Alt-Svc，但真实 QUIC 请求门禁仍为 pending。'));
+                $this->printer->warning(__('当前环境未通过 HTTP/3 真实 QUIC 门禁；本代未发布 QUIC 监听或 Alt-Svc，继续使用 HTTP/2/HTTP/1.1。'));
             }
             return true;
         } catch (\Throwable $e) {
+            if ($gatewayRuntimeAttempted
+                && $autoStartupFallback
+                && \is_array($activeCertificate)
+            ) {
+                try {
+                    $currentEndpoint = $this->getInstanceManager()
+                        ->getRawInstanceData($instanceName);
+                } catch (\Throwable) {
+                    $currentEndpoint = null;
+                }
+                if (\is_array($currentEndpoint)
+                    && $this->requestAutoGatewayStartupFallback(
+                        $instanceName,
+                        $currentEndpoint,
+                        $activeCertificate,
+                        $e->getMessage(),
+                    )
+                ) {
+                    $this->printer->warning(__(
+                        'Gateway 首次注册/路由门禁失败；当前 Master 已切换到项目级纯 WLS TLS 高端口入口。'
+                    ));
+                    $this->printer->note(__(
+                        'Gateway Agent 将继续后台重试注册；恢复稳定后按既有排空协议切回 80/443。'
+                    ));
+                    return true;
+                }
+            }
             if ($gatewayRetirementRequired) {
                 try {
                     $retirement = (
@@ -12876,9 +13638,331 @@ PHP;
                 $this->printer->warning(__('Gateway 启动/注册异常：%{1}', [$e->getMessage()]));
                 return false;
             }
+            if ($gatewayRuntimeAttempted) {
+                $this->printer->warning(__('Gateway 启动/注册异常：%{1}', [$e->getMessage()]));
+                return false;
+            }
             $this->printer->warning(__('托管 Nginx 启动异常：%{1}', [$e->getMessage()]));
             return false;
         }
+    }
+
+    /**
+     * Request, but never create, the project fallback listener. Success is
+     * reported only after the persisted runtime projection proves either the
+     * exact fallback lease or a concurrently recovered gateway is serving.
+     *
+     * @param array<string,mixed> $endpoint
+     * @param array<string,mixed> $activeCertificate
+     */
+    protected function requestAutoGatewayStartupFallback(
+        string $instanceName,
+        array $endpoint,
+        array $activeCertificate,
+        string $failure,
+    ): bool {
+        try {
+            // Registration may fail before any gateway route is publishable
+            // (for example, while the loopback join backend is still absent).
+            // Publish only project-owned TLS serving truth first. This does not
+            // create or claim a host Gateway ACTIVE route; it gives the Agent
+            // one immutable launch/certificate after-image for local fallback.
+            $servingManifest = $this->buildAutoGatewayStartupFallbackServingManifest(
+                $instanceName,
+                (\hrtime(true) / 1_000_000_000) + 8.0,
+            );
+            $gateway = \is_array($endpoint['gateway'] ?? null)
+                ? $endpoint['gateway']
+                : [];
+            $source = \is_array($gateway['certificate_source'] ?? null)
+                ? $gateway['certificate_source']
+                : [];
+            $certificateFence = \Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore::
+                activeCertificateFenceForDomain(
+                    $servingManifest,
+                    (string)($source['domain'] ?? $activeCertificate['domain'] ?? ''),
+                );
+            if ((int)($certificateFence['generation'] ?? 0)
+                    !== (int)($activeCertificate['generation'] ?? 0)
+            ) {
+                throw new \RuntimeException(
+                    'Startup fallback serving manifest does not contain the exact active certificate generation.',
+                );
+            }
+            foreach ([
+                'source_digest',
+                'trust_profile',
+                'provider',
+                'material_class',
+                'provenance_digest',
+                'cert_path',
+                'key_path',
+                'leaf_fingerprint_sha256',
+            ] as $certificateField) {
+                if (!\hash_equals(
+                    (string)($certificateFence[$certificateField] ?? ''),
+                    (string)($activeCertificate[$certificateField] ?? ''),
+                )) {
+                    throw new \RuntimeException(
+                        'Startup fallback serving manifest certificate provenance changed.',
+                    );
+                }
+            }
+            $request = GatewayStartupFallbackRequest::issue(
+                $instanceName,
+                $endpoint,
+                $activeCertificate,
+                $failure,
+            );
+        } catch (\Throwable $throwable) {
+            $this->printer->warning(__(
+                'auto 纯 WLS 降级请求未通过本地身份/证书栅栏：%{1}',
+                [$throwable->getMessage()],
+            ));
+            return false;
+        }
+
+        $accepted = false;
+        $lastRequestDispatchAt = 0.0;
+        $requestDeadline = \hrtime(true) / 1_000_000_000 + 5.0;
+        do {
+            $lastRequestDispatchAt = \hrtime(true) / 1_000_000_000;
+            try {
+                $result = $this->sendAutoGatewayStartupFallbackRequest(
+                    $instanceName,
+                    $request,
+                    $requestDeadline,
+                );
+            } catch (\Throwable) {
+                $result = [];
+            }
+            if (($result['success'] ?? false) === true
+                && (($result['data']['accepted'] ?? false) === true)
+            ) {
+                $accepted = true;
+                break;
+            }
+            try {
+                $latest = $this->getInstanceManager()
+                    ->getRawInstanceData($instanceName);
+            } catch (\Throwable) {
+                $latest = null;
+            }
+            if (\is_array($latest)
+                && (GatewayRuntimeServingProjection::gatewayIsServing(
+                    $latest,
+                    $requestDeadline,
+                )
+                    || GatewayRuntimeServingProjection::fallbackServingEndpoint(
+                        $latest,
+                        $requestDeadline,
+                    )
+                        !== null
+                    || GatewayRuntimeServingProjection::fallbackServingObservation(
+                        $latest,
+                        $requestDeadline,
+                    )
+                        !== null)
+            ) {
+                $accepted = true;
+                break;
+            }
+            $this->sleepWithinStartupFallbackDeadline($requestDeadline);
+        } while ((\hrtime(true) / 1_000_000_000) < $requestDeadline);
+        if (!$accepted) {
+            $this->printer->warning(__(
+                '当前实例 Gateway Agent 未接受 auto 纯 WLS 降级请求。'
+            ));
+            return false;
+        }
+
+        $projectionDeadline = \hrtime(true) / 1_000_000_000
+            + $this->startupFallbackProjectionTimeoutSeconds();
+        do {
+            try {
+                $latest = $this->getInstanceManager()
+                    ->getRawInstanceData($instanceName);
+            } catch (\Throwable) {
+                $latest = null;
+            }
+            if (\is_array($latest)) {
+                $fallback = GatewayRuntimeServingProjection::fallbackServingEndpoint(
+                    $latest,
+                    $projectionDeadline,
+                );
+                if (\is_array($fallback)) {
+                    try {
+                        $this->syncServerConfigToEnv(
+                            (string)($fallback['authority_host'] ?? '127.0.0.1'),
+                            (int)$fallback['port'],
+                            true,
+                        );
+                    } catch (\Throwable $throwable) {
+                        $this->printer->warning(__(
+                            '备用入口已验证，但无法同步显示配置：%{1}',
+                            [$throwable->getMessage()],
+                        ));
+                    }
+                    $this->printer->note(__(
+                        '备用入口：%{1}（高端口不是 80/443 的透明替代，请同步检查防火墙、DNS 或负载均衡）。',
+                        [(string)$fallback['origin']],
+                    ));
+                    return true;
+                }
+                $fallbackObservation = GatewayRuntimeServingProjection::
+                    fallbackServingObservation($latest, $projectionDeadline);
+                if (\is_array($fallbackObservation)) {
+                    $this->printer->note(__(
+                        '备用 TLS 监听：%{1}；路由域名：%{2}。',
+                        [
+                            (string)$fallbackObservation['bind_endpoint'],
+                            \implode(', ', (array)$fallbackObservation['route_domains']),
+                        ],
+                    ));
+                    $this->printer->warning(__(
+                        '当前只有通配符路由，必须使用匹配证书的具体 hostname/SNI；监听 IP 不是可用 HTTPS 地址。'
+                    ));
+                    return true;
+                }
+                if (GatewayRuntimeServingProjection::gatewayIsServing(
+                    $latest,
+                    $projectionDeadline,
+                )) {
+                    return true;
+                }
+            }
+            $now = \hrtime(true) / 1_000_000_000;
+            if ($now - $lastRequestDispatchAt
+                >= $this->startupFallbackRequestRedispatchSeconds()
+            ) {
+                // Master confirms only that the request was forwarded to the
+                // current READY Agent. Re-send the same idempotent envelope so
+                // an Agent reconnect between enqueue and processing cannot
+                // strand startup until this projection deadline expires.
+                $lastRequestDispatchAt = $now;
+                try {
+                    $this->sendAutoGatewayStartupFallbackRequest(
+                        $instanceName,
+                        $request,
+                        $projectionDeadline,
+                    );
+                } catch (\Throwable) {
+                    // The runtime projection remains authoritative. A newly
+                    // READY Agent may accept the next bounded re-dispatch.
+                }
+            }
+            $this->sleepWithinStartupFallbackDeadline($projectionDeadline);
+        } while ((\hrtime(true) / 1_000_000_000) < $projectionDeadline);
+
+        $this->printer->warning(__(
+            'auto 纯 WLS 降级请求已接受，但未在期限内形成可验证的运行时服务投影。'
+        ));
+        return false;
+    }
+
+    private function sleepWithinStartupFallbackDeadline(
+        float $deadlineMonotonic,
+    ): void {
+        $microseconds = self::boundedStartupFallbackSleepMicroseconds(
+            $deadlineMonotonic,
+            \hrtime(true) / 1_000_000_000,
+        );
+        if ($microseconds > 0) {
+            SchedulerSystem::usleep($microseconds);
+        }
+    }
+
+    private static function boundedStartupFallbackSleepMicroseconds(
+        float $deadlineMonotonic,
+        float $monotonicNow,
+        int $maximumMicroseconds = 100_000,
+    ): int {
+        return self::boundedMonotonicDeadlineSleepMicroseconds(
+            $deadlineMonotonic,
+            $monotonicNow,
+            $maximumMicroseconds,
+        );
+    }
+
+    private static function boundedMonotonicDeadlineSleepMicroseconds(
+        float $deadlineMonotonic,
+        float $monotonicNow,
+        int $maximumMicroseconds,
+    ): int {
+        if (!\is_finite($deadlineMonotonic)
+            || !\is_finite($monotonicNow)
+            || $maximumMicroseconds < 1
+            || $deadlineMonotonic <= $monotonicNow
+        ) {
+            return 0;
+        }
+        $remainingSeconds = $deadlineMonotonic - $monotonicNow;
+        if ($remainingSeconds >= $maximumMicroseconds / 1_000_000) {
+            return $maximumMicroseconds;
+        }
+        $remainingMicroseconds = (int)\floor($remainingSeconds * 1_000_000);
+        return \min($maximumMicroseconds, \max(0, $remainingMicroseconds));
+    }
+
+    private static function boundedNanosecondDeadlineSleepMicroseconds(
+        int $deadlineNanoseconds,
+        int $monotonicNowNanoseconds,
+        int $maximumMicroseconds,
+    ): int {
+        if ($maximumMicroseconds < 1
+            || $deadlineNanoseconds <= $monotonicNowNanoseconds
+        ) {
+            return 0;
+        }
+        $remainingNanoseconds = $deadlineNanoseconds - $monotonicNowNanoseconds;
+        if ($remainingNanoseconds >= $maximumMicroseconds * 1_000) {
+            return $maximumMicroseconds;
+        }
+        return \max(0, \intdiv($remainingNanoseconds, 1_000));
+    }
+
+    /** @return array<string,mixed> */
+    protected function buildAutoGatewayStartupFallbackServingManifest(
+        string $instanceName,
+        float $deadlineMonotonic,
+    ): array {
+        return (new \Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder())
+            ->buildServingManifest($instanceName, $deadlineMonotonic);
+    }
+
+    /**
+     * @param array<string,int|string> $request
+     * @return array<string,mixed>
+     */
+    protected function sendAutoGatewayStartupFallbackRequest(
+        string $instanceName,
+        array $request,
+        float $deadlineMonotonic,
+    ): array {
+        return (new IpcControlGateway())->command(
+            $instanceName,
+            ControlMessage::ACTION_GATEWAY_STARTUP_FALLBACK_REQUEST,
+            '',
+            $request,
+            1.0,
+            $deadlineMonotonic,
+        );
+    }
+
+    protected function startupFallbackProjectionTimeoutSeconds(): float
+    {
+        // Orchestrator's child READY budget is 30 seconds. Keep a bounded
+        // publication margin so a healthy fallback is not retired at the exact
+        // worker deadline while its endpoint CAS is still being persisted.
+        return 45.0;
+    }
+
+    protected function startupFallbackRequestRedispatchSeconds(): float
+    {
+        // This is below the Agent's ten-second fallback command cadence and
+        // above the launcher's projection poll cadence. Replays carry the same
+        // request id/digest and therefore cannot allocate caller-chosen ports.
+        return 2.0;
     }
 
     /**

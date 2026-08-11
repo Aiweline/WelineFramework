@@ -9,7 +9,9 @@ use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Service\Edge\EdgeAdapterInterface;
 use Weline\Server\Service\Edge\EdgeAdapterResolver;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxLiveProbe;
+use Weline\Server\Service\Edge\Nginx\Runtime\NginxConfigPublication;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -24,6 +26,8 @@ final class ManagedNginxService
     private const MAX_OWNER_RECOVERY_DIRECTORY_ENTRIES = 8192;
     private const MAX_OWNER_ATOMIC_TEMPORARIES_PER_TARGET = 8;
     private const MAX_OWNER_ATOMIC_TEMPORARIES_PER_DIRECTORY = 16;
+
+    private ?float $activeLifecycleDeadlineMonotonic = null;
 
     public function __construct(
         private readonly ManagedNginxPaths $paths = new ManagedNginxPaths(),
@@ -53,7 +57,9 @@ final class ManagedNginxService
     public function install(bool $force = false): array
     {
         return $this->withLifecycleLock(function () use ($force): array {
-            $status = $this->processManager->status();
+            $status = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($status['ok'] ?? false)) {
                 return ['ok' => false, 'message' => 'managed nginx PID identity is unsafe'];
             }
@@ -79,6 +85,7 @@ final class ManagedNginxService
         array $serverNames = [],
         string $ownerInstance = '',
         string $edgeAdapterName = EdgeAdapterInterface::NAME_NGINX,
+        ?array $certificateGeneration = null,
     ): array
     {
         return $this->withLifecycleLock(
@@ -88,6 +95,7 @@ final class ManagedNginxService
                 $serverNames,
                 $ownerInstance,
                 $edgeAdapterName,
+                $certificateGeneration,
             ),
         );
     }
@@ -99,6 +107,7 @@ final class ManagedNginxService
         array $serverNames,
         string $ownerInstance,
         string $edgeAdapterName,
+        ?array $certificateGeneration,
     ): array {
         if ($edgeAdapterName !== EdgeAdapterInterface::NAME_NGINX) {
             return ['ok' => false, 'message' => 'Nginx is the only supported public edge adapter'];
@@ -114,7 +123,9 @@ final class ManagedNginxService
             return ['ok' => false, 'message' => 'managed nginx start requires an explicit edge owner instance'];
         }
         $previousOwner = $this->readOwner();
-        $currentStatus = $this->processManager->status();
+        $currentStatus = $this->processManager->status(
+            $this->activeLifecycleDeadlineMonotonic,
+        );
         if (!($currentStatus['ok'] ?? false)) {
             return [
                 'ok' => false,
@@ -163,6 +174,7 @@ final class ManagedNginxService
         $wasRunning = false;
         $startedByCall = false;
         $published = false;
+        $ownerIntent = null;
         try {
             $written = $this->configWriter->write(
                 $upstreamPort,
@@ -171,8 +183,10 @@ final class ManagedNginxService
                 true,
                 (bool)($capabilities['gzip_module'] ?? false),
                 true,
-                (bool)($capabilities['http3_module'] ?? false),
+                (bool)($capabilities['http3_module'] ?? false)
+                    && $this->http3VerifierAvailable(),
                 $upstreamPorts,
+                $certificateGeneration,
             );
             if (!(bool)($written['ssl'] ?? false)) {
                 $this->configWriter->discardCandidate((string)$written['conf']);
@@ -196,7 +210,10 @@ final class ManagedNginxService
                 ];
             }
 
-            $test = $this->processManager->testConfig($candidate);
+            $test = $this->processManager->testConfig(
+                $candidate,
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (($test['code'] ?? 1) !== 0) {
                 $this->configWriter->discardCandidate($candidate);
                 return [
@@ -206,6 +223,19 @@ final class ManagedNginxService
                 ];
             }
             $transactionId = \bin2hex(\random_bytes(16));
+            $previousOwnerContents = $this->captureOwnerBeforeImage($previousOwner);
+            $configRollbackExpected = \is_file($this->paths->confFile());
+            $previousConfigSha256 = $configRollbackExpected
+                ? $this->stableManagedFileSha256(
+                    $this->paths->confFile(),
+                    'Managed Nginx previous active config',
+                )
+                : null;
+            if ($configRollbackExpected && !\is_string($previousConfigSha256)) {
+                throw new \RuntimeException(
+                    'Managed nginx previous active config could not be snapshotted.',
+                );
+            }
             $ownerIntent = [
                 'transaction_id' => $transactionId,
                 'instance_name' => $ownerInstance,
@@ -218,17 +248,25 @@ final class ManagedNginxService
                 'ssl_required' => (bool)($written['ssl'] ?? false),
                 'ssl_certificate_sha256' => (string)($written['ssl_certificate_sha256'] ?? ''),
                 'config_generation' => (string)$written['config_generation'],
-                'config_rollback_expected' => \is_file($this->paths->confFile()),
+                'config_rollback_expected' => $configRollbackExpected,
+                'previous_config_sha256' => (string)($previousConfigSha256 ?? ''),
+                'owner_rollback_expected' => $previousOwnerContents !== null,
+                'previous_owner_sha256' => $previousOwnerContents !== null
+                    ? \hash('sha256', $previousOwnerContents)
+                    : '',
+                ...$this->certificateGenerationFacts($written),
                 ...$this->protocolFacts($written, $capabilities),
                 'updated_at' => \date('c'),
             ];
             $this->writeOwnerIntent($ownerIntent);
-            $status = $this->processManager->status();
+            $this->stageOwnerRollback($ownerIntent, $previousOwnerContents);
+            $status = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($status['ok'] ?? false)) {
-                return [
-                    'ok' => false,
-                    'message' => 'managed nginx PID identity became unsafe before config publication',
-                ];
+                throw new \RuntimeException(
+                    'Managed nginx PID identity became unsafe before config publication.',
+                );
             }
             $wasRunning = (bool)$status['running'];
             $publication = $this->configWriter->publishCandidate($candidate, $transactionId);
@@ -238,11 +276,20 @@ final class ManagedNginxService
                 ? $publication['rollback']
                 : null;
             $lifecycle = $wasRunning
-                ? $this->processManager->reload()
-                : $this->processManager->start();
+                ? $this->processManager->reload(
+                    $this->activeLifecycleDeadlineMonotonic,
+                )
+                : $this->processManager->start(
+                    $this->activeLifecycleDeadlineMonotonic,
+                );
             $startedByCall = !$wasRunning && (bool)($lifecycle['ok'] ?? false);
             if (!($lifecycle['ok'] ?? false)) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx lifecycle rejected the candidate: '
@@ -250,7 +297,12 @@ final class ManagedNginxService
                 ];
             }
             if (!$this->probeConfigGeneration((int)$written['http'], (string)$written['config_generation'])) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx did not serve the published config generation' . $recovery,
@@ -264,7 +316,12 @@ final class ManagedNginxService
                     (string)($written['ssl_certificate_sha256'] ?? ''),
                 )
             ) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx did not complete a live TLS 1.3 certificate-bound handshake'
@@ -281,7 +338,12 @@ final class ManagedNginxService
                     $upstreamPort,
                 )
             ) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx did not carry an owner-bound HTTP/2 WLS health request'
@@ -296,7 +358,12 @@ final class ManagedNginxService
                 $ownerInstance,
                 $upstreamPort,
             )) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx did not carry an owner-bound HTTP/1.1 WLS health request'
@@ -309,9 +376,16 @@ final class ManagedNginxService
                 'http1_runtime_verified' => true,
                 'public_protocols_runtime_verified' => ['http/2', 'http/1.1'],
             ];
-            $currentStatus = $this->processManager->status();
+            $currentStatus = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($currentStatus['ok'] ?? false) || !($currentStatus['running'] ?? false)) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx exited or changed identity after live verification' . $recovery,
@@ -319,6 +393,7 @@ final class ManagedNginxService
             }
             $http3 = $this->verifyHttp3Runtime(
                 (bool)($written['http3_enabled'] ?? false),
+                (bool)($capabilities['http3_module'] ?? false),
                 (int)$written['https'],
                 (int)$currentStatus['pid'],
                 (string)$written['config_generation'],
@@ -329,12 +404,38 @@ final class ManagedNginxService
                 $upstreamPort,
             );
             if (!($http3['ok'] ?? false)) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
-                return [
-                    'ok' => false,
-                    'message' => 'managed nginx HTTP/3 runtime verification failed: '
-                        . (string)($http3['message'] ?? 'unknown') . $recovery,
-                ];
+                if (!$this->http3FailureCanDegrade($written, $http3)) {
+                    $recovery = $this->restorePublishedConfig(
+                        $rollback,
+                        $wasRunning,
+                        $startedByCall,
+                        $ownerIntent,
+                    );
+                    return [
+                        'ok' => false,
+                        'message' => 'managed nginx HTTP/3 runtime verification failed: '
+                            . (string)($http3['message'] ?? 'unknown') . $recovery,
+                    ];
+                }
+                $degraded = $this->degradeFailedHttp3Publication(
+                    $written,
+                    $http3,
+                    $capabilities,
+                    $ownerIntent,
+                    $transactionId,
+                    $rollback,
+                    $upstreamPort,
+                    $upstreamHost,
+                    $upstreamPorts,
+                    $ownerInstance,
+                    $certificateGeneration,
+                    (int)$currentStatus['pid'],
+                );
+                $written = $degraded['config'];
+                $ownerIntent = $degraded['owner_intent'];
+                $currentStatus = $degraded['status'];
+                $httpRuntimeEvidence = $degraded['http_runtime_evidence'];
+                $http3 = $degraded['http3'];
             }
             $resumption = $this->tlsSessionResumptionVerifier->verify(
                 (int)$written['https'],
@@ -345,19 +446,31 @@ final class ManagedNginxService
                 (string)($written['ssl_certificate_sha256'] ?? ''),
             );
             if (!($resumption['ok'] ?? false)) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx TLS session resumption verification failed: '
                         . (string)($resumption['message'] ?? 'unknown') . $recovery,
                 ];
             }
-            $verifiedStatus = $this->processManager->status();
+            $verifiedStatus = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($verifiedStatus['ok'] ?? false)
                 || !($verifiedStatus['running'] ?? false)
                 || (int)($verifiedStatus['pid'] ?? 0) !== (int)$currentStatus['pid']
             ) {
-                $recovery = $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx master identity changed during TLS session verification' . $recovery,
@@ -372,18 +485,27 @@ final class ManagedNginxService
             ];
             $this->writeOwnerIntent($ownerIntent);
             $currentStatus = $verifiedStatus;
-            $this->commitOwnerIntent($ownerIntent);
-            if (!$this->configWriter->commitPublished($rollback)) {
+            $commit = $this->commitVerifiedPublication(
+                $ownerIntent,
+                $rollback,
+                $wasRunning,
+                $startedByCall,
+            );
+            $published = false;
+            if (!($commit['ok'] ?? false)) {
                 return [
                     'ok' => false,
-                    'message' => 'managed nginx is live, but publication bookkeeping could not be committed',
+                    'message' => (string)($commit['message']
+                        ?? 'managed nginx publication could not be committed'),
                 ];
             }
-            $published = false;
-            $this->finalizeOwnerIntent($ownerIntent);
+            $cleanupWarning = (string)($commit['cleanup_warning'] ?? '');
             return [
                 'ok' => true,
-                'message' => $wasRunning ? 'managed nginx candidate verified and reloaded' : 'managed nginx candidate verified and started',
+                'message' => ($wasRunning
+                    ? 'managed nginx candidate verified and reloaded'
+                    : 'managed nginx candidate verified and started')
+                    . ($cleanupWarning !== '' ? '; ' . $cleanupWarning : ''),
                 'details' => [
                     'listen_http' => $written['http'],
                     'listen_https' => $written['https'],
@@ -399,20 +521,30 @@ final class ManagedNginxService
                     ...$httpRuntimeEvidence,
                     ...(array)($http3['evidence'] ?? []),
                     ...(array)($resumption['evidence'] ?? []),
+                    'publication_cleanup_warning' => $cleanupWarning,
                 ],
             ];
         } catch (\Throwable $e) {
             if ($candidate !== null) {
-                $this->configWriter->discardCandidate($candidate);
-            }
-            if ($published) {
                 try {
-                    $this->restorePublishedConfig($rollback, $wasRunning, $startedByCall);
+                    $this->configWriter->discardCandidate($candidate);
                 } catch (\Throwable) {
-                    // Preserve the original lifecycle failure below.
+                    // Transaction recovery below remains authoritative.
                 }
             }
-            return ['ok' => false, 'message' => $e->getMessage()];
+            $recoveryFailure = '';
+            if (\is_array($ownerIntent)
+                && $this->pathExistsNoFollow($this->paths->ownerIntentFile())
+            ) {
+                try {
+                    $this->recoverOwnerPublication();
+                    $published = false;
+                } catch (\Throwable $recovery) {
+                    $recoveryFailure = '; transaction recovery failed: '
+                        . $recovery->getMessage();
+                }
+            }
+            return ['ok' => false, 'message' => $e->getMessage() . $recoveryFailure];
         }
     }
 
@@ -422,11 +554,14 @@ final class ManagedNginxService
     public function stop(?float $deadlineMonotonic = null): array
     {
         return $this->withLifecycleLock(function () use ($deadlineMonotonic): array {
-            $status = $this->processManager->status();
+            $status = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($status['ok'] ?? false)) {
                 return [
                     'ok' => false,
-                    'message' => 'refusing owner cleanup because managed nginx PID identity is unsafe',
+                    'message' => 'refusing owner cleanup because managed nginx PID identity is unsafe: '
+                        . (string)($status['message'] ?? 'identity unavailable'),
                 ];
             }
             if (!$status['running']) {
@@ -436,7 +571,9 @@ final class ManagedNginxService
                 }
                 return ['ok' => true, 'message' => 'managed nginx is not running'];
             }
-            $result = $this->processManager->stop($deadlineMonotonic);
+            $result = $this->processManager->stop(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if ($result['ok'] ?? false) {
                 $this->clearOwner();
             }
@@ -445,10 +582,14 @@ final class ManagedNginxService
     }
 
     /** @return array{ok:bool,message:string,stopped?:bool,owner_matched?:bool} */
-    public function stopForInstance(string $instanceName): array
-    {
+    public function stopForInstance(
+        string $instanceName,
+        ?float $deadlineMonotonic = null,
+    ): array {
         return $this->withLifecycleLock(function () use ($instanceName): array {
-            $status = $this->processManager->status();
+            $status = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($status['ok'] ?? false)) {
                 return [
                     'ok' => false,
@@ -482,14 +623,16 @@ final class ManagedNginxService
                     'owner_matched' => false,
                 ];
             }
-            $result = $this->processManager->stop();
+            $result = $this->processManager->stop(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if ($result['ok'] ?? false) {
                 $this->clearOwner();
             }
             $result['stopped'] = ($result['ok'] ?? false) === true;
             $result['owner_matched'] = true;
             return $result;
-        });
+        }, $deadlineMonotonic);
     }
 
     /**
@@ -503,10 +646,14 @@ final class ManagedNginxService
      *   message:string
      * }
      */
-    public function promotionRollbackOwnerSnapshot(): array
+    public function promotionRollbackOwnerSnapshot(
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $snapshot = $this->withLifecycleLock(function (): array {
-            $status = $this->processManager->status();
+            $status = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (($status['ok'] ?? false) !== true) {
                 return [
                     'ok' => false,
@@ -541,7 +688,7 @@ final class ManagedNginxService
                     : '',
                 'message' => 'managed nginx rollback ownership observed',
             ];
-        });
+        }, $deadlineMonotonic);
         return [
             'ok' => ($snapshot['ok'] ?? false) === true,
             'running' => (bool)($snapshot['running'] ?? false),
@@ -558,9 +705,12 @@ final class ManagedNginxService
     /**
      * @return array{ok:bool,message:string,exit_code?:int|null}
      */
-    public function reload(): array
+    public function reload(?float $deadlineMonotonic = null): array
     {
-        return $this->withLifecycleLock(fn(): array => $this->reloadUnlocked());
+        return $this->withLifecycleLock(
+            fn(): array => $this->reloadUnlocked(),
+            $deadlineMonotonic,
+        );
     }
 
     /** @return array{ok:bool,message:string,exit_code?:int|null} */
@@ -571,7 +721,9 @@ final class ManagedNginxService
             return $identity;
         }
         $capabilities = (array)($identity['capabilities'] ?? []);
-        $status = $this->processManager->status();
+        $status = $this->processManager->status(
+            $this->activeLifecycleDeadlineMonotonic,
+        );
         if (!($status['ok'] ?? false)) {
             return [
                 'ok' => false,
@@ -606,9 +758,11 @@ final class ManagedNginxService
         $candidate = null;
         $rollback = null;
         $published = false;
+        $refreshedOwner = null;
         $reloadContinuityProbe = null;
         $reloadContinuityEvidence = [];
         try {
+            $certificateGeneration = $this->resolveOwnerCertificateGeneration($owner);
             $refreshed = $this->configWriter->write(
                 (int)$owner['upstream_port'],
                 (string)$owner['upstream_host'],
@@ -616,8 +770,10 @@ final class ManagedNginxService
                 true,
                 (bool)($capabilities['gzip_module'] ?? false),
                 true,
-                (bool)($capabilities['http3_module'] ?? false),
+                (bool)($capabilities['http3_module'] ?? false)
+                    && $this->http3VerifierAvailable(),
                 $upstreamPorts,
+                $certificateGeneration,
             );
             $candidate = (string)$refreshed['conf'];
             if (!$this->probeWlsBackendPool(
@@ -643,7 +799,10 @@ final class ManagedNginxService
                     'exit_code' => 1,
                 ];
             }
-            $test = $this->processManager->testConfig($candidate);
+            $test = $this->processManager->testConfig(
+                $candidate,
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (($test['code'] ?? 1) !== 0) {
                 $this->configWriter->discardCandidate($candidate);
                 return [
@@ -672,6 +831,21 @@ final class ManagedNginxService
                     );
             }
             $transactionId = \bin2hex(\random_bytes(16));
+            $previousOwnerContents = $this->captureOwnerBeforeImage($owner);
+            if (!\is_string($previousOwnerContents)) {
+                throw new \RuntimeException(
+                    'Managed nginx reload owner before-image is unavailable.',
+                );
+            }
+            $previousConfigSha256 = $this->stableManagedFileSha256(
+                $this->paths->confFile(),
+                'Managed Nginx previous active config',
+            );
+            if (!\is_string($previousConfigSha256)) {
+                throw new \RuntimeException(
+                    'Managed nginx reload config before-image is unavailable.',
+                );
+            }
             $refreshedOwner = [
                 ...$owner,
                 'transaction_id' => $transactionId,
@@ -682,7 +856,11 @@ final class ManagedNginxService
                 'listen_https' => (int)$refreshed['https'],
                 'ssl_certificate_sha256' => (string)($refreshed['ssl_certificate_sha256'] ?? ''),
                 'config_generation' => (string)$refreshed['config_generation'],
-                'config_rollback_expected' => \is_file($this->paths->confFile()),
+                'config_rollback_expected' => true,
+                'previous_config_sha256' => $previousConfigSha256,
+                'owner_rollback_expected' => true,
+                'previous_owner_sha256' => \hash('sha256', $previousOwnerContents),
+                ...$this->certificateGenerationFacts($refreshed),
                 ...$this->protocolFacts($refreshed, $capabilities),
                 'updated_at' => \date('c'),
             ];
@@ -702,13 +880,16 @@ final class ManagedNginxService
                 unset($refreshedOwner[$staleReloadContinuityKey]);
             }
             $this->writeOwnerIntent($refreshedOwner);
+            $this->stageOwnerRollback($refreshedOwner, $previousOwnerContents);
             $publication = $this->configWriter->publishCandidate($candidate, $transactionId);
             $candidate = null;
             $published = true;
             $rollback = \is_string($publication['rollback'] ?? null)
                 ? $publication['rollback']
                 : null;
-            $reloaded = $this->processManager->reload();
+            $reloaded = $this->processManager->reload(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($reloaded['ok'] ?? false)
                 || !$this->probeConfigGeneration(
                     (int)$refreshed['http'],
@@ -722,7 +903,12 @@ final class ManagedNginxService
                     (string)($refreshed['ssl_certificate_sha256'] ?? ''),
                 )
             ) {
-                $recovery = $this->restorePublishedConfig($rollback, true, false);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    true,
+                    false,
+                    $refreshedOwner,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx reload did not activate the verified config/TLS generation: '
@@ -740,7 +926,12 @@ final class ManagedNginxService
                     (int)$owner['upstream_port'],
                 )
             ) {
-                $recovery = $this->restorePublishedConfig($rollback, true, false);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    true,
+                    false,
+                    $refreshedOwner,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx reload did not carry an owner-bound HTTP/2 WLS health request'
@@ -756,7 +947,12 @@ final class ManagedNginxService
                 (string)$owner['instance_name'],
                 (int)$owner['upstream_port'],
             )) {
-                $recovery = $this->restorePublishedConfig($rollback, true, false);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    true,
+                    false,
+                    $refreshedOwner,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx reload did not carry an owner-bound HTTP/1.1 WLS health request'
@@ -770,14 +966,68 @@ final class ManagedNginxService
                 'http1_runtime_verified' => true,
                 'public_protocols_runtime_verified' => ['http/2', 'http/1.1'],
             ];
-            $currentStatus = $this->processManager->status();
+            $currentStatus = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($currentStatus['ok'] ?? false) || !($currentStatus['running'] ?? false)) {
-                $recovery = $this->restorePublishedConfig($rollback, true, false);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    true,
+                    false,
+                    $refreshedOwner,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx exited or changed identity after reload verification' . $recovery,
                     'exit_code' => 1,
                 ];
+            }
+            $http3 = $this->verifyHttp3Runtime(
+                (bool)($refreshed['http3_enabled'] ?? false),
+                (bool)($capabilities['http3_module'] ?? false),
+                (int)$refreshed['https'],
+                (int)$currentStatus['pid'],
+                (string)$refreshed['config_generation'],
+                (string)$refreshed['config_sha256'],
+                (string)($refreshed['ssl_certificate_sha256'] ?? ''),
+                (array)($refreshed['server_names'] ?? []),
+                (string)$owner['instance_name'],
+                (int)$owner['upstream_port'],
+            );
+            if (!($http3['ok'] ?? false)) {
+                if (!$this->http3FailureCanDegrade($refreshed, $http3)) {
+                    $recovery = $this->restorePublishedConfig(
+                        $rollback,
+                        true,
+                        false,
+                        $refreshedOwner,
+                    );
+                    return [
+                        'ok' => false,
+                        'message' => 'managed nginx reload HTTP/3 runtime verification failed: '
+                            . (string)($http3['message'] ?? 'unknown') . $recovery,
+                        'exit_code' => 1,
+                    ];
+                }
+                $degraded = $this->degradeFailedHttp3Publication(
+                    $refreshed,
+                    $http3,
+                    $capabilities,
+                    $refreshedOwner,
+                    $transactionId,
+                    $rollback,
+                    (int)$owner['upstream_port'],
+                    (string)$owner['upstream_host'],
+                    $upstreamPorts,
+                    (string)$owner['instance_name'],
+                    $certificateGeneration,
+                    (int)$currentStatus['pid'],
+                );
+                $refreshed = $degraded['config'];
+                $refreshedOwner = $degraded['owner_intent'];
+                $currentStatus = $degraded['status'];
+                $httpRuntimeEvidence = $degraded['http_runtime_evidence'];
+                $http3 = $degraded['http3'];
             }
             if (\is_array($reloadContinuityProbe)) {
                 $reloadContinuity = $this->tlsSessionResumptionVerifier
@@ -789,7 +1039,12 @@ final class ManagedNginxService
                         (string)($refreshed['ssl_certificate_sha256'] ?? ''),
                     );
                 if (!($reloadContinuity['ok'] ?? false)) {
-                    $recovery = $this->restorePublishedConfig($rollback, true, false);
+                    $recovery = $this->restorePublishedConfig(
+                        $rollback,
+                        true,
+                        false,
+                        $refreshedOwner,
+                    );
                     return [
                         'ok' => false,
                         'message' => 'managed nginx reload TLS Session continuity verification failed: '
@@ -798,26 +1053,6 @@ final class ManagedNginxService
                     ];
                 }
                 $reloadContinuityEvidence = (array)($reloadContinuity['evidence'] ?? []);
-            }
-            $http3 = $this->verifyHttp3Runtime(
-                (bool)($refreshed['http3_enabled'] ?? false),
-                (int)$refreshed['https'],
-                (int)$currentStatus['pid'],
-                (string)$refreshed['config_generation'],
-                (string)$refreshed['config_sha256'],
-                (string)($refreshed['ssl_certificate_sha256'] ?? ''),
-                (array)($refreshed['server_names'] ?? []),
-                (string)$owner['instance_name'],
-                (int)$owner['upstream_port'],
-            );
-            if (!($http3['ok'] ?? false)) {
-                $recovery = $this->restorePublishedConfig($rollback, true, false);
-                return [
-                    'ok' => false,
-                    'message' => 'managed nginx reload HTTP/3 runtime verification failed: '
-                        . (string)($http3['message'] ?? 'unknown') . $recovery,
-                    'exit_code' => 1,
-                ];
             }
             $resumption = $this->tlsSessionResumptionVerifier->verify(
                 (int)$refreshed['https'],
@@ -828,7 +1063,12 @@ final class ManagedNginxService
                 (string)($refreshed['ssl_certificate_sha256'] ?? ''),
             );
             if (!($resumption['ok'] ?? false)) {
-                $recovery = $this->restorePublishedConfig($rollback, true, false);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    true,
+                    false,
+                    $refreshedOwner,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx reload TLS session resumption verification failed: '
@@ -836,12 +1076,19 @@ final class ManagedNginxService
                     'exit_code' => 1,
                 ];
             }
-            $verifiedStatus = $this->processManager->status();
+            $verifiedStatus = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($verifiedStatus['ok'] ?? false)
                 || !($verifiedStatus['running'] ?? false)
                 || (int)($verifiedStatus['pid'] ?? 0) !== (int)$currentStatus['pid']
             ) {
-                $recovery = $this->restorePublishedConfig($rollback, true, false);
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    true,
+                    false,
+                    $refreshedOwner,
+                );
                 return [
                     'ok' => false,
                     'message' => 'managed nginx master identity changed during reload TLS session verification'
@@ -859,33 +1106,53 @@ final class ManagedNginxService
             ];
             $this->writeOwnerIntent($refreshedOwner);
             $currentStatus = $verifiedStatus;
-            $this->commitOwnerIntent($refreshedOwner);
-            if (!$this->configWriter->commitPublished($rollback)) {
+            $commit = $this->commitVerifiedPublication(
+                $refreshedOwner,
+                $rollback,
+                true,
+                false,
+            );
+            $published = false;
+            if (!($commit['ok'] ?? false)) {
                 return [
                     'ok' => false,
-                    'message' => 'reload is live, but publication bookkeeping could not be committed',
+                    'message' => (string)($commit['message']
+                        ?? 'reload publication could not be committed'),
                     'exit_code' => 1,
                 ];
             }
-            $published = false;
-            $this->finalizeOwnerIntent($refreshedOwner);
+            $cleanupWarning = (string)($commit['cleanup_warning'] ?? '');
             return [
                 'ok' => true,
-                'message' => 'configuration candidate tested, activated, and verified',
+                'message' => 'configuration candidate tested, activated, and verified'
+                    . ($cleanupWarning !== '' ? '; ' . $cleanupWarning : ''),
                 'exit_code' => $reloaded['exit_code'] ?? 0,
             ];
         } catch (\Throwable $exception) {
             if ($candidate !== null) {
-                $this->configWriter->discardCandidate($candidate);
-            }
-            if ($published) {
                 try {
-                    $this->restorePublishedConfig($rollback, true, false);
+                    $this->configWriter->discardCandidate($candidate);
                 } catch (\Throwable) {
-                    // Preserve the primary reload failure.
+                    // Transaction recovery below remains authoritative.
                 }
             }
-            return ['ok' => false, 'message' => $exception->getMessage(), 'exit_code' => 1];
+            $recoveryFailure = '';
+            if (\is_array($refreshedOwner)
+                && $this->pathExistsNoFollow($this->paths->ownerIntentFile())
+            ) {
+                try {
+                    $this->recoverOwnerPublication();
+                    $published = false;
+                } catch (\Throwable $recovery) {
+                    $recoveryFailure = '; transaction recovery failed: '
+                        . $recovery->getMessage();
+                }
+            }
+            return [
+                'ok' => false,
+                'message' => $exception->getMessage() . $recoveryFailure,
+                'exit_code' => 1,
+            ];
         } finally {
             if (\is_array($reloadContinuityProbe)) {
                 $this->tlsSessionResumptionVerifier
@@ -904,6 +1171,10 @@ final class ManagedNginxService
         $http2Enabled = $tlsConfigured && (bool)($written['http2_enabled'] ?? false);
         $http3Configured = $tlsConfigured && (bool)($written['http3_enabled'] ?? false);
         $http3Capable = (bool)($capabilities['http3_module'] ?? false);
+        $http3VerifierAvailable = $this->http3VerifierAvailable();
+        $http3VerificationUnavailable = $http3Capable
+            && !$http3Configured
+            && !$http3VerifierAvailable;
         $sessionCacheShared = $tlsConfigured
             && (bool)($written['tls_session_cache_shared'] ?? false);
         $sessionTicketsConfigured = $tlsConfigured
@@ -936,7 +1207,14 @@ final class ManagedNginxService
             'http3_configured' => $http3Configured,
             'http3_runtime_verified' => false,
             'http3_verifier_available' => false,
-            'http3_status' => $http3Configured ? 'pending' : 'not_configured',
+            'http3_status' => $http3Configured
+                ? 'pending'
+                : ($http3VerificationUnavailable
+                    ? 'verification_unavailable'
+                    : 'not_configured'),
+            'http3_advertisement_status' => $http3Configured
+                ? 'ADVERTISED'
+                : 'NOT_ADVERTISED',
             'http3_protocol' => '',
             'http3_master_pid' => 0,
             'http3_config_generation' => '',
@@ -945,7 +1223,9 @@ final class ManagedNginxService
             'http3_verified_at' => '',
             'http3_reason' => $http3Configured
                 ? 'Nginx QUIC is configured from a verified --with-http_v3_module build; a real QUIC request is still required.'
-                : (string)($capabilities['http3_reason'] ?? 'Nginx HTTP/3 capability is unavailable.'),
+                : ($http3VerificationUnavailable
+                    ? 'Nginx HTTP/3 capability is present, but QUIC and Alt-Svc are not published without an HTTP/3-only verifier.'
+                    : (string)($capabilities['http3_reason'] ?? 'Nginx HTTP/3 capability is unavailable.')),
             'alt_svc_enabled' => $http3Configured,
             'tls13_only' => $tlsConfigured,
             'tls13_runtime_verified' => false,
@@ -967,6 +1247,76 @@ final class ManagedNginxService
         ];
     }
 
+    /** @param array<string,mixed> $written @return array<string,mixed> */
+    private function certificateGenerationFacts(array $written): array
+    {
+        return [
+            'certificate_generation_managed'
+                => (bool)($written['certificate_generation_managed'] ?? false),
+            'certificate_domain' => (string)($written['certificate_domain'] ?? ''),
+            'certificate_generation' => (int)($written['certificate_generation'] ?? 0),
+            'certificate_source_digest'
+                => (string)($written['certificate_source_digest'] ?? ''),
+            'certificate_cert_sha256'
+                => (string)($written['certificate_cert_sha256'] ?? ''),
+            'certificate_key_sha256'
+                => (string)($written['certificate_key_sha256'] ?? ''),
+            'certificate_chain_sha256'
+                => (string)($written['certificate_chain_sha256'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $owner
+     * @return array<string,mixed>|null
+     */
+    private function resolveOwnerCertificateGeneration(array $owner): ?array
+    {
+        if (!\array_key_exists('certificate_generation_managed', $owner)) {
+            // Pre-WLS-2.0 owner files remain readable for one compatibility
+            // reload from app/etc/ssl. Once the field exists, mutable raw-source
+            // fallback is forbidden.
+            return null;
+        }
+        if ($owner['certificate_generation_managed'] !== true) {
+            throw new \RuntimeException(
+                'Managed Nginx owner is not bound to an immutable certificate generation.',
+            );
+        }
+        $domain = \strtolower(\trim((string)($owner['certificate_domain'] ?? '')));
+        $active = $domain !== ''
+            ? (new ProjectCertificateGenerationStore($this->paths->projectRoot()))
+                ->active($domain)
+            : null;
+        if (!\is_array($active)
+            || (int)($active['generation'] ?? 0)
+                < (int)($owner['certificate_generation'] ?? 0)
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx owner certificate generation is no longer active.'
+            );
+        }
+        foreach ([
+            'source_digest',
+            'cert_path',
+            'key_path',
+            'chain_path',
+            'leaf_fingerprint_sha256',
+            'cert_sha256',
+            'key_sha256',
+            'chain_sha256',
+        ] as $field) {
+            if (!\is_string($active[$field] ?? null)
+                || \trim((string)$active[$field]) === ''
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx active certificate generation is incomplete at ' . $field . '.',
+                );
+            }
+        }
+        return $active;
+    }
+
     /**
      * @param list<int> $ports
      * @param array{topology:'direct'|'dispatcher',listener_mode:string,upstream_port:int,upstream_ports:list<int>,worker_port:int,worker_count:int} $backendIdentity
@@ -977,10 +1327,16 @@ final class ManagedNginxService
         string $instanceName,
         array $backendIdentity,
     ): bool {
-        if ($ports === [] || !\array_is_list($ports)) {
+        if ($ports === []
+            || !\array_is_list($ports)
+            || !$this->lifecycleDeadlineAvailable()
+        ) {
             return false;
         }
         foreach (\array_values(\array_unique(\array_map('intval', $ports))) as $port) {
+            if (!$this->lifecycleDeadlineAvailable()) {
+                return false;
+            }
             if (!$this->probeWlsBackend($host, $port, $instanceName, $backendIdentity)) {
                 return false;
             }
@@ -1012,25 +1368,35 @@ final class ManagedNginxService
             ? '[' . $normalizedHost . ']'
             : $normalizedHost;
         for ($attempt = 0; $attempt < 3; $attempt++) {
+            $connectTimeout = $this->remainingLifecycleDeadline(0.5);
+            if ($connectTimeout === null) {
+                return false;
+            }
             $errno = 0;
             $error = '';
             $socket = @\stream_socket_client(
                 'tcp://' . $targetHost . ':' . $port,
                 $errno,
                 $error,
-                0.5,
+                $connectTimeout,
                 STREAM_CLIENT_CONNECT,
             );
             if (!\is_resource($socket)) {
                 continue;
             }
-            @\stream_set_timeout($socket, 1);
+            if (!$this->setSocketTimeoutWithinLifecycleDeadline($socket, 1.0)) {
+                @\fclose($socket);
+                return false;
+            }
             @\fwrite(
                 $socket,
                 "GET /_wls/health?detail=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
             );
             $response = '';
             while (!\feof($socket) && \strlen($response) < 1_048_576) {
+                if (!$this->setSocketTimeoutWithinLifecycleDeadline($socket, 1.0)) {
+                    break;
+                }
                 $chunk = @\fread($socket, 8192);
                 if (!\is_string($chunk) || $chunk === '') {
                     break;
@@ -1047,6 +1413,7 @@ final class ManagedNginxService
             }
             if ($separator === false
                 || \preg_match('/\AHTTP\/1\.[01]\s+200(?:\s|$)/', $response) !== 1
+                || !$this->lifecycleDeadlineAvailable()
             ) {
                 continue;
             }
@@ -1206,25 +1573,282 @@ final class ManagedNginxService
         return ['ok' => true, 'message' => 'managed nginx identity verified', 'capabilities' => $capabilities];
     }
 
+    /**
+     * @param array<string,mixed> $ownerIntent
+     * @return array{ok:bool,message:string,cleanup_warning:string}
+     */
+    private function commitVerifiedPublication(
+        array $ownerIntent,
+        ?string $rollback,
+        bool $wasRunning,
+        bool $startedByCall,
+    ): array {
+        try {
+            $this->commitOwnerIntent($ownerIntent);
+        } catch (\Throwable $throwable) {
+            if ($this->ownerAfterImageMatches($ownerIntent)) {
+                // The owner rename committed and only post-rename durability
+                // reporting failed. Continue the paired config commit.
+            } else {
+                try {
+                    $recovery = $this->restorePublishedConfig(
+                        $rollback,
+                        $wasRunning,
+                        $startedByCall,
+                        $ownerIntent,
+                    );
+                    return [
+                        'ok' => false,
+                        'message' => 'managed nginx owner commit failed before publication commit: '
+                            . $throwable->getMessage() . $recovery,
+                        'cleanup_warning' => '',
+                    ];
+                } catch (\Throwable $recoveryFailure) {
+                    return $this->failClosedPublication(
+                        'managed nginx owner/config commit identity is ambiguous: '
+                            . $throwable->getMessage() . '; recovery=' . $recoveryFailure->getMessage(),
+                    );
+                }
+            }
+        }
+
+        if ($this->configWriter->commitPublished($rollback)) {
+            try {
+                $cleanupWarning = $this->finalizeCommittedOwnerState($ownerIntent);
+            } catch (\Throwable $throwable) {
+                if (!$this->managedFileDigestMatches(
+                    $this->paths->confFile(),
+                    (string)($ownerIntent['config_sha256'] ?? ''),
+                    'Managed Nginx committed active config',
+                ) || !$this->committedOwnerMatchesWithoutIntent($ownerIntent)) {
+                    return $this->failClosedPublication(
+                        'managed nginx committed publication identity changed during cleanup: '
+                            . $throwable->getMessage(),
+                    );
+                }
+                $cleanupWarning = 'committed publication cleanup pending: '
+                    . $throwable->getMessage();
+            }
+            return [
+                'ok' => true,
+                'message' => 'owner and config publication committed',
+                'cleanup_warning' => $cleanupWarning,
+            ];
+        }
+
+        if ($this->publicationCommitAfterImageMatches($ownerIntent, $rollback)) {
+            $warnings = ['config commit completed with deferred durability cleanup'];
+            if ($rollback !== null) {
+                try {
+                    $this->configWriter->cleanupResolvedRollbackTemporaries($rollback);
+                } catch (\Throwable $throwable) {
+                    $warnings[] = 'rollback temporary cleanup pending: '
+                        . $throwable->getMessage();
+                }
+            }
+            try {
+                $ownerWarning = $this->finalizeCommittedOwnerState($ownerIntent);
+                if ($ownerWarning !== '') {
+                    $warnings[] = $ownerWarning;
+                }
+            } catch (\Throwable $throwable) {
+                $warnings[] = 'owner intent cleanup pending: ' . $throwable->getMessage();
+            }
+            return [
+                'ok' => true,
+                'message' => 'owner and config publication after-image is exact',
+                'cleanup_warning' => \implode('; ', $warnings),
+            ];
+        }
+
+        if ($this->rollbackBeforeImageIsExact($ownerIntent, $rollback)) {
+            try {
+                $recovery = $this->restorePublishedConfig(
+                    $rollback,
+                    $wasRunning,
+                    $startedByCall,
+                    $ownerIntent,
+                );
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx publication commit did not complete; '
+                        . 'owner and config before-images were restored' . $recovery,
+                    'cleanup_warning' => '',
+                ];
+            } catch (\Throwable $throwable) {
+                return $this->failClosedPublication(
+                    'managed nginx publication rollback failed: ' . $throwable->getMessage(),
+                );
+            }
+        }
+
+        return $this->failClosedPublication(
+            'managed nginx publication commit is ambiguous; neither exact before-image '
+                . 'nor exact after-image could be proven',
+        );
+    }
+
+    /** @return array{ok:false,message:string,cleanup_warning:string} */
+    private function failClosedPublication(string $message): array
+    {
+        try {
+            $this->stopManagedNginxFailClosed($message);
+            $message .= '; managed nginx stopped fail-closed';
+        } catch (\Throwable $throwable) {
+            $message .= '; fail-closed stop was not proven: ' . $throwable->getMessage();
+        }
+        return ['ok' => false, 'message' => $message, 'cleanup_warning' => ''];
+    }
+
+    /** @param array<string,mixed> $ownerIntent */
+    private function publicationCommitAfterImageMatches(array $ownerIntent, ?string $rollback): bool
+    {
+        if (!$this->ownerAfterImageMatches($ownerIntent)
+            || !$this->managedFileDigestMatches(
+                $this->paths->confFile(),
+                (string)($ownerIntent['config_sha256'] ?? ''),
+                'Managed Nginx committed active config',
+            )
+        ) {
+            return false;
+        }
+        if ($rollback === null) {
+            return !(bool)($ownerIntent['config_rollback_expected'] ?? false);
+        }
+        if ($this->pathExistsNoFollow($rollback)) {
+            return false;
+        }
+        return $this->managedFileDigestMatches(
+            $this->paths->confFile() . '.last-good',
+            (string)($ownerIntent['previous_config_sha256'] ?? ''),
+            'Managed Nginx committed last-known-good config',
+        );
+    }
+
+    /** @param array<string,mixed> $ownerIntent */
+    private function rollbackBeforeImageIsExact(array $ownerIntent, ?string $rollback): bool
+    {
+        if (!(bool)($ownerIntent['config_rollback_expected'] ?? false)
+            || $rollback === null
+            || !$this->managedFileDigestMatches(
+                $rollback,
+                (string)($ownerIntent['previous_config_sha256'] ?? ''),
+                'Managed Nginx rollback before-image',
+            )
+        ) {
+            return false;
+        }
+        if ($this->ownerBeforeImageMatches($ownerIntent)) {
+            return true;
+        }
+        if (!$this->ownerAfterImageMatches($ownerIntent)) {
+            return false;
+        }
+        if (!(bool)($ownerIntent['owner_rollback_expected'] ?? false)) {
+            return true;
+        }
+        $ownerRollback = $this->ownerRollbackPath(
+            (string)($ownerIntent['transaction_id'] ?? ''),
+        );
+        try {
+            $this->assertOwnerRollbackMatchesIntent($ownerIntent, $ownerRollback);
+        } catch (\Throwable) {
+            return false;
+        }
+        return true;
+    }
+
+    /** @param array<string,mixed> $ownerIntent */
+    private function finalizeCommittedOwnerState(array $ownerIntent): string
+    {
+        $warnings = [];
+        $ownerRollback = $this->ownerRollbackPath((string)$ownerIntent['transaction_id']);
+        if ($this->pathExistsNoFollow($ownerRollback)) {
+            $this->assertOwnerRollbackMatchesIntent($ownerIntent, $ownerRollback);
+            try {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $ownerRollback,
+                    'Committed managed Nginx owner rollback',
+                );
+            } catch (\Throwable $throwable) {
+                if ($this->pathExistsNoFollow($ownerRollback)) {
+                    throw $throwable;
+                }
+                try {
+                    $this->reconcileProjectStateRemovalAfterImage(
+                        $ownerRollback,
+                        'Committed managed Nginx owner rollback',
+                        $throwable,
+                    );
+                } catch (\Throwable $syncFailure) {
+                    if ($this->pathExistsNoFollow($ownerRollback)) {
+                        throw $syncFailure;
+                    }
+                    $warnings[] = 'owner rollback unlink committed with deferred directory sync: '
+                        . $syncFailure->getMessage();
+                }
+            }
+        } elseif ((bool)($ownerIntent['owner_rollback_expected'] ?? false)
+            && !$this->ownerAfterImageMatches($ownerIntent)
+        ) {
+            throw new \RuntimeException(
+                'Committed managed nginx owner rollback disappeared before owner identity was proven.',
+            );
+        }
+        $intentWarning = $this->finalizeOwnerIntent($ownerIntent);
+        if ($intentWarning !== '') {
+            $warnings[] = $intentWarning;
+        }
+        return \implode('; ', $warnings);
+    }
+
     private function restorePublishedConfig(
         ?string $rollback,
         bool $wasRunning,
         bool $startedByCall,
+        ?array $ownerIntent = null,
     ): string {
         $notes = [];
-        if ($startedByCall) {
-            // Do not discard the only candidate/intent evidence while that
-            // candidate may still be serving traffic.
-            $this->stopManagedNginxFailClosed(
-                'unable to stop the newly-started candidate before config rollback',
+        if (!$wasRunning) {
+            // start() may return failure after process creation (for example an
+            // identity publication error). Re-prove that no new master remains
+            // before changing the config under a potentially live process.
+            $status = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
             );
-            $notes[] = 'candidate process stopped';
+            if (!($status['ok'] ?? false)) {
+                throw new \RuntimeException(
+                    'Managed nginx newly-started process identity is unsafe; '
+                        . 'publication evidence was retained before config rollback.',
+                );
+            }
+            if ((bool)($status['running'] ?? false)) {
+                $this->stopManagedNginxFailClosed(
+                    'unable to stop the newly-started candidate before config rollback',
+                );
+                $notes[] = 'candidate process stopped';
+            } elseif ($startedByCall) {
+                $notes[] = 'candidate process already stopped';
+            }
         }
 
+        if (\is_array($ownerIntent)
+            && (bool)($ownerIntent['config_rollback_expected'] ?? false)
+            && !$this->rollbackBeforeImageIsExact($ownerIntent, $rollback)
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx config rollback before-image is missing or changed.',
+            );
+        }
         $this->configWriter->rollbackPublished($rollback);
+        if (\is_array($ownerIntent)) {
+            $this->restoreOwnerBeforeImage($ownerIntent);
+        }
         if ($wasRunning) {
             $owner = $this->readOwner();
-            $restored = $this->processManager->reload();
+            $restored = $this->processManager->reload(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
             if (!($restored['ok'] ?? false)
                 || !\is_array($owner)
                 || !$this->committedOwnerGenerationIsLive($owner)
@@ -1236,6 +1860,10 @@ final class ManagedNginxService
             } else {
                 $notes[] = 'last-known-good config and live generation restored';
             }
+        }
+
+        if (\is_array($ownerIntent)) {
+            $this->finalizeRolledBackOwnerIntent($ownerIntent);
         }
 
         return $notes === [] ? '' : '; ' . \implode('; ', $notes);
@@ -1266,8 +1894,12 @@ final class ManagedNginxService
 
     private function stopManagedNginxFailClosed(string $context): void
     {
-        $stop = $this->processManager->stop();
-        $status = $this->processManager->status();
+        $stop = $this->processManager->stop(
+            $this->activeLifecycleDeadlineMonotonic,
+        );
+        $status = $this->processManager->status(
+            $this->activeLifecycleDeadlineMonotonic,
+        );
         if (($status['ok'] ?? false) && !($status['running'] ?? false)) {
             return;
         }
@@ -1283,6 +1915,7 @@ final class ManagedNginxService
     {
         if ($port < 1 || $port > 65535
             || \preg_match('/\A[a-f0-9]{32}\z/D', $generation) !== 1
+            || !$this->lifecycleDeadlineAvailable()
         ) {
             return false;
         }
@@ -1295,8 +1928,36 @@ final class ManagedNginxService
             expectedHeaders: ['X-Wls-Nginx-Config' => $generation],
             maxAttempts: 60,
             requiredConsecutive: 8,
+            deadlineMonotonic: $this->activeLifecycleDeadlineMonotonic,
         );
         return (bool)($probe['ok'] ?? false);
+    }
+
+    /** @param list<string> $serverNames */
+    private function resolveTlsProbeHost(array $serverNames): string
+    {
+        foreach ($serverNames as $serverName) {
+            $candidate = \strtolower(\rtrim(\trim((string)$serverName), '.'));
+            if (\str_starts_with($candidate, '*.')) {
+                $suffix = \substr($candidate, 2);
+                $candidate = 'wls-probe.' . $suffix;
+            }
+            if ($candidate === ''
+                || $candidate === '_'
+                || \str_contains($candidate, '*')
+                || \str_contains($candidate, ':')
+                || \strlen($candidate) > 253
+                || \preg_match(
+                    '/\A[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\z/D',
+                    $candidate,
+                ) !== 1
+            ) {
+                continue;
+            }
+            return $candidate;
+        }
+
+        return 'localhost';
     }
 
     /** @param list<string> $serverNames */
@@ -1312,21 +1973,20 @@ final class ManagedNginxService
             || !\defined('STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT')
             || \preg_match('/\A[a-f0-9]{32}\z/D', $generation) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedCertificateSha256) !== 1
+            || !$this->lifecycleDeadlineAvailable()
         ) {
             return false;
         }
-        $peerName = 'localhost';
-        foreach ($serverNames as $serverName) {
-            $candidate = \trim((string)$serverName);
-            if ($candidate !== '' && $candidate !== '_') {
-                $peerName = $candidate;
-                break;
-            }
-        }
+        $peerName = $this->resolveTlsProbeHost($serverNames);
         for ($attempt = 0; $attempt < 10; $attempt++) {
+            $connectTimeout = $this->remainingLifecycleDeadline(1.0);
+            if ($connectTimeout === null) {
+                return false;
+            }
             $context = \stream_context_create(['ssl' => [
                 'verify_peer' => false,
-                'verify_peer_name' => false,
+                'verify_peer_name' => true,
+                'allow_self_signed' => true,
                 'SNI_enabled' => true,
                 'peer_name' => $peerName,
                 'alpn_protocols' => 'http/1.1',
@@ -1338,12 +1998,18 @@ final class ManagedNginxService
                 'tcp://127.0.0.1:' . $port,
                 $errno,
                 $error,
-                1.0,
+                $connectTimeout,
                 STREAM_CLIENT_CONNECT,
                 $context,
             );
             if (\is_resource($socket)) {
-                @\stream_set_timeout($socket, 2);
+                if (!$this->setSocketTimeoutWithinLifecycleDeadline(
+                    $socket,
+                    2.0,
+                )) {
+                    @\fclose($socket);
+                    return false;
+                }
                 $enabled = @\stream_socket_enable_crypto(
                     $socket,
                     true,
@@ -1371,6 +2037,12 @@ final class ManagedNginxService
                         "GET /_wls/health HTTP/1.1\r\nHost: {$peerName}\r\nConnection: close\r\n\r\n",
                     );
                     while (!\feof($socket) && \strlen($headers) < 65_536) {
+                        if (!$this->setSocketTimeoutWithinLifecycleDeadline(
+                            $socket,
+                            2.0,
+                        )) {
+                            break;
+                        }
                         $line = @\fgets($socket, 8192);
                         if (!\is_string($line)) {
                             break;
@@ -1383,6 +2055,7 @@ final class ManagedNginxService
                 }
                 @\fclose($socket);
                 if ($certificateVerified
+                    && $this->lifecycleDeadlineAvailable()
                     && \preg_match('/\AHTTP\/1\.[01]\s+200(?:\s|$)/', $headers) === 1
                     && \preg_match(
                         '/^X-Wls-Nginx-Config:\s*' . \preg_quote($generation, '/') . '\s*$/mi',
@@ -1392,7 +2065,9 @@ final class ManagedNginxService
                     return true;
                 }
             }
-            SchedulerSystem::usleep(100_000);
+            if (!$this->sleepWithinLifecycleDeadline(0.1)) {
+                return false;
+            }
         }
 
         return false;
@@ -1423,6 +2098,7 @@ final class ManagedNginxService
             || !\function_exists('curl_init')
             || !\defined('CURLINFO_HTTP_VERSION')
             || !\defined('CURL_SSLVERSION_TLSv1_3')
+            || !$this->lifecycleDeadlineAvailable()
         ) {
             return false;
         }
@@ -1442,21 +2118,7 @@ final class ManagedNginxService
         if ($backendIdentity === null) {
             return false;
         }
-        $probeHost = 'localhost';
-        foreach ($serverNames as $candidate) {
-            $candidate = \strtolower(\trim((string)$candidate));
-            if ($candidate === ''
-                || $candidate === '_'
-                || \str_contains($candidate, '*')
-                || \str_starts_with($candidate, '.')
-                || \str_contains($candidate, ':')
-                || \preg_match('/\A[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\z/D', $candidate) !== 1
-            ) {
-                continue;
-            }
-            $probeHost = $candidate;
-            break;
-        }
+        $probeHost = $this->resolveTlsProbeHost($serverNames);
 
         $requestedVersion = $protocol === '2'
             ? (int)\constant('CURL_HTTP_VERSION_2_0')
@@ -1467,6 +2129,10 @@ final class ManagedNginxService
         }
 
         for ($attempt = 0; $attempt < 5; $attempt++) {
+            $remainingMilliseconds = $this->remainingLifecycleMilliseconds(5_000);
+            if ($remainingMilliseconds === null) {
+                return false;
+            }
             $headers = '';
             $responseBody = '';
             $responseOverflow = false;
@@ -1506,11 +2172,11 @@ final class ManagedNginxService
                 },
                 CURLOPT_HTTP_VERSION => $requestedVersion,
                 CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_SSLVERSION => $sslVersion,
                 CURLOPT_RESOLVE => [$probeHost . ':' . $port . ':127.0.0.1'],
-                CURLOPT_CONNECTTIMEOUT_MS => 1_500,
-                CURLOPT_TIMEOUT_MS => 5_000,
+                CURLOPT_CONNECTTIMEOUT_MS => \min(1_500, $remainingMilliseconds),
+                CURLOPT_TIMEOUT_MS => $remainingMilliseconds,
                 CURLOPT_FRESH_CONNECT => true,
                 CURLOPT_FORBID_REUSE => true,
                 CURLOPT_PROXY => '',
@@ -1537,6 +2203,7 @@ final class ManagedNginxService
 
             $health = \json_decode($responseBody, true);
             if ($completed === true
+                && $this->lifecycleDeadlineAvailable()
                 && !$responseOverflow
                 && $errno === CURLE_OK
                 && $responseCode === 200
@@ -1550,7 +2217,9 @@ final class ManagedNginxService
             ) {
                 return true;
             }
-            SchedulerSystem::usleep(100_000);
+            if (!$this->sleepWithinLifecycleDeadline(0.1)) {
+                return false;
+            }
         }
 
         return false;
@@ -1561,6 +2230,7 @@ final class ManagedNginxService
      */
     private function verifyHttp3Runtime(
         bool $configured,
+        bool $capable,
         int $port,
         int $masterPid,
         string $generation,
@@ -1571,19 +2241,28 @@ final class ManagedNginxService
         int $upstreamPort,
     ): array {
         if (!$configured) {
+            $verificationUnavailable = $capable && !$this->http3VerifierAvailable();
             return [
                 'ok' => true,
-                'message' => 'HTTP/3 is not configured',
+                'message' => $verificationUnavailable
+                    ? 'HTTP/3 was not advertised because a real QUIC verifier is unavailable'
+                    : 'HTTP/3 is not configured',
                 'evidence' => [
                     'http3_runtime_verified' => false,
                     'http3_verifier_available' => false,
-                    'http3_status' => 'not_configured',
+                    'http3_status' => $verificationUnavailable
+                        ? 'verification_unavailable'
+                        : 'not_configured',
+                    'http3_advertisement_status' => 'NOT_ADVERTISED',
                     'http3_protocol' => '',
                     'http3_master_pid' => 0,
                     'http3_config_generation' => '',
                     'http3_config_sha256' => '',
                     'http3_ssl_certificate_sha256' => '',
                     'http3_verified_at' => '',
+                    'http3_reason' => $verificationUnavailable
+                        ? 'HTTP/3 capability is present, but QUIC/Alt-Svc stayed disabled because this runtime cannot issue an HTTP/3-only probe.'
+                        : '',
                 ],
             ];
         }
@@ -1596,6 +2275,7 @@ final class ManagedNginxService
             || \preg_match('/\A[a-f0-9]{32}\z/D', $generation) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $configSha256) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $certificateSha256) !== 1
+            || !$this->lifecycleDeadlineAvailable()
         ) {
             return ['ok' => false, 'message' => 'HTTP/3 verification identity is invalid', 'evidence' => []];
         }
@@ -1603,25 +2283,13 @@ final class ManagedNginxService
         if ($backendIdentity === null) {
             return ['ok' => false, 'message' => 'HTTP/3 WLS backend identity is invalid', 'evidence' => []];
         }
-        $probeHost = 'localhost';
-        foreach ($serverNames as $candidate) {
-            $candidate = \strtolower(\trim((string)$candidate));
-            if ($candidate === ''
-                || $candidate === '_'
-                || \str_contains($candidate, '*')
-                || \str_contains($candidate, ':')
-                || \preg_match('/\A[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\z/D', $candidate) !== 1
-            ) {
-                continue;
-            }
-            $probeHost = $candidate;
-            break;
-        }
+        $probeHost = $this->resolveTlsProbeHost($serverNames);
 
         $evidence = [
             'http3_runtime_verified' => false,
             'http3_verifier_available' => false,
             'http3_status' => 'verification_unavailable',
+            'http3_advertisement_status' => 'ADVERTISED',
             'http3_protocol' => '',
             'http3_master_pid' => $masterPid,
             'http3_config_generation' => $generation,
@@ -1630,21 +2298,21 @@ final class ManagedNginxService
             'http3_verified_at' => '',
             'http3_reason' => 'Nginx HTTP/3 is configured, but this PHP cURL runtime cannot issue an HTTP/3-only probe.',
         ];
-        if (!\function_exists('curl_init')
-            || !\defined('CURLOPT_HTTP_VERSION')
-            || !\defined('CURL_HTTP_VERSION_3ONLY')
-        ) {
-            return ['ok' => true, 'message' => (string)$evidence['http3_reason'], 'evidence' => $evidence];
-        }
-        $curlVersion = \curl_version();
-        if (\defined('CURL_VERSION_HTTP3')
-            && (((int)($curlVersion['features'] ?? 0) & (int)\constant('CURL_VERSION_HTTP3')) === 0)
-        ) {
-            return ['ok' => true, 'message' => (string)$evidence['http3_reason'], 'evidence' => $evidence];
+        if (!$this->http3VerifierAvailable()) {
+            return [
+                'ok' => false,
+                'message' => 'HTTP/3 was configured without an available QUIC verifier',
+                'evidence' => $evidence,
+            ];
         }
         $evidence['http3_verifier_available'] = true;
         $lastError = 'HTTP/3-only request did not complete';
         for ($attempt = 0; $attempt < 5; $attempt++) {
+            $remainingMilliseconds = $this->remainingLifecycleMilliseconds(5_000);
+            if ($remainingMilliseconds === null) {
+                $lastError = 'managed nginx lifecycle deadline was exhausted';
+                break;
+            }
             $headers = '';
             $responseBody = '';
             $responseOverflow = false;
@@ -1685,10 +2353,10 @@ final class ManagedNginxService
                 },
                 CURLOPT_HTTP_VERSION => (int)\constant('CURL_HTTP_VERSION_3ONLY'),
                 CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_RESOLVE => [$probeHost . ':' . $port . ':127.0.0.1'],
-                CURLOPT_CONNECTTIMEOUT_MS => 1500,
-                CURLOPT_TIMEOUT_MS => 5000,
+                CURLOPT_CONNECTTIMEOUT_MS => \min(1_500, $remainingMilliseconds),
+                CURLOPT_TIMEOUT_MS => $remainingMilliseconds,
                 CURLOPT_FRESH_CONNECT => true,
                 CURLOPT_FORBID_REUSE => true,
                 CURLOPT_PROXY => '',
@@ -1716,6 +2384,7 @@ final class ManagedNginxService
                 : 30;
             $health = \json_decode($responseBody, true);
             if ($completed === true
+                && $this->lifecycleDeadlineAvailable()
                 && !$responseOverflow
                 && $errno === 0
                 && (int)($info['http_code'] ?? 0) === 200
@@ -1731,6 +2400,7 @@ final class ManagedNginxService
                     ...$evidence,
                     'http3_runtime_verified' => true,
                     'http3_status' => 'verified',
+                    'http3_advertisement_status' => 'ADVERTISED',
                     'http3_protocol' => 'HTTP/3',
                     'http3_verified_at' => \date('c'),
                     'http3_reason' => 'Live owner-bound Nginx HTTP/3-only WLS health request verified.',
@@ -1742,13 +2412,326 @@ final class ManagedNginxService
                 ? 'curl_errno=' . $errno . ' ' . $error
                 : 'status=' . (int)($info['http_code'] ?? 0)
                     . ' http_version=' . (int)($info['http_version'] ?? 0);
-            SchedulerSystem::usleep(100_000);
+            if (!$this->sleepWithinLifecycleDeadline(0.1)) {
+                $lastError = 'managed nginx lifecycle deadline was exhausted';
+                break;
+            }
         }
 
         $lastError = \trim((string)\preg_replace('/\s+/', ' ', $lastError));
         $evidence['http3_status'] = 'failed';
         $evidence['http3_reason'] = 'Live Nginx HTTP/3 QUIC probe failed: ' . \substr($lastError, 0, 240);
         return ['ok' => false, 'message' => (string)$evidence['http3_reason'], 'evidence' => $evidence];
+    }
+
+    private function http3VerifierAvailable(): bool
+    {
+        if (!\function_exists('curl_init')
+            || !\function_exists('curl_version')
+            || !\defined('CURLOPT_HTTP_VERSION')
+            || !\defined('CURL_HTTP_VERSION_3ONLY')
+        ) {
+            return false;
+        }
+        if (!\defined('CURL_VERSION_HTTP3')) {
+            return true;
+        }
+        $curlVersion = \curl_version();
+        return (((int)($curlVersion['features'] ?? 0)
+                & (int)\constant('CURL_VERSION_HTTP3')) !== 0);
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @param array<string,mixed> $http3
+     */
+    private function http3FailureCanDegrade(array $config, array $http3): bool
+    {
+        $evidence = \is_array($http3['evidence'] ?? null)
+            ? $http3['evidence']
+            : [];
+        return (bool)($config['http3_enabled'] ?? false)
+            && !($http3['ok'] ?? false)
+            && (bool)($evidence['http3_verifier_available'] ?? false)
+            && \hash_equals('failed', (string)($evidence['http3_status'] ?? ''))
+            && \hash_equals(
+                (string)($config['config_generation'] ?? ''),
+                (string)($evidence['http3_config_generation'] ?? ''),
+            )
+            && \hash_equals(
+                (string)($config['config_sha256'] ?? ''),
+                (string)($evidence['http3_config_sha256'] ?? ''),
+            );
+    }
+
+    /**
+     * Replace a live but unverified QUIC candidate with an H2/H1-only candidate
+     * inside the original config/owner transaction. The original before-images
+     * stay authoritative until the downgraded data plane has passed every core
+     * probe, so a QUIC-only failure cannot take a healthy TLS edge down.
+     *
+     * @param array<string,mixed> $currentConfig
+     * @param array<string,mixed> $failedHttp3
+     * @param array<string,mixed> $capabilities
+     * @param array<string,mixed> $ownerIntent
+     * @param list<int> $upstreamPorts
+     * @param array<string,mixed>|null $certificateGeneration
+     * @return array{
+     *     config:array<string,mixed>,
+     *     owner_intent:array<string,mixed>,
+     *     status:array<string,mixed>,
+     *     http_runtime_evidence:array<string,mixed>,
+     *     http3:array<string,mixed>
+     * }
+     */
+    private function degradeFailedHttp3Publication(
+        array $currentConfig,
+        array $failedHttp3,
+        array $capabilities,
+        array $ownerIntent,
+        string $transactionId,
+        ?string $rollback,
+        int $upstreamPort,
+        string $upstreamHost,
+        array $upstreamPorts,
+        string $ownerInstance,
+        ?array $certificateGeneration,
+        int $masterPid,
+    ): array {
+        if (!$this->http3FailureCanDegrade($currentConfig, $failedHttp3)
+            || !\hash_equals(
+                $transactionId,
+                (string)($ownerIntent['transaction_id'] ?? ''),
+            )
+            || $masterPid < 1
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx HTTP/3 failure is not eligible for protocol-only degradation.',
+            );
+        }
+        if ((bool)($ownerIntent['config_rollback_expected'] ?? false) !== ($rollback !== null)) {
+            throw new \RuntimeException(
+                'Managed nginx HTTP/3 degradation rollback identity is inconsistent.',
+            );
+        }
+
+        $candidate = null;
+        try {
+            $degraded = $this->configWriter->write(
+                $upstreamPort,
+                $upstreamHost,
+                (array)($currentConfig['server_names'] ?? []),
+                true,
+                (bool)($capabilities['gzip_module'] ?? false),
+                true,
+                false,
+                $upstreamPorts,
+                $certificateGeneration,
+            );
+            $candidate = (string)($degraded['conf'] ?? '');
+            $this->assertHttp3DegradedConfigIdentity($currentConfig, $degraded, $candidate);
+            $test = $this->processManager->testConfig(
+                $candidate,
+                $this->activeLifecycleDeadlineMonotonic,
+            );
+            if (($test['code'] ?? 1) !== 0) {
+                throw new \RuntimeException(
+                    'Managed nginx H2/H1 fallback candidate failed nginx -t: '
+                        . \trim((string)($test['output'] ?? '')),
+                );
+            }
+
+            $attemptEvidence = (array)($failedHttp3['evidence'] ?? []);
+            $http3Evidence = [
+                ...$attemptEvidence,
+                'http3_runtime_verified' => false,
+                'http3_verifier_available' => true,
+                'http3_status' => 'failed',
+                'http3_advertisement_status' => 'NOT_ADVERTISED',
+                'http3_protocol' => '',
+                'http3_verified_at' => '',
+                'http3_reason' => \rtrim(
+                    (string)($attemptEvidence['http3_reason']
+                        ?? $failedHttp3['message']
+                        ?? 'Live HTTP/3 verification failed.'),
+                    ". \t\n\r\0\x0B",
+                ) . '; HTTP/3 and Alt-Svc were removed in the same publication transaction.',
+            ];
+            $degradedOwner = [
+                ...$ownerIntent,
+                'server_names' => (array)($degraded['server_names'] ?? []),
+                'listen_http' => (int)$degraded['http'],
+                'listen_https' => (int)$degraded['https'],
+                'ssl_required' => (bool)($degraded['ssl'] ?? false),
+                'ssl_certificate_sha256'
+                    => (string)($degraded['ssl_certificate_sha256'] ?? ''),
+                'config_generation' => (string)$degraded['config_generation'],
+                ...$this->certificateGenerationFacts($degraded),
+                ...$this->protocolFacts($degraded, $capabilities),
+                ...$http3Evidence,
+                'updated_at' => \date('c'),
+            ];
+            $this->writeOwnerIntent($degradedOwner);
+
+            $publication = (new NginxConfigPublication(
+                $this->paths->confFile(),
+                'managed nginx',
+            ))->replacePublishedCandidate(
+                $candidate,
+                $transactionId,
+                $rollback,
+                (string)$currentConfig['config_sha256'],
+            );
+            $candidate = null;
+            if (($publication['rollback'] ?? null) !== $rollback) {
+                throw new \RuntimeException(
+                    'Managed nginx H2/H1 fallback changed the original rollback identity.',
+                );
+            }
+            $reloaded = $this->processManager->reload(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
+            if (!($reloaded['ok'] ?? false)
+                || !$this->probeConfigGeneration(
+                    (int)$degraded['http'],
+                    (string)$degraded['config_generation'],
+                )
+                || !(bool)($degraded['ssl'] ?? false)
+                || !$this->probeTls13(
+                    (int)$degraded['https'],
+                    (array)($degraded['server_names'] ?? []),
+                    (string)$degraded['config_generation'],
+                    (string)($degraded['ssl_certificate_sha256'] ?? ''),
+                )
+                || !(bool)($degraded['http2_enabled'] ?? false)
+                || !$this->verifyHttpRuntime(
+                    '2',
+                    (int)$degraded['https'],
+                    (array)($degraded['server_names'] ?? []),
+                    (string)$degraded['config_generation'],
+                    $ownerInstance,
+                    $upstreamPort,
+                )
+                || !$this->verifyHttpRuntime(
+                    '1.1',
+                    (int)$degraded['https'],
+                    (array)($degraded['server_names'] ?? []),
+                    (string)$degraded['config_generation'],
+                    $ownerInstance,
+                    $upstreamPort,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Managed nginx H2/H1 fallback did not pass config, TLS, HTTP/2, and HTTP/1.1 probes: '
+                        . (string)($reloaded['message'] ?? 'unknown'),
+                );
+            }
+            $status = $this->processManager->status(
+                $this->activeLifecycleDeadlineMonotonic,
+            );
+            if (!($status['ok'] ?? false)
+                || !($status['running'] ?? false)
+                || (int)($status['pid'] ?? 0) !== $masterPid
+            ) {
+                throw new \RuntimeException(
+                    'Managed nginx master identity changed during HTTP/3 protocol degradation.',
+                );
+            }
+
+            $httpRuntimeEvidence = [
+                'tls13_runtime_verified' => true,
+                'http2_runtime_verified' => true,
+                'http1_runtime_verified' => true,
+                'public_protocols_runtime_verified' => ['http/2', 'http/1.1'],
+            ];
+            $degradedOwner = [
+                ...$degradedOwner,
+                ...$httpRuntimeEvidence,
+                ...$http3Evidence,
+                'updated_at' => \date('c'),
+            ];
+            $this->writeOwnerIntent($degradedOwner);
+
+            return [
+                'config' => $degraded,
+                'owner_intent' => $degradedOwner,
+                'status' => $status,
+                'http_runtime_evidence' => $httpRuntimeEvidence,
+                'http3' => [
+                    'ok' => true,
+                    'message' => 'HTTP/3 verification failed; H2/H1 fallback verified',
+                    'evidence' => $http3Evidence,
+                ],
+            ];
+        } catch (\Throwable $throwable) {
+            if ($candidate !== null) {
+                try {
+                    $this->configWriter->discardCandidate($candidate);
+                } catch (\Throwable) {
+                    // Preserve the publication failure. Transaction recovery
+                    // retains the authoritative before-image evidence.
+                }
+            }
+            throw $throwable;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $current
+     * @param array<string,mixed> $degraded
+     */
+    private function assertHttp3DegradedConfigIdentity(
+        array $current,
+        array $degraded,
+        string $candidate,
+    ): void {
+        $sameIdentity = (bool)($degraded['ssl'] ?? false)
+            && (bool)($degraded['http2_enabled'] ?? false)
+            && !(bool)($degraded['http3_enabled'] ?? false)
+            && (int)($degraded['http'] ?? 0) === (int)($current['http'] ?? 0)
+            && (int)($degraded['https'] ?? 0) === (int)($current['https'] ?? 0)
+            && (array)($degraded['server_names'] ?? []) === (array)($current['server_names'] ?? [])
+            && (array)($degraded['upstreams'] ?? []) === (array)($current['upstreams'] ?? [])
+            && \hash_equals(
+                (string)($current['ssl_certificate_sha256'] ?? ''),
+                (string)($degraded['ssl_certificate_sha256'] ?? ''),
+            )
+            && $this->certificateGenerationFacts($current)
+                === $this->certificateGenerationFacts($degraded)
+            && \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)($degraded['config_generation'] ?? ''),
+            ) === 1
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($degraded['config_sha256'] ?? ''),
+            ) === 1;
+        if (!$sameIdentity || $candidate === '') {
+            throw new \RuntimeException(
+                'Managed nginx H2/H1 fallback changed an immutable route or certificate identity.',
+            );
+        }
+        $contents = GatewayProjectStateFilesystem::read(
+            $candidate,
+            16 * 1024 * 1024,
+            'Managed Nginx H2/H1 fallback candidate',
+        );
+        if (\stripos($contents, 'Alt-Svc') !== false
+            || \preg_match('/\bhttp3\s+on\s*;/i', $contents) === 1
+            || \preg_match('/\blisten\s+[^;]*\bquic\b[^;]*;/i', $contents) === 1
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx H2/H1 fallback still advertises or listens for HTTP/3.',
+            );
+        }
+        if (!\hash_equals(
+            (string)$degraded['config_sha256'],
+            \hash('sha256', $contents),
+        )) {
+            throw new \RuntimeException(
+                'Managed nginx H2/H1 fallback candidate digest changed before publication.',
+            );
+        }
     }
 
     /** @return array<string,mixed>|null */
@@ -1778,6 +2761,8 @@ final class ManagedNginxService
                 && \preg_match('/\A[a-f0-9]{32}\z/D', (string)$decoded['transaction_id']) !== 1)
             || (\array_key_exists('config_rollback_expected', $decoded)
                 && !\is_bool($decoded['config_rollback_expected']))
+            || (\array_key_exists('owner_rollback_expected', $decoded)
+                && !\is_bool($decoded['owner_rollback_expected']))
             || ((bool)($decoded['ssl_required'] ?? false)
                 && \preg_match(
                     '/\A[a-f0-9]{64}\z/D',
@@ -1785,6 +2770,58 @@ final class ManagedNginxService
                 ) !== 1)
         ) {
             return null;
+        }
+        foreach (['previous_config_sha256', 'previous_owner_sha256'] as $previousHashField) {
+            $previousHash = \strtolower((string)($decoded[$previousHashField] ?? ''));
+            if ($previousHash !== ''
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $previousHash) !== 1
+            ) {
+                return null;
+            }
+        }
+        if (((bool)($decoded['config_rollback_expected'] ?? false)
+                && \array_key_exists('previous_config_sha256', $decoded)
+                && \preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    \strtolower((string)($decoded['previous_config_sha256'] ?? '')),
+                ) !== 1)
+            || ((bool)($decoded['owner_rollback_expected'] ?? false)
+                && \array_key_exists('previous_owner_sha256', $decoded)
+                && \preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    \strtolower((string)($decoded['previous_owner_sha256'] ?? '')),
+                ) !== 1)
+        ) {
+            return null;
+        }
+        $certificateContractPresent = \array_key_exists(
+            'certificate_generation_managed',
+            $decoded,
+        );
+        if ($certificateContractPresent
+            && !\is_bool($decoded['certificate_generation_managed'])
+        ) {
+            return null;
+        }
+        if (($decoded['certificate_generation_managed'] ?? false) === true) {
+            if (\trim((string)($decoded['certificate_domain'] ?? '')) === ''
+                || (int)($decoded['certificate_generation'] ?? 0) < 1
+            ) {
+                return null;
+            }
+            foreach ([
+                'certificate_source_digest',
+                'certificate_cert_sha256',
+                'certificate_key_sha256',
+                'certificate_chain_sha256',
+            ] as $certificateHashField) {
+                if (\preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    \strtolower((string)($decoded[$certificateHashField] ?? '')),
+                ) !== 1) {
+                    return null;
+                }
+            }
         }
         $upstreamPorts = $decoded['upstream_ports'] ?? [(int)$decoded['upstream_port']];
         if (!\is_array($upstreamPorts) || !\array_is_list($upstreamPorts) || $upstreamPorts === []) {
@@ -1875,12 +2912,24 @@ final class ManagedNginxService
         }
         $http3Status = (string)($decoded['http3_status'] ?? '');
         $http3Protocol = (string)($decoded['http3_protocol'] ?? '');
+        $http3AdvertisementStatus = (string)(
+            $decoded['http3_advertisement_status'] ?? ''
+        );
         if (!\in_array(
             $http3Status,
             ['', 'pending', 'not_configured', 'verification_unavailable', 'failed', 'verified'],
             true,
         )
             || !\in_array($http3Protocol, ['', 'HTTP/3'], true)
+            || !\in_array(
+                $http3AdvertisementStatus,
+                ['', 'ADVERTISED', 'NOT_ADVERTISED'],
+                true,
+            )
+            || ($http3AdvertisementStatus === 'ADVERTISED'
+                && !(bool)($decoded['http3_configured'] ?? false))
+            || ($http3AdvertisementStatus === 'NOT_ADVERTISED'
+                && (bool)($decoded['http3_configured'] ?? false))
             || (\array_key_exists('http3_master_pid', $decoded)
                 && (!\is_int($decoded['http3_master_pid']) || $decoded['http3_master_pid'] < 0))
             || (\array_key_exists('http3_reason', $decoded) && !\is_string($decoded['http3_reason']))
@@ -2175,10 +3224,17 @@ final class ManagedNginxService
             ))
             : [];
 
-        return [
+        $owner = [
             'transaction_id' => (string)($decoded['transaction_id'] ?? ''),
             'instance_name' => \trim((string)$decoded['instance_name']),
             'config_rollback_expected' => (bool)($decoded['config_rollback_expected'] ?? false),
+            'previous_config_sha256' => \strtolower((string)(
+                $decoded['previous_config_sha256'] ?? ''
+            )),
+            'owner_rollback_expected' => (bool)($decoded['owner_rollback_expected'] ?? false),
+            'previous_owner_sha256' => \strtolower((string)(
+                $decoded['previous_owner_sha256'] ?? ''
+            )),
             'upstream_host' => \trim((string)$decoded['upstream_host']),
             'upstream_port' => (int)$decoded['upstream_port'],
             'upstream_ports' => \array_values($upstreamPorts),
@@ -2204,6 +3260,7 @@ final class ManagedNginxService
             'http3_runtime_verified' => $http3Verified,
             'http3_verifier_available' => (bool)($decoded['http3_verifier_available'] ?? false),
             'http3_status' => $http3Status,
+            'http3_advertisement_status' => $http3AdvertisementStatus,
             'http3_protocol' => $http3Protocol,
             'http3_master_pid' => (int)($decoded['http3_master_pid'] ?? 0),
             'http3_config_generation' => (string)($decoded['http3_config_generation'] ?? ''),
@@ -2256,13 +3313,37 @@ final class ManagedNginxService
             'tls_session_resumption_reload_verified_at' => (string)($decoded['tls_session_resumption_reload_verified_at'] ?? ''),
             'updated_at' => (string)($decoded['updated_at'] ?? ''),
         ];
+        if ($certificateContractPresent) {
+            $owner = [
+                ...$owner,
+                'certificate_generation_managed'
+                    => (bool)$decoded['certificate_generation_managed'],
+                'certificate_domain' => \strtolower(\trim((string)(
+                    $decoded['certificate_domain'] ?? ''
+                ))),
+                'certificate_generation' => (int)($decoded['certificate_generation'] ?? 0),
+                'certificate_source_digest' => \strtolower((string)(
+                    $decoded['certificate_source_digest'] ?? ''
+                )),
+                'certificate_cert_sha256' => \strtolower((string)(
+                    $decoded['certificate_cert_sha256'] ?? ''
+                )),
+                'certificate_key_sha256' => \strtolower((string)(
+                    $decoded['certificate_key_sha256'] ?? ''
+                )),
+                'certificate_chain_sha256' => \strtolower((string)(
+                    $decoded['certificate_chain_sha256'] ?? ''
+                )),
+            ];
+        }
+        return $owner;
     }
 
     /** @param array<string,mixed> $owner */
     private function writeOwner(array $owner): void
     {
         $file = $this->paths->ownerFile();
-        $json = \json_encode($owner, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $json = $this->ownerJson($owner);
         if (\file_exists($file) || \is_link($file)) {
             GatewayProjectStateFilesystem::read(
                 $file,
@@ -2274,15 +3355,371 @@ final class ManagedNginxService
                 throw new \RuntimeException('Managed nginx owner transaction id is invalid.');
             }
         }
-        GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+        try {
+            GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+        } catch (\Throwable $throwable) {
+            $this->reconcileProjectStateWriteAfterImage(
+                $file,
+                \hash('sha256', $json),
+                'Managed Nginx owner after-image',
+                $throwable,
+            );
+        }
     }
 
     /** @param array<string,mixed> $owner */
     private function writeOwnerIntent(array $owner): void
     {
         $file = $this->paths->ownerIntentFile();
-        $json = \json_encode($owner, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-        GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+        $json = $this->ownerJson($owner);
+        try {
+            GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+        } catch (\Throwable $throwable) {
+            $this->reconcileProjectStateWriteAfterImage(
+                $file,
+                \hash('sha256', $json),
+                'Managed Nginx owner intent after-image',
+                $throwable,
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $owner */
+    private function ownerJson(array $owner): string
+    {
+        return \json_encode(
+            $owner,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+    }
+
+    /** @param array<string,mixed>|null $previousOwner */
+    private function captureOwnerBeforeImage(?array $previousOwner): ?string
+    {
+        $file = $this->paths->ownerFile();
+        if ($previousOwner === null) {
+            if ($this->pathExistsNoFollow($file)) {
+                throw new \RuntimeException(
+                    'Managed nginx owner before-image exists but is not verifiable.',
+                );
+            }
+            return null;
+        }
+        $contents = GatewayProjectStateFilesystem::read(
+            $file,
+            4 * 1024 * 1024,
+            'Managed Nginx owner before-image',
+        );
+        $current = $this->readOwner();
+        if (!\is_array($current)
+            || !\hash_equals(
+                $this->ownerSemanticDigest($previousOwner),
+                $this->ownerSemanticDigest($current),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx owner changed while its before-image was captured.',
+            );
+        }
+        return $contents;
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function stageOwnerRollback(array $intent, ?string $previousOwnerContents): void
+    {
+        $expected = (bool)($intent['owner_rollback_expected'] ?? false);
+        if ($expected !== ($previousOwnerContents !== null)) {
+            throw new \RuntimeException('Managed nginx owner rollback expectation is inconsistent.');
+        }
+        if ($previousOwnerContents === null) {
+            return;
+        }
+        $rollback = $this->ownerRollbackPath((string)$intent['transaction_id']);
+        if ($this->pathExistsNoFollow($rollback)) {
+            throw new \RuntimeException('Managed nginx owner rollback already exists.');
+        }
+        $expectedDigest = (string)($intent['previous_owner_sha256'] ?? '');
+        if (!\hash_equals($expectedDigest, \hash('sha256', $previousOwnerContents))) {
+            throw new \RuntimeException('Managed nginx owner rollback digest is inconsistent.');
+        }
+        try {
+            GatewayProjectStateFilesystem::atomicWrite(
+                $rollback,
+                $previousOwnerContents,
+                0600,
+            );
+        } catch (\Throwable $throwable) {
+            $this->reconcileProjectStateWriteAfterImage(
+                $rollback,
+                $expectedDigest,
+                'Managed Nginx owner rollback after-image',
+                $throwable,
+            );
+        }
+        $this->assertOwnerRollbackMatchesIntent($intent, $rollback);
+    }
+
+    private function ownerRollbackPath(string $transactionId): string
+    {
+        $transactionId = \strtolower(\trim($transactionId));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1) {
+            throw new \InvalidArgumentException('Managed nginx owner rollback transaction is invalid.');
+        }
+        return $this->paths->ownerFile() . '.rollback.' . $transactionId;
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function assertOwnerRollbackMatchesIntent(array $intent, string $rollback): void
+    {
+        if (!\hash_equals(
+            $this->ownerRollbackPath((string)$intent['transaction_id']),
+            $rollback,
+        ) || !$this->managedFileDigestMatches(
+            $rollback,
+            (string)($intent['previous_owner_sha256'] ?? ''),
+            'Managed Nginx owner rollback',
+        ) || !\is_array($this->readOwnerFile($rollback))) {
+            throw new \RuntimeException('Managed nginx owner rollback before-image is invalid.');
+        }
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function restoreOwnerBeforeImage(array $intent): void
+    {
+        $ownerFile = $this->paths->ownerFile();
+        $beforeMatches = $this->ownerBeforeImageMatches($intent);
+        $afterMatches = $this->ownerAfterImageMatches($intent);
+        if (!$beforeMatches && !$afterMatches) {
+            throw new \RuntimeException(
+                'Managed nginx owner is neither the exact before-image nor after-image.',
+            );
+        }
+        $rollback = $this->ownerRollbackPath((string)$intent['transaction_id']);
+        if ((bool)($intent['owner_rollback_expected'] ?? false)) {
+            if (!$beforeMatches) {
+                $this->assertOwnerRollbackMatchesIntent($intent, $rollback);
+                $contents = GatewayProjectStateFilesystem::read(
+                    $rollback,
+                    4 * 1024 * 1024,
+                    'Managed Nginx owner rollback',
+                );
+                try {
+                    GatewayProjectStateFilesystem::atomicWrite($ownerFile, $contents, 0600);
+                } catch (\Throwable $throwable) {
+                    $this->reconcileProjectStateWriteAfterImage(
+                        $ownerFile,
+                        (string)$intent['previous_owner_sha256'],
+                        'Restored managed Nginx owner before-image',
+                        $throwable,
+                    );
+                }
+            }
+            if ($this->pathExistsNoFollow($rollback)) {
+                $this->assertOwnerRollbackMatchesIntent($intent, $rollback);
+                try {
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $rollback,
+                        'Restored managed Nginx owner rollback',
+                    );
+                } catch (\Throwable $throwable) {
+                    $this->reconcileProjectStateRemovalAfterImage(
+                        $rollback,
+                        'Restored managed Nginx owner rollback',
+                        $throwable,
+                    );
+                }
+            }
+            if (!$this->ownerBeforeImageMatches($intent)) {
+                throw new \RuntimeException('Managed nginx owner before-image was not restored.');
+            }
+            return;
+        }
+
+        if ($this->pathExistsNoFollow($rollback)) {
+            throw new \RuntimeException(
+                'First managed nginx publication has unexpected owner rollback evidence.',
+            );
+        }
+        if ($afterMatches && $this->pathExistsNoFollow($ownerFile)) {
+            try {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $ownerFile,
+                    'Rolled-back first managed Nginx owner state',
+                );
+            } catch (\Throwable $throwable) {
+                $this->reconcileProjectStateRemovalAfterImage(
+                    $ownerFile,
+                    'Rolled-back first managed Nginx owner state',
+                    $throwable,
+                );
+            }
+        }
+        if ($this->pathExistsNoFollow($ownerFile)) {
+            throw new \RuntimeException('First managed nginx owner before-image is not absent.');
+        }
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function ownerBeforeImageMatches(array $intent): bool
+    {
+        $ownerFile = $this->paths->ownerFile();
+        if (!(bool)($intent['owner_rollback_expected'] ?? false)) {
+            return !$this->pathExistsNoFollow($ownerFile);
+        }
+        return $this->managedFileDigestMatches(
+            $ownerFile,
+            (string)($intent['previous_owner_sha256'] ?? ''),
+            'Managed Nginx owner before-image',
+        );
+    }
+
+    /** @param array<string,mixed> $expected */
+    private function ownerAfterImageMatches(array $expected): bool
+    {
+        $current = $this->readOwner();
+        $intent = $this->readOwnerFile($this->paths->ownerIntentFile());
+        if (!\is_array($current)
+            || !\is_array($intent)
+            || !\hash_equals(
+                (string)($expected['transaction_id'] ?? ''),
+                (string)($intent['transaction_id'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)($expected['config_generation'] ?? ''),
+                (string)($intent['config_generation'] ?? ''),
+            )
+        ) {
+            return false;
+        }
+        return \hash_equals(
+            $this->ownerSemanticDigest($intent),
+            $this->ownerSemanticDigest($current),
+        );
+    }
+
+    /** @param array<string,mixed> $owner */
+    private function ownerSemanticDigest(array $owner): string
+    {
+        return \hash('sha256', \json_encode(
+            $this->canonicalizeOwner($owner),
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ));
+    }
+
+    /** @param array<string,mixed> $value @return array<string,mixed> */
+    private function canonicalizeOwner(array $value): array
+    {
+        foreach ($value as $key => $item) {
+            if (\is_array($item)) {
+                $value[$key] = $this->canonicalizeOwner($item);
+            }
+        }
+        if (!\array_is_list($value)) {
+            \ksort($value, SORT_STRING);
+        }
+        return $value;
+    }
+
+    private function managedFileDigestMatches(string $file, string $digest, string $label): bool
+    {
+        $digest = \strtolower(\trim($digest));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1) {
+            return false;
+        }
+        try {
+            $actual = $this->stableManagedFileSha256($file, $label);
+        } catch (\Throwable) {
+            return false;
+        }
+        return \is_string($actual) && \hash_equals($digest, \strtolower($actual));
+    }
+
+    private function reconcileProjectStateWriteAfterImage(
+        string $file,
+        string $digest,
+        string $label,
+        \Throwable $original,
+    ): void {
+        if (!$this->managedFileDigestMatches($file, $digest, $label)) {
+            throw $original;
+        }
+        try {
+            GatewayProjectStateFilesystem::syncDirectory(\dirname($file));
+        } catch (\Throwable $syncFailure) {
+            throw new \RuntimeException(
+                $label . ' is exact but its parent-directory durability remains unproven: '
+                    . $syncFailure->getMessage(),
+                0,
+                $original,
+            );
+        }
+        if (!$this->managedFileDigestMatches($file, $digest, $label)) {
+            throw new \RuntimeException(
+                $label . ' changed while its parent-directory durability was reconciled.',
+                0,
+                $original,
+            );
+        }
+    }
+
+    private function reconcileProjectStateRemovalAfterImage(
+        string $file,
+        string $label,
+        \Throwable $original,
+    ): void {
+        if ($this->pathExistsNoFollow($file)) {
+            throw $original;
+        }
+        try {
+            GatewayProjectStateFilesystem::syncDirectory(\dirname($file));
+        } catch (\Throwable $syncFailure) {
+            throw new \RuntimeException(
+                $label . ' is absent but its parent-directory durability remains unproven: '
+                    . $syncFailure->getMessage(),
+                0,
+                $original,
+            );
+        }
+        if ($this->pathExistsNoFollow($file)) {
+            throw new \RuntimeException(
+                $label . ' reappeared while its removal durability was reconciled.',
+                0,
+                $original,
+            );
+        }
+    }
+
+    private function pathExistsNoFollow(string $path): bool
+    {
+        \clearstatcache(true, $path);
+        return @\lstat($path) !== false;
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function finalizeRolledBackOwnerIntent(array $intent): void
+    {
+        $intentFile = $this->paths->ownerIntentFile();
+        $persisted = $this->readOwnerFile($intentFile);
+        if (!\is_array($persisted)
+            || !\hash_equals(
+                (string)($intent['transaction_id'] ?? ''),
+                (string)($persisted['transaction_id'] ?? ''),
+            )
+        ) {
+            throw new \RuntimeException('Managed nginx rolled-back owner intent changed.');
+        }
+        try {
+            GatewayProjectStateFilesystem::removeRegular(
+                $intentFile,
+                'Rolled-back managed Nginx owner intent',
+            );
+        } catch (\Throwable $throwable) {
+            $this->reconcileProjectStateRemovalAfterImage(
+                $intentFile,
+                'Rolled-back managed Nginx owner intent',
+                $throwable,
+            );
+        }
     }
 
     /** @param array<string,mixed> $expected */
@@ -2290,6 +3727,10 @@ final class ManagedNginxService
     {
         $intent = $this->readOwnerFile($this->paths->ownerIntentFile());
         if (!\is_array($intent)
+            || !\hash_equals(
+                $this->ownerSemanticDigest($expected),
+                $this->ownerSemanticDigest($intent),
+            )
             || !\hash_equals((string)$expected['transaction_id'], (string)$intent['transaction_id'])
             || !\hash_equals((string)$expected['instance_name'], (string)$intent['instance_name'])
             || !\hash_equals((string)$expected['config_generation'], (string)$intent['config_generation'])
@@ -2331,6 +3772,7 @@ final class ManagedNginxService
             'http3_runtime_verified',
             'http3_verifier_available',
             'http3_status',
+            'http3_advertisement_status',
             'http3_protocol',
             'http3_master_pid',
             'http3_config_generation',
@@ -2411,7 +3853,7 @@ final class ManagedNginxService
     }
 
     /** @param array<string,mixed> $expected */
-    private function finalizeOwnerIntent(array $expected): void
+    private function finalizeOwnerIntent(array $expected): string
     {
         $intentFile = $this->paths->ownerIntentFile();
         $intent = $this->readOwnerFile($intentFile);
@@ -2423,27 +3865,318 @@ final class ManagedNginxService
         ) {
             throw new \RuntimeException('Managed nginx owner intent could not be finalized.');
         }
+        if (!$this->ownerAfterImageMatches($expected)
+            || !$this->managedFileDigestMatches(
+                $this->paths->confFile(),
+                (string)($expected['config_sha256'] ?? ''),
+                'Managed Nginx finalized active config',
+            )
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx owner/config identity changed before intent finalization.',
+            );
+        }
         $this->cleanupOwnerStateAtomicWriteRecoveryBackups(
             $intentFile,
             'Managed Nginx owner intent',
         );
-        GatewayProjectStateFilesystem::removeRegular(
-            $intentFile,
-            'Managed Nginx owner intent',
+        try {
+            GatewayProjectStateFilesystem::removeRegular(
+                $intentFile,
+                'Managed Nginx owner intent',
+            );
+        } catch (\Throwable $throwable) {
+            if ($this->pathExistsNoFollow($intentFile)
+                || !$this->managedFileDigestMatches(
+                    $this->paths->confFile(),
+                    (string)($expected['config_sha256'] ?? ''),
+                    'Managed Nginx finalized active config after-image',
+                )
+                || !$this->committedOwnerMatchesWithoutIntent($expected)
+            ) {
+                throw $throwable;
+            }
+            try {
+                $this->reconcileProjectStateRemovalAfterImage(
+                    $intentFile,
+                    'Committed managed Nginx owner intent',
+                    $throwable,
+                );
+            } catch (\Throwable $syncFailure) {
+                if ($this->pathExistsNoFollow($intentFile)) {
+                    throw $syncFailure;
+                }
+                return 'owner intent unlink committed with deferred directory sync: '
+                    . $syncFailure->getMessage();
+            }
+        }
+        return '';
+    }
+
+    /** @param array<string,mixed> $expected */
+    private function committedOwnerMatchesWithoutIntent(array $expected): bool
+    {
+        $current = $this->readOwner();
+        if (!\is_array($current)) {
+            return false;
+        }
+        return \hash_equals(
+            $this->ownerSemanticDigest($expected),
+            $this->ownerSemanticDigest($current),
         );
     }
 
     private function recoverOwnerPublication(): void
     {
-        $ownerFile = $this->paths->ownerFile();
         $intentFile = $this->paths->ownerIntentFile();
-        $intent = $this->readOwnerFile($intentFile);
-        if (!\is_array($intent) && \is_file($intentFile)) {
-            throw new \RuntimeException('Managed nginx owner intent is unreadable or invalid.');
-        }
-        if (!\is_array($intent)) {
+        if (!$this->pathExistsNoFollow($intentFile)) {
             return;
         }
+        $rawIntent = \json_decode(GatewayProjectStateFilesystem::read(
+            $intentFile,
+            4 * 1024 * 1024,
+            'Managed Nginx owner intent',
+        ), true);
+        $intent = $this->readOwnerFile($intentFile);
+        if (!\is_array($rawIntent) || !\is_array($intent)) {
+            throw new \RuntimeException('Managed nginx owner intent is unreadable or invalid.');
+        }
+        $strictTransaction = \array_key_exists('config_rollback_expected', $rawIntent)
+            && \array_key_exists('previous_config_sha256', $rawIntent)
+            && \array_key_exists('owner_rollback_expected', $rawIntent)
+            && \array_key_exists('previous_owner_sha256', $rawIntent);
+        if (!$strictTransaction) {
+            $this->recoverLegacyOwnerPublication($intent);
+            return;
+        }
+
+        $this->recoverStrictOwnerPublication($intent);
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function recoverStrictOwnerPublication(array $intent): void
+    {
+        $transactionId = (string)($intent['transaction_id'] ?? '');
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1) {
+            throw new \RuntimeException('Managed nginx recovery transaction identity is invalid.');
+        }
+        $configRollbackExpected = (bool)($intent['config_rollback_expected'] ?? false);
+        $ownerRollbackExpected = (bool)($intent['owner_rollback_expected'] ?? false);
+        $previousConfigSha256 = (string)($intent['previous_config_sha256'] ?? '');
+        $previousOwnerSha256 = (string)($intent['previous_owner_sha256'] ?? '');
+        if (($configRollbackExpected
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $previousConfigSha256) !== 1)
+            || (!$configRollbackExpected && $previousConfigSha256 !== '')
+            || ($ownerRollbackExpected
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $previousOwnerSha256) !== 1)
+            || (!$ownerRollbackExpected && $previousOwnerSha256 !== '')
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx recovery before-image metadata is inconsistent.',
+            );
+        }
+
+        $configRollback = $this->configWriter->rollbackPathForTransaction($transactionId);
+        $ownerRollback = $this->ownerRollbackPath($transactionId);
+        $configRollbackExists = $this->pathExistsNoFollow($configRollback);
+        $ownerRollbackExists = $this->pathExistsNoFollow($ownerRollback);
+        if ($configRollbackExists) {
+            if (!$configRollbackExpected
+                || !$this->managedFileDigestMatches(
+                    $configRollback,
+                    $previousConfigSha256,
+                    'Managed Nginx recovery config rollback',
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Managed nginx recovery config rollback is unexpected or changed.',
+                );
+            }
+        }
+        if ($ownerRollbackExists) {
+            if (!$ownerRollbackExpected) {
+                throw new \RuntimeException(
+                    'Managed nginx recovery found unexpected owner rollback evidence.',
+                );
+            }
+            $this->assertOwnerRollbackMatchesIntent($intent, $ownerRollback);
+        }
+
+        $activeAfter = $this->managedFileDigestMatches(
+            $this->paths->confFile(),
+            (string)($intent['config_sha256'] ?? ''),
+            'Managed Nginx recovery active after-image',
+        );
+        $activeBefore = $configRollbackExpected
+            ? $this->managedFileDigestMatches(
+                $this->paths->confFile(),
+                $previousConfigSha256,
+                'Managed Nginx recovery active before-image',
+            )
+            : !$this->pathExistsNoFollow($this->paths->confFile());
+        $ownerAfter = $this->ownerAfterImageMatches($intent);
+        $ownerBefore = $this->ownerBeforeImageMatches($intent);
+
+        // If the rollback target remains, commitPublished() did not reach the
+        // point of no return. Resolve both resources to their exact before-images.
+        if ($configRollbackExists) {
+            if (!$ownerBefore && !$ownerAfter) {
+                $this->stopInterruptedPublicationFailClosed(
+                    'owner identity is neither the exact before-image nor after-image',
+                );
+            }
+            if ($ownerAfter && $ownerRollbackExpected && !$ownerRollbackExists) {
+                $this->stopInterruptedPublicationFailClosed(
+                    'owner after-image has no exact owner rollback before-image',
+                );
+            }
+            $status = $this->safeRecoveryProcessStatus();
+            $this->restorePublishedConfig(
+                $configRollback,
+                (bool)$status['running'],
+                false,
+                $intent,
+            );
+            return;
+        }
+
+        // rollback absent + exact active/LKG/owner after-image is the committed
+        // point of no return. Only bookkeeping remains.
+        if ($activeAfter && $ownerAfter) {
+            if ($configRollbackExpected
+                && !$this->managedFileDigestMatches(
+                    $this->paths->confFile() . '.last-good',
+                    $previousConfigSha256,
+                    'Managed Nginx recovery last-known-good before-image',
+                )
+            ) {
+                $this->stopInterruptedPublicationFailClosed(
+                    'config rollback disappeared without an exact last-known-good after-image',
+                );
+            }
+            $this->configWriter->cleanupResolvedRollbackTemporaries($configRollback);
+            $this->finalizeCommittedOwnerState($intent);
+            return;
+        }
+
+        // A crash before config publication (or after an already-completed
+        // paired rollback) leaves both exact before-images and no config
+        // rollback. Finish only the owner/intent cleanup.
+        if ($activeBefore && $ownerBefore) {
+            $status = $this->safeRecoveryProcessStatus();
+            $this->proveRecoveryBeforeImageLive($status);
+            $this->restoreOwnerBeforeImage($intent);
+            $this->configWriter->cleanupResolvedRollbackTemporaries($configRollback);
+            $this->finalizeRolledBackOwnerIntent($intent);
+            return;
+        }
+
+        // A first publication has no config rollback. If its owner was never
+        // committed, remove the uncommitted active config only after stopping
+        // the exact managed process.
+        if (!$configRollbackExpected
+            && $ownerBefore
+            && $this->pathExistsNoFollow($this->paths->confFile())
+        ) {
+            $status = $this->safeRecoveryProcessStatus();
+            if ((bool)$status['running']) {
+                $this->stopManagedNginxFailClosed(
+                    'unable to stop an interrupted first managed nginx publication',
+                );
+            }
+            $this->configWriter->rollbackPublished(null);
+            $this->restoreOwnerBeforeImage($intent);
+            $this->finalizeRolledBackOwnerIntent($intent);
+            return;
+        }
+
+        // Config is already the before-image but owner commit crossed its
+        // rename. The exact owner rollback is sufficient to restore the pair.
+        if ($activeBefore && $ownerAfter && $ownerRollbackExists) {
+            $status = $this->safeRecoveryProcessStatus();
+            $this->restoreOwnerBeforeImage($intent);
+            $this->proveRecoveryBeforeImageLive($status);
+            $this->configWriter->cleanupResolvedRollbackTemporaries($configRollback);
+            $this->finalizeRolledBackOwnerIntent($intent);
+            return;
+        }
+
+        $this->stopInterruptedPublicationFailClosed(
+            'neither the exact transaction before-image nor after-image can be proven',
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private function safeRecoveryProcessStatus(): array
+    {
+        $status = $this->processManager->status(
+            $this->activeLifecycleDeadlineMonotonic,
+        );
+        if (!($status['ok'] ?? false)) {
+            throw new \RuntimeException(
+                'Cannot recover owner intent while nginx PID identity is unsafe.',
+            );
+        }
+        return $status;
+    }
+
+    /** @param array<string,mixed> $status */
+    private function proveRecoveryBeforeImageLive(array $status): void
+    {
+        if (!(bool)($status['running'] ?? false)) {
+            return;
+        }
+        $owner = $this->readOwner();
+        if (!\is_array($owner)) {
+            $this->stopManagedNginxFailClosed(
+                'interrupted first publication left a process without an owner before-image',
+            );
+            return;
+        }
+        if ($this->committedOwnerGenerationIsLive($owner)) {
+            return;
+        }
+        $reloaded = $this->processManager->reload(
+            $this->activeLifecycleDeadlineMonotonic,
+        );
+        if (!($reloaded['ok'] ?? false) || !$this->committedOwnerGenerationIsLive($owner)) {
+            $this->stopManagedNginxFailClosed(
+                'unable to prove the exact owner/config before-image live during recovery',
+            );
+        }
+    }
+
+    private function stopInterruptedPublicationFailClosed(string $reason): never
+    {
+        try {
+            $status = $this->safeRecoveryProcessStatus();
+            if ((bool)($status['running'] ?? false)) {
+                $this->stopManagedNginxFailClosed($reason);
+            }
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'Managed nginx interrupted publication is ambiguous: ' . $reason
+                    . '; fail-closed stop was not proven: ' . $throwable->getMessage(),
+                0,
+                $throwable,
+            );
+        }
+        throw new \RuntimeException(
+            'Managed nginx interrupted publication is ambiguous: ' . $reason
+                . '; managed nginx stopped fail-closed and recovery evidence was retained.',
+        );
+    }
+
+    /**
+     * Compatibility recovery for owner intents written before the paired
+     * before-image hashes were introduced.
+     *
+     * @param array<string,mixed> $intent
+     */
+    private function recoverLegacyOwnerPublication(array $intent): void
+    {
+        $ownerFile = $this->paths->ownerFile();
+        $intentFile = $this->paths->ownerIntentFile();
         $transactionId = (string)($intent['transaction_id'] ?? '');
         $rollbackExpected = (bool)($intent['config_rollback_expected'] ?? false);
         if (!\is_file($ownerFile) && $transactionId !== '') {
@@ -2454,11 +4187,7 @@ final class ManagedNginxService
                     4 * 1024 * 1024,
                     'Legacy managed Nginx owner rollback',
                 );
-                GatewayProjectStateFilesystem::atomicWrite(
-                    $ownerFile,
-                    $rollbackContents,
-                    0600,
-                );
+                GatewayProjectStateFilesystem::atomicWrite($ownerFile, $rollbackContents, 0600);
                 GatewayProjectStateFilesystem::removeRegular(
                     $ownerRollback,
                     'Legacy managed Nginx owner rollback',
@@ -2485,15 +4214,9 @@ final class ManagedNginxService
             && $this->http3EvidenceMatches($intent, $committedOwner)
             && $this->tlsSessionEvidenceMatches($intent, $committedOwner);
         $committedOwnerConfigMatchesActive = \is_array($committedOwner)
-            && \preg_match(
-                '/\A[a-f0-9]{64}\z/D',
-                $committedOwnerConfigSha256,
-            ) === 1
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $committedOwnerConfigSha256) === 1
             && \is_string($activeConfigSha256)
-            && \hash_equals(
-                $committedOwnerConfigSha256,
-                \strtolower($activeConfigSha256),
-            );
+            && \hash_equals($committedOwnerConfigSha256, \strtolower($activeConfigSha256));
         if ($committedOwnerIdentityMatches
             && (\preg_match('/\A[a-f0-9]{64}\z/D', $intentConfigSha256) !== 1
                 || !\hash_equals($intentConfigSha256, $committedOwnerConfigSha256)
@@ -2501,7 +4224,7 @@ final class ManagedNginxService
                 || !\hash_equals($intentConfigSha256, \strtolower($activeConfigSha256)))
         ) {
             throw new \RuntimeException(
-                'Committed managed nginx owner no longer matches the active config digest; preserving rollback evidence.'
+                'Committed managed nginx owner no longer matches the active config digest; preserving rollback evidence.',
             );
         }
         if ($committedOwnerIdentityMatches) {
@@ -2516,10 +4239,6 @@ final class ManagedNginxService
                     'Committed first managed nginx publication has unexpected rollback evidence.',
                 );
             } else {
-                // commitPublished() removes the rollback before the owner
-                // intent can be finalized. A crash in that window is safe to
-                // finish because owner identity and the active config digest
-                // were proven above.
                 $this->configWriter->cleanupResolvedRollbackTemporaries($configRollback);
             }
             GatewayProjectStateFilesystem::removeRegular(
@@ -2529,10 +4248,7 @@ final class ManagedNginxService
             return;
         }
 
-        $status = $this->processManager->status();
-        if (!$status['ok']) {
-            throw new \RuntimeException('Cannot recover owner intent while nginx PID identity is unsafe.');
-        }
+        $status = $this->safeRecoveryProcessStatus();
         $configRollback = $transactionId !== ''
             ? $this->configWriter->rollbackPathForTransaction($transactionId)
             : null;
@@ -2554,7 +4270,9 @@ final class ManagedNginxService
         if (\is_string($configRollback) && \is_file($configRollback)) {
             $this->configWriter->rollbackPublished($configRollback);
             if ($status['running']) {
-                $reloaded = $this->processManager->reload();
+                $reloaded = $this->processManager->reload(
+                    $this->activeLifecycleDeadlineMonotonic,
+                );
                 if (!$reloaded['ok']
                     || !\is_array($committedOwner)
                     || !$this->committedOwnerGenerationIsLive($committedOwner)
@@ -2571,13 +4289,15 @@ final class ManagedNginxService
                 || !$committedOwnerConfigMatchesActive
             ) {
                 throw new \RuntimeException(
-                    'Managed nginx transaction expected a rollback file, but the committed config cannot be proven.'
+                    'Managed nginx transaction expected a rollback file, but the committed config cannot be proven.',
                 );
             }
             if ($status['running']) {
                 $committedGenerationLive = $this->committedOwnerGenerationIsLive($committedOwner);
                 if (!$committedGenerationLive) {
-                    $reloaded = $this->processManager->reload();
+                    $reloaded = $this->processManager->reload(
+                        $this->activeLifecycleDeadlineMonotonic,
+                    );
                     $committedGenerationLive = $reloaded['ok']
                         && $this->committedOwnerGenerationIsLive($committedOwner);
                 }
@@ -2588,9 +4308,7 @@ final class ManagedNginxService
                 }
             }
             if (!\is_string($configRollback)) {
-                throw new \RuntimeException(
-                    'Managed nginx rollback transaction identity is missing.',
-                );
+                throw new \RuntimeException('Managed nginx rollback transaction identity is missing.');
             }
             $this->configWriter->cleanupResolvedRollbackTemporaries($configRollback);
             if (!GatewayProjectStateFilesystem::removeRegular(
@@ -2643,6 +4361,85 @@ final class ManagedNginxService
     }
 
     /**
+     * Return the remaining portion of the one active lifecycle deadline.
+     * Probe helpers must never derive a fresh now+N budget while a lifecycle
+     * transaction is in progress.
+     */
+    private function remainingLifecycleDeadline(
+        float $maximumSeconds,
+    ): ?float {
+        if (!\is_finite($maximumSeconds) || $maximumSeconds <= 0.0) {
+            throw new \InvalidArgumentException(
+                'Managed Nginx lifecycle timeout is invalid.',
+            );
+        }
+        $deadline = $this->activeLifecycleDeadlineMonotonic;
+        if ($deadline === null) {
+            return $maximumSeconds;
+        }
+        if (!\is_finite($deadline)) {
+            return null;
+        }
+        $remaining = $deadline - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            return null;
+        }
+        return \min($maximumSeconds, $remaining);
+    }
+
+    private function remainingLifecycleMilliseconds(
+        int $maximumMilliseconds,
+    ): ?int {
+        if ($maximumMilliseconds < 1) {
+            throw new \InvalidArgumentException(
+                'Managed Nginx lifecycle millisecond timeout is invalid.',
+            );
+        }
+        $remaining = $this->remainingLifecycleDeadline(
+            $maximumMilliseconds / 1_000,
+        );
+        if ($remaining === null) {
+            return null;
+        }
+        return (int)\max(1, \floor($remaining * 1_000));
+    }
+
+    private function lifecycleDeadlineAvailable(): bool
+    {
+        return $this->remainingLifecycleDeadline(1.0) !== null;
+    }
+
+    /** @param resource $socket */
+    private function setSocketTimeoutWithinLifecycleDeadline(
+        mixed $socket,
+        float $maximumSeconds,
+    ): bool {
+        $timeout = $this->remainingLifecycleDeadline($maximumSeconds);
+        if ($timeout === null) {
+            return false;
+        }
+        $seconds = (int)\floor($timeout);
+        $microseconds = (int)\ceil(($timeout - $seconds) * 1_000_000);
+        if ($microseconds >= 1_000_000) {
+            $seconds++;
+            $microseconds = 0;
+        } elseif ($seconds === 0 && $microseconds < 1) {
+            $microseconds = 1;
+        }
+        return @\stream_set_timeout($socket, $seconds, $microseconds);
+    }
+
+    private function sleepWithinLifecycleDeadline(float $seconds): bool
+    {
+        $delay = $this->remainingLifecycleDeadline($seconds);
+        if ($delay === null) {
+            return false;
+        }
+        SchedulerSystem::usleep((int)\max(1, \ceil($delay * 1_000_000)));
+        return $this->lifecycleDeadlineAvailable();
+    }
+
+    /**
      * @param callable():array<string,mixed> $operation
      * @return array<string,mixed>
      */
@@ -2653,26 +4450,32 @@ final class ManagedNginxService
     {
         try {
             $this->paths->ensureRuntimeDirectories();
-            if ($deadlineMonotonic !== null) {
-                if (!\is_finite($deadlineMonotonic)) {
-                    return [
-                        'ok' => false,
-                        'message' => 'managed nginx lifecycle deadline is invalid',
-                    ];
-                }
+            $monotonicNow = \hrtime(true) / 1_000_000_000;
+            if (!\is_finite($monotonicNow) || $monotonicNow <= 0.0) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx lifecycle monotonic clock is unavailable',
+                ];
             }
-            $waitTimeoutSeconds = self::LIFECYCLE_LOCK_TIMEOUT_SECONDS;
-            if ($deadlineMonotonic !== null) {
-                $remaining = $deadlineMonotonic
-                    - (\hrtime(true) / 1_000_000_000);
-                if ($remaining <= 0.0) {
-                    return [
-                        'ok' => false,
-                        'message' => 'managed nginx lifecycle deadline was exhausted',
-                    ];
-                }
-                $waitTimeoutSeconds = \min($waitTimeoutSeconds, $remaining);
+            $deadlineMonotonic ??= $monotonicNow
+                + self::LIFECYCLE_LOCK_TIMEOUT_SECONDS;
+            if (!\is_finite($deadlineMonotonic)) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx lifecycle deadline is invalid',
+                ];
             }
+            $remaining = $deadlineMonotonic - $monotonicNow;
+            if ($remaining <= 0.0) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx lifecycle deadline was exhausted',
+                ];
+            }
+            $waitTimeoutSeconds = \min(
+                self::LIFECYCLE_LOCK_TIMEOUT_SECONDS,
+                $remaining,
+            );
 
             return GatewayProjectStateFilesystem::withExclusiveLock(
                 $this->paths->lifecycleLockFile(),
@@ -2688,14 +4491,27 @@ final class ManagedNginxService
                             'message' => 'managed nginx lifecycle deadline was exhausted',
                         ];
                     }
-                    $this->cleanupOwnerAtomicWriteRecoveryBackups();
-                    $this->cleanupConfigAtomicWriteRecoveryBackups();
-                    $this->recoverOwnerPublication();
-                    $this->configWriter->recoverInterruptedPublication();
-                    return $operation();
+                    $previousDeadline = $this->activeLifecycleDeadlineMonotonic;
+                    $this->activeLifecycleDeadlineMonotonic = $deadlineMonotonic;
+                    try {
+                        $this->cleanupOwnerAtomicWriteRecoveryBackups();
+                        $this->cleanupConfigAtomicWriteRecoveryBackups();
+                        $this->recoverOwnerPublication();
+                        $this->configWriter->recoverInterruptedPublication();
+                        if ((\hrtime(true) / 1_000_000_000) >= $deadlineMonotonic) {
+                            return [
+                                'ok' => false,
+                                'message' => 'managed nginx lifecycle deadline was exhausted',
+                            ];
+                        }
+                        return $operation();
+                    } finally {
+                        $this->activeLifecycleDeadlineMonotonic = $previousDeadline;
+                    }
                 },
                 null,
                 $waitTimeoutSeconds,
+                $deadlineMonotonic,
             );
         } catch (\Throwable $exception) {
             $message = $exception->getMessage();
@@ -2844,6 +4660,13 @@ final class ManagedNginxService
                 if ($leaf === '.' || $leaf === '..') {
                     continue;
                 }
+                if (($rawEntries & 63) === 0
+                    && !$this->lifecycleDeadlineAvailable()
+                ) {
+                    throw new \RuntimeException(
+                        'Managed Nginx lifecycle deadline was exhausted during owner recovery enumeration.',
+                    );
+                }
                 if (++$rawEntries > self::MAX_OWNER_RECOVERY_DIRECTORY_ENTRIES) {
                     throw new \RuntimeException(
                         'Managed Nginx owner atomic temporary directory quota is exhausted.',
@@ -2875,6 +4698,11 @@ final class ManagedNginxService
                         );
                     }
                     $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                    if (!$this->lifecycleDeadlineAvailable()) {
+                        throw new \RuntimeException(
+                            'Managed Nginx lifecycle deadline was exhausted before owner recovery read.',
+                        );
+                    }
                     GatewayProjectStateFilesystem::read(
                         $path,
                         4 * 1024 * 1024,
@@ -2996,7 +4824,10 @@ final class ManagedNginxService
                         'Managed Nginx ' . $kind . ' recovery target is empty.',
                     );
                 }
-                $test = $this->processManager->testConfig($path);
+                $test = $this->processManager->testConfig(
+                    $path,
+                    $this->activeLifecycleDeadlineMonotonic,
+                );
                 if ((int)($test['code'] ?? 1) !== 0) {
                     throw new \RuntimeException(
                         'Managed Nginx ' . $kind
@@ -3016,7 +4847,7 @@ final class ManagedNginxService
         // Windows process identity may consume a ten-second child timeout plus
         // the bounded runner's documented twelve-second Job cleanup tail.
         $this->assertRetirementDeadline($deadlineMonotonic, 23.0);
-        $status = $this->processManager->status();
+        $status = $this->processManager->status($deadlineMonotonic);
         $owner = $this->readOwner();
         $activeConfigSha256 = $this->stableManagedFileSha256(
             $this->paths->confFile(),
@@ -3076,10 +4907,10 @@ final class ManagedNginxService
     /**
      * @return array<string,mixed>
      */
-    public function doctorSnapshot(): array
+    public function doctorSnapshot(?float $deadlineMonotonic = null): array
     {
         $ports = $this->portAllocator->allocate();
-        $status = $this->processManager->status();
+        $status = $this->processManager->status($deadlineMonotonic);
         $hostBinary = $this->paths->detectHostNginxBinary();
         $installation = $this->installer->installationStatus();
         $binaryCapabilities = $installation['installed']

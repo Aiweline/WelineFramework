@@ -868,7 +868,8 @@ CDEF,
         // Under Master FD inheritance, Darwin libproc can prove birth while
         // bounded ps cannot. Self observation still has the authoritative
         // CLI title set by applyProcessTitle().
-        if (($observedName === '' || $command === '')
+        if ($this->processInfoResolver === null
+            && ($observedName === '' || $command === '')
             && $pid === (int)\getmypid()
         ) {
             $selfMeta = $this->selfProcessCliMetadata();

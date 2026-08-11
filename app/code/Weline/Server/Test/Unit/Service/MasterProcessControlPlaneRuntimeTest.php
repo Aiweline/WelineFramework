@@ -101,6 +101,7 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             endpointResolver: new ControlEndpointResolver(BP, 28600, 1000),
             supervisorEnabled: true,
             channelId: 'channel-' . $instanceName,
+            allowUnauthenticatedHarness: true,
         );
         $hybrid->setExpectedInstanceCode($instanceName);
         $hybrid->onMessage(static function (): void {});
@@ -134,15 +135,12 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             'http' => [
                 'protocols' => [HttpProtocolSelection::HTTP_1],
                 'preferred' => HttpProtocolSelection::HTTP_1,
-                'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
                 'alt_svc' => false,
             ],
         ], true)->toArray();
         (new ServerInstanceManager())->saveInstance($instanceName, [
             'edge_adapter' => 'nginx',
             'http_protocol_selection' => $httpProtocolSelection,
-            'protocol_edge_enabled' => false,
-            'protocol_edge_binary' => '',
         ]);
 
         try {
@@ -159,8 +157,6 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             self::assertSame($hybrid->getPort(), $data['control_port'] ?? null);
             self::assertSame('nginx', $data['edge_adapter'] ?? null);
             self::assertSame($httpProtocolSelection, $data['http_protocol_selection'] ?? null);
-            self::assertFalse((bool)($data['protocol_edge_enabled'] ?? true));
-            self::assertSame('', $data['protocol_edge_binary'] ?? null);
         } finally {
             $hybrid->close();
             $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';

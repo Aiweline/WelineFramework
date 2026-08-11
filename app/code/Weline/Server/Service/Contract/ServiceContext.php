@@ -94,12 +94,11 @@ class ServiceContext
             }
             if (($http['protocols'] ?? ['h1']) !== ['h1']
                 || \strtolower(\trim((string)($http['preferred'] ?? 'h1'))) !== 'h1'
-                || \strtolower(\trim((string)($http['protocol_edge'] ?? 'disabled'))) !== 'disabled'
                 || (bool)($http['tls_session_resumption'] ?? false)
                 || (bool)($http['alt_svc'] ?? false)
             ) {
                 throw new \InvalidArgumentException(
-                    'Nginx WLS context requires h1/disabled private backend protocol settings.'
+                    'Nginx WLS context requires an H1 private backend policy.'
                 );
             }
             return;
@@ -120,11 +119,10 @@ class ServiceContext
             );
         }
         if ((bool)($http['alt_svc'] ?? false)
-            || \strtolower(\trim((string)($http['protocol_edge'] ?? 'disabled'))) !== 'disabled'
             || \in_array('h3', (array)($http['protocols'] ?? []), true)
         ) {
             throw new \InvalidArgumentException(
-                'Pure WLS supports in-process HTTP/2/HTTP/1.1 only; HTTP/3 and external protocol edges are unavailable.'
+                'Pure WLS supports in-process HTTP/2/HTTP/1.1 only; HTTP/3 is unavailable.'
             );
         }
     }
@@ -214,15 +212,9 @@ class ServiceContext
         return $this->runtimeSelection->isDirect();
     }
 
-    /** WLS no longer owns a public protocol edge; Nginx runs outside the service registry. */
-    public function isProtocolEdgeEnabled(): bool
-    {
-        return false;
-    }
-
     public function isWorkerPublicListener(): bool
     {
-        return $this->isDirect() && !$this->isProtocolEdgeEnabled();
+        return $this->isDirect();
     }
 
     public function getEffectiveTopology(): EffectiveTopology

@@ -14,6 +14,7 @@ use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Edge\EdgeAdapterInterface;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectEndpointReader;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin;
 use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
@@ -45,9 +46,25 @@ class ServerInstanceManager
 
     private readonly MasterLeaseManager $masterLeaseManager;
 
+    private ?float $endpointPublicationDeadlineMonotonic = null;
+
     public function __construct(?MasterLeaseManager $masterLeaseManager = null)
     {
         $this->masterLeaseManager = $masterLeaseManager ?? new MasterLeaseManager();
+    }
+
+    public function setEndpointPublicationDeadlineMonotonic(
+        ?float $deadlineMonotonic,
+    ): self {
+        if ($deadlineMonotonic !== null
+            && (!\is_finite($deadlineMonotonic) || $deadlineMonotonic < 0.0)
+        ) {
+            throw new \InvalidArgumentException(
+                'WLS endpoint publication deadline is invalid.',
+            );
+        }
+        $this->endpointPublicationDeadlineMonotonic = $deadlineMonotonic;
+        return $this;
     }
 
     /** 实例信息存储相对路径（相对 VAR_DIR） */
@@ -513,6 +530,21 @@ class ServerInstanceManager
                 return false;
             }
 
+            // Serving references are retired before the endpoint commit. If
+            // this process crashes during the authority-last retirement, the
+            // stopped endpoint remains discoverable and the next force-clean
+            // replays the exact same fenced generation.
+            $this->retireInactiveServingManifestReferences(
+                $name,
+                $current['data'],
+            );
+            $current = $this->selectInactiveCleanupEndpoint($name);
+            if (!$this->sameInactiveCleanupEndpoint($selected, $current)
+                || $this->hasTrackedRunningProcess($name, $current['data'], null)
+            ) {
+                return false;
+            }
+
             $file = $this->getInstanceFile($name);
             $validator = self::inactiveCleanupEndpointValidator($name);
             $removed = GatewayProjectStateFilesystem::withExclusiveLock(
@@ -575,6 +607,34 @@ class ServerInstanceManager
             @\fclose($startLock);
             $lifecycleLock->release();
         }
+    }
+
+    /** @param array<string,mixed> $rawData */
+    protected function retireInactiveServingManifestReferences(
+        string $name,
+        array $rawData,
+    ): void {
+        $gateway = \is_array($rawData['gateway'] ?? null)
+            ? $rawData['gateway']
+            : [];
+        $generation = (int)($gateway['serving_manifest_generation'] ?? 0);
+        $digest = \strtolower(\trim((string)(
+            $gateway['serving_manifest_digest'] ?? ''
+        )));
+        if ($generation === 0 && $digest === '') {
+            return;
+        }
+        $gatewayInstanceId = \trim((string)($gateway['instance_id'] ?? $name));
+        if (!\hash_equals($name, $gatewayInstanceId)
+            || $generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Inactive endpoint serving manifest proof is invalid.',
+            );
+        }
+        (new ProjectServingManifestStore((string)BP))
+            ->retireInactiveInstanceReferences($name, $generation, $digest);
     }
 
     /**
@@ -954,7 +1014,6 @@ class ServerInstanceManager
             'control_token_created_at', 'epoch', 'master_epoch', 'host', 'public_host', 'public_origin',
             'port', 'main_port', 'count', 'daemon', 'ssl_enabled', 'ssl_cert', 'ssl_key',
             'http3', 'edge_adapter', 'http_protocol_selection',
-            'protocol_edge_enabled', 'protocol_edge_binary',
             'dispatcher_port', 'worker_port', 'worker_base_port', 'worker_memory_limit',
             'dispatcher_memory_limit', 'session_server_port', 'session_server_token_file_name',
             'memory_server_port', 'memory_server_token_file_name', 'shared_state', 'gateway',
@@ -1018,31 +1077,6 @@ class ServerInstanceManager
                 throw new \RuntimeException('WLS endpoint protocol selection requires edge_adapter=nginx or wls.');
             }
             $selection->assertCompatibleEdgeAdapter($filtered['edge_adapter']);
-
-            if (\array_key_exists('protocol_edge_enabled', $filtered)
-                && !\is_bool($filtered['protocol_edge_enabled'])
-            ) {
-                throw new \RuntimeException('WLS endpoint protocol_edge_enabled must be a boolean.');
-            }
-            if (\array_key_exists('protocol_edge_enabled', $filtered)
-                && $filtered['protocol_edge_enabled'] !== $selection->isCaddyProtocolEdge()
-            ) {
-                throw new \RuntimeException(
-                    'WLS endpoint protocol_edge_enabled does not match http_protocol_selection.'
-                );
-            }
-            $filtered['protocol_edge_enabled'] = $selection->isCaddyProtocolEdge();
-        }
-        if (\array_key_exists('protocol_edge_binary', $filtered)) {
-            if (!\is_string($filtered['protocol_edge_binary'])) {
-                throw new \RuntimeException('WLS endpoint protocol_edge_binary must be a string.');
-            }
-            $filtered['protocol_edge_binary'] = \trim($filtered['protocol_edge_binary']);
-            if ($filtered['protocol_edge_binary'] !== '') {
-                throw new \RuntimeException(
-                    'WLS external protocol edge binary is retired; use managed Nginx or in-process pure WLS HTTP/2.'
-                );
-            }
         }
 
         return $filtered;
@@ -2541,6 +2575,7 @@ class ServerInstanceManager
      */
     public function saveInstance(string $name, array $info): void
     {
+        $deadlineMonotonic = $this->endpointPublicationDeadlineMonotonic;
         self::assertGatewayEndpointName($name);
         $file = $this->getInstanceFile($name);
         $dir = $this->getInstanceDir();
@@ -2589,15 +2624,49 @@ class ServerInstanceManager
             ? GatewayProjectStateFilesystem::withExclusiveLock(
                 \rtrim($dir, '/\\') . DIRECTORY_SEPARATOR
                     . self::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
-                function () use ($dir, $name, $publish): bool {
+                function () use (
+                    $dir,
+                    $name,
+                    $publish,
+                    $deadlineMonotonic,
+                ): bool {
+                    self::endpointDeadlineRemaining($deadlineMonotonic);
                     $this->assertGatewayEndpointPublicationCapacity($dir, $name);
                     return $publish();
                 },
+                waitTimeoutSeconds: self::endpointLockWaitTimeout(
+                    $deadlineMonotonic,
+                ),
             )
             : $publish();
         if (!$published) {
             throw new \RuntimeException('Failed to publish WLS instance endpoint.');
         }
+    }
+
+    private static function endpointLockWaitTimeout(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        return \min(0.25, self::endpointDeadlineRemaining($deadlineMonotonic));
+    }
+
+    private static function endpointDeadlineRemaining(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('WLS endpoint publication deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException('WLS endpoint publication deadline was exhausted.');
+        }
+        return $remaining;
     }
 
     private static function assertGatewayEndpointName(string $name): void

@@ -24,6 +24,15 @@ final class SecurityRulesReceiptWiringTest extends TestCase
         self::assertStringContainsString('expected_digest: rulesDigest', $template);
     }
 
+    public function testServerMonitorEmbedsBrowserParseableRulesJsonWithoutHtmlEntities(): void
+    {
+        $template = $this->source('view/templates/Backend/ServerMonitor/security-rules.phtml');
+
+        self::assertStringNotContainsString('htmlspecialchars($rulesJson', $template);
+        self::assertStringContainsString('JSON_HEX_TAG', $template);
+        self::assertStringContainsString('id="wls-security-rules-json" type="application/json"><?= $rulesJson ?>', $template);
+    }
+
     public function testWlsPanelFormsRoundTripRulesReceipt(): void
     {
         $controller = $this->source('Controller/Backend/WlsPanel.php');

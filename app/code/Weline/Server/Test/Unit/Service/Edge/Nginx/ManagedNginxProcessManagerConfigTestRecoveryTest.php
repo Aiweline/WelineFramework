@@ -7,6 +7,7 @@ namespace Weline\Server\Test\Unit\Service\Edge\Nginx;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxProcessManager;
+use Weline\Server\Service\Edge\Nginx\Runtime\NginxProcessIdentity;
 
 final class ManagedNginxProcessManagerConfigTestRecoveryTest extends TestCase
 {
@@ -81,6 +82,21 @@ final class ManagedNginxProcessManagerConfigTestRecoveryTest extends TestCase
         ] as $artifact) {
             self::assertFileDoesNotExist($artifact);
         }
+    }
+
+    public function testEmptyCanonicalConfigTestPidIsCollectedAsANonRunningMarker(): void
+    {
+        $token = \str_repeat('f', 32);
+        $config = $this->canonicalConfig($token);
+        $pid = $this->canonicalPid($token);
+        $this->write($config, $this->isolatedConfig(\basename($pid)));
+        $this->write($pid, '');
+
+        $result = $this->manager->testConfig($this->candidateConfig());
+
+        self::assertStringNotContainsString('recovery failed', \strtolower($result['output']));
+        self::assertFileDoesNotExist($config);
+        self::assertFileDoesNotExist($pid);
     }
 
     public function testLiveConfigTestPidPreservesTheCompleteRecoverySet(): void
@@ -345,6 +361,123 @@ final class ManagedNginxProcessManagerConfigTestRecoveryTest extends TestCase
         self::assertArrayHasKey('code', $result);
     }
 
+    public function testStartIdentityFailureStopsTheExactNewlyLaunchedMaster(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('pcntl_fork')
+            || !\function_exists('posix_setsid')
+            || !\function_exists('posix_kill')
+        ) {
+            self::markTestSkipped('POSIX fork/process-identity fixture.');
+        }
+        $installRoot = $this->paths->installRoot();
+        self::assertTrue(\mkdir($installRoot, 0700, true));
+        $binary = $this->paths->binary();
+        $script = <<<'PHP'
+#!/usr/bin/env php
+<?php
+if (in_array('-t', $argv, true)) {
+    exit(0);
+}
+$prefix = '';
+foreach ($argv as $index => $argument) {
+    if ($argument === '-p' && isset($argv[$index + 1])) {
+        $prefix = (string)$argv[$index + 1];
+        break;
+    }
+}
+if ($prefix === '') {
+    exit(2);
+}
+$signalIndex = array_search('-s', $argv, true);
+if ($signalIndex !== false && ($argv[$signalIndex + 1] ?? '') === 'quit') {
+    $pidFile = rtrim($prefix, "/\\") . DIRECTORY_SEPARATOR . 'run'
+        . DIRECTORY_SEPARATOR . 'nginx.pid';
+    $pid = (int)trim((string)@file_get_contents($pidFile));
+    exit($pid > 0 && posix_kill($pid, SIGTERM) ? 0 : 4);
+}
+$child = pcntl_fork();
+if ($child < 0) {
+    exit(3);
+}
+if ($child > 0) {
+    exit(0);
+}
+posix_setsid();
+@fclose(STDIN);
+@fclose(STDOUT);
+@fclose(STDERR);
+$pidFile = rtrim($prefix, "/\\") . DIRECTORY_SEPARATOR . 'run'
+    . DIRECTORY_SEPARATOR . 'nginx.pid';
+file_put_contents($pidFile, (string)getmypid() . PHP_EOL);
+while (true) {
+    sleep(1);
+}
+PHP;
+        $this->write($binary, $script);
+        self::assertTrue(\chmod($binary, 0700));
+        $this->write($this->paths->confFile(), "events {}\nhttp {}\n");
+        $manifest = [
+            'schema_version' => 2,
+            'role' => 'legacy-project-nginx',
+            'implementation_level' => 'nginx-runtime-v2',
+            'version' => '1.30.4',
+            'binary' => $binary,
+            'binary_sha256' => \hash_file('sha256', $binary),
+        ];
+        $manifest['runtime_generation'] = \hash(
+            'sha256',
+            \json_encode(
+                $this->canonicalize($manifest),
+                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ),
+        );
+        $this->write(
+            $this->paths->manifestFile(),
+            \json_encode($manifest, JSON_THROW_ON_ERROR),
+        );
+        $identityCalls = 0;
+        $identity = new NginxProcessIdentity(
+            role: 'legacy-project-nginx',
+            binary: $binary,
+            prefix: $this->paths->runtimeRoot(),
+            config: $this->paths->confFile(),
+            installManifest: $this->paths->manifestFile(),
+            processManifest: $this->paths->runDir() . DIRECTORY_SEPARATOR
+                . 'nginx.process-identity.json',
+            processStartIdentityResolver: static function (int $pid) use (&$identityCalls): string {
+                ++$identityCalls;
+                return match ($identityCalls) {
+                    1 => 'injected-unstable-birth-a',
+                    2 => 'injected-unstable-birth-b',
+                    default => 'stable-launch-birth:' . $pid,
+                };
+            },
+        );
+        $manager = new ManagedNginxProcessManager($this->paths, $identity);
+        $result = $manager->start();
+        $pid = (int)($result['pid'] ?? 0);
+        try {
+            self::assertFalse($result['ok']);
+            self::assertGreaterThan(0, $pid);
+            self::assertStringContainsString(
+                'exact newly launched master was stopped',
+                (string)$result['message'],
+            );
+            self::assertFileDoesNotExist($this->paths->pidFile());
+            self::assertFileDoesNotExist(
+                $this->paths->runDir() . DIRECTORY_SEPARATOR . 'nginx.process-identity.json',
+            );
+            $status = $manager->status();
+            self::assertTrue($status['ok'], $status['message']);
+            self::assertFalse($status['running']);
+        } finally {
+            if ($pid > 0 && @\posix_kill($pid, 0)) {
+                @\posix_kill($pid, SIGKILL);
+            }
+        }
+    }
+
     private function candidateConfig(): string
     {
         $path = $this->paths->confDir() . DIRECTORY_SEPARATOR . 'next-candidate.conf';
@@ -373,6 +506,18 @@ final class ManagedNginxProcessManagerConfigTestRecoveryTest extends TestCase
     private function isolatedConfig(string $pidLeaf): string
     {
         return "worker_processes 1;\npid run/{$pidLeaf};\nevents {}\nhttp {}\n";
+    }
+
+    /** @param array<string,mixed> $value @return array<string,mixed> */
+    private function canonicalize(array $value): array
+    {
+        foreach ($value as $key => $item) {
+            if (\is_array($item)) {
+                $value[$key] = $this->canonicalize($item);
+            }
+        }
+        \ksort($value, SORT_STRING);
+        return $value;
     }
 
     private function write(string $path, string $contents): void

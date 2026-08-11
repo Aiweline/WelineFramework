@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Integration\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
 
 final class NativeGatewayBrokerTest extends TestCase
 {
@@ -416,7 +417,7 @@ final class NativeGatewayBrokerTest extends TestCase
         $home = $this->root . DIRECTORY_SEPARATOR . 'home';
         $state = $home . DIRECTORY_SEPARATOR . 'state';
         $trust = $home . DIRECTORY_SEPARATOR . 'trust';
-        $snapshots = $home . DIRECTORY_SEPARATOR . 'snapshots';
+        $snapshots = $home . DIRECTORY_SEPARATOR . 'snapshot-candidates-v2';
         $project = $this->root . DIRECTORY_SEPARATOR . 'project';
         $certificateRoot = $project . DIRECTORY_SEPARATOR . 'app/etc/ssl';
         $digest = \str_repeat('a', 64);
@@ -586,7 +587,14 @@ final class NativeGatewayBrokerTest extends TestCase
                 $client = @\stream_socket_client('unix://' . $socket, $errno, $error, 2.0);
                 self::assertIsResource($client, $error);
                 self::assertNotFalse(@\fwrite($client, '{"request_id":"action"}' . "\n"));
-                self::assertStringContainsString('"ok":true', (string)@\fgets($client, 4096));
+                self::assertStringContainsString(
+                    '"ok":true',
+                    (string)@\fgets($client, 4096),
+                    (string)@\file_get_contents($log) . "\n"
+                        . (string)@\file_get_contents(
+                            $this->root . DIRECTORY_SEPARATOR . 'rollback-actions.log',
+                        ),
+                );
                 @\fclose($client);
             }
             self::assertSame(
@@ -619,6 +627,280 @@ final class NativeGatewayBrokerTest extends TestCase
                 \pcntl_waitpid($controllerPid, $ignored, WNOHANG);
             }
         }
+    }
+
+    public function testAtomicReplaceStreamsPayloadBeyondControlFrameAndCleansBoundBackup(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
+            self::markTestSkipped('pcntl and posix are required for the native broker action test.');
+        }
+        $home = $this->root . DIRECTORY_SEPARATOR . 'atomic-home';
+        $state = $home . DIRECTORY_SEPARATOR . 'state';
+        $trust = $home . DIRECTORY_SEPARATOR . 'trust';
+        self::assertTrue(\mkdir($state, 0700, true));
+        self::assertTrue(\mkdir($trust, 0700, true));
+        $target = $state . DIRECTORY_SEPARATOR . 'nonce.wal';
+        $temporary = $target . '.tmp-' . \bin2hex(\random_bytes(6));
+        $payloadBytes = 5 * 1024 * 1024 + 17;
+        $payload = \substr(
+            \str_repeat("nonce-record\n", (int)\ceil($payloadBytes / 13)),
+            0,
+            $payloadBytes,
+        );
+        self::assertSame($payloadBytes, \strlen($payload));
+        self::assertSame(8, \file_put_contents($target, 'previous'));
+        self::assertSame($payloadBytes, \file_put_contents($temporary, $payload));
+        self::assertTrue(\chmod($target, 0600));
+        self::assertTrue(\chmod($temporary, 0600));
+        $digest = \hash('sha256', $payload);
+
+        // Persisted native evidence for a crash after replacement commit but
+        // before Controller cleanup state could be checkpointed.
+        $committedTarget = $state . DIRECTORY_SEPARATOR . 'lease-checkpoint.json';
+        self::assertSame(15, \file_put_contents($committedTarget, 'committed-state'));
+        self::assertTrue(\chmod($committedTarget, 0600));
+        $committedDigest = \hash_file('sha256', $committedTarget);
+        self::assertIsString($committedDigest);
+        $committedOrphan = $committedTarget . '.wls-replace-backup-'
+            . $committedDigest . '-' . \bin2hex(\random_bytes(8));
+        self::assertSame(16, \file_put_contents($committedOrphan, 'previous-version'));
+        self::assertTrue(\chmod($committedOrphan, 0600));
+
+        // POSIX link+directory-fsync happens before rename. A crash in that
+        // window leaves the target and backup as the same two-link inode.
+        $precommitTarget = $state . DIRECTORY_SEPARATOR . 'publication-current.json';
+        self::assertSame(15, \file_put_contents($precommitTarget, 'precommit-state'));
+        self::assertTrue(\chmod($precommitTarget, 0600));
+        $precommitOrphan = $precommitTarget . '.wls-replace-backup-'
+            . \hash('sha256', 'future-publication') . '-'
+            . \bin2hex(\random_bytes(8));
+        self::assertTrue(\link($precommitTarget, $precommitOrphan));
+        self::assertSame(2, (int)(\stat($precommitTarget)['nlink'] ?? 0));
+
+        $cleanupToken = \bin2hex(\random_bytes(8));
+        $cleanupBackup = $target . '.wls-replace-backup-'
+            . $digest . '-' . $cleanupToken;
+
+        $adminSocket = $this->root . DIRECTORY_SEPARATOR . 'atomic-admin.sock';
+        $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'atomic-project.sock';
+        $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'atomic-controller.sock';
+        $lockFile = $this->root . DIRECTORY_SEPARATOR . 'atomic-broker.lock';
+        $fencingFile = $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token';
+        $ackFile = $this->root . DIRECTORY_SEPARATOR . 'atomic-actions.log';
+        $controller = \stream_socket_server(
+            'unix://' . $controllerSocket,
+            $errno,
+            $error,
+            \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($controller, $error);
+        $actions = [
+            'WLS-ACTION/2' . "\t" . \implode("\t", [
+                'ATOMIC_REPLACE',
+                \bin2hex($temporary),
+                \bin2hex($target),
+                $digest,
+                (string)$payloadBytes,
+                '0600',
+            ]) . "\n",
+            'WLS-ACTION/2' . "\t" . \implode("\t", [
+                'ATOMIC_REPLACE_CLEANUP',
+                \bin2hex($target),
+                $digest,
+                (string)$payloadBytes,
+                '0600',
+                $cleanupToken,
+            ]) . "\n",
+        ];
+
+        $controllerPid = \pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $controllerPid);
+        if ($controllerPid === 0) {
+            foreach ($actions as $index => $action) {
+                $client = @\stream_socket_accept($controller, 5);
+                if (!\is_resource($client)) exit(90);
+                if (!$this->authenticateBrokerProbe($client, $fencingFile)
+                    || !\is_string(@\fgets($client, 4096))
+                    || !\is_string(@\fgets($client, 4096))
+                    || @\fwrite($client, $action) !== \strlen($action)
+                ) {
+                    exit(91);
+                }
+                $ack = @\fgets($client, 4096);
+                @\file_put_contents($ackFile, (string)$ack, FILE_APPEND);
+                $expectedOpcode = $index === 0
+                    ? 'ATOMIC_REPLACE'
+                    : 'ATOMIC_REPLACE_CLEANUP';
+                if (!\str_starts_with(
+                    (string)$ack,
+                    "WLS-ACTION/2\tOK\t{$expectedOpcode}\t-\t-\t{$digest}\t{$payloadBytes}\t0600",
+                )) {
+                    exit(92);
+                }
+                @\fwrite(
+                    $client,
+                    '{"protocol":"wls-edge/2","request_id":"atomic","ok":true}' . "\n",
+                );
+                @\fclose($client);
+            }
+            @\fclose($controller);
+            exit(0);
+        }
+        @\fclose($controller);
+
+        $process = null;
+        try {
+            $log = $this->root . DIRECTORY_SEPARATOR . 'atomic-broker.log';
+            $process = \proc_open([
+                $this->broker,
+                '--serve',
+                '--admin-socket',
+                $adminSocket,
+                '--project-socket',
+                $projectSocket,
+                '--controller-socket',
+                $controllerSocket,
+                '--lock-file',
+                $lockFile,
+                '--fencing-file',
+                $fencingFile,
+                '--home',
+                $home,
+            ], [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['file', $log, 'a'],
+                2 => ['file', $log, 'a'],
+            ], $pipes, null, null, ['bypass_shell' => true]);
+            self::assertIsResource($process);
+            $this->waitForSocket($adminSocket);
+            self::assertFileDoesNotExist($committedOrphan);
+            self::assertFileDoesNotExist($precommitOrphan);
+            self::assertSame(1, (int)(\stat($precommitTarget)['nlink'] ?? 0));
+            foreach ($actions as $index => $_) {
+                $client = @\stream_socket_client(
+                    'unix://' . $adminSocket,
+                    $errno,
+                    $error,
+                    2.0,
+                );
+                self::assertIsResource($client, $error);
+                self::assertNotFalse(@\fwrite(
+                    $client,
+                    '{"request_id":"atomic"}' . "\n",
+                ));
+                self::assertStringContainsString(
+                    '"ok":true',
+                    (string)@\fgets($client, 4096),
+                    (string)@\file_get_contents($log),
+                );
+                @\fclose($client);
+                if ($index === 0) {
+                    self::assertSame(
+                        15,
+                        \file_put_contents($cleanupBackup, 'retained-backup'),
+                    );
+                    self::assertTrue(\chmod($cleanupBackup, 0600));
+                }
+            }
+            self::assertFileDoesNotExist($temporary);
+            self::assertFileDoesNotExist($cleanupBackup);
+            self::assertSame($payloadBytes, \filesize($target));
+            self::assertSame($digest, \hash_file('sha256', $target));
+            self::assertSame(0600, \fileperms($target) & 0777);
+            $acks = \file($ackFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            self::assertIsArray($acks);
+            self::assertCount(2, $acks);
+            self::assertSame($controllerPid, \pcntl_waitpid($controllerPid, $status));
+            self::assertTrue(\pcntl_wifexited($status));
+            self::assertSame(0, \pcntl_wexitstatus($status));
+        } finally {
+            if (\is_resource($process)) {
+                $status = \proc_get_status($process);
+                if ($status['running'] ?? false) {
+                    \posix_kill((int)$status['pid'], SIGTERM);
+                }
+                \proc_close($process);
+            }
+            if ($controllerPid > 0) {
+                \pcntl_waitpid($controllerPid, $ignored, WNOHANG);
+            }
+        }
+    }
+
+    public function testAtomicReplaceRecoveryRejectsAmbiguousBackupBeforeServing(): void
+    {
+        $home = $this->root . DIRECTORY_SEPARATOR . 'ambiguous-atomic-home';
+        $state = $home . DIRECTORY_SEPARATOR . 'state';
+        $trust = $home . DIRECTORY_SEPARATOR . 'trust';
+        self::assertTrue(\mkdir($state, 0700, true));
+        self::assertTrue(\mkdir($trust, 0700, true));
+        $target = $state . DIRECTORY_SEPARATOR . 'gateway-state.json';
+        self::assertSame(14, \file_put_contents($target, 'current-target'));
+        self::assertTrue(\chmod($target, 0600));
+        $backup = $target . '.wls-replace-backup-'
+            . \hash('sha256', 'different-future-target') . '-'
+            . \bin2hex(\random_bytes(8));
+        self::assertSame(15, \file_put_contents($backup, 'previous-target'));
+        self::assertTrue(\chmod($backup, 0600));
+
+        $result = $this->runCommand([
+            $this->broker,
+            '--serve',
+            '--admin-socket',
+            $this->root . DIRECTORY_SEPARATOR . 'ambiguous-admin.sock',
+            '--project-socket',
+            $this->root . DIRECTORY_SEPARATOR . 'ambiguous-project.sock',
+            '--controller-socket',
+            $this->root . DIRECTORY_SEPARATOR . 'ambiguous-controller.sock',
+            '--lock-file',
+            $this->root . DIRECTORY_SEPARATOR . 'ambiguous-broker.lock',
+            '--fencing-file',
+            $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token',
+            '--home',
+            $home,
+        ]);
+
+        self::assertNotSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'atomic replace backup recovery refused startup',
+            $result['output'],
+        );
+        self::assertSame('current-target', \file_get_contents($target));
+        self::assertFileExists($backup);
+
+        $malformedHome = $this->root . DIRECTORY_SEPARATOR
+            . 'malformed-atomic-home';
+        $malformedState = $malformedHome . DIRECTORY_SEPARATOR . 'state';
+        $malformedTrust = $malformedHome . DIRECTORY_SEPARATOR . 'trust';
+        self::assertTrue(\mkdir($malformedState, 0700, true));
+        self::assertTrue(\mkdir($malformedTrust, 0700, true));
+        $malformed = $malformedState . DIRECTORY_SEPARATOR
+            . 'gateway-state.json.wls-replace-backup-'
+            . \str_repeat('A', 64) . '-' . \str_repeat('4', 16);
+        self::assertSame(9, \file_put_contents($malformed, 'malformed'));
+        self::assertTrue(\chmod($malformed, 0600));
+        $malformedResult = $this->runCommand([
+            $this->broker,
+            '--serve',
+            '--admin-socket',
+            $this->root . DIRECTORY_SEPARATOR . 'malformed-admin.sock',
+            '--project-socket',
+            $this->root . DIRECTORY_SEPARATOR . 'malformed-project.sock',
+            '--controller-socket',
+            $this->root . DIRECTORY_SEPARATOR . 'malformed-controller.sock',
+            '--lock-file',
+            $this->root . DIRECTORY_SEPARATOR . 'malformed-broker.lock',
+            '--fencing-file',
+            $malformedTrust . DIRECTORY_SEPARATOR . 'broker-fencing-token',
+            '--home',
+            $malformedHome,
+        ]);
+        self::assertNotSame(0, $malformedResult['code'], $malformedResult['output']);
+        self::assertStringContainsString(
+            'atomic replace backup recovery refused startup',
+            $malformedResult['output'],
+        );
+        self::assertFileExists($malformed);
     }
 
     public function testSlowRequestDoesNotBlockStatusAndDisconnectedClientCannotKillBroker(): void
@@ -756,7 +1038,7 @@ final class NativeGatewayBrokerTest extends TestCase
         }
     }
 
-    public function testUnexpectedControllerExitRestartsInPlaceWithoutReplacingBrokerSockets(): void
+    public function testControllerRestartRetainsSocketsForIsolationReplayAndRouteDegradedAdmission(): void
     {
         if (!\function_exists('posix_getpwuid') || !\function_exists('posix_kill')) {
             self::markTestSkipped('POSIX identity and signals are required for controller restart.');
@@ -765,6 +1047,21 @@ final class NativeGatewayBrokerTest extends TestCase
         self::assertIsArray($account);
         $controllerUser = (string)($account['name'] ?? '');
         self::assertNotSame('', $controllerUser);
+        $dataPlaneUser = '';
+        foreach (\PHP_OS_FAMILY === 'Darwin'
+            ? ['_nobody', 'daemon']
+            : ['nobody', 'daemon'] as $candidateUser
+        ) {
+            $candidate = @\posix_getpwnam($candidateUser);
+            if (\is_array($candidate)
+                && (int)($candidate['uid'] ?? 0) > 0
+                && (int)($candidate['uid'] ?? 0) !== \posix_geteuid()
+            ) {
+                $dataPlaneUser = $candidateUser;
+                break;
+            }
+        }
+        self::assertNotSame('', $dataPlaneUser);
         self::assertTrue(\chgrp($this->root, \posix_getegid()));
 
         $home = $this->root . DIRECTORY_SEPARATOR . 'restart-home';
@@ -784,6 +1081,11 @@ final class NativeGatewayBrokerTest extends TestCase
         $slotPhp = $slotBin . DIRECTORY_SEPARATOR . 'php';
         self::assertTrue(\copy(\PHP_BINARY, $slotPhp));
         self::assertTrue(\chmod($slotPhp, 0700));
+        $slotNginx = $slotBin . DIRECTORY_SEPARATOR . 'nginx';
+        self::assertTrue(\copy(\PHP_BINARY, $slotNginx));
+        self::assertTrue(\chmod($slotNginx, 0700));
+        $slotNginxCanonical = \realpath($slotNginx);
+        self::assertIsString($slotNginxCanonical);
         self::assertNotFalse(\file_put_contents(
             $home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json',
             \json_encode(
@@ -934,8 +1236,26 @@ while (true) {
         && $requestId !== ''
     ) {
         $epoch = str_repeat('1', 32);
+        $admissionState = trim((string)@file_get_contents(
+            $home . DIRECTORY_SEPARATOR . 'bootstrap-admission-state',
+        ));
+        if (!in_array($admissionState, [
+            'HEALTHY',
+            'ISOLATION_REPLAY',
+            'ROUTE_DEGRADED',
+        ], true)) {
+            $admissionState = 'HEALTHY';
+        }
+        $healthy = $admissionState === 'HEALTHY';
+        $isolation = $admissionState === 'ISOLATION_REPLAY';
+        $healthState = $healthy
+            ? 'HEALTHY'
+            : ($isolation ? 'STATE_REBUILD' : 'ROUTE_DEGRADED');
+        $recoveryStage = $healthy
+            ? 'NONE'
+            : ($isolation ? 'STATE_REBUILD' : 'ROUTE_DEGRADED');
         $payload = [
-            'ready' => true,
+            'ready' => $healthy,
             'generation' => 1,
             'active_config_generation' => 1,
             'publication_generation' => 1,
@@ -947,7 +1267,17 @@ while (true) {
             'upgrade_intent_sha256' => str_repeat('0', 64),
             'upgrade_intent_nonce' => str_repeat('0', 32),
             'data_plane' => 'RUNNING',
-            'recovery_pending' => false,
+            'recovery_pending' => !$healthy,
+            'admission_state' => $admissionState,
+            'promotion_eligible' => $healthy,
+            'guardian_continuity_healthy' => true,
+            'control_plane_ready' => true,
+            'isolation_mode' => $isolation,
+            'health_state' => $healthState,
+            'recovery_stage' => $recoveryStage,
+            'route_failure_kind' => $admissionState === 'ROUTE_DEGRADED'
+                ? 'backend_transport'
+                : '',
         ];
         $response = [
             'protocol' => 'wls-edge/2',
@@ -961,10 +1291,15 @@ while (true) {
             canonicalJson($response),
             $adminToken,
         );
-        @fwrite(
-            $client,
-            json_encode($response, JSON_UNESCAPED_SLASHES) . PHP_EOL,
-        );
+        $responseLine = json_encode($response, JSON_UNESCAPED_SLASHES) . PHP_EOL;
+        $responseOffset = 0;
+        while ($responseOffset < strlen($responseLine)) {
+            $responseWritten = @fwrite($client, substr($responseLine, $responseOffset));
+            if (!is_int($responseWritten) || $responseWritten < 1) {
+                exit(67);
+            }
+            $responseOffset += $responseWritten;
+        }
         @fclose($client);
         continue;
     }
@@ -983,6 +1318,63 @@ PHP;
             \strlen($controllerSource),
             \file_put_contents($controllerScript, $controllerSource),
         );
+
+        $nginxProcess = \proc_open([
+            $slotNginx,
+            '-r',
+            'sleep(120);',
+        ], [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['file', '/dev/null', 'a'],
+            2 => ['file', '/dev/null', 'a'],
+        ], $nginxPipes, null, null, ['bypass_shell' => true]);
+        self::assertIsResource($nginxProcess);
+        $nginxStatus = \proc_get_status($nginxProcess);
+        $nginxPid = (int)($nginxStatus['pid'] ?? 0);
+        self::assertGreaterThan(0, $nginxPid);
+        $nginxIdentityDeadline = \microtime(true) + 3.0;
+        do {
+            $nginxIdentityFields = [];
+            $nginxIdentity = $this->runCommand([
+                $this->broker,
+                '--process-identity-self-test',
+                (string)$nginxPid,
+            ]);
+            $nginxIdentityMatches = $nginxIdentity['code'] === 0
+                && \preg_match(
+                    '/\AWLS-PROCESS-IDENTITY\/1\npid=(\d+)\n'
+                        . 'start_id=(\d+)\nexecutable=([^\r\n]+)\z/D',
+                    $nginxIdentity['output'],
+                    $nginxIdentityFields,
+                ) === 1;
+            if (!$nginxIdentityMatches) {
+                \usleep(10_000);
+            }
+        } while (!$nginxIdentityMatches && \microtime(true) < $nginxIdentityDeadline);
+        self::assertSame(0, $nginxIdentity['code'], $nginxIdentity['output']);
+        self::assertTrue($nginxIdentityMatches, $nginxIdentity['output']);
+        self::assertSame($nginxPid, (int)$nginxIdentityFields[1]);
+        self::assertSame($slotNginxCanonical, (string)$nginxIdentityFields[3]);
+        $zeroDigest = \str_repeat('0', 64);
+        $processAttestation = "WLS-PROCESS-ATTEST/3\n"
+            . 'pid=' . $nginxPid . "\n"
+            . 'start_id=' . (string)$nginxIdentityFields[2] . "\n"
+            . 'binary_digest=' . (string)\hash_file('sha256', $slotNginx) . "\n"
+            . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'config_digest=' . $zeroDigest . "\n"
+            . 'config_path_digest=' . $zeroDigest . "\n"
+            . "publication_generation=1\n"
+            . "fence_kind=ACTIVE\n"
+            . "candidate_transaction_id=-\n"
+            . "candidate_phase=ACTIVE\n"
+            . 'candidate_fence_digest=' . $zeroDigest . "\n";
+        $processAttestationFile = $home
+            . DIRECTORY_SEPARATOR . 'trust/process-attestation.receipt';
+        self::assertSame(
+            \strlen($processAttestation),
+            \file_put_contents($processAttestationFile, $processAttestation),
+        );
+        self::assertTrue(\chmod($processAttestationFile, 0600));
 
         $log = $this->root . DIRECTORY_SEPARATOR . 'restart-broker.log';
         $process = \proc_open([
@@ -1006,6 +1398,8 @@ PHP;
             $home,
             '--controller-user',
             $controllerUser,
+            '--data-plane-user',
+            $dataPlaneUser,
             '--active-slot',
             'A',
             '--runtime-generation',
@@ -1035,6 +1429,10 @@ PHP;
             self::assertGreaterThan(0, $socketInode);
 
             $firstControllerPid = $firstPids[0];
+            self::assertSame(16, \file_put_contents(
+                $home . DIRECTORY_SEPARATOR . 'bootstrap-admission-state',
+                'ISOLATION_REPLAY',
+            ));
             self::assertTrue(\posix_kill($firstControllerPid, SIGTERM));
             $controllerPids = $this->waitForControllerPids($pidFile, 2, $log);
             self::assertNotSame($firstControllerPid, $controllerPids[1]);
@@ -1064,6 +1462,23 @@ PHP;
                 $response,
             );
             self::assertStringContainsString('"ok":true', $response);
+
+            self::assertSame(14, \file_put_contents(
+                $home . DIRECTORY_SEPARATOR . 'bootstrap-admission-state',
+                'ROUTE_DEGRADED',
+            ));
+            self::assertTrue(\posix_kill($controllerPids[1], SIGTERM));
+            $thirdPids = $this->waitForControllerPids($pidFile, 3, $log);
+            self::assertNotSame($controllerPids[1], $thirdPids[2]);
+            $afterRouteDegraded = \proc_get_status($process);
+            self::assertTrue(
+                $afterRouteDegraded['running'] ?? false,
+                (string)@\file_get_contents($log),
+            );
+            self::assertSame($brokerPid, (int)($afterRouteDegraded['pid'] ?? 0));
+            $routeDegradedSocket = \lstat($adminSocket);
+            self::assertIsArray($routeDegradedSocket);
+            self::assertSame($socketInode, (int)$routeDegradedSocket['ino']);
         } finally {
             if (\is_resource($process)) {
                 $status = \proc_get_status($process);
@@ -1071,6 +1486,13 @@ PHP;
                     \posix_kill((int)$status['pid'], SIGTERM);
                 }
                 \proc_close($process);
+            }
+            if (\is_resource($nginxProcess)) {
+                $nginxStatus = \proc_get_status($nginxProcess);
+                if ($nginxStatus['running'] ?? false) {
+                    \posix_kill((int)$nginxStatus['pid'], SIGTERM);
+                }
+                \proc_close($nginxProcess);
             }
         }
     }
@@ -1091,16 +1513,25 @@ PHP;
         $hostId = \bin2hex(\random_bytes(16));
         $adminSecret = \random_bytes(32);
         $preparedAt = \time() - 5;
-        $requestedAt = \time();
+        $requestedMonotonic = \intdiv(\hrtime(true), 1_000_000);
+        $preparedMonotonic = $requestedMonotonic - 5_000;
+        self::assertGreaterThan(0, $preparedMonotonic);
+        $hostBootId = GatewayHostBootIdentity::current();
         $runtimeGeneration = \str_repeat('d', 64);
         $intentNonce = \bin2hex(\random_bytes(16));
         $requestNonce = \bin2hex(\random_bytes(16));
-        $intentPayload = "WLS-UPGRADE/1\n"
+        $intentPayload = "WLS-UPGRADE/2\n"
             . 'host_id=' . $hostId . "\n"
             . "from=B\nto=A\n"
             . 'prepared_at=' . $preparedAt . "\n"
             . 'deadline=' . ($preparedAt + 300) . "\n"
             . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'host_boot_id=' . $hostBootId . "\n"
+            . 'prepared_monotonic_ms=' . $preparedMonotonic . "\n"
+            . 'activation_deadline_monotonic_ms='
+                . ($preparedMonotonic + 300_000) . "\n"
+            . 'rollback_deadline_monotonic_ms='
+                . ($preparedMonotonic + 900_000) . "\n"
             . 'nonce=' . $intentNonce . "\n";
         $intent = $intentPayload . 'signature='
             . \hash_hmac('sha256', $intentPayload, $adminSecret) . "\n";
@@ -1114,23 +1545,26 @@ PHP;
             $trust . DIRECTORY_SEPARATOR . 'host-id',
             $hostId,
         ));
-        $upgradeState = "WLS-UPGRADE-STATE/2\n"
+        $upgradeState = "WLS-UPGRADE-STATE/3\n"
             . 'intent_sha256=' . $intentDigest . "\n"
             . 'intent_nonce=' . $intentNonce . "\n"
             . "from=B\nto=A\n"
             . 'runtime_generation=' . $runtimeGeneration . "\n"
-            . 'boot_id=' . \str_repeat('e', 64) . "\n"
-            . "phase=OBSERVING\nattempts=0\n"
+            . 'boot_id=' . $hostBootId . "\n"
+            . "phase=PREPARED\nattempts=0\n"
+            . 'prepared_monotonic_ms=' . $preparedMonotonic . "\n"
             . "observation_started_monotonic_ms=0\n"
             . "observation_deadline_monotonic_ms=0\n"
-            . 'total_deadline=' . ($preparedAt + 900) . "\n";
+            . 'total_deadline_monotonic_ms='
+                . ($preparedMonotonic + 900_000) . "\n";
 
         $request = $state . DIRECTORY_SEPARATOR . 'upgrade-rollback.request';
-        $expectedRequest = "WLS-UPGRADE-ROLLBACK/2\n"
+        $expectedRequest = "WLS-UPGRADE-ROLLBACK/3\n"
             . 'intent_sha256=' . $intentDigest . "\n"
             . 'intent_nonce=' . $intentNonce . "\n"
             . "from=A\nto=B\n"
-            . 'at=' . $requestedAt . "\n"
+            . 'host_boot_id=' . $hostBootId . "\n"
+            . 'requested_monotonic_ms=' . $requestedMonotonic . "\n"
             . 'request_nonce=' . $requestNonce . "\n";
         $action = 'WLS-ACTION/2' . "\t" . \implode("\t", [
             'ROLLBACK_REQUEST',
@@ -1139,7 +1573,7 @@ PHP;
             $intentNonce,
             'A',
             'B',
-            (string)$requestedAt,
+            (string)$requestedMonotonic,
         ]) . "\n";
         $adminSocket = $this->root . DIRECTORY_SEPARATOR . 'rollback-admin.sock';
         $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'rollback-project.sock';

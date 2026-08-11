@@ -24,7 +24,7 @@ const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Ca
 const CONTENT_SHELL = 'main#main-content, main.backend-main-content';
 const CONTENT = CONTENT_SHELL;
 // 候选后台路由（来自模块 Controller/Backend 的 index/get* 动作 + 兜底猜测），按序探测
-const CANDIDATE_ROUTES = ["sslCertificate","sslcertificate","ssl_certificate","reverseProxyManager","reverseproxymanager","reverse_proxy_manager","panelMarketplace","panelmarketplace","panel_marketplace","wlsPanel","wlspanel","wls_panel","serverManager","servermanager","server_manager","optimizationGuide","optimizationguide","optimization_guide","serverMonitor","servermonitor","server_monitor","sseTest","ssetest","sse_test","server","index","config","dashboard"];
+const CANDIDATE_ROUTES = ["sslCertificate","sslcertificate","ssl_certificate","panelMarketplace","panelmarketplace","panel_marketplace","wlsPanel","wlspanel","wls_panel","serverManager","servermanager","server_manager","optimizationGuide","optimizationguide","optimization_guide","serverMonitor","servermonitor","server_monitor","sseTest","ssetest","sse_test","server","index","config","dashboard"];
 
 // 返回 { route, fatal }：
 //  - route!=null：命中真正渲染后台内容区的入口；

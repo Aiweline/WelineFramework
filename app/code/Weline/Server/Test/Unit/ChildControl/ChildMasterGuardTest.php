@@ -6,6 +6,8 @@ namespace Weline\Server\Test\Unit\ChildControl;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\System\IPC\OrphanGuard;
 use Weline\Server\IPC\ChildControl\ChildMasterGuard;
+use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\MasterChildCredentialStore;
 use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 
@@ -20,6 +22,8 @@ final class ChildMasterGuardTest extends TestCase
             $path = MasterLeaseManager::pathForInstance($instance);
             @\unlink($path);
             @\unlink(MasterLeaseManager::lockPathForInstance($instance));
+            @\unlink(MasterChildCredentialStore::pathForInstance($instance));
+            @\unlink(MasterChildCredentialStore::lockPathForInstance($instance));
             @\rmdir(\dirname($path));
         }
         $this->instances = [];
@@ -65,7 +69,7 @@ final class ChildMasterGuardTest extends TestCase
     public function testStoppingStateAndExpectedIdentityMismatchExit(): void
     {
         $now = 3_000.0;
-        [$manager, $instance, $path, $token] = $this->lease($now);
+        [$manager, $instance, $path, $token, $masterToken] = $this->lease($now);
         $pid = (int)\getmypid();
 
         $wrongPid = new ChildMasterGuard(
@@ -81,7 +85,7 @@ final class ChildMasterGuardTest extends TestCase
         );
         self::assertTrue($wrongPid->shouldExit(true));
 
-        $manager->markStopping($instance, $pid, $token);
+        $manager->markStopping($instance, $pid, $masterToken);
         $guard = $this->guard($manager, $instance, $path, $token, true);
         self::assertTrue($guard->shouldExit(true));
         self::assertStringContainsString('not running', \strtolower($guard->getLastExitReason()));
@@ -107,7 +111,7 @@ final class ChildMasterGuardTest extends TestCase
         );
     }
 
-    /** @return array{MasterLeaseManager,string,string,string} */
+    /** @return array{MasterLeaseManager,string,string,string,string} */
     private function lease(
         float &$now,
         ?string &$namespace = null,
@@ -139,9 +143,40 @@ final class ChildMasterGuardTest extends TestCase
         $manager = new MasterLeaseManager($runtime);
         $instance = 'child-guard-' . \bin2hex(\random_bytes(5));
         $this->instances[] = $instance;
-        $token = \str_repeat('a', 64);
-        $path = $manager->writeRunning($instance, $pid, 19191, 7, $token);
+        $masterToken = \str_repeat('a', 64);
+        $path = $manager->writeRunning($instance, $pid, 19191, 7, $masterToken);
+        $role = ControlMessage::ROLE_WORKER;
+        $slotId = $role . '#1';
+        $launchId = 'child-guard-launch';
+        $leaseId = 'child-guard-lease';
+        $generation = 1;
+        (new MasterChildCredentialStore($manager, $runtime))->authorizeServices(
+            $path,
+            $instance,
+            $pid,
+            7,
+            $masterToken,
+            [[
+                'role' => $role,
+                'slot_id' => $slotId,
+                'launch_id' => $launchId,
+                'lease_id' => $leaseId,
+                'generation' => $generation,
+                'pid' => $pid,
+            ]],
+        );
+        $token = $manager->resolveProtectedCredential(
+            $path,
+            $instance,
+            $pid,
+            7,
+            $launchId,
+            $leaseId,
+            $generation,
+            $role,
+            $slotId,
+        );
 
-        return [$manager, $instance, $path, $token];
+        return [$manager, $instance, $path, $token, $masterToken];
     }
 }

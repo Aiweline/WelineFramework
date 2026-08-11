@@ -39,7 +39,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $firstSource = $this->createCertificate($domain, 'first');
         $store = new ProjectCertificateGenerationStore($this->root);
 
-        $first = $store->activate(
+        $first = self::activateForTest($store,
             $domain,
             $firstSource['cert'],
             $firstSource['key'],
@@ -61,7 +61,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             self::assertSame(0600, \fileperms($first['key_path']) & 0777);
         }
 
-        $idempotent = $store->activate(
+        $idempotent = self::activateForTest($store,
             $domain,
             $firstSource['cert'],
             $firstSource['key'],
@@ -75,7 +75,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         self::assertSame($first['cert_path'], $idempotent['cert_path']);
 
         $secondSource = $this->createCertificate($domain, 'second');
-        $second = $store->activate(
+        $second = self::activateForTest($store,
             $domain,
             $secondSource['cert'],
             $secondSource['key'],
@@ -86,6 +86,163 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         self::assertSame($first['source_digest'], $second['previous']['source_digest']);
         self::assertFileExists($first['cert_path']);
         self::assertFileExists($second['cert_path']);
+    }
+
+    public function testLegacySelectorsRemainGcReferencesWhileSchemaTwoActivationMigrates(): void
+    {
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $legacyDomain = 'legacy-capacity.example.test';
+        $legacySource = $this->createCertificate($legacyDomain, 'legacy-capacity');
+        $legacy = self::activateForTest(
+            $store,
+            $legacyDomain,
+            $legacySource['cert'],
+            $legacySource['key'],
+        );
+        $selector = $this->selectorManifestPath('active', $legacyDomain);
+        $envelope = \json_decode((string)\file_get_contents($selector), true);
+        self::assertIsArray($envelope);
+        self::assertIsArray($envelope['payload'] ?? null);
+        $envelope['payload']['schema_version'] = 1;
+        foreach (['trust_profile', 'provider', 'material_class', 'provenance_digest'] as $field) {
+            unset($envelope['payload'][$field]);
+        }
+        $envelope['sha256'] = \hash(
+            'sha256',
+            \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson(
+                $envelope['payload'],
+            ),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $selector,
+            \json_encode(
+                $envelope,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($selector, 0600));
+        }
+
+        try {
+            $store->active($legacyDomain);
+            self::fail('A schema-1 selector must never become serving authority.');
+        } catch (\Weline\Server\Service\Edge\Gateway\CertificateTrustProvenanceException) {
+            self::assertTrue(true);
+        }
+
+        $nextDomain = 'schema-two-after-legacy.example.test';
+        $nextSource = $this->createCertificate($nextDomain, 'schema-two-after-legacy');
+        $next = self::activateForTest(
+            $store,
+            $nextDomain,
+            $nextSource['cert'],
+            $nextSource['key'],
+        );
+        self::assertGreaterThan((int)$legacy['generation'], (int)$next['generation']);
+        self::assertFileExists($legacy['cert_path']);
+
+        $replacement = $this->createCertificate($legacyDomain, 'legacy-capacity-replacement');
+        $migrated = self::activateForTest(
+            $store,
+            $legacyDomain,
+            $replacement['cert'],
+            $replacement['key'],
+        );
+        self::assertGreaterThan((int)$legacy['generation'], (int)$migrated['generation']);
+        self::assertSame(
+            ProjectCertificateGenerationStore::SCHEMA_VERSION,
+            (int)(\json_decode(
+                (string)\file_get_contents($selector),
+                true,
+            )['payload']['schema_version'] ?? 0),
+        );
+    }
+
+    public function testActivationRejectsSourceReplacementDuringSnapshotPublication(): void
+    {
+        $domain = 'source-cas.example.test';
+        $source = $this->createCertificate($domain, 'source-cas');
+        $replacement = $this->createCertificate($domain, 'source-cas-replacement');
+        $replaced = false;
+        $store = new ProjectCertificateGenerationStore(
+            $this->root,
+            function () use (&$replaced, $source, $replacement): int {
+                if (!$replaced) {
+                    $replaced = true;
+                    if (!\copy($replacement['cert'], $source['cert'])
+                        || !\copy($replacement['key'], $source['key'])
+                    ) {
+                        throw new \RuntimeException(
+                            'Unable to replace the certificate source fixture.',
+                        );
+                    }
+                }
+                return \time();
+            },
+        );
+
+        try {
+            self::activateForTest($store, $domain, $source['cert'], $source['key']);
+            self::fail('A source replaced during snapshot publication was activated.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'Certificate source changed while publishing its immutable snapshot.',
+                $exception->getMessage(),
+            );
+        }
+        self::assertTrue($replaced);
+        self::assertNull($store->active($domain));
+    }
+
+    public function testFirstActivationReconcilesExactManifestCommittedBeforeDirectorySyncFailure(): void
+    {
+        $domain = 'first-commit-boundary.example.test';
+        $source = $this->createCertificate($domain, 'first-commit-boundary');
+        $store = new ProjectCertificateGenerationStore($this->root);
+
+        $activated = $this->activateWithPostRenameSyncFailure(
+            $store,
+            $domain,
+            $source,
+        );
+
+        self::assertSame(1, $activated['generation']);
+        self::assertFalse($activated['retained_previous']);
+        self::assertStringContainsString(
+            'committed and reconciled',
+            (string)$activated['activation_error'],
+        );
+        $current = $store->active($domain);
+        self::assertIsArray($current);
+        self::assertSame(1, $current['generation']);
+        self::assertSame($activated['source_digest'], $current['source_digest']);
+    }
+
+    public function testRenewalDoesNotReportOldGenerationAfterCommittedSelectorSyncFailure(): void
+    {
+        $domain = 'renew-commit-boundary.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $first = $this->createCertificate($domain, 'renew-commit-boundary-first');
+        self::activateForTest($store, $domain, $first['cert'], $first['key']);
+        $second = $this->createCertificate($domain, 'renew-commit-boundary-second');
+
+        $activated = $this->activateWithPostRenameSyncFailure(
+            $store,
+            $domain,
+            $second,
+        );
+
+        self::assertSame(2, $activated['generation']);
+        self::assertFalse($activated['retained_previous']);
+        self::assertStringContainsString(
+            'committed and reconciled',
+            (string)$activated['activation_error'],
+        );
+        $current = $store->active($domain);
+        self::assertIsArray($current);
+        self::assertSame(2, $current['generation']);
+        self::assertSame($activated['source_digest'], $current['source_digest']);
     }
 
     public function testAtomicStagingArtifactDoesNotPoisonActiveManifestEnumeration(): void
@@ -121,7 +278,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'active-artifact-recovery.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'active-artifact-recovery');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $target = $this->selectorManifestPath('active', $domain);
         $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
 
@@ -129,7 +286,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $next = $this->createCertificate($nextDomain, 'active-artifact-recovery-next');
         self::assertSame(
             2,
-            $store->activate($nextDomain, $next['cert'], $next['key'])['generation'],
+            self::activateForTest($store, $nextDomain, $next['cert'], $next['key'])['generation'],
         );
 
         foreach ($artifacts as $artifact) {
@@ -142,7 +299,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'disabled-artifact-recovery.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'disabled-artifact-recovery');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $target = $this->selectorManifestPath('disabled', $domain);
         $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
@@ -159,7 +316,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'disabled-artifact-update.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'disabled-artifact-update');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $intent = $store->pendingRetirementIntents()[$domain] ?? null;
         self::assertIsArray($intent);
@@ -186,7 +343,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
                 $domain,
                 'disabled-artifact-directory-' . $index,
             );
-            $store->activate($domain, $source['cert'], $source['key']);
+            self::activateForTest($store, $domain, $source['cert'], $source['key']);
             $store->deactivate($domain);
         }
         $intents = $store->pendingRetirementIntents();
@@ -211,11 +368,11 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $store = new ProjectCertificateGenerationStore($this->root);
         $first = $this->createCertificate($domain, 'reenable-artifact-first');
         $second = $this->createCertificate($domain, 'reenable-artifact-second');
-        $store->activate($domain, $first['cert'], $first['key']);
+        self::activateForTest($store, $domain, $first['cert'], $first['key']);
         $store->deactivate($domain);
         $issue = static function () use ($store, $domain, $second): array {
             return $store->withCertificateLifecycleLock(
-                fn (): array => $store->issueExplicitReenableIntent(
+                fn (): array => self::issueExplicitReenableIntentForTest($store,
                     $domain,
                     $second['cert'],
                     $second['key'],
@@ -241,7 +398,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             $firstDomain,
             'snapshot-retirement-artifact-first',
         );
-        $store->activate($firstDomain, $first['cert'], $first['key']);
+        self::activateForTest($store, $firstDomain, $first['cert'], $first['key']);
         $target = $this->snapshotRetirementStatePath();
         self::assertFileExists($target);
         $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
@@ -251,7 +408,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             $nextDomain,
             'snapshot-retirement-artifact-next',
         );
-        $store->activate($nextDomain, $next['cert'], $next['key']);
+        self::activateForTest($store, $nextDomain, $next['cert'], $next['key']);
 
         foreach ($artifacts as $artifact) {
             self::assertFileDoesNotExist($artifact);
@@ -263,7 +420,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'retirement-cursor-artifact.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'retirement-cursor-artifact');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $intent = $store->pendingRetirementIntents()[$domain] ?? null;
         self::assertIsArray($intent);
@@ -283,7 +440,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'active-artifact-missing-target.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'active-artifact-missing-target');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $target = $this->selectorManifestPath('active', $domain);
         $artifact = $target . '.wls-backup-' . \str_repeat('e', 16);
         self::assertTrue(\copy($target, $artifact));
@@ -297,7 +454,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         );
         $failure = null;
         try {
-            $store->activate($nextDomain, $next['cert'], $next['key']);
+            self::activateForTest($store, $nextDomain, $next['cert'], $next['key']);
         } catch (\RuntimeException $throwable) {
             $failure = $throwable;
         }
@@ -315,7 +472,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'disabled-artifact-missing-target.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'disabled-artifact-missing-target');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $target = $this->selectorManifestPath('disabled', $domain);
         $artifact = $target . '.wls-backup-' . \str_repeat('1', 16);
@@ -340,7 +497,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'active-artifact-corrupt-target.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'active-artifact-corrupt-target');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $target = $this->selectorManifestPath('active', $domain);
         $artifact = $target . '.wls-backup-' . \str_repeat('f', 16);
         self::assertTrue(\copy($target, $artifact));
@@ -354,7 +511,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             'active-artifact-corrupt-target-next',
         );
         try {
-            $store->activate($nextDomain, $next['cert'], $next['key']);
+            self::activateForTest($store, $nextDomain, $next['cert'], $next['key']);
             self::fail('A corrupt committed selector target must fail closed.');
         } catch (\RuntimeException $throwable) {
             self::assertStringContainsString('integrity', $throwable->getMessage());
@@ -370,7 +527,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $store = new ProjectCertificateGenerationStore($this->root);
         $domain = 'generation-floor-artifact.example.test';
         $source = $this->createCertificate($domain, 'generation-floor-artifact');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $target = $this->certificateGenerationFloorPath();
         $artifacts = $this->createAtomicRecoveryArtifacts($target, 12);
 
@@ -378,7 +535,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $next = $this->createCertificate($nextDomain, 'generation-floor-artifact-next');
         self::assertSame(
             2,
-            $store->activate($nextDomain, $next['cert'], $next['key'])['generation'],
+            self::activateForTest($store, $nextDomain, $next['cert'], $next['key'])['generation'],
         );
 
         foreach ($artifacts as $artifact) {
@@ -391,7 +548,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $store = new ProjectCertificateGenerationStore($this->root);
         $domain = 'generation-floor-missing-target.example.test';
         $source = $this->createCertificate($domain, 'generation-floor-missing-target');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $target = $this->certificateGenerationFloorPath();
         $artifact = $target . '.wls-backup-' . \str_repeat('a', 16);
         self::assertTrue(\copy($target, $artifact));
@@ -405,7 +562,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         );
         $failure = null;
         try {
-            $store->activate($nextDomain, $next['cert'], $next['key']);
+            self::activateForTest($store, $nextDomain, $next['cert'], $next['key']);
         } catch (\RuntimeException $throwable) {
             $failure = $throwable;
         }
@@ -420,9 +577,9 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $valid = $this->createCertificate($domain, 'valid');
         $mismatch = $this->createCertificate($domain, 'mismatch');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $active = $store->activate($domain, $valid['cert'], $valid['key']);
+        $active = self::activateForTest($store, $domain, $valid['cert'], $valid['key']);
 
-        $retained = $store->activate($domain, $valid['cert'], $mismatch['key']);
+        $retained = self::activateForTest($store, $domain, $valid['cert'], $mismatch['key']);
         self::assertTrue($retained['retained_previous']);
         self::assertStringContainsString('do not match', $retained['activation_error']);
         self::assertSame($active['generation'], $retained['generation']);
@@ -439,7 +596,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'deactivate.example.test';
         $source = $this->createCertificate($domain, 'deactivate');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $active = $store->activate($domain, $source['cert'], $source['key']);
+        $active = self::activateForTest($store, $domain, $source['cert'], $source['key']);
 
         $store->deactivate($domain);
 
@@ -453,7 +610,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'retirement-intent.example.test';
         $source = $this->createCertificate($domain, 'retirement-intent');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
 
         $store->deactivate($domain);
 
@@ -480,7 +637,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'retirement-receipt-list.example.test';
         $source = $this->createCertificate($domain, 'retirement-receipt-list');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $disabled = $store->disabled($domain);
         self::assertIsArray($disabled);
@@ -506,7 +663,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'historical-tombstone.example.test';
         $source = $this->createCertificate($domain, 'historical-tombstone');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $this->removeRetirementIntentFromTombstone($domain);
 
@@ -522,7 +679,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'historical-explicit-retirement.example.test';
         $source = $this->createCertificate($domain, 'historical-explicit-retirement');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $this->removeRetirementIntentFromTombstone($domain);
         $historical = $store->disabled($domain);
@@ -550,7 +707,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'retirement-proof.example.test';
         $source = $this->createCertificate($domain, 'retirement-proof');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $intent = $store->pendingRetirementIntents()[$domain] ?? null;
         self::assertIsArray($intent);
@@ -599,7 +756,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'prepared-retirement.example.test';
         $source = $this->createCertificate($domain, 'prepared-retirement');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $rowDigest = \hash('sha256', 'pgsql-row-17');
 
         $intent = $store->prepareCertificateRetirement(
@@ -627,7 +784,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'retirement-event-order.example.test';
         $source = $this->createCertificate($domain, 'retirement-event-order');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->prepareCertificateRetirement(
             $domain,
             ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DISABLE,
@@ -639,7 +796,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('generation-bound event');
         $store->withCertificateLifecycleLock(
-            static fn (): array => $store->issueExplicitReenableIntent(
+            static fn (): array => self::issueExplicitReenableIntentForTest($store,
                 $domain,
                 $source['cert'],
                 $source['key'],
@@ -655,7 +812,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('current lifecycle lock');
-        $store->issueExplicitReenableIntent(
+        self::issueExplicitReenableIntentForTest($store,
             $domain,
             $source['cert'],
             $source['key'],
@@ -868,16 +1025,27 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             "(int)\$entry['mtime'] <= \$cutoff",
             $generationSource,
         );
+        $publishLocked = \strpos(
+            $servingSource,
+            'private function publishLocked(',
+        );
+        self::assertIsInt($publishLocked);
         $transition = \strpos(
             $servingSource,
             '->transitionCertificateSnapshotReferences(',
+            $publishLocked,
         );
+        self::assertIsInt($transition);
         $lockedRevalidation = \strpos(
             $servingSource,
             '$this->assertPayload($payload, true);',
+            $publishLocked,
         );
-        $authority = \strpos($servingSource, '$authority = $this->readPublicationAuthority(');
-        self::assertIsInt($transition);
+        $authority = \strpos(
+            $servingSource,
+            '$authority = $this->readPublicationAuthority(',
+            $transition,
+        );
         self::assertIsInt($lockedRevalidation);
         self::assertIsInt($authority);
         self::assertLessThan($transition, $lockedRevalidation);
@@ -942,8 +1110,37 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             $stateLock,
         );
         self::assertStringContainsString(
-            'waitTimeoutSeconds: $this->retirementLockWaitTimeout(',
+            '$waitTimeoutSeconds = $this->retirementLockWaitTimeout(',
             $stateLock,
+        );
+        self::assertStringContainsString(
+            'waitTimeoutSeconds: $waitTimeoutSeconds',
+            $stateLock,
+        );
+        self::assertStringContainsString(
+            'deadlineMonotonic: $this->lockAcquisitionDeadline(',
+            $stateLock,
+        );
+        $replayLease = $methodSource('withRetirementReplayLease');
+        self::assertStringContainsString(
+            '?float $deadlineMonotonic = null',
+            $replayLease,
+        );
+        self::assertStringContainsString(
+            '$this->retirementDeadlineRemaining($deadlineMonotonic)',
+            $replayLease,
+        );
+        self::assertStringContainsString(
+            '$waitTimeoutSeconds = $this->retirementLockWaitTimeout(',
+            $replayLease,
+        );
+        self::assertStringContainsString(
+            'waitTimeoutSeconds: $waitTimeoutSeconds',
+            $replayLease,
+        );
+        self::assertStringContainsString(
+            'deadlineMonotonic: $this->lockAcquisitionDeadline(',
+            $replayLease,
         );
         foreach ([
             'active',
@@ -969,7 +1166,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'retirement-proof-mismatch.example.test';
         $source = $this->createCertificate($domain, 'retirement-proof-mismatch');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $intent = $store->pendingRetirementIntents()[$domain] ?? null;
         self::assertIsArray($intent);
@@ -991,17 +1188,17 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $firstSource = $this->createCertificate($domain, 'retirement-superseded-first');
         $secondSource = $this->createCertificate($domain, 'retirement-superseded-second');
         $store = new ProjectCertificateGenerationStore($this->root);
-        $store->activate($domain, $firstSource['cert'], $firstSource['key']);
+        self::activateForTest($store, $domain, $firstSource['cert'], $firstSource['key']);
         $store->deactivate($domain);
 
         $second = $store->withCertificateLifecycleLock(
             function () use ($store, $domain, $secondSource): array {
-                $store->issueExplicitReenableIntent(
+                self::issueExplicitReenableIntentForTest($store,
                     $domain,
                     $secondSource['cert'],
                     $secondSource['key'],
                 );
-                return $store->activate(
+                return self::activateForTest($store,
                     $domain,
                     $secondSource['cert'],
                     $secondSource['key'],
@@ -1023,7 +1220,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $source = $this->createCertificate($domain, 'wildcard');
         $store = new ProjectCertificateGenerationStore($this->root);
 
-        $active = $store->activate($domain, $source['cert'], $source['key']);
+        $active = self::activateForTest($store, $domain, $source['cert'], $source['key']);
 
         self::assertSame($domain, $active['domain']);
         self::assertSame(1, $active['generation']);
@@ -1037,7 +1234,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Certificate SAN does not cover *.sub.example.test');
-        $store->activate(
+        self::activateForTest($store,
             '*.sub.example.test',
             $source['cert'],
             $source['key'],
@@ -1057,7 +1254,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('No valid active certificate generation');
-        $store->activate($domain, $linked, $source['key']);
+        self::activateForTest($store, $domain, $linked, $source['key']);
     }
 
     public function testAccessibleCertificateOutsideProjectRequiresEnrollment(): void
@@ -1079,17 +1276,43 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             $this->expectExceptionMessage(
                 'Certificate source is outside every enrolled certificate root',
             );
-            $store->activate($domain, $certificate, $privateKey);
+            self::activateForTest($store, $domain, $certificate, $privateKey);
         } finally {
             $this->removeTree($outside);
         }
     }
 
-    public function testExplicitEnrollmentAllowsExternalCertificateRoot(): void
+    public function testExplicitEnrollmentAllowsAdditionalProjectCertificateRoot(): void
     {
         $domain = 'enrolled.example.test';
         $source = $this->createCertificate($domain, 'enrolled-source');
-        $outside = $this->root . '-enrolled';
+        $additional = $this->root . DIRECTORY_SEPARATOR . 'secrets/tls';
+        self::assertTrue(\mkdir($additional, 0700, true));
+        $certificate = $additional . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $privateKey = $additional . DIRECTORY_SEPARATOR . 'privkey.pem';
+        self::assertTrue(\copy($source['cert'], $certificate));
+        self::assertTrue(\copy($source['key'], $privateKey));
+        self::assertTrue(\chmod($certificate, 0600));
+        self::assertTrue(\chmod($privateKey, 0600));
+
+        $active = self::activateForTest(
+            new ProjectCertificateGenerationStore($this->root),
+            $domain,
+            $certificate,
+            $privateKey,
+            '',
+            ['additional' => $additional],
+        );
+
+        self::assertSame(1, $active['generation']);
+        self::assertFalse($active['retained_previous']);
+    }
+
+    public function testExplicitEnrollmentRejectsCertificateRootOutsideProject(): void
+    {
+        $domain = 'external-enrollment.example.test';
+        $source = $this->createCertificate($domain, 'external-enrollment-source');
+        $outside = $this->root . '-external-enrollment';
         self::assertTrue(\mkdir($outside, 0700, true));
         $certificate = $outside . DIRECTORY_SEPARATOR . 'fullchain.pem';
         $privateKey = $outside . DIRECTORY_SEPARATOR . 'privkey.pem';
@@ -1099,16 +1322,18 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         self::assertTrue(\chmod($privateKey, 0600));
 
         try {
-            $active = (new ProjectCertificateGenerationStore($this->root))->activate(
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage(
+                'Enrolled certificate source roots must stay inside the project root',
+            );
+            self::activateForTest(
+                new ProjectCertificateGenerationStore($this->root),
                 $domain,
                 $certificate,
                 $privateKey,
                 '',
                 ['external' => $outside],
             );
-
-            self::assertSame(1, $active['generation']);
-            self::assertFalse($active['retained_previous']);
         } finally {
             $this->removeTree($outside);
         }
@@ -1123,7 +1348,8 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $this->expectExceptionMessage(
             'Enrolled certificate source root must be a canonical directory',
         );
-        (new ProjectCertificateGenerationStore($this->root))->activate(
+        self::activateForTest(
+            new ProjectCertificateGenerationStore($this->root),
             $domain,
             $source['cert'],
             $source['key'],
@@ -1184,11 +1410,11 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'gc.example.test';
         $store = $this->generationStoreWithClock($wall, $monotonic, $boot);
         $firstSource = $this->createCertificate($domain, 'gc-first');
-        $first = $store->activate($domain, $firstSource['cert'], $firstSource['key']);
+        $first = self::activateForTest($store, $domain, $firstSource['cert'], $firstSource['key']);
         $secondSource = $this->createCertificate($domain, 'gc-second');
-        $second = $store->activate($domain, $secondSource['cert'], $secondSource['key']);
+        $second = self::activateForTest($store, $domain, $secondSource['cert'], $secondSource['key']);
         $thirdSource = $this->createCertificate($domain, 'gc-third');
-        $third = $store->activate($domain, $thirdSource['cert'], $thirdSource['key']);
+        $third = self::activateForTest($store, $domain, $thirdSource['cert'], $thirdSource['key']);
         $firstDirectory = \dirname((string)$first['cert_path']);
         self::assertTrue(\touch($firstDirectory, \time() - 604_801));
 
@@ -1209,7 +1435,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'reactivated.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $firstSource = $this->createCertificate($domain, 'reactivated-first');
-        $first = $store->activate($domain, $firstSource['cert'], $firstSource['key']);
+        $first = self::activateForTest($store, $domain, $firstSource['cert'], $firstSource['key']);
 
         $store->deactivate($domain);
         self::assertNull($store->active($domain));
@@ -1217,12 +1443,12 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $secondSource = $this->createCertificate($domain, 'reactivated-second');
         $second = $store->withCertificateLifecycleLock(
             function () use ($store, $domain, $secondSource): array {
-                $store->issueExplicitReenableIntent(
+                self::issueExplicitReenableIntentForTest($store,
                     $domain,
                     $secondSource['cert'],
                     $secondSource['key'],
                 );
-                return $store->activate(
+                return self::activateForTest($store,
                     $domain,
                     $secondSource['cert'],
                     $secondSource['key'],
@@ -1239,7 +1465,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $snapshots = [];
         foreach (['first', 'second', 'third'] as $name) {
             $source = $this->createCertificate($domain, 'gc-corrupt-' . $name);
-            $snapshots[] = $store->activate($domain, $source['cert'], $source['key']);
+            $snapshots[] = self::activateForTest($store, $domain, $source['cert'], $source['key']);
         }
         $orphan = \dirname((string)$snapshots[0]['cert_path']);
         self::assertTrue(\touch($orphan, \time() - 604_801));
@@ -1280,48 +1506,66 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         );
     }
 
-    public function testExternalEnrollmentRejectsWritableRoot(): void
+    public function testGatewayEnrollmentRejectsCertificateRootOutsideProject(): void
+    {
+        $outside = $this->root . '-outside-enrollment';
+        self::assertTrue(\mkdir($outside, 0700, true));
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage(
+                'Gateway certificate roots must stay inside the project root',
+            );
+            (new GatewayRegistrationBuilder())->enrollmentCertificateRoots(
+                $this->root,
+                ['external' => $outside],
+            );
+        } finally {
+            $this->removeTree($outside);
+        }
+    }
+
+    public function testAdditionalProjectEnrollmentRejectsWritableRoot(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
             self::markTestSkipped('POSIX permission fixture.');
         }
         $domain = 'writable-root.example.test';
         $source = $this->createCertificate($domain, 'writable-root-source');
-        $outside = $this->root . '-writable-root';
-        self::assertTrue(\mkdir($outside, 0700, true));
-        $certificate = $outside . DIRECTORY_SEPARATOR . 'fullchain.pem';
-        $privateKey = $outside . DIRECTORY_SEPARATOR . 'privkey.pem';
+        $additional = $this->root . DIRECTORY_SEPARATOR . 'writable-root';
+        self::assertTrue(\mkdir($additional, 0700, true));
+        $certificate = $additional . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $privateKey = $additional . DIRECTORY_SEPARATOR . 'privkey.pem';
         self::assertTrue(\copy($source['cert'], $certificate));
         self::assertTrue(\copy($source['key'], $privateKey));
         self::assertTrue(\chmod($certificate, 0600));
         self::assertTrue(\chmod($privateKey, 0600));
-        self::assertTrue(\chmod($outside, 0770));
+        self::assertTrue(\chmod($additional, 0770));
 
         try {
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('group/world-writable directory');
-            (new ProjectCertificateGenerationStore($this->root))->activate(
+            self::activateForTest(
+                new ProjectCertificateGenerationStore($this->root),
                 $domain,
                 $certificate,
                 $privateKey,
                 '',
-                ['external' => $outside],
+                ['additional' => $additional],
             );
         } finally {
-            @\chmod($outside, 0700);
-            $this->removeTree($outside);
+            @\chmod($additional, 0700);
         }
     }
 
-    public function testExternalEnrollmentRejectsWritableDescendant(): void
+    public function testAdditionalProjectEnrollmentRejectsWritableDescendant(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
             self::markTestSkipped('POSIX permission fixture.');
         }
         $domain = 'writable-child.example.test';
         $source = $this->createCertificate($domain, 'writable-child-source');
-        $outside = $this->root . '-writable-child';
-        $material = $outside . DIRECTORY_SEPARATOR . 'tenant';
+        $additional = $this->root . DIRECTORY_SEPARATOR . 'writable-child';
+        $material = $additional . DIRECTORY_SEPARATOR . 'tenant';
         self::assertTrue(\mkdir($material, 0700, true));
         $certificate = $material . DIRECTORY_SEPARATOR . 'fullchain.pem';
         $privateKey = $material . DIRECTORY_SEPARATOR . 'privkey.pem';
@@ -1334,16 +1578,16 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         try {
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('group/world-writable directory');
-            (new ProjectCertificateGenerationStore($this->root))->activate(
+            self::activateForTest(
+                new ProjectCertificateGenerationStore($this->root),
                 $domain,
                 $certificate,
                 $privateKey,
                 '',
-                ['external' => $outside],
+                ['additional' => $additional],
             );
         } finally {
             @\chmod($material, 0700);
-            $this->removeTree($outside);
         }
     }
 
@@ -1352,7 +1596,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'migrated.example.test';
         $source = $this->createCertificate($domain, 'migrated-source');
         $original = new ProjectCertificateGenerationStore($this->root);
-        $activated = $original->activate($domain, $source['cert'], $source['key']);
+        $activated = self::activateForTest($original, $domain, $source['cert'], $source['key']);
 
         $migratedRoot = $this->root . '-migrated';
         self::assertTrue(\mkdir($migratedRoot . DIRECTORY_SEPARATOR . 'app/etc', 0700, true));
@@ -1373,7 +1617,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             );
             self::assertStringNotContainsString($this->root . DIRECTORY_SEPARATOR, $active['cert_path']);
 
-            $idempotent = $migrated->activate(
+            $idempotent = self::activateForTest($migrated,
                 $domain,
                 $migratedRoot . DIRECTORY_SEPARATOR
                     . 'app/etc/ssl/migrated-source/fullchain.pem',
@@ -1395,7 +1639,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $domain = 'migrated-symlink.example.test';
         $source = $this->createCertificate($domain, 'migrated-symlink-source');
         $original = new ProjectCertificateGenerationStore($this->root);
-        $activated = $original->activate($domain, $source['cert'], $source['key']);
+        $activated = self::activateForTest($original, $domain, $source['cert'], $source['key']);
 
         $migratedRoot = $this->root . '-symlink-migrated';
         self::assertTrue(\mkdir(
@@ -1453,7 +1697,8 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         $gid = (int)$account['gid'];
         $this->changeOwnership($this->root, $uid, $gid);
 
-        $active = (new ProjectCertificateGenerationStore($this->root))->activate(
+        $active = self::activateForTest(
+            new ProjectCertificateGenerationStore($this->root),
             $domain,
             $source['cert'],
             $source['key'],
@@ -1473,6 +1718,50 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             self::assertSame($uid, (int)$owner['uid'], $path);
             self::assertSame($gid, (int)$owner['gid'], $path);
         }
+    }
+
+    /** @return array<string,mixed> */
+    private static function activateForTest(
+        ProjectCertificateGenerationStore $store,
+        string $domain,
+        string $certificate,
+        string $privateKey,
+        string $chain = '',
+        array $sourceRoots = [],
+        ?float $deadlineMonotonic = null,
+    ): array {
+        return $store->activate(
+            $domain,
+            $certificate,
+            $privateKey,
+            $chain,
+            $sourceRoots,
+            $deadlineMonotonic,
+            ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+            ProjectCertificateGenerationStore::PROVIDER_EXTERNAL,
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private static function issueExplicitReenableIntentForTest(
+        ProjectCertificateGenerationStore $store,
+        string $domain,
+        string $certificate,
+        string $privateKey,
+        string $chain = '',
+        array $sourceRoots = [],
+        ?float $deadlineMonotonic = null,
+    ): array {
+        return $store->issueExplicitReenableIntent(
+            $domain,
+            $certificate,
+            $privateKey,
+            $chain,
+            $sourceRoots,
+            $deadlineMonotonic,
+            ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+            ProjectCertificateGenerationStore::PROVIDER_EXTERNAL,
+        );
     }
 
     /**
@@ -1667,7 +1956,7 @@ CONF
         $domain = 'active-artifact.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'active-artifact');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $target = $this->selectorManifestPath('active', $domain);
         $artifact = $target . $suffix;
         self::assertTrue(\copy($target, $artifact));
@@ -1675,7 +1964,7 @@ CONF
 
         $nextDomain = 'active-artifact-next.example.test';
         $next = $this->createCertificate($nextDomain, 'active-artifact-next');
-        $activated = $store->activate($nextDomain, $next['cert'], $next['key']);
+        $activated = self::activateForTest($store, $nextDomain, $next['cert'], $next['key']);
 
         self::assertSame(2, $activated['generation']);
         self::assertFileDoesNotExist(
@@ -1689,7 +1978,7 @@ CONF
         $domain = 'disabled-artifact.example.test';
         $store = new ProjectCertificateGenerationStore($this->root);
         $source = $this->createCertificate($domain, 'disabled-artifact');
-        $store->activate($domain, $source['cert'], $source['key']);
+        self::activateForTest($store, $domain, $source['cert'], $source['key']);
         $store->deactivate($domain);
         $target = $this->selectorManifestPath('disabled', $domain);
         $artifact = $target . $suffix;
@@ -1710,6 +1999,53 @@ CONF
         return $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations/'
             . $selector . DIRECTORY_SEPARATOR
             . \substr(\hash('sha256', $domain), 0, 32) . '.json';
+    }
+
+    /**
+     * @param array{cert:string,key:string} $source
+     * @return array<string,mixed>
+     */
+    private function activateWithPostRenameSyncFailure(
+        ProjectCertificateGenerationStore $store,
+        string $domain,
+        array $source,
+    ): array {
+        $target = $this->selectorManifestPath('active', $domain);
+        $previousMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $previousFailure = \getenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE');
+        $previousTarget = \getenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256',
+        );
+        \putenv('WLS_GATEWAY_TEST_MODE=1');
+        \putenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE=directory_fsync_after_rename_failed',
+        );
+        \putenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256='
+                . \hash('sha256', $target),
+        );
+        try {
+            return self::activateForTest($store,
+                $domain,
+                $source['cert'],
+                $source['key'],
+            );
+        } finally {
+            $previousMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $previousMode);
+            $previousFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE=' . $previousFailure,
+                );
+            $previousTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256='
+                        . $previousTarget,
+                );
+        }
     }
 
     private function certificateGenerationFloorPath(): string

@@ -1,9 +1,12 @@
 # WLS 模式部署指南
 
-WLS（Weline Server）是框架内置的常驻内存 HTTP 服务器。WLS 2.0 默认
-`--edge=auto`：只发现并加入已安装且受信的宿主 Weline Gateway；网关不存在、不兼容或
-未 ready 时，以稳定高端口降级为纯 WLS TLS。普通项目启动不会安装、升级或修复宿主
-网关，也不会检测、接管或停止未知的系统 Nginx。
+WLS（Weline Server）是框架内置的常驻内存 HTTP 服务器。WLS 2.0 项目发布合同要求最终
+发行物在 `extend/server/wls-gateway/<target-profile>` 托管平台锁定的签名 Gateway/Nginx
+包；只有最终发布组装消费 overlay 并注入启用公钥后才算满足，开发树并不自动具备该包。
+默认 `--edge=auto` 优先加入已安装且受信的宿主 Weline Gateway；若网关不存在且
+80/443、签名包、平台权限和守护安装条件全部安全，首项目自动将包安装到宿主 A/B 槽、
+建立独立网关并注册自身。未知 owner、缺包、坏签名、无权限、不兼容或建立未 ready 时，
+以稳定高端口降级为纯 WLS TLS。普通启动不会自动升级、修复、重引导或接管未知 Nginx。
 
 纯 WLS 可显式使用 `--edge=wls`，`--no-nginx` 是兼容别名。此时 WLS 直接作为入口，
 默认启用 HTTPS/TLS 1.3、优先 HTTP/2，并自动回退 HTTP/1.1；纯 WLS 不提供 HTTP/3，
@@ -21,12 +24,11 @@ Master/Worker 或平台副作用前统一拒绝不满足该合同的 PHP，`serv
 
 | 模式 | 说明 |
 |------|------|
-| **自动（默认）** | `--edge=auto`。加入 ready 的 `wls-edge/2` 宿主网关；不可用时降级纯 WLS，不创建宿主网关目录。 |
-| **共享网关（强制）** | `--edge=gateway`。必须加入受信宿主网关，否则启动非零失败；项目只管理自己的期望路由与证书事实源。 |
+| **自动（默认）** | `--edge=auto`。加入 ready 的 `wls-edge/2` 宿主网关；不存在且所有安全前置齐全时由首项目建立宿主独立网关，否则降级纯 WLS。 |
+| **共享网关（强制）** | `--edge=gateway`。必须加入受信宿主网关，或完成同一首次建立，否则启动非零失败；项目只管理自己的期望路由与证书事实源。 |
 | **纯 WLS** | `--edge=wls` 或 `--no-nginx`。完全绕过网关；默认 HTTPS/TLS 1.3/H2，并自动回退 H1。H3 不可用。 |
 | **项目托管 Nginx（legacy）** | WLS 1.x 已保存实例在显式提升前保持原状；WLS 2.0 新项目不自动建立该模式。 |
 | **未知系统 Nginx** | 不是 WLS 网关。WLS 不提示终止、不修改配置；`auto` 降级，`gateway` 非零失败。 |
-| **Caddy/独立 Protocol Edge（已退役）** | 只保留历史识别或残留清理材料；没有可成功启动的数据面命令或配置值。 |
 
 网关接入含义：**公网请求到达宿主 Weline Gateway** + **网关访问项目 loopback
 回源** + **项目 Agent 注册域名、后端身份和证书 generation**。纯 WLS 接入则由客户端
@@ -50,8 +52,15 @@ Master/Worker 或平台副作用前统一拒绝不满足该合同的 PHP，`serv
 ```
 
 配置优先级为 CLI > 已保存实例 > 环境配置 > `auto`。普通 `server:start` 对共享网关
-仅执行只读发现/加入；安装、修复、升级和显式提升必须使用对应的
-`server:gateway:*` 管理命令。
+执行发现/加入，并只在状态精确为 `INSTALL_REQUIRED` 时尝试一次签名包初始安装。
+初始安装先无副作用预检项目包，再在 root-only `package-bootstrap.lock` 内复查宿主状态、
+重复验签并安装；并发第二项目只加入胜者建立的网关。升级、修复、rebootstrap 和显式
+提升仍必须使用对应的 `server:gateway:*` 管理命令。
+
+项目发布系统必须把 `wls-gateway-project-distribution-*` overlay 中的签名包和启用公钥
+inventory 一起合并进最终发行物；当前仓库没有该 artifact 的下游消费 workflow。发布组装
+未接通时，项目不会凭空拥有生产包，默认空信任库也不会被开发目录替代，启动按缺少可信包
+安全降级/失败。
 
 ### 1.2 纯 WLS 回退（`--edge=wls`）
 
@@ -452,7 +461,7 @@ php bin/w server:start -p 9981
 - 纯 WLS 使用 PHP Stream SSL：TLS 1.3、ALPN H2、HTTP/2 多路复用、H1 Keep-Alive/自动回退可用；HTTP/3 不可用。fresh TCP Session Ticket/Session Resumption 与跨 Worker 恢复未验证。
 - Nginx shared session cache/ticket 已配置；正式门禁使用 `fresh-share-two-connection-pair-v1`，要求至少 8 个有效 fresh-TCP probe、`failed=0`、恢复握手 P95 ≤ 50ms，并把 same/cross Nginx Worker 恢复绑定到每对 issuer/probe PID。单个有效 Nginx Worker 的 cross 状态为 `not_applicable`；HTTP/3/QUIC Session Resumption 仍未验证。
 - Nginx reload 的连续性是另一项门禁：`fresh-share-across-nginx-reload-v1` 必须用 reload 前 issuer 的同一个 SSL share，在新 generation 和不同 Nginx Worker PID 上返回 `r`，同时保持 Master PID/证书摘要一致，恢复握手 ≤ 50ms。普通 8/8 same/cross 样本不能替代这项跨代证明。
-- `server:doctor` 按实例模式报告：Nginx 实例分开显示公网 Nginx 与 WLS H1 回源；纯 WLS 实例显示 TLS 1.3、ALPN H2、H2/H1 与 Session 恢复 pending，不从遗留 Caddy/Protocol Edge 代码推导能力。
+- `server:doctor` 按实例模式报告：Nginx 实例分开显示公网 Nginx 与 WLS H1 回源；纯 WLS 实例显示 TLS 1.3、ALPN H2、H2/H1 与 Session 恢复 pending。
 
 验证示例：
 
@@ -537,7 +546,7 @@ curl -k --http3-only https://example.com/
 | 启动预检报 `compiled_factories.php` 构造参数为 `null` | 旧反射编译器把对象默认值错误降级为 `null` | 更新代码后执行 `php bin/w reflection:compile`；新编译器会让无法安全字面量化的类回退到一次性反射，且预检失败返回非零退出码 |
 | Worker 异常退出 | 进程崩溃 | Master 默认启用，会自动重启异常 Worker |
 | `server:reload` 超时、断线或 Master 明确失败 | 控制面没有完成终态，或实例启动预算高于默认估算；**仍有在途写缓冲/Fiber/半包请求**时会保留旧 Worker 并返回非零（「保留排水」） | 命令会返回非零退出码；先用 `server:status` 核实状态。Master 排水等待 ≥ Nginx upstream idle + 5 秒（默认 10 秒），发给 Worker 的软期限再减 5 秒余量；空闲 keep-alive 会在 Worker 软期限主动关闭，不再单独导致失败。如需延长可配置 `wls.orchestrator.reload_drain_timeout_sec` / `reload_wait_timeout_sec`（只会提高、不会压低安全估算）。停机型逃生口仍是 `server:reload -f`。 |
-| TLS 1.3 / H2 门禁失败 | Nginx 二进制/配置/证书，或纯 WLS Stream TLS/证书/真实握手不满足要求 | 按 `server:doctor` 的 edge adapter 检查 Nginx 或纯 WLS 的证书、TLS 1.3 与 ALPN；不得回退到 Caddy/Protocol Edge |
+| TLS 1.3 / H2 门禁失败 | Nginx 二进制/配置/证书，或纯 WLS Stream TLS/证书/真实握手不满足要求 | 按 `server:doctor` 的 edge adapter 检查 Nginx 或纯 WLS 的证书、TLS 1.3 与 ALPN |
 | H3 未 READY | Nginx HTTP/3/QUIC 配置、UDP、Alt-Svc、证书或 owner 绑定的 HTTP/3-only WLS health 请求任一失败；也可能是 PHP cURL verifier 不具备 H3 能力 | 确认请求未被 Nginx 本地响应/边缘缓存截断，并核对 backend identity/config generation；失败时保持 H2/H1，verifier 不可用时保持 pending |
 | TLS Session 恢复门禁失败 | Nginx 的 `fresh-share-two-connection-pair-v1` 未达标，或纯 WLS 尚无 fresh TCP/跨 Worker 恢复证据 | Nginx 核对 shared cache/ticket 与 issuer/probe PID；纯 WLS 保持 pending，不把长连接/H2 多路复用当成 Session Resumption |
 | Nginx reload 后 TLS 连续性门禁失败 | `fresh-share-across-nginx-reload-v1` 未保留同一 SSL share、Master/证书身份变化、generation 未变化、新旧 Worker PID 相同、结果不是 `r` 或握手 > 50ms | 保留旧 owner/recovery 证据并检查 shared cache/ticket 与 graceful reload；不能用 reload 后重新创建的 8/8 样本替代跨代 Session |

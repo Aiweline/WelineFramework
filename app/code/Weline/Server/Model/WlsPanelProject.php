@@ -11,7 +11,6 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'WLS panel managed project registry')]
 #[Index(name: 'uk_wls_panel_project_domain', columns: ['domain'], type: 'UNIQUE')]
 #[Index(name: 'idx_wls_panel_project_status', columns: ['status'])]
-#[Index(name: 'idx_wls_panel_project_gateway_proxy', columns: ['gateway_proxy_id'])]
 class WlsPanelProject extends Model
 {
     public const schema_table = 'weline_server_panel_project';
@@ -43,21 +42,6 @@ class WlsPanelProject extends Model
 
     #[Col('varchar', 120, nullable: true, comment: 'Database profile')]
     public const schema_fields_DATABASE_PROFILE = 'database_profile';
-
-    #[Col('tinyint', 1, nullable: false, default: 0, comment: 'Whether gateway routing is enabled')]
-    public const schema_fields_GATEWAY_ENABLED = 'gateway_enabled';
-
-    #[Col('varchar', 255, nullable: true, comment: 'Gateway backend host')]
-    public const schema_fields_BACKEND_HOST = 'backend_host';
-
-    #[Col('int', 11, nullable: false, default: 0, comment: 'Gateway backend port')]
-    public const schema_fields_BACKEND_PORT = 'backend_port';
-
-    #[Col('tinyint', 1, nullable: false, default: 0, comment: 'Gateway backend SSL')]
-    public const schema_fields_BACKEND_SSL = 'backend_ssl';
-
-    #[Col('int', 11, nullable: false, default: 0, comment: 'Linked reverse proxy ID')]
-    public const schema_fields_GATEWAY_PROXY_ID = 'gateway_proxy_id';
 
     #[Col('varchar', 20, nullable: false, default: self::STATUS_ACTIVE, comment: 'Project status')]
     public const schema_fields_STATUS = 'status';
@@ -98,25 +82,6 @@ class WlsPanelProject extends Model
             $status = self::STATUS_ACTIVE;
         }
         $this->setData(self::schema_fields_STATUS, $status);
-
-        $gatewayEnabled = (int)$this->getData(self::schema_fields_GATEWAY_ENABLED) === 1 ? 1 : 0;
-        $this->setData(self::schema_fields_GATEWAY_ENABLED, $gatewayEnabled);
-        $this->setData(self::schema_fields_BACKEND_SSL, (int)$this->getData(self::schema_fields_BACKEND_SSL) === 1 ? 1 : 0);
-
-        $backendHost = \trim((string)$this->getData(self::schema_fields_BACKEND_HOST));
-        $backendPort = (int)$this->getData(self::schema_fields_BACKEND_PORT);
-        if ($gatewayEnabled === 1) {
-            if ($backendHost === '') {
-                throw new \InvalidArgumentException((string)__('Gateway backend host is required.'));
-            }
-            if ($backendPort < 1 || $backendPort > 65535) {
-                throw new \InvalidArgumentException((string)__('Gateway backend port must be between 1 and 65535.'));
-            }
-        } elseif ($backendPort < 0 || $backendPort > 65535) {
-            throw new \InvalidArgumentException((string)__('Gateway backend port must be between 1 and 65535.'));
-        }
-        $this->setData(self::schema_fields_BACKEND_HOST, $backendHost !== '' ? $backendHost : null);
-        $this->setData(self::schema_fields_BACKEND_PORT, $backendPort);
 
         foreach ([self::schema_fields_ADMIN_URL, self::schema_fields_PANEL_URL] as $urlField) {
             $url = \trim((string)$this->getData($urlField));

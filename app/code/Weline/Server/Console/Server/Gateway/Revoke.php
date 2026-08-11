@@ -10,6 +10,8 @@ use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 
 final class Revoke extends AbstractGatewayCommand
 {
+    private const OPERATION_BUDGET_SECONDS = 120.0;
+
     public function execute(array $args = [], array $data = []): int
     {
         $json = $this->isJson($args);
@@ -20,10 +22,14 @@ final class Revoke extends AbstractGatewayCommand
                 'confirmation_required',
             );
         }
+        $deadlineMonotonic = (\hrtime(true) / 1_000_000_000)
+            + self::OPERATION_BUDGET_SECONDS;
         try {
             $response = $this->gateway()->request('revoke', [
-                'project_uuid' => (new GatewayRegistrationBuilder())->projectUuid(),
-            ]);
+                'project_uuid' => (new GatewayRegistrationBuilder())->projectUuid(
+                    $deadlineMonotonic,
+                ),
+            ], $deadlineMonotonic);
             if (!($response['ok'] ?? false)) {
                 $error = (array)($response['error'] ?? []);
                 return $this->failure(
@@ -36,7 +42,7 @@ final class Revoke extends AbstractGatewayCommand
             $payload = (array)($response['payload'] ?? []);
             $cleanupErrors = [];
             try {
-                (new GatewayCredentialStore())->remove();
+                (new GatewayCredentialStore())->remove($deadlineMonotonic);
                 $payload['credential_removed'] = true;
             } catch (\Throwable $throwable) {
                 $cleanupErrors['credential'] = $throwable->getMessage();

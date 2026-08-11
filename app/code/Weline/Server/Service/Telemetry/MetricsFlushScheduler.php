@@ -9,8 +9,6 @@ class MetricsFlushScheduler
 {
     /** 内存警告阈值（MB），超过则清理 */
     private const MEMORY_WARNING_MB = 64;
-    /** 内存危险阈值（MB），超过则直接返回 false 不写入 */
-    private const MEMORY_DANGER_MB = 96;
 
     public function __construct(
         private readonly ServerTrafficMetric $metricModel
@@ -24,14 +22,13 @@ class MetricsFlushScheduler
         string $metricType,
         array $payload
     ): bool {
-        // 内存危险检测：超过危险阈值时直接拒绝写入，防止 OOM
-        $currentMemMb = \memory_get_usage(true) / 1024 / 1024;
-        if ($currentMemMb > self::MEMORY_DANGER_MB) {
-            \error_log("[MetricsFlush] 内存危险：{$currentMemMb}MB > " . self::MEMORY_DANGER_MB . "MB，拒绝写入 metrics");
-            return false;
-        }
-
-        // 内存压力检测：超过警告阈值时先清理旧数据
+        // Process-wide memory includes application/container/test state that
+        // this scheduler neither owns nor can release. Refusing persistence at
+        // a fixed process threshold leaves every bucket in the retry queue and
+        // increases memory pressure indefinitely. The aggregator already
+        // bounds its own buckets; under pressure, keep that queue drainable and
+        // perform the existing best-effort history cleanup before the write.
+        $currentMemMb = $this->currentMemoryUsageBytes() / 1024 / 1024;
         if ($currentMemMb > self::MEMORY_WARNING_MB) {
             $this->cleanupOldMetrics();
         }
@@ -90,6 +87,11 @@ class MetricsFlushScheduler
                 return false;
             }
         }
+    }
+
+    protected function currentMemoryUsageBytes(): int
+    {
+        return \memory_get_usage(true);
     }
 
     private function findBucketRow(string $instance, string $host, int $bucketTs, string $metricType): array

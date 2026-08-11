@@ -9,7 +9,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SslCertificateService;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * Builds a complete project-owned desired-state registration.
@@ -45,9 +44,10 @@ final class GatewayRegistrationBuilder
     }
 
     /**
-     * Keep one global lock order for every publisher:
-     * project desired-state authority, then per-instance serving transaction.
-     * The callback may retain both locks through a synchronous Worker ACK.
+     * Keep one global lock order for every publisher: project desired-state
+     * authority, certificate lifecycle authority, then deterministic
+     * per-instance serving transactions. The callback may retain all locks
+     * through a synchronous Worker ACK.
      *
      * @template TResult
      * @param \Closure(\Closure():array<string,mixed>,\Closure():array<string,mixed>):TResult $callback
@@ -166,7 +166,15 @@ final class GatewayRegistrationBuilder
         return $this->identity->withDesiredStateBuildLock(
             function () use ($acquire, $deadlineMonotonic): mixed {
                 self::assertPublicationDeadline($deadlineMonotonic);
-                return $acquire(0);
+                return $this->certificateGenerations
+                    ->withCertificateLifecycleLock(
+                        function () use ($acquire, $deadlineMonotonic): mixed {
+                            self::assertPublicationDeadline($deadlineMonotonic);
+                            return $acquire(0);
+                        },
+                        self::publicationLockWaitTimeout($deadlineMonotonic),
+                        $deadlineMonotonic,
+                    );
             },
             self::publicationLockWaitTimeout($deadlineMonotonic),
         );
@@ -210,12 +218,15 @@ final class GatewayRegistrationBuilder
      *
      * @return array{path:string,generation:int,digest:string,converged:bool,route_count:int,payload:array<string,mixed>}
      */
-    public function buildServingManifest(string $instanceName): array
-    {
+    public function buildServingManifest(
+        string $instanceName,
+        ?float $deadlineMonotonic = null,
+    ): array {
         return $this->withServingPublicationTransaction(
             $instanceName,
             static fn (\Closure $buildGateway, \Closure $buildServing): array =>
                 $buildServing(),
+            $deadlineMonotonic,
         );
     }
 
@@ -238,6 +249,7 @@ final class GatewayRegistrationBuilder
         $this->assertBackendIdentitySchema($endpoint);
         $projectUuid = $this->projectUuid($deadlineMonotonic);
         $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
+        $certificateTrustProfile = $this->certificateTrustProfileFromEndpoint($endpoint);
         if (!\hash_equals($instanceName, (string)($gateway['instance_id'] ?? ''))) {
             throw new \RuntimeException(
                 'WLS serving endpoint instance identity does not match its persisted name.',
@@ -288,28 +300,16 @@ final class GatewayRegistrationBuilder
         if ($publicHost === '') {
             $publicHost = \trim((string)($gatewayCertificate['domain'] ?? ''));
         }
-        if ($publicHost !== '' && $endpointCert !== '' && $endpointKey !== '') {
-            $existingMaterial = \is_array($certificateMap[$publicHost] ?? null)
-                ? $certificateMap[$publicHost]
-                : [];
-            $existingState = \strtolower(\trim((string)(
-                $existingMaterial['certificate_state'] ?? ''
-            )));
-            if ($existingState !== 'disabled'
-                && (\trim((string)($existingMaterial['cert'] ?? '')) === ''
-                    || \trim((string)($existingMaterial['key'] ?? '')) === '')
-            ) {
-                $certificateMap[$publicHost] = [
-                'cert' => $endpointCert,
-                'key' => $endpointKey,
-                'chain' => '',
-                'cert_type' => \str_starts_with($publicHost, '*.') ? 'wildcard' : 'exact',
-                'force_https' => 1,
-                'force_root_to_www' => 0,
-                'certificate_state' => 'active',
-                ];
-            }
-        }
+        $certificateMap = $this->appendEndpointActiveGenerationFallback(
+            $certificateMap,
+            $publicHost,
+            $endpointCert,
+            $endpointKey,
+            $gatewayCertificate,
+            $certificateRoots,
+            $certificateTrustProfile,
+            $deadlineMonotonic,
+        );
         if ($certificateMap === []) {
             throw new \RuntimeException(
                 'No project-owned domain is available for WLS serving publication.',
@@ -327,6 +327,7 @@ final class GatewayRegistrationBuilder
                 $material,
                 $certificateRoots,
                 $deadlineMonotonic,
+                $certificateTrustProfile,
             );
             $forceHttps = (bool)$preflightRoute['force_https']
                 && $certificate['state'] !== 'disabled';
@@ -341,6 +342,10 @@ final class GatewayRegistrationBuilder
                     'key' => (array)$certificate['key'],
                     'chain' => null,
                     'source_digest' => (string)$certificate['source_digest'],
+                    'trust_profile' => (string)$certificate['trust_profile'],
+                    'provider' => (string)$certificate['provider'],
+                    'material_class' => (string)$certificate['material_class'],
+                    'provenance_digest' => (string)$certificate['provenance_digest'],
                     'leaf_fingerprint_sha256' => (string)$certificate['leaf_fingerprint_sha256'],
                     'generation' => (int)$certificate['generation'],
                     'pending' => (bool)$certificate['pending'],
@@ -356,7 +361,14 @@ final class GatewayRegistrationBuilder
             static fn (array $route): array => [
                 'domain' => (string)$route['domain'],
                 'state' => (string)($route['certificate']['state'] ?? ''),
+                'generation' => (int)($route['certificate']['generation'] ?? 0),
                 'source_digest' => (string)($route['certificate']['source_digest'] ?? ''),
+                'trust_profile' => (string)($route['certificate']['trust_profile'] ?? ''),
+                'provider' => (string)($route['certificate']['provider'] ?? ''),
+                'material_class' => (string)($route['certificate']['material_class'] ?? ''),
+                'provenance_digest' => (string)(
+                    $route['certificate']['provenance_digest'] ?? ''
+                ),
             ],
             $routes,
         )));
@@ -377,6 +389,10 @@ final class GatewayRegistrationBuilder
                     'certificate' => [
                         'state' => (string)$route['certificate']['state'],
                         'source_digest' => (string)$route['certificate']['source_digest'],
+                        'trust_profile' => (string)$route['certificate']['trust_profile'],
+                        'provider' => (string)$route['certificate']['provider'],
+                        'material_class' => (string)$route['certificate']['material_class'],
+                        'provenance_digest' => (string)$route['certificate']['provenance_digest'],
                         'generation' => (int)$route['certificate']['generation'],
                     ],
                     'force_https' => (bool)$route['force_https'],
@@ -391,6 +407,7 @@ final class GatewayRegistrationBuilder
             GatewayClient::canonicalJson([
                 'project_uuid' => $projectUuid,
                 'project_root' => $projectRoot,
+                'certificate_trust_profile' => $certificateTrustProfile,
                 'backend_capability' => $projectCapability,
                 'routes' => \array_map(
                     static fn (array $route): array => [
@@ -412,6 +429,7 @@ final class GatewayRegistrationBuilder
         $registration = [
             'project_uuid' => $projectUuid,
             'project_root' => $projectRoot,
+            'certificate_trust_profile' => $certificateTrustProfile,
             'instance_id' => $instanceName,
             'master_pid' => $masterPid,
             'master_epoch' => $masterEpoch,
@@ -474,11 +492,17 @@ final class GatewayRegistrationBuilder
         $this->assertBackendIdentitySchema($endpoint);
         $projectUuid = $this->projectUuid($deadlineMonotonic);
         $endpointGateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
+        $certificateTrustProfile = $this->certificateTrustProfileFromEndpoint($endpoint);
         $endpointProjectUuid = \strtolower(\trim((string)($endpointGateway['project_uuid'] ?? '')));
         if ($endpointProjectUuid !== '' && !\hash_equals($projectUuid, $endpointProjectUuid)) {
             throw new \RuntimeException('WLS endpoint project UUID does not match project-owned identity.');
         }
-        $backend = $this->resolveBackend($endpoint, $instanceName, $projectUuid);
+        $backend = $this->resolveBackend(
+            $endpoint,
+            $instanceName,
+            $projectUuid,
+            $deadlineMonotonic,
+        );
         $port = (int)$backend['port'];
         if ($port < 1 || $port > 65535) {
             throw new \RuntimeException('WLS instance endpoint has no valid backend port.');
@@ -525,28 +549,16 @@ final class GatewayRegistrationBuilder
         if ($publicHost === '') {
             $publicHost = \trim((string)($gatewayCertificate['domain'] ?? ''));
         }
-        if ($publicHost !== '' && $endpointCert !== '' && $endpointKey !== '') {
-            $existingMaterial = \is_array($certificateMap[$publicHost] ?? null)
-                ? $certificateMap[$publicHost]
-                : [];
-            $existingState = \strtolower(\trim((string)(
-                $existingMaterial['certificate_state'] ?? ''
-            )));
-            if ($existingState !== 'disabled'
-                && (\trim((string)($existingMaterial['cert'] ?? '')) === ''
-                    || \trim((string)($existingMaterial['key'] ?? '')) === '')
-            ) {
-                $certificateMap[$publicHost] = [
-                'cert' => $endpointCert,
-                'key' => $endpointKey,
-                'chain' => '',
-                'cert_type' => \str_starts_with($publicHost, '*.') ? 'wildcard' : 'exact',
-                'force_https' => 1,
-                'force_root_to_www' => 0,
-                'certificate_state' => 'active',
-                ];
-            }
-        }
+        $certificateMap = $this->appendEndpointActiveGenerationFallback(
+            $certificateMap,
+            $publicHost,
+            $endpointCert,
+            $endpointKey,
+            $gatewayCertificate,
+            $certificateRoots,
+            $certificateTrustProfile,
+            $deadlineMonotonic,
+        );
         if ($certificateMap === []) {
             throw new \RuntimeException(
                 'No project-owned domain is available for gateway registration.'
@@ -563,7 +575,10 @@ final class GatewayRegistrationBuilder
                 'WLS backend instance generation is missing; restart the managed instance before registration.',
             );
         }
-        $edgeCapabilitySecret = ProtocolEdgeRuntime::readToken($instanceName);
+        $edgeCapabilitySecret = GatewayBackendIngressTokenStore::readToken(
+            $instanceName,
+            $deadlineMonotonic,
+        );
         $backendCapability = $this->backendCapabilities
             ->capabilityFromLaunchSnapshot($endpoint);
         $masterPid = (int)($endpoint['master_pid'] ?? 0);
@@ -578,6 +593,7 @@ final class GatewayRegistrationBuilder
             $instanceName,
             $host === 'localhost' ? '127.0.0.1' : $host,
             $port,
+            $deadlineMonotonic,
         );
         $backendIdentity = [
             'schema' => self::BACKEND_IDENTITY_SCHEMA,
@@ -614,6 +630,7 @@ final class GatewayRegistrationBuilder
                 $material,
                 $certificateRoots,
                 $deadlineMonotonic,
+                $certificateTrustProfile,
             );
             $forceHttps = (bool)$preflightRoute['force_https']
                 && $certificate['state'] !== 'disabled';
@@ -636,6 +653,10 @@ final class GatewayRegistrationBuilder
                     // full chain. Re-supplying chain would duplicate it.
                     'chain' => null,
                     'source_digest' => (string)$certificate['source_digest'],
+                    'trust_profile' => (string)$certificate['trust_profile'],
+                    'provider' => (string)$certificate['provider'],
+                    'material_class' => (string)$certificate['material_class'],
+                    'provenance_digest' => (string)$certificate['provenance_digest'],
                     'leaf_fingerprint_sha256' => (string)$certificate['leaf_fingerprint_sha256'],
                     'generation' => (int)$certificate['generation'],
                     'pending' => (bool)$certificate['pending'],
@@ -653,7 +674,14 @@ final class GatewayRegistrationBuilder
             static fn (array $route): array => [
                 'domain' => (string)$route['domain'],
                 'state' => (string)($route['certificate']['state'] ?? ''),
+                'generation' => (int)($route['certificate']['generation'] ?? 0),
                 'source_digest' => (string)($route['certificate']['source_digest'] ?? ''),
+                'trust_profile' => (string)($route['certificate']['trust_profile'] ?? ''),
+                'provider' => (string)($route['certificate']['provider'] ?? ''),
+                'material_class' => (string)($route['certificate']['material_class'] ?? ''),
+                'provenance_digest' => (string)(
+                    $route['certificate']['provenance_digest'] ?? ''
+                ),
             ],
             $routes,
         )));
@@ -674,6 +702,12 @@ final class GatewayRegistrationBuilder
                     'certificate' => [
                         'state' => (string)($route['certificate']['state'] ?? ''),
                         'source_digest' => (string)($route['certificate']['source_digest'] ?? ''),
+                        'trust_profile' => (string)($route['certificate']['trust_profile'] ?? ''),
+                        'provider' => (string)($route['certificate']['provider'] ?? ''),
+                        'material_class' => (string)($route['certificate']['material_class'] ?? ''),
+                        'provenance_digest' => (string)(
+                            $route['certificate']['provenance_digest'] ?? ''
+                        ),
                         'generation' => (int)($route['certificate']['generation'] ?? 0),
                     ],
                     'force_https' => (bool)$route['force_https'],
@@ -688,6 +722,7 @@ final class GatewayRegistrationBuilder
             GatewayClient::canonicalJson([
                 'project_uuid' => $projectUuid,
                 'project_root' => $projectRoot,
+                'certificate_trust_profile' => $certificateTrustProfile,
                 'backend_capability' => $projectDesired['backend_capability'],
                 'routes' => \array_map(
                     static fn (array $route): array => [
@@ -720,6 +755,7 @@ final class GatewayRegistrationBuilder
         $registration = [
             'project_uuid' => $projectUuid,
             'project_root' => $projectRoot,
+            'certificate_trust_profile' => $certificateTrustProfile,
             'instance_id' => $instanceName,
             'master_pid' => $masterPid,
             'master_epoch' => (int)$backendIdentity['master_epoch'],
@@ -897,6 +933,7 @@ final class GatewayRegistrationBuilder
         array $endpoint,
         string $instanceName,
         string $projectUuid,
+        ?float $deadlineMonotonic = null,
     ): array {
         if (!$this->endpointRequiresJoinBackend($endpoint)) {
             return [
@@ -908,7 +945,10 @@ final class GatewayRegistrationBuilder
         $join = \is_array($gateway['join_backend'] ?? null)
             ? $gateway['join_backend']
             : [];
-        $tokenDigest = \hash('sha256', ProtocolEdgeRuntime::readToken($instanceName));
+        $tokenDigest = GatewayBackendIngressTokenStore::digest(
+            $instanceName,
+            $deadlineMonotonic,
+        );
         $valid = \hash_equals('ACTIVE', (string)($join['state'] ?? ''))
             && \hash_equals($projectUuid, (string)($join['project_uuid'] ?? ''))
             && \hash_equals($instanceName, (string)($join['instance_id'] ?? ''))
@@ -948,6 +988,7 @@ final class GatewayRegistrationBuilder
         string $instanceName,
         string $host,
         int $port,
+        ?float $deadlineMonotonic = null,
     ): string {
         $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
         $requiresJoin = $this->endpointRequiresJoinBackend($endpoint);
@@ -1002,7 +1043,9 @@ final class GatewayRegistrationBuilder
             );
         }
 
-        $leases = new GatewayPortLeaseAllocator();
+        $leases = new GatewayPortLeaseAllocator(
+            operationDeadlineMonotonic: $deadlineMonotonic,
+        );
         $masterPid = (int)($endpoint['master_pid'] ?? 0);
         if ($masterPid < 1) {
             throw new \RuntimeException(
@@ -1199,6 +1242,16 @@ final class GatewayRegistrationBuilder
                     'Certificate roots must be canonical, unlinked directories.'
                 );
             }
+            // WLS Edge Protocol 2 registration is deliberately portable: the
+            // host registry is derived state, while every certificate source
+            // remains inside the enrolled child project. The Controller has
+            // the same boundary; reject it here before activating a project
+            // generation that the host can never authorize.
+            if (!$this->pathInside($real, $canonicalProject)) {
+                throw new \RuntimeException(
+                    'Gateway certificate roots must stay inside the project root.'
+                );
+            }
             $this->assertNoLinkedDirectoryComponents($real);
             $pathKey = $this->pathKey($real);
             if (isset($seenPaths[$pathKey])) {
@@ -1268,6 +1321,140 @@ final class GatewayRegistrationBuilder
         throw new \RuntimeException(
             'Gateway route policy ' . $field . ' is not a canonical boolean: ' . $domain,
         );
+    }
+
+    /**
+     * A runtime endpoint is an observed consumer of project certificate truth,
+     * never an alternate certificate fact source. It may fill a storage-map
+     * hole only when every endpoint field matches the currently active,
+     * profile-bound immutable generation byte-for-byte.
+     *
+     * @param array<mixed,mixed> $certificateMap
+     * @param array<string,mixed> $gatewayCertificate
+     * @param array<string,string> $certificateRoots
+     * @return array<mixed,mixed>
+     */
+    private function appendEndpointActiveGenerationFallback(
+        array $certificateMap,
+        string $publicHost,
+        string $endpointCertificate,
+        string $endpointPrivateKey,
+        array $gatewayCertificate,
+        array $certificateRoots,
+        string $trustProfile,
+        ?float $deadlineMonotonic,
+    ): array {
+        if ($publicHost === ''
+            || $endpointCertificate === ''
+            || $endpointPrivateKey === ''
+        ) {
+            return $certificateMap;
+        }
+        self::assertPublicationDeadline($deadlineMonotonic);
+        $domain = $this->normalizeGatewayDomain($publicHost);
+        if ($domain === null) {
+            throw new \RuntimeException(
+                'Runtime endpoint certificate Host is outside WLS Edge Protocol 2.',
+            );
+        }
+        $mapKey = $domain;
+        $existingMaterial = [];
+        foreach ($certificateMap as $candidateKey => $candidateMaterial) {
+            if (!\is_string($candidateKey)
+                || !\is_array($candidateMaterial)
+                || $this->normalizeGatewayDomain($candidateKey) !== $domain
+            ) {
+                continue;
+            }
+            $mapKey = $candidateKey;
+            $existingMaterial = $candidateMaterial;
+            break;
+        }
+        $existingState = \strtolower(\trim((string)(
+            $existingMaterial['certificate_state'] ?? ''
+        )));
+        if ($existingState === 'disabled'
+            || (\trim((string)($existingMaterial['cert'] ?? '')) !== ''
+                && \trim((string)($existingMaterial['key'] ?? '')) !== '')
+        ) {
+            return $certificateMap;
+        }
+
+        $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            $trustProfile,
+        );
+        $active = $this->certificateGenerations->active(
+            $domain,
+            $deadlineMonotonic,
+            $trustProfile,
+        );
+        $sourceDomain = $this->normalizeGatewayDomain((string)(
+            $gatewayCertificate['domain'] ?? ''
+        ));
+        $sourceDigest = \strtolower(\trim((string)(
+            $gatewayCertificate['source_digest'] ?? ''
+        )));
+        $provenanceDigest = \strtolower(\trim((string)(
+            $gatewayCertificate['provenance_digest'] ?? ''
+        )));
+        if ($active === null
+            || $sourceDomain === null
+            || !\hash_equals($domain, $sourceDomain)
+            || (int)($gatewayCertificate['generation'] ?? 0)
+                !== (int)($active['generation'] ?? 0)
+            || !\hash_equals(
+                (string)($active['source_digest'] ?? ''),
+                $sourceDigest,
+            )
+            || !\hash_equals(
+                (string)($active['provenance_digest'] ?? ''),
+                $provenanceDigest,
+            )
+            || !\hash_equals(
+                (string)($active['trust_profile'] ?? ''),
+                (string)($gatewayCertificate['trust_profile'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)($active['provider'] ?? ''),
+                (string)($gatewayCertificate['provider'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)($active['material_class'] ?? ''),
+                (string)($gatewayCertificate['material_class'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)($active['cert_path'] ?? ''),
+                $endpointCertificate,
+            )
+            || !\hash_equals(
+                (string)($active['key_path'] ?? ''),
+                $endpointPrivateKey,
+            )
+            || !\hash_equals(
+                (string)($active['cert_path'] ?? ''),
+                (string)($gatewayCertificate['cert_path'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)($active['key_path'] ?? ''),
+                (string)($gatewayCertificate['key_path'] ?? ''),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Runtime endpoint certificate fallback is not bound to the current project generation.',
+            );
+        }
+
+        $certificateMap[$mapKey] = \array_replace($existingMaterial, [
+            'cert' => (string)$active['cert_path'],
+            'key' => (string)$active['key_path'],
+            'chain' => '',
+            'cert_type' => \str_starts_with($domain, '*.') ? 'wildcard' : 'exact',
+            'force_https' => $existingMaterial['force_https'] ?? 1,
+            'force_root_to_www' => $existingMaterial['force_root_to_www'] ?? 0,
+            'certificate_state' => 'active',
+            'provider' => (string)$active['provider'],
+        ]);
+        return $certificateMap;
     }
 
     /**
@@ -1344,6 +1531,9 @@ final class GatewayRegistrationBuilder
                 'force_root_to_www',
                 $domain,
             );
+            if ($forceRootToWww && (\str_starts_with($domain, 'www.') || \str_starts_with($domain, '*.'))) {
+                $forceRootToWww = false;
+            }
             if ($certificateState === 'disabled') {
                 $forceHttps = false;
                 $forceRootToWww = false;
@@ -1398,8 +1588,10 @@ final class GatewayRegistrationBuilder
         array $material,
         array $certificateRoots,
         ?float $deadlineMonotonic = null,
+        string $trustProfile = ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
     ): array {
         self::assertPublicationDeadline($deadlineMonotonic);
+        $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile($trustProfile);
         $requestedState = (string)($material['certificate_state'] ?? 'pending');
         $activeCertificate = null;
         $disabledCertificate = null;
@@ -1411,6 +1603,11 @@ final class GatewayRegistrationBuilder
                 \trim((string)($material['chain'] ?? '')),
                 $certificateRoots,
                 $deadlineMonotonic,
+                $trustProfile,
+                ProjectCertificateGenerationStore::normalizeProvider((string)(
+                    $material['provider']
+                        ?? ProjectCertificateGenerationStore::PROVIDER_EXTERNAL
+                )),
             );
         } elseif ($requestedState === 'disabled') {
             $this->certificateGenerations->deactivate(
@@ -1434,6 +1631,7 @@ final class GatewayRegistrationBuilder
             $activeCertificate = $this->certificateGenerations->active(
                 $domain,
                 $deadlineMonotonic,
+                $trustProfile,
             );
             $disabledCertificate = $this->certificateGenerations->disabled(
                 $domain,
@@ -1451,6 +1649,37 @@ final class GatewayRegistrationBuilder
         }
 
         if ($activeCertificate !== null) {
+            $activeSourceDigest = \strtolower(\trim((string)(
+                $activeCertificate['source_digest'] ?? ''
+            )));
+            $activeProvider = ProjectCertificateGenerationStore::normalizeProvider(
+                (string)($activeCertificate['provider'] ?? ''),
+            );
+            $activeMaterialClass = \strtolower(\trim((string)(
+                $activeCertificate['material_class'] ?? ''
+            )));
+            $activeProvenanceDigest = \strtolower(\trim((string)(
+                $activeCertificate['provenance_digest'] ?? ''
+            )));
+            if (!\hash_equals(
+                    $trustProfile,
+                    (string)($activeCertificate['trust_profile'] ?? ''),
+                )
+                || !\hash_equals(
+                    ProjectCertificateGenerationStore::provenanceDigest(
+                        $domain,
+                        $activeSourceDigest,
+                        $trustProfile,
+                        $activeProvider,
+                        $activeMaterialClass,
+                    ),
+                    $activeProvenanceDigest,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Active project certificate generation does not match route trust policy.',
+                );
+            }
             return [
                 'state' => 'active',
                 'cert' => $this->certificateReference(
@@ -1461,7 +1690,11 @@ final class GatewayRegistrationBuilder
                     (string)$activeCertificate['key_path'],
                     $certificateRoots,
                 ),
-                'source_digest' => (string)$activeCertificate['source_digest'],
+                'source_digest' => $activeSourceDigest,
+                'trust_profile' => (string)$activeCertificate['trust_profile'],
+                'provider' => $activeProvider,
+                'material_class' => $activeMaterialClass,
+                'provenance_digest' => $activeProvenanceDigest,
                 'leaf_fingerprint_sha256' => (string)(
                     $activeCertificate['leaf_fingerprint_sha256'] ?? ''
                 ),
@@ -1470,28 +1703,80 @@ final class GatewayRegistrationBuilder
             ];
         }
         if ($disabledCertificate !== null) {
+            $disabledDigest = (string)$disabledCertificate['source_digest'];
+            $disabledGeneration = (int)$disabledCertificate['generation'];
             return [
                 'state' => 'disabled',
                 'cert' => [],
                 'key' => [],
-                'source_digest' => (string)$disabledCertificate['source_digest'],
+                'source_digest' => $disabledDigest,
+                'trust_profile' => $trustProfile,
+                'provider' => 'none',
+                'material_class' => 'none',
+                'provenance_digest' => ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                    $domain,
+                    'disabled',
+                    $disabledDigest,
+                    $disabledGeneration,
+                    $trustProfile,
+                ),
                 'leaf_fingerprint_sha256' => '',
-                'generation' => (int)$disabledCertificate['generation'],
+                'generation' => $disabledGeneration,
                 'pending' => true,
             ];
         }
+        $pendingDigest = \hash(
+            'sha256',
+            'wls-pending-certificate' . "\0" . $domain,
+        );
         return [
             'state' => 'pending',
             'cert' => [],
             'key' => [],
-            'source_digest' => \hash(
-                'sha256',
-                'wls-pending-certificate' . "\0" . $domain,
+            'source_digest' => $pendingDigest,
+            'trust_profile' => $trustProfile,
+            'provider' => 'none',
+            'material_class' => 'none',
+            'provenance_digest' => ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                $domain,
+                'pending',
+                $pendingDigest,
+                0,
+                $trustProfile,
             ),
             'leaf_fingerprint_sha256' => '',
             'generation' => 0,
             'pending' => true,
         ];
+    }
+
+    /** @param array<string,mixed> $endpoint */
+    private function certificateTrustProfileFromEndpoint(array $endpoint): string
+    {
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $source = \is_array($gateway['certificate_source'] ?? null)
+            ? $gateway['certificate_source']
+            : [];
+        $profile = ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+            $gateway['certificate_profile']
+                ?? ($endpoint['certificate_profile']
+                    ?? ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION)
+        ));
+        if (\array_key_exists('trust_profile', $source)
+            && !\hash_equals(
+                $profile,
+                ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                    $source['trust_profile'] ?? ''
+                )),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Endpoint certificate after-image trust profile differs from runtime policy.',
+            );
+        }
+        return $profile;
     }
 
     /**
@@ -1511,9 +1796,10 @@ final class GatewayRegistrationBuilder
                 ? \constant('INTL_IDNA_VARIANT_UTS46')
                 : 0;
             $ascii = @\idn_to_ascii($body, IDNA_DEFAULT, $variant);
-            if (\is_string($ascii) && $ascii !== '') {
-                $body = \strtolower($ascii);
+            if (!\is_string($ascii) || $ascii === '') {
+                return null;
             }
+            $body = \strtolower($ascii);
         }
         // Local loopback fact keys remain valid without a public TLD.
         if ($body === 'localhost'
@@ -1666,6 +1952,9 @@ final class GatewayRegistrationBuilder
         $projectUuid = \strtolower((string)($registration['project_uuid'] ?? ''));
         $instanceId = (string)($registration['instance_id'] ?? '');
         $generation = (int)($registration['project_generation'] ?? 0);
+        $certificateTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($registration['certificate_trust_profile'] ?? ''),
+        );
         $instanceGeneration = (int)($registration['instance_generation'] ?? 0);
         $masterEpoch = (int)($registration['master_epoch'] ?? 0);
         $requestDigest = \strtolower((string)($registration['request_digest'] ?? ''));
@@ -1709,13 +1998,24 @@ final class GatewayRegistrationBuilder
                 'sha256',
                 $projectUuid . "\0" . $domain,
             ), 0, 32);
+            $certificate = $route['certificate'] ?? null;
             if ($domain === ''
                 || \strlen($domain) > 253
                 || !\hash_equals($expectedRouteId, (string)($route['route_id'] ?? ''))
                 || !\is_bool($route['force_https'] ?? null)
                 || !\is_bool($route['force_root_to_www'] ?? null)
+                || !\is_array($certificate)
             ) {
                 throw new \RuntimeException('Gateway route envelope failed strict client validation.');
+            }
+            $this->assertRouteCertificateEnvelope($domain, $certificate);
+            if (!\hash_equals(
+                $certificateTrustProfile,
+                (string)($certificate['trust_profile'] ?? ''),
+            )) {
+                throw new \RuntimeException(
+                    'Gateway route certificate profile differs from the project profile.',
+                );
             }
             $registeredDomains[$domain] = true;
         }
@@ -1732,6 +2032,102 @@ final class GatewayRegistrationBuilder
                     'Gateway root-to-www policy is missing its same-project target route.'
                 );
             }
+        }
+    }
+
+    /** @param array<string,mixed> $certificate */
+    private function assertRouteCertificateEnvelope(
+        string $domain,
+        array $certificate,
+    ): void {
+        $state = \strtolower(\trim((string)($certificate['state'] ?? '')));
+        $sourceDigest = \strtolower(\trim((string)(
+            $certificate['source_digest'] ?? ''
+        )));
+        $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            (string)($certificate['trust_profile'] ?? ''),
+        );
+        $provider = \strtolower(\trim((string)($certificate['provider'] ?? '')));
+        $materialClass = \strtolower(\trim((string)(
+            $certificate['material_class'] ?? ''
+        )));
+        $provenanceDigest = \strtolower(\trim((string)(
+            $certificate['provenance_digest'] ?? ''
+        )));
+        $generation = (int)($certificate['generation'] ?? -1);
+        $pending = $certificate['pending'] ?? null;
+        $certificateReference = $certificate['cert'] ?? null;
+        $privateKeyReference = $certificate['key'] ?? null;
+        if (!\in_array($state, ['active', 'pending', 'disabled'], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
+            || !\is_bool($pending)
+            || !\is_array($certificateReference)
+            || !\is_array($privateKeyReference)
+        ) {
+            throw new \RuntimeException(
+                'Gateway route certificate provenance envelope is malformed.',
+            );
+        }
+
+        if ($state === 'active') {
+            $provider = ProjectCertificateGenerationStore::normalizeProvider($provider);
+            $expectedProvenanceDigest = ProjectCertificateGenerationStore::provenanceDigest(
+                $domain,
+                $sourceDigest,
+                $trustProfile,
+                $provider,
+                $materialClass,
+            );
+            $leafFingerprint = \strtolower(\trim((string)(
+                $certificate['leaf_fingerprint_sha256'] ?? ''
+            )));
+            if ($generation < 1
+                || $pending
+                || $certificateReference === []
+                || $privateKeyReference === []
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $leafFingerprint) !== 1
+                || !\is_string($certificateReference['root_alias'] ?? null)
+                || \trim((string)$certificateReference['root_alias']) === ''
+                || !\is_string($certificateReference['relative_path'] ?? null)
+                || \trim((string)$certificateReference['relative_path']) === ''
+                || !\is_string($privateKeyReference['root_alias'] ?? null)
+                || \trim((string)$privateKeyReference['root_alias']) === ''
+                || !\is_string($privateKeyReference['relative_path'] ?? null)
+                || \trim((string)$privateKeyReference['relative_path']) === ''
+                || !\hash_equals($expectedProvenanceDigest, $provenanceDigest)
+                || ($trustProfile
+                    === ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION
+                    && $materialClass
+                        !== ProjectCertificateGenerationStore::MATERIAL_CLASS_PUBLIC_TRUST)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway active certificate is not bound to an allowed trust provenance.',
+                );
+            }
+            return;
+        }
+
+        $expectedGeneration = $state === 'pending' ? 0 : $generation;
+        $expectedProvenanceDigest = ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+            $domain,
+            $state,
+            $sourceDigest,
+            $expectedGeneration,
+            $trustProfile,
+        );
+        if ($provider !== 'none'
+            || $materialClass !== 'none'
+            || !$pending
+            || $certificateReference !== []
+            || $privateKeyReference !== []
+            || ($state === 'pending' && $generation !== 0)
+            || ($state === 'disabled' && $generation < 1)
+            || !\hash_equals($expectedProvenanceDigest, $provenanceDigest)
+        ) {
+            throw new \RuntimeException(
+                'Gateway inactive certificate state is not provenance-bound.',
+            );
         }
     }
 }

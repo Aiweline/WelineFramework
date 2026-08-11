@@ -12,6 +12,71 @@ use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 
 final class GatewayAgentDrainCountersTest extends TestCase
 {
+    public function testBootstrapReconnectAndHeartbeatShareCallerOwnedDeadlines(): void
+    {
+        $execute = new \ReflectionMethod(Agent::class, 'execute');
+        $lines = \file($execute->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $execute->getStartLine() - 1,
+            $execute->getEndLine() - $execute->getStartLine() + 1,
+        ));
+
+        $tickDeadline = \strpos(
+            $source,
+            '$tickDeadline = $now + self::TICK_WORK_DEADLINE_SECONDS;',
+        );
+        $tick = \strpos($source, '$kernel?->tick();');
+        self::assertIsInt($tickDeadline);
+        self::assertIsInt($tick);
+        self::assertLessThan(
+            $tick,
+            $tickDeadline,
+            'The tick deadline must exist before reconnect or other control work starts.',
+        );
+        self::assertStringContainsString(
+            '$kernel->reconnect($tickDeadline);',
+            $source,
+        );
+        self::assertMatchesRegularExpression(
+            '/masterDrainCounters\(\s*\$instanceName,\s*\$tickDeadline,\s*\)/',
+            $source,
+        );
+
+        $drainCounters = new \ReflectionMethod(Agent::class, 'masterDrainCounters');
+        $drainSource = \implode('', \array_slice(
+            $lines,
+            $drainCounters->getStartLine() - 1,
+            $drainCounters->getEndLine() - $drainCounters->getStartLine() + 1,
+        ));
+        self::assertStringContainsString(
+            'getStatusBeforeDeadline(',
+            $drainSource,
+        );
+        self::assertStringContainsString('$deadlineMonotonic,', $drainSource);
+
+        $connectMaster = new \ReflectionMethod(Agent::class, 'connectMaster');
+        $connectSource = \implode('', \array_slice(
+            $lines,
+            $connectMaster->getStartLine() - 1,
+            $connectMaster->getEndLine() - $connectMaster->getStartLine() + 1,
+        ));
+        self::assertStringContainsString(
+            'deadlineMonotonic: $bootstrapDeadline',
+            $connectSource,
+        );
+        self::assertMatchesRegularExpression(
+            '/connectAndRegister\(\s*\$controlPort,\s*false,\s*'
+                . '\$bootstrapDeadline,\s*\)/',
+            $connectSource,
+        );
+        self::assertStringContainsString(
+            '$kernel->sendReady($bootstrapDeadline)',
+            $connectSource,
+        );
+    }
+
     public function testDesiredStateWorkerUsesPidBoundManagedTaskCapability(): void
     {
         $source = (string)\file_get_contents(
@@ -112,6 +177,38 @@ final class GatewayAgentDrainCountersTest extends TestCase
         ]));
     }
 
+    public function testFallbackEnablePayloadIsBoundToExactNonEmptyManifest(): void
+    {
+        $digest = \str_repeat('a', 64);
+        self::assertSame([
+            'serving_manifest_generation' => 17,
+            'serving_manifest_digest' => $digest,
+            'serving_manifest_route_count' => 2,
+        ], Agent::fallbackServingManifestExpectation([
+            'generation' => 17,
+            'digest' => $digest,
+            'route_count' => 2,
+            'payload' => [
+                'routes' => [
+                    ['route_id' => \str_repeat('1', 32)],
+                    ['route_id' => \str_repeat('2', 32)],
+                ],
+            ],
+        ]));
+    }
+
+    public function testFallbackEnablePayloadRejectsManifestWithoutActiveRoutes(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('ACTIVE routes');
+        Agent::fallbackServingManifestExpectation([
+            'generation' => 17,
+            'digest' => \str_repeat('a', 64),
+            'route_count' => 0,
+            'payload' => ['routes' => []],
+        ]);
+    }
+
     public function testHeartbeatTransportFailureDoesNotTriggerRegistrationStorm(): void
     {
         self::assertFalse(Agent::heartbeatFailureRequiresRegistrationReplay(
@@ -168,6 +265,43 @@ final class GatewayAgentDrainCountersTest extends TestCase
 
         self::assertStringContainsString('->liveServingLeaseForAnyOwner(', $source);
         self::assertStringNotContainsString('->liveServingLease(', $source);
+        self::assertStringContainsString(
+            'operationDeadlineMonotonic: $deadlineMonotonic',
+            $source,
+        );
+
+        $execute = new \ReflectionMethod(Agent::class, 'execute');
+        $executeLines = \file($execute->getFileName());
+        self::assertIsArray($executeLines);
+        $executeSource = \implode('', \array_slice(
+            $executeLines,
+            $execute->getStartLine() - 1,
+            $execute->getEndLine() - $execute->getStartLine() + 1,
+        ));
+        self::assertMatchesRegularExpression(
+            '/observeFallbackLease\(\s*\$instanceName,\s*\$tickDeadline,\s*\)/',
+            $executeSource,
+        );
+        self::assertStringNotContainsString(
+            '$fallbackLeases = new GatewayPortLeaseAllocator()',
+            $executeSource,
+        );
+        self::assertStringContainsString(
+            '$bootstrapDeadline = $this->monotonicNow()',
+            $executeSource,
+        );
+        self::assertStringContainsString(
+            '$projectUuid = $builder->projectUuid($bootstrapDeadline)',
+            $executeSource,
+        );
+        self::assertStringNotContainsString(
+            '$projectUuid = $builder->projectUuid();',
+            $executeSource,
+        );
+        self::assertMatchesRegularExpression(
+            '/pendingReplay\(\s*0\.25,\s*\$tickDeadline,\s*\)/',
+            $executeSource,
+        );
     }
 
     public function testGatewayControlRecoveryDoesNotDependOnActivePublicRoutes(): void
@@ -674,6 +808,20 @@ final class GatewayAgentDrainCountersTest extends TestCase
         ));
     }
 
+    public function testFallbackDrainClockRejectsANonCanonicalAcknowledgementDigest(): void
+    {
+        $boot = \str_repeat('a', 64);
+        $observation = $this->fallbackDrainAckObservation($boot, 880.0);
+        $observation['listener_transition_digest'] = \str_repeat('f', 64);
+        $observation['drain_action_digest'] = \str_repeat('f', 64);
+
+        self::assertSame(0.0, Agent::restoreFallbackDrainStartedAt(
+            $observation,
+            1000.0,
+            $boot,
+        ));
+    }
+
     public function testFallbackControlPortOnlyEchoesTheHostLeaseRange(): void
     {
         self::assertSame(0, Agent::fallbackControlPort([]));
@@ -682,6 +830,37 @@ final class GatewayAgentDrainCountersTest extends TestCase
         self::assertSame(27673, Agent::fallbackControlPort(['port' => 27673]));
         self::assertSame(29999, Agent::fallbackControlPort(['port' => 29999]));
         self::assertSame(0, Agent::fallbackControlPort(['port' => 30000]));
+    }
+
+    public function testAnOmittedPublicProbeCannotCreateOutageContinuityEvidence(): void
+    {
+        $digest = new \ReflectionMethod(Agent::class, 'gatewayOutageObservationDigest');
+        $arguments = [
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            \str_repeat('a', 64),
+            [\str_repeat('1', 32)],
+            443,
+            '123e4567-e89b-42d3-a456-426614174099',
+            'site',
+            7,
+            22000,
+            9,
+            \str_repeat('2', 32),
+            11,
+            \str_repeat('3', 64),
+        ];
+
+        self::assertSame('', $digest->invokeArgs(null, $arguments));
+        $arguments[1] = true;
+        self::assertMatchesRegularExpression(
+            '/\A[a-f0-9]{64}\z/D',
+            (string)$digest->invokeArgs(null, $arguments),
+        );
     }
 
     public function testAggregatesFreshIdentityMatchedWorkerReports(): void
@@ -877,6 +1056,37 @@ final class GatewayAgentDrainCountersTest extends TestCase
         );
     }
 
+    public function testFallbackFinalDisableRetriesOnlyAtHeartbeatCadence(): void
+    {
+        $drained = [
+            'dataPlaneHealthy' => true,
+            'fallbackEligible' => true,
+            'controlAvailable' => true,
+            'downSince' => 0.0,
+            'activeSince' => 50.0,
+            'fallbackDrainStartedAt' => 100.0,
+            'lastFallbackCommandAt' => 395.0,
+            'fallbackRequested' => true,
+            'fallbackDrainRequested' => true,
+        ];
+
+        self::assertSame('', Agent::decideFallbackLifecycleAction(
+            ...['now' => 404.999, ...$drained],
+        ));
+        self::assertSame(
+            ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
+            Agent::decideFallbackLifecycleAction(...['now' => 405.0, ...$drained]),
+        );
+
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(Agent::class))->getFileName(),
+        );
+        self::assertGreaterThanOrEqual(
+            3,
+            \substr_count($source, '$lastFallbackCommandAt = $now;'),
+        );
+    }
+
     public function testProjectDrainingFencesFallbackByProjectAndInstanceIdentity(): void
     {
         $currentProject = '11111111-1111-4111-8111-111111111111';
@@ -1044,6 +1254,39 @@ final class GatewayAgentDrainCountersTest extends TestCase
         ));
     }
 
+    public function testStartupFallbackUsesTheTickDeadlineAndExactManifestFence(): void
+    {
+        $method = new \ReflectionMethod(Agent::class, 'execute');
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+        $deadlineAt = \strpos(
+            $source,
+            '$tickDeadline = $now + self::TICK_WORK_DEADLINE_SECONDS',
+        );
+        $pendingAt = \strpos($source, 'if (\is_array($pendingStartupFallbackCommand))');
+        $pollAt = \strpos($source, '$desiredStateResult = $this->pollDesiredStateJob(');
+        self::assertIsInt($deadlineAt);
+        self::assertIsInt($pendingAt);
+        self::assertIsInt($pollAt);
+        self::assertLessThan($pendingAt, $deadlineAt);
+        $pendingSource = \substr($source, $pendingAt, $pollAt - $pendingAt);
+        self::assertStringContainsString('->currentForFence([', $pendingSource);
+        self::assertStringContainsString(
+            'activeCertificateFenceForDomain(',
+            $pendingSource,
+        );
+        self::assertStringNotContainsString('->active(', $pendingSource);
+        self::assertGreaterThanOrEqual(
+            2,
+            \substr_count($source, 'activeCertificateFenceForDomain('),
+        );
+    }
+
     public function testNativeDrainRetriesWithoutResettingTheDurableDeadline(): void
     {
         $base = [
@@ -1113,7 +1356,6 @@ final class GatewayAgentDrainCountersTest extends TestCase
         $leaseId = \str_repeat('1', 32);
         $workerLaunchId = \str_repeat('2', 32);
         $transitionId = \str_repeat('3', 32);
-        $actionDigest = \str_repeat('4', 64);
         $pidNamespaceId = PHP_OS_FAMILY === 'Linux'
             ? 'pid:[4026531836]'
             : '';
@@ -1143,6 +1385,13 @@ final class GatewayAgentDrainCountersTest extends TestCase
             'listener_transport' => 'posix_inherited_fd',
             'listener_receipt_digest' => \str_repeat('a', 64),
         ];
+        $actionDigest = ControlMessage::gatewayFallbackListenerActionDigest(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+            $transitionId,
+            '',
+            $identity,
+        );
         return [
             'schema_version' => GatewayPortLeaseAllocator::SCHEMA_VERSION,
             'state' => 'DRAINING',

@@ -187,6 +187,11 @@ class SslCertificateService
     protected string $lastAcmeError = '';
 
     private ?ProjectAcmeHttp01ChallengeStore $acmeHttp01Store = null;
+
+    /** Absolute lock budget supplied by the startup/certificate transaction. */
+    private ?float $operationDeadlineMonotonic = null;
+
+    private const DEFAULT_CERTIFICATE_LOCK_WAIT_SECONDS = 10.0;
     
     /**
      * SAN 条目缓存 [domain => ['dns' => [], 'ip' => []]]
@@ -215,6 +220,63 @@ class SslCertificateService
             $this->ensureCertificateStorageReady();
         }
         
+    }
+
+    public function setOperationDeadlineMonotonic(
+        ?float $deadlineMonotonic,
+    ): self {
+        if ($deadlineMonotonic !== null
+            && (!\is_finite($deadlineMonotonic) || $deadlineMonotonic < 0.0)
+        ) {
+            throw new \InvalidArgumentException(
+                'SSL certificate operation deadline is invalid.',
+            );
+        }
+        $this->operationDeadlineMonotonic = $deadlineMonotonic;
+        return $this;
+    }
+
+    private function certificateOperationDeadlineRemaining(): float
+    {
+        if ($this->operationDeadlineMonotonic === null) {
+            return self::DEFAULT_CERTIFICATE_LOCK_WAIT_SECONDS;
+        }
+        $remaining = $this->operationDeadlineMonotonic
+            - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'SSL certificate state deadline was exhausted.',
+            );
+        }
+        return $remaining;
+    }
+
+    private function certificateOperationLockWaitTimeout(float $default): float
+    {
+        if ($this->operationDeadlineMonotonic === null) {
+            return \min(
+                $default,
+                self::DEFAULT_CERTIFICATE_LOCK_WAIT_SECONDS,
+            );
+        }
+        return \min($default, $this->certificateOperationDeadlineRemaining());
+    }
+
+    /** @template TResult @param callable():TResult $operation @return TResult */
+    private function withCertificateOperationLifecycleLock(
+        callable $operation,
+        float $defaultWaitTimeoutSeconds = 300.0,
+    ): mixed {
+        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            function () use ($operation): mixed {
+                $this->certificateOperationDeadlineRemaining();
+                return $operation();
+            },
+            $this->certificateOperationLockWaitTimeout(
+                $defaultWaitTimeoutSeconds,
+            ),
+            $this->operationDeadlineMonotonic,
+        );
     }
 
     private static function sameFilesystemPath(string $left, string $right): bool
@@ -542,8 +604,10 @@ class SslCertificateService
         string $directory,
         \Closure $operation,
     ): mixed {
-        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        $this->certificateOperationDeadlineRemaining();
+        return $this->withCertificateOperationLifecycleLock(
             function () use ($directory, $operation): mixed {
+                $this->certificateOperationDeadlineRemaining();
                 $canonical = \realpath($directory);
                 $status = @\lstat($directory);
                 if (!\is_string($canonical)
@@ -560,6 +624,7 @@ class SslCertificateService
                 if ((self::$heldLocalCaStateLocks[$lockPath] ?? 0) > 0) {
                     self::$heldLocalCaStateLocks[$lockPath]++;
                     try {
+                        $this->certificateOperationDeadlineRemaining();
                         return $operation();
                     } finally {
                         self::$heldLocalCaStateLocks[$lockPath]--;
@@ -568,6 +633,7 @@ class SslCertificateService
                 return GatewayProjectStateFilesystem::withExclusiveLock(
                     $lockPath,
                     function () use ($lockPath, $operation): mixed {
+                        $this->certificateOperationDeadlineRemaining();
                         self::$heldLocalCaStateLocks[$lockPath] = 1;
                         try {
                             return $operation();
@@ -575,8 +641,12 @@ class SslCertificateService
                             unset(self::$heldLocalCaStateLocks[$lockPath]);
                         }
                     },
+                    waitTimeoutSeconds: $this->certificateOperationLockWaitTimeout(
+                        300.0,
+                    ),
                 );
             },
+            $this->certificateOperationLockWaitTimeout(10.0),
         );
     }
 
@@ -599,7 +669,7 @@ class SslCertificateService
             throw new \RuntimeException('SSL state publication boundary is invalid.');
         }
         $validateContents($contents);
-        (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        $this->withCertificateOperationLifecycleLock(
             function () use (
                 $path,
                 $contents,
@@ -916,7 +986,7 @@ class SslCertificateService
                 'Optional certificate state leaf is not managed.',
             );
         }
-        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        return $this->withCertificateOperationLifecycleLock(
             function () use ($directory, $leaf): bool {
                 $path = \rtrim($directory, '/\\') . DS . $leaf;
                 $mode = $leaf === 'chain.pem' ? 0644 : 0600;
@@ -1604,9 +1674,8 @@ class SslCertificateService
      * - localhost
      * - *.local
      * - *.test
-     * - *.dev (非真实域名)
-     * - 127.0.0.1
-     * - IP 地址
+     * - 127.0.0.1 / ::1
+     * - RFC1918、IPv6 ULA 与链路本地地址（公网 IP 不属于本地域名）
      */
     public function isLocalDomain(string $domain): bool
     {
@@ -1617,13 +1686,19 @@ class SslCertificateService
             return $this->localDomainCache[$domain];
         }
         
-        // localhost 或 IP 地址
-        if ($domain === 'localhost' || \filter_var($domain, FILTER_VALIDATE_IP)) {
+        // Only loopback/private/link-local literals are local. A syntactically
+        // valid public IP must not silently authorize a project-local CA.
+        if ($domain === 'localhost'
+            || (\filter_var($domain, FILTER_VALIDATE_IP) !== false
+                && $this->isLoopbackIp($domain))
+        ) {
             return $this->localDomainCache[$domain] = true;
         }
         
         // 本地开发常用后缀
-        $localSuffixes = ['.local', '.test', '.dev', '.localhost', '.example'];
+        // RFC-reserved development namespaces only. In particular, `.dev` is
+        // a public ICANN TLD and must pass the normal DNS/certificate gates.
+        $localSuffixes = ['.local', '.test', '.localhost', '.example'];
         foreach ($localSuffixes as $suffix) {
             if (\str_ends_with($domain, $suffix)) {
                 return $this->localDomainCache[$domain] = true;
@@ -1634,10 +1709,9 @@ class SslCertificateService
     }
     
     /**
-     * 检查域名是否解析到本地回环地址
-     * 
-     * 即使在生产环境，如果域名解析到 127.0.0.1 或其他本地地址，
-     * Let's Encrypt 无法验证，需要使用自签证书
+     * 检查域名是否解析到本地回环或私有地址。
+     *
+     * 这只是 DNS 事实探针；是否允许自签仍由显式开发环境策略决定。
      * 
      * @param string $domain 域名
      * @return bool
@@ -1666,8 +1740,10 @@ class SslCertificateService
         $ips = $this->resolveDomainIps($domain);
         
         if (empty($ips)) {
-            // 解析失败，域名无法公网访问，使用自签证书
-            return $this->loopbackResolveCache[$domain] = true;
+            // DNS failure is not evidence that a public-looking name belongs
+            // to this host. Treating a typo/outage as local would silently
+            // authorize an implicit self-signed certificate.
+            return $this->loopbackResolveCache[$domain] = false;
         }
         
         // 检查所有解析的 IP 是否有本地地址
@@ -1701,6 +1777,25 @@ class SslCertificateService
         // IPv6 回环地址
         if ($ip === '::1') {
             return $this->loopbackIpCache[$ip] = true;
+        }
+
+        $packed = @\inet_pton($ip);
+        if (\is_string($packed) && \strlen($packed) === 16) {
+            $first = \ord($packed[0]);
+            $second = \ord($packed[1]);
+            // RFC 4193 unique-local fc00::/7 and RFC 4291 link-local
+            // fe80::/10 are not publicly ACME-reachable.
+            if (($first & 0xfe) === 0xfc
+                || ($first === 0xfe && ($second & 0xc0) === 0x80)
+            ) {
+                return $this->loopbackIpCache[$ip] = true;
+            }
+            // IPv4-mapped literals inherit the embedded IPv4 policy.
+            if (\substr($packed, 0, 12) === \str_repeat("\0", 10) . "\xff\xff") {
+                $mapped = \inet_ntop(\substr($packed, 12));
+                return $this->loopbackIpCache[$ip] = \is_string($mapped)
+                    && $this->isLoopbackIp($mapped);
+            }
         }
         
         // 私有地址范围（Let's Encrypt 也无法验证）
@@ -1750,7 +1845,7 @@ class SslCertificateService
      */
     public function applyWildcardToSubdomainIfExists(string $domain, int $websiteId = 0): ?array
     {
-        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        return $this->withCertificateOperationLifecycleLock(
             fn (): ?array => $this->applyWildcardToSubdomainIfExistsLocked(
                 $domain,
                 $websiteId,
@@ -2269,7 +2364,9 @@ CNF;
             return false;
         }
 
-        return $this->isLocalDomain($domain) || $this->resolvesToLoopback($domain);
+        return $this->isLocalDomain($domain)
+            || ($this->isDevelopmentEnvironment()
+                && $this->resolvesToLoopback($domain));
     }
 
     protected function getLocalCaDir(): string
@@ -3847,6 +3944,7 @@ CNF;
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $lockPath,
             function () use ($serialPaths): int {
+                $this->certificateOperationDeadlineRemaining();
                 $current = 1000;
                 foreach ($serialPaths as $serialPath) {
                     $stored = self::readRegularFileNoFollow(
@@ -3873,14 +3971,16 @@ CNF;
                 }
                 return $current;
             },
+            waitTimeoutSeconds: $this->certificateOperationLockWaitTimeout(
+                300.0,
+            ),
         );
     }
 
     public function generateLocalCaSignedCertificate(string $domain, int $websiteId = 0, int $validDays = 825): array
     {
         try {
-            return (new ProjectCertificateGenerationStore())
-                ->withCertificateLifecycleLock(
+            return $this->withCertificateOperationLifecycleLock(
                     fn (): array => $this->generateLocalCaSignedCertificateLocked(
                         $domain,
                         $websiteId,
@@ -4028,6 +4128,7 @@ CNF;
                 'cert_path' => $certPath,
                 'key_path' => $keyPath,
                 'issuer' => self::ISSUER_LOCAL_CA,
+                'provider' => self::PROVIDER_LOCAL_CA,
                 'expires_at' => \date('Y-m-d H:i:s', \strtotime("+{$validDays} days")),
                 'is_new' => true,
                 'ssl_enabled' => true,
@@ -4065,7 +4166,9 @@ CNF;
         $domain = \strtolower(\trim($domain));
         
         // 判断是否需要本地/内网 SAN 配置
-        $needLocalSan = $this->isLocalDomain($domain) || $this->resolvesToLoopback($domain);
+        $needLocalSan = $this->isLocalDomain($domain)
+            || ($this->isDevelopmentEnvironment()
+                && $this->resolvesToLoopback($domain));
         if (!$needLocalSan) {
             return $opensslConfig;
         }
@@ -4141,7 +4244,7 @@ CNF;
             return $this->sanEntriesCache[$domain] = ['dns' => $dns, 'ip' => $ip];
         }
         
-        // 3. 本地开发用后缀（*.test / *.local / *.dev 等）：不调用阻塞式 DNS。
+        // 3. 本地开发用后缀（*.test / *.local 等）：不调用阻塞式 DNS。
         // gethostbynamel/gethostbyname 在 Windows 上可能因 .test 等后缀长时间挂起，
         // 用户看到「正在为 *.weline.test 准备 SSL 证书...」后无进展。
         // 开发域默认按本机 HTTPS 使用，SAN 补全回环地址即可（与 hosts 指向 127.0.0.1 的常见约定一致）。
@@ -4334,8 +4437,7 @@ CNF;
     public function generateSelfSignedCertificate(string $domain, int $websiteId = 0, int $validDays = 365): array
     {
         try {
-            return (new ProjectCertificateGenerationStore())
-                ->withCertificateLifecycleLock(
+            return $this->withCertificateOperationLifecycleLock(
                     fn (): array => $this->generateSelfSignedCertificateLocked(
                         $domain,
                         $websiteId,
@@ -4456,6 +4558,7 @@ CNF;
                 'cert_path' => $certPath,
                 'key_path' => $keyPath,
                 'issuer' => self::ISSUER_SELF_SIGNED,
+                'provider' => self::PROVIDER_SELF_SIGNED,
                 'expires_at' => \date('Y-m-d H:i:s', \strtotime("+{$validDays} days")),
                 'is_new' => true,
                 'ssl_enabled' => true,
@@ -4902,7 +5005,7 @@ CNF;
      */
     public function isDomainSslIssuanceInProgress(string $domain): bool
     {
-        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        return $this->withCertificateOperationLifecycleLock(
             fn (): bool => $this->isDomainSslIssuanceInProgressUnlocked($domain),
         );
     }
@@ -4986,7 +5089,7 @@ CNF;
     protected function acquireSslIssuanceLock(string $domain): bool
     {
         try {
-            return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            return $this->withCertificateOperationLifecycleLock(
                 fn (): bool => $this->acquireSslIssuanceLockUnlocked($domain),
             );
         } catch (\Throwable) {
@@ -5040,7 +5143,7 @@ CNF;
      */
     protected function releaseSslIssuanceLock(string $domain): void
     {
-        (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        $this->withCertificateOperationLifecycleLock(
             function () use ($domain): void {
                 $this->releaseSslIssuanceLockUnlocked($domain);
             },
@@ -5105,7 +5208,7 @@ CNF;
         string $provider = '',
         bool $recoverAndTrustLocalCa = true
     ): ?SslCertificate {
-        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        return $this->withCertificateOperationLifecycleLock(
             fn (): ?SslCertificate => $this->syncCertificateRecordFromFilesLocked(
                 $domain,
                 $certPath,
@@ -5322,6 +5425,16 @@ CNF;
         }
 
         return self::PROVIDER_SELF_SIGNED;
+    }
+
+    /**
+     * Serving provenance follows the persisted provider fact only. Issuer text
+     * is display metadata and is neither authenticated nor stable enough to
+     * change an explicit re-enable intent or route generation digest.
+     */
+    private function canonicalServingProvider(string $provider): string
+    {
+        return ProjectCertificateGenerationStore::normalizeProvider($provider);
     }
     
     /**
@@ -5667,6 +5780,9 @@ CNF;
             $certPath = (string)($cert[SslCertificate::schema_fields_CERT_PATH] ?? '');
             $keyPath = (string)($cert[SslCertificate::schema_fields_KEY_PATH] ?? '');
             $certType = (string)($cert[SslCertificate::schema_fields_CERT_TYPE] ?? SslCertificate::CERT_TYPE_EXACT);
+            $provider = $this->canonicalServingProvider((string)(
+                $cert[SslCertificate::schema_fields_PROVIDER] ?? ''
+            ));
             $certId = (int)($cert[SslCertificate::schema_fields_ID] ?? 0);
             $expiresAt = (string)($cert[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
             $expiresTimestamp = $expiresAt !== '' ? \strtotime($expiresAt) : false;
@@ -5702,6 +5818,7 @@ CNF;
                     'cert_type' => $certType,
                     'force_https' => $forceHttps,
                     'force_root_to_www' => $forceRootToWww,
+                    'provider' => $provider,
                 ], true);
                 continue;
             }
@@ -5813,6 +5930,7 @@ CNF;
                         'cert_type' => $certType,
                         'force_https' => $forceHttps,
                         'force_root_to_www' => $forceRootToWww,
+                        'provider' => $provider,
                     ], true);
                     continue;
                 }
@@ -5837,6 +5955,7 @@ CNF;
                 'cert_type' => $certType,
                 'force_https' => $forceHttps,
                 'force_root_to_www' => $forceRootToWww,
+                'provider' => $provider,
             ];
             
             $this->appendCertificateMapEntries(
@@ -6281,10 +6400,7 @@ CNF;
             return $wildcard ? '*.' . $body : $body;
         }
         if (\filter_var($body, FILTER_VALIDATE_IP) !== false) {
-            if (!$wildcard && (
-                \str_starts_with($body, '127.')
-                || $body === '::1'
-            )) {
+            if (!$wildcard && $this->isLoopbackOrPrivateIp($body)) {
                 $packed = @\inet_pton($body);
                 $canonical = \is_string($packed) ? @\inet_ntop($packed) : false;
                 if (\is_string($canonical) && $canonical !== '') {
@@ -6305,10 +6421,27 @@ CNF;
         return $wildcard ? '*.' . $body : $body;
     }
 
+    private function isLoopbackOrPrivateIp(string $ip): bool
+    {
+        if (\str_starts_with($ip, '127.') || $ip === '::1') {
+            return true;
+        }
+
+        // Private/reserved ranges are valid origin listen facts (e.g. AWS VPC 172.31.x.x).
+        return \filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    }
+
     /** @param array<string,mixed> $left @param array<string,mixed> $right */
     private function certificateMapEntryEquivalent(array $left, array $right): bool
     {
-        foreach (['cert', 'key', 'chain', 'force_https', 'force_root_to_www'] as $field) {
+        foreach ([
+            'cert',
+            'key',
+            'chain',
+            'force_https',
+            'force_root_to_www',
+            'provider',
+        ] as $field) {
             if (($left[$field] ?? null) !== ($right[$field] ?? null)) {
                 return false;
             }
@@ -6749,7 +6882,7 @@ CNF;
      */
     public function reconcileCertificateFiles(): array
     {
-        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        return $this->withCertificateOperationLifecycleLock(
             fn (): array => $this->reconcileCertificateFilesLocked(),
         );
     }
@@ -7289,8 +7422,7 @@ CNF;
         }
 
         try {
-            $prepared = (new ProjectCertificateGenerationStore())
-                ->withCertificateLifecycleLock(
+            $prepared = $this->withCertificateOperationLifecycleLock(
                 fn (): array => $this->importManualCertificateLocked(
                     $domain,
                     $fullchainPem,
@@ -7502,8 +7634,7 @@ CNF;
                 continue;
             }
             try {
-                $didSync = (new ProjectCertificateGenerationStore())
-                    ->withCertificateLifecycleLock(function () use (
+                $didSync = $this->withCertificateOperationLifecycleLock(function () use (
                         $row,
                         $subDomain,
                         $certPem,
@@ -8599,7 +8730,7 @@ CNF;
         }
         $file = $challengeDir . $token;
         try {
-            (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            $this->withCertificateOperationLifecycleLock(
                 function () use ($file): void {
                     GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
                         $file,
@@ -9104,8 +9235,14 @@ CNF;
             return $this->needsSelfSignedCache[$host] = $this->isLoopbackIp($host);
         }
         
-        // 域名：检查是否为本地域名或解析到内网
-        return $this->needsSelfSignedCache[$host] = ($this->isLocalDomain($host) || $this->resolvesToLoopback($host));
+        // Reserved development names are intrinsically local. A public name
+        // that happens to resolve to loopback/private space is local only
+        // under an explicit development deployment profile.
+        return $this->needsSelfSignedCache[$host] = (
+            $this->isLocalDomain($host)
+            || ($this->isDevelopmentEnvironment()
+                && $this->resolvesToLoopback($host))
+        );
     }
     
     /**
@@ -9373,8 +9510,7 @@ CNF;
         }
         try {
             $domain = self::normalizeCertificateStorageDomain($domain);
-            $prepared = (new ProjectCertificateGenerationStore())
-                ->withCertificateLifecycleLock(
+            $prepared = $this->withCertificateOperationLifecycleLock(
                 fn (): array => $this->enableManagedCertificateLocked($domain),
             );
             if (($prepared['success'] ?? false) !== true
@@ -9464,17 +9600,51 @@ CNF;
                 ];
             }
             
+            $certId = (int)$cert->getCertId();
+            $previousStatus = $cert->getStatus();
+            $previousRenewError = $cert->getRenewError();
+            $previousHttpsEnabled = $cert->isHttpsEnabled();
+            $certificateTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+                (string)Env::get(
+                    'wls.gateway.certificate_profile',
+                    Env::get(
+                        'wls.certificate_profile',
+                        ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
+                    ),
+                ),
+            );
             $cert->setStatus(SslCertificate::STATUS_ACTIVE)
                 ->setRenewError('')
                 ->setHttpsEnabled(true)
                 ->save();
-
-            $certId = (int)$cert->getCertId();
-            $reenableIntent = $generationStore->issueExplicitReenableIntent(
-                $domain,
-                (string)$cert->getCertPath(),
-                (string)$cert->getKeyPath(),
-            );
+            try {
+                $reenableIntent = $generationStore->issueExplicitReenableIntent(
+                    $domain,
+                    (string)$cert->getCertPath(),
+                    (string)$cert->getKeyPath(),
+                    trustProfile: $certificateTrustProfile,
+                    provider: $this->canonicalServingProvider(
+                        (string)$cert->getProvider(),
+                    ),
+                );
+            } catch (\Throwable $throwable) {
+                try {
+                    $cert->setStatus($previousStatus)
+                        ->setRenewError($previousRenewError)
+                        ->setHttpsEnabled($previousHttpsEnabled)
+                        ->save();
+                } catch (\Throwable $rollbackFailure) {
+                    throw new \RuntimeException(
+                        'Certificate re-enable authorization failed and the '
+                            . 'database after-image could not be restored: '
+                            . $throwable->getMessage() . '; rollback: '
+                            . $rollbackFailure->getMessage(),
+                        0,
+                        $throwable,
+                    );
+                }
+                throw $throwable;
+            }
             return [
                 'success' => true,
                 'phase' => 'prepared',
@@ -9487,6 +9657,9 @@ CNF;
                 'cert_type' => (string)$cert->getCertType(),
                 'reenable_intent_id' => (string)$reenableIntent['intent_id'],
                 'certificate_source_digest' => (string)$reenableIntent['source_digest'],
+                'certificate_provenance_digest' => (string)$reenableIntent[
+                    'provenance_digest'
+                ],
             ];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];
@@ -9569,9 +9742,8 @@ CNF;
                     [$domain],
                 ));
             }
-            $prepared = (new ProjectCertificateGenerationStore())
-                ->withCertificateLifecycleLock(
-                    fn (): array => $this->transitionCertificateOutOfServiceLocked(
+            $prepared = $this->withCertificateOperationLifecycleLock(
+                fn (): array => $this->transitionCertificateOutOfServiceLocked(
                         $domain,
                         $delete,
                         $reason,
@@ -10184,6 +10356,7 @@ CNF;
                 return $callback();
             },
             $waitTimeout,
+            $deadlineMonotonic,
         );
     }
 
@@ -11086,7 +11259,7 @@ CNF;
         array $revocationIntent = [],
     ): void
     {
-        (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+        $this->withCertificateOperationLifecycleLock(
             function () use (
                 $broadcastReload,
                 $changedDomain,
@@ -11120,6 +11293,7 @@ CNF;
     public function replayPendingCertificateRetirements(
         float $totalBudgetSeconds = 15.0,
         int $maximumIntents = 4,
+        ?float $deadlineMonotonic = null,
     ): array {
         if (!\is_finite($totalBudgetSeconds)
             || $totalBudgetSeconds < 1.0
@@ -11131,14 +11305,28 @@ CNF;
                 'Certificate retirement replay budget or batch is invalid.',
             );
         }
+        if ($deadlineMonotonic !== null && !\is_finite($deadlineMonotonic)) {
+            throw new \InvalidArgumentException(
+                'Certificate retirement replay deadline is invalid.',
+            );
+        }
+        $now = \hrtime(true) / 1_000_000_000;
+        $budgetDeadline = $now + $totalBudgetSeconds;
+        $deadline = $deadlineMonotonic === null
+            ? $budgetDeadline
+            : \min($budgetDeadline, $deadlineMonotonic);
+        if ($deadline <= $now) {
+            throw new \RuntimeException(
+                'Certificate retirement replay deadline was exhausted.',
+            );
+        }
         $store = new ProjectCertificateGenerationStore();
         try {
             return $store->withRetirementReplayLease(function () use (
                 $store,
-                $totalBudgetSeconds,
                 $maximumIntents,
+                $deadline,
             ): array {
-                $deadline = (\hrtime(true) / 1_000_000_000) + $totalBudgetSeconds;
                 $pending = $store->pendingRetirementBatch(
                     $maximumIntents,
                     $deadline,
@@ -11200,7 +11388,7 @@ CNF;
                     'deferred' => $attempted < \count($pending)
                         || \count($pending) >= $maximumIntents,
                 ];
-            });
+            }, $deadline);
         } catch (\RuntimeException $throwable) {
             if (\hash_equals(
                 'Timed out acquiring the WLS state lock.',
@@ -11248,6 +11436,15 @@ CNF;
             @\mkdir($mapDir, 0755, true);
         }
         $map = $this->getCertificateMap();
+        foreach ($map as &$entry) {
+            if (\is_array($entry)) {
+                // Provider provenance belongs to WLS Edge Protocol 2. The
+                // legacy worker map has a deliberately smaller strict schema
+                // and must never receive Gateway-only identity fields.
+                unset($entry['provider']);
+            }
+        }
+        unset($entry);
         if ($deadlineMonotonic !== null) {
             $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
         }

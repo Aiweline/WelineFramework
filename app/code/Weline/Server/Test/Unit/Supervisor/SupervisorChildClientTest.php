@@ -17,6 +17,40 @@ use Weline\Server\Supervisor\SupervisorServer;
 
 final class SupervisorChildClientTest extends TestCase
 {
+    public function testExpiredOperationDeadlinePreventsSupervisorConnection(): void
+    {
+        $server = \stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($server, (string)$errstr);
+        $address = \stream_socket_get_name($server, false);
+        self::assertIsString($address);
+        $separator = \strrpos($address, ':');
+        self::assertIsInt($separator);
+        $port = (int)\substr($address, $separator + 1);
+        $client = new SupervisorChildClient(
+            instanceName: 'ut-expired-deadline',
+            channelId: 'channel-ut-expired-deadline',
+            endpointResolver: new ControlEndpointResolver(BP, 27000, 1000),
+            endpoint: ControlEndpoint::tcp('127.0.0.1', $port),
+        );
+        try {
+            $client->setOperationDeadlineMonotonic(
+                ControlMessage::monotonicSeconds() - 1.0,
+            );
+            self::assertFalse($client->connect('127.0.0.1', 0));
+            self::assertSame(
+                'operation_deadline_exhausted',
+                $client->getLastConnectError(),
+            );
+            self::assertFalse(
+                @\stream_socket_accept($server, 0.0),
+                'An expired Supervisor operation must not open its endpoint.',
+            );
+        } finally {
+            $client->close();
+            \fclose($server);
+        }
+    }
+
     public function testReadyIntentDoesNotCountAsConfirmedUntilAckArrives(): void
     {
         $runtime = $this->createRuntime('ut-instance');

@@ -13,6 +13,8 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Provider\GatewayFallbackProvider;
 use Weline\Server\Service\Provider\GatewayJoinBackendProvider;
 use Weline\Server\Service\Provider\GatewayProvider;
@@ -26,6 +28,8 @@ final class GatewayFallbackProviderTest extends TestCase
 
     /** @var list<string> */
     private array $temporaryFiles = [];
+    /** @var list<string> */
+    private array $gatewayTokenInstances = [];
 
     protected function setUp(): void
     {
@@ -56,6 +60,58 @@ final class GatewayFallbackProviderTest extends TestCase
         foreach ($this->temporaryFiles as $file) {
             @\unlink($file);
         }
+        foreach ($this->gatewayTokenInstances as $instanceName) {
+            $tokenFile =
+                \Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore::tokenFile($instanceName);
+            @\unlink($tokenFile);
+            @\unlink(\dirname($tokenFile) . DIRECTORY_SEPARATOR . '.state.lock');
+            @\rmdir(\dirname($tokenFile));
+        }
+    }
+
+    public function testTerminalStopDrainCompletionOutranksReversibleFallbackPhase(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_GATEWAY_FALLBACK,
+            instanceId: 1,
+            state: ServiceInstance::STATE_DRAINING,
+            ipcClientId: 91,
+            metadata: [
+                'fallback_listener_phase' =>
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+            ],
+        );
+        $orchestrator->getRegistry()->addInstance($instance);
+        (new \ReflectionProperty(ServiceOrchestrator::class, 'pendingStopReason'))
+            ->setValue($orchestrator, 'server_stop');
+
+        (new \ReflectionMethod(ServiceOrchestrator::class, 'handleDrainingComplete'))
+            ->invoke($orchestrator, ['reason' => 'server_stop'], 91);
+
+        self::assertSame(ServiceInstance::STATE_STOPPING, $instance->state);
+        self::assertSame('server_stop', $instance->getMeta('exit_reason'));
+    }
+
+    public function testReversibleFallbackPhaseStillIgnoresGenericCompletionOutsideStop(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_GATEWAY_FALLBACK,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 92,
+            metadata: [
+                'fallback_listener_phase' =>
+                    GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+            ],
+        );
+        $orchestrator->getRegistry()->addInstance($instance);
+
+        (new \ReflectionMethod(ServiceOrchestrator::class, 'handleDrainingComplete'))
+            ->invoke($orchestrator, [], 92);
+
+        self::assertSame(ServiceInstance::STATE_READY, $instance->state);
     }
 
     public function testProviderBuildsSingleLoopbackTlsListenerWithH2AndH1Only(): void
@@ -65,7 +121,6 @@ final class GatewayFallbackProviderTest extends TestCase
         $context = $this->context([
             'protocols' => ['http2', 'http/1.1'],
             'preferred' => 'http2',
-            'protocol_edge' => 'disabled',
             'alt_svc' => false,
         ]);
         $provider = new GatewayFallbackProvider(
@@ -83,8 +138,20 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertContains('--wls-runtime-topology=direct', $command->arguments);
         self::assertContains('--wls-listener-mode=single', $command->arguments);
         self::assertContains('--worker-count=1', $command->arguments);
-        self::assertContains('--ssl-cert=' . $certificate, $command->arguments);
-        self::assertContains('--ssl-key=' . $privateKey, $command->arguments);
+        self::assertNotContains('--ssl-cert=' . $certificate, $command->arguments);
+        self::assertNotContains('--ssl-key=' . $privateKey, $command->arguments);
+        self::assertContains(
+            '--serving-manifest=' . \sys_get_temp_dir()
+                . DIRECTORY_SEPARATOR
+                . 'wls-serving-manifest-unit.json',
+            $command->arguments,
+        );
+        self::assertContains('--serving-manifest-generation=1', $command->arguments);
+        self::assertContains(
+            '--serving-manifest-digest=' . \str_repeat('f', 64),
+            $command->arguments,
+        );
+        self::assertContains('--serving-instance-generation=17', $command->arguments);
 
         $policyArgument = $this->argumentWithPrefix($command->arguments, '--wls-http-policy=');
         $encoded = \substr($policyArgument, \strlen('--wls-http-policy='));
@@ -163,19 +230,54 @@ final class GatewayFallbackProviderTest extends TestCase
         );
     }
 
+    public function testWildcardOnlyProviderDoesNotTurnBindIpIntoTlsAuthority(): void
+    {
+        $provider = new GatewayFallbackProvider(
+            port: 24572,
+            certificate: $this->temporaryFile('certificate'),
+            privateKey: $this->temporaryFile('private-key'),
+            bindHost: '127.0.0.1',
+            hostLeaseId: self::HOST_LEASE_ID,
+        );
+        $context = $this->context([], [
+            'certificate_source' => ['domain' => '*.example.test'],
+        ]);
+
+        $command = $provider->buildCommand(1, $context);
+
+        self::assertContains('--public-origin=', $command->arguments);
+        self::assertNotContains(
+            '--public-origin=https://127.0.0.1:24572',
+            $command->arguments,
+        );
+    }
+
     public function testSslFallbackWorkerAcceptsLeaseBoundLiteralPublicBindPolicy(): void
     {
         $source = (string)\file_get_contents(
             BP . 'app/code/Weline/Server/bin/worker_ssl.php',
         );
 
+        $fallbackGuardStart = \strpos($source, 'if ($isGatewayFallbackWorker');
+        self::assertIsInt($fallbackGuardStart);
+        $nextFallbackGuard = \strpos(
+            $source,
+            'if ($isGatewayFallbackWorker',
+            $fallbackGuardStart + 1,
+        );
+        self::assertIsInt($nextFallbackGuard);
+        $fallbackBindGuard = \substr(
+            $source,
+            $fallbackGuardStart,
+            $nextFallbackGuard - $fallbackGuardStart,
+        );
         self::assertStringContainsString(
             '\\filter_var($privateListenerHost, FILTER_VALIDATE_IP) === false',
-            $source,
+            $fallbackBindGuard,
         );
         self::assertStringNotContainsString(
             "!\\in_array(\$privateListenerHost, ['127.0.0.1', '::1'], true)",
-            $source,
+            $fallbackBindGuard,
         );
         self::assertStringContainsString(
             "\\preg_match('/^[a-f0-9]{32}\$/D', \$gatewayHostLeaseId)",
@@ -211,26 +313,45 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertStringNotContainsString('--control-token=', $joined);
     }
 
-    public function testExplicitPureWlsRunsOnlyTheCertificateRetirementAgent(): void
+    public function testExplicitPureWlsDoesNotStartOrBuildGatewayAgent(): void
     {
         $context = $this->context([], ['requested_mode' => 'wls'], 'wls');
         $provider = new GatewayProvider();
 
-        self::assertTrue($provider->isEnabled($context));
-        $command = $provider->buildCommand(1, $context);
-        self::assertContains('--certificate-retirement-only', $command->arguments);
-        self::assertNotContains('--control-token=unit-control-token', $command->arguments);
+        self::assertFalse($provider->isEnabled($context));
+        $staleEffectiveMode = $this->context(
+            [],
+            ['requested_mode' => 'wls'],
+            'gateway',
+        );
+        self::assertFalse($provider->isEnabled($staleEffectiveMode));
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('must not start');
+        $provider->buildCommand(1, $staleEffectiveMode);
     }
 
-    public function testPersistedPureWlsWithoutRequestedModeCannotJoinAGateway(): void
+    public function testPersistedPureWlsWithoutRequestedModeDoesNotStartGatewayAgent(): void
     {
         $provider = new GatewayProvider();
-        $command = $provider->buildCommand(1, $this->context([], [], 'wls'));
+        $context = $this->context([], [], 'wls');
 
-        self::assertContains('--certificate-retirement-only', $command->arguments);
+        self::assertFalse($provider->isEnabled($context));
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('must not start');
+        $provider->buildCommand(1, $context);
     }
 
-    public function testPureWlsRetirementAgentReplaysTheFullOutboxEveryHeartbeat(): void
+    public function testLegacyPromotionMayBuildGatewayAgentOnlyThroughExplicitLifecycle(): void
+    {
+        $provider = new GatewayProvider();
+        $context = $this->context([], ['requested_mode' => 'legacy'], 'legacy');
+
+        self::assertFalse($provider->isEnabled($context));
+        $command = $provider->buildCommand(1, $context);
+        self::assertNotContains('--certificate-retirement-only', $command->arguments);
+    }
+
+    public function testExplicitRetirementOnlyAgentReplaysTheFullOutboxEveryHeartbeat(): void
     {
         $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
             . 'app/code/Weline/Server/Console/Server/Gateway/Agent.php';
@@ -256,8 +377,9 @@ final class GatewayFallbackProviderTest extends TestCase
             $worker->getStartLine() - 1,
             $worker->getEndLine() - $worker->getStartLine() + 1,
         ));
-        self::assertStringContainsString(
-            'replayPendingCertificateRetirements(75.0, 8)',
+        self::assertMatchesRegularExpression(
+            '/replayPendingCertificateRetirements\(\s*75\.0,\s*8,\s*'
+                . '\$mutationDeadline,\s*\)/',
             $workerSource,
         );
         self::assertStringContainsString("if (\$action !== 'retirements')", $workerSource);
@@ -284,7 +406,7 @@ final class GatewayFallbackProviderTest extends TestCase
     {
         $endpoint = [
             'master_pid' => 12345,
-            'epoch' => 3,
+            'master_epoch' => 3,
             'edge_adapter' => 'nginx',
             'gateway' => [
                 'requested_mode' => 'legacy',
@@ -421,7 +543,7 @@ final class GatewayFallbackProviderTest extends TestCase
         $this->expectExceptionMessage('runtime policy digest is invalid');
         $prepare->invoke(
             null,
-            ['master_pid' => 12345, 'epoch' => 3],
+            ['master_pid' => 12345, 'master_epoch' => 3],
             12345,
             3,
             \str_repeat('b', 32),
@@ -475,7 +597,14 @@ final class GatewayFallbackProviderTest extends TestCase
 
     public function testAutoFallbackKeepsAgentAndBuildsAuthenticatedLoopbackJoinBackend(): void
     {
-        $context = $this->context([], ['requested_mode' => 'auto'], 'wls');
+        $instanceName = 'unit-gateway-backend-' . \bin2hex(\random_bytes(6));
+        $this->gatewayTokenInstances[] = $instanceName;
+        $context = $this->context(
+            [],
+            ['requested_mode' => 'auto'],
+            'wls',
+            $instanceName,
+        );
         $agent = new GatewayProvider();
         $backend = new GatewayJoinBackendProvider(
             port: 24569,
@@ -486,6 +615,10 @@ final class GatewayFallbackProviderTest extends TestCase
         );
 
         self::assertTrue($agent->isEnabled($context));
+        self::assertNotContains(
+            '--certificate-retirement-only',
+            $agent->buildCommand(1, $context)->arguments,
+        );
         self::assertTrue($backend->isEnabled($context));
         self::assertSame(ControlMessage::ROLE_GATEWAY_BACKEND, $backend->getRole());
         self::assertSame(3, $backend->getInstanceCount($context));
@@ -513,13 +646,13 @@ final class GatewayFallbackProviderTest extends TestCase
                 $command->arguments,
                 static fn (string $argument): bool => \str_starts_with(
                     $argument,
-                    '--protocol-edge-token-file=',
+                    '--gateway-backend-token-file=',
                 ),
             ),
         );
     }
 
-    public function testOnlyReadyGatewayAgentMayUseTokenlessFallbackCommands(): void
+    public function testOnlyAuthenticatedReadyGatewayAgentMayUseTokenlessFallbackCommands(): void
     {
         $server = new MasterControlServer();
         $server->setExpectedControlToken('unit-control-token');
@@ -535,6 +668,7 @@ final class GatewayFallbackProviderTest extends TestCase
                 'socket' => $agentSocket,
                 'role' => ControlMessage::ROLE_GATEWAY_AGENT,
                 'state' => MasterControlServer::STATE_READY,
+                'managed_child_authenticated' => true,
             ],
             8 => [
                 'socket' => $workerSocket,
@@ -545,6 +679,7 @@ final class GatewayFallbackProviderTest extends TestCase
                 'socket' => $registeredAgentSocket,
                 'role' => ControlMessage::ROLE_GATEWAY_AGENT,
                 'state' => MasterControlServer::STATE_REGISTERED,
+                'managed_child_authenticated' => true,
             ],
         ]);
         $authorize = new \ReflectionMethod($server, 'isAuthorizedControlCommand');
@@ -602,6 +737,19 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertFalse($authorize->invoke(
             $server,
             9,
+            ['action' => ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE],
+        ));
+        $clients->setValue($server, [
+            7 => [
+                'socket' => $agentSocket,
+                'role' => ControlMessage::ROLE_GATEWAY_AGENT,
+                'state' => MasterControlServer::STATE_READY,
+                'managed_child_authenticated' => false,
+            ],
+        ]);
+        self::assertFalse($authorize->invoke(
+            $server,
+            7,
             ['action' => ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE],
         ));
         self::assertTrue($authorize->invoke(
@@ -678,6 +826,10 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertStringNotContainsString('markDraining(', $source);
         self::assertStringNotContainsString('closeGatewayFallbackListener(', $source);
         self::assertStringNotContainsString('$this->sendDrainToInstance($instance, 300.0);', $source);
+        self::assertStringNotContainsString(
+            '$instance->state = ServiceInstance::STATE_DRAINING;',
+            $source,
+        );
 
         $ack = new \ReflectionMethod(
             ServiceOrchestrator::class,
@@ -694,6 +846,81 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertStringContainsString('compensateGatewayFallbackToDrain(', $ackSource);
         self::assertStringContainsString('closeGatewayFallbackListener(', $ackSource);
         self::assertStringNotContainsString('suspendGatewayFallbackCredential(', $ackSource);
+        self::assertStringNotContainsString(
+            '$instance->state = ServiceInstance::STATE_DRAINING;',
+            $ackSource,
+        );
+        self::assertGreaterThanOrEqual(
+            2,
+            \substr_count($ackSource, 'gatewayFallbackUndrainCommitAllowed('),
+            'UNDRAIN must re-check the full stop/certificate fence at the ACTIVE commit barrier.',
+        );
+        self::assertGreaterThanOrEqual(
+            2,
+            \substr_count($ackSource, '$afterImage = $leases->status('),
+            'Both DRAIN_ACKED and ACTIVE publication failures must reconcile a committed after-image.',
+        );
+
+        foreach ([
+            'handleFailedGatewayFallbackListenerAck',
+            'compensateGatewayFallbackToDrain',
+        ] as $methodName) {
+            $method = new \ReflectionMethod(ServiceOrchestrator::class, $methodName);
+            $methodSource = \implode('', \array_slice(
+                $lines,
+                $method->getStartLine() - 1,
+                $method->getEndLine() - $method->getStartLine() + 1,
+            ));
+            self::assertStringNotContainsString(
+                '$instance->state = ServiceInstance::STATE_DRAINING;',
+                $methodSource,
+                $methodName . ' must not enter the terminal service-drain lifecycle.',
+            );
+        }
+
+        $drainingComplete = new \ReflectionMethod(
+            ServiceOrchestrator::class,
+            'handleDrainingComplete',
+        );
+        $drainingCompleteSource = \implode('', \array_slice(
+            $lines,
+            $drainingComplete->getStartLine() - 1,
+            $drainingComplete->getEndLine() - $drainingComplete->getStartLine() + 1,
+        ));
+        $fallbackGuard = \strpos(
+            $drainingCompleteSource,
+            'ControlMessage::ROLE_GATEWAY_FALLBACK',
+        );
+        $terminalMutation = \strpos(
+            $drainingCompleteSource,
+            '$this->markAutonomousWorkerExitPending(',
+        );
+        self::assertIsInt($fallbackGuard);
+        self::assertIsInt($terminalMutation);
+        self::assertLessThan(
+            $terminalMutation,
+            $fallbackGuard,
+            'A reversible fallback listener must be rejected before generic terminal drain handling.',
+        );
+        self::assertStringContainsString(
+            'GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED',
+            $drainingCompleteSource,
+        );
+
+        $digest = new \ReflectionMethod(
+            ServiceOrchestrator::class,
+            'gatewayFallbackActionDigest',
+        );
+        $digestSource = \implode('', \array_slice(
+            $lines,
+            $digest->getStartLine() - 1,
+            $digest->getEndLine() - $digest->getStartLine() + 1,
+        ));
+        self::assertStringContainsString(
+            'ControlMessage::gatewayFallbackListenerActionDigest(',
+            $digestSource,
+        );
+        self::assertStringNotContainsString('\\hash(', $digestSource);
     }
 
     public function testFallbackWorkerSupportsExactReversibleListenerTransition(): void
@@ -804,12 +1031,12 @@ final class GatewayFallbackProviderTest extends TestCase
         array $http = [],
         array $gateway = [],
         string $edgeMode = 'gateway',
+        string $instanceName = 'unit-gateway-fallback',
     ): ServiceContext
     {
         $http += [
             'protocols' => ['h2', 'h1'],
             'preferred' => 'h2',
-            'protocol_edge' => 'disabled',
             'alt_svc' => false,
         ];
         $capabilityEvidence = [
@@ -835,7 +1062,7 @@ final class GatewayFallbackProviderTest extends TestCase
             ),
         ];
         return new ServiceContext(
-            instanceName: 'unit-gateway-fallback',
+            instanceName: $instanceName,
             epoch: 3,
             controlPort: 19091,
             masterPid: 12345,
@@ -862,6 +1089,13 @@ final class GatewayFallbackProviderTest extends TestCase
             envConfig: [
                 'wls' => [
                     'public_origin' => 'https://127.0.0.1:19502/',
+                    'serving_manifest_path' => \sys_get_temp_dir()
+                        . DIRECTORY_SEPARATOR
+                        . 'wls-serving-manifest-unit.json',
+                    'serving_manifest_generation' => 1,
+                    'serving_manifest_digest' => \str_repeat('f', 64),
+                    'serving_instance_generation' => 17,
+                    'serving_certificate_trust_profile' => 'test',
                     'edge' => [
                         'adapter' => 'wls',
                         'mode' => $edgeMode,

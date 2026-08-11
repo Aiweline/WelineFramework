@@ -8,6 +8,7 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedText;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedTreeWalker;
 use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
@@ -15,10 +16,12 @@ use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 final class Promote extends AbstractGatewayCommand
 {
+    private const PROMOTION_OPERATION_TIMEOUT_SECONDS = 900.0;
+    private const PROMOTION_ROLLBACK_RESERVE_SECONDS = 120.0;
+
     public function execute(array $args = [], array $data = []): int
     {
         $json = $this->isJson($args);
@@ -39,6 +42,8 @@ final class Promote extends AbstractGatewayCommand
             );
         }
         $profile = \strtolower(\trim((string)($args['profile'] ?? 'default')));
+        $deadlineMonotonic = self::monotonicSeconds()
+            + self::PROMOTION_OPERATION_TIMEOUT_SECONDS;
         try {
             return GatewayProjectStateFilesystem::withExclusiveLock(
                 $this->promotionLockFile(),
@@ -47,16 +52,27 @@ final class Promote extends AbstractGatewayCommand
                     $json,
                     $package,
                     $profile,
+                    $deadlineMonotonic,
                 ): int {
+                    $this->remainingPromotionDeadline($deadlineMonotonic);
                     $this->cleanupPromotionJournalRecoveryBackups();
                     return $recoverOnly
-                        ? $this->executeRecoveryOnlyLocked($json)
+                        ? $this->executeRecoveryOnlyLocked(
+                            $json,
+                            $deadlineMonotonic,
+                        )
                         : $this->executePromotionLocked(
                             $json,
                             $package,
                             $profile,
+                            $deadlineMonotonic,
                         );
                 },
+                waitTimeoutSeconds: \min(
+                    300.0,
+                    $this->remainingPromotionDeadline($deadlineMonotonic),
+                ),
+                deadlineMonotonic: $deadlineMonotonic,
             );
         } catch (\Throwable $throwable) {
             return $this->failure(
@@ -67,9 +83,15 @@ final class Promote extends AbstractGatewayCommand
         }
     }
 
-    private function executeRecoveryOnlyLocked(bool $json): int
+    private function executeRecoveryOnlyLocked(
+        bool $json,
+        float $deadlineMonotonic,
+    ): int
     {
-        $recovered = $this->recoverIncompletePromotion(new GatewayHostManager());
+        $recovered = $this->recoverIncompletePromotion(
+            new GatewayHostManager(),
+            $deadlineMonotonic,
+        );
         if (!$json) {
             if ($recovered === []) {
                 $this->printer->success(__('没有未完成的 WLS Gateway 提升事务。'));
@@ -85,16 +107,26 @@ final class Promote extends AbstractGatewayCommand
         bool $json,
         string $package,
         string $profile,
+        float $deadlineMonotonic,
     ): int {
         $gateway = new GatewayHostManager();
-        $recovered = $this->recoverIncompletePromotion($gateway);
+        $recovered = $this->recoverIncompletePromotion(
+            $gateway,
+            $deadlineMonotonic,
+        );
         if ($recovered !== []) {
             if (!$json) {
                 $this->printer->warning(__('已先恢复上次未完成的提升事务。'));
             }
         }
+        // Recovery of an older cutover owns the complete outer budget. Only
+        // a new promotion must prove its independent rollback reserve before
+        // it performs even reversible staging work.
+        $forwardDeadlineMonotonic = $this->promotionForwardDeadline(
+            $deadlineMonotonic,
+        );
         $legacy = ManagedNginxService::fromEnv();
-        $snapshot = $legacy->doctorSnapshot();
+        $snapshot = $legacy->doctorSnapshot($deadlineMonotonic);
         $paths = new GatewayPaths();
         $owner = \trim((string)($snapshot['owner_instance'] ?? ''));
         if (!($snapshot['running'] ?? false)
@@ -126,6 +158,8 @@ final class Promote extends AbstractGatewayCommand
         $legacyPublicBaseline = $this->probeLegacyPublicResponses(
             $paths->publicHttpsPort(),
             $serverNames,
+            null,
+            $deadlineMonotonic,
         );
         if (!($legacyPublicBaseline['ok'] ?? false)) {
             return $this->failure(
@@ -143,7 +177,11 @@ final class Promote extends AbstractGatewayCommand
         try {
             // Package, Broker, locked runtimes, system definition and project
             // desired state are validated while the legacy owner keeps serving.
-            $staged = $gateway->stageLegacyPromotion($package, $profile);
+            $staged = $gateway->stageLegacyPromotion(
+                $package,
+                $profile,
+                $deadlineMonotonic,
+            );
             $journal = $this->beginPromotionJournal(
                 $staged,
                 $owner,
@@ -159,12 +197,20 @@ final class Promote extends AbstractGatewayCommand
                 $legacyRuntimeRoot,
                 $legacyRuntimeOwnership,
             );
+            // Never begin the public cutover unless the complete forward
+            // hand-off still fits ahead of the rollback reserve. Every
+            // potentially blocking operation after this point uses the
+            // derived forward deadline; compensation keeps the outer one.
+            $this->remainingPromotionDeadline($forwardDeadlineMonotonic);
             $journal = $this->advancePromotionJournal(
                 $journal,
                 'LEGACY_STOPPING',
                 ['legacy_stop_started' => true],
             );
-            $stopped = $legacy->stopForInstance($owner);
+            $stopped = $legacy->stopForInstance(
+                $owner,
+                $forwardDeadlineMonotonic,
+            );
             if (!$this->legacyStopReleasedPublicOwnership($stopped)) {
                 if (($stopped['owner_matched'] ?? null) === false) {
                     // The lifecycle lock proved that this transaction did not
@@ -190,15 +236,25 @@ final class Promote extends AbstractGatewayCommand
                 'GATEWAY_ACTIVATING',
                 ['gateway_activation_started' => true],
             );
-            $gateway->activateLegacyPromotion($staged);
+            $gateway->activateLegacyPromotion(
+                $staged,
+                $forwardDeadlineMonotonic,
+            );
             $activated = true;
             $journal = $this->advancePromotionJournal($journal, 'GATEWAY_ACTIVE');
-            $gateway->enrollCurrentProjectForPromotion($builder, $projectRoot);
+            $gateway->enrollCurrentProjectForPromotion(
+                $builder,
+                $projectRoot,
+                $forwardDeadlineMonotonic,
+            );
             $journal = $this->advancePromotionJournal($journal, 'PROJECT_ENROLLED');
             // An administrator promotion may encounter a root-owned runtime
             // directory left by WLS 1.x. Repair it before the project Master
             // must create the authenticated join-backend capability token.
-            ProtocolEdgeRuntime::ensureTokenFile($owner);
+            GatewayBackendIngressTokenStore::ensureTokenFile(
+                $owner,
+                $forwardDeadlineMonotonic,
+            );
             $this->persistPromotedInstanceEdgeMode(
                 $owner,
                 function (array $snapshot) use (&$journal): void {
@@ -208,6 +264,7 @@ final class Promote extends AbstractGatewayCommand
                         ['saved_edge_snapshot' => $snapshot],
                     );
                 },
+                $forwardDeadlineMonotonic,
             );
             $journal = $this->advancePromotionJournal($journal, 'EDGE_MODE_UPDATED');
             // Mark the attempt before IPC so a lost enable acknowledgement is
@@ -217,7 +274,11 @@ final class Promote extends AbstractGatewayCommand
                 'AGENT_ATTACHING',
                 ['agent_attach_started' => true],
             );
-            $agent = $this->setProjectGatewayAgentEnabled($owner, true);
+            $agent = $this->setProjectGatewayAgentEnabled(
+                $owner,
+                true,
+                $forwardDeadlineMonotonic,
+            );
             $transactionId = (string)(
                 $agent['runtime_endpoint']['transaction_id'] ?? ''
             );
@@ -227,11 +288,16 @@ final class Promote extends AbstractGatewayCommand
                 ['agent_transaction_id' => $transactionId],
             );
             $registration = $gateway->awaitPromotionProjectActivation(
-                $owner,
-                $projectRoot,
+                instanceName: $owner,
+                projectRoot: $projectRoot,
+                deadlineMonotonic: $forwardDeadlineMonotonic,
             );
             $journal = $this->advancePromotionJournal($journal, 'PROJECT_ACTIVE');
-            $commit = $this->commitProjectGatewayAgentPromotion($owner, $transactionId);
+            $commit = $this->commitProjectGatewayAgentPromotion(
+                $owner,
+                $transactionId,
+                $forwardDeadlineMonotonic,
+            );
             $journal = $this->advancePromotionJournal($journal, 'COMMITTED');
             $registration['agent'] = $agent;
             $registration['agent_commit'] = $commit;
@@ -253,7 +319,10 @@ final class Promote extends AbstractGatewayCommand
         } catch (\Throwable $throwable) {
             if (\is_array($journal)) {
                 try {
-                    $rollForward = $this->rollForwardCommittedPromotion($journal);
+                    $rollForward = $this->rollForwardCommittedPromotion(
+                        $journal,
+                        $deadlineMonotonic,
+                    );
                     if ($rollForward !== null) {
                         if (!$json) {
                             $this->printer->success(__(
@@ -298,6 +367,7 @@ final class Promote extends AbstractGatewayCommand
                     $rollbackDetails = $this->rollbackPromotionFromJournal(
                         $gateway,
                         $journal,
+                        $deadlineMonotonic,
                     );
                     $details = \array_replace($details, $rollbackDetails);
                 } catch (\Throwable $rollbackError) {
@@ -326,7 +396,11 @@ final class Promote extends AbstractGatewayCommand
                 // failed. Public ownership has not moved yet, so only discard
                 // the disabled staged service/package.
                 try {
-                    $gateway->abortLegacyPromotion($staged, false);
+                    $gateway->abortLegacyPromotion(
+                        $staged,
+                        false,
+                        $deadlineMonotonic,
+                    );
                 } catch (\Throwable $abort) {
                     $details['gateway_cleanup_error'] = $abort->getMessage();
                 }
@@ -632,8 +706,11 @@ final class Promote extends AbstractGatewayCommand
     }
 
     /** @return array<string,mixed> */
-    private function recoverIncompletePromotion(GatewayHostManager $gateway): array
-    {
+    private function recoverIncompletePromotion(
+        GatewayHostManager $gateway,
+        float $deadlineMonotonic,
+    ): array {
+        $this->remainingPromotionDeadline($deadlineMonotonic);
         $journal = $this->readPromotionJournal();
         if ($journal === null
             || \in_array((string)($journal['phase'] ?? ''), ['COMMITTED', 'ROLLED_BACK'], true)
@@ -662,6 +739,7 @@ final class Promote extends AbstractGatewayCommand
                     $agent = $this->setProjectGatewayAgentEnabled(
                         (string)($journal['owner_instance'] ?? ''),
                         true,
+                        $deadlineMonotonic,
                     );
                     $transactionId = \strtolower(\trim((string)(
                         $agent['runtime_endpoint']['transaction_id'] ?? ''
@@ -680,7 +758,10 @@ final class Promote extends AbstractGatewayCommand
                         ],
                     );
                 }
-                $rollForward = $this->rollForwardCommittedPromotion($journal);
+                $rollForward = $this->rollForwardCommittedPromotion(
+                    $journal,
+                    $deadlineMonotonic,
+                );
                 if ($rollForward !== null) {
                     return [
                         'transaction_id' => (string)$journal['transaction_id'],
@@ -703,7 +784,11 @@ final class Promote extends AbstractGatewayCommand
                     ),
                 ],
             );
-            $details = $this->rollbackPromotionFromJournal($gateway, $journal);
+            $details = $this->rollbackPromotionFromJournal(
+                $gateway,
+                $journal,
+                $deadlineMonotonic,
+            );
             return [
                 'transaction_id' => (string)$journal['transaction_id'],
                 'recovered_from_phase' => $phase,
@@ -733,8 +818,11 @@ final class Promote extends AbstractGatewayCommand
      * @param array<string,mixed> $journal
      * @return array<string,mixed>|null null means the matching transaction is still ATTACHING
      */
-    private function rollForwardCommittedPromotion(array $journal): ?array
-    {
+    private function rollForwardCommittedPromotion(
+        array $journal,
+        float $deadlineMonotonic,
+    ): ?array {
+        $this->remainingPromotionDeadline($deadlineMonotonic);
         $owner = (string)($journal['owner_instance'] ?? '');
         $transactionId = \strtolower(\trim((string)(
             $journal['agent_transaction_id'] ?? ''
@@ -747,6 +835,7 @@ final class Promote extends AbstractGatewayCommand
         $status = $this->queryProjectGatewayAgentPromotionStatus(
             $owner,
             $transactionId,
+            $deadlineMonotonic,
         );
         $state = (string)($status['state'] ?? '');
         $matches = ($status['matches'] ?? false) === true
@@ -786,13 +875,14 @@ final class Promote extends AbstractGatewayCommand
     private function queryProjectGatewayAgentPromotionStatus(
         string $instanceName,
         string $transactionId,
+        float $deadlineMonotonic,
     ): array {
         $result = (new IpcControlGateway())->command(
             $instanceName,
             ControlMessage::ACTION_GATEWAY_AGENT_STATUS,
             '',
             ['promotion_transaction_id' => $transactionId],
-            10.0,
+            \min(10.0, $this->remainingPromotionDeadline($deadlineMonotonic)),
         );
         if (!($result['success'] ?? false)) {
             throw new \RuntimeException(
@@ -817,7 +907,9 @@ final class Promote extends AbstractGatewayCommand
     private function rollbackPromotionFromJournal(
         GatewayHostManager $gateway,
         array $journal,
+        float $deadlineMonotonic,
     ): array {
+        $this->remainingPromotionDeadline($deadlineMonotonic);
         $owner = (string)($journal['owner_instance'] ?? '');
         $staged = \is_array($journal['staged'] ?? null) ? $journal['staged'] : [];
         $legacy = \is_array($journal['legacy'] ?? null) ? $journal['legacy'] : [];
@@ -839,12 +931,18 @@ final class Promote extends AbstractGatewayCommand
         ) {
             $this->assertRollbackLegacyOwnerNotReplaced(
                 $owner,
-                ManagedNginxService::fromEnv()->promotionRollbackOwnerSnapshot(),
+                ManagedNginxService::fromEnv()->promotionRollbackOwnerSnapshot(
+                    $deadlineMonotonic,
+                ),
             );
         }
         if (($journal['agent_attach_started'] ?? false) === true) {
             try {
-                $this->setProjectGatewayAgentEnabled($owner, false);
+                $this->setProjectGatewayAgentEnabled(
+                    $owner,
+                    false,
+                    $deadlineMonotonic,
+                );
                 $details['gateway_agent_cleanup'] = 'detached';
             } catch (\Throwable $throwable) {
                 // Continue restoring public service; the removed gateway and
@@ -862,7 +960,11 @@ final class Promote extends AbstractGatewayCommand
             ? $journal['saved_edge_snapshot']
             : null;
         if ($saved !== null) {
-            $configRollback = $this->restoreSavedInstanceEdgeMode($owner, $saved);
+            $configRollback = $this->restoreSavedInstanceEdgeMode(
+                $owner,
+                $saved,
+                $deadlineMonotonic,
+            );
             $details['saved_edge_mode_rollback'] = $configRollback['conflicts'] === []
                 ? 'restored'
                 : 'concurrent_changes_preserved';
@@ -872,7 +974,7 @@ final class Promote extends AbstractGatewayCommand
             && ($journal['gateway_quiesced'] ?? false) !== true
             && ($journal['legacy_restored'] ?? false) !== true
         ) {
-            $gateway->quiesceLegacyPromotion($staged);
+            $gateway->quiesceLegacyPromotion($staged, $deadlineMonotonic);
             $journal = $this->advancePromotionJournal(
                 $journal,
                 'GATEWAY_QUIESCED',
@@ -897,6 +999,7 @@ final class Promote extends AbstractGatewayCommand
                 (int)($legacy['upstream_port'] ?? 0),
                 (string)($legacy['upstream_host'] ?? ''),
                 $serverNames,
+                $deadlineMonotonic,
             );
             if (!($rollback['ok'] ?? false)) {
                 throw new \RuntimeException(
@@ -909,6 +1012,7 @@ final class Promote extends AbstractGatewayCommand
                 \is_array($legacy['public_baseline'] ?? null)
                     ? $legacy['public_baseline']
                     : null,
+                $deadlineMonotonic,
             );
             if (!($probe['ok'] ?? false)) {
                 throw new \RuntimeException(
@@ -934,6 +1038,7 @@ final class Promote extends AbstractGatewayCommand
         $gateway->abortLegacyPromotion(
             $staged,
             ($journal['gateway_activation_started'] ?? false) === true,
+            $deadlineMonotonic,
         );
         $this->advancePromotionJournal($journal, 'ROLLED_BACK');
         $details['gateway_cleanup'] = 'removed_after_legacy_probe';
@@ -955,6 +1060,7 @@ final class Promote extends AbstractGatewayCommand
     private function persistPromotedInstanceEdgeMode(
         string $instanceName,
         \Closure $beforeWrite,
+        ?float $deadlineMonotonic = null,
     ): array
     {
         $savedAt = \date('Y-m-d H:i:s');
@@ -996,6 +1102,7 @@ final class Promote extends AbstractGatewayCommand
                 return [$next, $snapshot];
             },
             true,
+            $deadlineMonotonic,
         );
     }
 
@@ -1006,6 +1113,7 @@ final class Promote extends AbstractGatewayCommand
     private function restoreSavedInstanceEdgeMode(
         string $instanceName,
         array $snapshot,
+        ?float $deadlineMonotonic = null,
     ): array {
         $fields = $snapshot['fields'] ?? null;
         $afterFields = $snapshot['after_fields'] ?? null;
@@ -1026,6 +1134,7 @@ final class Promote extends AbstractGatewayCommand
             $instanceName,
             $fields,
             $afterFields,
+            $deadlineMonotonic,
         );
     }
 
@@ -1033,6 +1142,7 @@ final class Promote extends AbstractGatewayCommand
     private function setProjectGatewayAgentEnabled(
         string $instanceName,
         bool $enabled,
+        float $deadlineMonotonic,
     ): array {
         $action = $enabled
             ? ControlMessage::ACTION_GATEWAY_AGENT_ENABLE
@@ -1042,7 +1152,7 @@ final class Promote extends AbstractGatewayCommand
             $action,
             '',
             [],
-            30.0,
+            \min(30.0, $this->remainingPromotionDeadline($deadlineMonotonic)),
         );
         if (!($result['success'] ?? false)) {
             throw new \RuntimeException(
@@ -1057,6 +1167,7 @@ final class Promote extends AbstractGatewayCommand
     private function commitProjectGatewayAgentPromotion(
         string $instanceName,
         string $transactionId,
+        float $deadlineMonotonic,
     ): array {
         $transactionId = \strtolower(\trim($transactionId));
         if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1) {
@@ -1067,7 +1178,7 @@ final class Promote extends AbstractGatewayCommand
             ControlMessage::ACTION_GATEWAY_AGENT_COMMIT,
             '',
             ['promotion_transaction_id' => $transactionId],
-            10.0,
+            \min(10.0, $this->remainingPromotionDeadline($deadlineMonotonic)),
         );
         if ($result['success'] ?? false) {
             return \is_array($result['data'] ?? null) ? $result['data'] : [];
@@ -1078,6 +1189,7 @@ final class Promote extends AbstractGatewayCommand
         $status = $this->queryProjectGatewayAgentPromotionStatus(
             $instanceName,
             $transactionId,
+            $deadlineMonotonic,
         );
         if ((string)($status['state'] ?? '') === 'COMMITTED'
             && ($status['matches'] ?? false) === true
@@ -1109,6 +1221,7 @@ final class Promote extends AbstractGatewayCommand
         int $upstreamPort,
         string $upstreamHost,
         array $serverNames,
+        float $deadlineMonotonic,
     ): array {
         $result = (new IpcControlGateway())->command(
             $instanceName,
@@ -1120,7 +1233,7 @@ final class Promote extends AbstractGatewayCommand
                 'upstream_host' => $upstreamHost,
                 'server_names' => \array_values($serverNames),
             ],
-            30.0,
+            \min(30.0, $this->remainingPromotionDeadline($deadlineMonotonic)),
         );
         $data = \is_array($result['data'] ?? null) ? $result['data'] : [];
         if (!($result['success'] ?? false) || !($data['ok'] ?? false)) {
@@ -1179,7 +1292,10 @@ final class Promote extends AbstractGatewayCommand
         int $port,
         array $serverNames,
         ?array $baseline = null,
+        ?float $deadlineMonotonic = null,
     ): array {
+        $deadlineMonotonic ??= self::monotonicSeconds() + 20.0;
+        $this->remainingPromotionDeadline($deadlineMonotonic);
         $host = $this->legacyPublicProbeHost($serverNames);
         if ($port < 1
             || $port > 65535
@@ -1211,6 +1327,7 @@ final class Promote extends AbstractGatewayCommand
                 $host,
                 $port,
                 $requestedVersion,
+                $deadlineMonotonic,
             );
             $probes[$name] = $probe;
             if (!($probe['ok'] ?? false)) {
@@ -1277,7 +1394,14 @@ final class Promote extends AbstractGatewayCommand
         string $host,
         int $port,
         int $requestedVersion,
+        float $deadlineMonotonic,
     ): array {
+        $remainingMilliseconds = (int)\max(
+            1,
+            \floor(
+                $this->remainingPromotionDeadline($deadlineMonotonic) * 1000,
+            ),
+        );
         $bodyBytes = 0;
         $hash = \hash_init('sha256');
         $handle = @\curl_init('https://' . $host . ':' . $port . '/');
@@ -1303,8 +1427,8 @@ final class Promote extends AbstractGatewayCommand
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => 0,
             CURLOPT_RESOLVE => [$host . ':' . $port . ':127.0.0.1'],
-            CURLOPT_CONNECTTIMEOUT_MS => 1_500,
-            CURLOPT_TIMEOUT_MS => 8_000,
+            CURLOPT_CONNECTTIMEOUT_MS => \min(1_500, $remainingMilliseconds),
+            CURLOPT_TIMEOUT_MS => \min(8_000, $remainingMilliseconds),
             CURLOPT_FRESH_CONNECT => true,
             CURLOPT_FORBID_REUSE => true,
             CURLOPT_FOLLOWLOCATION => false,
@@ -1550,5 +1674,38 @@ final class Promote extends AbstractGatewayCommand
     private static function monotonicSeconds(): float
     {
         return \hrtime(true) / 1_000_000_000;
+    }
+
+    /**
+     * The public hand-off may consume at most the outer deadline minus the
+     * fixed recovery reserve. The returned absolute deadline is reused by
+     * stop, activation, enrollment and Agent commit; rollback deliberately
+     * continues to use the original outer deadline.
+     */
+    private function promotionForwardDeadline(float $deadlineMonotonic): float
+    {
+        $remaining = $this->remainingPromotionDeadline($deadlineMonotonic);
+        if ($remaining <= self::PROMOTION_ROLLBACK_RESERVE_SECONDS) {
+            throw new \RuntimeException(
+                'Gateway promotion cannot begin because its rollback reserve is exhausted.',
+            );
+        }
+        return $deadlineMonotonic - self::PROMOTION_ROLLBACK_RESERVE_SECONDS;
+    }
+
+    private function remainingPromotionDeadline(float $deadlineMonotonic): float
+    {
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Gateway promotion deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - self::monotonicSeconds();
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Gateway promotion deadline was exhausted.',
+            );
+        }
+        return $remaining;
     }
 }

@@ -267,7 +267,6 @@ class ControlMessage
     public const ROLE_MAINTENANCE = 'maintenance';
     public const ROLE_SESSION_SERVER = 'session_server';
     public const ROLE_MEMORY_SERVER = 'memory_server';
-    public const ROLE_GATEWAY = 'gateway';
     public const ROLE_GATEWAY_FALLBACK = 'gateway_fallback';
     public const ROLE_GATEWAY_AGENT = 'gateway_agent';
     public const ROLE_GATEWAY_BACKEND = 'gateway_backend';
@@ -321,9 +320,6 @@ class ControlMessage
     /** CLI → Master：查询扩缩容状态 */
     public const ACTION_SCALING_STATUS = 'scaling_status';
 
-    /** CLI → Master：应用反向代理配置 */
-    public const ACTION_PROXY_APPLY = 'proxy_apply';
-
     /** CLI → Master：清除 Dispatcher 路由缓存 */
     public const ACTION_ROUTING_CACHE_CLEAR = 'routing_cache_clear';
 
@@ -335,6 +331,8 @@ class ControlMessage
     public const ACTION_GATEWAY_FALLBACK_ENABLE = 'gateway_fallback_enable';
     public const ACTION_GATEWAY_FALLBACK_DRAIN = 'gateway_fallback_drain';
     public const ACTION_GATEWAY_FALLBACK_DISABLE = 'gateway_fallback_disable';
+    /** CLI(Start) → Master → current Gateway Agent; never carries bind authority. */
+    public const ACTION_GATEWAY_STARTUP_FALLBACK_REQUEST = 'gateway_startup_fallback_request';
     public const ACTION_GATEWAY_BACKEND_ENABLE = 'gateway_backend_enable';
     public const ACTION_GATEWAY_NATIVE_DRAIN = 'gateway_native_drain';
     public const ACTION_GATEWAY_AGENT_ENABLE = 'gateway_agent_enable';
@@ -373,17 +371,6 @@ class ControlMessage
 
     /** Master → Dispatcher：清除路由缓存 */
     public const TYPE_ROUTING_CACHE_CLEAR = 'routing_cache_clear';
-
-    // ========== Gateway 反向代理消息类型 ==========
-
-    /** Master → Gateway：添加反向代理路由 */
-    public const TYPE_PROXY_ADD_ROUTE = 'proxy_add_route';
-
-    /** Master → Gateway：移除反向代理路由 */
-    public const TYPE_PROXY_REMOVE_ROUTE = 'proxy_remove_route';
-
-    /** Master → Gateway：重载所有反向代理路由 */
-    public const TYPE_PROXY_RELOAD = 'proxy_reload';
 
     /** Worker → Master：长连接饱和上报（主动） */
     public const TYPE_WORKER_SATURATION = 'worker_saturation';
@@ -489,6 +476,7 @@ class ControlMessage
         string $slotId = '',
         string $leaseId = '',
         int $generation = 0,
+        string $managedChildCredential = '',
     ): string
     {
         $data = [
@@ -517,6 +505,9 @@ class ControlMessage
             $data['instance_code'] = $instanceCode;
         }
         self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $managedChildCredential) === 1) {
+            $data['managed_child_credential'] = $managedChildCredential;
+        }
         return self::encode($data);
     }
 
@@ -3379,57 +3370,4 @@ class ControlMessage
         ]);
     }
 
-    // ========== Gateway 反向代理消息工厂方法 ==========
-
-    /**
-     * 构建 proxy_add_route 消息（Master → Gateway）
-     *
-     * @param string $domain 域名
-     * @param string $backendHost 后端主机
-     * @param int $backendPort 后端端口
-     * @param bool $backendSsl 后端是否使用SSL
-     * @param int $priority 优先级
-     */
-    public static function proxyAddRoute(
-        string $domain,
-        string $backendHost,
-        int $backendPort,
-        bool $backendSsl = true,
-        int $priority = 0
-    ): string {
-        return self::encode([
-            'type'         => self::TYPE_PROXY_ADD_ROUTE,
-            'domain'       => $domain,
-            'backend_host' => $backendHost,
-            'backend_port' => $backendPort,
-            'backend_ssl'  => $backendSsl,
-            'priority'     => $priority,
-        ]);
-    }
-
-    /**
-     * 构建 proxy_remove_route 消息（Master → Gateway）
-     *
-     * @param string $domain 域名
-     */
-    public static function proxyRemoveRoute(string $domain): string
-    {
-        return self::encode([
-            'type'   => self::TYPE_PROXY_REMOVE_ROUTE,
-            'domain' => $domain,
-        ]);
-    }
-
-    /**
-     * 构建 proxy_reload 消息（Master → Gateway）
-     *
-     * @param array $routes 路由数组 [['domain' => ..., 'backend_host' => ..., 'backend_port' => ..., 'backend_ssl' => ..., 'priority' => ...], ...]
-     */
-    public static function proxyReload(array $routes): string
-    {
-        return self::encode([
-            'type'   => self::TYPE_PROXY_RELOAD,
-            'routes' => $routes,
-        ]);
-    }
 }

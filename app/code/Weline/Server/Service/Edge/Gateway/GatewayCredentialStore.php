@@ -118,8 +118,12 @@ final class GatewayCredentialStore
     }
 
     /** @param array<string,mixed> $credential */
-    public function install(array $credential, string $expectedProjectUuid): string
-    {
+    public function install(
+        array $credential,
+        string $expectedProjectUuid,
+        ?float $deadlineMonotonic = null,
+    ): string {
+        $this->credentialDeadlineRemaining($deadlineMonotonic);
         $payload = $this->credentialPayload($credential, $expectedProjectUuid);
         $hostId = (string)$payload['host_id'];
 
@@ -142,8 +146,19 @@ final class GatewayCredentialStore
 
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
-            function () use ($directory, $file, $encoded, $projectOwner, $seal): string {
-                $credentials = $this->credentialFiles($directory);
+            function () use (
+                $directory,
+                $file,
+                $encoded,
+                $projectOwner,
+                $seal,
+                $deadlineMonotonic,
+            ): string {
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
+                $credentials = $this->credentialFiles(
+                    $directory,
+                    $deadlineMonotonic,
+                );
                 $overflowAfterImage = $this->assertRecoverableOverflowAfterImage(
                     $credentials,
                     $file,
@@ -164,6 +179,7 @@ final class GatewayCredentialStore
                     $credentials,
                     $file,
                     'active credential install',
+                    $deadlineMonotonic,
                 );
                 if ($this->credentialFileMatches($file, $encoded)) {
                     $this->assertProjectOwnedRegularFile(
@@ -174,6 +190,7 @@ final class GatewayCredentialStore
                     $this->cleanupPublishedCredentialFiles($credentials, $file);
                     return $file;
                 }
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
                 GatewayProjectStateFilesystem::atomicWrite($file, $encoded, 0600, $seal);
                 $this->assertProjectOwnedRegularFile($file, $projectOwner, \strlen($encoded));
                 // The active payload is now durable. Cleanup is maintenance,
@@ -184,6 +201,9 @@ final class GatewayCredentialStore
                 return $file;
             },
             $seal,
+            waitTimeoutSeconds: $this->credentialLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
         );
     }
 
@@ -192,7 +212,9 @@ final class GatewayCredentialStore
         array $credential,
         string $expectedProjectUuid,
         string $rotationId,
+        ?float $deadlineMonotonic = null,
     ): string {
+        $this->credentialDeadlineRemaining($deadlineMonotonic);
         $rotationId = $this->rotationId($rotationId);
         $payload = $this->credentialPayload($credential, $expectedProjectUuid);
         $projectRoot = $this->root();
@@ -213,8 +235,19 @@ final class GatewayCredentialStore
         );
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
-            function () use ($directory, $file, $encoded, $owner, $seal): string {
-                $credentials = $this->credentialFiles($directory);
+            function () use (
+                $directory,
+                $file,
+                $encoded,
+                $owner,
+                $seal,
+                $deadlineMonotonic,
+            ): string {
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
+                $credentials = $this->credentialFiles(
+                    $directory,
+                    $deadlineMonotonic,
+                );
                 $overflowAfterImage = $this->assertRecoverableOverflowAfterImage(
                     $credentials,
                     $file,
@@ -234,11 +267,15 @@ final class GatewayCredentialStore
                     $file,
                     'pending credential install',
                 );
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
                 GatewayProjectStateFilesystem::atomicWrite($file, $encoded, 0600, $seal);
                 $this->assertProjectOwnedRegularFile($file, $owner, \strlen($encoded));
                 return $file;
             },
             $seal,
+            waitTimeoutSeconds: $this->credentialLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
         );
     }
 
@@ -268,7 +305,9 @@ final class GatewayCredentialStore
     public function commitPending(
         string $rotationId,
         string $expectedProjectUuid,
+        ?float $deadlineMonotonic = null,
     ): array {
+        $this->credentialDeadlineRemaining($deadlineMonotonic);
         $rotationId = $this->rotationId($rotationId);
         $projectRoot = $this->root();
         $directory = $this->prepareCredentialDirectory($projectRoot);
@@ -292,8 +331,13 @@ final class GatewayCredentialStore
                 $expectedProjectUuid,
                 $owner,
                 $seal,
+                $deadlineMonotonic,
             ): array {
-                $files = $this->credentialFiles($directory);
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
+                $files = $this->credentialFiles(
+                    $directory,
+                    $deadlineMonotonic,
+                );
                 $payload = $this->readCredentialPayload($pending, $expectedProjectUuid);
                 $encoded = \json_encode(
                     $payload,
@@ -317,9 +361,11 @@ final class GatewayCredentialStore
                         $files,
                         $active,
                         'pending credential commit',
+                        $deadlineMonotonic,
                     );
                 }
                 if (!$this->credentialFileMatches($active, $encoded)) {
+                    $this->credentialDeadlineRemaining($deadlineMonotonic);
                     GatewayProjectStateFilesystem::atomicWrite(
                         $active,
                         $encoded,
@@ -332,11 +378,17 @@ final class GatewayCredentialStore
                 return $payload;
             },
             $seal,
+            waitTimeoutSeconds: $this->credentialLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
         );
     }
 
-    public function abortPending(string $rotationId): void
-    {
+    public function abortPending(
+        string $rotationId,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $this->credentialDeadlineRemaining($deadlineMonotonic);
         $directory = $this->credentialDirectory();
         if (!\is_dir($directory) || \is_link($directory)) {
             return;
@@ -352,16 +404,23 @@ final class GatewayCredentialStore
         );
         GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
-            fn (): bool => GatewayProjectStateFilesystem::removeRegular(
-                $this->pendingFile($directory, $this->rotationId($rotationId)),
-                'aborted pending gateway credential',
-            ),
+            function () use ($directory, $rotationId, $deadlineMonotonic): bool {
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
+                return GatewayProjectStateFilesystem::removeRegular(
+                    $this->pendingFile($directory, $this->rotationId($rotationId)),
+                    'aborted pending gateway credential',
+                );
+            },
             $seal,
+            waitTimeoutSeconds: $this->credentialLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
         );
     }
 
-    public function remove(): bool
+    public function remove(?float $deadlineMonotonic = null): bool
     {
+        $this->credentialDeadlineRemaining($deadlineMonotonic);
         $directory = $this->credentialDirectory();
         $status = @\lstat($directory);
         if (!\is_array($status)) {
@@ -385,11 +444,17 @@ final class GatewayCredentialStore
         );
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
-            static fn (): bool => GatewayProjectStateFilesystem::removeRegular(
-                $file,
-                'host-bound gateway credential',
-            ),
+            function () use ($file, $deadlineMonotonic): bool {
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
+                return GatewayProjectStateFilesystem::removeRegular(
+                    $file,
+                    'host-bound gateway credential',
+                );
+            },
             $seal,
+            waitTimeoutSeconds: $this->credentialLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
         );
     }
 
@@ -402,8 +467,10 @@ final class GatewayCredentialStore
      */
     public function purgeForFreshCloneIdentity(
         ?string $preserveProjectUuid = null,
+        ?float $deadlineMonotonic = null,
     ): int
     {
+        $this->credentialDeadlineRemaining($deadlineMonotonic);
         if ($preserveProjectUuid !== null) {
             $preserveProjectUuid = \strtolower(\trim($preserveProjectUuid));
             if (!$this->isUuidV4($preserveProjectUuid)) {
@@ -438,13 +505,22 @@ final class GatewayCredentialStore
         );
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
-            function () use ($directory, $preserveProjectUuid): int {
-                $files = $this->credentialFiles($directory);
+            function () use (
+                $directory,
+                $preserveProjectUuid,
+                $deadlineMonotonic,
+            ): int {
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
+                $files = $this->credentialFiles(
+                    $directory,
+                    $deadlineMonotonic,
+                );
                 $preserved = $preserveProjectUuid === null
                     ? ''
                     : $directory . DIRECTORY_SEPARATOR . $this->hostId() . '.cred';
                 $removed = 0;
                 foreach ($files as $file) {
+                    $this->credentialDeadlineRemaining($deadlineMonotonic);
                     if ($preserved !== '' && \hash_equals($preserved, $file)) {
                         $raw = GatewayProjectStateFilesystem::read(
                             $file,
@@ -482,7 +558,10 @@ final class GatewayCredentialStore
                     }
                     $removed++;
                 }
-                $remaining = $this->credentialFiles($directory);
+                $remaining = $this->credentialFiles(
+                    $directory,
+                    $deadlineMonotonic,
+                );
                 if (($preserved === '' && $remaining !== [])
                     || ($preserved !== ''
                         && ($remaining !== [] && $remaining !== [$preserved]))
@@ -500,6 +579,43 @@ final class GatewayCredentialStore
                 return $removed;
             },
             $seal,
+            waitTimeoutSeconds: $this->credentialLockWaitTimeout(
+                $deadlineMonotonic,
+            ),
+        );
+    }
+
+    private function credentialDeadlineRemaining(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'WLS gateway credential deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'WLS gateway credential deadline was exhausted.',
+            );
+        }
+
+        return $remaining;
+    }
+
+    private function credentialLockWaitTimeout(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+
+        return \min(
+            0.25,
+            $this->credentialDeadlineRemaining($deadlineMonotonic),
         );
     }
 
@@ -634,8 +750,11 @@ final class GatewayCredentialStore
     }
 
     /** @return list<string> */
-    private function credentialFiles(string $directory): array
-    {
+    private function credentialFiles(
+        string $directory,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $this->credentialDeadlineRemaining($deadlineMonotonic);
         $files = [];
         $staging = [];
         $backups = [];
@@ -648,6 +767,7 @@ final class GatewayCredentialStore
         $rawEntries = 0;
         try {
             while (($leaf = @\readdir($handle)) !== false) {
+                $this->credentialDeadlineRemaining($deadlineMonotonic);
                 // Count every raw leaf, including dot/lock/recovery entries,
                 // before interpreting it. Recovery must remain bounded even
                 // when an attacker fills the project-owned directory.
@@ -732,6 +852,7 @@ final class GatewayCredentialStore
         // is authorized by durable project identity/rotation facts. Validate
         // every backup first so a damaged target retains all recovery evidence.
         foreach ($backups as $index => $backup) {
+            $this->credentialDeadlineRemaining($deadlineMonotonic);
             $target = $directory . DIRECTORY_SEPARATOR . $backup['target_leaf'];
             if (!\in_array($target, $files, true)) {
                 throw new \RuntimeException(
@@ -743,6 +864,7 @@ final class GatewayCredentialStore
                     = $this->validateCredentialRecoveryTarget(
                     $target,
                     (string)$backup['target_leaf'],
+                    $deadlineMonotonic,
                 );
             } catch (\Throwable $throwable) {
                 throw new \RuntimeException(
@@ -753,6 +875,7 @@ final class GatewayCredentialStore
             }
         }
         foreach ([...$staging, ...$backups] as $artifact) {
+            $this->credentialDeadlineRemaining($deadlineMonotonic);
             if (\is_array($artifact['target_identity'] ?? null)) {
                 $target = $directory . DIRECTORY_SEPARATOR
                     . (string)$artifact['target_leaf'];
@@ -787,7 +910,9 @@ final class GatewayCredentialStore
     private function validateCredentialRecoveryTarget(
         string $target,
         string $targetLeaf,
+        ?float $deadlineMonotonic = null,
     ): array {
+        $this->credentialDeadlineRemaining($deadlineMonotonic);
         $active = [];
         $pending = [];
         $isActive = \preg_match(
@@ -874,6 +999,7 @@ final class GatewayCredentialStore
         if (!(new ProjectIdentityStore($this->root()))->authorizesCredentialRecovery(
             $projectUuid,
             $rotationId,
+            $deadlineMonotonic,
         )) {
             throw new \RuntimeException(
                 'Credential recovery paired target is not authorized by project facts.',
@@ -985,6 +1111,7 @@ final class GatewayCredentialStore
         array $files,
         string $active,
         string $operation,
+        ?float $deadlineMonotonic = null,
     ): array {
         if (\in_array($active, $files, true)
             || \count($files) < self::MAX_CREDENTIAL_FILES
@@ -992,6 +1119,7 @@ final class GatewayCredentialStore
             return $files;
         }
         foreach ($files as $candidate) {
+            $this->credentialDeadlineRemaining($deadlineMonotonic);
             if (!\str_ends_with($candidate, '.cred')
                 || \hash_equals($active, $candidate)
             ) {
@@ -1010,7 +1138,10 @@ final class GatewayCredentialStore
                     $throwable,
                 );
             }
-            $files = $this->credentialFiles($directory);
+            $files = $this->credentialFiles(
+                $directory,
+                $deadlineMonotonic,
+            );
             break;
         }
         $this->assertCapacityForNewPath($files, $active, $operation);

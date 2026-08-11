@@ -13,9 +13,11 @@ final class RedirectControlHandler implements RoleControlHandlerInterface
 {
     /**
      * @param callable(bool):void $setShutdownFlag
+     * @param null|callable(array<string,mixed>):void $onCommand
      */
     public function __construct(
-        private readonly mixed $setShutdownFlag
+        private readonly mixed $setShutdownFlag,
+        private readonly mixed $onCommand = null,
     ) {
     }
 
@@ -23,6 +25,12 @@ final class RedirectControlHandler implements RoleControlHandlerInterface
     {
         if (($message['type'] ?? '') === ControlMessage::TYPE_SHUTDOWN) {
             ($this->setShutdownFlag)(true);
+            return;
+        }
+        if (($message['type'] ?? '') === ControlMessage::TYPE_COMMAND
+            && \is_callable($this->onCommand)
+        ) {
+            ($this->onCommand)($message);
         }
     }
 
@@ -36,4 +44,3 @@ final class RedirectControlHandler implements RoleControlHandlerInterface
         $kernel->reconnect();
     }
 }
-

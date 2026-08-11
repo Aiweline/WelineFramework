@@ -14,6 +14,27 @@ use Weline\Server\Supervisor\SupervisorRuntime;
 
 final class HybridControlPlaneServerTest extends TestCase
 {
+    public function testInstanceControlPlaneFailsClosedWithoutProductionCredentials(): void
+    {
+        $hybrid = new HybridControlPlaneServer(
+            controlServer: new MasterControlServer(),
+            endpointResolver: new ControlEndpointResolver(BP, 28700, 1000),
+            supervisorEnabled: false,
+            supervisorAuthSecret: \str_repeat('a', 64),
+        );
+        $hybrid->setExpectedInstanceCode('ut-missing-control-token');
+        self::assertFalse($hybrid->start('127.0.0.1', 0));
+
+        $missingManagedCredential = new HybridControlPlaneServer(
+            controlServer: new MasterControlServer(),
+            endpointResolver: new ControlEndpointResolver(BP, 28700, 1000),
+            supervisorEnabled: false,
+        );
+        $missingManagedCredential->setExpectedInstanceCode('ut-missing-managed-token');
+        $missingManagedCredential->setExpectedControlToken(\str_repeat('b', 64));
+        self::assertFalse($missingManagedCredential->start('127.0.0.1', 0));
+    }
+
     public function testHybridServerAcceptsArrayCallablesForControlCallbacks(): void
     {
         $controlServer = new MasterControlServer();
@@ -83,6 +104,7 @@ final class HybridControlPlaneServerTest extends TestCase
             endpointResolver: $resolver,
             supervisorEnabled: true,
             channelId: 'channel-ut-instance',
+            allowUnauthenticatedHarness: true,
             supervisorRuntime: $runtime,
         );
         $hybrid->setExpectedInstanceCode('ut-instance');
@@ -251,6 +273,7 @@ final class HybridControlPlaneServerTest extends TestCase
             endpointResolver: new ControlEndpointResolver(BP, 28100, 1000),
             supervisorEnabled: true,
             channelId: 'channel-ut-instance',
+            allowUnauthenticatedHarness: true,
         );
         $hybrid->setExpectedInstanceCode('ut-instance');
         $hybrid->onMessage(static function (): void {});
@@ -299,6 +322,7 @@ final class HybridControlPlaneServerTest extends TestCase
             endpointResolver: $resolver,
             supervisorEnabled: true,
             channelId: 'channel-ut-gateway-agent',
+            allowUnauthenticatedHarness: true,
             supervisorRuntime: $runtime,
         );
         $hybrid->setExpectedInstanceCode('ut-gateway-agent');
@@ -419,6 +443,7 @@ final class HybridControlPlaneServerTest extends TestCase
             endpointResolver: $resolver,
             supervisorEnabled: true,
             channelId: 'channel-ut-monotonic-pong',
+            allowUnauthenticatedHarness: true,
             supervisorRuntime: $runtime,
         );
         $hybrid->setExpectedInstanceCode('ut-monotonic-pong');

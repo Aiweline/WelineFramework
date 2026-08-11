@@ -5,6 +5,7 @@ namespace Weline\Server\Service\Control;
 
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
+use Weline\Server\Log\WlsLogger;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 use Weline\Server\Supervisor\SupervisorRuntime;
@@ -47,6 +48,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         private readonly ?string $channelId = null,
         private readonly ?string $basePath = null,
         private readonly string $supervisorAuthSecret = '',
+        private readonly bool $allowUnauthenticatedHarness = false,
         private ?SupervisorRuntime $supervisorRuntime = null,
         private ?SupervisorServer $supervisorServer = null,
     ) {
@@ -65,6 +67,34 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
 
     public function start(string $host, int $port): bool
     {
+        $managedCredentialReady = \preg_match(
+            '/\A[a-f0-9]{64}\z/D',
+            $this->supervisorAuthSecret,
+        ) === 1;
+        $controlCredentialReady = \preg_match(
+            '/\A[a-f0-9]{64}\z/D',
+            $this->expectedControlToken,
+        ) === 1;
+        if ($this->expectedInstanceCode !== null
+            && (!$managedCredentialReady || !$controlCredentialReady)
+            && !$this->allowUnauthenticatedHarness
+        ) {
+            WlsLogger::error_(
+                '[IPC-Hybrid] Refusing to start an instance control plane without both 64-hex credentials.'
+            );
+            return false;
+        }
+        if ($this->expectedInstanceCode !== null && $managedCredentialReady) {
+            $expectedInstanceCode = $this->expectedInstanceCode;
+            $this->controlServer->setManagedChildCredentialResolver(
+                static function (array $message) use ($expectedInstanceCode): string {
+                    return (new MasterChildCredentialStore())
+                        ->resolveSupervisorHelloCredential($message, $expectedInstanceCode);
+                },
+            );
+        } else {
+            $this->controlServer->setManagedChildCredentialResolver(null);
+        }
         if (!$this->controlServer->start($host, $port)) {
             return false;
         }

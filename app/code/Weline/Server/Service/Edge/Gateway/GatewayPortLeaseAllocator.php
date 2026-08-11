@@ -38,6 +38,7 @@ final class GatewayPortLeaseAllocator
     private readonly string $leaseDirectory;
     private readonly string $hostBootId;
     private readonly MasterLeaseRuntimeIdentity $runtimeIdentity;
+    private readonly ?float $operationDeadlineMonotonic;
 
     public function __construct(
         private readonly ProjectIdentityStore $projects = new ProjectIdentityStore(),
@@ -46,7 +47,17 @@ final class GatewayPortLeaseAllocator
         private readonly ?\Closure $monotonicClock = null,
         ?MasterLeaseRuntimeIdentity $runtimeIdentity = null,
         private readonly ?\Closure $afterAtomicPublication = null,
+        ?float $operationDeadlineMonotonic = null,
     ) {
+        if ($operationDeadlineMonotonic !== null
+            && (!\is_finite($operationDeadlineMonotonic)
+                || $operationDeadlineMonotonic < 0.0)
+        ) {
+            throw new \InvalidArgumentException(
+                'WLS port lease operation deadline is invalid.',
+            );
+        }
+        $this->operationDeadlineMonotonic = $operationDeadlineMonotonic;
         $this->leaseDirectory = $leaseDirectory
             ?? $this->projects->hostStateRoot() . DIRECTORY_SEPARATOR . 'fallback-leases';
         $this->hostBootId = GatewayHostBootIdentity::validate(
@@ -120,7 +131,9 @@ final class GatewayPortLeaseAllocator
             $retainBoundSocket,
             $exactPort,
         ): array {
-            $projectUuid = $this->projects->projectUuid();
+            $projectUuid = $this->projects->projectUuid(
+                $this->operationDeadlineMonotonic,
+            );
             $identity = $projectUuid . ':' . $instanceName;
             $file = $this->leaseFile($identity);
             $current = $this->readLease($file);
@@ -250,6 +263,7 @@ final class GatewayPortLeaseAllocator
                 ? self::MAX_PORT - self::MIN_PORT + 1
                 : 1;
             for ($offset = 0; $offset < $candidateCount; $offset++) {
+                $this->assertOperationDeadline();
                 $port = $exactPort ?? (self::MIN_PORT
                     + (($start - self::MIN_PORT + $offset)
                         % (self::MAX_PORT - self::MIN_PORT + 1)));
@@ -396,7 +410,9 @@ final class GatewayPortLeaseAllocator
             ) {
                 throw new \RuntimeException('Fallback lease confirmation identity is invalid.');
             }
-            $projectUuid = $this->projects->projectUuid();
+            $projectUuid = $this->projects->projectUuid(
+                $this->operationDeadlineMonotonic,
+            );
             $identity = $projectUuid . ':' . $instanceName;
             $file = $this->leaseFile($identity);
             $lease = $this->readLease($file);
@@ -553,7 +569,9 @@ final class GatewayPortLeaseAllocator
             $masterIdentity,
             $masterLaunchId,
         ): array {
-            $projectUuid = $this->projects->projectUuid();
+            $projectUuid = $this->projects->projectUuid(
+                $this->operationDeadlineMonotonic,
+            );
             $file = $this->leaseFile($projectUuid . ':' . $instanceName);
             $lease = $this->readLease($file);
             $reservedAt = (int)($lease['reserved_timestamp'] ?? 0);
@@ -637,7 +655,9 @@ final class GatewayPortLeaseAllocator
         $this->assertInstanceName($instanceName);
         $leaseId = $this->validateLeaseId($leaseId);
         return $this->withAllocationLock(function () use ($instanceName, $port, $leaseId): array {
-            $projectUuid = $this->projects->projectUuid();
+            $projectUuid = $this->projects->projectUuid(
+                $this->operationDeadlineMonotonic,
+            );
             $identity = $projectUuid . ':' . $instanceName;
             $file = $this->leaseFile($identity);
             $lease = $this->readLease($file);
@@ -1129,7 +1149,9 @@ final class GatewayPortLeaseAllocator
         $this->assertInstanceName($instanceName);
         $leaseId = $this->validateLeaseId($leaseId);
         $this->withAllocationLock(function () use ($instanceName, $port, $leaseId): void {
-            $projectUuid = $this->projects->projectUuid();
+            $projectUuid = $this->projects->projectUuid(
+                $this->operationDeadlineMonotonic,
+            );
             $identity = $projectUuid . ':' . $instanceName;
             $file = $this->leaseFile($identity);
             $lease = $this->readLease($file);
@@ -1167,7 +1189,9 @@ final class GatewayPortLeaseAllocator
         $this->assertInstanceName($instanceName);
         $leaseId = $this->validateLeaseId($leaseId);
         $this->withAllocationLock(function () use ($instanceName, $port, $leaseId): void {
-            $projectUuid = $this->projects->projectUuid();
+            $projectUuid = $this->projects->projectUuid(
+                $this->operationDeadlineMonotonic,
+            );
             $identity = $projectUuid . ':' . $instanceName;
             $file = $this->leaseFile($identity);
             $lease = $this->readLease($file);
@@ -1237,11 +1261,15 @@ final class GatewayPortLeaseAllocator
      */
     public function status(string $instanceName): ?array
     {
+        $this->assertOperationDeadline();
         $this->assertInstanceName($instanceName);
-        $projectUuid = $this->projects->projectUuid();
+        $projectUuid = $this->projects->projectUuid(
+            $this->operationDeadlineMonotonic,
+        );
         $lease = $this->readLease(
             $this->leaseFile($projectUuid . ':' . $instanceName),
         );
+        $this->assertOperationDeadline();
         if ($lease !== null
             && (!\hash_equals($projectUuid, (string)($lease['project_uuid'] ?? ''))
                 || !\hash_equals($instanceName, (string)($lease['instance'] ?? '')))
@@ -1484,7 +1512,9 @@ final class GatewayPortLeaseAllocator
             $port,
             $masterLaunchId,
         ): array {
-            $projectUuid = $this->projects->projectUuid();
+            $projectUuid = $this->projects->projectUuid(
+                $this->operationDeadlineMonotonic,
+            );
             $file = $this->leaseFile($projectUuid . ':' . $instanceName);
             $lease = $this->readLease($file);
             if (!\is_array($lease)
@@ -2398,8 +2428,38 @@ final class GatewayPortLeaseAllocator
         $lockPath = $this->leaseDirectory . DIRECTORY_SEPARATOR . 'allocation.lock';
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $lockPath,
-            \Closure::fromCallable($callback),
+            function () use ($callback): mixed {
+                $this->assertOperationDeadline();
+                return $callback();
+            },
+            waitTimeoutSeconds: $this->allocationLockWaitTimeout(),
         );
+    }
+
+    private function allocationLockWaitTimeout(): float
+    {
+        if ($this->operationDeadlineMonotonic === null) {
+            return 300.0;
+        }
+        return \min(0.25, $this->operationDeadlineRemaining());
+    }
+
+    private function assertOperationDeadline(): void
+    {
+        if ($this->operationDeadlineMonotonic !== null) {
+            $this->operationDeadlineRemaining();
+        }
+    }
+
+    private function operationDeadlineRemaining(): float
+    {
+        $remaining = (float)$this->operationDeadlineMonotonic - $this->monotonicNow();
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'WLS port lease operation deadline was exhausted.',
+            );
+        }
+        return $remaining;
     }
 
     private function leaseFile(string $identity): string
@@ -2434,6 +2494,7 @@ final class GatewayPortLeaseAllocator
      */
     private function publishLease(string $file, array $lease): void
     {
+        $this->assertOperationDeadline();
         // Observation-only trust metadata must never become part of the
         // durable lease. A DRAINING publication still has to prove its raw
         // boot-bound monotonic fence in assertValidLease().
@@ -2457,6 +2518,7 @@ final class GatewayPortLeaseAllocator
                 'WLS fallback port lease exceeds its fixed serialized size limit.'
             );
         }
+        $this->assertOperationDeadline();
         GatewayProjectStateFilesystem::atomicWrite($file, $encoded, 0600);
         // Optional fault boundary used by lifecycle tests to model an
         // exception after atomic rename/ReplaceFile has already committed the
@@ -3038,7 +3100,9 @@ final class GatewayPortLeaseAllocator
         string $leaseId,
         string $workerLaunchId,
     ): array {
-        $projectUuid = $this->projects->projectUuid();
+        $projectUuid = $this->projects->projectUuid(
+            $this->operationDeadlineMonotonic,
+        );
         $file = $this->leaseFile($projectUuid . ':' . $instanceName);
         $lease = $this->readLease($file);
         if ($lease === null

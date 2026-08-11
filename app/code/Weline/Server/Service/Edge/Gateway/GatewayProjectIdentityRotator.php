@@ -47,7 +47,11 @@ final class GatewayProjectIdentityRotator
             // The credential file was copied with the clone. Remove only this
             // clone-local capability before publishing its new UUID; the
             // source project and its host credential are separate files.
-            $this->retireClonedCredential($oldProjectUuid);
+            $this->retireClonedCredential(
+                $oldProjectUuid,
+                null,
+                $deadlineMonotonic,
+            );
             $freshEnrollment = $this->identities->prepareFreshCloneEnrollment(
                 $cloneConflict,
                 $deadlineMonotonic,
@@ -69,6 +73,7 @@ final class GatewayProjectIdentityRotator
             $this->retireClonedCredential(
                 (string)($freshEnrollment['previous_project_uuid'] ?? ''),
                 (string)($freshEnrollment['project_uuid'] ?? ''),
+                $deadlineMonotonic,
             );
             $projectUuid = $this->identities->projectUuid($deadlineMonotonic);
             if (!\hash_equals(
@@ -89,7 +94,7 @@ final class GatewayProjectIdentityRotator
             ];
         }
 
-        $rotation = $this->identities->rotationState();
+        $rotation = $this->identities->rotationState($deadlineMonotonic);
         $lastFreshEnrollment = $rotation === []
             ? $this->identities->lastFreshEnrollmentState($deadlineMonotonic)
             : [];
@@ -112,7 +117,7 @@ final class GatewayProjectIdentityRotator
             // This also snapshots the old same-host claim while the active UUID
             // and credential remain untouched.
             $this->identities->projectUuid($deadlineMonotonic);
-            $rotation = $this->identities->prepareRotation();
+            $rotation = $this->identities->prepareRotation($deadlineMonotonic);
         }
         $rotationId = (string)$rotation['rotation_id'];
         $phase = (string)$rotation['phase'];
@@ -140,6 +145,7 @@ final class GatewayProjectIdentityRotator
                 $credential,
                 (string)$rotation['new_project_uuid'],
                 $rotationId,
+                $deadlineMonotonic,
             );
             $rotation = $this->identities->recordRotationPrepared(
                 $rotationId,
@@ -147,6 +153,7 @@ final class GatewayProjectIdentityRotator
                 (string)$request['idempotency_key'],
                 (string)$credential['credential_id'],
                 \hash('sha256', GatewayClient::canonicalJson($prepareReceipt)),
+                $deadlineMonotonic,
             );
             $phase = 'CONTROLLER_PREPARED';
         }
@@ -200,6 +207,7 @@ final class GatewayProjectIdentityRotator
             $rotation = $this->identities->markRotationHostCommitted(
                 $rotationId,
                 $receipt,
+                $deadlineMonotonic,
             );
             $phase = 'HOST_COMMITTED';
         }
@@ -219,7 +227,10 @@ final class GatewayProjectIdentityRotator
                 $rotation,
                 $pending,
             );
-            $rotation = $this->identities->commitRotationIdentity($rotationId);
+            $rotation = $this->identities->commitRotationIdentity(
+                $rotationId,
+                $deadlineMonotonic,
+            );
             $phase = 'IDENTITY_COMMITTED';
         }
 
@@ -229,6 +240,7 @@ final class GatewayProjectIdentityRotator
                 $activeCredential = $this->credentials->commitPending(
                     $rotationId,
                     (string)$rotation['new_project_uuid'],
+                    $deadlineMonotonic,
                 );
             } catch (\Throwable $throwable) {
                 // Atomic active publication may have completed before the
@@ -251,7 +263,10 @@ final class GatewayProjectIdentityRotator
                 }
                 throw $proofFailure;
             }
-            $rotation = $this->identities->markRotationLocalCommitted($rotationId);
+            $rotation = $this->identities->markRotationLocalCommitted(
+                $rotationId,
+                $deadlineMonotonic,
+            );
             $phase = 'LOCAL_COMMITTED';
         }
 
@@ -265,7 +280,10 @@ final class GatewayProjectIdentityRotator
                 ),
                 'rotation finalize',
             );
-            $finished = $this->identities->finalizeRotation($rotationId);
+            $finished = $this->identities->finalizeRotation(
+                $rotationId,
+                $deadlineMonotonic,
+            );
             return [
                 'state' => 'FINALIZED',
                 'rotation_id' => $rotationId,
@@ -277,15 +295,15 @@ final class GatewayProjectIdentityRotator
         throw new \RuntimeException('WLS project identity rotation phase is unsupported.');
     }
 
-    public function abort(): void
+    public function abort(?float $deadlineMonotonic = null): void
     {
-        if ($this->identities->freshEnrollmentState() !== []) {
+        if ($this->identities->freshEnrollmentState($deadlineMonotonic) !== []) {
             throw new \RuntimeException(
                 'A fresh clone identity cannot be aborted into the copied project UUID; '
                     . 'complete its new enrollment instead.',
             );
         }
-        $rotation = $this->identities->rotationState();
+        $rotation = $this->identities->rotationState($deadlineMonotonic);
         if ($rotation === []) {
             return;
         }
@@ -305,23 +323,37 @@ final class GatewayProjectIdentityRotator
         // advanced. Controller abort is idempotent and fences a concurrent or
         // already committed transfer instead of orphaning it.
         self::successfulPayload(
-            $this->projectRequest('rotate-abort', $reference),
+            $this->projectRequest(
+                'rotate-abort',
+                $reference,
+                $deadlineMonotonic,
+            ),
             'rotation abort',
         );
-        $this->credentials->abortPending((string)$rotation['rotation_id']);
-        $this->identities->abortRotation((string)$rotation['rotation_id']);
+        $this->credentials->abortPending(
+            (string)$rotation['rotation_id'],
+            $deadlineMonotonic,
+        );
+        $this->identities->abortRotation(
+            (string)$rotation['rotation_id'],
+            $deadlineMonotonic,
+        );
     }
 
     private function retireClonedCredential(
         string $oldProjectUuid,
         ?string $preserveProjectUuid = null,
+        ?float $deadlineMonotonic = null,
     ): void
     {
         if ($this->credentialRetirer !== null) {
             ($this->credentialRetirer)($oldProjectUuid);
             return;
         }
-        $this->credentials->purgeForFreshCloneIdentity($preserveProjectUuid);
+        $this->credentials->purgeForFreshCloneIdentity(
+            $preserveProjectUuid,
+            $deadlineMonotonic,
+        );
     }
 
     /** @param array<string,mixed> $payload @return array<string,mixed> */

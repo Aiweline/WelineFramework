@@ -20,6 +20,7 @@ final class NginxProcessIdentity
     public const SCHEMA_VERSION = 2;
     private const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
     private const MAX_BINARY_BYTES = 1024 * 1024 * 1024;
+    private const DEFAULT_LIFECYCLE_TIMEOUT_SECONDS = 30.0;
 
     private static ?\FFI $darwinLibproc = null;
     private static bool $darwinLibprocUnavailable = false;
@@ -59,40 +60,19 @@ final class NginxProcessIdentity
      *   adopted:bool
      * }
      */
-    public function inspect(int $pid, string $commandLine, bool $allowLegacyAdoption = false): array
-    {
-        if ($pid < 1 || \trim($commandLine) === '') {
-            return $this->failure($pid, 'PID or command line is unavailable.');
+    public function inspect(
+        int $pid,
+        string $commandLine,
+        bool $allowLegacyAdoption = false,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $candidate = $this->inspectLaunchCandidate($pid, $commandLine);
+        if (!($candidate['ok'] ?? false)) {
+            return $candidate;
         }
-
-        try {
-            $processStartIdentity = $this->processStartIdentity($pid);
-            $expected = $this->expectedRuntime();
-        } catch (\Throwable $throwable) {
-            return $this->failure($pid, $throwable->getMessage());
-        }
-        if (!$this->commandMatches($commandLine)) {
-            return $this->failure(
-                $pid,
-                'Nginx argv does not match the expected binary, prefix and config.',
-                $expected,
-            );
-        }
-
-        try {
-            if (!\hash_equals(
-                $processStartIdentity,
-                $this->processStartIdentity($pid),
-            )) {
-                return $this->failure(
-                    $pid,
-                    'Nginx process identity changed during attestation.',
-                    $expected,
-                );
-            }
-        } catch (\Throwable $throwable) {
-            return $this->failure($pid, $throwable->getMessage(), $expected);
-        }
+        /** @var array<string,string> $expected */
+        $expected = (array)$candidate['expected_runtime'];
+        $processStartIdentity = (string)$candidate['process_start_identity'];
 
         return $this->withLock(function () use (
             $pid,
@@ -220,10 +200,66 @@ final class NginxProcessIdentity
                 'runtime_generation' => $expected['runtime_generation'],
                 'adopted' => $adopted,
             ];
-        });
+        }, $deadlineMonotonic);
     }
 
-    public function recordedPid(): ?int
+    /**
+     * Attest the immutable runtime and kernel birth of a just-launched master
+     * without trusting the mutable PID-bound manifest. This is intentionally
+     * read-only: the process manager uses it only to prove the exact process it
+     * may terminate when normal manifest adoption fails after launch.
+     *
+     * @return array<string,mixed>
+     */
+    public function inspectLaunchCandidate(int $pid, string $commandLine): array
+    {
+        if ($pid < 1 || \trim($commandLine) === '') {
+            return $this->failure($pid, 'PID or command line is unavailable.');
+        }
+
+        try {
+            $processStartIdentity = $this->processStartIdentity($pid);
+            $expected = $this->expectedRuntime();
+        } catch (\Throwable $throwable) {
+            return $this->failure($pid, $throwable->getMessage());
+        }
+        if (!$this->commandMatches($commandLine)) {
+            return $this->failure(
+                $pid,
+                'Nginx argv does not match the expected binary, prefix and config.',
+                $expected,
+            );
+        }
+
+        try {
+            if (!\hash_equals(
+                $processStartIdentity,
+                $this->processStartIdentity($pid),
+            )) {
+                return $this->failure(
+                    $pid,
+                    'Nginx process identity changed during attestation.',
+                    $expected,
+                );
+            }
+        } catch (\Throwable $throwable) {
+            return $this->failure($pid, $throwable->getMessage(), $expected);
+        }
+
+        return [
+            'ok' => true,
+            'reason' => 'Nginx launch candidate matches its immutable runtime and kernel birth.',
+            'pid' => $pid,
+            'role' => $this->role,
+            'binary_sha256' => $expected['binary_sha256'],
+            'runtime_generation' => $expected['runtime_generation'],
+            'process_start_identity' => $processStartIdentity,
+            'expected_runtime' => $expected,
+            'adopted' => false,
+        ];
+    }
+
+    public function recordedPid(?float $deadlineMonotonic = null): ?int
     {
         return $this->withLock(function (): ?int {
             $record = $this->readProcessManifest();
@@ -237,7 +273,7 @@ final class NginxProcessIdentity
                 throw new \RuntimeException('PID-bound Nginx process identity is malformed.');
             }
             return (int)$record['pid'];
-        });
+        }, $deadlineMonotonic);
     }
 
     /** @return array{ok:bool,reason:string,binary_sha256:string,runtime_generation:string} */
@@ -261,7 +297,10 @@ final class NginxProcessIdentity
         }
     }
 
-    public function clear(int $expectedPid): void
+    public function clear(
+        int $expectedPid,
+        ?float $deadlineMonotonic = null,
+    ): void
     {
         $this->withLock(function () use ($expectedPid): null {
             $record = $this->readProcessManifest();
@@ -282,7 +321,7 @@ final class NginxProcessIdentity
                 throw new \RuntimeException('Unable to clear the PID-bound Nginx process identity.');
             }
             return null;
-        });
+        }, $deadlineMonotonic);
     }
 
     /**
@@ -477,27 +516,105 @@ final class NginxProcessIdentity
             $record,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
         ) . PHP_EOL;
-        GatewayProjectStateFilesystem::atomicWrite(
-            $this->processManifest,
-            $payload,
-            0600,
-            $this->directoryOwnershipSeal($directory),
-        );
+        try {
+            GatewayProjectStateFilesystem::atomicWrite(
+                $this->processManifest,
+                $payload,
+                0600,
+                $this->directoryOwnershipSeal($directory),
+            );
+        } catch (\Throwable $throwable) {
+            // atomicWrite() can report a parent-directory fsync failure after
+            // the rename already committed. Never turn that exact after-image
+            // into a false identity failure that strands the new Nginx master.
+            if (!$this->processManifestHasExactPayload($payload)) {
+                throw $throwable;
+            }
+        }
     }
 
-    private function withLock(callable $operation): mixed
+    private function processManifestHasExactPayload(string $payload): bool
     {
+        try {
+            $actual = GatewayProjectStateFilesystem::read(
+                $this->processManifest,
+                self::MAX_MANIFEST_BYTES,
+                'PID-bound Nginx process identity after-image',
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return \hash_equals(\hash('sha256', $payload), \hash('sha256', $actual))
+            && \strlen($payload) === \strlen($actual);
+    }
+
+    private function withLock(
+        callable $operation,
+        ?float $deadlineMonotonic = null,
+    ): mixed
+    {
+        $deadlineMonotonic ??= $this->monotonicNow()
+            + self::DEFAULT_LIFECYCLE_TIMEOUT_SECONDS;
+        $remaining = $this->remainingLifecycleBudget($deadlineMonotonic);
         $directory = \dirname($this->processManifest);
         $this->ensureProcessIdentityDirectory($directory);
         $lockFile = $this->processManifest . '.lock';
-        return GatewayProjectStateFilesystem::withExclusiveLock(
-            $lockFile,
-            function () use ($operation): mixed {
-                $this->cleanupProcessManifestAtomicWriteRecoveryBackups();
-                return $operation();
-            },
-            $this->directoryOwnershipSeal($directory),
-        );
+        try {
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $lockFile,
+                function () use ($operation, $deadlineMonotonic): mixed {
+                    $this->remainingLifecycleBudget($deadlineMonotonic);
+                    $this->cleanupProcessManifestAtomicWriteRecoveryBackups();
+                    // Lock acquisition and crash-residue recovery consume the
+                    // caller's one lifecycle budget. Never begin identity
+                    // adoption or deletion after that absolute deadline.
+                    $this->remainingLifecycleBudget($deadlineMonotonic);
+                    return $operation();
+                },
+                $this->directoryOwnershipSeal($directory),
+                $remaining,
+            );
+        } catch (\RuntimeException $exception) {
+            if (\hash_equals(
+                'Timed out acquiring the WLS state lock.',
+                $exception->getMessage(),
+            )) {
+                throw new \RuntimeException(
+                    'Nginx process identity lock timed out before the lifecycle deadline.',
+                    0,
+                    $exception,
+                );
+            }
+            throw $exception;
+        }
+    }
+
+    private function remainingLifecycleBudget(float $deadlineMonotonic): float
+    {
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Nginx process identity lifecycle deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - $this->monotonicNow();
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Nginx process identity lifecycle deadline was exhausted.',
+            );
+        }
+        return \min(300.0, $remaining);
+    }
+
+    private function monotonicNow(): float
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException(
+                'Nginx process identity monotonic clock is unavailable.',
+            );
+        }
+        return $now;
     }
 
     /**

@@ -107,7 +107,6 @@ final class MasterProcessSharedStateRuntimeTest extends TestCase
             'http' => [
                 'protocols' => ['h2', 'h1'],
                 'preferred' => 'h2',
-                'protocol_edge' => 'disabled',
                 'tls_session_resumption' => true,
                 'alt_svc' => false,
             ],

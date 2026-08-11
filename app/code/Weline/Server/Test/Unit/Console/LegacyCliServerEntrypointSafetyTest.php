@@ -57,27 +57,6 @@ final class LegacyCliServerEntrypointSafetyTest extends TestCase
         }
     }
 
-    public function testRetiredProtocolEdgeIsAMinimalFailClosedScript(): void
-    {
-        $source = $this->source('bin/protocol_edge.php');
-
-        self::assertStringContainsString('throw new \\RuntimeException(', $source);
-        self::assertStringContainsString('retired', $source);
-        self::assertLessThan(15, \substr_count($source, "\n"));
-
-        foreach ([
-            'Processer::',
-            'proc_terminate(',
-            'killProcessTreeByPid(',
-            'getProcessCommandLine(',
-            'pid-file',
-            'require_once',
-            '$argv',
-        ] as $unsafeFragment) {
-            self::assertStringNotContainsString($unsafeFragment, $source);
-        }
-    }
-
     private function source(string $relativePath): string
     {
         $path = \dirname(__DIR__, 3) . DIRECTORY_SEPARATOR

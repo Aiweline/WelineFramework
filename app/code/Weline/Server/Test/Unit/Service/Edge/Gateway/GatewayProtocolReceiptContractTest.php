@@ -61,7 +61,8 @@ final class GatewayProtocolReceiptContractTest extends TestCase
             'instance_generation', 'instance_digest', 'master_epoch',
             'launch_id', 'request_digest', 'idempotency_key',
             'active_config_generation', 'active_config_digest',
-            'host_boot_id', 'issued_monotonic', 'lease_sequence',
+            'host_boot_id', 'issued_monotonic', 'lifecycle_state',
+            'drain_operation_id', 'drain_started_monotonic', 'lease_sequence',
             'lease_ttl_seconds', 'route_generations', 'routes_digest',
             'issued_at', 'signature',
         ], GatewayHostManager::LEASE_RECEIPT_FIELDS);
@@ -286,6 +287,9 @@ final class GatewayProtocolReceiptContractTest extends TestCase
             'active_config_digest' => $activeDigest,
             'host_boot_id' => \str_repeat('9', 64),
             'issued_monotonic' => 100.0,
+            'lifecycle_state' => 'ACTIVE',
+            'drain_operation_id' => '',
+            'drain_started_monotonic' => 0.0,
             'lease_sequence' => 1,
             'lease_ttl_seconds' => 45,
             'instance_id' => $instanceId,
@@ -383,6 +387,9 @@ final class GatewayProtocolReceiptContractTest extends TestCase
             'active_config_digest' => \str_repeat('f', 64),
             'host_boot_id' => \str_repeat('9', 64),
             'issued_monotonic' => 100.0,
+            'lifecycle_state' => 'ACTIVE',
+            'drain_operation_id' => '',
+            'drain_started_monotonic' => 0.0,
             'lease_sequence' => 4,
             'lease_ttl_seconds' => 45,
             'route_generations' => [$routeId => 3],
@@ -407,6 +414,15 @@ final class GatewayProtocolReceiptContractTest extends TestCase
             'lease_sequence' => 5,
         ];
         $method->invoke(null, $existing, $newer);
+        self::addToAssertionCount(1);
+
+        $drainOperationId = \str_repeat('7', 64);
+        $draining = [...$newer,
+            'lifecycle_state' => 'DRAINING',
+            'drain_operation_id' => $drainOperationId,
+            'drain_started_monotonic' => 105.0,
+        ];
+        $method->invoke(null, $existing, $draining);
         self::addToAssertionCount(1);
 
         foreach ([
@@ -450,6 +466,66 @@ final class GatewayProtocolReceiptContractTest extends TestCase
                 );
             }
             self::assertTrue($rejected, 'An inverse receipt completion must fail closed.');
+        }
+
+        foreach ([
+            [...$draining,
+                'lifecycle_state' => 'ACTIVE',
+                'drain_operation_id' => '',
+                'drain_started_monotonic' => 0.0,
+                'lease_sequence' => 6,
+                'issued_monotonic' => 120.0,
+            ],
+            [...$draining,
+                'drain_operation_id' => \str_repeat('8', 64),
+                'lease_sequence' => 6,
+                'issued_monotonic' => 120.0,
+            ],
+        ] as $inverseLifecycle) {
+            try {
+                $method->invoke(null, $draining, $inverseLifecycle);
+                self::fail('A committed DRAINING receipt must never regress or change identity.');
+            } catch (\RuntimeException $throwable) {
+                self::assertStringStartsWith(
+                    'REGISTER_REPLAY_REQUIRED:',
+                    $throwable->getMessage(),
+                );
+            }
+        }
+
+        $newEpochDrain = [...$draining,
+            'gateway_epoch' => \str_repeat('b', 32),
+            'active_config_generation' => 1,
+            'lease_sequence' => 1,
+            'issued_monotonic' => 120.0,
+        ];
+        $method->invoke(null, $draining, $newEpochDrain);
+        self::addToAssertionCount(1);
+        try {
+            $method->invoke(null, $newEpochDrain, [...$newer,
+                'gateway_epoch' => \str_repeat('a', 32),
+                'lease_sequence' => 99,
+                'issued_monotonic' => 115.0,
+            ]);
+            self::fail('A delayed old-epoch heartbeat replaced the new epoch receipt.');
+        } catch (\RuntimeException $throwable) {
+            self::assertStringStartsWith(
+                'REGISTER_REPLAY_REQUIRED:',
+                $throwable->getMessage(),
+            );
+        }
+        try {
+            $method->invoke(null, $newEpochDrain, [...$newer,
+                'gateway_epoch' => \str_repeat('a', 32),
+                'lease_sequence' => 100,
+                'issued_monotonic' => 120.0,
+            ]);
+            self::fail('Equal monotonic timestamps cannot order distinct gateway epochs.');
+        } catch (\RuntimeException $throwable) {
+            self::assertStringStartsWith(
+                'REGISTER_REPLAY_REQUIRED:',
+                $throwable->getMessage(),
+            );
         }
     }
 
@@ -499,5 +575,227 @@ final class GatewayProtocolReceiptContractTest extends TestCase
             $compensation,
             'Failure bookkeeping needs its own bounded deadline after the host mutation budget has expired.',
         );
+    }
+
+    public function testPosixSnapshotReceiptV2BindsImmutableEntityAndRootOnlyMac(): void
+    {
+        $source = self::posixNativeBrokerSource();
+        $canonicalStart = \strpos(
+            $source,
+            'static int wls_snapshot_receipt_canonical(',
+        );
+        $canonicalEnd = \strpos(
+            $source,
+            'static int wls_snapshot_receipt_mac(',
+            $canonicalStart ?: 0,
+        );
+        self::assertIsInt($canonicalStart);
+        self::assertIsInt($canonicalEnd);
+        $canonical = \substr(
+            $source,
+            $canonicalStart,
+            $canonicalEnd - $canonicalStart,
+        );
+        self::assertStringContainsString('WLS-SNAPSHOT-RECEIPT/2', $canonical);
+        self::assertStringNotContainsString('receipt_digest=', $canonical);
+        self::assertStringNotContainsString('receipt_mac=', $canonical);
+
+        $ordered = [
+            'snapshot_digest=', 'project_uuid=', 'transaction_id=',
+            'intent_digest=', 'security_generation=', 'certificate_generation=',
+            'source_binding_digest=', 'cert_source_digest=', 'key_source_digest=',
+            'chain_source_digest=', 'manifest_semantic_digest=',
+            'manifest_file_digest=', 'fullchain_digest=', 'private_key_digest=',
+            'leaf_fingerprint=', 'san_names_digest=', 'not_before=', 'not_after=',
+            'key_match=', 'platform=', 'gateway_epoch=', 'host_boot_id=',
+            'broker_binary_digest=', 'data_plane_identity_kind=',
+            'data_plane_identity_value=', 'controller_identity_kind=',
+            'controller_identity_value=', 'owner_identity_kind=',
+            'owner_identity_value=', 'acl_profile=', 'directory_acl_digest=',
+            'fullchain_acl_digest=', 'private_key_acl_digest=',
+            'manifest_acl_digest=', 'acl_protected=', 'reparse_free=',
+            'single_link_files=', 'snapshot_file_ids_digest=',
+            'broker_runtime_generation=',
+        ];
+        $previous = -1;
+        foreach ($ordered as $field) {
+            $position = \strpos($canonical, $field);
+            self::assertIsInt($position, $field);
+            self::assertGreaterThan($previous, $position, $field);
+            $previous = $position;
+        }
+
+        $macEnd = \strpos(
+            $source,
+            'static int wls_snapshot_receipt_publish(',
+            $canonicalEnd,
+        );
+        self::assertIsInt($macEnd);
+        $mac = \substr($source, $canonicalEnd, $macEnd - $canonicalEnd);
+        self::assertStringContainsString('wls_snapshot_receipt_key(home, token)', $mac);
+        self::assertStringContainsString('snapshot-receipt.key', $source);
+        self::assertStringContainsString(
+            'wls_snapshot_receipt_key_link_recover(',
+            $source,
+        );
+        self::assertStringContainsString(
+            'wls_snapshot_receipt_key_candidate_namespace_empty(',
+            $source,
+        );
+        self::assertStringContainsString('key_status->st_nlink != 2', $source);
+        self::assertStringContainsString(
+            'Simulate a process dying after linkat(final)',
+            $source,
+        );
+        self::assertStringNotContainsString('admin.token', $mac);
+        self::assertStringContainsString('"snapshots-v2"', $source);
+        self::assertStringContainsString('"snapshot-candidates-v2"', $source);
+        self::assertStringContainsString('WLS-SNAPSHOT-CANDIDATE-REMOVE/1', $source);
+        self::assertStringContainsString(
+            'wls_snapshot_internal_candidates_recover(',
+            $source,
+        );
+        self::assertStringContainsString(
+            '".candidate-%s-%ld-2222222222222222"',
+            $source,
+        );
+        self::assertStringContainsString(
+            'wls_snapshot_internal_candidate_final_safe(',
+            $source,
+        );
+        self::assertStringContainsString(
+            'kill(owner_pid, 0) == 0 || errno != ESRCH',
+            $source,
+        );
+        self::assertStringContainsString('(private_key_before.st_mode & 07777) != 0640', $source);
+        self::assertStringContainsString('snapshot_file_ids_digest', $source);
+
+        $runtimeStart = \strpos($source, 'static int wls_prepare_data_plane_runtime(');
+        $runtimeEnd = \strpos(
+            $source,
+            'static int wls_nginx_probe_context_load(',
+            $runtimeStart ?: 0,
+        );
+        self::assertIsInt($runtimeStart);
+        self::assertIsInt($runtimeEnd);
+        $runtimePreparation = \substr(
+            $source,
+            $runtimeStart,
+            $runtimeEnd - $runtimeStart,
+        );
+        self::assertStringNotContainsString('{"snapshots", 0710}', $runtimePreparation);
+    }
+
+    public function testPosixNginxTestIsPublicationBoundAndRestoresTemporaryAcl(): void
+    {
+        $source = self::posixNativeBrokerSource();
+        $start = \strpos($source, 'static int wls_nginx_test_action_v2(');
+        $end = \strpos(
+            $source,
+            'static int wls_nginx_lifecycle_action_v2(',
+            $start ?: 0,
+        );
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+        $action = \substr($source, $start, $end - $start);
+
+        self::assertStringContainsString('WLS-NGINX-TEST/1', $action);
+        self::assertStringContainsString('wls_nginx_test_context_load(', $action);
+        self::assertStringContainsString('wls_prepare_nginx_test_candidate(', $action);
+        self::assertStringContainsString('wls_restore_nginx_test_candidate(', $action);
+        self::assertStringContainsString('wls_nginx_test_context_binding_same(', $action);
+        self::assertStringContainsString('&before.action, "TEST"', $action);
+        self::assertStringContainsString('candidate_granted = 0;', $action);
+        self::assertStringContainsString('NGINX_TEST_FAILED', $action);
+        self::assertStringContainsString('WLS-NGINX-TEST-RESTORE-FAILED/1', $source);
+        self::assertStringContainsString('state/publication-current.json', $source);
+        self::assertStringContainsString('wls_json_checksummed_envelope(', $source);
+        self::assertStringContainsString('WLS-NGINX-LKG-TEST-INTENT/1', $source);
+        self::assertStringContainsString('wls_lkg_certificate_closure_valid(', $source);
+        self::assertStringContainsString(
+            'context->lkg_source_config_digest, &config_status',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            'strcmp(candidate_digest, source_config_digest) != 0',
+            $source,
+        );
+        self::assertStringContainsString('strcmp(channel, "admin") != 0', $action);
+        self::assertStringContainsString('count == 13U', $source);
+        self::assertStringContainsString('arguments[14] = "--nginx-config";', $source);
+
+        $restoreArmed = \strpos($action, 'candidate_granted = 1;');
+        $prepare = \strpos($action, 'wls_prepare_nginx_test_candidate(', $restoreArmed ?: 0);
+        $cleanupRestore = \strpos(
+            $action,
+            'if (candidate_granted) {',
+            $prepare ?: 0,
+        );
+        $failureRecord = \strpos(
+            $action,
+            'wls_nginx_test_restore_failure_record(',
+            $cleanupRestore ?: 0,
+        );
+        self::assertIsInt($restoreArmed);
+        self::assertIsInt($prepare);
+        self::assertIsInt($cleanupRestore);
+        self::assertIsInt($failureRecord);
+        self::assertGreaterThan($restoreArmed, $prepare);
+        self::assertGreaterThan($prepare, $cleanupRestore);
+        self::assertGreaterThan($cleanupRestore, $failureRecord);
+
+        $receiptFields = [
+            'gateway_epoch=%s', 'host_boot_id=%s', 'active_slot=%s',
+            'runtime_generation=%s', 'binary_digest=%s',
+            'broker_binary_digest=%s', 'config_digest=%s',
+            'test_config_path_digest=%s', 'target_config_path_digest=%s',
+            'publication_generation=%lu', 'candidate_transaction_id=%s',
+            'candidate_phase=%s',
+        ];
+        $previous = -1;
+        foreach ($receiptFields as $field) {
+            $position = \strpos($action, $field);
+            self::assertIsInt($position, $field);
+            self::assertGreaterThan($previous, $position, $field);
+            $previous = $position;
+        }
+    }
+
+    public function testPosixReloadTestsSameFenceBeforeSignallingMaster(): void
+    {
+        $source = self::posixNativeBrokerSource();
+        $start = \strpos($source, 'static int wls_nginx_lifecycle_action_v2(');
+        $end = \strpos(
+            $source,
+            'static int wls_owned_nginx_alive(',
+            $start ?: 0,
+        );
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+        $lifecycle = \substr($source, $start, $end - $start);
+        $test = \strpos($lifecycle, '&before, "TEST", NULL, 0U, deadline');
+        $same = \strpos($lifecycle, 'wls_nginx_action_context_same(&before, &after)', $test ?: 0);
+        $reload = \strpos(
+            $lifecycle,
+            'reload ? "RELOAD" : "START"',
+            $same ?: 0,
+        );
+        self::assertIsInt($test);
+        self::assertIsInt($same);
+        self::assertIsInt($reload);
+        self::assertGreaterThan($test, $same);
+        self::assertGreaterThan($same, $reload);
+    }
+
+    private static function posixNativeBrokerSource(): string
+    {
+        $path = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR . 'Service'
+            . DIRECTORY_SEPARATOR . 'Edge' . DIRECTORY_SEPARATOR . 'Gateway'
+            . DIRECTORY_SEPARATOR . 'Native' . DIRECTORY_SEPARATOR . 'posix'
+            . DIRECTORY_SEPARATOR . 'wls_gateway_broker.c';
+        self::assertFileExists($path);
+        $source = \file_get_contents($path);
+        self::assertIsString($source);
+        return $source;
     }
 }

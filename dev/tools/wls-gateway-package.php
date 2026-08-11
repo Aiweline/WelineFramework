@@ -513,6 +513,129 @@ final class WlsGatewayDependencyAuditor
  * receives a signing key. WlsGatewayPackageSigner finalizes that candidate in
  * a separate job which verifies hashes and does not execute package content.
  */
+final class WlsGatewayCertificateTrustBundle
+{
+    public const MAX_BYTES = 4_194_304;
+    public const MAX_CERTIFICATES = 512;
+
+    public static function canonicalize(string $source): string
+    {
+        if ($source === '' || \strlen($source) > self::MAX_BYTES) {
+            throw new \RuntimeException(
+                'Gateway certificate trust bundle is empty or outside its fixed size bound.'
+            );
+        }
+        $matches = [];
+        $count = \preg_match_all(
+            '/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s',
+            $source,
+            $matches,
+        );
+        if (!\is_int($count)
+            || $count < 1
+            || $count > self::MAX_CERTIFICATES
+        ) {
+            throw new \RuntimeException(
+                'Gateway certificate trust bundle has an invalid certificate count.'
+            );
+        }
+        $remainder = \preg_replace(
+            '/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s',
+            '',
+            $source,
+        );
+        if (!\is_string($remainder) || \trim($remainder) !== '') {
+            throw new \RuntimeException(
+                'Gateway certificate trust bundle contains data outside PEM certificates.'
+            );
+        }
+
+        $roots = [];
+        foreach ((array)($matches[0] ?? []) as $block) {
+            $certificate = @\openssl_x509_read((string)$block);
+            $normalized = '';
+            $parsed = $certificate !== false
+                ? @\openssl_x509_parse($certificate, false)
+                : false;
+            if ($certificate === false
+                || !\is_array($parsed)
+                || !@\openssl_x509_export($certificate, $normalized, true)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway certificate trust bundle contains invalid X.509 material.'
+                );
+            }
+            $basicConstraints = \strtoupper((string)(
+                $parsed['extensions']['basicConstraints'] ?? ''
+            ));
+            $keyUsage = \strtolower((string)(
+                $parsed['extensions']['keyUsage'] ?? ''
+            ));
+            if (!\str_contains($basicConstraints, 'CA:TRUE')
+                || ($keyUsage !== ''
+                    && !\str_contains($keyUsage, 'certificate sign')
+                    && !\str_contains($keyUsage, 'key cert sign'))
+            ) {
+                throw new \RuntimeException(
+                    'Gateway certificate trust bundle contains a non-CA certificate.'
+                );
+            }
+            $subject = self::canonicalJson((array)($parsed['subject'] ?? []));
+            $issuer = self::canonicalJson((array)($parsed['issuer'] ?? []));
+            $publicKey = @\openssl_pkey_get_public($certificate);
+            if (!\hash_equals($subject, $issuer)
+                || $publicKey === false
+                || @\openssl_x509_verify($certificate, $publicKey) !== 1
+            ) {
+                throw new \RuntimeException(
+                    'Gateway certificate trust bundle accepts only self-signed root authorities.'
+                );
+            }
+            $body = \preg_replace(
+                '/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\s+/',
+                '',
+                $normalized,
+            );
+            $der = \is_string($body) ? \base64_decode($body, true) : false;
+            if (!\is_string($der) || $der === '') {
+                throw new \RuntimeException(
+                    'Gateway certificate trust root cannot be normalized to DER.'
+                );
+            }
+            $fingerprint = \hash('sha256', $der);
+            if (isset($roots[$fingerprint])) {
+                throw new \RuntimeException(
+                    'Gateway certificate trust bundle contains duplicate roots.'
+                );
+            }
+            $roots[$fingerprint] = \rtrim($normalized) . "\n";
+        }
+        \ksort($roots, SORT_STRING);
+        return \implode('', $roots);
+    }
+
+    /** @param array<string,mixed> $value */
+    private static function canonicalJson(array $value): string
+    {
+        $normalize = static function (mixed $item) use (&$normalize): mixed {
+            if (!\is_array($item)) {
+                return $item;
+            }
+            foreach ($item as $key => $child) {
+                $item[$key] = $normalize($child);
+            }
+            if (!\array_is_list($item)) {
+                \ksort($item, SORT_STRING);
+            }
+            return $item;
+        };
+        return (string)\json_encode(
+            $normalize($value),
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+    }
+}
+
 final class WlsGatewayPackageBuilder
 {
     private const MAX_CONTROLLER_BYTES = 16_777_216;
@@ -524,6 +647,16 @@ final class WlsGatewayPackageBuilder
         'nginx',
         'wls-gateway-broker',
         'wls-gateway-launcher',
+    ];
+    private const DURABLE_STATE_CONTRACT = [
+        'schema_version' => 2,
+        'security_ledger_read_schema' => 8,
+        'security_ledger_write_schema' => 8,
+        'snapshot_receipt_read_schema' => 2,
+        'snapshot_receipt_write_schema' => 2,
+        'snapshot_namespace' => 'snapshots-v2',
+        'nonce_wal_schema' => 1,
+        'nginx_test_schema' => 1,
     ];
 
     /**
@@ -565,9 +698,27 @@ final class WlsGatewayPackageBuilder
             $this->requiredOption($options, 'licenses'),
             self::MAX_METADATA_BYTES,
         );
+        $caBundle = $this->safeInput(
+            $this->requiredOption($options, 'ca-bundle'),
+            WlsGatewayCertificateTrustBundle::MAX_BYTES,
+        );
+        $caBundleBytes = $this->readStableFile(
+            $caBundle,
+            WlsGatewayCertificateTrustBundle::MAX_BYTES,
+            'gateway certificate trust bundle',
+        );
+        $canonicalCaBundle = WlsGatewayCertificateTrustBundle::canonicalize(
+            $caBundleBytes,
+        );
+        if (!\hash_equals($canonicalCaBundle, $caBundleBytes)) {
+            throw new \RuntimeException(
+                'Gateway certificate trust bundle must use canonical fingerprint ordering and PEM encoding.'
+            );
+        }
         $executables = [];
         $requiredExecutables = self::REQUIRED_EXECUTABLES;
         if ($platform === 'Windows') {
+            $requiredExecutables[] = 'wls-gateway-guardian';
             $requiredExecutables[] = 'wls-bounded-command';
         }
         foreach ($requiredExecutables as $name) {
@@ -577,7 +728,11 @@ final class WlsGatewayPackageBuilder
             );
         }
         $inputBytes = $this->stableFileSize($controller, self::MAX_CONTROLLER_BYTES)
-            + $this->stableFileSize($licenses, self::MAX_METADATA_BYTES);
+            + $this->stableFileSize($licenses, self::MAX_METADATA_BYTES)
+            + $this->stableFileSize(
+                $caBundle,
+                WlsGatewayCertificateTrustBundle::MAX_BYTES,
+            );
         foreach ($executables as $executable) {
             $inputBytes += $this->stableFileSize(
                 $executable,
@@ -600,6 +755,7 @@ final class WlsGatewayPackageBuilder
             $platform,
             $arch,
             $controller,
+            $caBundle,
             $executables,
             $production,
         );
@@ -625,6 +781,13 @@ final class WlsGatewayPackageBuilder
             $target = 'bin/' . $name . ($platform === 'Windows' ? '.exe' : '');
             $this->copyComponent($source, $output . '/' . $target, 0755, $components, $output);
         }
+        $this->copyComponent(
+            $caBundle,
+            $output . '/share/ca-bundle.pem',
+            0644,
+            $components,
+            $output,
+        );
         $this->copyComponent($licenses, $output . '/LICENSES.txt', 0644, $components, $output);
 
         $provenanceFile = $output . '/provenance.json';
@@ -655,20 +818,29 @@ final class WlsGatewayPackageBuilder
 
         $capabilities = [
             'broker_sideband_actions' => true,
+            'certificate_public_trust_bundle' => true,
+            'certificate_snapshot_seal' => true,
             'dual_control_channels' => true,
             'native_peer_identity' => true,
             'neutral_default_certificate' => true,
             'no_follow_snapshot' => true,
+            'physical_rebootstrap_capacity_reserve' => true,
             'privilege_separation' => true,
             'self_contained_nginx' => $this->isSelfContained($provenance, 'nginx'),
             'self_contained_php' => $this->isSelfContained($provenance, 'php'),
             'singleton_fencing' => true,
+            'stable_launcher_rollback_target_proof' => true,
         ];
         if ($platform === 'Windows') {
             // Assembly already executed the locked PHP binary with this exact
             // kernel32 cdef probe. The signer and installer require the
             // resulting declaration; a generic `php --version` is not enough.
             $capabilities['windows_kernel32_ffi_atomic_write'] = true;
+            // The packaged bounded-command helper owns fixed-channel named
+            // pipe connect/write/read with one native absolute deadline. An
+            // old helper must never be paired with the PHP 8.4 clients that
+            // deliberately no longer trust stream timeouts for Windows pipes.
+            $capabilities['windows_named_pipe_deadline_transport'] = true;
         }
         if ($production && \in_array(false, $capabilities, true)) {
             throw new \RuntimeException(
@@ -685,6 +857,7 @@ final class WlsGatewayPackageBuilder
             'protocol_max' => 2,
             'security_profile' => 'native-broker-v1',
             'implementation_level' => 'wls-2.0',
+            'durable_state_contract' => self::DURABLE_STATE_CONTRACT,
             'package_profile' => $profile,
             'release_ready' => false,
             'signing_key_id' => '',
@@ -754,7 +927,11 @@ final class WlsGatewayPackageBuilder
     private function prepareOutput(string $output): string
     {
         $output = $this->outputTarget($output);
-        if (!@\mkdir($output, 0700) || !@\mkdir($output . '/app', 0700) || !@\mkdir($output . '/bin', 0700)) {
+        if (!@\mkdir($output, 0700)
+            || !@\mkdir($output . '/app', 0700)
+            || !@\mkdir($output . '/bin', 0700)
+            || !@\mkdir($output . '/share', 0700)
+        ) {
             throw new \RuntimeException('Unable to create package output directories.');
         }
         return $output;
@@ -795,6 +972,7 @@ final class WlsGatewayPackageBuilder
         string $platform,
         string $arch,
         string $controller,
+        string $caBundle,
         array $executables,
         bool $production,
     ): array {
@@ -804,6 +982,7 @@ final class WlsGatewayPackageBuilder
             }
             $components = [
                 'controller' => $this->testProvenanceComponent($controller),
+                'ca-bundle' => $this->testProvenanceComponent($caBundle),
             ];
             foreach ($executables as $name => $path) {
                 $components[$name] = $this->testProvenanceComponent($path);
@@ -829,7 +1008,10 @@ final class WlsGatewayPackageBuilder
         ) {
             throw new \RuntimeException('Gateway component provenance target is invalid.');
         }
-        $sources = ['controller' => $controller] + $executables;
+        $sources = [
+            'controller' => $controller,
+            'ca-bundle' => $caBundle,
+        ] + $executables;
         foreach (\array_keys($sources) as $name) {
             $definition = $decoded['components'][$name] ?? null;
             if (!\is_array($definition)
@@ -858,7 +1040,7 @@ final class WlsGatewayPackageBuilder
                 );
             }
             if ($production
-                && $name !== 'controller'
+                && !\in_array($name, ['controller', 'ca-bundle'], true)
                 && ($definition['self_contained'] ?? false) !== true
             ) {
                 throw new \RuntimeException(
@@ -901,9 +1083,29 @@ final class WlsGatewayPackageBuilder
             [$executables['nginx'], '-V'],
             [$executables['wls-gateway-broker'], '--self-test'],
             [$executables['wls-gateway-launcher'], '--self-test'],
+            [
+                $executables['wls-gateway-launcher'],
+                '--rollback-target-proof-self-test',
+            ],
+            [
+                $executables['wls-gateway-launcher'],
+                '--recovery-ledger-self-test',
+            ],
+            [
+                $executables['wls-gateway-launcher'],
+                '--capacity-reserve-contract-self-test',
+            ],
         ];
         if ($platform === 'Windows') {
+            $commands[] = [
+                $executables['wls-gateway-guardian'],
+                '--self-test',
+            ];
             $commands[] = [$executables['wls-bounded-command'], '--self-test'];
+            $commands[] = [
+                $executables['wls-bounded-command'],
+                '--pipe-deadline-self-test',
+            ];
             \array_splice($commands, 3, 0, [[
                 $executables['php'],
                 '-r',
@@ -1313,14 +1515,28 @@ final class WlsGatewayPackageSigner
 
     private const REQUIRED_CAPABILITIES = [
         'broker_sideband_actions',
+        'certificate_public_trust_bundle',
+        'certificate_snapshot_seal',
         'dual_control_channels',
         'native_peer_identity',
         'neutral_default_certificate',
         'no_follow_snapshot',
+        'physical_rebootstrap_capacity_reserve',
         'privilege_separation',
         'self_contained_nginx',
         'self_contained_php',
         'singleton_fencing',
+        'stable_launcher_rollback_target_proof',
+    ];
+    private const DURABLE_STATE_CONTRACT = [
+        'schema_version' => 2,
+        'security_ledger_read_schema' => 8,
+        'security_ledger_write_schema' => 8,
+        'snapshot_receipt_read_schema' => 2,
+        'snapshot_receipt_write_schema' => 2,
+        'snapshot_namespace' => 'snapshots-v2',
+        'nonce_wal_schema' => 1,
+        'nginx_test_schema' => 1,
     ];
 
     /** @param array<string,string> $options */
@@ -4267,6 +4483,7 @@ CDEF, 'kernel32.dll');
             'arch',
             'capabilities',
             'components',
+            'durable_state_contract',
             'implementation_level',
             'listen_profiles',
             'package_profile',
@@ -4305,6 +4522,9 @@ CDEF, 'kernel32.dll');
             || ($manifest['protocol_max'] ?? null) !== 2
             || !\is_array($manifest['components'] ?? null)
             || !\is_array($manifest['capabilities'] ?? null)
+            || !$this->durableStateContractValid(
+                $manifest['durable_state_contract'] ?? null,
+            )
             || ($manifest['listen_profiles'] ?? null) !== ['default', 'ipv4-only']
         ) {
             throw new \RuntimeException(
@@ -4333,9 +4553,18 @@ CDEF, 'kernel32.dll');
                 'Unsigned Windows candidate lacks the locked kernel32 FFI atomic-write capability.'
             );
         }
+        if ((string)$manifest['platform'] === 'Windows'
+            && ($manifest['capabilities']['windows_named_pipe_deadline_transport'] ?? false)
+                !== true
+        ) {
+            throw new \RuntimeException(
+                'Unsigned Windows candidate lacks the native named-pipe deadline transport capability.'
+            );
+        }
         $expectedCapabilities = self::REQUIRED_CAPABILITIES;
         if ((string)$manifest['platform'] === 'Windows') {
             $expectedCapabilities[] = 'windows_kernel32_ffi_atomic_write';
+            $expectedCapabilities[] = 'windows_named_pipe_deadline_transport';
         }
         $actualCapabilities = \array_keys($manifest['capabilities']);
         \sort($expectedCapabilities, SORT_STRING);
@@ -4372,6 +4601,24 @@ CDEF, 'kernel32.dll');
         ];
     }
 
+    private function durableStateContractValid(mixed $contract): bool
+    {
+        if (!\is_array($contract)
+            || \array_is_list($contract)
+            || \count($contract) !== \count(self::DURABLE_STATE_CONTRACT)
+        ) {
+            return false;
+        }
+        foreach (self::DURABLE_STATE_CONTRACT as $field => $expected) {
+            if (!\array_key_exists($field, $contract)
+                || $contract[$field] !== $expected
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** @return list<string> */
     private function requiredComponents(string $platform): array
     {
@@ -4384,9 +4631,11 @@ CDEF, 'kernel32.dll');
             'bin/wls-gateway-launcher' . $suffix,
             'LICENSES.txt',
             'provenance.json',
+            'share/ca-bundle.pem',
             'sbom.cdx.json',
         ];
         if ($platform === 'Windows') {
+            $required[] = 'bin/wls-gateway-guardian.exe';
             $required[] = 'bin/wls-bounded-command.exe';
         }
         return $required;
@@ -4398,6 +4647,7 @@ CDEF, 'kernel32.dll');
             'app/controller.php',
             'LICENSES.txt',
             'provenance.json',
+            'share/ca-bundle.pem',
             'sbom.cdx.json',
         ], true)) {
             return 0644;
@@ -4411,6 +4661,7 @@ CDEF, 'kernel32.dll');
             'bin/wls-gateway-launcher' . $suffix,
         ];
         if ($platform === 'Windows') {
+            $executables[] = 'bin/wls-gateway-guardian.exe';
             $executables[] = 'bin/wls-bounded-command.exe';
         }
         if (\in_array($relative, $executables, true)) {
@@ -5188,12 +5439,14 @@ CDEF, 'kernel32.dll');
         $suffix = (string)$manifest['platform'] === 'Windows' ? '.exe' : '';
         $files = [
             'controller' => 'app/controller.php',
+            'ca-bundle' => 'share/ca-bundle.pem',
             'php' => 'bin/php' . $suffix,
             'nginx' => 'bin/nginx' . $suffix,
             'wls-gateway-broker' => 'bin/wls-gateway-broker' . $suffix,
             'wls-gateway-launcher' => 'bin/wls-gateway-launcher' . $suffix,
         ];
         if ((string)$manifest['platform'] === 'Windows') {
+            $files['wls-gateway-guardian'] = 'bin/wls-gateway-guardian.exe';
             $files['wls-bounded-command'] = 'bin/wls-bounded-command.exe';
         }
         $provenanceNames = \array_keys($provenance['components']);
@@ -5247,14 +5500,16 @@ CDEF, 'kernel32.dll');
                     \strtolower((string)($definition['binary_sha256'] ?? '')),
                     $binary['sha256'],
                 )
-                || ($name !== 'controller'
+                || (!\in_array($name, ['controller', 'ca-bundle'], true)
                     && ($definition['self_contained'] ?? false) !== true)
             ) {
                 throw new \RuntimeException(
                     'Production provenance changed or is incomplete: ' . $name
                 );
             }
-            if ($auditDependencies && $name !== 'controller') {
+            if ($auditDependencies
+                && !\in_array($name, ['controller', 'ca-bundle'], true)
+            ) {
                 WlsGatewayDependencyAuditor::assertBaseSystemOnly(
                     $name,
                     $file,
@@ -5265,6 +5520,22 @@ CDEF, 'kernel32.dll');
                 (string)$definition['binary_sha256'],
             );
             $verified[$name] = $definition;
+        }
+        $caBundleBytes = $this->readStableFile(
+            $this->safeFile(
+                $package . DIRECTORY_SEPARATOR . 'share'
+                    . DIRECTORY_SEPARATOR . 'ca-bundle.pem',
+            ),
+            WlsGatewayCertificateTrustBundle::MAX_BYTES,
+            'production certificate trust bundle',
+        );
+        if (!\hash_equals(
+            WlsGatewayCertificateTrustBundle::canonicalize($caBundleBytes),
+            $caBundleBytes,
+        )) {
+            throw new \RuntimeException(
+                'Production certificate trust bundle is not canonical.'
+            );
         }
         $licenses = \trim($this->readStableFile(
             $this->safeFile($package . DIRECTORY_SEPARATOR . 'LICENSES.txt'),

@@ -2,25 +2,32 @@
 Description=Weline WLS 2.0 Host Gateway
 After=network-online.target
 Wants=network-online.target
-StartLimitIntervalSec=900
-StartLimitBurst=10
+# The immutable Guardian owns the signed crash/recovery ledger and bounded
+# maintenance backoff. systemd must remain available to schedule the next
+# invocation instead of entering a permanent StartLimit lockout.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=root
 Group=root
-ExecStart="{{LAUNCHER}}" --service --home="{{HOME}}" --run="{{RUN_DIR}}" --profile="{{PROFILE}}"
+ExecStart="{{GUARDIAN}}" --guardian --service --home="{{HOME}}" --run="{{RUN_DIR}}" --profile="{{PROFILE}}"
 Restart=on-failure
 RestartSec=5
-KillMode=control-group
-TimeoutStopSec=30
+# A normal stop reaches only the Guardian first. It owns the bounded graceful
+# handoff; after 330 seconds systemd may kill the remaining service cgroup.
+KillMode=mixed
+TimeoutStopSec=330
 SendSIGKILL=yes
 LimitNOFILE=65536
 RuntimeDirectory=weline-gateway
 RuntimeDirectoryMode=0751
 UMask=0077
 NoNewPrivileges=true
-PrivateTmp=true
+# Enrollment authorizes project and certificate source paths in the host
+# filesystem namespace. A private /tmp would make otherwise valid projects
+# under /tmp or /var/tmp disappear from the Controller.
+PrivateTmp=false
 ProtectSystem=strict
 ProtectHome=read-only
 ProtectKernelTunables=true
@@ -30,7 +37,7 @@ RestrictSUIDSGID=true
 LockPersonality=true
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_CHOWN
 AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_CHOWN
-ReadWritePaths="{{HOME}}" "{{RUN_DIR}}"
+ReadWritePaths="{{HOME}}" "{{RUN_DIR}}" "{{SYSTEMD_DEFINITION_DIR}}"
 Environment="WLS_GATEWAY_LISTEN_HTTP={{HTTP_PORT}}"
 Environment="WLS_GATEWAY_LISTEN_HTTPS={{HTTPS_PORT}}"
 

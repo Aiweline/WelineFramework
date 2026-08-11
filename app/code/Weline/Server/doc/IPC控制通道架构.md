@@ -4,7 +4,7 @@
 
 WLS 使用 NDJSON 控制通道连接 CLI、Master、Dispatcher、Worker 和其它子服务。控制面传递身份、READY、路由快照、排水、重载、停止与遥测；公网协议不进入该通道。
 
-当前唯一公网数据面为“项目托管 Nginx TLS 1.3/H2/H1（H3 可用时）→ loopback HTTP/1.1 Keep-Alive → Direct Worker”。Windows 由 Nginx 均衡独立 `worker_ports`；Linux 自动优先 `reuseport`，不可用时回退 `shared_fd`；macOS 使用 `shared_fd`。这里的 Direct 仅表示内部回源 socket 由 Worker 接受，不表示客户端直连 WLS。旧 Linux native HTTP/3 activation、Gateway、Caddy、WLS TLS/Protocol Edge 消息即使仍留有历史常量，也没有受支持的启动入口，不属于现行 READY 契约。
+现行公网数据面有两种：宿主级 Weline Gateway Nginx 或 legacy 项目 Nginx，均经 loopback HTTP/1.1 Keep-Alive 回源 Direct Worker；纯 WLS 则由 `worker_ssl.php` 直接提供 TLS 1.3/H2/H1 高端口入口。Windows 回源由 Nginx 均衡独立 `worker_ports`；Linux 自动优先 `reuseport`，不可用时回退 `shared_fd`；macOS 使用 `shared_fd`。这里的 Direct 仅表示内部回源 socket 由 Worker 接受。
 
 ## 1. 控制面与数据面
 
@@ -14,8 +14,10 @@ flowchart LR
   MASTER <-->|"REGISTER / READY / lease / heartbeat"| DISP["Dispatcher"]
   MASTER <-->|"REGISTER / READY / drain / shutdown"| WORKER["Worker / Maintenance"]
   MASTER <-->|"REGISTER / READY / shutdown"| SIDE["Session / Memory / Redirect"]
-  CLIENT["Client"] --> NGINX["项目托管 Nginx\nTLS 1.3 + H2/H1 + 可用时 H3"]
-  NGINX -->|"loopback H1 Keep-Alive"| ROUTE{"内部拓扑"}
+  CLIENT["Client"] --> EDGE["宿主 Gateway / legacy Nginx\nTLS 1.3 + H2/H1 + 可用时 H3"]
+  CLIENT --> PURE["纯 WLS 高端口\nTLS 1.3 + H2/H1"]
+  EDGE -->|"loopback H1 Keep-Alive"| ROUTE{"内部拓扑"}
+  PURE --> WORKER
   ROUTE -->|"显式兼容模式"| DISP
   ROUTE -->|"Windows worker_ports / Linux reuseport→shared_fd / macOS shared_fd"| WORKER
   DISP -->|"H1 bytes"| WORKER

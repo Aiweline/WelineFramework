@@ -9,6 +9,7 @@ use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
 use Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity;
 use Weline\Server\Service\Edge\Gateway\GatewayRuntimeEndpointPublisher;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 
 final class GatewayRuntimeEndpointPublisherTest extends TestCase
 {
@@ -20,6 +21,7 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
             'edge_adapter' => 'wls',
         ];
         $endpoint['gateway']['mode'] = 'wls';
+        $endpoint['gateway']['requested_mode'] = 'auto';
         $endpoint['gateway']['certificate_generation'] = 7;
         $endpoint['gateway']['degraded_reason'] = 'GATEWAY_UNAVAILABLE';
         $endpoint['gateway']['fallback_state'] = 'DEGRADED_WLS';
@@ -38,6 +40,7 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
         self::assertSame($this->projectUuid(), $updated['gateway']['project_uuid']);
         self::assertSame(7, $updated['gateway']['certificate_generation']);
         self::assertSame('wls', $updated['gateway']['mode']);
+        self::assertSame('auto', $updated['gateway']['requested_mode']);
         self::assertSame('gateway', $updated['gateway']['serving_mode']);
         self::assertSame('wls-edge/2', $updated['gateway']['protocol']);
         self::assertSame(80, $updated['gateway']['public_http']);
@@ -51,6 +54,7 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
         $endpoint = $this->endpoint();
         $endpoint['edge_adapter'] = 'wls';
         $endpoint['gateway']['mode'] = 'gateway';
+        $endpoint['gateway']['requested_mode'] = 'auto';
         $endpoint['gateway']['certificate_generation'] = 7;
         $updated = GatewayRuntimeEndpointPublisher::applyFallbackObservation(
             $endpoint,
@@ -65,10 +69,53 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
         self::assertSame($this->projectUuid(), $updated['gateway']['project_uuid']);
         self::assertSame(7, $updated['gateway']['certificate_generation']);
         self::assertSame('gateway', $updated['gateway']['mode']);
+        self::assertSame('auto', $updated['gateway']['requested_mode']);
         self::assertSame('fallback_wls', $updated['gateway']['serving_mode']);
+        self::assertSame('wls-edge/2', $updated['gateway']['protocol']);
         self::assertSame(0, $updated['gateway']['public_http']);
         self::assertSame(27673, $updated['gateway']['public_https']);
         self::assertSame('DEGRADED_WLS', $updated['gateway']['fallback_state']);
+        self::assertSame(
+            ['https://shop.example.test:27673'],
+            $updated['gateway']['fallback_urls'],
+        );
+        self::assertSame(
+            ['shop.example.test'],
+            $updated['gateway']['fallback_route_domains'],
+        );
+    }
+
+    public function testWildcardOnlyFallbackPublishesNoIpAuthorityUrl(): void
+    {
+        $endpoint = $this->endpoint();
+        $proof = $this->fallbackLeaseProof($endpoint, 27674);
+        $proof['authority_host'] = '';
+        $proof['route_domains'] = ['*.example.test'];
+        unset($proof['proof_digest']);
+        $proof['proof_digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($proof),
+        );
+
+        $updated = GatewayRuntimeEndpointPublisher::applyFallbackObservation(
+            $endpoint,
+            27674,
+            'GATEWAY_DATA_PLANE_UNAVAILABLE',
+            1800000000,
+            $proof,
+            123.0,
+        );
+
+        self::assertSame([], $updated['gateway']['fallback_urls']);
+        self::assertSame(
+            ['*.example.test'],
+            $updated['gateway']['fallback_route_domains'],
+        );
+        self::assertContains(
+            'hostname_and_sni_required',
+            $updated['gateway']['fallback_limitations'],
+        );
+        self::assertSame('', $updated['gateway']['fallback_lease_proof']['authority_host']);
     }
 
     public function testDrainingFallbackLeaseCannotBePublishedAsAccepting(): void
@@ -110,12 +157,44 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
 
         self::assertStringContainsString('->liveServingLeaseForAnyOwner(', $source);
         self::assertStringNotContainsString('->liveServingLease(', $source);
+        self::assertStringContainsString(
+            'operationDeadlineMonotonic: $deadlineMonotonic',
+            $source,
+        );
     }
 
-    public function testUnauthenticatedHealthyObservationIsRejected(): void
+    public function testActiveRouteRemainsPublishableWhileAnotherProjectRouteWaitsForCertificate(): void
+    {
+        $endpoint = $this->endpoint();
+        $status = $this->healthyStatus();
+        // One exact ACTIVE route can serve while another desired route is still
+        // PENDING_CERTIFICATE. This must not be presented as whole-project
+        // readiness, but it is sufficient evidence for the active route's
+        // runtime projection.
+        $status['project_ready'] = false;
+        $status['project_converged'] = false;
+        $status['route_serving_ready'] = true;
+
+        $updated = GatewayRuntimeEndpointPublisher::applyHealthyObservation(
+            $endpoint,
+            $status,
+            'ACTIVE',
+            $this->servingProof($endpoint, $status),
+            1800000000,
+            123.0,
+        );
+
+        self::assertSame('gateway', $updated['gateway']['serving_mode']);
+        self::assertSame(
+            $this->servingProof($endpoint, $status)['proof_digest'],
+            $updated['gateway']['runtime_project_proof']['proof_digest'],
+        );
+    }
+
+    public function testHealthyObservationWithoutRouteServingReadinessIsRejected(): void
     {
         $status = $this->healthyStatus();
-        $status['project_ready'] = false;
+        $status['route_serving_ready'] = false;
 
         $this->expectException(\RuntimeException::class);
         GatewayRuntimeEndpointPublisher::applyHealthyObservation(
@@ -170,10 +249,9 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
             'public_host' => 'tenant.example.test',
         ], ['payload' => ['routes' => [['domain' => '*.example.test']]] ]));
 
-        $this->expectException(\RuntimeException::class);
-        $method->invoke(null, [
+        self::assertSame('', $method->invoke(null, [
             'public_host' => '*',
-        ], ['payload' => ['routes' => [['domain' => '*.example.test']]] ]);
+        ], ['payload' => ['routes' => [['domain' => '*.example.test']]] ]));
     }
 
     public function testServingProofRequiresRedirectTargetInSameActivePublication(): void
@@ -296,6 +374,8 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
             'ok' => true,
             'ready' => true,
             'project_ready' => true,
+            'project_converged' => true,
+            'route_serving_ready' => true,
             'state' => 'HEALTHY',
             'protocol' => 'wls-edge/2',
             'epoch' => \str_repeat('a', 32),
@@ -325,6 +405,7 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
                 'instance_id' => 'publisher-unit',
                 'instance_generation' => 4,
                 'launch_id' => \str_repeat('e', 32),
+                'certificate_profile' => ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
             ],
         ];
     }
@@ -333,7 +414,7 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
     private function servingProof(array $endpoint, array $status): array
     {
         $proof = [
-            'schema_version' => 2,
+            'schema_version' => 3,
             'project_uuid' => $this->projectUuid(),
             'instance_id' => 'publisher-unit',
             'project_generation' => 11,
@@ -350,12 +431,23 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
             'active_config_digest' => \str_repeat('b', 64),
             'serving_manifest_generation' => 3,
             'serving_manifest_digest' => \str_repeat('1', 64),
+            'certificate_trust_profile' => ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
             'active_routes' => [[
                 'route_id' => \str_repeat('2', 32),
                 'domain' => 'shop.example.test',
                 'route_generation' => 5,
                 'certificate_generation' => 6,
                 'certificate_source_digest' => \str_repeat('3', 64),
+                'certificate_trust_profile' => ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+                'certificate_provider' => ProjectCertificateGenerationStore::PROVIDER_LOCAL_CA,
+                'certificate_material_class' => ProjectCertificateGenerationStore::MATERIAL_CLASS_LOCAL_CA,
+                'certificate_provenance_digest' => ProjectCertificateGenerationStore::provenanceDigest(
+                    'shop.example.test',
+                    \str_repeat('3', 64),
+                    ProjectCertificateGenerationStore::TRUST_PROFILE_TEST,
+                    ProjectCertificateGenerationStore::PROVIDER_LOCAL_CA,
+                    ProjectCertificateGenerationStore::MATERIAL_CLASS_LOCAL_CA,
+                ),
                 'backend_public_digest' => \str_repeat('4', 64),
                 'force_https' => true,
                 'force_root_to_www' => false,
@@ -385,6 +477,7 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
             'lease_id' => \str_repeat('5', 32),
             'bind_host' => '127.0.0.1',
             'authority_host' => 'shop.example.test',
+            'route_domains' => ['shop.example.test'],
             'port' => $port,
             'master_pid' => (int)$endpoint['master_pid'],
             'worker_launch_id' => \str_repeat('6', 32),

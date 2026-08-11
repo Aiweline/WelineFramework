@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Console\Gateway;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Gateway\AbstractGatewayCommand;
+use Weline\Server\Console\Server\Gateway\Rebootstrap;
 
 final class GatewayCommandJsonOutputTest extends TestCase
 {
@@ -78,6 +79,34 @@ final class GatewayCommandJsonOutputTest extends TestCase
         self::assertArrayNotHasKey('admin_token', $decoded['payload']);
         self::assertTrue($decoded['payload']['credential_installed']);
         self::assertSame(\str_repeat('d', 64), $decoded['payload']['signature']);
+    }
+
+    public function testRebootstrapCommandPublishesReplaySafeHelpAndGuardsPackagePath(): void
+    {
+        $command = new Rebootstrap();
+        $command->__init();
+        $help = $command->help();
+        self::assertIsString($help);
+        self::assertStringContainsString('server:gateway:rebootstrap', $help);
+        self::assertStringContainsString('--nonce', $help);
+        self::assertStringContainsString('--confirm', $help);
+        self::assertStringContainsString('同一 package、nonce 与 profile', $help);
+
+        \ob_start();
+        $exit = $command->execute([
+            'json' => true,
+            'confirm' => true,
+            'package' => 'relative/package',
+            'nonce' => \str_repeat('a', 32),
+        ]);
+        $output = (string)\ob_get_clean();
+        $decoded = \json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(1, $exit);
+        self::assertFalse($decoded['ok']);
+        self::assertSame(
+            'absolute_package_required',
+            $decoded['error']['code'],
+        );
     }
 
     private function probeCommand(): object

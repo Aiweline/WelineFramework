@@ -531,10 +531,54 @@ final class RuntimePolicyCompiler
                 $hosts[$host] = true;
             }
         }
+        foreach ($this->activeCertificateHosts() as $host) {
+            $hosts[$host] = true;
+        }
 
         $hosts = \array_keys($hosts);
         \sort($hosts, \SORT_STRING);
         return $hosts;
+    }
+
+    /**
+     * SaaS / multi-SNI hosts live in the certificate generation store, not in
+     * the instance bind address. Host guard must accept every currently active
+     * generation or public sites 403 behind a private listen IP.
+     *
+     * @return list<string>
+     */
+    private function activeCertificateHosts(): array
+    {
+        $dir = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'app'
+            . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl'
+            . DIRECTORY_SEPARATOR . '.wls-generations' . DIRECTORY_SEPARATOR . 'active';
+        if (!\is_dir($dir) || \is_link($dir)) {
+            return [];
+        }
+        $hosts = [];
+        $files = @\scandir($dir);
+        if (!\is_array($files)) {
+            return [];
+        }
+        foreach ($files as $leaf) {
+            if ($leaf === '.' || $leaf === '..' || !\str_ends_with($leaf, '.json')) {
+                continue;
+            }
+            $path = $dir . DIRECTORY_SEPARATOR . $leaf;
+            if (!\is_file($path) || \is_link($path)) {
+                continue;
+            }
+            $raw = @\file_get_contents($path);
+            $data = \is_string($raw) ? \json_decode($raw, true) : null;
+            $payload = \is_array($data) ? ($data['payload'] ?? $data) : null;
+            $domain = \is_array($payload) ? (string)($payload['domain'] ?? '') : '';
+            $host = $this->normalizeConfiguredHost($domain);
+            if ($host !== '') {
+                $hosts[$host] = true;
+            }
+        }
+
+        return \array_keys($hosts);
     }
 
     /**

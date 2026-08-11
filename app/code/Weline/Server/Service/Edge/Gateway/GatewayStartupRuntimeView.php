@@ -28,12 +28,26 @@ final class GatewayStartupRuntimeView
      * @param array<string,mixed> $endpoint
      * @return array{source:string,ready_action:string,public_proven:bool,requested_mode:string,join_state:string,native_edge_state:string}
      */
-    public static function resolve(array $endpoint, bool $explicitNoNginx = false): array
+    public static function resolve(
+        array $endpoint,
+        bool $explicitNoNginx = false,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         return self::resolveObserved(
             $endpoint,
-            GatewayRuntimeServingProjection::gatewayIsServing($endpoint),
-            GatewayRuntimeServingProjection::fallbackServingEndpoint($endpoint) !== null,
+            GatewayRuntimeServingProjection::gatewayIsServing(
+                $endpoint,
+                $deadlineMonotonic,
+            ),
+            GatewayRuntimeServingProjection::fallbackServingEndpoint(
+                $endpoint,
+                $deadlineMonotonic,
+            ) !== null
+                || GatewayRuntimeServingProjection::fallbackServingObservation(
+                    $endpoint,
+                    $deadlineMonotonic,
+                ) !== null,
             $explicitNoNginx,
         );
     }

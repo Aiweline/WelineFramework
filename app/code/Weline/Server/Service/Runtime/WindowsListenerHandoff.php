@@ -164,9 +164,15 @@ final class WindowsListenerHandoff
         mixed $stream,
         array $intent,
         int $masterPid,
+        ?float $deadlineMonotonic = null,
     ): void {
         self::assertWindowsCapability();
         $intent = self::normalizeIntent($intent);
+        $runtime = new WindowsListenerHandoffRuntime();
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         if (!\is_resource($stream) || $masterPid <= 0) {
             throw new \RuntimeException(
                 'Windows Master listener handoff requires a retained stream and target PID.'
@@ -192,6 +198,8 @@ final class WindowsListenerHandoff
             $intent['launch_id'],
             'master',
             0,
+            $runtime,
+            $deadlineMonotonic,
         );
     }
 
@@ -199,9 +207,15 @@ final class WindowsListenerHandoff
     public static function installCurrentProcessSource(
         mixed $stream,
         array $intent,
+        ?float $deadlineMonotonic = null,
     ): void {
         self::assertWindowsCapability();
         $intent = self::normalizeIntent($intent);
+        $runtime = new WindowsListenerHandoffRuntime();
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         if (!\is_resource($stream)) {
             throw new \RuntimeException(
                 'Foreground Windows Master has no retained listener stream.'
@@ -214,14 +228,28 @@ final class WindowsListenerHandoff
             );
         }
         self::assertListeningSocket($socket, $intent['bind_host'], $intent['port']);
-        self::installMasterSocket($socket, $intent, $stream);
+        self::installMasterSocket(
+            $socket,
+            $intent,
+            $stream,
+            $runtime,
+            $deadlineMonotonic,
+        );
     }
 
     /** @param array<string,mixed> $intent */
-    public static function awaitInstallForMaster(array $intent): void
+    public static function awaitInstallForMaster(
+        array $intent,
+        ?float $deadlineMonotonic = null,
+    ): void
     {
         self::assertWindowsCapability();
         $intent = self::normalizeIntent($intent);
+        $runtime = new WindowsListenerHandoffRuntime();
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         $imported = self::awaitEnvelope(
             $intent['master_path'],
             $intent,
@@ -230,13 +258,31 @@ final class WindowsListenerHandoff
             $intent['launch_id'],
             'master',
             0,
+            $runtime,
+            $deadlineMonotonic,
         );
-        self::installMasterSocket($imported['socket'], $intent, null);
+        self::installMasterSocket(
+            $imported['socket'],
+            $intent,
+            null,
+            $runtime,
+            $deadlineMonotonic,
+        );
     }
 
-    public static function hasMasterSocket(?string $intentDigest = null): bool
+    public static function hasMasterSocket(
+        ?string $intentDigest = null,
+        ?float $deadlineMonotonic = null,
+    ): bool
     {
-        self::sweepPendingExportsBestEffort();
+        $runtime = new WindowsListenerHandoffRuntime();
+        self::sweepPendingExportsBestEffort(
+            runtime: $runtime,
+            deadlineMonotonic: self::operationDeadline(
+                $deadlineMonotonic,
+                $runtime,
+            ),
+        );
         $intentDigest = $intentDigest !== null
             ? \strtolower(\trim($intentDigest))
             : self::$primaryIntentDigest;
@@ -245,9 +291,19 @@ final class WindowsListenerHandoff
     }
 
     /** @return array<string,mixed> */
-    public static function masterIntent(?string $intentDigest = null): array
+    public static function masterIntent(
+        ?string $intentDigest = null,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        self::sweepPendingExportsBestEffort();
+        $runtime = new WindowsListenerHandoffRuntime();
+        self::sweepPendingExportsBestEffort(
+            runtime: $runtime,
+            deadlineMonotonic: self::operationDeadline(
+                $deadlineMonotonic,
+                $runtime,
+            ),
+        );
         $intentDigest = $intentDigest !== null
             ? \strtolower(\trim($intentDigest))
             : self::$primaryIntentDigest;
@@ -294,11 +350,17 @@ final class WindowsListenerHandoff
         string $launchId,
         string $slotId,
         int $generation,
+        ?float $deadlineMonotonic = null,
     ): array {
         self::assertWindowsCapability();
         $intent = self::normalizeIntent($intent);
+        $runtime = new WindowsListenerHandoffRuntime();
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         $intentDigest = (string)$intent['intent_digest'];
-        if (!self::hasMasterSocket($intentDigest)) {
+        if (!self::hasMasterSocket($intentDigest, $deadlineMonotonic)) {
             throw new \RuntimeException(
                 'Windows Master no longer owns the listener needed for Dispatcher recovery.'
             );
@@ -316,6 +378,8 @@ final class WindowsListenerHandoff
             $launchId,
             $slotId,
             $generation,
+            $runtime,
+            $deadlineMonotonic,
         );
     }
 
@@ -326,9 +390,18 @@ final class WindowsListenerHandoff
      * } $expected
      * @return array{socket:\Socket,proof:array<string,mixed>}
      */
-    public static function awaitChildSocket(string $path, array $expected): array
+    public static function awaitChildSocket(
+        string $path,
+        array $expected,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         self::assertWindowsCapability();
+        $runtime = new WindowsListenerHandoffRuntime();
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         $intent = [
             'schema_version' => self::SCHEMA_VERSION,
             'transport' => self::TRANSPORT,
@@ -372,6 +445,8 @@ final class WindowsListenerHandoff
             $launchId,
             $slotId,
             $generation,
+            $runtime,
+            $deadlineMonotonic,
         );
 
         return [
@@ -400,9 +475,16 @@ final class WindowsListenerHandoff
         ];
     }
 
-    public static function closeMasterSocket(): void
+    public static function closeMasterSocket(?float $deadlineMonotonic = null): void
     {
-        self::sweepPendingExportsBestEffort();
+        $runtime = new WindowsListenerHandoffRuntime();
+        self::sweepPendingExportsBestEffort(
+            runtime: $runtime,
+            deadlineMonotonic: self::operationDeadline(
+                $deadlineMonotonic,
+                $runtime,
+            ),
+        );
         foreach (\array_keys(self::$masterSources) as $intentDigest) {
             self::releaseMasterSource($intentDigest);
         }
@@ -440,17 +522,29 @@ final class WindowsListenerHandoff
         string $slotId,
         int $generation,
         ?WindowsListenerHandoffRuntime $runtime = null,
+        ?float $deadlineMonotonic = null,
     ): array {
         $runtime ??= new WindowsListenerHandoffRuntime();
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         if ($targetPid !== $runtime->currentPid()) {
             throw new \RuntimeException(
                 'Windows listener handoff target PID is not the importing process.'
             );
         }
-        self::sweepPendingExportsBestEffort(\dirname($path), $runtime);
-        $deadline = (\hrtime(true) / 1_000_000_000) + self::HANDOFF_TIMEOUT_SECONDS;
+        self::sweepPendingExportsBestEffort(
+            \dirname($path),
+            $runtime,
+            $deadlineMonotonic,
+        );
+        $deadline = \min(
+            $deadlineMonotonic,
+            $runtime->monotonicNow() + self::HANDOFF_TIMEOUT_SECONDS,
+        );
         $encoded = null;
-        while ((\hrtime(true) / 1_000_000_000) < $deadline) {
+        while ($runtime->monotonicNow() < $deadline) {
             $encoded = GatewayProjectStateFilesystem::readOptional(
                 $path,
                 self::MAX_ENVELOPE_BYTES,
@@ -466,6 +560,7 @@ final class WindowsListenerHandoff
                 'Timed out waiting for the target-bound Windows listener handoff.'
             );
         }
+        self::remainingDeadlineSeconds($deadlineMonotonic, $runtime);
 
         $socket = false;
         $protocolId = null;
@@ -503,6 +598,7 @@ final class WindowsListenerHandoff
                 $targetIdentity,
                 $generation,
                 $runtime,
+                $deadlineMonotonic,
             );
         } finally {
             if (!$protocolOwnershipTransferred) {
@@ -518,6 +614,7 @@ final class WindowsListenerHandoff
                         $generation,
                         'REJECTED',
                         $runtime,
+                        $deadlineMonotonic,
                     );
                 } catch (\Throwable) {
                     // The token is owned by the exporter process. If the
@@ -546,12 +643,21 @@ final class WindowsListenerHandoff
         string $slotId,
         int $generation,
         ?WindowsListenerHandoffRuntime $runtime = null,
+        ?float $deadlineMonotonic = null,
     ): array {
         if (!$socket instanceof \Socket || $targetPid <= 0) {
             throw new \RuntimeException('Windows listener export target is invalid.');
         }
         $runtime ??= new WindowsListenerHandoffRuntime();
-        self::sweepPendingExportsBestEffort(\dirname($path), $runtime);
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
+        self::sweepPendingExportsBestEffort(
+            \dirname($path),
+            $runtime,
+            $deadlineMonotonic,
+        );
         $targetIdentity = $runtime->captureProcessIdentity($targetPid);
         $sourcePid = $runtime->currentPid();
         $sourceIdentity = $runtime->captureProcessIdentity($sourcePid);
@@ -563,12 +669,18 @@ final class WindowsListenerHandoff
                 $sourcePid,
                 $sourceIdentity,
                 $runtime,
+                $deadlineMonotonic,
             );
             $mutexReady = true;
             if ($mutexRecoveryState === 'ABANDONED') {
-                self::recoverAbandonedPendingExports(\dirname($path), $runtime);
+                self::recoverAbandonedPendingExports(
+                    \dirname($path),
+                    $runtime,
+                    $deadlineMonotonic,
+                );
             }
             $exported = $runtime->export($socket, $targetPid);
+            self::remainingDeadlineSeconds($deadlineMonotonic, $runtime);
             if (!\is_string($exported) || $exported === '') {
                 throw new \RuntimeException(
                     'Winsock refused to export the listener for the requested target PID.'
@@ -587,8 +699,10 @@ final class WindowsListenerHandoff
                 $generation,
                 $mutexRecoveryState,
                 $runtime,
+                $deadlineMonotonic,
             );
             $registered = true;
+            self::remainingDeadlineSeconds($deadlineMonotonic, $runtime);
             $envelope = [
                 'schema_version' => self::SCHEMA_VERSION,
                 'transport' => self::TRANSPORT,
@@ -619,7 +733,9 @@ final class WindowsListenerHandoff
             if (\strlen($encoded) > self::MAX_ENVELOPE_BYTES) {
                 throw new \RuntimeException('Windows listener handoff envelope is too large.');
             }
+            self::remainingDeadlineSeconds($deadlineMonotonic, $runtime);
             GatewayProjectStateFilesystem::atomicWrite($path, $encoded, 0600);
+            self::remainingDeadlineSeconds($deadlineMonotonic, $runtime);
             if (!$runtime->publisherReleaseWaitIsExternallyDriven($path)) {
                 self::awaitSourceExportRelease(
                     $protocolId,
@@ -628,6 +744,7 @@ final class WindowsListenerHandoff
                     $targetIdentity,
                     $generation,
                     $runtime,
+                    $deadlineMonotonic,
                 );
             }
         } catch (\Throwable $throwable) {
@@ -642,6 +759,7 @@ final class WindowsListenerHandoff
                             $generation,
                             'CANCELLED',
                             $runtime,
+                            $deadlineMonotonic,
                         );
                         if (!$releasedByRegistry) {
                             $runtime->release($protocolId);
@@ -694,11 +812,23 @@ final class WindowsListenerHandoff
         array $targetIdentity,
         int $generation,
         WindowsListenerHandoffRuntime $runtime,
+        ?float $deadlineMonotonic = null,
     ): void {
         $protocolDigest = \hash('sha256', $protocolId);
-        $deadline = $runtime->monotonicNow() + self::ENVELOPE_LIFETIME_SECONDS;
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
+        $deadline = \min(
+            $deadlineMonotonic,
+            $runtime->monotonicNow() + self::ENVELOPE_LIFETIME_SECONDS,
+        );
         do {
-            self::sweepPendingExports(\dirname($path), $runtime);
+            self::sweepPendingExports(
+                \dirname($path),
+                $runtime,
+                $deadlineMonotonic,
+            );
             if (!isset(self::$ownedExportProtocols[$protocolDigest])) {
                 return;
             }
@@ -714,6 +844,7 @@ final class WindowsListenerHandoff
                 $generation,
                 'CANCELLED',
                 $runtime,
+                $deadlineMonotonic,
             );
         } catch (\Throwable) {
             // The exact exporter still owns the process-local php-src mapping.
@@ -742,6 +873,7 @@ final class WindowsListenerHandoff
         int $generation,
         string $mutexRecoveryState,
         WindowsListenerHandoffRuntime $runtime,
+        ?float $deadlineMonotonic = null,
     ): void {
         if ($sourcePid < 1
             || $targetPid < 1
@@ -803,6 +935,8 @@ final class WindowsListenerHandoff
                 }
                 $records[$protocolDigest] = $record;
             },
+            $runtime,
+            $deadlineMonotonic,
         );
     }
 
@@ -813,7 +947,12 @@ final class WindowsListenerHandoff
         int $sourcePid,
         array $sourceIdentity,
         WindowsListenerHandoffRuntime $runtime,
+        ?float $deadlineMonotonic = null,
     ): string {
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         if (self::$exportMutexGuard instanceof WindowsListenerHandoffMutexGuard) {
             if ($sourcePid !== self::$exportMutexSourcePid
                 || !\hash_equals(
@@ -832,7 +971,13 @@ final class WindowsListenerHandoff
             return self::$exportMutexRecoveryState;
         }
 
-        $guard = $runtime->acquireExportMutex(self::EXPORT_MUTEX_WAIT_MILLISECONDS);
+        $guard = $runtime->acquireExportMutex((int)\max(1, \min(
+            self::EXPORT_MUTEX_WAIT_MILLISECONDS,
+            \ceil(self::remainingDeadlineSeconds(
+                $deadlineMonotonic,
+                $runtime,
+            ) * 1000.0),
+        )));
         self::$exportMutexSourcePid = $sourcePid;
         self::$exportMutexSourceBirth = (string)$sourceIdentity['birth'];
         self::$exportMutexSourcePidNamespaceId = (string)$sourceIdentity['pid_namespace_id'];
@@ -857,6 +1002,7 @@ final class WindowsListenerHandoff
     private static function recoverAbandonedPendingExports(
         string $directory,
         WindowsListenerHandoffRuntime $runtime,
+        ?float $deadlineMonotonic = null,
     ): void {
         $removedPaths = [];
         self::withPendingRegistry(
@@ -892,6 +1038,8 @@ final class WindowsListenerHandoff
                     unset($records[$digest]);
                 }
             },
+            $runtime,
+            $deadlineMonotonic,
         );
         foreach ($removedPaths as $path) {
             try {
@@ -936,6 +1084,7 @@ final class WindowsListenerHandoff
         int $generation,
         string $consumerState,
         WindowsListenerHandoffRuntime $runtime,
+        ?float $deadlineMonotonic = null,
     ): bool {
         if (!\in_array($consumerState, ['CONSUMED', 'REJECTED', 'CANCELLED'], true)) {
             throw new \RuntimeException(
@@ -996,6 +1145,8 @@ final class WindowsListenerHandoff
                     return;
                 }
             },
+            $runtime,
+            $deadlineMonotonic,
         );
         // A registry-less token belongs to a legacy exporter process. PHP keeps
         // exported mapping handles in that process's SOCKETS_G(wsa_info), so a
@@ -1073,6 +1224,7 @@ final class WindowsListenerHandoff
         array $targetIdentity,
         int $generation,
         WindowsListenerHandoffRuntime $runtime,
+        ?float $deadlineMonotonic = null,
     ): \Socket {
         $pathDigest = self::pendingPathDigest($path);
         $socket = null;
@@ -1170,6 +1322,8 @@ final class WindowsListenerHandoff
                         }
                     }
                 },
+                $runtime,
+                $deadlineMonotonic,
             );
             if (!$socket instanceof \Socket) {
                 throw new \RuntimeException(
@@ -1188,6 +1342,7 @@ final class WindowsListenerHandoff
     private static function sweepPendingExports(
         string $directory,
         WindowsListenerHandoffRuntime $runtime,
+        ?float $deadlineMonotonic = null,
     ): int {
         $removedPaths = [];
         $reclaimed = 0;
@@ -1270,6 +1425,8 @@ final class WindowsListenerHandoff
                     $reclaimed++;
                 }
             },
+            $runtime,
+            $deadlineMonotonic,
         );
         foreach ($removedPaths as $path) {
             try {
@@ -1287,6 +1444,7 @@ final class WindowsListenerHandoff
     private static function sweepPendingExportsBestEffort(
         ?string $directory = null,
         ?WindowsListenerHandoffRuntime $runtime = null,
+        ?float $deadlineMonotonic = null,
     ): void {
         if ($runtime === null && PHP_OS_FAMILY !== 'Windows') {
             return;
@@ -1305,6 +1463,7 @@ final class WindowsListenerHandoff
             self::sweepPendingExports(
                 $directory,
                 $runtime ?? new WindowsListenerHandoffRuntime(),
+                $deadlineMonotonic,
             );
         } catch (\Throwable) {
         }
@@ -1318,7 +1477,14 @@ final class WindowsListenerHandoff
     private static function withPendingRegistry(
         string $directory,
         \Closure $callback,
+        ?WindowsListenerHandoffRuntime $runtime = null,
+        ?float $deadlineMonotonic = null,
     ): mixed {
+        $runtime ??= new WindowsListenerHandoffRuntime();
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         $canonical = \realpath($directory);
         if (!\is_string($canonical)
             || $canonical === ''
@@ -1333,7 +1499,14 @@ final class WindowsListenerHandoff
         $lockPath = $canonical . DIRECTORY_SEPARATOR . self::PENDING_REGISTRY_LOCK;
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $lockPath,
-            static function () use ($canonical, $registryPath, $callback): mixed {
+            static function () use (
+                $canonical,
+                $registryPath,
+                $callback,
+                $runtime,
+                $deadlineMonotonic,
+            ): mixed {
+                self::remainingDeadlineSeconds($deadlineMonotonic, $runtime);
                 GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
                     $registryPath,
                     self::MAX_PENDING_REGISTRY_BYTES,
@@ -1352,6 +1525,7 @@ final class WindowsListenerHandoff
                 } catch (\Throwable $throwable) {
                     $failure = $throwable;
                 }
+                self::remainingDeadlineSeconds($deadlineMonotonic, $runtime);
                 if ($records !== $originalRecords) {
                     self::writePendingRegistry($registryPath, $records);
                 }
@@ -1360,6 +1534,10 @@ final class WindowsListenerHandoff
                 }
                 return $result;
             },
+            waitTimeoutSeconds: \min(
+                0.25,
+                self::remainingDeadlineSeconds($deadlineMonotonic, $runtime),
+            ),
         );
     }
 
@@ -1589,12 +1767,19 @@ final class WindowsListenerHandoff
         mixed $socket,
         array $intent,
         mixed $stream,
+        ?WindowsListenerHandoffRuntime $runtime = null,
+        ?float $deadlineMonotonic = null,
     ): void {
         if (!$socket instanceof \Socket) {
             throw new \RuntimeException('Windows Master listener socket is invalid.');
         }
+        $runtime ??= new WindowsListenerHandoffRuntime();
+        $deadlineMonotonic = self::operationDeadline(
+            $deadlineMonotonic,
+            $runtime,
+        );
         $intentDigest = (string)$intent['intent_digest'];
-        if (self::hasMasterSocket($intentDigest)) {
+        if (self::hasMasterSocket($intentDigest, $deadlineMonotonic)) {
             $existing = self::$masterSources[$intentDigest];
             if (\hash_equals(
                 (string)($existing['intent']['intent_digest'] ?? ''),
@@ -1704,6 +1889,40 @@ final class WindowsListenerHandoff
                 );
             }
         }
+    }
+
+    private static function operationDeadline(
+        ?float $deadlineMonotonic,
+        WindowsListenerHandoffRuntime $runtime,
+    ): float {
+        $now = $runtime->monotonicNow();
+        if ($deadlineMonotonic === null) {
+            return $now + self::ENVELOPE_LIFETIME_SECONDS;
+        }
+        if (!\is_finite($deadlineMonotonic) || $deadlineMonotonic <= $now) {
+            throw new \RuntimeException(
+                'Windows listener handoff operation deadline was exhausted.',
+            );
+        }
+        return $deadlineMonotonic;
+    }
+
+    private static function remainingDeadlineSeconds(
+        float $deadlineMonotonic,
+        WindowsListenerHandoffRuntime $runtime,
+    ): float {
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException(
+                'Windows listener handoff operation deadline is invalid.',
+            );
+        }
+        $remaining = $deadlineMonotonic - $runtime->monotonicNow();
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException(
+                'Windows listener handoff operation deadline was exhausted.',
+            );
+        }
+        return $remaining;
     }
 
     /**

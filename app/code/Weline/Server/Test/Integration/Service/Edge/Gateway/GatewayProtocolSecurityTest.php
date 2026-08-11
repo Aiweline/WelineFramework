@@ -7,6 +7,7 @@ namespace Weline\Server\Test\Integration\Service\Edge\Gateway;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 
 final class GatewayProtocolSecurityTest extends TestCase
 {
@@ -35,6 +36,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertTrue(\mkdir($state, 0700, true));
         self::assertTrue(\mkdir($trust, 0750, true));
         self::assertTrue(\mkdir($slot . DIRECTORY_SEPARATOR . 'bin', 0700, true));
+        self::assertTrue(\mkdir($slot . DIRECTORY_SEPARATOR . 'share', 0700, true));
         $this->hostId = \bin2hex(\random_bytes(16));
         $this->adminSecret = \bin2hex(\random_bytes(32));
         $this->fencing = \bin2hex(\random_bytes(32));
@@ -44,6 +46,11 @@ final class GatewayProtocolSecurityTest extends TestCase
             $this->adminSecret,
         ));
         self::assertNotFalse(\file_put_contents($trust . DIRECTORY_SEPARATOR . 'active-slot', "A\n"));
+        $trustBundle = $this->certificateAuthority();
+        $trustBundlePath = $slot . DIRECTORY_SEPARATOR . 'share'
+            . DIRECTORY_SEPARATOR . 'ca-bundle.pem';
+        self::assertNotFalse(\file_put_contents($trustBundlePath, $trustBundle));
+        self::assertTrue(\chmod($trustBundlePath, 0644));
         self::assertNotFalse(\file_put_contents(
             $slot . DIRECTORY_SEPARATOR . 'manifest.json',
             \json_encode([
@@ -52,8 +59,17 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'release_ready' => false,
                 'implementation_level' => 'wls-2.0',
                 'security_profile' => 'native-broker-v1',
-                'runtime_generation' => 'test-runtime-a',
-                'components' => [],
+                'runtime_generation' => \hash('sha256', 'test-runtime-a'),
+                'capabilities' => [
+                    'certificate_public_trust_bundle' => true,
+                ],
+                'components' => [
+                    'share/ca-bundle.pem' => [
+                        'sha256' => \hash('sha256', $trustBundle),
+                        'size' => \strlen($trustBundle),
+                        'mode' => 0644,
+                    ],
+                ],
             ], JSON_THROW_ON_ERROR),
         ));
         $nginx = $slot . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'nginx';
@@ -94,6 +110,112 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
+    public function testControllerCapacityContractMatchesWlsTwoPlan(): void
+    {
+        self::assertSame(
+            128,
+            (new \ReflectionClassConstant(
+                \WlsEdgeGatewayController::class,
+                'MAX_PROJECTS',
+            ))->getValue(),
+        );
+        self::assertSame(
+            256,
+            (new \ReflectionClassConstant(
+                \WlsEdgeGatewayController::class,
+                'MAX_ROUTES_PER_PROJECT',
+            ))->getValue(),
+        );
+        self::assertSame(
+            2048,
+            (new \ReflectionClassConstant(
+                \WlsEdgeGatewayController::class,
+                'MAX_TOTAL_ROUTES',
+            ))->getValue(),
+        );
+        $constant = static fn (string $name): int|float => (new \ReflectionClassConstant(
+            \WlsEdgeGatewayController::class,
+            $name,
+        ))->getValue();
+        self::assertSame(512, $constant('PROBE_MAX_IN_FLIGHT_DEFAULT'));
+        self::assertSame(768, $constant('PROBE_MAX_IN_FLIGHT_HARD_LIMIT'));
+        self::assertSame(64, $constant('PROBE_MAX_IN_FLIGHT_MINIMUM'));
+        self::assertSame(60, $constant('PROBE_WINDOWS_SELECT_SAFE_LIMIT'));
+        self::assertLessThanOrEqual(
+            60.0,
+            $constant('PUBLIC_ROUTE_PROBE_PROOF_TTL_SECONDS'),
+        );
+        self::assertGreaterThanOrEqual(
+            0.5,
+            $constant('BACKEND_PROBE_ENDPOINT_TIMEOUT_SECONDS'),
+            'Loopback identity checks must retain a realistic endpoint budget.',
+        );
+        self::assertLessThanOrEqual(
+            60.0,
+            \ceil(
+                $constant('MAX_TOTAL_ROUTES')
+                    * $constant('MAX_BACKENDS_PER_ROUTE')
+                    / $constant('PROBE_MAX_IN_FLIGHT_DEFAULT'),
+            ) * $constant('BACKEND_PROBE_ENDPOINT_TIMEOUT_SECONDS'),
+            'The maximum backend tuple closure must fit the 60-second contract.',
+        );
+        self::assertLessThanOrEqual(
+            60.0,
+            \ceil(
+                $constant('MAX_TOTAL_ROUTES')
+                    / $constant('PROBE_MAX_IN_FLIGHT_DEFAULT'),
+            ) * $constant('PUBLIC_ROUTE_PROBE_ENDPOINT_TIMEOUT_SECONDS'),
+            'The maximum public SNI route set must fit the 60-second contract.',
+        );
+        self::assertGreaterThanOrEqual(
+            0.5,
+            $constant('PUBLIC_ROUTE_PROBE_ENDPOINT_TIMEOUT_SECONDS'),
+            'A public TLS handshake must retain a realistic endpoint budget.',
+        );
+        $batchesPerMaintenance = (int)\floor(
+            ($constant('PUBLIC_ROUTE_PROBE_BUDGET_SECONDS') - 0.25)
+                / $constant('PUBLIC_ROUTE_PROBE_ENDPOINT_TIMEOUT_SECONDS'),
+        );
+        $windowsCycles = (int)\ceil(
+            $constant('MAX_TOTAL_ROUTES')
+                / ($constant('PROBE_WINDOWS_SELECT_SAFE_LIMIT')
+                    * $batchesPerMaintenance),
+        );
+        self::assertGreaterThanOrEqual(3, $batchesPerMaintenance);
+        self::assertLessThanOrEqual(
+            60.0,
+            ($windowsCycles - 1) * $constant('HEALTH_INTERVAL')
+                + $constant('PUBLIC_ROUTE_PROBE_BUDGET_SECONDS'),
+            'Even the Windows select fence must close one 2048-route sweep before proof expiry.',
+        );
+        self::assertLessThanOrEqual(
+            $constant('NONCE_WAL_MAX_BYTES'),
+            $constant('MAX_DURABLE_NONCES')
+                * $constant('NONCE_WAL_MAX_RECORD_BYTES'),
+            'The complete durable replay set must fit one bounded WAL image.',
+        );
+        $heartbeatWorstCase = $constant('MAX_TOTAL_INSTANCES') * 3
+            + $constant('MAX_TOTAL_INSTANCES') * 0.125
+                * $constant('HEARTBEAT_NONCE_RETENTION_SECONDS')
+            + $constant('MAX_PROJECTS') * 3;
+        self::assertLessThan(
+            $constant('MAX_HEARTBEAT_NONCES'),
+            $heartbeatWorstCase,
+            'Heartbeat replay capacity must cover instance and invalid-identity bursts.',
+        );
+        $readOnlyWorstCase = ($constant('MAX_PROJECTS') + 1)
+            * (10 + 2 * 120);
+        self::assertLessThan(
+            $constant('MAX_READ_ONLY_NONCES'),
+            $readOnlyWorstCase,
+            'Read-only replay capacity must cover every bounded project/admin window.',
+        );
+        self::assertLessThan(
+            $constant('MAX_RATE_WINDOWS'),
+            $constant('MAX_TOTAL_INSTANCES') + 2 * $constant('MAX_PROJECTS') + 8,
+        );
+    }
+
     public function testControllerRejectsUnauthenticatedNativeBrokerProbe(): void
     {
         $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
@@ -119,6 +241,57 @@ final class GatewayProtocolSecurityTest extends TestCase
 
         self::assertTrue($response['ok'], \json_encode($response));
         self::assertSame('wls-edge/2', $response['protocol']);
+        self::assertArrayHasKey('control_plane_ready', $response['payload']);
+        self::assertFalse(
+            $response['payload']['control_plane_ready'],
+            'A test-only unsigned runtime must publish the admission field but remain untrusted.',
+        );
+    }
+
+    public function testBrokerVerifiedBadSignaturesConsumeBoundedPreAuthenticationBudget(): void
+    {
+        $response = $this->request(
+            'admin',
+            'status',
+            [],
+            'admin',
+            $this->adminSecret,
+            tamperSignature: true,
+        );
+        self::assertFalse($response['ok']);
+        self::assertSame('unauthorized', $response['error']['code']);
+
+        $windows = new \ReflectionProperty(
+            $this->controller,
+            'preAuthenticationRateWindows',
+        );
+        $current = $windows->getValue($this->controller);
+        self::assertCount(2, $current);
+        $peerKey = (string)\array_values(\array_filter(
+            \array_keys($current),
+            static fn (string $key): bool => $key !== 'global',
+        ))[0];
+        self::assertLessThan(64.0, (float)$current[$peerKey]['tokens']);
+        $current[$peerKey] = [
+            'tokens' => 0.0,
+            'at' => \hrtime(true) / 1_000_000_000,
+        ];
+        $windows->setValue($this->controller, $current);
+
+        $limited = $this->request(
+            'admin',
+            'status',
+            [],
+            'admin',
+            $this->adminSecret,
+            tamperSignature: true,
+        );
+        self::assertFalse($limited['ok']);
+        self::assertSame('rate_limited', $limited['error']['code']);
+        self::assertStringContainsString(
+            'pre-authentication rate limit exceeded',
+            $limited['error']['message'],
+        );
     }
 
     public function testControllerRejectsBrokerIdentityWithoutActionProtocolTwo(): void
@@ -328,38 +501,56 @@ final class GatewayProtocolSecurityTest extends TestCase
             );
             \fclose($probe);
             $method = new \ReflectionMethod($controller, $entryMethod);
-            $result = $entryMethod === 'restartDataPlane'
-                ? $method->invoke($controller, 'test listener withdrawal')
-                : $method->invoke($controller);
-
-            if ($entryMethod === 'startDataPlane') {
-                self::assertFalse($result['ok'] ?? true);
-                self::assertTrue(
-                    $result['service_tree_restart_required'] ?? false,
-                    \json_encode([
-                        'result' => $result,
-                        'broker_actions_required' => (new \ReflectionMethod(
-                            $this->controller,
-                            'brokerActionsRequired',
-                        ))->invoke($controller),
-                        'manifest' => $manifest,
-                        'state_active_slot' => $state['active_slot'] ?? null,
-                    ], JSON_UNESCAPED_SLASHES),
+            $result = null;
+            try {
+                $result = $entryMethod === 'restartDataPlane'
+                    ? $method->invoke($controller, 'test listener withdrawal')
+                    : $method->invoke($controller);
+            } catch (\DomainException $exception) {
+                // A non-root test fixture becomes an intentionally retired
+                // Controller when its manifest is switched to production.
+                // The generation fence may stop that Controller before its
+                // diagnostic state can be persisted; it still must not gain
+                // authority over the unknown listener.
+                self::assertStringContainsString(
+                    'Native Broker generation changed',
+                    $exception->getMessage(),
                 );
             }
-            self::assertTrue((new \ReflectionProperty(
+
+            if ($entryMethod === 'startDataPlane' && \is_array($result)) {
+                self::assertFalse($result['ok'] ?? true);
+                self::assertSame('UNPROVEN', $result['state'] ?? null);
+                self::assertStringContainsString(
+                    'Native Broker TCP port proof is unavailable',
+                    (string)($result['message'] ?? ''),
+                );
+            }
+            self::assertFalse((new \ReflectionProperty(
                 $controller,
                 'serviceTreeRestartRequested',
             ))->getValue($controller));
             $failedState = $stateProperty->getValue($controller);
             self::assertSame(
-                'SERVICE_TREE_RESTART',
+                'UNPROVEN',
                 $failedState['recovery']['stage'] ?? null,
             );
             self::assertStringContainsString(
-                'public gateway listener remains open',
+                'Native Broker TCP port proof is unavailable',
                 (string)($failedState['recovery']['last_failure'] ?? ''),
             );
+            $stillOpen = \stream_socket_client(
+                'tcp://127.0.0.1:' . $port,
+                $stillOpenErrorCode,
+                $stillOpenErrorMessage,
+                0.2,
+            );
+            self::assertIsResource(
+                $stillOpen,
+                'The unknown listener was modified: '
+                    . $stillOpenErrorCode . ' ' . $stillOpenErrorMessage,
+            );
+            \fclose($stillOpen);
         } finally {
             \fclose($listener);
         }
@@ -516,6 +707,15 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
         self::assertTrue($valid['ok']);
         $this->assertResponseSignature($valid, (string)$credential['secret']);
+        self::assertArrayHasKey('route_serving_ready', $valid['payload']);
+        self::assertFalse(
+            $valid['payload']['route_serving_ready'],
+            'An enrolled project with no ACTIVE route must not gain a serving claim.',
+        );
+        self::assertFalse(
+            $valid['payload']['project_ready'],
+            'An enrolled project with no ACTIVE route must not claim whole-project convergence.',
+        );
 
         $replayed = $this->request(
             'project',
@@ -618,6 +818,429 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertArrayHasKey($previousBootNonce, $retained);
     }
 
+    public function testReadOnlyNonceTrafficCannotEvictDurableReplayEvidence(): void
+    {
+        $hostBootId = (string)(new \ReflectionProperty(
+            $this->controller,
+            'hostBootId',
+        ))->getValue($this->controller);
+        $now = \hrtime(true) / 1_000_000_000;
+        $durableNonce = \str_repeat('a', 32);
+        $durable = new \ReflectionProperty($this->controller, 'nonces');
+        $durable->setValue($this->controller, [
+            $durableNonce => [
+                'seen_at' => \time(),
+                'seen_monotonic' => $now,
+                'boot_id' => $hostBootId,
+            ],
+        ]);
+        $readOnly = new \ReflectionProperty($this->controller, 'readOnlyNonces');
+        $readOnlyLimit = (int)(new \ReflectionClassConstant(
+            \WlsEdgeGatewayController::class,
+            'MAX_READ_ONLY_NONCES',
+        ))->getValue();
+        $readOnlyRecords = [];
+        for ($index = 0; $index < $readOnlyLimit; ++$index) {
+            $readOnlyRecords[\sprintf('%032x', $index + 1)] = [
+                'seen_at' => \time(),
+                'seen_monotonic' => $now,
+                'boot_id' => $hostBootId,
+            ];
+        }
+        $readOnly->setValue($this->controller, $readOnlyRecords);
+
+        $statusNonce = \str_repeat('f', 32);
+        $response = $this->request(
+            'admin',
+            'status',
+            [],
+            'admin',
+            $this->adminSecret,
+            nonce: $statusNonce,
+        );
+
+        self::assertTrue($response['ok'], \json_encode($response));
+        self::assertArrayHasKey($durableNonce, $durable->getValue($this->controller));
+        self::assertCount($readOnlyLimit, $readOnly->getValue($this->controller));
+        self::assertArrayHasKey($statusNonce, $readOnly->getValue($this->controller));
+        self::assertFileDoesNotExist(
+            $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal',
+            'Read-only authentication must not consume durable WAL capacity.',
+        );
+    }
+
+    public function testRateLimitedAuthenticatedRequestDoesNotGrowNonceWal(): void
+    {
+        $authenticate = new \ReflectionMethod($this->controller, 'authenticate');
+        $broker = [
+            'channel' => 'admin',
+            'uid' => (int)\posix_geteuid(),
+        ];
+        $lastAcceptedNonce = '';
+        for ($index = 0; $index < 10; ++$index) {
+            $request = $this->signedRequest(
+                'admin',
+                'enroll',
+                [],
+                'admin',
+                $this->adminSecret,
+            );
+            $lastAcceptedNonce = (string)$request['nonce'];
+            $result = $authenticate->invoke($this->controller, $request, $broker);
+            self::assertSame('', $result['error']);
+        }
+        $wal = $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal';
+        self::assertFileExists($wal);
+        $acceptedSize = (int)\filesize($wal);
+        self::assertGreaterThan(0, $acceptedSize);
+
+        $rejected = $this->signedRequest(
+            'admin',
+            'enroll',
+            [],
+            'admin',
+            $this->adminSecret,
+        );
+        $result = $authenticate->invoke($this->controller, $rejected, $broker);
+        self::assertSame('rate_limited', $result['error_code']);
+        self::assertStringContainsString('rate limit exceeded', $result['error']);
+        \clearstatcache(true, $wal);
+        self::assertSame($acceptedSize, (int)\filesize($wal));
+        $nonces = (new \ReflectionProperty($this->controller, 'nonces'))
+            ->getValue($this->controller);
+        self::assertArrayHasKey($lastAcceptedNonce, $nonces);
+        self::assertArrayNotHasKey((string)$rejected['nonce'], $nonces);
+    }
+
+    public function testNonceWalCompactionRetainsOnlyLiveReplaySetAndNewAppend(): void
+    {
+        $hostBootId = (string)(new \ReflectionProperty(
+            $this->controller,
+            'hostBootId',
+        ))->getValue($this->controller);
+        $encode = new \ReflectionMethod($this->controller, 'encodeNonceWalLine');
+        $oldRecord = [
+            'seen_at' => \time() - 3600,
+            'seen_monotonic' => (\hrtime(true) / 1_000_000_000) - 3600.0,
+            'boot_id' => $hostBootId,
+        ];
+        $raw = '';
+        for ($index = 1; $index <= 100; ++$index) {
+            $raw .= $encode->invoke(
+                $this->controller,
+                \sprintf('%032x', $index),
+                $oldRecord,
+            );
+        }
+        $wal = $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal';
+        self::assertNotFalse(\file_put_contents($wal, $raw));
+        self::assertTrue(\chmod($wal, 0600));
+
+        $now = \hrtime(true) / 1_000_000_000;
+        $retainedNonce = \str_repeat('d', 32);
+        $newNonce = \str_repeat('e', 32);
+        $retainedRecord = [
+            'seen_at' => \time(),
+            'seen_monotonic' => $now,
+            'boot_id' => $hostBootId,
+        ];
+        (new \ReflectionProperty($this->controller, 'nonces'))->setValue(
+            $this->controller,
+            [$retainedNonce => $retainedRecord],
+        );
+        (new \ReflectionMethod($this->controller, 'compactNonceWal'))->invoke(
+            $this->controller,
+            \strlen($raw),
+        );
+        (new \ReflectionMethod($this->controller, 'appendNonceWal'))->invoke(
+            $this->controller,
+            $newNonce,
+            $retainedRecord,
+        );
+
+        $published = \file_get_contents($wal);
+        self::assertIsString($published);
+        self::assertLessThan(2048, \strlen($published));
+        $decoded = (new \ReflectionMethod($this->controller, 'decodeNonceWal'))
+            ->invoke($this->controller, $published);
+        self::assertSame([$retainedNonce, $newNonce], \array_keys($decoded));
+    }
+
+    public function testNonceWalRecoversOnlyUnterminatedTailAndRejectsMiddleCorruption(): void
+    {
+        $hostBootId = (string)(new \ReflectionProperty(
+            $this->controller,
+            'hostBootId',
+        ))->getValue($this->controller);
+        $nonce = \str_repeat('c', 32);
+        $line = (new \ReflectionMethod($this->controller, 'encodeNonceWalLine'))
+            ->invoke($this->controller, $nonce, [
+                'seen_at' => \time(),
+                'seen_monotonic' => \hrtime(true) / 1_000_000_000,
+                'boot_id' => $hostBootId,
+            ]);
+        $wal = $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal';
+        self::assertNotFalse(\file_put_contents($wal, $line . '{"partial":'));
+        self::assertTrue(\chmod($wal, 0600));
+
+        $tailRecovered = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR . 'runtime/run/nonce-tail.sock',
+        );
+        self::assertTrue(
+            (new \ReflectionProperty($tailRecovered, 'journalTrusted'))
+                ->getValue($tailRecovered),
+        );
+        self::assertArrayHasKey(
+            $nonce,
+            (new \ReflectionProperty($tailRecovered, 'nonces'))->getValue($tailRecovered),
+        );
+        self::assertSame($line, \file_get_contents($wal));
+
+        self::assertNotFalse(\file_put_contents($wal, "{\"invalid\":true}\n" . $line));
+        $middleCorrupt = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR . 'runtime/run/nonce-middle.sock',
+        );
+        self::assertFalse(
+            (new \ReflectionProperty($middleCorrupt, 'nonceWalTrusted'))
+                ->getValue($middleCorrupt),
+        );
+        self::assertTrue(
+            (new \ReflectionProperty($middleCorrupt, 'journalTrusted'))
+                ->getValue($middleCorrupt),
+        );
+        $state = (new \ReflectionProperty($middleCorrupt, 'state'))
+            ->getValue($middleCorrupt);
+        self::assertSame('NONCE_WAL_UNTRUSTED', $state['health_state']);
+    }
+
+    public function testNonceWalDuplicateLastWinsOrderSurvivesWallRollbackAndRestart(): void
+    {
+        $hostBootId = $this->hostBootId();
+        $encode = new \ReflectionMethod($this->controller, 'encodeNonceWalLine');
+        $firstNonce = \str_repeat('1', 32);
+        $secondNonce = \str_repeat('2', 32);
+        $now = \hrtime(true) / 1_000_000_000;
+        $raw = $encode->invoke($this->controller, $firstNonce, [
+            'seen_at' => \time() + 3600,
+            'seen_monotonic' => $now - 2.0,
+            'boot_id' => $hostBootId,
+        ]) . $encode->invoke($this->controller, $secondNonce, [
+            'seen_at' => \time() + 1800,
+            'seen_monotonic' => $now - 1.0,
+            'boot_id' => $hostBootId,
+        ]) . $encode->invoke($this->controller, $firstNonce, [
+            // The wall clock moved backwards, but this is the last durable
+            // append and must therefore remain the newest replay evidence.
+            'seen_at' => \time() - 3600,
+            'seen_monotonic' => $now,
+            'boot_id' => $hostBootId,
+        ]);
+        $wal = $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal';
+        self::assertNotFalse(\file_put_contents($wal, $raw));
+        self::assertTrue(\chmod($wal, 0600));
+
+        $restarted = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/nonce-order.sock',
+        );
+        $records = (new \ReflectionProperty($restarted, 'nonces'))
+            ->getValue($restarted);
+        self::assertSame([$secondNonce, $firstNonce], \array_keys($records));
+
+        (new \ReflectionMethod($restarted, 'compactNonceWal'))->invoke(
+            $restarted,
+            \strlen($raw),
+        );
+        $compacted = (string)\file_get_contents($wal);
+        $decoded = (new \ReflectionMethod($restarted, 'decodeNonceWal'))
+            ->invoke($restarted, $compacted);
+        self::assertSame([$secondNonce, $firstNonce], \array_keys($decoded));
+
+        $request = $this->signedRequest(
+            'admin',
+            'enroll',
+            [],
+            'admin',
+            $this->adminSecret,
+        );
+        $request['nonce'] = $firstNonce;
+        unset($request['signature']);
+        $request['signature'] = \hash_hmac(
+            'sha256',
+            GatewayClient::canonicalJson($request),
+            $this->adminSecret,
+        );
+        $authentication = (new \ReflectionMethod($restarted, 'authenticate'))->invoke(
+            $restarted,
+            $request,
+            ['channel' => 'admin', 'uid' => (int)\posix_geteuid()],
+        );
+        self::assertStringContainsString('replayed', $authentication['error']);
+    }
+
+    public function testEstablishedNonceWalCannotDisappearSilently(): void
+    {
+        $request = $this->signedRequest(
+            'admin',
+            'enroll',
+            [],
+            'admin',
+            $this->adminSecret,
+        );
+        $authentication = (new \ReflectionMethod($this->controller, 'authenticate'))
+            ->invoke(
+                $this->controller,
+                $request,
+                ['channel' => 'admin', 'uid' => (int)\posix_geteuid()],
+            );
+        self::assertSame('', $authentication['error']);
+        $wal = $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal';
+        self::assertFileExists($wal);
+        $ledger = \json_decode((string)\file_get_contents(
+            $this->home . DIRECTORY_SEPARATOR . 'state/security-ledger.json',
+        ), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(8, $ledger['payload']['schema_version']);
+        self::assertTrue($ledger['payload']['nonce_wal_established']);
+        self::assertSame(
+            [],
+            $ledger['payload']['security_publication_recovery_authority'],
+        );
+
+        self::assertTrue(\unlink($wal));
+        $restarted = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/nonce-missing.sock',
+        );
+        self::assertFalse(
+            (new \ReflectionProperty($restarted, 'nonceWalTrusted'))
+                ->getValue($restarted),
+        );
+        $status = (new \ReflectionMethod($restarted, 'status'))->invoke($restarted);
+        self::assertFalse($status['ready']);
+        self::assertSame('NONCE_WAL_MISSING', $status['recovery']['stage']);
+    }
+
+    public function testNonceWalAuthorityPersistenceFailureRemainsRepairableAndFailClosed(): void
+    {
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $atomicFailure = \getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+        $failureTarget = \getenv(
+            'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256'
+        );
+        $ledgerFile = $this->home . DIRECTORY_SEPARATOR
+            . 'state/security-ledger.json';
+        $walFile = $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal';
+        try {
+            $baselineLedger = \json_decode(
+                (string)\file_get_contents($ledgerFile),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            );
+            self::assertFalse($baselineLedger['payload']['nonce_wal_established']);
+
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE='
+                    . 'directory_fsync_after_rename_failed'
+            );
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                    . \hash('sha256', $ledgerFile)
+            );
+
+            $mutation = $this->request(
+                'admin',
+                'upgrade',
+                [],
+                'admin',
+                $this->adminSecret,
+            );
+            self::assertFalse($mutation['ok']);
+            self::assertSame('storage_unavailable', $mutation['error']['code']);
+            self::assertFileExists($walFile);
+            self::assertNotSame('', (string)\file_get_contents($walFile));
+            self::assertTrue(
+                (new \ReflectionProperty(
+                    $this->controller,
+                    'nonceWalAuthorityPersistPending',
+                ))->getValue($this->controller),
+                'A failed first authority publication must remain retryable.',
+            );
+
+            \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+            \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256');
+            $repair = $this->request(
+                'admin',
+                'repair',
+                ['accept_storage_recovery' => true],
+                'admin',
+                $this->adminSecret,
+            );
+            self::assertTrue($repair['ok'], \json_encode($repair));
+            self::assertFalse(
+                (new \ReflectionProperty(
+                    $this->controller,
+                    'nonceWalAuthorityPersistPending',
+                ))->getValue($this->controller),
+            );
+            $repairedLedger = \json_decode(
+                (string)\file_get_contents($ledgerFile),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            );
+            self::assertSame(8, $repairedLedger['payload']['schema_version']);
+            self::assertTrue($repairedLedger['payload']['nonce_wal_established']);
+            self::assertSame(
+                [],
+                $repairedLedger['payload']['security_publication_recovery_authority'],
+            );
+
+            $restarted = new \WlsEdgeGatewayController(
+                $this->home,
+                'unix://' . $this->home . DIRECTORY_SEPARATOR
+                    . 'runtime/run/nonce-authority-repaired.sock',
+            );
+            self::assertTrue(
+                (new \ReflectionProperty($restarted, 'nonceWalTrusted'))
+                    ->getValue($restarted),
+            );
+
+            self::assertTrue(\unlink($walFile));
+            $missingWal = new \WlsEdgeGatewayController(
+                $this->home,
+                'unix://' . $this->home . DIRECTORY_SEPARATOR
+                    . 'runtime/run/nonce-authority-missing.sock',
+            );
+            self::assertFalse(
+                (new \ReflectionProperty($missingWal, 'nonceWalTrusted'))
+                    ->getValue($missingWal),
+            );
+            $status = (new \ReflectionMethod($missingWal, 'status'))
+                ->invoke($missingWal);
+            self::assertFalse($status['ready']);
+            self::assertSame('NONCE_WAL_MISSING', $status['recovery']['stage']);
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $atomicFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=' . $atomicFailure);
+            $failureTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                        . $failureTarget
+                );
+        }
+    }
+
     public function testClockUntrustedStateAllowsOnlyExactAdministratorAcknowledgement(): void
     {
         $clockWallAnchor = new \ReflectionProperty($this->controller, 'clockWallAnchor');
@@ -651,6 +1274,10 @@ final class GatewayProtocolSecurityTest extends TestCase
             'wall clock is untrusted',
             \strtolower((string)$combinedRepair['error']['message']),
         );
+        self::assertFileDoesNotExist(
+            $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal',
+            'Clock-rejected requests must not consume durable replay capacity.',
+        );
 
         $accepted = $this->request(
             'admin',
@@ -663,6 +1290,105 @@ final class GatewayProtocolSecurityTest extends TestCase
         $state = (new \ReflectionProperty($this->controller, 'state'))
             ->getValue($this->controller);
         self::assertArrayNotHasKey('clock_untrusted_since', $state['security']);
+    }
+
+    public function testClockAndStorageFencesRequireAndAcceptOneExactCombinedRepair(): void
+    {
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $freeBytes = \getenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES');
+        try {
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES=1');
+            (new \ReflectionMethod($this->controller, 'markDiskPressure'))->invoke(
+                $this->controller,
+                'DISK_PRESSURE',
+                'combined_clock_storage_recovery_test',
+            );
+            (new \ReflectionProperty($this->controller, 'readOnlyRecoveryMode'))
+                ->setValue($this->controller, true);
+            (new \ReflectionProperty($this->controller, 'clockWallAnchor'))
+                ->setValue($this->controller, \time() - 10);
+
+            \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES=33554432');
+            $response = $this->request(
+                'admin',
+                'repair',
+                [
+                    'accept_clock' => true,
+                    'accept_storage_recovery' => true,
+                ],
+                'admin',
+                $this->adminSecret,
+            );
+
+            self::assertTrue($response['ok'], \json_encode($response));
+            self::assertFileDoesNotExist(
+                $this->home . DIRECTORY_SEPARATOR . 'state/disk-pressure.marker',
+            );
+            $state = (new \ReflectionProperty($this->controller, 'state'))
+                ->getValue($this->controller);
+            self::assertArrayNotHasKey('clock_untrusted_since', $state['security']);
+            self::assertFalse(
+                (new \ReflectionProperty($this->controller, 'readOnlyRecoveryMode'))
+                    ->getValue($this->controller),
+            );
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $freeBytes === false
+                ? \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES')
+                : \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES=' . $freeBytes);
+        }
+    }
+
+    public function testJournalDistrustMarkerRequiresExplicitResetAndRecoversThroughProtocol(): void
+    {
+        (new \ReflectionMethod($this->controller, 'quarantineJournal'))->invoke(
+            $this->controller,
+            'explicit_protocol_reset_test',
+        );
+        $marker = (new \ReflectionMethod(
+            $this->controller,
+            'journalDistrustMarkerFile',
+        ))->invoke($this->controller);
+        self::assertIsString($marker);
+        self::assertFileExists($marker);
+        self::assertFalse(
+            (new \ReflectionProperty($this->controller, 'journalTrusted'))
+                ->getValue($this->controller),
+        );
+
+        $withoutReset = $this->request(
+            'admin',
+            'repair',
+            ['accept_storage_recovery' => true],
+            'admin',
+            $this->adminSecret,
+        );
+        self::assertFalse($withoutReset['ok']);
+        self::assertStringContainsString(
+            'accept_journal_reset=true',
+            (string)$withoutReset['error']['message'],
+        );
+        self::assertFileExists($marker);
+
+        $repaired = $this->request(
+            'admin',
+            'repair',
+            [
+                'accept_storage_recovery' => true,
+                'accept_journal_reset' => true,
+            ],
+            'admin',
+            $this->adminSecret,
+        );
+        self::assertTrue($repaired['ok'], \json_encode($repaired));
+        self::assertFileDoesNotExist($marker);
+        self::assertTrue(
+            (new \ReflectionProperty($this->controller, 'journalTrusted'))
+                ->getValue($this->controller),
+        );
     }
 
     public function testClockTrustRecoversAfterAStableMonotonicWindow(): void
@@ -813,6 +1539,7 @@ final class GatewayProtocolSecurityTest extends TestCase
     public function testSecurityTombstoneCannotReviveLegacyOrPriorGenerationRoute(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174011';
+        $domain = 'tombstone.example.test';
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $state = $stateProperty->getValue($this->controller);
         $state['enrollments'][$projectUuid] = [
@@ -829,14 +1556,20 @@ final class GatewayProtocolSecurityTest extends TestCase
 
         self::assertFalse($allowed->invoke($this->controller, [
             'project_uuid' => $projectUuid,
+            'domain' => $domain,
+            'certificate' => $this->pendingCertificateEnvelope($domain),
         ]));
         self::assertFalse($allowed->invoke($this->controller, [
             'project_uuid' => $projectUuid,
+            'domain' => $domain,
             'enrollment_security_generation' => 10,
+            'certificate' => $this->pendingCertificateEnvelope($domain),
         ]));
         self::assertTrue($allowed->invoke($this->controller, [
             'project_uuid' => $projectUuid,
+            'domain' => $domain,
             'enrollment_security_generation' => 12,
+            'certificate' => $this->pendingCertificateEnvelope($domain),
         ]));
     }
 
@@ -864,6 +1597,16 @@ final class GatewayProtocolSecurityTest extends TestCase
             'project_uuid' => $from,
             'route_ids' => [$sourceRouteId],
         ];
+        $sourceCertificate = $this->activeCertificateEnvelope(
+            $domain,
+            \str_repeat('a', 64),
+            [
+                'valid' => true,
+                'pending' => false,
+                'generation' => 7,
+                'snapshot_digest' => \str_repeat('a', 64),
+            ],
+        );
         $state['routes'][$sourceRouteId] = [
             'route_id' => $sourceRouteId,
             'project_uuid' => $from,
@@ -872,11 +1615,15 @@ final class GatewayProtocolSecurityTest extends TestCase
             'route_generation' => 7,
             'domain' => $domain,
             'status' => 'ACTIVE',
-            'certificate' => [
-                'snapshot_digest' => \str_repeat('a', 64),
-                'valid' => true,
-            ],
+            'certificate' => $sourceCertificate,
         ];
+        $this->installCertificateFloor(
+            $state,
+            $from,
+            $domain,
+            $sourceCertificate,
+            7,
+        );
         $state['acme_challenges']['source-challenge'] = [
             'project_uuid' => $from,
             'domain' => $domain,
@@ -914,10 +1661,16 @@ final class GatewayProtocolSecurityTest extends TestCase
             'route_generation' => 1,
             'domain' => $domain,
             'status' => 'ACTIVE',
-            'certificate' => [
-                'snapshot_digest' => \str_repeat('c', 64),
-                'valid' => true,
-            ],
+            'certificate' => $this->activeCertificateEnvelope(
+                $domain,
+                \str_repeat('c', 64),
+                [
+                    'valid' => true,
+                    'pending' => false,
+                    'generation' => 1,
+                    'snapshot_digest' => \str_repeat('c', 64),
+                ],
+            ),
         ];
         (new \ReflectionMethod($this->controller, 'applyCommittedDomainTransfer'))
             ->invoke(
@@ -993,6 +1746,10 @@ final class GatewayProtocolSecurityTest extends TestCase
             $this->controller,
             'snapshotCertificate',
         );
+        $provenanceMethod = new \ReflectionMethod(
+            $this->controller,
+            'certificateProvenanceDigest',
+        );
         $certificates = [];
         foreach ($certificateSources as $certificateDomain => $source) {
             $name = $certificateDomain === $domain ? 'secure' : 'secure-alias';
@@ -1017,6 +1774,19 @@ final class GatewayProtocolSecurityTest extends TestCase
                     ],
                     'source_digest' => $sourceDigest,
                     'generation' => 3,
+                    'state' => 'active',
+                    'pending' => false,
+                    'trust_profile' => 'test',
+                    'provider' => 'self_signed',
+                    'material_class' => 'self_signed',
+                    'provenance_digest' => $provenanceMethod->invoke(
+                        $this->controller,
+                        $certificateDomain,
+                        $sourceDigest,
+                        'test',
+                        'self_signed',
+                        'self_signed',
+                    ),
                 ],
             );
             self::assertTrue($certificates[$certificateDomain]['valid']);
@@ -1043,6 +1813,33 @@ final class GatewayProtocolSecurityTest extends TestCase
         $state['routes'][$secondRouteId]['route_id'] = $secondRouteId;
         $state['routes'][$secondRouteId]['domain'] = $aliasDomain;
         $state['routes'][$secondRouteId]['certificate'] = $certificates[$aliasDomain];
+        $floorKeyMethod = new \ReflectionMethod(
+            $this->controller,
+            'certificateFloorKey',
+        );
+        foreach ($certificates as $certificateDomain => $certificate) {
+            $floorKey = $floorKeyMethod->invoke(
+                $this->controller,
+                $projectUuid,
+                $certificateDomain,
+            );
+            $state['certificate_floors'][$floorKey] = [
+                'schema_version' => 2,
+                'project_uuid' => $projectUuid,
+                'domain' => $certificateDomain,
+                'generation' => 3,
+                'source_digest' => $certificate['source_digest'],
+                'trust_profile' => $certificate['trust_profile'],
+                'provider' => $certificate['provider'],
+                'material_class' => $certificate['material_class'],
+                'provenance_digest' => $certificate['provenance_digest'],
+                'route_generation' => 1,
+                'revocation_generation' => 0,
+                'revocation_source_digest' => '',
+                'revocation_trust_profile' => '',
+                'revocation_provenance_digest' => '',
+            ];
+        }
         $stateProperty->setValue($this->controller, $state);
         $config = (new \ReflectionMethod($this->controller, 'renderNginxConfig'))
             ->invoke($this->controller, false);
@@ -1051,6 +1848,50 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertStringContainsString('ssl_session_tickets off;', $config);
         self::assertStringNotContainsString('ssl_session_ticket_key ', $config);
         self::assertStringContainsString('ssl_early_data off;', $config);
+        self::assertStringContainsString(
+            'map $server_protocol $wls_requires_http_host { default 1; "HTTP/3.0" 0; }',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map "$wls_requires_http_host:$http_host" $wls_missing_authority { default 0; "1:" 1; }',
+            $config,
+        );
+        self::assertStringContainsString(
+            'if ($wls_missing_authority) { return 421; }',
+            $config,
+        );
+        self::assertStringNotContainsString(
+            'if ($http_host = "") { return 421; }',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map "$ssl_server_name|$http_host" $wls_raw_authority_mismatch {',
+            $config,
+        );
+        self::assertStringContainsString(
+            '~*^([^|]+)\|\1(?::[0-9]+)?$ 0;',
+            $config,
+        );
+        self::assertStringContainsString(
+            '~^[^|]+\|$ 0;',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map "$ssl_server_name|$host" $wls_effective_authority_mismatch {',
+            $config,
+        );
+        self::assertStringContainsString(
+            'if ($wls_raw_authority_mismatch) { return 421; }',
+            $config,
+        );
+        self::assertStringContainsString(
+            'if ($wls_effective_authority_mismatch) { return 421; }',
+            $config,
+        );
+        self::assertStringNotContainsString(
+            'if ($ssl_server_name != $host) { return 421; }',
+            $config,
+        );
         self::assertStringContainsString('location = /_wls/health {', $config);
         self::assertStringContainsString('if ($args != "") { return 404; }', $config);
         self::assertSame(
@@ -1073,22 +1914,35 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
         self::assertStringContainsString('    keepalive_requests 10000;', $config);
         self::assertStringContainsString('  keepalive_requests 100000;', $config);
+        self::assertStringContainsString('worker_shutdown_timeout 300s;', $config);
         self::assertStringNotContainsString('location = /_wls/health { return 404; }', $config);
         self::assertStringContainsString('location = /__wls_gateway_sentinel', $config);
         self::assertStringContainsString('proxy_set_header X-WLS-Edge-Token "' . $secret . '";', $config);
         self::assertStringContainsString('proxy_set_header X-Forwarded-For $remote_addr;', $config);
         self::assertStringContainsString('proxy_set_header Forwarded "";', $config);
         self::assertStringContainsString(
-            'map $http_upgrade $connection_upgrade { default upgrade; "" ""; }',
+            'map $http_upgrade $wls_business_upstream_upgrade { default ""; websocket websocket; }',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map $http_upgrade $wls_business_upstream_connection { default ""; websocket upgrade; }',
             $config,
         );
         self::assertStringContainsString('access_log off;', $config);
         self::assertStringNotContainsString('/access.log', $config);
         self::assertStringNotContainsString(
-            'map $http_upgrade $connection_upgrade { default upgrade; "" close; }',
+            'map $http_upgrade $connection_upgrade { default upgrade;',
             $config,
         );
-        self::assertStringContainsString('proxy_set_header Connection $connection_upgrade;', $config);
+        self::assertStringNotContainsString('proxy_set_header Upgrade $http_upgrade;', $config);
+        self::assertStringContainsString(
+            'proxy_set_header Upgrade $wls_business_upstream_upgrade;',
+            $config,
+        );
+        self::assertStringContainsString(
+            'proxy_set_header Connection $wls_business_upstream_connection;',
+            $config,
+        );
         if (\PHP_OS_FAMILY === 'Windows') {
             self::assertStringNotContainsString('worker_rlimit_nofile', $config);
         } else {
@@ -1238,21 +2092,13 @@ final class GatewayProtocolSecurityTest extends TestCase
         $credential = $enrollment['payload']['credential'];
         $token = 'TOKEN_123-abc';
         $keyAuthorization = $token . '.' . \str_repeat('A', 43);
-        $pendingDigest = \hash(
-            'sha256',
-            'wls-pending-certificate' . "\0" . 'acme.example.test',
-        );
         $snapshot = (new \ReflectionMethod($this->controller, 'snapshotCertificate'))
             ->invoke(
                 $this->controller,
                 $projectUuid,
                 $project,
                 'acme.example.test',
-                [
-                    'pending' => true,
-                    'source_digest' => $pendingDigest,
-                    'generation' => 0,
-                ],
+                $this->pendingCertificateEnvelope('acme.example.test'),
             );
         self::assertFalse($snapshot['valid']);
         self::assertTrue($snapshot['pending']);
@@ -1272,7 +2118,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             ),
             'status' => 'PENDING_CERTIFICATE',
             'backends' => [],
-            'certificate' => ['valid' => false],
+            'certificate' => $snapshot,
         ];
         $stateProperty->setValue($this->controller, $state);
         $desiredChallenges = [[
@@ -1306,10 +2152,13 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertSame($controllerBootId, $signedLease['host_boot_id'] ?? '');
         self::assertIsFloat($signedLease['issued_monotonic'] ?? null);
         self::assertGreaterThan(0.0, $signedLease['issued_monotonic']);
-        self::assertSame(
-            ($signedLease['issued_monotonic'] ?? 0.0) + 900.0,
-            $signedLease['deadline_monotonic'] ?? 0.0,
-            'The Controller must issue its own exact 900 second monotonic lease.',
+        $signedDuration = (float)($signedLease['deadline_monotonic'] ?? 0.0)
+            - (float)($signedLease['issued_monotonic'] ?? 0.0);
+        self::assertGreaterThan(0.0, $signedDuration);
+        self::assertLessThanOrEqual(
+            300.0,
+            $signedDuration,
+            'The Controller must not extend the project wall expiry to 900 seconds.',
         );
         $firstFence = \array_intersect_key($signedLease, \array_flip([
             'host_boot_id',
@@ -1519,7 +2368,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         $damagedState = $state;
         $damagedState['acme_challenges'][$leaseId] = $activeLease;
         $damagedState['acme_challenges'][$leaseId]['deadline_monotonic']
-            = (float)$activeLease['issued_monotonic'] + 899.0;
+            = (float)$activeLease['issued_monotonic'] + 901.0;
         $stateProperty->setValue($this->controller, $damagedState);
         self::assertNotSame(
             $beforeWallJumpDigest,
@@ -1560,20 +2409,51 @@ final class GatewayProtocolSecurityTest extends TestCase
             'enrollment_security_generation' => 1,
             'domain' => $domain,
             'status' => 'PENDING_CERTIFICATE',
-            'certificate' => ['valid' => false, 'state' => 'pending'],
+            'certificate' => $this->pendingCertificateEnvelope($domain),
         ];
         $stateProperty->setValue($this->controller, $state);
         (new \ReflectionProperty($this->controller, 'deferPublication'))
             ->setValue($this->controller, true);
 
+        $sync = new \ReflectionMethod($this->controller, 'syncAcmeChallenges');
+        foreach ([\time() - 1, \time() + 902] as $invalidExpiry) {
+            $invalidChallenges = [[
+                'domain' => $domain,
+                'token' => $token,
+                'key_authorization' => $authorization,
+                'expires_at' => $invalidExpiry,
+            ]];
+            try {
+                $sync->invoke($this->controller, [
+                    'project_uuid' => $projectUuid,
+                    'challenge_generation' => 1,
+                    'desired_digest' => \hash(
+                        'sha256',
+                        GatewayClient::canonicalJson($invalidChallenges),
+                    ),
+                    'challenges' => $invalidChallenges,
+                ]);
+                self::fail('An expired or overlong ACME wall lease was accepted.');
+            } catch (\DomainException $exception) {
+                self::assertStringContainsString(
+                    'expiry is invalid',
+                    $exception->getMessage(),
+                );
+            }
+            self::assertSame(
+                [],
+                (array)($stateProperty->getValue($this->controller)['acme_challenges'] ?? []),
+            );
+        }
+
+        $wallExpiresAt = \time() + 60;
         $challenges = [[
             'domain' => $domain,
             'token' => $token,
             'key_authorization' => $authorization,
-            'expires_at' => 1,
+            'expires_at' => $wallExpiresAt,
         ]];
         $digest = \hash('sha256', GatewayClient::canonicalJson($challenges));
-        $sync = new \ReflectionMethod($this->controller, 'syncAcmeChallenges');
         $first = $sync->invoke($this->controller, [
             'project_uuid' => $projectUuid,
             'challenge_generation' => 1,
@@ -1594,9 +2474,13 @@ final class GatewayProtocolSecurityTest extends TestCase
                 ->getValue($this->controller),
             $fence['host_boot_id'] ?? '',
         );
-        self::assertSame(
-            ($fence['issued_monotonic'] ?? 0.0) + 900.0,
-            $fence['deadline_monotonic'] ?? 0.0,
+        $shortDuration = (float)($fence['deadline_monotonic'] ?? 0.0)
+            - (float)($fence['issued_monotonic'] ?? 0.0);
+        self::assertGreaterThan(0.0, $shortDuration);
+        self::assertLessThanOrEqual(
+            60.0,
+            $shortDuration,
+            'A short remaining wall lease must not be extended to 900 seconds.',
         );
         $render = new \ReflectionMethod($this->controller, 'renderNginxConfig');
         self::assertStringContainsString(
@@ -1887,7 +2771,7 @@ final class GatewayProtocolSecurityTest extends TestCase
                 $projectUuid,
                 $project,
                 $domain,
-                [
+                $this->activeCertificateEnvelope($domain, $sourceDigest, [
                     'cert' => [
                         'root_alias' => 'project_ssl',
                         'relative_path' => 'lkg/fullchain.pem',
@@ -1896,9 +2780,8 @@ final class GatewayProtocolSecurityTest extends TestCase
                         'root_alias' => 'project_ssl',
                         'relative_path' => 'lkg/privkey.pem',
                     ],
-                    'source_digest' => $sourceDigest,
                     'generation' => 3,
-                ],
+                ]),
             );
         self::assertTrue($certificate['valid']);
         $digest = (string)$certificate['snapshot_digest'];
@@ -1927,6 +2810,12 @@ final class GatewayProtocolSecurityTest extends TestCase
         $state = $stateProperty->getValue($this->controller);
         $state['routes'] = $routes;
         $state['active_routes'] = $routes;
+        $this->installCertificateFloor(
+            $state,
+            $projectUuid,
+            $domain,
+            $certificate,
+        );
         $state['active_config_digest'] = \hash('sha256', $config);
         $state['pending_lkg_config_digest'] = $state['active_config_digest'];
         $canonicalRoutes = (new \ReflectionMethod($this->controller, 'canonicalJson'))
@@ -1957,10 +2846,8 @@ final class GatewayProtocolSecurityTest extends TestCase
         $promoted['active_config_generation'] = 25;
         $promoted['snapshot_gc_candidates'][$unusedDigest] = [
             'unreferenced_at' => \time() - 8 * 86400,
-            // A trusted wall-clock observation can mature across a recent
-            // host boot; keep the monotonic component valid and nonnegative.
-            'unreferenced_monotonic' => 0.0,
-            'boot_id' => $this->hostBootId(),
+            'unreferenced_monotonic' => 1.0,
+            'boot_id' => \str_repeat('f', 64),
         ];
         $stateProperty->setValue($this->controller, $promoted);
         self::assertFalse(
@@ -1968,10 +2855,50 @@ final class GatewayProtocolSecurityTest extends TestCase
                 ->invoke($this->controller, $unusedDigest),
             'The GC candidate must not be protected by desired, active, publication, or LKG state.',
         );
-        (new \ReflectionMethod($this->controller, 'collectSnapshots'))->invoke($this->controller);
+        $collectSnapshots = new \ReflectionMethod($this->controller, 'collectSnapshots');
+        $collectSnapshots->invoke($this->controller, 100.0);
         self::assertDirectoryExists(
             $this->home . DIRECTORY_SEPARATOR . 'snapshots/' . $digest,
         );
+        self::assertDirectoryExists(
+            $this->home . DIRECTORY_SEPARATOR . 'snapshots/' . $unusedDigest,
+            'A cross-boot wall timestamp must not authorize snapshot deletion.',
+        );
+
+        $rebuilt = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            $this->hostBootId(),
+            $rebuilt['snapshot_gc_candidates'][$unusedDigest]['boot_id'],
+        );
+        self::assertSame(
+            100.0,
+            $rebuilt['snapshot_gc_candidates'][$unusedDigest]['unreferenced_monotonic'],
+        );
+        $rebuilt['snapshot_gc_candidates'][$unusedDigest] = [
+            'unreferenced_at' => \time() - 8 * 86400,
+            'unreferenced_monotonic' => '1',
+            'boot_id' => $this->hostBootId(),
+        ];
+        $stateProperty->setValue($this->controller, $rebuilt);
+        $collectSnapshots->invoke($this->controller, 200.0);
+        $rebuilt = $stateProperty->getValue($this->controller);
+        self::assertDirectoryExists(
+            $this->home . DIRECTORY_SEPARATOR . 'snapshots/' . $unusedDigest,
+            'A coerced monotonic string must rebuild rather than authorize deletion.',
+        );
+        self::assertSame(
+            200.0,
+            $rebuilt['snapshot_gc_candidates'][$unusedDigest]['unreferenced_monotonic'],
+        );
+        $rebuilt['snapshot_gc_candidates'][$unusedDigest] = [
+            // Even a future wall timestamp is diagnostic only; a complete
+            // same-boot monotonic window is the sole deletion authority.
+            'unreferenced_at' => \time() + 31536000,
+            'unreferenced_monotonic' => 1.0,
+            'boot_id' => $this->hostBootId(),
+        ];
+        $stateProperty->setValue($this->controller, $rebuilt);
+        $collectSnapshots->invoke($this->controller, 604802.0);
         self::assertDirectoryDoesNotExist(
             $this->home . DIRECTORY_SEPARATOR . 'snapshots/' . $unusedDigest,
         );
@@ -2238,6 +3165,133 @@ final class GatewayProtocolSecurityTest extends TestCase
         }
     }
 
+    public function testSignedStorageRecoveryCanPersistItsNonceBeforeLeavingReadOnlyMode(): void
+    {
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $freeBytes = \getenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES');
+        try {
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES=1');
+            (new \ReflectionMethod($this->controller, 'markDiskPressure'))->invoke(
+                $this->controller,
+                'DISK_PRESSURE',
+                'protocol_recovery_test',
+            );
+            (new \ReflectionProperty($this->controller, 'readOnlyRecoveryMode'))
+                ->setValue($this->controller, true);
+            self::assertFileExists(
+                $this->home . DIRECTORY_SEPARATOR . 'state/disk-pressure.marker',
+            );
+
+            \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES=33554432');
+            $response = $this->request(
+                'admin',
+                'repair',
+                ['accept_storage_recovery' => true],
+                'admin',
+                $this->adminSecret,
+            );
+            self::assertTrue($response['ok'], \json_encode($response));
+            self::assertFileDoesNotExist(
+                $this->home . DIRECTORY_SEPARATOR . 'state/disk-pressure.marker',
+            );
+            self::assertFalse(
+                (new \ReflectionProperty($this->controller, 'readOnlyRecoveryMode'))
+                    ->getValue($this->controller),
+            );
+            self::assertTrue(
+                (new \ReflectionProperty($this->controller, 'nonceWalTrusted'))
+                    ->getValue($this->controller),
+            );
+            self::assertFileExists(
+                $this->home . DIRECTORY_SEPARATOR . 'state/nonce.wal',
+            );
+            $state = (new \ReflectionProperty($this->controller, 'state'))
+                ->getValue($this->controller);
+            self::assertTrue($state['nonce_wal_established']);
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $freeBytes === false
+                ? \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES')
+                : \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES=' . $freeBytes);
+        }
+    }
+
+    public function testAtomicWriteReconcilesOnlyExactCommittedAfterImageAfterDirectorySyncFailure(): void
+    {
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $atomicFailure = \getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+        $failureTarget = \getenv(
+            'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256'
+        );
+        $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
+            ->invoke($this->controller);
+        $target = $configDir . DIRECTORY_SEPARATOR . 'atomic-after-image-test.conf';
+        $other = $configDir . DIRECTORY_SEPARATOR . 'atomic-after-image-other.conf';
+        $contents = "events {}\nhttp {}\n";
+        $atomicWrite = new \ReflectionMethod($this->controller, 'atomicWrite');
+        $reconcile = new \ReflectionMethod(
+            $this->controller,
+            'reconcileCommittedAtomicWrite',
+        );
+        try {
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE='
+                    . 'directory_fsync_after_rename_failed'
+            );
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                    . \hash('sha256', $target)
+            );
+
+            // The path fence prevents a publication-specific fault from
+            // perturbing candidate, rollback, journal, or state writes.
+            $atomicWrite->invoke($this->controller, $other, "events {}\n", 0600);
+            self::assertSame("events {}\n", \file_get_contents($other));
+
+            try {
+                $atomicWrite->invoke($this->controller, $target, $contents, 0600);
+                self::fail('The injected post-rename directory sync failure was accepted.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString(
+                    'after replacement',
+                    $exception->getMessage(),
+                );
+            }
+
+            self::assertSame(
+                $contents,
+                \file_get_contents($target),
+                'The exception must model a rename that already committed.',
+            );
+            self::assertSame(
+                'COMMITTED',
+                $reconcile->invoke($this->controller, $target, $contents, 0600),
+            );
+            self::assertNotFalse(\file_put_contents($target, "events {}\n# tampered\n"));
+            self::assertSame(
+                'NO_MATCH',
+                $reconcile->invoke($this->controller, $target, $contents, 0600),
+                'A changed after-image must never be reconciled as the candidate commit.',
+            );
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $atomicFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=' . $atomicFailure);
+            $failureTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256=' . $failureTarget
+                );
+        }
+    }
+
     public function testPersistenceFailureReturnsSignedRejectionAndKeepsStatusReadable(): void
     {
         $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
@@ -2285,6 +3339,7 @@ final class GatewayProtocolSecurityTest extends TestCase
 
     public function testRecoveryCircuitUsesMonotonicWindowAndReleasesOneRetry(): void
     {
+        $this->assignAvailablePublicPortsForRecovery();
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
             ->getValue($this->controller);
@@ -2389,6 +3444,9 @@ final class GatewayProtocolSecurityTest extends TestCase
 
     public function testMissingBinaryRollbackAuthorityContinuesNormalRecovery(): void
     {
+        $rollbackSlot = $this->createVerifiedRollbackSlotFixture('B');
+        self::assertTrue(\unlink($rollbackSlot['binary']));
+
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
             ->getValue($this->controller);
@@ -2417,6 +3475,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         $state['recovery']['last_failure'] = 'previous rollback request was rejected';
         $state['recovery']['consecutive_failures'] = 9;
         $stateProperty->setValue($this->controller, $state);
+        $this->assignAvailablePublicPortsForRecovery();
 
         (new \ReflectionMethod($this->controller, 'recoverDataPlane'))
             ->invoke($this->controller);
@@ -2450,21 +3509,32 @@ final class GatewayProtocolSecurityTest extends TestCase
             $manifestFile,
             \json_encode($manifest, JSON_THROW_ON_ERROR),
         ));
-        $previousBin = $this->home . DIRECTORY_SEPARATOR . 'slots/B/bin';
-        self::assertTrue(\mkdir($previousBin, 0700, true));
-        self::assertTrue(\copy(
-            $this->home . DIRECTORY_SEPARATOR . 'slots/A/bin/nginx',
-            $previousBin . DIRECTORY_SEPARATOR . 'nginx',
-        ));
+        $this->createVerifiedRollbackSlotFixture('B');
 
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
+            ->getValue($this->controller);
         $preparedAt = \time() - 1200;
+        $monotonicMilliseconds = \intdiv(\hrtime(true), 1_000_000);
+        if ($monotonicMilliseconds <= 900_001) {
+            self::markTestSkipped(
+                'Host uptime is too short to construct an expired monotonic rollback intent.',
+            );
+        }
+        $preparedMonotonic = $monotonicMilliseconds - 900_001;
         $nonce = \str_repeat('b', 32);
-        $intentPayload = "WLS-UPGRADE/1\n"
+        $intentPayload = "WLS-UPGRADE/2\n"
             . 'host_id=' . $this->hostId . "\n"
             . "from=B\nto=A\n"
             . 'prepared_at=' . $preparedAt . "\n"
             . 'deadline=' . ($preparedAt + 300) . "\n"
             . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'host_boot_id=' . $hostBootId . "\n"
+            . 'prepared_monotonic_ms=' . $preparedMonotonic . "\n"
+            . 'activation_deadline_monotonic_ms='
+                . ($preparedMonotonic + 300_000) . "\n"
+            . 'rollback_deadline_monotonic_ms='
+                . ($preparedMonotonic + 900_000) . "\n"
             . 'nonce=' . $nonce . "\n";
         $key = \hex2bin($this->adminSecret);
         self::assertIsString($key);
@@ -2473,9 +3543,6 @@ final class GatewayProtocolSecurityTest extends TestCase
             $intentPayload . 'signature=' . \hash_hmac('sha256', $intentPayload, $key) . "\n",
         ));
 
-        $stateProperty = new \ReflectionProperty($this->controller, 'state');
-        $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
-            ->getValue($this->controller);
         $monotonicNow = \hrtime(true) / 1_000_000_000;
         $state = $stateProperty->getValue($this->controller);
         $state['active_slot'] = 'A';
@@ -2495,6 +3562,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         $state['recovery']['last_failure'] = 'previous rollback request was rejected';
         $state['recovery']['consecutive_failures'] = 0;
         $stateProperty->setValue($this->controller, $state);
+        $this->assignAvailablePublicPortsForRecovery();
 
         (new \ReflectionMethod($this->controller, 'recoverDataPlane'))
             ->invoke($this->controller);
@@ -2505,7 +3573,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             $recovered['binary_transaction']['phase'],
         );
         self::assertStringContainsString(
-            'outside the supported range',
+            'outside the signed transaction',
             (string)$recovered['binary_transaction']['rollback_unavailable_reason'],
         );
         self::assertSame(1, $recovered['recovery']['consecutive_failures']);
@@ -2738,7 +3806,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             ],
         ];
         $stateProperty->setValue($this->controller, $state);
-        $certificate = [
+        $certificate = $this->activeCertificateEnvelope($domain, $sourceDigest, [
             'cert' => [
                 'root_alias' => 'project_ssl',
                 'relative_path' => 'snapshot/fullchain.pem',
@@ -2747,9 +3815,8 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'root_alias' => 'project_ssl',
                 'relative_path' => 'snapshot/privkey.pem',
             ],
-            'source_digest' => $sourceDigest,
             'generation' => 1,
-        ];
+        ]);
         $snapshotMethod = new \ReflectionMethod(
             $this->controller,
             'snapshotCertificate',
@@ -2761,6 +3828,13 @@ final class GatewayProtocolSecurityTest extends TestCase
             'sha256',
             \hash_file('sha256', $source['cert'])
                 . ':' . \hash_file('sha256', $mismatch['key']) . ':',
+        );
+        $invalid['provenance_digest'] = ProjectCertificateGenerationStore::provenanceDigest(
+            $domain,
+            $invalid['source_digest'],
+            'test',
+            'self_signed',
+            'self_signed',
         );
         try {
             $snapshotMethod->invoke(
@@ -2837,6 +3911,117 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertCount(
             1,
             \glob($this->home . DIRECTORY_SEPARATOR . 'snapshots/*') ?: [],
+        );
+    }
+
+    public function testReusableSnapshotRetainsEachRouteProvenanceEnvelope(): void
+    {
+        $project = $this->createProject();
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174122';
+        $wildcard = '*.reuse-provenance.example.test';
+        $source = $this->createCertificate(
+            $project,
+            $wildcard,
+            'reuse-provenance',
+        );
+        $sourceDigest = \hash(
+            'sha256',
+            \hash_file('sha256', $source['cert'])
+                . ':' . \hash_file('sha256', $source['key']) . ':',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['enrollments'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'security_generation' => 1,
+            'certificate_roots' => [
+                'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+            ],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        $snapshot = new \ReflectionMethod($this->controller, 'snapshotCertificate');
+        $references = [
+            'cert' => [
+                'root_alias' => 'project_ssl',
+                'relative_path' => 'reuse-provenance/fullchain.pem',
+            ],
+            'key' => [
+                'root_alias' => 'project_ssl',
+                'relative_path' => 'reuse-provenance/privkey.pem',
+            ],
+            'generation' => 1,
+        ];
+        $firstDomain = 'one.reuse-provenance.example.test';
+        $secondDomain = 'two.reuse-provenance.example.test';
+        $first = $snapshot->invoke(
+            $this->controller,
+            $projectUuid,
+            $project,
+            $firstDomain,
+            $this->activeCertificateEnvelope($firstDomain, $sourceDigest, $references),
+        );
+        $copyDirectory = $project . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/reuse-provenance-copy';
+        self::assertTrue(\mkdir($copyDirectory, 0700, true));
+        self::assertTrue(\copy(
+            $source['cert'],
+            $copyDirectory . DIRECTORY_SEPARATOR . 'fullchain.pem',
+        ));
+        self::assertTrue(\copy(
+            $source['key'],
+            $copyDirectory . DIRECTORY_SEPARATOR . 'privkey.pem',
+        ));
+        self::assertTrue(\chmod(
+            $copyDirectory . DIRECTORY_SEPARATOR . 'privkey.pem',
+            0600,
+        ));
+        $secondReferences = [
+            'cert' => [
+                'root_alias' => 'project_ssl',
+                'relative_path' => 'reuse-provenance-copy/fullchain.pem',
+            ],
+            'key' => [
+                'root_alias' => 'project_ssl',
+                'relative_path' => 'reuse-provenance-copy/privkey.pem',
+            ],
+            'generation' => 2,
+        ];
+        $second = $snapshot->invoke(
+            $this->controller,
+            $projectUuid,
+            $project,
+            $secondDomain,
+            $this->activeCertificateEnvelope(
+                $secondDomain,
+                $sourceDigest,
+                $secondReferences,
+                'external',
+            ),
+        );
+
+        self::assertSame($first['snapshot_digest'], $second['snapshot_digest']);
+        self::assertNotSame($first['provenance_digest'], $second['provenance_digest']);
+        self::assertSame(
+            ProjectCertificateGenerationStore::provenanceDigest(
+                $secondDomain,
+                $sourceDigest,
+                'test',
+                'external',
+                'self_signed',
+            ),
+            $second['provenance_digest'],
+        );
+        self::assertSame('test', $second['trust_profile']);
+        self::assertSame('external', $second['provider']);
+        self::assertSame('self_signed', $second['material_class']);
+        self::assertSame(2, $second['generation']);
+        self::assertSame(
+            $secondReferences['cert'],
+            $second['source_refs']['cert'],
+        );
+        self::assertSame(
+            $secondReferences['key'],
+            $second['source_refs']['key'],
         );
     }
 
@@ -2978,6 +4163,8 @@ final class GatewayProtocolSecurityTest extends TestCase
         $selector->invokeArgs($this->controller, [&$route]);
         self::assertSame('REMOVED', $route['status']);
         self::assertSame($removedAt, $route['removed_at']);
+        self::assertSame($this->hostBootId(), $route['removed_boot_id']);
+        self::assertGreaterThan(0.0, $route['removed_at_monotonic']);
         self::assertSame([], $route['instances']);
         self::assertSame([], $route['backends']);
         self::assertSame([], $route['backend_instances']);
@@ -3003,6 +4190,75 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertSame('REMOVED', $swept['routes'][$routeId]['status']);
         self::assertSame($removedAt, $swept['routes'][$routeId]['removed_at']);
         self::assertSame([], $swept['routes'][$routeId]['instances']);
+    }
+
+    public function testRemovedRouteCompactionUsesCurrentBootMonotonicRetentionFence(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174034';
+        $domain = 'retained.example.test';
+        $project = $this->createProject();
+        $enrollment = $this->request(
+            'admin',
+            'enroll',
+            [
+                'project_uuid' => $projectUuid,
+                'project_root' => $project,
+                'certificate_roots' => [
+                    'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+                ],
+                'allowed_domains' => [$domain],
+            ],
+            'admin',
+            $this->adminSecret,
+        );
+        self::assertTrue($enrollment['ok'], \json_encode($enrollment));
+        $securityGeneration = (int)($enrollment['payload']['security_generation'] ?? 0);
+        self::assertGreaterThan(0, $securityGeneration);
+        $routeId = $this->canonicalRouteId($projectUuid, $domain);
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['routes'][$routeId] = [
+            'route_id' => $routeId,
+            'project_uuid' => $projectUuid,
+            'domain' => $domain,
+            'enrollment_security_generation' => $securityGeneration,
+            'domain_security_generation' => 0,
+            'route_generation' => 1,
+            'status' => 'REMOVED',
+            // Wall time is deliberately mature/future across the two sweeps;
+            // neither value may authorize or veto a duration decision.
+            'removed_at' => \time() - 172800,
+            'removed_at_monotonic' => 10.0,
+            'removed_boot_id' => \str_repeat('f', 64),
+            'certificate' => [],
+            'instances' => [],
+            'backends' => [],
+            'backend_instances' => [],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+
+        $compact = new \ReflectionMethod($this->controller, 'compactRemovedRoutes');
+        $compact->invoke($this->controller, 1000.0);
+
+        $rebuilt = $stateProperty->getValue($this->controller);
+        self::assertArrayHasKey($routeId, $rebuilt['routes']);
+        self::assertSame(
+            $this->hostBootId(),
+            $rebuilt['routes'][$routeId]['removed_boot_id'],
+        );
+        self::assertSame(1000.0, $rebuilt['routes'][$routeId]['removed_at_monotonic']);
+
+        $rebuilt['routes'][$routeId]['removed_at'] = \time() + 31536000;
+        $rebuilt['routes'][$routeId]['removed_at_monotonic'] = 1000.0;
+        $stateProperty->setValue($this->controller, $rebuilt);
+        $compact->invoke($this->controller, 87401.0);
+
+        $compacted = $stateProperty->getValue($this->controller);
+        self::assertArrayNotHasKey($routeId, $compacted['routes']);
+        self::assertSame(
+            'COMPACTED',
+            $compacted['domain_ownership'][$domain]['status'],
+        );
     }
 
     public function testQueuedPublicationCoalescesAndFailedRequestKeepsEarlierAcceptedState(): void
@@ -3122,8 +4378,1351 @@ final class GatewayProtocolSecurityTest extends TestCase
 
         // Heartbeats are state-only and retain a distinct bounded budget, so
         // an idempotent registration retry loop cannot expire a live route.
-        $rateLimit->invoke($this->controller, 'project', $principal, 'heartbeat');
+        $rateLimit->invoke(
+            $this->controller,
+            'project',
+            $principal,
+            'heartbeat',
+            'instance-live',
+        );
         self::assertTrue(true);
+    }
+
+    public function testHeartbeatReplayAcrossControllerIncarnationCannotExtendLease(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174096';
+        $instanceId = 'heartbeat-replay';
+        $credentialId = \str_repeat('a', 32);
+        $secret = \str_repeat('b', 64);
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['enrollments'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'credential_id' => $credentialId,
+            'credential_secret' => $secret,
+            'security_generation' => 1,
+            'owner' => [
+                'kind' => 'posix',
+                'uid' => (int)\posix_geteuid(),
+                'gid' => (int)\posix_getegid(),
+            ],
+        ];
+        $state['projects'][$projectUuid] = [
+            'generation' => 1,
+            'route_ids' => [],
+        ];
+        $lease = $this->instanceLease($instanceId, 29105, 'heartbeat-replay');
+        $lease['last_heartbeat_monotonic']
+            = \hrtime(true) / 1_000_000_000 - 2.0;
+        $state['instances'][$projectUuid][$instanceId] = $lease;
+        $stateProperty->setValue($this->controller, $state);
+
+        $payload = [
+            'project_uuid' => $projectUuid,
+            'project_generation' => 1,
+            'instance_id' => $instanceId,
+            'instance_generation' => 1,
+            'instance_digest' => (string)$lease['digest'],
+            'master_epoch' => 1,
+            'launch_id' => \str_repeat('c', 32),
+            'gateway_epoch' => (string)$state['epoch'],
+            'host_boot_id' => $this->hostBootId(),
+        ];
+        $request = $this->signedRequest(
+            'project',
+            'heartbeat',
+            $payload,
+            $credentialId,
+            $secret,
+        );
+        $authenticate = new \ReflectionMethod($this->controller, 'authenticate');
+        $broker = [
+            'channel' => 'project',
+            'uid' => (int)\posix_geteuid(),
+        ];
+        $first = $authenticate->invoke($this->controller, $request, $broker);
+        self::assertSame('', $first['error']);
+        (new \ReflectionMethod($this->controller, 'heartbeat'))->invoke(
+            $this->controller,
+            $payload + [
+                '_authenticated_monotonic' => $first['authenticated_monotonic'],
+                '_authenticated_timestamp' => $first['authenticated_timestamp'],
+            ],
+        );
+        $firstLease = $stateProperty->getValue($this->controller)
+            ['instances'][$projectUuid][$instanceId]['last_heartbeat_monotonic'];
+        self::assertSame((float)$request['monotonic_timestamp'], $firstLease);
+
+        $sameProcessReplay = $authenticate->invoke(
+            $this->controller,
+            $request,
+            $broker,
+        );
+        self::assertStringContainsString('replayed', $sameProcessReplay['error']);
+
+        (new \ReflectionProperty($this->controller, 'heartbeatNonces'))
+            ->setValue($this->controller, []);
+        (new \ReflectionProperty($this->controller, 'controllerStartedMonotonic'))
+            ->setValue($this->controller, \hrtime(true) / 1_000_000_000);
+        (new \ReflectionProperty($this->controller, 'controllerIncarnation'))
+            ->setValue($this->controller, \bin2hex(\random_bytes(16)));
+        $afterRestart = $authenticate->invoke($this->controller, $request, $broker);
+        self::assertSame('', $afterRestart['error']);
+        (new \ReflectionMethod($this->controller, 'heartbeat'))->invoke(
+            $this->controller,
+            $payload + [
+                '_authenticated_monotonic' => $afterRestart['authenticated_monotonic'],
+                '_authenticated_timestamp' => $afterRestart['authenticated_timestamp'],
+            ],
+        );
+        $replayedLease = $stateProperty->getValue($this->controller)
+            ['instances'][$projectUuid][$instanceId]['last_heartbeat_monotonic'];
+        self::assertSame(
+            $firstLease,
+            $replayedLease,
+            'A post-crash replay must renew only its original signed instant.',
+        );
+
+        $expired = $this->signedRequest(
+            'project',
+            'heartbeat',
+            $payload,
+            $credentialId,
+            $secret,
+        );
+        $expired['monotonic_timestamp']
+            = \hrtime(true) / 1_000_000_000 - 6.0;
+        unset($expired['signature']);
+        $expired['signature'] = \hash_hmac(
+            'sha256',
+            GatewayClient::canonicalJson($expired),
+            $secret,
+        );
+        $rejected = $authenticate->invoke($this->controller, $expired, $broker);
+        self::assertStringContainsString(
+            'monotonic timestamp is outside',
+            $rejected['error'],
+        );
+    }
+
+    public function testRegisteredHeartbeatCheckpointSurvivesControllerRestart(): void
+    {
+        $fixture = $this->registerPendingCertificateLeaseForCheckpoint(
+            '123e4567-e89b-42d3-a456-426614174081',
+            'checkpoint-restart',
+            'checkpoint-restart.example.test',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $baselineMonotonic = \hrtime(true) / 1_000_000_000 - 31.0;
+        $baselineWall = \time() - 31;
+        foreach (['instances', 'routes', 'active_routes'] as $scope) {
+            if ($scope === 'instances') {
+                $state[$scope][$fixture['project_uuid']][$fixture['instance_id']]
+                    ['last_heartbeat'] = $baselineWall;
+                $state[$scope][$fixture['project_uuid']][$fixture['instance_id']]
+                    ['last_heartbeat_monotonic'] = $baselineMonotonic;
+                continue;
+            }
+            $state[$scope][$fixture['route_id']]['instances'][$fixture['instance_id']]
+                ['last_heartbeat'] = $baselineWall;
+            $state[$scope][$fixture['route_id']]['instances'][$fixture['instance_id']]
+                ['last_heartbeat_monotonic'] = $baselineMonotonic;
+        }
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionMethod($this->controller, 'persistState'))
+            ->invoke($this->controller);
+
+        $stateFile = (new \ReflectionMethod($this->controller, 'stateFile'))
+            ->invoke($this->controller);
+        $stateDigestBeforeHeartbeat = \hash_file('sha256', $stateFile);
+        self::assertIsString($stateDigestBeforeHeartbeat);
+        $authenticatedMonotonic = \hrtime(true) / 1_000_000_000;
+        $authenticatedTimestamp = \time();
+        $heartbeat = (new \ReflectionMethod($this->controller, 'heartbeat'))->invoke(
+            $this->controller,
+            [
+                'project_uuid' => $fixture['project_uuid'],
+                'project_generation' => $fixture['project_generation'],
+                'instance_id' => $fixture['instance_id'],
+                'instance_generation' => $fixture['instance_generation'],
+                'instance_digest' => $fixture['instance_digest'],
+                'master_epoch' => $fixture['master_epoch'],
+                'launch_id' => $fixture['launch_id'],
+                'gateway_epoch' => $fixture['gateway_epoch'],
+                'host_boot_id' => $this->hostBootId(),
+                '_authenticated_monotonic' => $authenticatedMonotonic,
+                '_authenticated_timestamp' => $authenticatedTimestamp,
+            ],
+        );
+
+        self::assertFalse($heartbeat['re_register_required']);
+        self::assertArrayHasKey('lease_receipt', $heartbeat);
+        self::assertSame(
+            $authenticatedMonotonic,
+            $heartbeat['lease_receipt']['issued_monotonic'],
+        );
+        self::assertSame(
+            $stateDigestBeforeHeartbeat,
+            \hash_file('sha256', $stateFile),
+            'A durable heartbeat checkpoint must not rewrite the complete gateway state.',
+        );
+
+        $checkpointFile = $this->home . DIRECTORY_SEPARATOR
+            . 'state/lease-checkpoint.json';
+        self::assertFileExists($checkpointFile);
+        self::assertLessThanOrEqual(4_194_304, (int)\filesize($checkpointFile));
+        $checkpoint = \json_decode(
+            (string)\file_get_contents($checkpointFile),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('wls-edge-lease-checkpoint/1', $checkpoint['payload']['schema']);
+        self::assertSame(
+            32,
+            \strlen((string)$checkpoint['payload']['instances'][0]
+                ['instance_fence']['launch_id']),
+            'The compact lease fence must use the protocol-defined 32-hex launch ID.',
+        );
+
+        $restarted = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/checkpoint-restart.sock',
+        );
+        $restartedState = (new \ReflectionProperty($restarted, 'state'))
+            ->getValue($restarted);
+        self::assertSame(
+            $authenticatedTimestamp,
+            $restartedState['instances'][$fixture['project_uuid']]
+                [$fixture['instance_id']]['last_heartbeat'],
+        );
+        self::assertSame(
+            $authenticatedMonotonic,
+            $restartedState['instances'][$fixture['project_uuid']]
+                [$fixture['instance_id']]['last_heartbeat_monotonic'],
+        );
+        self::assertSame(
+            $authenticatedMonotonic,
+            $restartedState['routes'][$fixture['route_id']]['instances']
+                [$fixture['instance_id']]['last_heartbeat_monotonic'],
+        );
+        self::assertSame(
+            'ACTIVE',
+            $restartedState['instances'][$fixture['project_uuid']]
+                [$fixture['instance_id']]['status'],
+            'A checkpoint may refresh an existing lease but may not change lifecycle state.',
+        );
+    }
+
+    public function testLeaseCheckpointCannotCrossAnInstanceIdentityFence(): void
+    {
+        $fixture = $this->registerPendingCertificateLeaseForCheckpoint(
+            '123e4567-e89b-42d3-a456-426614174082',
+            'checkpoint-fence',
+            'checkpoint-fence.example.test',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $baselineMonotonic = \hrtime(true) / 1_000_000_000 - 20.0;
+        $baselineWall = \time() - 20;
+        $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+            ['last_heartbeat'] = $baselineWall;
+        $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+            ['last_heartbeat_monotonic'] = $baselineMonotonic;
+        $state['routes'][$fixture['route_id']]['instances'][$fixture['instance_id']]
+            ['last_heartbeat'] = $baselineWall;
+        $state['routes'][$fixture['route_id']]['instances'][$fixture['instance_id']]
+            ['last_heartbeat_monotonic'] = $baselineMonotonic;
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionMethod($this->controller, 'persistState'))
+            ->invoke($this->controller);
+
+        $checkpointMonotonic = \hrtime(true) / 1_000_000_000;
+        (new \ReflectionMethod($this->controller, 'touchInstanceLease'))->invoke(
+            $this->controller,
+            $fixture['project_uuid'],
+            $fixture['instance_id'],
+            $fixture['master_epoch'],
+            $fixture['launch_id'],
+            $fixture['instance_generation'],
+            null,
+            $checkpointMonotonic,
+            \time(),
+        );
+        (new \ReflectionMethod($this->controller, 'persistLeaseCheckpoint'))
+            ->invoke($this->controller);
+
+        $state = $stateProperty->getValue($this->controller);
+        $nextLaunchId = \str_repeat('d', 32);
+        $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]['launch_id']
+            = $nextLaunchId;
+        $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+            ['last_heartbeat'] = $baselineWall;
+        $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+            ['last_heartbeat_monotonic'] = $baselineMonotonic;
+        foreach (['routes', 'active_routes'] as $scope) {
+            $state[$scope][$fixture['route_id']]['instances'][$fixture['instance_id']]
+                ['launch_id'] = $nextLaunchId;
+            $state[$scope][$fixture['route_id']]['instances'][$fixture['instance_id']]
+                ['last_heartbeat'] = $baselineWall;
+            $state[$scope][$fixture['route_id']]['instances'][$fixture['instance_id']]
+                ['last_heartbeat_monotonic'] = $baselineMonotonic;
+        }
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionMethod($this->controller, 'persistState'))
+            ->invoke($this->controller);
+
+        $restarted = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/checkpoint-fence.sock',
+        );
+        $restartedState = (new \ReflectionProperty($restarted, 'state'))
+            ->getValue($restarted);
+        self::assertSame(
+            $nextLaunchId,
+            $restartedState['instances'][$fixture['project_uuid']]
+                [$fixture['instance_id']]['launch_id'],
+        );
+        self::assertSame(
+            $baselineMonotonic,
+            $restartedState['instances'][$fixture['project_uuid']]
+                [$fixture['instance_id']]['last_heartbeat_monotonic'],
+            'A lease from the retired launch must not refresh its replacement.',
+        );
+    }
+
+    public function testUntrustedJournalPreventsLeaseCheckpointOverlay(): void
+    {
+        $fixture = $this->registerPendingCertificateLeaseForCheckpoint(
+            '123e4567-e89b-42d3-a456-426614174083',
+            'checkpoint-journal',
+            'checkpoint-journal.example.test',
+        );
+        (new \ReflectionMethod($this->controller, 'touchInstanceLease'))->invoke(
+            $this->controller,
+            $fixture['project_uuid'],
+            $fixture['instance_id'],
+            $fixture['master_epoch'],
+            $fixture['launch_id'],
+            $fixture['instance_generation'],
+        );
+        (new \ReflectionMethod($this->controller, 'persistLeaseCheckpoint'))
+            ->invoke($this->controller);
+
+        $journalFile = $this->home . DIRECTORY_SEPARATOR . 'state/journal.jsonl';
+        $lines = \file($journalFile, FILE_IGNORE_NEW_LINES);
+        self::assertIsArray($lines);
+        self::assertNotEmpty($lines);
+        $tampered = \json_decode($lines[0], true, 512, JSON_THROW_ON_ERROR);
+        $tampered['event'] = 'tampered-before-checkpoint-overlay';
+        $lines[0] = \json_encode($tampered, JSON_THROW_ON_ERROR);
+        self::assertNotFalse(\file_put_contents(
+            $journalFile,
+            \implode("\n", $lines) . "\n",
+        ));
+
+        $restarted = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/checkpoint-untrusted-journal.sock',
+        );
+        self::assertFalse(
+            (new \ReflectionProperty($restarted, 'journalTrusted'))->getValue($restarted),
+        );
+        $state = (new \ReflectionProperty($restarted, 'state'))->getValue($restarted);
+        self::assertTrue($state['isolation_mode']);
+        self::assertSame('JOURNAL_UNTRUSTED', $state['health_state']);
+        self::assertArrayNotHasKey(
+            $fixture['project_uuid'],
+            (array)($state['instances'] ?? []),
+            'Derived checkpoint leases must not repopulate state after audit trust fails.',
+        );
+    }
+
+    public function testHeartbeatCheckpointFailureFallsBackOrRefusesAReceipt(): void
+    {
+        $fixture = $this->registerPendingCertificateLeaseForCheckpoint(
+            '123e4567-e89b-42d3-a456-426614174084',
+            'checkpoint-failure',
+            'checkpoint-failure.example.test',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $baselineMonotonic = \hrtime(true) / 1_000_000_000 - 31.0;
+        $baselineWall = \time() - 31;
+        $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+            ['last_heartbeat'] = $baselineWall;
+        $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+            ['last_heartbeat_monotonic'] = $baselineMonotonic;
+        $state['routes'][$fixture['route_id']]['instances'][$fixture['instance_id']]
+            ['last_heartbeat'] = $baselineWall;
+        $state['routes'][$fixture['route_id']]['instances'][$fixture['instance_id']]
+            ['last_heartbeat_monotonic'] = $baselineMonotonic;
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionMethod($this->controller, 'persistState'))
+            ->invoke($this->controller);
+
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $atomicFailure = \getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+        $failureTarget = \getenv(
+            'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256'
+        );
+        $checkpointFile = $this->home . DIRECTORY_SEPARATOR
+            . 'state/lease-checkpoint.json';
+        $stateFile = $this->home . DIRECTORY_SEPARATOR
+            . 'state/gateway-state.json';
+        $heartbeatMethod = new \ReflectionMethod($this->controller, 'heartbeat');
+        $payload = [
+            'project_uuid' => $fixture['project_uuid'],
+            'project_generation' => $fixture['project_generation'],
+            'instance_id' => $fixture['instance_id'],
+            'instance_generation' => $fixture['instance_generation'],
+            'instance_digest' => $fixture['instance_digest'],
+            'master_epoch' => $fixture['master_epoch'],
+            'launch_id' => $fixture['launch_id'],
+            'gateway_epoch' => $fixture['gateway_epoch'],
+            'host_boot_id' => $this->hostBootId(),
+        ];
+        try {
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE='
+                    . 'directory_fsync_after_rename_failed'
+            );
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                    . \hash('sha256', $checkpointFile)
+            );
+            $fallbackHeartbeat = $heartbeatMethod->invoke(
+                $this->controller,
+                $payload + [
+                    '_authenticated_monotonic' => \hrtime(true) / 1_000_000_000,
+                    '_authenticated_timestamp' => \time(),
+                ],
+            );
+            self::assertArrayHasKey('lease_receipt', $fallbackHeartbeat);
+            self::assertFalse(
+                (new \ReflectionProperty($this->controller, 'leaseCheckpointDirty'))
+                    ->getValue($this->controller),
+                'A successful full-state fallback durably covers the renewed lease.',
+            );
+
+            // Force the next acknowledgement beyond the durability threshold,
+            // then make the compact write latch disk pressure. The full-state
+            // fallback must not be attempted after that mutation fence closes.
+            $durable = new \ReflectionProperty(
+                $this->controller,
+                'durableLeaseMonotonic',
+            );
+            $durableMap = $durable->getValue($this->controller);
+            foreach ($durableMap as $key => $_) {
+                $durableMap[$key] = \hrtime(true) / 1_000_000_000 - 31.0;
+            }
+            $durable->setValue($this->controller, $durableMap);
+            $stateDigestBeforeDiskFailure = \hash_file('sha256', $stateFile);
+            self::assertIsString($stateDigestBeforeDiskFailure);
+            \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=temporary_write_or_fsync_failed');
+            \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256');
+            try {
+                $heartbeatMethod->invoke(
+                    $this->controller,
+                    $payload + [
+                        '_authenticated_monotonic' => \hrtime(true) / 1_000_000_000,
+                        '_authenticated_timestamp' => \time(),
+                    ],
+                );
+                self::fail('A heartbeat received a receipt without a durable lease image.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString(
+                    'cannot be durably acknowledged',
+                    $exception->getMessage(),
+                );
+            }
+            self::assertTrue(
+                (new \ReflectionProperty($this->controller, 'leaseCheckpointDirty'))
+                    ->getValue($this->controller),
+                'A refused durability acknowledgement must retain the dirty lease for repair.',
+            );
+            self::assertSame(
+                $stateDigestBeforeDiskFailure,
+                \hash_file('sha256', $stateFile),
+                'A checkpoint failure that latched disk pressure must not attempt a full-state write.',
+            );
+            $pressureState = $stateProperty->getValue($this->controller);
+            self::assertSame('DISK_PRESSURE', $pressureState['health_state']);
+            self::assertSame('ATOMIC_WRITE_FAILED', $pressureState['recovery']['stage']);
+            self::assertSame(
+                'temporary_write_or_fsync_failed',
+                $pressureState['recovery']['last_failure'],
+            );
+            self::assertFalse($pressureState['ready']);
+
+            (new \ReflectionMethod($this->controller, 'markDiskPressure'))->invoke(
+                $this->controller,
+                'SECONDARY_DISK_FAILURE',
+                'secondary_failure_must_not_replace_primary',
+            );
+            $repeatedPressure = $stateProperty->getValue($this->controller);
+            self::assertSame(
+                'ATOMIC_WRITE_FAILED',
+                $repeatedPressure['recovery']['stage'],
+            );
+            self::assertSame(
+                'temporary_write_or_fsync_failed',
+                $repeatedPressure['recovery']['last_failure'],
+            );
+
+            $pressureRestart = new \WlsEdgeGatewayController(
+                $this->home,
+                'unix://' . $this->home . DIRECTORY_SEPARATOR
+                    . 'runtime/run/checkpoint-pressure-restart.sock',
+            );
+            (new \ReflectionMethod($pressureRestart, 'adoptOrRecoverDataPlane'))
+                ->invoke($pressureRestart);
+            $pressureRestartState = (new \ReflectionProperty(
+                $pressureRestart,
+                'state',
+            ))->getValue($pressureRestart);
+            self::assertFalse($pressureRestartState['ready']);
+            self::assertSame('DISK_PRESSURE', $pressureRestartState['health_state']);
+            self::assertSame(
+                'ATOMIC_WRITE_FAILED',
+                $pressureRestartState['recovery']['stage'],
+            );
+            self::assertSame(
+                'temporary_write_or_fsync_failed',
+                $pressureRestartState['recovery']['last_failure'],
+                'A restart must recover the exact first failure from the bounded marker.',
+            );
+            self::assertArrayHasKey(
+                'observed_data_plane_stage',
+                $pressureRestartState['recovery'],
+            );
+
+            $markerFile = $this->home . DIRECTORY_SEPARATOR
+                . 'state/disk-pressure.marker';
+            self::assertNotFalse(\file_put_contents($markerFile, "corrupt\tmarker\n"));
+            $corruptMarkerDigest = \hash_file('sha256', $markerFile);
+            self::assertIsString($corruptMarkerDigest);
+            $corruptRestart = new \WlsEdgeGatewayController(
+                $this->home,
+                'unix://' . $this->home . DIRECTORY_SEPARATOR
+                    . 'runtime/run/checkpoint-pressure-corrupt.sock',
+            );
+            $corruptState = (new \ReflectionProperty($corruptRestart, 'state'))
+                ->getValue($corruptRestart);
+            self::assertFalse($corruptState['ready']);
+            self::assertSame('DISK_PRESSURE', $corruptState['health_state']);
+            self::assertSame(
+                'DISK_PRESSURE_MARKER_UNTRUSTED',
+                $corruptState['recovery']['stage'],
+            );
+            self::assertSame(
+                'disk_pressure_marker_invalid',
+                $corruptState['recovery']['last_failure'],
+            );
+            self::assertSame(
+                $corruptMarkerDigest,
+                \hash_file('sha256', $markerFile),
+                'An untrusted marker must remain untouched for administrator repair.',
+            );
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $atomicFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=' . $atomicFailure);
+            $failureTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                        . $failureTarget
+                );
+        }
+    }
+
+    public function testLeaseCheckpointMaintenanceThrottlePreservesDiskFailure(): void
+    {
+        $fixture = $this->registerPendingCertificateLeaseForCheckpoint(
+            '123e4567-e89b-42d3-a456-426614174086',
+            'checkpoint-maintenance',
+            'checkpoint-maintenance.example.test',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $dirtyProperty = new \ReflectionProperty(
+            $this->controller,
+            'leaseCheckpointDirty',
+        );
+        $attemptProperty = new \ReflectionProperty(
+            $this->controller,
+            'lastLeaseCheckpointAttemptAt',
+        );
+        $maintenance = new \ReflectionMethod($this->controller, 'maintenance');
+        foreach (['lastHealthAt', 'lastBackendProbeAt', 'lastRetentionCollectionAt']
+            as $timer
+        ) {
+            (new \ReflectionProperty($this->controller, $timer))
+                ->setValue($this->controller, PHP_FLOAT_MAX);
+        }
+
+        $state = $stateProperty->getValue($this->controller);
+        $validProjectDigest = $state['projects'][$fixture['project_uuid']]['digest'];
+        $state['projects'][$fixture['project_uuid']]['digest'] = 'invalid-fence';
+        $stateProperty->setValue($this->controller, $state);
+        $dirtyProperty->setValue($this->controller, true);
+        $firstBaseline = \hrtime(true) / 1_000_000_000 - 6.0;
+        $attemptProperty->setValue($this->controller, $firstBaseline);
+
+        $maintenance->invoke($this->controller);
+        $firstAttempt = $attemptProperty->getValue($this->controller);
+        self::assertGreaterThan($firstBaseline, $firstAttempt);
+        self::assertTrue($dirtyProperty->getValue($this->controller));
+        $failed = $stateProperty->getValue($this->controller);
+        self::assertSame('CONTROL_DEGRADED', $failed['health_state']);
+        self::assertSame('LEASE_CHECKPOINT_FAILED', $failed['recovery']['stage']);
+
+        // Pin the last attempt at the current monotonic instant so this check
+        // remains deterministic even on a paused or overloaded test host.
+        $withinThrottle = \hrtime(true) / 1_000_000_000;
+        $attemptProperty->setValue($this->controller, $withinThrottle);
+        $maintenance->invoke($this->controller);
+        self::assertSame(
+            $withinThrottle,
+            $attemptProperty->getValue($this->controller),
+            'A dirty checkpoint must not retry before five seconds elapsed.',
+        );
+
+        $retryBaseline = \hrtime(true) / 1_000_000_000 - 5.1;
+        $attemptProperty->setValue($this->controller, $retryBaseline);
+        $maintenance->invoke($this->controller);
+        self::assertGreaterThan(
+            $retryBaseline,
+            $attemptProperty->getValue($this->controller),
+            'A failed checkpoint must become retryable after five seconds.',
+        );
+
+        $state = $stateProperty->getValue($this->controller);
+        $state['projects'][$fixture['project_uuid']]['digest'] = $validProjectDigest;
+        $stateProperty->setValue($this->controller, $state);
+        $dirtyProperty->setValue($this->controller, true);
+        $attemptProperty->setValue(
+            $this->controller,
+            \hrtime(true) / 1_000_000_000 - 6.0,
+        );
+
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $atomicFailure = \getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+        $failureTarget = \getenv(
+            'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256'
+        );
+        try {
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            (new \ReflectionMethod($this->controller, 'ensureRecoveryReserve'))
+                ->invoke($this->controller);
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE='
+                    . 'temporary_write_or_fsync_failed'
+            );
+            \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256');
+
+            $beforeDiskAttempt = $attemptProperty->getValue($this->controller);
+            $maintenance->invoke($this->controller);
+
+            self::assertGreaterThan(
+                $beforeDiskAttempt,
+                $attemptProperty->getValue($this->controller),
+            );
+            self::assertTrue($dirtyProperty->getValue($this->controller));
+            self::assertTrue(
+                (new \ReflectionProperty($this->controller, 'running'))
+                    ->getValue($this->controller),
+                'A checkpoint storage failure must not terminate the Controller loop.',
+            );
+            self::assertTrue(
+                (new \ReflectionProperty($this->controller, 'readOnlyRecoveryMode'))
+                    ->getValue($this->controller),
+            );
+            $pressure = $stateProperty->getValue($this->controller);
+            self::assertFalse($pressure['ready']);
+            self::assertSame('DISK_PRESSURE', $pressure['health_state']);
+            self::assertSame('ATOMIC_WRITE_FAILED', $pressure['recovery']['stage']);
+            self::assertSame(
+                'temporary_write_or_fsync_failed',
+                $pressure['recovery']['last_failure'],
+            );
+            (new \ReflectionProperty($this->controller, 'lastHealthAt'))
+                ->setValue($this->controller, 0.0);
+            $maintenance->invoke($this->controller);
+            $observedPressure = $stateProperty->getValue($this->controller);
+            self::assertSame(
+                'ATOMIC_WRITE_FAILED',
+                $observedPressure['recovery']['stage'],
+                'Read-only data-plane observation must not replace the storage root cause.',
+            );
+            self::assertSame(
+                'temporary_write_or_fsync_failed',
+                $observedPressure['recovery']['last_failure'],
+            );
+            self::assertArrayHasKey(
+                'observed_data_plane_stage',
+                $observedPressure['recovery'],
+            );
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $atomicFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=' . $atomicFailure);
+            $failureTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                        . $failureTarget
+                );
+        }
+    }
+
+    public function testLeaseMaintenanceAtomicFailureDoesNotExitController(): void
+    {
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $atomicFailure = \getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+        $failureTarget = \getenv(
+            'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256'
+        );
+        try {
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            (new \ReflectionMethod($this->controller, 'ensureRecoveryReserve'))
+                ->invoke($this->controller);
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE='
+                    . 'directory_fsync_after_rename_failed'
+            );
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                    . \hash(
+                        'sha256',
+                        $this->home . DIRECTORY_SEPARATOR
+                            . 'state/publication-current.json',
+                    )
+            );
+            (new \ReflectionProperty($this->controller, 'leaseCheckpointDirty'))
+                ->setValue($this->controller, false);
+            (new \ReflectionProperty($this->controller, 'lastHealthAt'))
+                ->setValue($this->controller, 0.0);
+            (new \ReflectionProperty($this->controller, 'lastBackendProbeAt'))
+                ->setValue($this->controller, PHP_FLOAT_MAX);
+            (new \ReflectionProperty($this->controller, 'lastRetentionCollectionAt'))
+                ->setValue($this->controller, PHP_FLOAT_MAX);
+
+            (new \ReflectionMethod($this->controller, 'maintenance'))
+                ->invoke($this->controller);
+
+            self::assertTrue(
+                (new \ReflectionProperty($this->controller, 'running'))
+                    ->getValue($this->controller),
+            );
+            self::assertFalse(
+                (new \ReflectionProperty($this->controller, 'serviceTreeRestartRequested'))
+                    ->getValue($this->controller),
+            );
+            $state = (new \ReflectionProperty($this->controller, 'state'))
+                ->getValue($this->controller);
+            self::assertSame('CONTROL_DEGRADED', $state['health_state']);
+            self::assertSame('LEASE_MAINTENANCE_FAILED', $state['recovery']['stage']);
+            self::assertStringContainsString(
+                'Lease maintenance transaction aborted',
+                $state['recovery']['last_failure'],
+            );
+            self::assertNull(
+                (new \ReflectionProperty($this->controller, 'publication'))
+                    ->getValue($this->controller),
+                'A recoverable maintenance transaction failure must close its rollback journal.',
+            );
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $atomicFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=' . $atomicFailure);
+            $failureTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                        . $failureTarget
+                );
+        }
+    }
+
+    public function testRecoverDataPlaneAtomicFailureDoesNotExitController(): void
+    {
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $atomicFailure = \getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+        $failureTarget = \getenv(
+            'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256'
+        );
+        try {
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            (new \ReflectionMethod($this->controller, 'ensureRecoveryReserve'))
+                ->invoke($this->controller);
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE='
+                    . 'directory_fsync_after_rename_failed'
+            );
+            \putenv(
+                'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                    . \hash(
+                        'sha256',
+                        $this->home . DIRECTORY_SEPARATOR
+                            . 'state/gateway-state.json',
+                    )
+            );
+            (new \ReflectionProperty($this->controller, 'leaseCheckpointDirty'))
+                ->setValue($this->controller, false);
+            (new \ReflectionProperty($this->controller, 'lastHealthAt'))
+                ->setValue($this->controller, 0.0);
+            (new \ReflectionProperty($this->controller, 'lastBackendProbeAt'))
+                ->setValue($this->controller, PHP_FLOAT_MAX);
+            (new \ReflectionProperty($this->controller, 'lastRetentionCollectionAt'))
+                ->setValue($this->controller, PHP_FLOAT_MAX);
+
+            (new \ReflectionMethod($this->controller, 'maintenance'))
+                ->invoke($this->controller);
+
+            self::assertTrue(
+                (new \ReflectionProperty($this->controller, 'running'))
+                    ->getValue($this->controller),
+            );
+            self::assertFalse(
+                (new \ReflectionProperty($this->controller, 'serviceTreeRestartRequested'))
+                    ->getValue($this->controller),
+            );
+            $state = (new \ReflectionProperty($this->controller, 'state'))
+                ->getValue($this->controller);
+            self::assertSame('CONTROL_DEGRADED', $state['health_state']);
+            self::assertSame('DATA_PLANE_RECOVERY_FAILED', $state['recovery']['stage']);
+            self::assertStringContainsString(
+                'Data-plane recovery maintenance failed',
+                $state['recovery']['last_failure'],
+            );
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $atomicFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=' . $atomicFailure);
+            $failureTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE_TARGET_SHA256='
+                        . $failureTarget
+                );
+        }
+    }
+
+    public function testIdempotentRegisterAndRenewReceiptsSurviveControllerRestart(): void
+    {
+        $fixture = $this->registerPendingCertificateLeaseForCheckpoint(
+            '123e4567-e89b-42d3-a456-426614174085',
+            'checkpoint-idempotent',
+            'checkpoint-idempotent.example.test',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $persistState = new \ReflectionMethod($this->controller, 'persistState');
+        $ageDurableLease = function () use (
+            $fixture,
+            $stateProperty,
+            $persistState,
+        ): float {
+            $baselineMonotonic = \hrtime(true) / 1_000_000_000 - 31.0;
+            $baselineWall = \time() - 31;
+            $state = $stateProperty->getValue($this->controller);
+            $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+                ['last_heartbeat'] = $baselineWall;
+            $state['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+                ['last_heartbeat_monotonic'] = $baselineMonotonic;
+            foreach (['routes', 'active_routes'] as $scope) {
+                $state[$scope][$fixture['route_id']]['instances'][$fixture['instance_id']]
+                    ['last_heartbeat'] = $baselineWall;
+                $state[$scope][$fixture['route_id']]['instances'][$fixture['instance_id']]
+                    ['last_heartbeat_monotonic'] = $baselineMonotonic;
+            }
+            $stateProperty->setValue($this->controller, $state);
+            $persistState->invoke($this->controller);
+            return $baselineMonotonic;
+        };
+
+        $registerBaseline = $ageDurableLease();
+        $register = $this->request(
+            'project',
+            'register',
+            $fixture['register_payload'],
+            $fixture['credential_id'],
+            $fixture['credential_secret'],
+        );
+        self::assertTrue($register['ok'], \json_encode($register));
+        self::assertTrue($register['payload']['idempotent']);
+        self::assertArrayHasKey('lease_receipt', $register['payload']);
+        $registeredLease = $stateProperty->getValue($this->controller)
+            ['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+            ['last_heartbeat_monotonic'];
+        self::assertGreaterThan($registerBaseline, $registeredLease);
+
+        $registerRestart = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/checkpoint-idempotent-register.sock',
+        );
+        $registerRestartState = (new \ReflectionProperty($registerRestart, 'state'))
+            ->getValue($registerRestart);
+        self::assertSame(
+            $registeredLease,
+            $registerRestartState['instances'][$fixture['project_uuid']]
+                [$fixture['instance_id']]['last_heartbeat_monotonic'],
+            'The real Broker register fast path must checkpoint before signing its receipt.',
+        );
+
+        $renewBaseline = $ageDurableLease();
+        $renewPayload = $fixture['register_payload'];
+        $renewPayload['expected_route_generations'] = [
+            $fixture['route_id'] => $fixture['route_generation'],
+        ];
+        $renew = $this->request(
+            'project',
+            'renew',
+            $renewPayload,
+            $fixture['credential_id'],
+            $fixture['credential_secret'],
+        );
+        self::assertTrue($renew['ok'], \json_encode($renew));
+        self::assertTrue($renew['payload']['idempotent']);
+        self::assertArrayHasKey('lease_receipt', $renew['payload']);
+        $renewedLease = $stateProperty->getValue($this->controller)
+            ['instances'][$fixture['project_uuid']][$fixture['instance_id']]
+            ['last_heartbeat_monotonic'];
+        self::assertGreaterThan($renewBaseline, $renewedLease);
+
+        $renewRestart = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/checkpoint-idempotent-renew.sock',
+        );
+        $renewRestartState = (new \ReflectionProperty($renewRestart, 'state'))
+            ->getValue($renewRestart);
+        self::assertSame(
+            $renewedLease,
+            $renewRestartState['routes'][$fixture['route_id']]['instances']
+                [$fixture['instance_id']]['last_heartbeat_monotonic'],
+            'The real Broker renew fast path must checkpoint before signing its receipt.',
+        );
+    }
+
+    public function testLeaseCheckpointIsBoundedAtMaximumInstanceCapacity(): void
+    {
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['projects'] = [];
+        $state['instances'] = [];
+        $instanceCount = 0;
+        for ($projectIndex = 1; $projectIndex <= 32; ++$projectIndex) {
+            $projectUuid = \sprintf(
+                '123e4567-e89b-42d3-a456-%012x',
+                $projectIndex,
+            );
+            $state['projects'][$projectUuid] = [
+                'project_uuid' => $projectUuid,
+                'generation' => 1,
+                'digest' => \hash('sha256', 'checkpoint-project-' . $projectIndex),
+                'route_ids' => [],
+            ];
+            for ($instanceIndex = 1; $instanceIndex <= 64; ++$instanceIndex) {
+                $instanceId = 'checkpoint-' . $projectIndex . '-' . $instanceIndex;
+                $state['instances'][$projectUuid][$instanceId]
+                    = $this->instanceLease($instanceId, 20000 + $instanceIndex, 'isolated');
+                ++$instanceCount;
+            }
+        }
+        self::assertSame(2048, $instanceCount);
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionMethod($this->controller, 'persistLeaseCheckpoint'))
+            ->invoke($this->controller);
+        $checkpointFile = $this->home . DIRECTORY_SEPARATOR
+            . 'state/lease-checkpoint.json';
+        self::assertFileExists($checkpointFile);
+        self::assertLessThanOrEqual(4_194_304, (int)\filesize($checkpointFile));
+        $checkpoint = \json_decode(
+            (string)\file_get_contents($checkpointFile),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertCount(2048, $checkpoint['payload']['instances']);
+
+        $overflowProject = '123e4567-e89b-42d3-a456-000000000021';
+        $overflowInstance = 'checkpoint-overflow';
+        $state['projects'][$overflowProject] = [
+            'project_uuid' => $overflowProject,
+            'generation' => 1,
+            'digest' => \hash('sha256', 'checkpoint-overflow'),
+            'route_ids' => [],
+        ];
+        $state['instances'][$overflowProject][$overflowInstance]
+            = $this->instanceLease($overflowInstance, 29999, 'isolated');
+        $stateProperty->setValue($this->controller, $state);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('instance capacity is exhausted');
+        (new \ReflectionMethod($this->controller, 'persistLeaseCheckpoint'))
+            ->invoke($this->controller);
+    }
+
+    public function testSteadyHealthAndUnchangedBackendProbeAvoidFullStateWrites(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR . 'bin'
+                . DIRECTORY_SEPARATOR . 'wls_gateway_controller.php',
+        );
+        $probeStart = \strpos($source, 'private function probeActiveBackends(): bool');
+        $probeEnd = \strpos($source, 'private function applyBackendProbeResult(', $probeStart);
+        self::assertIsInt($probeStart);
+        self::assertIsInt($probeEnd);
+        $probeSource = \substr($source, $probeStart, $probeEnd - $probeStart);
+        self::assertStringNotContainsString(
+            '$this->persistState()',
+            $probeSource,
+            'Probe diagnostics must stay in memory unless a routing digest transition persists.',
+        );
+
+        $healthyStart = \strpos(
+            $source,
+            '$durableStateBefore = $this->dataPlaneRecoveryDurableSnapshot();',
+        );
+        $healthyEnd = \strpos(
+            $source,
+            '$this->state[\'ready\'] = false;',
+            $healthyStart,
+        );
+        self::assertIsInt($healthyStart);
+        self::assertIsInt($healthyEnd);
+        $healthySource = \substr($source, $healthyStart, $healthyEnd - $healthyStart);
+        self::assertStringContainsString(
+            '$this->statePersistenceSequence === $persistenceSequenceBefore',
+            $healthySource,
+        );
+        self::assertStringContainsString(
+            '$durableStateBefore !== $this->dataPlaneRecoveryDurableSnapshot()',
+            $healthySource,
+        );
+        self::assertSame(
+            1,
+            \substr_count($healthySource, '$this->persistState()'),
+            'The healthy branch may persist only behind its bounded durable-state change gate.',
+        );
+    }
+
+    public function testRepeatedDeferredRouteProbeRoundsStayInMemoryWithoutRecoveryWrites(): void
+    {
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['ready'] = true;
+        $state['isolation_mode'] = false;
+        $state['health_state'] = 'HEALTHY';
+        $state['recovery']['stage'] = 'HEALTHY';
+        $state['recovery']['consecutive_failures'] = 4;
+        $state['recovery']['backoff_attempt'] = 2;
+        $state['failure_events'] = [[
+            'at' => \time(),
+            'at_monotonic' => \hrtime(true) / 1_000_000_000,
+            'boot_id' => $this->hostBootId(),
+            'reason' => 'preexisting evidence',
+        ]];
+        $stateProperty->setValue($this->controller, $state);
+        $persistenceSequence = new \ReflectionProperty(
+            $this->controller,
+            'statePersistenceSequence',
+        );
+        $beforeSequence = $persistenceSequence->getValue($this->controller);
+        $stateFile = $this->home . DIRECTORY_SEPARATOR . 'state/gateway-state.json';
+        $journalFile = $this->home . DIRECTORY_SEPARATOR . 'state/journal.jsonl';
+        $beforeStateHash = \hash_file('sha256', $stateFile);
+        $beforeJournalHash = \hash_file('sha256', $journalFile);
+        $beforeStateStatus = \lstat($stateFile);
+        self::assertIsArray($beforeStateStatus);
+        $observe = new \ReflectionMethod(
+            $this->controller,
+            'observeDeferredPublicRouteProbe',
+        );
+
+        for ($round = 1; $round <= 12; ++$round) {
+            $observe->invoke($this->controller, $round * 5.0);
+        }
+
+        self::assertSame(
+            $beforeSequence,
+            $persistenceSequence->getValue($this->controller),
+        );
+        self::assertSame($beforeStateHash, \hash_file('sha256', $stateFile));
+        self::assertSame($beforeJournalHash, \hash_file('sha256', $journalFile));
+        $afterStateStatus = \lstat($stateFile);
+        self::assertIsArray($afterStateStatus);
+        self::assertSame($beforeStateStatus['mtime'], $afterStateStatus['mtime']);
+        self::assertSame($beforeStateStatus['size'], $afterStateStatus['size']);
+        $after = $stateProperty->getValue($this->controller);
+        self::assertTrue($after['ready']);
+        self::assertSame('CONTROL_DEGRADED', $after['health_state']);
+        self::assertSame('ROUTE_PROBE_DEFERRED', $after['recovery']['stage']);
+        self::assertSame(60.0, $after['recovery']['route_probe_coverage_age_seconds']);
+        self::assertSame(4, $after['recovery']['consecutive_failures']);
+        self::assertSame(2, $after['recovery']['backoff_attempt']);
+        self::assertSame($state['failure_events'], $after['failure_events']);
+        self::assertFalse(
+            (new \ReflectionProperty(
+                $this->controller,
+                'serviceTreeRestartRequested',
+            ))->getValue($this->controller),
+        );
+    }
+
+    public function testReadOnlyStatusUsesStorageCacheWithoutAWriteProbe(): void
+    {
+        $cache = new \ReflectionProperty($this->controller, 'storageStatusCache');
+        $cachedAt = new \ReflectionProperty($this->controller, 'storageStatusCachedAt');
+        $probeCount = new \ReflectionProperty(
+            $this->controller,
+            'storagePersistenceProbeCount',
+        );
+        $snapshotScanCount = new \ReflectionProperty(
+            $this->controller,
+            'snapshotStorageScanCount',
+        );
+        $statusMethod = new \ReflectionMethod($this->controller, 'status');
+        $storageMethod = new \ReflectionMethod($this->controller, 'storageStatus');
+        $stateDirectory = $this->home . DIRECTORY_SEPARATOR . 'state';
+        $stateFile = $stateDirectory . DIRECTORY_SEPARATOR . 'gateway-state.json';
+        $journalFile = $stateDirectory . DIRECTORY_SEPARATOR . 'journal.jsonl';
+
+        $cache->setValue($this->controller, null);
+        $cachedAt->setValue($this->controller, 0.0);
+        $beforeProbeCount = $probeCount->getValue($this->controller);
+        $beforeSnapshotScanCount = $snapshotScanCount->getValue($this->controller);
+        $beforeEntries = \scandir($stateDirectory);
+        self::assertIsArray($beforeEntries);
+        $beforeStateDigest = \hash_file('sha256', $stateFile);
+        $beforeJournalDigest = \hash_file('sha256', $journalFile);
+
+        $cold = $statusMethod->invoke($this->controller, false);
+
+        self::assertSame($beforeProbeCount, $probeCount->getValue($this->controller));
+        self::assertSame(
+            $beforeSnapshotScanCount,
+            $snapshotScanCount->getValue($this->controller),
+            'A cold read-only status must not walk the certificate snapshot tree.',
+        );
+        self::assertSame('UNKNOWN', $cold['storage']['persistence_probe_state']);
+        self::assertFalse($cold['storage']['persistence_probe_fresh']);
+        self::assertNull($cold['storage']['persistence_writable']);
+        self::assertFalse($cold['storage']['mutation_ready']);
+        self::assertSame($beforeEntries, \scandir($stateDirectory));
+        self::assertSame($beforeStateDigest, \hash_file('sha256', $stateFile));
+        self::assertSame($beforeJournalDigest, \hash_file('sha256', $journalFile));
+
+        $active = $storageMethod->invoke($this->controller, true, true);
+        self::assertGreaterThan(
+            $beforeProbeCount,
+            $probeCount->getValue($this->controller),
+            'Maintenance/mutation refresh owns the persistence write probe.',
+        );
+        self::assertTrue($active['persistence_probe_fresh']);
+        self::assertGreaterThan(
+            $beforeSnapshotScanCount,
+            $snapshotScanCount->getValue($this->controller),
+            'Only an active maintenance/mutation refresh owns snapshot quota scans.',
+        );
+        $afterActiveProbeCount = $probeCount->getValue($this->controller);
+        $afterActiveSnapshotScanCount = $snapshotScanCount->getValue($this->controller);
+        $cached = $statusMethod->invoke($this->controller, false);
+        self::assertSame(
+            $afterActiveProbeCount,
+            $probeCount->getValue($this->controller),
+        );
+        self::assertTrue($cached['storage']['persistence_probe_fresh']);
+        self::assertSame('CACHED_FRESH', $cached['storage']['storage_metrics_state']);
+        self::assertSame(
+            $afterActiveSnapshotScanCount,
+            $snapshotScanCount->getValue($this->controller),
+        );
+
+        $cache->setValue($this->controller, null);
+        $cachedAt->setValue($this->controller, 0.0);
+        (new \ReflectionProperty($this->controller, 'probeCriticalSectionDepth'))
+            ->setValue($this->controller, 1);
+        $nested = $statusMethod->invoke($this->controller, false);
+        self::assertSame(
+            $afterActiveProbeCount,
+            $probeCount->getValue($this->controller),
+        );
+        self::assertSame('UNKNOWN', $nested['storage']['storage_metrics_state']);
+        self::assertFalse($nested['storage']['mutation_ready']);
+        self::assertSame(
+            $afterActiveSnapshotScanCount,
+            $snapshotScanCount->getValue($this->controller),
+        );
+        $forcedRefresh = $storageMethod->invoke($this->controller, true, true);
+        self::assertSame(
+            $afterActiveProbeCount,
+            $probeCount->getValue($this->controller),
+            'Probe critical sections must suppress even an explicit write-probe refresh.',
+        );
+        self::assertFalse($forcedRefresh['mutation_ready']);
+        try {
+            (new \ReflectionMethod(
+                $this->controller,
+                'assertPersistentMutationPreconditions',
+            ))->invoke($this->controller, 'nested-status-regression');
+            self::fail('A mutation used an unknown nested storage observation.');
+        } catch (\DomainException $exception) {
+            self::assertStringContainsString(
+                'persistence proof is not fresh',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFalse(
+            (new \ReflectionProperty($this->controller, 'readOnlyRecoveryMode'))
+                ->getValue($this->controller),
+            'An unknown read-only observation must fail closed without inventing disk pressure.',
+        );
+        self::assertFileDoesNotExist(
+            $stateDirectory . DIRECTORY_SEPARATOR . 'disk-pressure.marker',
+        );
+    }
+
+    public function testReadOnlyDispatchHasAHardControllerPersistenceFence(): void
+    {
+        $dispatch = new \ReflectionMethod($this->controller, 'dispatch');
+        $persistState = new \ReflectionMethod($this->controller, 'persistState');
+        $sequence = new \ReflectionProperty(
+            $this->controller,
+            'statePersistenceSequence',
+        );
+        $readOnlyDepth = new \ReflectionProperty(
+            $this->controller,
+            'readOnlyRequestDepth',
+        );
+        $stateFile = $this->home . DIRECTORY_SEPARATOR . 'state/gateway-state.json';
+        $journalFile = $this->home . DIRECTORY_SEPARATOR . 'state/journal.jsonl';
+        $beforeSequence = $sequence->getValue($this->controller);
+        $beforeStateDigest = \hash_file('sha256', $stateFile);
+        $beforeJournalDigest = \hash_file('sha256', $journalFile);
+
+        $status = $dispatch->invoke($this->controller, 'status', []);
+        $doctor = $dispatch->invoke($this->controller, 'doctor', []);
+
+        self::assertArrayHasKey('data_plane', $status);
+        self::assertArrayHasKey('binary', $doctor);
+        self::assertSame(0, $readOnlyDepth->getValue($this->controller));
+        self::assertSame($beforeSequence, $sequence->getValue($this->controller));
+        self::assertSame($beforeStateDigest, \hash_file('sha256', $stateFile));
+        self::assertSame($beforeJournalDigest, \hash_file('sha256', $journalFile));
+
+        $readOnlyDepth->setValue($this->controller, 1);
+        try {
+            $persistState->invoke($this->controller);
+            self::fail('A read-only request was allowed to persist Controller state.');
+        } catch (\LogicException $exception) {
+            self::assertSame(
+                'Read-only gateway operations must not persist Controller state.',
+                $exception->getMessage(),
+            );
+        } finally {
+            $readOnlyDepth->setValue($this->controller, 0);
+        }
+    }
+
+    public function testFinalAdminStopIntentFencesRecoveryWhenDataPlaneStopThrows(): void
+    {
+        $failure = \getenv('WLS_GATEWAY_TEST_STOP_DATA_PLANE_FAILURE');
+        try {
+            \putenv('WLS_GATEWAY_TEST_STOP_DATA_PLANE_FAILURE=throw');
+            $result = (new \ReflectionMethod($this->controller, 'stopGateway'))
+                ->invoke($this->controller, [
+                    'confirm' => true,
+                    'force' => true,
+                ]);
+
+            self::assertTrue($result['accepted']);
+            self::assertFalse($result['data_plane_stopped']);
+            self::assertTrue($result['manual_cleanup_required']);
+            self::assertSame(
+                'Stop intent accepted; manual data-plane cleanup required.',
+                $result['message'],
+            );
+            self::assertFileExists(
+                $this->home . DIRECTORY_SEPARATOR . 'trust'
+                    . DIRECTORY_SEPARATOR . 'admin-stopped.intent',
+            );
+            self::assertFalse(
+                (new \ReflectionProperty($this->controller, 'running'))
+                    ->getValue($this->controller),
+            );
+            self::assertTrue(
+                (new \ReflectionProperty($this->controller, 'adminStopFenceActive'))
+                    ->getValue($this->controller),
+            );
+            $stateProperty = new \ReflectionProperty($this->controller, 'state');
+            $state = $stateProperty->getValue($this->controller);
+            self::assertSame('ADMIN_STOPPING', $state['health_state']);
+            self::assertSame(
+                'ADMIN_STOP_CLEANUP_REQUIRED',
+                $state['recovery']['stage'],
+            );
+            self::assertStringContainsString(
+                'Injected data-plane stop failure',
+                $state['recovery']['last_failure'],
+            );
+            $stateFile = $this->home . DIRECTORY_SEPARATOR
+                . 'state/gateway-state.json';
+            $before = \hash_file('sha256', $stateFile);
+
+            // run() performs one final maintenance tail after serving the stop
+            // response. It and every direct recovery/start path must be inert.
+            (new \ReflectionMethod($this->controller, 'maintenance'))
+                ->invoke($this->controller);
+            (new \ReflectionMethod($this->controller, 'recoverDataPlane'))
+                ->invoke($this->controller);
+            (new \ReflectionMethod($this->controller, 'restartDataPlane'))
+                ->invoke($this->controller, 'stop-fence-regression');
+            $start = (new \ReflectionMethod($this->controller, 'startDataPlane'))
+                ->invoke($this->controller);
+            $reload = (new \ReflectionMethod($this->controller, 'reloadDataPlane'))
+                ->invoke($this->controller);
+            (new \ReflectionMethod($this->controller, 'requestServiceTreeRestart'))
+                ->invoke($this->controller, 'must remain administratively stopped');
+
+            self::assertSame('ADMIN_STOPPING', $start['state']);
+            self::assertFalse($reload['ok']);
+            self::assertFalse(
+                (new \ReflectionProperty(
+                    $this->controller,
+                    'serviceTreeRestartRequested',
+                ))->getValue($this->controller),
+            );
+            self::assertSame($before, \hash_file('sha256', $stateFile));
+            $after = $stateProperty->getValue($this->controller);
+            self::assertSame('ADMIN_STOPPING', $after['health_state']);
+            self::assertSame(
+                'ADMIN_STOP_CLEANUP_REQUIRED',
+                $after['recovery']['stage'],
+            );
+        } finally {
+            $failure === false
+                ? \putenv('WLS_GATEWAY_TEST_STOP_DATA_PLANE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_STOP_DATA_PLANE_FAILURE=' . $failure);
+        }
     }
 
     public function testControllerResponseSanitizesNestedSecretsBeforeSigning(): void
@@ -3523,19 +6122,7 @@ final class GatewayProtocolSecurityTest extends TestCase
                 $launchId,
                 \str_repeat('a', 64),
             ),
-            'certificate' => [
-                'state' => 'pending',
-                'pending' => true,
-                'valid' => false,
-                'generation' => 0,
-                'source_digest' => \hash(
-                    'sha256',
-                    "wls-pending-certificate\0" . $domain,
-                ),
-                'snapshot_digest' => '',
-                'cert_path' => '',
-                'key_path' => '',
-            ],
+            'certificate' => $this->pendingCertificateEnvelope($domain),
         ];
         $candidateRoute = (new \ReflectionMethod($this->controller, 'validateRoute'))
             ->invoke(
@@ -4297,6 +6884,203 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
+    public function testH3UnknownSniUsesTheNeutralDefaultQuicServer(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174034';
+        $domain = 'h3-neutral.example.test';
+        $project = $this->createProject();
+        $source = $this->createCertificate($project, $domain, 'h3-neutral');
+        $sourceDigest = \hash(
+            'sha256',
+            \hash_file('sha256', $source['cert'])
+                . ':' . \hash_file('sha256', $source['key']) . ':',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $runtimeGeneration = (new \ReflectionMethod(
+            $this->controller,
+            'activeRuntimeGeneration',
+        ))->invoke($this->controller);
+        self::assertNotSame('', $runtimeGeneration);
+        $state['isolation_mode'] = false;
+        $state['security_ledger_valid'] = true;
+        $state['h3_capable'] = true;
+        $state['h3_capability_runtime_generation'] = $runtimeGeneration;
+        $state['h3_quarantined_runtime_generation'] = '';
+        $state['enrollments'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'security_generation' => 71,
+            'certificate_roots' => [
+                'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+            ],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        $certificate = (new \ReflectionMethod($this->controller, 'snapshotCertificate'))
+            ->invoke(
+                $this->controller,
+                $projectUuid,
+                $project,
+                $domain,
+                $this->activeCertificateEnvelope($domain, $sourceDigest, [
+                    'cert' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'h3-neutral/fullchain.pem',
+                    ],
+                    'key' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'h3-neutral/privkey.pem',
+                    ],
+                    'generation' => 1,
+                ]),
+            );
+        $routeId = $this->canonicalRouteId($projectUuid, $domain);
+        $backendIdentity = $this->signedBackendIdentity(
+            $projectUuid,
+            'h3-neutral',
+            1,
+            1,
+            \str_repeat('a', 32),
+            \str_repeat('b', 64),
+        );
+        $state = $stateProperty->getValue($this->controller);
+        $state['routes'][$routeId] = [
+            'route_id' => $routeId,
+            'project_uuid' => $projectUuid,
+            'project_root' => $project,
+            'enrollment_security_generation' => 71,
+            'domain_security_generation' => 0,
+            'route_generation' => 1,
+            'instance_id' => 'h3-neutral',
+            'preferred_instance_id' => 'h3-neutral',
+            'distribution_mode' => 'single',
+            'domain' => $domain,
+            'status' => 'ACTIVE',
+            'backends' => [[
+                'host' => '127.0.0.1',
+                'port' => 29540,
+                'weight' => 1,
+            ]],
+            'backend_identity' => $backendIdentity,
+            'certificate' => $certificate,
+            'force_https' => true,
+            'force_root_to_www' => false,
+        ];
+        $this->installCertificateFloor(
+            $state,
+            $projectUuid,
+            $domain,
+            $certificate,
+        );
+        $stateProperty->setValue($this->controller, $state);
+
+        $config = (new \ReflectionMethod($this->controller, 'renderNginxConfig'))
+            ->invoke($this->controller, true);
+        $httpsPort = (int)$state['public_https'];
+        self::assertStringContainsString(
+            'listen 0.0.0.0:' . $httpsPort
+                . ' quic reuseport default_server;',
+            $config,
+        );
+        self::assertMatchesRegularExpression(
+            '/server \{[\s\S]*?listen 0\.0\.0\.0:' . $httpsPort
+                . ' quic reuseport default_server;[\s\S]*?'
+                . 'ssl_certificate [^;]*neutral-cert\.pem"?;[\s\S]*?'
+                . 'server_name _;[\s\S]*?return 421;[\s\S]*?\}/',
+            $config,
+        );
+        self::assertStringNotContainsString(
+            "quic reuseport;\n",
+            $config,
+        );
+        self::assertSame(
+            1,
+            \substr_count(
+                $config,
+                'listen 0.0.0.0:' . $httpsPort
+                    . ' quic reuseport default_server;',
+            ),
+        );
+        self::assertSame(
+            1,
+            \substr_count(
+                $config,
+                'listen 0.0.0.0:' . $httpsPort . ' quic;',
+            ),
+        );
+        $tenantServerName = 'server_name ' . $domain . ';';
+        $tenantServerNameOffset = \strrpos($config, $tenantServerName);
+        self::assertIsInt($tenantServerNameOffset);
+        $tenantPrefix = \substr($config, 0, $tenantServerNameOffset);
+        $tenantStart = \strrpos($tenantPrefix, '  server {');
+        self::assertIsInt($tenantStart);
+        $tenantEnd = \strpos($config, "\n  }", $tenantServerNameOffset);
+        self::assertIsInt($tenantEnd);
+        $tenantServer = \substr(
+            $config,
+            $tenantStart,
+            $tenantEnd + 4 - $tenantStart,
+        );
+        self::assertStringContainsString(
+            'listen 0.0.0.0:' . $httpsPort . ' quic;',
+            $tenantServer,
+        );
+        self::assertStringNotContainsString('reuseport', $tenantServer);
+        self::assertStringNotContainsString('default_server', $tenantServer);
+        self::assertTrue($stateProperty->getValue($this->controller)['h3_enabled']);
+
+        $repositoryRoot = \dirname(__DIR__, 9);
+        $nginx = \trim((string)\getenv('WLS_TEST_NGINX_BINARY'));
+        if ($nginx === '') {
+            $nginx = $repositoryRoot . DIRECTORY_SEPARATOR
+                . 'var/server/nginx-build/nginx-1.30.4/objs/nginx';
+        }
+        if (\is_file($nginx) && \is_executable($nginx)) {
+            $configPath = $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/conf/h3-neutral-nginx.conf';
+            self::assertNotFalse(\file_put_contents($configPath, $config));
+            $nginxPrefix = $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/nginx-test-prefix';
+            self::assertTrue(\mkdir(
+                $nginxPrefix . DIRECTORY_SEPARATOR . 'logs',
+                0700,
+                true,
+            ));
+            $process = \proc_open(
+                [
+                    $nginx,
+                    '-p',
+                    $nginxPrefix . DIRECTORY_SEPARATOR,
+                    '-t',
+                    '-c',
+                    $configPath,
+                ],
+                [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ],
+                $pipes,
+                $repositoryRoot,
+            );
+            self::assertIsResource($process);
+            self::assertIsArray($pipes);
+            \fclose($pipes[0]);
+            $stdout = (string)\stream_get_contents($pipes[1]);
+            $stderr = (string)\stream_get_contents($pipes[2]);
+            \fclose($pipes[1]);
+            \fclose($pipes[2]);
+            self::assertSame(
+                0,
+                \proc_close($process),
+                $stdout . $stderr,
+            );
+            self::assertStringContainsString(
+                'test is successful',
+                $stdout . $stderr,
+            );
+        }
+    }
+
     public function testPublicRouteProbeProofNeverRefreshesTenantLeases(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174035';
@@ -4385,7 +7169,1798 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertFalse($probeResults[\str_repeat('7', 32)]['success']);
     }
 
-    public function testRollbackIntentRejectsHmacValidNonCanonicalObservationDeadline(): void
+    public function testTimedOutPublicRouteProbeAdvancesWithoutStarvingLaterTenant(): void
+    {
+        $project = $this->createProject();
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174036';
+        $domain = 'slow-probe.example.test';
+        $source = $this->createCertificate($project, $domain, 'slow-probe');
+        $sourceDigest = \hash(
+            'sha256',
+            \hash_file('sha256', $source['cert'])
+                . ':' . \hash_file('sha256', $source['key']) . ':',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['enrollments'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'security_generation' => 61,
+            'certificate_roots' => [
+                'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+            ],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        $certificate = (new \ReflectionMethod($this->controller, 'snapshotCertificate'))
+            ->invoke(
+                $this->controller,
+                $projectUuid,
+                $project,
+                $domain,
+                $this->activeCertificateEnvelope($domain, $sourceDigest, [
+                    'cert' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'slow-probe/fullchain.pem',
+                    ],
+                    'key' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'slow-probe/privkey.pem',
+                    ],
+                    'generation' => 1,
+                ]),
+            );
+
+        $server = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($server, $error);
+        $endpoint = (string)\stream_socket_get_name($server, false);
+        self::assertMatchesRegularExpression('/:[0-9]+\z/D', $endpoint);
+        $port = (int)\substr($endpoint, (int)\strrpos($endpoint, ':') + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+        $backend = ['host' => '127.0.0.1', 'port' => 29536, 'weight' => 1];
+        $identity = ['generation' => 1];
+        $route = [
+            'project_uuid' => $projectUuid,
+            'domain' => $domain,
+            'enrollment_security_generation' => 61,
+            'domain_security_generation' => 0,
+            'status' => 'ACTIVE',
+            'route_generation' => 1,
+            'certificate' => $certificate,
+            'instance_id' => 'slow-probe',
+            'backends' => [$backend],
+            'backend_identity' => $identity,
+            'backend_instances' => [
+                'slow-probe' => [
+                    'instance_id' => 'slow-probe',
+                    'backends' => [$backend],
+                    'backend_identity' => $identity,
+                ],
+            ],
+        ];
+        $firstRouteId = \str_repeat('1', 32);
+        $secondRouteId = \str_repeat('2', 32);
+        $firstRoute = ['route_id' => $firstRouteId] + $route;
+        $secondRoute = ['route_id' => $secondRouteId] + $route;
+        $state = $stateProperty->getValue($this->controller);
+        $state['isolation_mode'] = false;
+        $state['active_config_generation'] = 0;
+        $state['active_routes'] = [];
+        $state['public_https'] = $port;
+        $state['routes'] = [
+            $firstRouteId => $firstRoute,
+            $secondRouteId => $secondRoute,
+        ];
+        $this->installCertificateFloor(
+            $state,
+            $projectUuid,
+            $domain,
+            $certificate,
+        );
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionProperty($this->controller, 'publicRouteProbeCursor'))
+            ->setValue($this->controller, 0);
+        (new \ReflectionProperty($this->controller, 'publicRouteProbeResults'))
+            ->setValue($this->controller, []);
+        (new \ReflectionProperty($this->controller, 'publicRouteProbeSetDigest'))
+            ->setValue($this->controller, '');
+        $probe = new \ReflectionMethod($this->controller, 'publicRoutesReachable');
+
+        try {
+            self::assertFalse($probe->invoke(
+                $this->controller,
+                false,
+                \hrtime(true) / 1_000_000_000 - 1.0,
+                null,
+            ));
+            self::assertSame(
+                'deferred',
+                (new \ReflectionProperty($this->controller, 'lastPublicProbeFailureKind'))
+                    ->getValue($this->controller),
+            );
+            self::assertSame(
+                0,
+                (new \ReflectionProperty($this->controller, 'publicRouteProbeCursor'))
+                    ->getValue($this->controller),
+                'A route whose external probe never began must retain its cursor.',
+            );
+
+            self::assertFalse($probe->invoke(
+                $this->controller,
+                false,
+                \hrtime(true) / 1_000_000_000 + 2.0,
+                null,
+            ));
+            self::assertSame(
+                2,
+                (new \ReflectionProperty($this->controller, 'publicRouteProbeCursor'))
+                    ->getValue($this->controller),
+                'The bounded TLS batch must advance every attempted tenant.',
+            );
+            $results = (new \ReflectionProperty(
+                $this->controller,
+                'publicRouteProbeResults',
+            ))->getValue($this->controller);
+            self::assertArrayHasKey($firstRouteId, $results);
+            self::assertFalse($results[$firstRouteId]['success']);
+            self::assertArrayHasKey($secondRouteId, $results);
+            self::assertFalse($results[$secondRouteId]['success']);
+        } finally {
+            \fclose($server);
+        }
+    }
+
+    public function testPublicRouteProbeCovers2048MixedTlsAndHttpTargetsWithinMinute(): void
+    {
+        $project = $this->createProject();
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174039';
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['enrollments'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'security_generation' => 71,
+            'certificate_roots' => [
+                'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+            ],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        $snapshot = new \ReflectionMethod(
+            $this->controller,
+            'snapshotCertificate',
+        );
+        $sharedKey = \openssl_pkey_new([
+            'private_key_type' => OPENSSL_KEYTYPE_EC,
+            'curve_name' => 'prime256v1',
+        ]);
+        self::assertInstanceOf(\OpenSSLAsymmetricKey::class, $sharedKey);
+        $certificates = [];
+        for ($group = 0; $group < 256; ++$group) {
+            $wildcard = '*.group-' . $group . '.capacity-public.example.test';
+            $source = $this->createCertificateWithPrivateKey(
+                $project,
+                $wildcard,
+                'capacity-public-' . $group,
+                $sharedKey,
+            );
+            $sourceDigest = \hash(
+                'sha256',
+                \hash_file('sha256', $source['cert'])
+                    . ':' . \hash_file('sha256', $source['key']) . ':',
+            );
+            $certificates[$group] = $snapshot->invoke(
+                $this->controller,
+                $projectUuid,
+                $project,
+                $wildcard,
+                $this->activeCertificateEnvelope($wildcard, $sourceDigest, [
+                    'cert' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'capacity-public-' . $group
+                            . '/fullchain.pem',
+                    ],
+                    'key' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'capacity-public-' . $group
+                            . '/privkey.pem',
+                    ],
+                    'generation' => 1,
+                ]),
+            );
+            self::assertSame(
+                2,
+                $certificates[$group]['snapshot_manifest_schema'],
+            );
+        }
+        self::assertCount(
+            256,
+            \array_unique(\array_column($certificates, 'snapshot_digest')),
+            'Capacity coverage must use many independent real certificate snapshots.',
+        );
+        $slowTls = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($slowTls, $error);
+        $slowEndpoint = (string)\stream_socket_get_name($slowTls, false);
+        $slowPort = (int)\substr(
+            $slowEndpoint,
+            (int)\strrpos($slowEndpoint, ':') + 1,
+        );
+        self::assertGreaterThanOrEqual(9502, $slowPort);
+        $refusedHttp = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $refusedErrno,
+            $refusedError,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($refusedHttp, $refusedError);
+        $refusedEndpoint = (string)\stream_socket_get_name($refusedHttp, false);
+        $refusedPort = (int)\substr(
+            $refusedEndpoint,
+            (int)\strrpos($refusedEndpoint, ':') + 1,
+        );
+        self::assertGreaterThanOrEqual(9502, $refusedPort);
+        \fclose($refusedHttp);
+
+        $previousProductionLimit = \getenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT');
+        $previousTestLimit = \getenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT');
+        $previousHighestOpenFd = \getenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD');
+        \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT');
+        \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT');
+        \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=899');
+        $backend = ['host' => '127.0.0.1', 'port' => 29600, 'weight' => 1];
+        $identity = [
+            'generation' => 1,
+            'master_epoch' => 1,
+            'launch_id' => \str_repeat('a', 32),
+        ];
+        $routes = [];
+        for ($index = 0; $index < 2048; ++$index) {
+            $certificateGroup = \intdiv($index, 2) % 256;
+            $domain = 'route-' . $index . '.group-' . $certificateGroup
+                . '.capacity-public.example.test';
+            $routeId = \substr(\hash('sha256', 'public-route-' . $index), 0, 32);
+            $instanceId = 'public-capacity-' . $index;
+            $routeCertificate = $this->activeCertificateEnvelope(
+                $domain,
+                (string)$certificates[$certificateGroup]['source_digest'],
+                $certificates[$certificateGroup],
+            );
+            $status = 'ACTIVE';
+            $forceHttps = true;
+            if ($index % 2 === 1) {
+                $status = 'PENDING_CERTIFICATE';
+                $forceHttps = false;
+                $routeCertificate = $this->disabledCertificateEnvelope($domain);
+            }
+            $routes[$routeId] = [
+                'route_id' => $routeId,
+                'project_uuid' => $projectUuid,
+                'domain' => $domain,
+                'enrollment_security_generation' => 71,
+                'domain_security_generation' => 0,
+                'status' => $status,
+                'force_https' => $forceHttps,
+                'route_generation' => 1,
+                'certificate' => $routeCertificate,
+                'instance_id' => $instanceId,
+                'backends' => [$backend],
+                'backend_identity' => $identity,
+                'backend_instances' => [
+                    $instanceId => [
+                        'instance_id' => $instanceId,
+                        'backends' => [$backend],
+                        'backend_identity' => $identity,
+                    ],
+                ],
+            ];
+        }
+        $state = $stateProperty->getValue($this->controller);
+        $state['isolation_mode'] = false;
+        $state['active_config_generation'] = 0;
+        $state['active_routes'] = [];
+        $state['public_http'] = $refusedPort;
+        $state['public_https'] = $slowPort;
+        $state['routes'] = $routes;
+        foreach ($routes as $route) {
+            $this->installCertificateFloor(
+                $state,
+                $projectUuid,
+                (string)$route['domain'],
+                (array)$route['certificate'],
+            );
+        }
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionProperty($this->controller, 'publicRouteProbeCursor'))
+            ->setValue($this->controller, 0);
+        (new \ReflectionProperty($this->controller, 'publicRouteProbeResults'))
+            ->setValue($this->controller, []);
+        (new \ReflectionProperty($this->controller, 'publicRouteProbeSetDigest'))
+            ->setValue($this->controller, '');
+        (new \ReflectionProperty(
+            $this->controller,
+            'publicCertificateSnapshotParseCount',
+        ))->setValue($this->controller, 0);
+        $probe = new \ReflectionMethod($this->controller, 'publicRoutesReachable');
+
+        try {
+            $started = \hrtime(true);
+            $calls = 0;
+            do {
+                $probe->invoke(
+                    $this->controller,
+                    false,
+                    \hrtime(true) / 1_000_000_000 + 4.0,
+                    null,
+                );
+                ++$calls;
+                $results = (new \ReflectionProperty(
+                    $this->controller,
+                    'publicRouteProbeResults',
+                ))->getValue($this->controller);
+            } while (\count($results) < 2048 && $calls < 14);
+            $elapsed = (\hrtime(true) - $started) / 1_000_000_000;
+            self::assertCount(2048, $results);
+            self::assertLessThan(60.0, $elapsed);
+            self::assertLessThanOrEqual(12, $calls);
+            self::assertLessThanOrEqual(
+                60.0,
+                ($calls - 1) * 5.0 + 4.0,
+                'The low-FD sweep must close within the real five-second maintenance cadence.',
+            );
+            $peak = (new \ReflectionProperty(
+                $this->controller,
+                'lastConcurrentProbePeak',
+            ))->getValue($this->controller);
+            self::assertGreaterThan(1, $peak);
+            self::assertLessThanOrEqual(60, $peak);
+            $failed = \array_filter(
+                $results,
+                static fn (array $result): bool => !$result['success'],
+            );
+            self::assertCount(2048, $failed);
+            self::assertSame(
+                0,
+                (new \ReflectionProperty(
+                    $this->controller,
+                    'publicCertificateSnapshotParseCount',
+                ))->getValue($this->controller),
+                'Hot route probes must consume publication-bound certificate facts without reparsing snapshot files.',
+            );
+        } finally {
+            \fclose($slowTls);
+            $previousProductionLimit === false
+                ? \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT')
+                : \putenv(
+                    'WLS_GATEWAY_PROBE_MAX_IN_FLIGHT=' . $previousProductionLimit,
+                );
+            $previousTestLimit === false
+                ? \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT=' . $previousTestLimit,
+                );
+            $previousHighestOpenFd === false
+                ? \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=' . $previousHighestOpenFd,
+                );
+        }
+    }
+
+    public function testConcurrentPublicTlsProbeKeepsCertificateHostAndNonceProof(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('The concurrent TLS probe test requires pcntl.');
+        }
+        $project = $this->createProject();
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174040';
+        $wildcard = '*.concurrent-public.example.test';
+        $source = $this->createCertificate(
+            $project,
+            $wildcard,
+            'concurrent-public',
+        );
+        $sourceDigest = \hash(
+            'sha256',
+            \hash_file('sha256', $source['cert'])
+                . ':' . \hash_file('sha256', $source['key']) . ':',
+        );
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['enrollments'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'security_generation' => 72,
+            'certificate_roots' => [
+                'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+            ],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        $certificate = (new \ReflectionMethod(
+            $this->controller,
+            'snapshotCertificate',
+        ))->invoke(
+            $this->controller,
+            $projectUuid,
+            $project,
+            $wildcard,
+            $this->activeCertificateEnvelope($wildcard, $sourceDigest, [
+                'cert' => [
+                    'root_alias' => 'project_ssl',
+                    'relative_path' => 'concurrent-public/fullchain.pem',
+                ],
+                'key' => [
+                    'root_alias' => 'project_ssl',
+                    'relative_path' => 'concurrent-public/privkey.pem',
+                ],
+                'generation' => 1,
+            ]),
+        );
+        $context = \stream_context_create([
+            'ssl' => [
+                'local_cert' => $source['cert'],
+                'local_pk' => $source['key'],
+                'verify_peer' => false,
+                'allow_self_signed' => true,
+                'disable_compression' => true,
+                'crypto_method' => \STREAM_CRYPTO_METHOD_TLSv1_3_SERVER,
+            ],
+        ]);
+        $server = \stream_socket_server(
+            'tls://127.0.0.1:0',
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context,
+        );
+        self::assertIsResource($server, $error);
+        $endpoint = (string)\stream_socket_get_name($server, false);
+        $port = (int)\substr($endpoint, (int)\strrpos($endpoint, ':') + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+
+        $domains = [
+            'one.concurrent-public.example.test' => 'public-one',
+            'two.concurrent-public.example.test' => 'public-two',
+        ];
+        $launchId = \str_repeat('b', 32);
+        $pid = \pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            $remainingDomains = $domains;
+            for ($accepted = 0; $accepted < 2; ++$accepted) {
+                $client = @\stream_socket_accept($server, 3.0);
+                if (!\is_resource($client)) {
+                    exit(70);
+                }
+                \stream_set_timeout($client, 2);
+                $request = '';
+                while (!\str_contains($request, "\r\n\r\n")) {
+                    $chunk = @\fread($client, 8192);
+                    if (!\is_string($chunk) || $chunk === '') {
+                        @\fclose($client);
+                        exit(71);
+                    }
+                    $request .= $chunk;
+                    if (\strlen($request) > 65536) {
+                        @\fclose($client);
+                        exit(72);
+                    }
+                }
+                if (\preg_match(
+                    '/\AGET \/__wls_gateway_sentinel\?nonce=([a-f0-9]{32}) HTTP\/1\.1\r\n/D',
+                    $request,
+                    $nonceMatch,
+                ) !== 1
+                    || \preg_match(
+                        '/\r\nHost: ([a-z0-9.-]+)\r\n/D',
+                        $request,
+                        $hostMatch,
+                    ) !== 1
+                ) {
+                    @\fclose($client);
+                    exit(73);
+                }
+                $nonce = (string)$nonceMatch[1];
+                $domain = (string)$hostMatch[1];
+                $instanceId = $remainingDomains[$domain] ?? null;
+                if (!\is_string($instanceId)) {
+                    @\fclose($client);
+                    exit(74);
+                }
+                unset($remainingDomains[$domain]);
+                $body = \json_encode([
+                    'instance' => $instanceId,
+                    'launch_id' => $launchId,
+                    'master_epoch' => 1,
+                    'nonce' => $nonce,
+                    'status' => 'healthy',
+                ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                $response = "HTTP/1.1 200 OK\r\n"
+                    . 'Content-Length: ' . \strlen($body) . "\r\n"
+                    . "Connection: close\r\n"
+                    . "X-WLS-Project-UUID: {$projectUuid}\r\n"
+                    . "X-WLS-Instance-ID: {$instanceId}\r\n"
+                    . "X-WLS-Backend-Generation: 1\r\n"
+                    . "X-WLS-Probe-Nonce: {$nonce}\r\n\r\n"
+                    . $body;
+                @\fwrite($client, $response);
+                @\fclose($client);
+            }
+            @\fclose($server);
+            exit(0);
+        }
+
+        $backend = ['host' => '127.0.0.1', 'port' => 29601, 'weight' => 1];
+        $jobs = [];
+        $expectationMethod = new \ReflectionMethod(
+            $this->controller,
+            'publicRouteProbeExpectation',
+        );
+        $state = $stateProperty->getValue($this->controller);
+        $state['public_https'] = $port;
+        $stateProperty->setValue($this->controller, $state);
+        foreach ($domains as $domain => $instanceId) {
+            $routeId = \substr(\hash('sha256', $domain), 0, 32);
+            $routeCertificate = $this->activeCertificateEnvelope(
+                $domain,
+                (string)$certificate['source_digest'],
+                $certificate,
+            );
+            $identity = [
+                'generation' => 1,
+                'master_epoch' => 1,
+                'launch_id' => $launchId,
+            ];
+            $route = [
+                'route_id' => $routeId,
+                'project_uuid' => $projectUuid,
+                'domain' => $domain,
+                'status' => 'ACTIVE',
+                'certificate' => $routeCertificate,
+                'instance_id' => $instanceId,
+                'backends' => [$backend],
+                'backend_identity' => $identity,
+                'backend_instances' => [
+                    $instanceId => [
+                        'instance_id' => $instanceId,
+                        'backends' => [$backend],
+                        'backend_identity' => $identity,
+                    ],
+                ],
+            ];
+            $expectation = $expectationMethod->invoke(
+                $this->controller,
+                $route,
+                false,
+            );
+            self::assertIsArray($expectation);
+            $jobs[] = [
+                'route' => $route,
+                'kind' => 'https',
+                'expectation' => $expectation,
+            ];
+        }
+        try {
+            $results = (new \ReflectionMethod(
+                $this->controller,
+                'probePublicRouteBatchConcurrent',
+            ))->invoke(
+                $this->controller,
+                $jobs,
+                false,
+                \hrtime(true) / 1_000_000_000 + 3.0,
+            );
+            \pcntl_waitpid($pid, $status);
+            self::assertTrue(\pcntl_wifexited($status));
+            self::assertSame(0, \pcntl_wexitstatus($status));
+            self::assertCount(2, $results);
+            foreach ($results as $result) {
+                self::assertTrue($result['success']);
+                self::assertSame('', $result['failure_kind']);
+            }
+            self::assertSame(
+                2,
+                (new \ReflectionProperty(
+                    $this->controller,
+                    'lastConcurrentProbePeak',
+                ))->getValue($this->controller),
+            );
+        } finally {
+            @\fclose($server);
+            if (@\posix_kill($pid, 0)) {
+                @\posix_kill($pid, SIGTERM);
+                @\pcntl_waitpid($pid, $ignored);
+            }
+        }
+    }
+
+    public function testTimedOutBackendProbeAdvancesWithoutStarvingLaterTarget(): void
+    {
+        $server = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($server, $error);
+        $endpoint = (string)\stream_socket_get_name($server, false);
+        self::assertMatchesRegularExpression('/:[0-9]+\z/D', $endpoint);
+        $port = (int)\substr($endpoint, (int)\strrpos($endpoint, ':') + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174037';
+        $launchId = \str_repeat('d', 32);
+        $edgeSecret = \str_repeat('a', 64);
+        $slowIdentity = $this->signedBackendIdentity(
+            $projectUuid,
+            'slow-backend',
+            1,
+            1,
+            $launchId,
+            $edgeSecret,
+        );
+        $slowBackend = ['host' => '127.0.0.1', 'port' => $port, 'weight' => 1];
+        $slowInstance = [
+            'instance_id' => 'slow-backend',
+            'generation' => 1,
+            'digest' => \str_repeat('b', 64),
+            'master_epoch' => 1,
+            'launch_id' => $launchId,
+            'backends' => [$slowBackend],
+            'backend_identity' => $slowIdentity,
+            'backend_healthy' => true,
+            'status' => 'ACTIVE',
+            'last_heartbeat' => \time(),
+            'last_heartbeat_monotonic' => \hrtime(true) / 1_000_000_000,
+            'lease_boot_id' => $this->hostBootId(),
+        ];
+        $invalidIdentity = $slowIdentity;
+        $invalidIdentity['instance_id'] = 'later-backend';
+        $invalidIdentity['edge_capability_secret'] = 'invalid';
+        $laterBackend = ['host' => '127.0.0.1', 'port' => 29537, 'weight' => 1];
+        $laterInstance = [
+            'instance_id' => 'later-backend',
+            'generation' => 1,
+            'digest' => \str_repeat('c', 64),
+            'master_epoch' => 1,
+            'launch_id' => $launchId,
+            'backends' => [$laterBackend],
+            'backend_identity' => $invalidIdentity,
+            'backend_healthy' => false,
+            'status' => 'ACTIVE',
+            'last_heartbeat' => \time(),
+            'last_heartbeat_monotonic' => \hrtime(true) / 1_000_000_000,
+            'lease_boot_id' => $this->hostBootId(),
+        ];
+        $pendingCertificate = [
+            'state' => 'pending',
+            'valid' => false,
+            'pending' => true,
+            'generation' => 0,
+            'source_digest' => \hash(
+                'sha256',
+                "wls-pending-certificate\0backend-probe.example.test",
+            ),
+        ];
+        $slowRouteId = \str_repeat('3', 32);
+        $laterRouteId = \str_repeat('4', 32);
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['routes'] = [
+            $slowRouteId => [
+                'route_id' => $slowRouteId,
+                'project_uuid' => $projectUuid,
+                'domain' => 'backend-probe.example.test',
+                'status' => 'PENDING_CERTIFICATE',
+                'certificate' => $pendingCertificate,
+                'instances' => ['slow-backend' => $slowInstance],
+                'preferred_instance_id' => 'slow-backend',
+                'instance_id' => 'slow-backend',
+                'backends' => [$slowBackend],
+                'backend_identity' => $slowIdentity,
+                'backend_instances' => [
+                    'slow-backend' => [
+                        'instance_id' => 'slow-backend',
+                        'backends' => [$slowBackend],
+                        'backend_identity' => $slowIdentity,
+                    ],
+                ],
+                'distribution_mode' => 'single',
+            ],
+            $laterRouteId => [
+                'route_id' => $laterRouteId,
+                'project_uuid' => $projectUuid,
+                'domain' => 'backend-probe-later.example.test',
+                'status' => 'PENDING_CERTIFICATE',
+                'certificate' => $pendingCertificate,
+                'instances' => ['later-backend' => $laterInstance],
+                'preferred_instance_id' => '',
+                'instance_id' => '',
+                'backends' => [],
+                'backend_identity' => [],
+                'backend_instances' => [],
+                'distribution_mode' => 'single',
+            ],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionProperty($this->controller, 'backendProbeCursor'))
+            ->setValue($this->controller, 0);
+        $probe = new \ReflectionMethod($this->controller, 'probeActiveBackends');
+
+        try {
+            self::assertTrue($probe->invoke($this->controller));
+            $afterSlow = $stateProperty->getValue($this->controller);
+            self::assertSame(
+                'transport',
+                $afterSlow['routes'][$slowRouteId]['instances']['slow-backend'][
+                    'last_backend_probe_failure_kind'
+                ] ?? '',
+                'An attempted listener timeout must be concrete transport evidence.',
+            );
+            self::assertSame(
+                0,
+                (new \ReflectionProperty($this->controller, 'backendProbeCursor'))
+                    ->getValue($this->controller),
+                'The bounded concurrent sweep must finish both targets.',
+            );
+            $afterLater = $stateProperty->getValue($this->controller);
+            self::assertSame(
+                'identity',
+                $afterLater['routes'][$laterRouteId]['instances']['later-backend'][
+                    'last_backend_probe_failure_kind'
+                ] ?? '',
+                'The later target must not wait behind a timed-out listener.',
+            );
+        } finally {
+            \fclose($server);
+        }
+    }
+
+    public function testBackendProbeCovers2048MixedSlowAndRefusedTargetsWithinMinute(): void
+    {
+        $slowServer = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($slowServer, $error);
+        $slowEndpoint = (string)\stream_socket_get_name($slowServer, false);
+        $slowPort = (int)\substr(
+            $slowEndpoint,
+            (int)\strrpos($slowEndpoint, ':') + 1,
+        );
+        self::assertGreaterThanOrEqual(9502, $slowPort);
+        $refusedServer = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $refusedErrno,
+            $refusedError,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($refusedServer, $refusedError);
+        $refusedEndpoint = (string)\stream_socket_get_name($refusedServer, false);
+        $refusedPort = (int)\substr(
+            $refusedEndpoint,
+            (int)\strrpos($refusedEndpoint, ':') + 1,
+        );
+        self::assertGreaterThanOrEqual(9502, $refusedPort);
+        \fclose($refusedServer);
+
+        $previousProductionLimit = \getenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT');
+        $previousTestLimit = \getenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT');
+        \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT');
+        \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT');
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174038';
+        $launchId = \str_repeat('e', 32);
+        $edgeSecret = \str_repeat('f', 64);
+        $pendingCertificate = [
+            'state' => 'pending',
+            'valid' => false,
+            'pending' => true,
+            'generation' => 0,
+            'source_digest' => '',
+        ];
+        $state = $stateProperty->getValue($this->controller);
+        $routes = [];
+        for ($index = 0; $index < 2048; ++$index) {
+            $routeId = \substr(\hash('sha256', 'capacity-route-' . $index), 0, 32);
+            $instanceId = 'capacity-' . $index;
+            $domain = 'capacity-' . $index . '.example.test';
+            $backend = [
+                'host' => '127.0.0.1',
+                'port' => $index % 2 === 0 ? $slowPort : $refusedPort,
+                'weight' => 1,
+            ];
+            $identity = $this->signedBackendIdentity(
+                $projectUuid,
+                $instanceId,
+                1,
+                1,
+                $launchId,
+                $edgeSecret,
+            );
+            $instance = [
+                'instance_id' => $instanceId,
+                'generation' => 1,
+                'digest' => \hash('sha256', 'capacity-instance-' . $index),
+                'master_epoch' => 1,
+                'launch_id' => $launchId,
+                'backends' => [$backend],
+                'backend_identity' => $identity,
+                'backend_healthy' => true,
+                'status' => 'ACTIVE',
+                'last_heartbeat' => \time(),
+                'last_heartbeat_monotonic' => \hrtime(true) / 1_000_000_000,
+                'lease_boot_id' => $this->hostBootId(),
+            ];
+            $certificate = $pendingCertificate;
+            $certificate['source_digest'] = \hash(
+                'sha256',
+                "wls-pending-certificate\0{$domain}",
+            );
+            $routes[$routeId] = [
+                'route_id' => $routeId,
+                'project_uuid' => $projectUuid,
+                'domain' => $domain,
+                'status' => 'PENDING_CERTIFICATE',
+                'certificate' => $certificate,
+                'instances' => [$instanceId => $instance],
+                'preferred_instance_id' => $instanceId,
+                'instance_id' => $instanceId,
+                'backends' => [$backend],
+                'backend_identity' => $identity,
+                'backend_instances' => [
+                    $instanceId => [
+                        'instance_id' => $instanceId,
+                        'backends' => [$backend],
+                        'backend_identity' => $identity,
+                    ],
+                ],
+                'distribution_mode' => 'single',
+            ];
+        }
+        $state['routes'] = $routes;
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionProperty($this->controller, 'backendProbeCursor'))
+            ->setValue($this->controller, 0);
+        $probe = new \ReflectionMethod($this->controller, 'probeActiveBackends');
+
+        try {
+            $started = \hrtime(true);
+            $calls = 0;
+            do {
+                $probe->invoke($this->controller);
+                ++$calls;
+                $cursor = (new \ReflectionProperty(
+                    $this->controller,
+                    'backendProbeCursor',
+                ))->getValue($this->controller);
+            } while ($cursor !== 0 && $calls < 12);
+            $elapsed = (\hrtime(true) - $started) / 1_000_000_000;
+            self::assertSame(0, $cursor, 'The complete 2048-target sweep must close.');
+            self::assertLessThan(60.0, $elapsed);
+            self::assertGreaterThanOrEqual(1, $calls);
+            self::assertLessThanOrEqual(12, $calls);
+            $peak = (new \ReflectionProperty(
+                $this->controller,
+                'lastConcurrentProbePeak',
+            ))->getValue($this->controller);
+            self::assertGreaterThan(1, $peak);
+            self::assertLessThanOrEqual(512, $peak);
+            $after = $stateProperty->getValue($this->controller);
+            $covered = 0;
+            foreach ($routes as $routeId => $route) {
+                $instanceId = (string)$route['instance_id'];
+                if ((string)(
+                    $after['routes'][$routeId]['instances'][$instanceId][
+                        'last_backend_probe_failure_kind'
+                    ] ?? ''
+                ) === 'transport') {
+                    ++$covered;
+                }
+            }
+            self::assertSame(2048, $covered);
+        } finally {
+            \fclose($slowServer);
+            $previousProductionLimit === false
+                ? \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT')
+                : \putenv(
+                    'WLS_GATEWAY_PROBE_MAX_IN_FLIGHT=' . $previousProductionLimit,
+                );
+            $previousTestLimit === false
+                ? \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT=' . $previousTestLimit,
+                );
+        }
+    }
+
+    public function testConcurrentProbeDescriptorFenceIsBoundedAndConfigurable(): void
+    {
+        $production = \getenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT');
+        $test = \getenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT');
+        $openFileLimit = \getenv('WLS_GATEWAY_TEST_OPEN_FILE_LIMIT');
+        $openFileUsage = \getenv('WLS_GATEWAY_TEST_OPEN_FILE_USAGE');
+        $highestOpenFd = \getenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD');
+        $method = new \ReflectionMethod($this->controller, 'probeMaxInFlight');
+        try {
+            \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT');
+            \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT');
+            \putenv('WLS_GATEWAY_TEST_OPEN_FILE_LIMIT');
+            \putenv('WLS_GATEWAY_TEST_OPEN_FILE_USAGE');
+            \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=2');
+            self::assertSame(512, $method->invoke($this->controller));
+
+            \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT=600');
+            self::assertSame(600, $method->invoke($this->controller));
+
+            \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT=64');
+            self::assertSame(
+                64,
+                $method->invoke($this->controller),
+                'An administrator may lower the production batch fence.',
+            );
+
+            \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT=64');
+            \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT=17');
+            self::assertSame(
+                17,
+                $method->invoke($this->controller),
+                'Embedded tests may lower the fence without weakening production capacity.',
+            );
+
+            \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT=769');
+            \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT');
+            self::assertSame(512, $method->invoke($this->controller));
+
+            \putenv('WLS_GATEWAY_TEST_OPEN_FILE_LIMIT=192');
+            \putenv('WLS_GATEWAY_TEST_OPEN_FILE_USAGE=32');
+            self::assertSame(
+                96,
+                $method->invoke($this->controller),
+                'RLIMIT minus live usage and the control/recovery reserve is authoritative.',
+            );
+
+            \putenv('WLS_GATEWAY_TEST_OPEN_FILE_LIMIT');
+            \putenv('WLS_GATEWAY_TEST_OPEN_FILE_USAGE');
+            \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=899');
+            self::assertSame(
+                60,
+                $method->invoke($this->controller),
+                'A high numeric descriptor must shrink the select-safe pool.',
+            );
+            \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=959');
+            self::assertSame(
+                0,
+                $method->invoke($this->controller),
+                'No select-safe descriptor is represented as DEFERRED capacity.',
+            );
+        } finally {
+            $production === false
+                ? \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT')
+                : \putenv('WLS_GATEWAY_PROBE_MAX_IN_FLIGHT=' . $production);
+            $test === false
+                ? \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT')
+                : \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT=' . $test);
+            $openFileLimit === false
+                ? \putenv('WLS_GATEWAY_TEST_OPEN_FILE_LIMIT')
+                : \putenv('WLS_GATEWAY_TEST_OPEN_FILE_LIMIT=' . $openFileLimit);
+            $openFileUsage === false
+                ? \putenv('WLS_GATEWAY_TEST_OPEN_FILE_USAGE')
+                : \putenv('WLS_GATEWAY_TEST_OPEN_FILE_USAGE=' . $openFileUsage);
+            $highestOpenFd === false
+                ? \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD')
+                : \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=' . $highestOpenFd);
+        }
+    }
+
+    public function testSelectDescriptorFenceDefersAndRecoversWithoutFailureEvidence(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('The descriptor recovery test requires pcntl.');
+        }
+        $server = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($server, $error);
+        $endpoint = (string)\stream_socket_get_name($server, false);
+        $port = (int)\substr($endpoint, (int)\strrpos($endpoint, ':') + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+        $identity = $this->signedBackendIdentity(
+            '123e4567-e89b-42d3-a456-426614174047',
+            'select-fence-recovery',
+            1,
+            1,
+            \str_repeat('8', 32),
+            \str_repeat('9', 64),
+        );
+        $pid = $this->forkAuthenticatedBackendProbeResponder(
+            $server,
+            $identity,
+            $port,
+            1,
+        );
+        $target = [[
+            'key' => 'select-fence-recovery',
+            'backends' => [[
+                'host' => '127.0.0.1',
+                'port' => $port,
+                'weight' => 1,
+            ]],
+            'identity' => $identity,
+        ]];
+        $highestFd = \getenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD');
+        try {
+            $probe = new \ReflectionMethod(
+                $this->controller,
+                'probeBackendTargetBatchConcurrent',
+            );
+            \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=959');
+            $deferred = $probe->invoke(
+                $this->controller,
+                $target,
+                \hrtime(true) / 1_000_000_000 + 1.0,
+            );
+            self::assertSame('DEFERRED', $deferred['select-fence-recovery']['state']);
+            self::assertSame(
+                'deferred',
+                $deferred['select-fence-recovery']['failure_kind'],
+            );
+            self::assertSame(
+                0,
+                (new \ReflectionProperty(
+                    $this->controller,
+                    'lastConcurrentProbePeak',
+                ))->getValue($this->controller),
+            );
+
+            \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=2');
+            $healthy = $probe->invoke(
+                $this->controller,
+                $target,
+                \hrtime(true) / 1_000_000_000 + 2.0,
+            );
+            self::assertSame('HEALTHY', $healthy['select-fence-recovery']['state']);
+            self::assertSame('', $healthy['select-fence-recovery']['failure_kind']);
+            \pcntl_waitpid($pid, $status);
+            self::assertTrue(\pcntl_wifexited($status));
+            self::assertSame(0, \pcntl_wexitstatus($status));
+        } finally {
+            $highestFd === false
+                ? \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD')
+                : \putenv('WLS_GATEWAY_TEST_HIGHEST_OPEN_FD=' . $highestFd);
+            @\fclose($server);
+            if (@\posix_kill($pid, 0)) {
+                @\posix_kill($pid, SIGTERM);
+                @\pcntl_waitpid($pid, $ignored);
+            }
+        }
+    }
+
+    public function testExpiredSharedProbeDeadlineDefersEveryUnstartedEndpoint(): void
+    {
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $beforeState = $stateProperty->getValue($this->controller);
+        $expiredDeadline = \hrtime(true) / 1_000_000_000 - 1.0;
+
+        $publicResults = (new \ReflectionMethod(
+            $this->controller,
+            'probePublicRouteBatchConcurrent',
+        ))->invoke(
+            $this->controller,
+            [
+                [
+                    'route' => ['route_id' => 'expired-public-a'],
+                    'kind' => 'https',
+                    'expectation' => ['domain' => 'expired-a.example.test'],
+                ],
+                [
+                    'route' => ['route_id' => 'expired-public-b'],
+                    'kind' => 'http',
+                    'expectation' => ['domain' => 'expired-b.example.test'],
+                ],
+            ],
+            false,
+            $expiredDeadline,
+        );
+        self::assertSame(
+            [
+                'success' => false,
+                'failure_kind' => 'deferred',
+            ],
+            $publicResults['expired-public-a'],
+        );
+        self::assertSame(
+            [
+                'success' => false,
+                'failure_kind' => 'deferred',
+            ],
+            $publicResults['expired-public-b'],
+        );
+
+        $backendResults = (new \ReflectionMethod(
+            $this->controller,
+            'probeBackendTargetBatchConcurrent',
+        ))->invoke(
+            $this->controller,
+            [
+                [
+                    'key' => 'expired-backend-a',
+                    'backends' => [],
+                    'identity' => [],
+                ],
+                [
+                    'key' => 'expired-backend-b',
+                    'backends' => [],
+                    'identity' => [],
+                ],
+            ],
+            $expiredDeadline,
+        );
+        self::assertSame(
+            [
+                'state' => 'DEFERRED',
+                'failure_kind' => 'deferred',
+            ],
+            $backendResults['expired-backend-a'],
+        );
+        self::assertSame(
+            [
+                'state' => 'DEFERRED',
+                'failure_kind' => 'deferred',
+            ],
+            $backendResults['expired-backend-b'],
+        );
+
+        $afterState = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            $beforeState['failure_events'] ?? [],
+            $afterState['failure_events'] ?? [],
+            'Exhausted shared capacity is not recovery failure evidence.',
+        );
+    }
+
+    public function testOverwideBackendTupleDoesNotStarveLaterHealthyTenant(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('The backend fairness test requires pcntl.');
+        }
+        $server = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($server, $error);
+        $endpoint = (string)\stream_socket_get_name($server, false);
+        $port = (int)\substr($endpoint, (int)\strrpos($endpoint, ':') + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174043';
+        $launchId = \str_repeat('1', 32);
+        $secret = \str_repeat('2', 64);
+        $laterIdentity = $this->signedBackendIdentity(
+            $projectUuid,
+            'later-healthy',
+            1,
+            1,
+            $launchId,
+            $secret,
+        );
+        $pid = $this->forkAuthenticatedBackendProbeResponder(
+            $server,
+            $laterIdentity,
+            $port,
+            1,
+        );
+        $backend = ['host' => '127.0.0.1', 'port' => $port, 'weight' => 1];
+        $overwideIdentity = $this->signedBackendIdentity(
+            $projectUuid,
+            'overwide-first',
+            1,
+            1,
+            $launchId,
+            \str_repeat('3', 64),
+        );
+        $overwideBackends = [$backend, $backend, $backend];
+        $instance = function (
+            string $instanceId,
+            array $backends,
+            array $identity,
+            bool $healthy,
+        ): array {
+            return [
+                'instance_id' => $instanceId,
+                'generation' => 1,
+                'digest' => \hash('sha256', $instanceId),
+                'master_epoch' => 1,
+                'launch_id' => \str_repeat('1', 32),
+                'backends' => $backends,
+                'backend_identity' => $identity,
+                'backend_healthy' => $healthy,
+                'status' => 'ACTIVE',
+                'last_heartbeat' => \time(),
+                'last_heartbeat_monotonic' => \hrtime(true) / 1_000_000_000,
+                'lease_boot_id' => $this->hostBootId(),
+            ];
+        };
+        $overwideInstance = $instance(
+            'overwide-first',
+            $overwideBackends,
+            $overwideIdentity,
+            true,
+        );
+        $laterInstance = $instance(
+            'later-healthy',
+            [$backend],
+            $laterIdentity,
+            false,
+        );
+        $pendingCertificate = [
+            'state' => 'pending',
+            'valid' => false,
+            'pending' => true,
+            'generation' => 0,
+            'source_digest' => \hash(
+                'sha256',
+                "wls-pending-certificate\0backend-fairness.example.test",
+            ),
+        ];
+        $route = static function (
+            string $routeId,
+            string $domain,
+            string $instanceId,
+            array $current,
+            array $certificate,
+        ) use ($projectUuid): array {
+            return [
+                'route_id' => $routeId,
+                'project_uuid' => $projectUuid,
+                'domain' => $domain,
+                'status' => 'PENDING_CERTIFICATE',
+                'certificate' => $certificate,
+                'instances' => [$instanceId => $current],
+                'preferred_instance_id' => $instanceId,
+                'instance_id' => $instanceId,
+                'backends' => $current['backends'],
+                'backend_identity' => $current['backend_identity'],
+                'backend_instances' => [
+                    $instanceId => [
+                        'instance_id' => $instanceId,
+                        'backends' => $current['backends'],
+                        'backend_identity' => $current['backend_identity'],
+                    ],
+                ],
+                'distribution_mode' => 'single',
+            ];
+        };
+        $firstRouteId = \str_repeat('a', 32);
+        $laterRouteId = \str_repeat('b', 32);
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['routes'] = [
+            $firstRouteId => $route(
+                $firstRouteId,
+                'backend-fairness.example.test',
+                'overwide-first',
+                $overwideInstance,
+                $pendingCertificate,
+            ),
+            $laterRouteId => $route(
+                $laterRouteId,
+                'backend-fairness-later.example.test',
+                'later-healthy',
+                $laterInstance,
+                $pendingCertificate,
+            ),
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        $previousLimit = \getenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT');
+        try {
+            \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT=2');
+            self::assertTrue(
+                (new \ReflectionMethod($this->controller, 'probeActiveBackends'))
+                    ->invoke($this->controller),
+                'The overwide tuple remains deferred and requests another sweep.',
+            );
+            $after = $stateProperty->getValue($this->controller);
+            self::assertArrayNotHasKey(
+                'last_backend_probe_failure_kind',
+                $after['routes'][$firstRouteId]['instances']['overwide-first'],
+                'Local descriptor capacity is not backend failure evidence.',
+            );
+            self::assertTrue(
+                $after['routes'][$laterRouteId]['instances']['later-healthy'][
+                    'backend_healthy'
+                ],
+                'A later tenant must still receive its healthy proof.',
+            );
+            self::assertSame(
+                '',
+                $after['routes'][$laterRouteId]['instances']['later-healthy'][
+                    'last_backend_probe_failure_kind'
+                ],
+            );
+            self::assertGreaterThan(
+                0,
+                $after['routes'][$laterRouteId]['instances']['later-healthy'][
+                    'last_backend_probe_success'
+                ],
+            );
+            self::assertSame(
+                0,
+                (new \ReflectionProperty($this->controller, 'backendProbeCursor'))
+                    ->getValue($this->controller),
+            );
+            \pcntl_waitpid($pid, $status);
+            self::assertTrue(\pcntl_wifexited($status));
+            self::assertSame(0, \pcntl_wexitstatus($status));
+        } finally {
+            $previousLimit === false
+                ? \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT')
+                : \putenv('WLS_GATEWAY_TEST_PROBE_MAX_IN_FLIGHT=' . $previousLimit);
+            @\fclose($server);
+            if (@\posix_kill($pid, 0)) {
+                @\posix_kill($pid, SIGTERM);
+                @\pcntl_waitpid($pid, $ignored);
+            }
+        }
+    }
+
+    public function testMidBatchDescriptorPressureDefersOnlyAffectedTupleAndRecovers(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('The descriptor-pressure test requires pcntl.');
+        }
+        $server = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($server, $error);
+        $endpoint = (string)\stream_socket_get_name($server, false);
+        $port = (int)\substr($endpoint, (int)\strrpos($endpoint, ':') + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+        $identity = $this->signedBackendIdentity(
+            '123e4567-e89b-42d3-a456-426614174044',
+            'descriptor-pressure',
+            1,
+            1,
+            \str_repeat('4', 32),
+            \str_repeat('5', 64),
+        );
+        $pid = $this->forkAuthenticatedBackendProbeResponder(
+            $server,
+            $identity,
+            $port,
+            3,
+        );
+        $backend = ['host' => '127.0.0.1', 'port' => $port, 'weight' => 1];
+        $failure = \getenv('WLS_GATEWAY_TEST_PROBE_DESCRIPTOR_FAILURE_AFTER');
+        try {
+            \putenv('WLS_GATEWAY_TEST_PROBE_DESCRIPTOR_FAILURE_AFTER=1');
+            $probe = new \ReflectionMethod(
+                $this->controller,
+                'probeBackendTargetBatchConcurrent',
+            );
+            $targets = [];
+            foreach (['first', 'descriptor-deferred', 'later'] as $key) {
+                $targets[] = [
+                    'key' => $key,
+                    'backends' => [$backend],
+                    'identity' => $identity,
+                ];
+            }
+            $results = $probe->invoke(
+                $this->controller,
+                $targets,
+                \hrtime(true) / 1_000_000_000 + 2.0,
+            );
+            self::assertSame('HEALTHY', $results['first']['state']);
+            self::assertSame('DEFERRED', $results['descriptor-deferred']['state']);
+            self::assertSame('deferred', $results['descriptor-deferred']['failure_kind']);
+            self::assertSame(
+                'HEALTHY',
+                $results['later']['state'],
+                'A one-shot EMFILE must not starve a later tuple in the batch.',
+            );
+
+            \putenv('WLS_GATEWAY_TEST_PROBE_DESCRIPTOR_FAILURE_AFTER');
+            $recovered = $probe->invoke(
+                $this->controller,
+                [[
+                    'key' => 'descriptor-deferred',
+                    'backends' => [$backend],
+                    'identity' => $identity,
+                ]],
+                \hrtime(true) / 1_000_000_000 + 2.0,
+            );
+            self::assertSame('HEALTHY', $recovered['descriptor-deferred']['state']);
+            self::assertSame('', $recovered['descriptor-deferred']['failure_kind']);
+            \pcntl_waitpid($pid, $status);
+            self::assertTrue(\pcntl_wifexited($status));
+            self::assertSame(0, \pcntl_wexitstatus($status));
+        } finally {
+            $failure === false
+                ? \putenv('WLS_GATEWAY_TEST_PROBE_DESCRIPTOR_FAILURE_AFTER')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_PROBE_DESCRIPTOR_FAILURE_AFTER=' . $failure,
+                );
+            @\fclose($server);
+            if (@\posix_kill($pid, 0)) {
+                @\posix_kill($pid, SIGTERM);
+                @\pcntl_waitpid($pid, $ignored);
+            }
+        }
+    }
+
+    public function testConcurrentBackendProbeYieldsToAuthenticatedControlRequest(): void
+    {
+        $fixture = $this->registerPendingCertificateLeaseForCheckpoint(
+            '123e4567-e89b-42d3-a456-426614174042',
+            'concurrent-heartbeat',
+            'concurrent-heartbeat.example.test',
+        );
+        (new \ReflectionMethod($this->controller, 'persistLeaseCheckpoint'))
+            ->invoke($this->controller);
+        $durable = new \ReflectionProperty(
+            $this->controller,
+            'durableLeaseMonotonic',
+        );
+        $durableMap = $durable->getValue($this->controller);
+        foreach ($durableMap as $key => $_value) {
+            $durableMap[$key] = \hrtime(true) / 1_000_000_000 - 31.0;
+        }
+        $durable->setValue($this->controller, $durableMap);
+        $checkpointFile = $this->home . DIRECTORY_SEPARATOR
+            . 'state/lease-checkpoint.json';
+        $checkpointDigest = \hash_file('sha256', $checkpointFile);
+        self::assertIsString($checkpointDigest);
+        $controlSocket = $this->root . DIRECTORY_SEPARATOR
+            . 'concurrent-probe-control.sock';
+        $controlServerResource = \stream_socket_server(
+            'unix://' . $controlSocket,
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($controlServerResource, $error);
+        \stream_set_blocking($controlServerResource, false);
+        $controlServer = new \ReflectionProperty($this->controller, 'controlServer');
+        $controlServer->setValue($this->controller, $controlServerResource);
+        $heartbeatPayload = [
+            'project_uuid' => $fixture['project_uuid'],
+            'project_generation' => $fixture['project_generation'],
+            'instance_id' => $fixture['instance_id'],
+            'instance_generation' => $fixture['instance_generation'],
+            'instance_digest' => $fixture['instance_digest'],
+            'master_epoch' => $fixture['master_epoch'],
+            'launch_id' => $fixture['launch_id'],
+            'gateway_epoch' => $fixture['gateway_epoch'],
+            'host_boot_id' => $this->hostBootId(),
+        ];
+        $request = $this->signedRequest(
+            'project',
+            'heartbeat',
+            $heartbeatPayload,
+            $fixture['credential_id'],
+            $fixture['credential_secret'],
+        );
+        $encoded = \json_encode(
+            $request,
+            JSON_UNESCAPED_SLASHES
+                | JSON_PRESERVE_ZERO_FRACTION
+                | JSON_THROW_ON_ERROR,
+        ) . "\n";
+        $broker = \json_encode([
+            'broker_schema' => 1,
+            'action_protocol' => 2,
+            'channel' => 'project',
+            'uid' => (int)\posix_geteuid(),
+            'gid' => (int)\posix_getegid(),
+            'pid' => \getmypid(),
+            'fencing_token' => $this->fencing,
+            'payload_length' => \strlen($encoded),
+        ], JSON_THROW_ON_ERROR) . "\n";
+        $handshake = $this->brokerHandshake();
+        $client = \stream_socket_client(
+            'unix://' . $controlSocket,
+            $clientErrno,
+            $clientError,
+            1.0,
+        );
+        self::assertIsResource($client, $clientError);
+        \stream_set_timeout($client, 2);
+        self::assertSame(
+            \strlen($handshake['probe'] . $broker . $encoded),
+            \fwrite($client, $handshake['probe'] . $broker . $encoded),
+        );
+
+        $slowServer = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $slowErrno,
+            $slowError,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($slowServer, $slowError);
+        $endpoint = (string)\stream_socket_get_name($slowServer, false);
+        $port = (int)\substr($endpoint, (int)\strrpos($endpoint, ':') + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174041';
+        $instanceId = 'yielding-probe';
+        $identity = $this->signedBackendIdentity(
+            $projectUuid,
+            $instanceId,
+            1,
+            1,
+            \str_repeat('c', 32),
+            \str_repeat('d', 64),
+        );
+        $backend = ['host' => '127.0.0.1', 'port' => $port, 'weight' => 1];
+        $criticalSection = new \ReflectionProperty(
+            $this->controller,
+            'probeCriticalSectionDepth',
+        );
+        try {
+            $criticalSection->setValue($this->controller, 1);
+            $started = \hrtime(true);
+            $results = (new \ReflectionMethod(
+                $this->controller,
+                'probeBackendTargetBatchConcurrent',
+            ))->invoke(
+                $this->controller,
+                [[
+                    'key' => \hash('sha256', 'yielding-probe'),
+                    'backends' => [$backend],
+                    'identity' => $identity,
+                ]],
+                \hrtime(true) / 1_000_000_000 + 2.0,
+            );
+            $elapsed = (\hrtime(true) - $started) / 1_000_000_000;
+            self::assertLessThan(2.0, $elapsed);
+            self::assertSame('transport', \array_values($results)[0]['failure_kind']);
+            self::assertSame($handshake['ready'], \fgets($client, 512));
+            $response = \fgets($client, 4 * 1024 * 1024);
+            self::assertIsString($response);
+            $decoded = \json_decode($response, true, 512, JSON_THROW_ON_ERROR);
+            self::assertFalse($decoded['ok']);
+            self::assertSame('heartbeat_deferred', $decoded['error']['code']);
+            self::assertStringContainsString(
+                'retry_after=1',
+                $decoded['error']['message'],
+            );
+            self::assertSame(
+                $checkpointDigest,
+                \hash_file('sha256', $checkpointFile),
+                'A stale nested heartbeat must not start an fsync checkpoint.',
+            );
+            self::assertTrue(
+                (new \ReflectionProperty(
+                    $this->controller,
+                    'leaseCheckpointDirty',
+                ))->getValue($this->controller),
+            );
+        } finally {
+            $criticalSection->setValue($this->controller, 0);
+            @\fclose($client);
+            @\fclose($slowServer);
+            @\fclose($controlServerResource);
+            $controlServer->setValue($this->controller, null);
+        }
+    }
+
+    public function testConcurrentBackendProbeServicesMixedControlAndRejectsMutationsWithinBound(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('The mixed control latency test requires pcntl.');
+        }
+        $fixture = $this->registerPendingCertificateLeaseForCheckpoint(
+            '123e4567-e89b-42d3-a456-426614174045',
+            'mixed-control',
+            'mixed-control.example.test',
+        );
+        $heartbeatPayload = [
+            'project_uuid' => $fixture['project_uuid'],
+            'project_generation' => $fixture['project_generation'],
+            'instance_id' => $fixture['instance_id'],
+            'instance_generation' => $fixture['instance_generation'],
+            'instance_digest' => $fixture['instance_digest'],
+            'master_epoch' => $fixture['master_epoch'],
+            'launch_id' => $fixture['launch_id'],
+            'gateway_epoch' => $fixture['gateway_epoch'],
+            'host_boot_id' => $this->hostBootId(),
+        ];
+        $requests = [
+            'status' => $this->framedBrokerRequest('admin', $this->signedRequest(
+                'admin',
+                'status',
+                [],
+                'admin',
+                $this->adminSecret,
+            )),
+            'heartbeat' => $this->framedBrokerRequest('project', $this->signedRequest(
+                'project',
+                'heartbeat',
+                $heartbeatPayload,
+                $fixture['credential_id'],
+                $fixture['credential_secret'],
+            )),
+            'register' => $this->framedBrokerRequest('project', $this->signedRequest(
+                'project',
+                'register',
+                ['project_uuid' => $fixture['project_uuid']],
+                $fixture['credential_id'],
+                $fixture['credential_secret'],
+            )),
+            'stop' => $this->framedBrokerRequest('admin', $this->signedRequest(
+                'admin',
+                'stop',
+                ['confirm' => true, 'force' => true],
+                'admin',
+                $this->adminSecret,
+            )),
+        ];
+        $controlSocket = $this->root . DIRECTORY_SEPARATOR
+            . 'mixed-control-probe.sock';
+        $controlServerResource = \stream_socket_server(
+            'unix://' . $controlSocket,
+            $controlErrno,
+            $controlError,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($controlServerResource, $controlError);
+        \stream_set_blocking($controlServerResource, false);
+        $controlServer = new \ReflectionProperty($this->controller, 'controlServer');
+        $controlServer->setValue($this->controller, $controlServerResource);
+        $responseFile = $this->root . DIRECTORY_SEPARATOR
+            . 'mixed-control-responses.json';
+        $pid = \pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            @\fclose($controlServerResource);
+            \usleep(30000);
+            $responses = [];
+            $allStarted = \microtime(true);
+            foreach ($requests as $name => $frame) {
+                $started = \microtime(true);
+                $client = @\stream_socket_client(
+                    'unix://' . $controlSocket,
+                    $childErrno,
+                    $childError,
+                    1.0,
+                );
+                if (!\is_resource($client)) {
+                    $responses[$name] = ['error' => $childError ?: (string)$childErrno];
+                    continue;
+                }
+                \stream_set_timeout($client, 1);
+                @\fwrite($client, $frame['wire']);
+                $ready = @\fgets($client, 512);
+                $line = @\fgets($client, 4 * 1024 * 1024);
+                @\fclose($client);
+                $responses[$name] = [
+                    'elapsed_ms' => (\microtime(true) - $started) * 1000,
+                    'ready' => $ready === $frame['ready'],
+                    'action' => \is_string($line)
+                        && \str_starts_with($line, "WLS-ACTION/2\t")
+                            ? \rtrim($line, "\r\n")
+                            : '',
+                    'response' => \is_string($line)
+                        && !\str_starts_with($line, "WLS-ACTION/2\t")
+                            ? \json_decode($line, true)
+                            : null,
+                ];
+            }
+            $responses['_total_elapsed_ms'] = (\microtime(true) - $allStarted) * 1000;
+            @\file_put_contents(
+                $responseFile,
+                \json_encode($responses, JSON_THROW_ON_ERROR),
+            );
+            exit(0);
+        }
+
+        $slowServer = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $slowErrno,
+            $slowError,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($slowServer, $slowError);
+        $endpoint = (string)\stream_socket_get_name($slowServer, false);
+        $port = (int)\substr($endpoint, (int)\strrpos($endpoint, ':') + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+        $identity = $this->signedBackendIdentity(
+            '123e4567-e89b-42d3-a456-426614174046',
+            'mixed-control-slow-probe',
+            1,
+            1,
+            \str_repeat('6', 32),
+            \str_repeat('7', 64),
+        );
+        $criticalSection = new \ReflectionProperty(
+            $this->controller,
+            'probeCriticalSectionDepth',
+        );
+        try {
+            $criticalSection->setValue($this->controller, 1);
+            $probeResults = (new \ReflectionMethod(
+                $this->controller,
+                'probeBackendTargetBatchConcurrent',
+            ))->invoke(
+                $this->controller,
+                [[
+                    'key' => 'mixed-control-slow-probe',
+                    'backends' => [[
+                        'host' => '127.0.0.1',
+                        'port' => $port,
+                        'weight' => 1,
+                    ]],
+                    'identity' => $identity,
+                ]],
+                \hrtime(true) / 1_000_000_000 + 2.0,
+            );
+            self::assertSame(
+                'transport',
+                $probeResults['mixed-control-slow-probe']['failure_kind'],
+            );
+            \pcntl_waitpid($pid, $status);
+            self::assertTrue(\pcntl_wifexited($status));
+            self::assertSame(0, \pcntl_wexitstatus($status));
+            $responses = \json_decode(
+                (string)\file_get_contents($responseFile),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            );
+            foreach (['status', 'heartbeat', 'register', 'stop'] as $name) {
+                self::assertTrue($responses[$name]['ready'], $name);
+                self::assertSame('', $responses[$name]['action'], $name);
+                self::assertLessThan(350.0, $responses[$name]['elapsed_ms'], $name);
+                self::assertIsArray($responses[$name]['response'], $name);
+            }
+            self::assertLessThan(500.0, $responses['_total_elapsed_ms']);
+            self::assertTrue($responses['status']['response']['ok']);
+            self::assertArrayHasKey(
+                'ready',
+                $responses['status']['response']['payload'],
+            );
+            self::assertTrue($responses['heartbeat']['response']['ok']);
+            self::assertFalse(
+                $responses['heartbeat']['response']['payload']['re_register_required'],
+            );
+            foreach (['register', 'stop'] as $blocked) {
+                self::assertFalse($responses[$blocked]['response']['ok']);
+                self::assertSame(
+                    'rejected',
+                    $responses[$blocked]['response']['error']['code'],
+                    \json_encode($responses[$blocked]['response']),
+                );
+                self::assertStringContainsString(
+                    'retry_after=1',
+                    $responses[$blocked]['response']['error']['message'],
+                );
+            }
+        } finally {
+            $criticalSection->setValue($this->controller, 0);
+            @\fclose($slowServer);
+            @\fclose($controlServerResource);
+            $controlServer->setValue($this->controller, null);
+            if (@\posix_kill($pid, 0)) {
+                @\posix_kill($pid, SIGTERM);
+                @\pcntl_waitpid($pid, $ignored);
+            }
+        }
+    }
+
+    public function testRollbackIntentRejectsHmacValidNonCanonicalMonotonicDeadline(): void
     {
         $runtimeGeneration = \str_repeat('d', 64);
         $manifest = $this->home . DIRECTORY_SEPARATOR . 'slots'
@@ -4403,12 +8978,21 @@ final class GatewayProtocolSecurityTest extends TestCase
         ));
 
         $preparedAt = \time();
-        $payload = "WLS-UPGRADE/1\n"
+        $preparedMonotonic = \intdiv(\hrtime(true), 1_000_000);
+        $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
+            ->getValue($this->controller);
+        $payload = "WLS-UPGRADE/2\n"
             . 'host_id=' . $this->hostId . "\n"
             . "from=B\nto=A\n"
             . 'prepared_at=' . $preparedAt . "\n"
-            . 'deadline=' . ($preparedAt + 299) . "\n"
+            . 'deadline=' . ($preparedAt + 300) . "\n"
             . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'host_boot_id=' . $hostBootId . "\n"
+            . 'prepared_monotonic_ms=' . $preparedMonotonic . "\n"
+            . 'activation_deadline_monotonic_ms='
+                . ($preparedMonotonic + 299_999) . "\n"
+            . 'rollback_deadline_monotonic_ms='
+                . ($preparedMonotonic + 900_000) . "\n"
             . 'nonce=' . \str_repeat('a', 32) . "\n";
         $key = \hex2bin($this->adminSecret);
         self::assertIsString($key);
@@ -4596,6 +9180,8 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'launch_id' => \str_repeat('c', 32),
                 'gateway_epoch' => (string)$renewed['epoch'],
                 'host_boot_id' => $this->hostBootId(),
+                '_authenticated_monotonic' => \hrtime(true) / 1_000_000_000,
+                '_authenticated_timestamp' => \time(),
             ],
         );
         self::assertTrue($heartbeat['accepted']);
@@ -4670,6 +9256,8 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'launch_id' => \str_repeat('c', 32),
                 'gateway_epoch' => (string)$state['epoch'],
                 'host_boot_id' => $this->hostBootId(),
+                '_authenticated_monotonic' => \hrtime(true) / 1_000_000_000,
+                '_authenticated_timestamp' => \time(),
             ],
         );
 
@@ -4710,6 +9298,8 @@ final class GatewayProtocolSecurityTest extends TestCase
                     'launch_id' => \str_repeat('c', 32),
                     'gateway_epoch' => (string)$state['epoch'],
                     'host_boot_id' => $this->hostBootId(),
+                    '_authenticated_monotonic' => \hrtime(true) / 1_000_000_000,
+                    '_authenticated_timestamp' => \time(),
                 ],
             );
             self::fail('Heartbeat must prove the exact registered instance digest.');
@@ -4765,19 +9355,7 @@ final class GatewayProtocolSecurityTest extends TestCase
                     'backend_identity' => $lease['backend_identity'],
                 ],
             ],
-            'certificate' => [
-                'state' => 'pending',
-                'valid' => false,
-                'pending' => true,
-                'generation' => 0,
-                'source_digest' => \hash(
-                    'sha256',
-                    "wls-pending-certificate\0" . $domain,
-                ),
-                'snapshot_digest' => '',
-                'cert_path' => '',
-                'key_path' => '',
-            ],
+            'certificate' => $this->pendingCertificateEnvelope($domain),
             'instances' => [
                 $instanceId => $lease + ['backend_healthy' => true],
             ],
@@ -4816,7 +9394,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         ));
     }
 
-    public function testHeartbeatPersistsFreshMasterDrainCountersWithoutPublishing(): void
+    public function testHeartbeatIgnoresDrainCountersUntilExactDrainPublication(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174035';
         $instanceId = 'instance-draining';
@@ -4826,9 +9404,30 @@ final class GatewayProtocolSecurityTest extends TestCase
         $publicationProperty = new \ReflectionProperty($this->controller, 'publication');
         $state = $stateProperty->getValue($this->controller);
         $lease = $this->instanceLease($instanceId, 29101, 'master-counters');
+        $drainStartedMonotonic = \hrtime(true) / 1_000_000_000 - 1.0;
+        $drainStartedAt = \time() - 1;
+        $drainOperationId = (new \ReflectionMethod(
+            $this->controller,
+            'drainOperationId',
+        ))->invoke(
+            $this->controller,
+            $projectUuid,
+            $instanceId,
+            1,
+            1,
+            \str_repeat('c', 32),
+        );
         $lease['status'] = 'DRAINING';
-        $lease['drain_until'] = \time() + 300;
-        $state['projects'][$projectUuid] = ['generation' => 1];
+        $lease['drain_operation_id'] = $drainOperationId;
+        $lease['drain_seconds'] = 300;
+        $lease['drain_started_at'] = $drainStartedAt;
+        $lease['drain_started_monotonic'] = $drainStartedMonotonic;
+        $lease['drain_until'] = $drainStartedAt + 300;
+        $lease['drain_until_monotonic'] = $drainStartedMonotonic + 300.0;
+        $state['projects'][$projectUuid] = [
+            'generation' => 1,
+            'route_ids' => [$routeId],
+        ];
         $state['instances'][$projectUuid][$instanceId] = $lease;
         $state['routes'][$routeId] = [
             'project_uuid' => $projectUuid,
@@ -4850,6 +9449,9 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'launch_id' => \str_repeat('c', 32),
                 'gateway_epoch' => (string)$state['epoch'],
                 'host_boot_id' => $this->hostBootId(),
+                '_authenticated_monotonic' => \hrtime(true) / 1_000_000_000,
+                '_authenticated_timestamp' => \time(),
+                'drain_operation_id' => $drainOperationId,
                 'drain_counters' => [
                     'version' => 1,
                     'counters_known' => true,
@@ -4869,10 +9471,11 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
 
         $renewed = $stateProperty->getValue($this->controller);
-        $stored = $renewed['instances'][$projectUuid][$instanceId]['drain_counters'];
-        self::assertSame(3, $stored['active_requests']);
-        self::assertSame(4, $stored['long_lived_connections']);
-        self::assertSame(2, $stored['http2_connections']);
+        self::assertArrayNotHasKey(
+            'drain_counters',
+            $renewed['instances'][$projectUuid][$instanceId],
+            'Pre-publication counters cannot become drain completion authority.',
+        );
         self::assertSame(
             'DRAINING',
             $renewed['routes'][$routeId]['instances'][$instanceId]['status'],
@@ -4883,23 +9486,8 @@ final class GatewayProtocolSecurityTest extends TestCase
         $statuses = (new \ReflectionMethod($this->controller, 'projectInstanceStatuses'))
             ->invoke($this->controller, $projectUuid);
         self::assertCount(1, $statuses);
-        self::assertTrue($statuses[0]['counters_known']);
-        self::assertSame('master-heartbeat', $statuses[0]['counter_source']);
-        self::assertSame(3, $statuses[0]['active_requests']);
-        self::assertSame(4, $statuses[0]['long_lived_connections']);
-        self::assertSame(2, $statuses[0]['http2_connections']);
+        self::assertFalse($statuses[0]['counters_known']);
         self::assertFalse($statuses[0]['drain_complete']);
-
-        $renewed['instances'][$projectUuid][$instanceId]['drain_counters']['reported_monotonic']
-            -= 26.0;
-        $stateProperty->setValue($this->controller, $renewed);
-        $stale = (new \ReflectionMethod($this->controller, 'projectInstanceStatuses'))
-            ->invoke($this->controller, $projectUuid);
-        self::assertFalse($stale[0]['counters_known']);
-        self::assertSame(0, $stale[0]['active_requests']);
-        self::assertSame(0, $stale[0]['long_lived_connections']);
-        self::assertSame(0, $stale[0]['http2_connections']);
-        self::assertFalse($stale[0]['drain_complete']);
     }
 
     public function testDrainCounterCapabilityRequiresACompleteTypedHttp2Vector(): void
@@ -4935,15 +9523,23 @@ final class GatewayProtocolSecurityTest extends TestCase
     public function testUntrustedSecurityMarkerOverridesOlderValidLedger(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174031';
-        $stateProperty = new \ReflectionProperty($this->controller, 'state');
-        $state = $stateProperty->getValue($this->controller);
-        $state['enrollments'][$projectUuid] = [
-            'project_uuid' => $projectUuid,
-            'security_generation' => 1,
-        ];
-        $stateProperty->setValue($this->controller, $state);
-        (new \ReflectionMethod($this->controller, 'persistSecurityLedger'))
-            ->invoke($this->controller);
+        $project = $this->createProject();
+        $enrollment = $this->request(
+            'admin',
+            'enroll',
+            [
+                'project_uuid' => $projectUuid,
+                'project_root' => $project,
+                'certificate_roots' => [
+                    'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+                ],
+                'allowed_domains' => ['untrusted-marker.example.test'],
+                'capabilities' => [],
+            ],
+            'admin',
+            $this->adminSecret,
+        );
+        self::assertTrue($enrollment['ok'], \json_encode($enrollment));
         $ledger = $this->home . DIRECTORY_SEPARATOR . 'state/security-ledger.json';
         self::assertFileExists($ledger);
         self::assertNotFalse(\file_put_contents($ledger . '.untrusted', "injected failure\n"));
@@ -4974,6 +9570,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         ?int $peerUid = null,
         ?float $monotonicTimestamp = null,
         ?int $brokerActionProtocol = 2,
+        bool $tamperSignature = false,
     ): array {
         $this->lastBrokerActions = [];
         if ($operation === 'enroll') {
@@ -5004,6 +9601,9 @@ final class GatewayProtocolSecurityTest extends TestCase
             GatewayClient::canonicalJson($request),
             $secret,
         );
+        if ($tamperSignature) {
+            $request['signature'] = \str_repeat('0', 64);
+        }
         $encoded = \json_encode(
             $request,
             JSON_UNESCAPED_SLASHES
@@ -5053,6 +9653,70 @@ final class GatewayProtocolSecurityTest extends TestCase
             );
         }
         return \json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function signedRequest(
+        string $channel,
+        string $operation,
+        array $payload,
+        string $credentialId,
+        string $secret,
+    ): array {
+        $request = [
+            'protocol' => 'wls-edge/2',
+            'channel' => $channel,
+            'host_id' => $this->hostId,
+            'credential_id' => $credentialId,
+            'operation' => $operation,
+            'request_id' => \bin2hex(\random_bytes(16)),
+            'timestamp' => \time(),
+            'monotonic_timestamp' => \hrtime(true) / 1_000_000_000,
+            'nonce' => \bin2hex(\random_bytes(16)),
+            'payload' => $payload,
+        ];
+        $request['request_digest'] = \hash('sha256', GatewayClient::canonicalJson([
+            'operation' => $operation,
+            'payload' => $payload,
+        ]));
+        $request['signature'] = \hash_hmac(
+            'sha256',
+            GatewayClient::canonicalJson($request),
+            $secret,
+        );
+        return $request;
+    }
+
+    /**
+     * @param array<string,mixed> $request
+     * @return array{wire:string,ready:string}
+     */
+    private function framedBrokerRequest(string $channel, array $request): array
+    {
+        $encoded = \json_encode(
+            $request,
+            JSON_UNESCAPED_SLASHES
+                | JSON_PRESERVE_ZERO_FRACTION
+                | JSON_THROW_ON_ERROR,
+        ) . "\n";
+        $broker = \json_encode([
+            'broker_schema' => 1,
+            'action_protocol' => 2,
+            'channel' => $channel,
+            'uid' => (int)\posix_geteuid(),
+            'gid' => (int)\posix_getegid(),
+            'pid' => \getmypid(),
+            'fencing_token' => $this->fencing,
+            'payload_length' => \strlen($encoded),
+        ], JSON_THROW_ON_ERROR) . "\n";
+        $handshake = $this->brokerHandshake();
+        return [
+            'wire' => $handshake['probe'] . $broker . $encoded,
+            'ready' => $handshake['ready'],
+        ];
     }
 
     /**
@@ -5140,6 +9804,221 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
+    /**
+     * Exercise the production registration validator and state builder, then
+     * model the already-verified publication boundary without starting Nginx.
+     *
+     * @return array{
+     *     project_uuid:string,
+     *     project_generation:int,
+     *     instance_id:string,
+     *     instance_generation:int,
+     *     instance_digest:string,
+     *     master_epoch:int,
+     *     launch_id:string,
+     *     route_id:string,
+     *     gateway_epoch:string,
+     *     credential_id:string,
+     *     credential_secret:string,
+     *     register_payload:array<string,mixed>,
+     *     route_generation:int
+     * }
+     */
+    private function registerPendingCertificateLeaseForCheckpoint(
+        string $projectUuid,
+        string $instanceId,
+        string $domain,
+    ): array {
+        $project = $this->createProject();
+        $enrollment = $this->request(
+            'admin',
+            'enroll',
+            [
+                'project_uuid' => $projectUuid,
+                'project_root' => $project,
+                'certificate_roots' => [
+                    'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+                ],
+                'allowed_domains' => [$domain],
+            ],
+            'admin',
+            $this->adminSecret,
+        );
+        self::assertTrue($enrollment['ok'], \json_encode($enrollment));
+        $credential = (array)($enrollment['payload']['credential'] ?? []);
+        self::assertMatchesRegularExpression(
+            '/\A[a-f0-9]{32}\z/D',
+            (string)($credential['credential_id'] ?? ''),
+        );
+        self::assertMatchesRegularExpression(
+            '/\A[a-f0-9]{64}\z/D',
+            (string)($credential['secret'] ?? ''),
+        );
+
+        $projectGeneration = 1;
+        $instanceGeneration = 1;
+        $masterEpoch = 1;
+        $launchId = \str_repeat('c', 32);
+        $routeId = $this->canonicalRouteId($projectUuid, $domain);
+        // The closed loopback port deliberately exercises registration's
+        // retryable transport-outage path. A pending certificate still keeps
+        // HTTPS closed while the desired identity and lease closure are stored.
+        $backend = ['host' => '127.0.0.1', 'port' => 65530, 'weight' => 1];
+        $routePayload = [
+            'route_id' => $routeId,
+            'domain' => $domain,
+            'force_https' => true,
+            'force_root_to_www' => false,
+            'root_to_www_target' => '',
+            'backends' => [$backend],
+            'backend_identity' => $this->signedBackendIdentity(
+                $projectUuid,
+                $instanceId,
+                $instanceGeneration,
+                $masterEpoch,
+                $launchId,
+                \str_repeat('a', 64),
+            ),
+            'certificate' => $this->pendingCertificateEnvelope($domain),
+        ];
+        $candidateRoute = (new \ReflectionMethod($this->controller, 'validateRoute'))
+            ->invoke(
+                $this->controller,
+                $routePayload,
+                $projectUuid,
+                $project,
+                $instanceId,
+                $instanceGeneration,
+                $masterEpoch,
+                $launchId,
+                \hrtime(true) / 1_000_000_000 + 5.0,
+                true,
+                true,
+            );
+        $projectDigest = (new \ReflectionMethod(
+            $this->controller,
+            'projectDesiredDigest',
+        ))->invoke($this->controller, $projectUuid, $project, [$candidateRoute]);
+        $instanceDigest = (new \ReflectionMethod(
+            $this->controller,
+            'instanceDesiredDigest',
+        ))->invoke(
+            $this->controller,
+            $projectUuid,
+            $instanceId,
+            $instanceGeneration,
+            [$candidateRoute],
+        );
+        $nonCertificateDigest = (new \ReflectionMethod(
+            $this->controller,
+            'nonCertificateDesiredDigest',
+        ))->invoke($this->controller, $projectUuid, $project, [$candidateRoute]);
+        $idempotencyKey = \substr(\hash(
+            'sha256',
+            $projectUuid . ':desired:' . $projectGeneration . ':' . $projectDigest,
+        ), 0, 40);
+        $state = (new \ReflectionProperty($this->controller, 'state'))
+            ->getValue($this->controller);
+        $registerPayload = [
+            'project_uuid' => $projectUuid,
+            'project_root' => $project,
+            'instance_id' => $instanceId,
+            'project_generation' => $projectGeneration,
+            'request_digest' => $projectDigest,
+            'idempotency_key' => $idempotencyKey,
+            'instance_generation' => $instanceGeneration,
+            'instance_digest' => $instanceDigest,
+            'non_certificate_desired_digest' => $nonCertificateDigest,
+            'master_epoch' => $masterEpoch,
+            'launch_id' => $launchId,
+            'gateway_epoch' => (string)$state['epoch'],
+            'host_boot_id' => $this->hostBootId(),
+            'routes' => [$routePayload],
+        ];
+
+        $deferPublication = new \ReflectionProperty($this->controller, 'deferPublication');
+        $requestOperation = new \ReflectionProperty($this->controller, 'requestOperation');
+        $requestPrincipal = new \ReflectionProperty($this->controller, 'requestPrincipal');
+        $deferPublication->setValue($this->controller, true);
+        $requestOperation->setValue($this->controller, 'register');
+        $requestPrincipal->setValue($this->controller, $projectUuid);
+        $registered = (new \ReflectionMethod($this->controller, 'register'))->invoke(
+            $this->controller,
+            $registerPayload + [
+                '_broker_peer' => [
+                    'channel' => 'project',
+                    'uid' => (int)\posix_geteuid(),
+                    'gid' => (int)\posix_getegid(),
+                    'pid' => \getmypid(),
+                ],
+            ],
+            false,
+        );
+        self::assertFalse($registered['idempotent']);
+
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $route = $state['routes'][$routeId];
+        $route['instances'][$instanceId]['backend_healthy'] = true;
+        (new \ReflectionMethod($this->controller, 'selectRouteBackends'))
+            ->invokeArgs($this->controller, [&$route]);
+        self::assertSame('PENDING_CERTIFICATE', $route['status']);
+        self::assertNotEmpty($route['backends']);
+        $state['routes'][$routeId] = $route;
+        $state['active_routes'][$routeId] = $route;
+        $state['active_config_generation'] = \max(1, (int)$state['generation']);
+        $state['active_config_digest'] = \hash(
+            'sha256',
+            'checkpoint-fixture:' . $projectUuid,
+        );
+        $state['pending_lkg_generation'] = $state['active_config_generation'];
+        $state['pending_lkg_config_digest'] = $state['active_config_digest'];
+        $state['pending_lkg_routes_digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($state['active_routes']),
+        );
+        $state['isolation_mode'] = false;
+        $state['operations'] = [];
+        $stateProperty->setValue($this->controller, $state);
+
+        $publicationProperty = new \ReflectionProperty($this->controller, 'publication');
+        $publication = $publicationProperty->getValue($this->controller);
+        self::assertIsArray($publication);
+        $publication['phase'] = 'COMMITTED';
+        $publication['candidate_generation'] = $state['active_config_generation'];
+        $publication['candidate_digest'] = $state['active_config_digest'];
+        $publicationProperty->setValue($this->controller, $publication);
+        (new \ReflectionMethod($this->controller, 'completePublication'))
+            ->invoke($this->controller);
+        $deferPublication->setValue($this->controller, false);
+        $requestOperation->setValue($this->controller, '');
+        $requestPrincipal->setValue($this->controller, '');
+        (new \ReflectionProperty($this->controller, 'configDirty'))
+            ->setValue($this->controller, false);
+        (new \ReflectionMethod($this->controller, 'persistState'))
+            ->invoke($this->controller);
+        self::assertTrue(
+            (new \ReflectionMethod($this->controller, 'registrationLeaseFullyActive'))
+                ->invoke($this->controller, $projectUuid, $instanceId),
+        );
+
+        return [
+            'project_uuid' => $projectUuid,
+            'project_generation' => $projectGeneration,
+            'instance_id' => $instanceId,
+            'instance_generation' => $instanceGeneration,
+            'instance_digest' => $instanceDigest,
+            'master_epoch' => $masterEpoch,
+            'launch_id' => $launchId,
+            'route_id' => $routeId,
+            'gateway_epoch' => (string)$state['epoch'],
+            'credential_id' => (string)$credential['credential_id'],
+            'credential_secret' => (string)$credential['secret'],
+            'register_payload' => $registerPayload,
+            'route_generation' => (int)$state['routes'][$routeId]['route_generation'],
+        ];
+    }
+
     private function createProject(): string
     {
         $project = $this->root . DIRECTORY_SEPARATOR . 'project-' . \bin2hex(\random_bytes(4));
@@ -5191,6 +10070,66 @@ CONF
         $request = \openssl_csr_new(['commonName' => $domain], $key, $arguments);
         self::assertNotFalse($request);
         $certificate = \openssl_csr_sign($request, null, $key, 30, $arguments);
+        self::assertNotFalse($certificate);
+        self::assertTrue(\openssl_x509_export($certificate, $certificatePem));
+        self::assertTrue(\openssl_pkey_export($key, $keyPem, null, $arguments));
+        $certificatePath = $directory . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $keyPath = $directory . DIRECTORY_SEPARATOR . 'privkey.pem';
+        self::assertNotFalse(\file_put_contents($certificatePath, $certificatePem));
+        self::assertNotFalse(\file_put_contents($keyPath, $keyPem));
+        self::assertTrue(\chmod($certificatePath, 0600));
+        self::assertTrue(\chmod($keyPath, 0600));
+        return ['cert' => $certificatePath, 'key' => $keyPath];
+    }
+
+    /**
+     * @return array{cert:string,key:string}
+     */
+    private function createCertificateWithPrivateKey(
+        string $project,
+        string $domain,
+        string $name,
+        \OpenSSLAsymmetricKey $key,
+    ): array {
+        $directory = $project . DIRECTORY_SEPARATOR . 'app/etc/ssl/' . $name;
+        self::assertTrue(\mkdir($directory, 0700, true));
+        $config = $directory . DIRECTORY_SEPARATOR . 'openssl.cnf';
+        self::assertNotFalse(\file_put_contents($config, <<<CONF
+[req]
+distinguished_name = dn
+prompt = no
+req_extensions = server_ext
+x509_extensions = server_ext
+
+[dn]
+CN = {$domain}
+
+[server_ext]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = {$domain}
+CONF
+        ));
+        $arguments = [
+            'config' => $config,
+            'digest_alg' => 'sha256',
+            'req_extensions' => 'server_ext',
+            'x509_extensions' => 'server_ext',
+        ];
+        $request = \openssl_csr_new(['commonName' => $domain], $key, $arguments);
+        self::assertNotFalse($request);
+        $certificate = \openssl_csr_sign(
+            $request,
+            null,
+            $key,
+            30,
+            $arguments,
+            \random_int(1, PHP_INT_MAX),
+        );
         self::assertNotFalse($certificate);
         self::assertTrue(\openssl_x509_export($certificate, $certificatePem));
         self::assertTrue(\openssl_pkey_export($key, $keyPem, null, $arguments));
@@ -5326,6 +10265,436 @@ CONF
             'drain_until' => null,
             'drain_until_monotonic' => null,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $references
+     * @return array<string,mixed>
+     */
+    private function activeCertificateEnvelope(
+        string $domain,
+        string $sourceDigest,
+        array $references,
+        string $provider = 'self_signed',
+        string $materialClass = 'self_signed',
+    ): array {
+        return \array_replace($references, [
+            'state' => 'active',
+            'pending' => false,
+            'source_digest' => $sourceDigest,
+            'trust_profile' => 'test',
+            'provider' => $provider,
+            'material_class' => $materialClass,
+            'provenance_digest' => ProjectCertificateGenerationStore::provenanceDigest(
+                $domain,
+                $sourceDigest,
+                'test',
+                $provider,
+                $materialClass,
+            ),
+        ]);
+    }
+
+    /** @return array<string,mixed> */
+    private function pendingCertificateEnvelope(string $domain): array
+    {
+        $generation = 0;
+        $sourceDigest = \hash(
+            'sha256',
+            "wls-pending-certificate\0" . $domain,
+        );
+        return [
+            'state' => 'pending',
+            'valid' => false,
+            'pending' => true,
+            'generation' => $generation,
+            'source_digest' => $sourceDigest,
+            'trust_profile' => 'test',
+            'provider' => 'none',
+            'material_class' => 'none',
+            'provenance_digest'
+                => ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                    $domain,
+                    'pending',
+                    $sourceDigest,
+                    $generation,
+                    'test',
+                ),
+            'cert' => [],
+            'key' => [],
+            'chain' => null,
+            'snapshot_digest' => '',
+            'cert_path' => '',
+            'key_path' => '',
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function disabledCertificateEnvelope(
+        string $domain,
+        int $generation = 1,
+    ): array {
+        $sourceDigest = \hash(
+            'sha256',
+            "wls-disabled-certificate\0" . $domain . "\0" . $generation,
+        );
+        return [
+            'state' => 'disabled',
+            'valid' => false,
+            'pending' => true,
+            'generation' => $generation,
+            'source_digest' => $sourceDigest,
+            'trust_profile' => 'test',
+            'provider' => 'none',
+            'material_class' => 'none',
+            'provenance_digest'
+                => ProjectCertificateGenerationStore::inactiveProvenanceDigest(
+                    $domain,
+                    'disabled',
+                    $sourceDigest,
+                    $generation,
+                    'test',
+                ),
+            'snapshot_digest' => '',
+            'cert_path' => '',
+            'key_path' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @param array<string,mixed> $certificate
+     */
+    private function installCertificateFloor(
+        array &$state,
+        string $projectUuid,
+        string $domain,
+        array $certificate,
+        int $routeGeneration = 1,
+    ): void {
+        $disabled = ($certificate['state'] ?? '') === 'disabled';
+        $state['certificate_floors'][$projectUuid . '|' . $domain] = [
+            'schema_version' => 2,
+            'project_uuid' => $projectUuid,
+            'domain' => $domain,
+            'generation' => (int)$certificate['generation'],
+            'source_digest' => (string)$certificate['source_digest'],
+            'trust_profile' => (string)$certificate['trust_profile'],
+            'provider' => (string)$certificate['provider'],
+            'material_class' => (string)$certificate['material_class'],
+            'provenance_digest' => (string)$certificate['provenance_digest'],
+            'route_generation' => $routeGeneration,
+            'revocation_generation' => $disabled
+                ? (int)$certificate['generation']
+                : 0,
+            'revocation_source_digest' => $disabled
+                ? (string)$certificate['source_digest']
+                : '',
+            'revocation_trust_profile' => $disabled
+                ? (string)$certificate['trust_profile']
+                : '',
+            'revocation_provenance_digest' => $disabled
+                ? (string)$certificate['provenance_digest']
+                : '',
+        ];
+    }
+
+    private function certificateAuthority(): string
+    {
+        $config = $this->root . DIRECTORY_SEPARATOR . 'openssl-ca.cnf';
+        self::assertNotFalse(\file_put_contents(
+            $config,
+            <<<'CONFIG'
+[ req ]
+distinguished_name = req_distinguished_name
+prompt = no
+x509_extensions = v3_ca
+
+[ req_distinguished_name ]
+CN = WLS Controller Test Root
+O = Weline Test
+
+[ v3_ca ]
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,keyCertSign,cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+CONFIG
+                . PHP_EOL,
+        ));
+        $options = [
+            'config' => $config,
+            'digest_alg' => 'sha256',
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'x509_extensions' => 'v3_ca',
+        ];
+        $key = \openssl_pkey_new($options);
+        self::assertNotFalse($key);
+        $csr = \openssl_csr_new([], $key, $options);
+        self::assertNotFalse($csr);
+        $certificate = \openssl_csr_sign(
+            $csr,
+            null,
+            $key,
+            3650,
+            $options,
+            1,
+        );
+        self::assertNotFalse($certificate);
+        $pem = '';
+        self::assertTrue(\openssl_x509_export($certificate, $pem, true));
+        return \rtrim($pem) . "\n";
+    }
+
+    private function assignAvailablePublicPortsForRecovery(): void
+    {
+        $reservations = [];
+        $ports = [];
+        try {
+            while (\count($ports) < 2) {
+                $reservation = \stream_socket_server(
+                    'tcp://127.0.0.1:0',
+                    $errorCode,
+                    $errorMessage,
+                );
+                self::assertIsResource(
+                    $reservation,
+                    'Unable to reserve a recovery test port: '
+                        . $errorCode . ' ' . $errorMessage,
+                );
+                $name = (string)\stream_socket_get_name($reservation, false);
+                self::assertMatchesRegularExpression('/:[1-9][0-9]*\z/D', $name);
+                $port = (int)\substr($name, (int)\strrpos($name, ':') + 1);
+                if (\in_array($port, $ports, true)) {
+                    \fclose($reservation);
+                    continue;
+                }
+                $reservations[] = $reservation;
+                $ports[] = $port;
+            }
+        } finally {
+            foreach ($reservations as $reservation) {
+                \fclose($reservation);
+            }
+        }
+
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['public_http'] = $ports[0];
+        $state['public_https'] = $ports[1];
+        $stateProperty->setValue($this->controller, $state);
+
+        $manifestFile = $this->home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json';
+        $manifest = \json_decode(
+            (string)\file_get_contents($manifestFile),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $manifest['listen_profile'] = 'ipv4-only';
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode($manifest, JSON_THROW_ON_ERROR),
+        ));
+    }
+
+    /** @return array{binary:string,runtime_generation:string} */
+    private function createVerifiedRollbackSlotFixture(string $slot): array
+    {
+        self::assertContains($slot, ['A', 'B']);
+        $slotDirectory = $this->home . DIRECTORY_SEPARATOR . 'slots'
+            . DIRECTORY_SEPARATOR . $slot;
+        $binaryDirectory = $slotDirectory . DIRECTORY_SEPARATOR . 'bin';
+        if (!\is_dir($binaryDirectory)) {
+            self::assertTrue(\mkdir($binaryDirectory, 0700, true));
+        }
+        $shareDirectory = $slotDirectory . DIRECTORY_SEPARATOR . 'share';
+        if (!\is_dir($shareDirectory)) {
+            self::assertTrue(\mkdir($shareDirectory, 0700, true));
+        }
+        $sourceBinary = $this->home . DIRECTORY_SEPARATOR . 'slots/A/bin/nginx';
+        $binary = $binaryDirectory . DIRECTORY_SEPARATOR . 'nginx';
+        self::assertTrue(\copy($sourceBinary, $binary));
+        self::assertTrue(\chmod($binary, 0700));
+        $binaryDigest = \hash_file('sha256', $binary);
+        $binarySize = \filesize($binary);
+        self::assertIsString($binaryDigest);
+        self::assertIsInt($binarySize);
+        self::assertGreaterThan(0, $binarySize);
+        $trustBundleSource = $this->home . DIRECTORY_SEPARATOR
+            . 'slots/A/share/ca-bundle.pem';
+        $trustBundle = $shareDirectory . DIRECTORY_SEPARATOR . 'ca-bundle.pem';
+        if (!\hash_equals($trustBundleSource, $trustBundle)) {
+            self::assertTrue(\copy($trustBundleSource, $trustBundle));
+            self::assertTrue(\chmod($trustBundle, 0644));
+        }
+        $trustBundleDigest = \hash_file('sha256', $trustBundle);
+        $trustBundleSize = \filesize($trustBundle);
+        self::assertIsString($trustBundleDigest);
+        self::assertIsInt($trustBundleSize);
+
+        $contract = (new \ReflectionClassConstant(
+            \WlsEdgeGatewayController::class,
+            'DURABLE_STATE_CONTRACT',
+        ))->getValue();
+        self::assertIsArray($contract);
+        $manifest = [
+            'schema_version' => 2,
+            'role' => 'host_gateway',
+            'slot' => $slot,
+            'components' => [
+                'bin/nginx' => [
+                    'sha256' => $binaryDigest,
+                    'size' => $binarySize,
+                ],
+                'share/ca-bundle.pem' => [
+                    'sha256' => $trustBundleDigest,
+                    'size' => $trustBundleSize,
+                    'mode' => 0644,
+                ],
+            ],
+            'capabilities' => [
+                'certificate_public_trust_bundle' => true,
+                'stable_launcher_rollback_target_proof' => true,
+            ],
+            'durable_state_contract' => $contract,
+        ];
+        $normalize = static function (mixed $value) use (&$normalize): mixed {
+            if (!\is_array($value)) {
+                return $value;
+            }
+            foreach ($value as $key => $child) {
+                $value[$key] = $normalize($child);
+            }
+            if (!\array_is_list($value)) {
+                \ksort($value, SORT_STRING);
+            }
+            return $value;
+        };
+        $runtimeGeneration = \hash(
+            'sha256',
+            \json_encode(
+                $normalize($manifest),
+                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ),
+        );
+        $manifest['runtime_generation'] = $runtimeGeneration;
+        self::assertNotFalse(\file_put_contents(
+            $slotDirectory . DIRECTORY_SEPARATOR . 'manifest.json',
+            \json_encode($manifest, JSON_THROW_ON_ERROR),
+        ));
+        $verified = (new \ReflectionMethod(
+            $this->controller,
+            'verifiedRollbackTargetManifest',
+        ))->invoke($this->controller, $slot);
+        self::assertSame($runtimeGeneration, $verified['runtime_generation']);
+
+        return [
+            'binary' => $binary,
+            'runtime_generation' => $runtimeGeneration,
+        ];
+    }
+
+    /**
+     * @param resource $server
+     * @param array<string,mixed> $identity
+     */
+    private function forkAuthenticatedBackendProbeResponder(
+        $server,
+        array $identity,
+        int $port,
+        int $acceptCount,
+    ): int {
+        $pid = \pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $pid);
+        if ($pid !== 0) {
+            return $pid;
+        }
+        for ($accepted = 0; $accepted < $acceptCount; ++$accepted) {
+            $client = @\stream_socket_accept($server, 4.0);
+            if (!\is_resource($client)) {
+                exit(70);
+            }
+            \stream_set_timeout($client, 2);
+            $request = '';
+            while (!\str_contains($request, "\r\n\r\n")) {
+                $chunk = @\fread($client, 8192);
+                if (!\is_string($chunk) || $chunk === '') {
+                    @\fclose($client);
+                    exit(71);
+                }
+                $request .= $chunk;
+                if (\strlen($request) > 65536) {
+                    @\fclose($client);
+                    exit(72);
+                }
+            }
+            if (\preg_match('/[?&]nonce=([a-f0-9]{32}) /D', $request, $nonce) !== 1
+                || \preg_match(
+                    '/\r\nX-WLS-Edge-Token: ([a-f0-9]{64})\r\n/D',
+                    $request,
+                    $token,
+                ) !== 1
+                || !\hash_equals(
+                    (string)$identity['edge_capability_secret'],
+                    (string)$token[1],
+                )
+            ) {
+                @\fclose($client);
+                exit(73);
+            }
+            $attestation = [
+                'schema' => 'wls-backend-attestation/1',
+                'project_uuid' => (string)$identity['project_uuid'],
+                'instance_id' => (string)$identity['instance_id'],
+                'instance_generation' => (int)$identity['generation'],
+                'master_epoch' => (int)$identity['master_epoch'],
+                'launch_id' => (string)$identity['launch_id'],
+                'listener_lease_id' => (string)$identity['listener_lease_id'],
+                'edge_capability_digest' => (string)$identity['edge_capability_digest'],
+                'backend_host' => '127.0.0.1',
+                'backend_port' => $port,
+                'session_capability' => (string)$identity['session_capability'],
+                'session_capability_evidence_digest' => (string)(
+                    $identity['session_capability_evidence_digest']
+                        ?? \str_repeat('0', 64)
+                ),
+                'nonce' => (string)$nonce[1],
+                'issued_at' => \time(),
+            ];
+            $key = \hex2bin((string)$identity['edge_capability_secret']);
+            if (!\is_string($key)) {
+                @\fclose($client);
+                exit(74);
+            }
+            $attestation['signature'] = \hash_hmac(
+                'sha256',
+                GatewayClient::canonicalJson($attestation),
+                $key,
+            );
+            $body = \json_encode(
+                ['backend_attestation' => $attestation],
+                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            );
+            $response = "HTTP/1.1 200 OK\r\n"
+                . 'Content-Length: ' . \strlen($body) . "\r\n"
+                . "Content-Type: application/json\r\n"
+                . "Connection: close\r\n\r\n"
+                . $body;
+            $offset = 0;
+            while ($offset < \strlen($response)) {
+                $written = @\fwrite($client, \substr($response, $offset));
+                if (!\is_int($written) || $written < 1) {
+                    @\fclose($client);
+                    exit(75);
+                }
+                $offset += $written;
+            }
+            @\fclose($client);
+        }
+        @\fclose($server);
+        exit(0);
     }
 
     private function removeTree(string $root): void

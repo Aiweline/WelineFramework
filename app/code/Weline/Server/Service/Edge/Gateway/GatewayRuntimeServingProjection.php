@@ -16,10 +16,19 @@ final class GatewayRuntimeServingProjection
     public const SERVING_GATEWAY = 'gateway';
     public const SERVING_FALLBACK_WLS = 'fallback_wls';
     private const OBSERVATION_TTL_SECONDS = 75;
+    private const READ_BUDGET_SECONDS = 1.0;
 
     /** @param array<string,mixed> $endpoint */
-    public static function gatewayIsServing(array $endpoint): bool
+    public static function gatewayIsServing(
+        array $endpoint,
+        ?float $deadlineMonotonic = null,
+    ): bool
     {
+        try {
+            $deadlineMonotonic = self::projectionDeadline($deadlineMonotonic);
+        } catch (\Throwable) {
+            return false;
+        }
         $gateway = self::gateway($endpoint);
         $fallbackState = \strtoupper(\trim((string)(
             $gateway['fallback_state'] ?? ''
@@ -39,7 +48,11 @@ final class GatewayRuntimeServingProjection
             && (int)$gateway['public_http'] !== (int)$gateway['public_https']
             && (int)($gateway['runtime_generation'] ?? 0) > 0
             && self::observationIsFresh($gateway)
-            && self::runtimeProjectProofMatchesEndpoint($endpoint, $gateway)
+            && self::runtimeProjectProofMatchesEndpoint(
+                $endpoint,
+                $gateway,
+                $deadlineMonotonic,
+            )
             && \in_array($fallbackState, [
                 'NATIVE_EDGE_DRAINING',
                 'GATEWAY_ACTIVE',
@@ -48,8 +61,16 @@ final class GatewayRuntimeServingProjection
     }
 
     /** @param array<string,mixed> $endpoint */
-    public static function fallbackWlsIsServing(array $endpoint): bool
+    public static function fallbackWlsIsServing(
+        array $endpoint,
+        ?float $deadlineMonotonic = null,
+    ): bool
     {
+        try {
+            $deadlineMonotonic = self::projectionDeadline($deadlineMonotonic);
+        } catch (\Throwable) {
+            return false;
+        }
         $gateway = self::gateway($endpoint);
         $httpsPort = (int)($gateway['public_https'] ?? 0);
         return \hash_equals(
@@ -67,7 +88,11 @@ final class GatewayRuntimeServingProjection
             && $httpsPort <= 29999
             && \trim((string)($gateway['degraded_reason'] ?? '')) !== ''
             && self::observationIsFresh($gateway)
-            && self::fallbackLeaseProofMatches($endpoint, $gateway);
+            && self::fallbackLeaseProofMatches(
+                $endpoint,
+                $gateway,
+                $deadlineMonotonic,
+            );
     }
 
     /**
@@ -77,14 +102,24 @@ final class GatewayRuntimeServingProjection
      * @param array<string,mixed> $endpoint
      * @return array{origin:string,bind_host:string,connect_host:string,authority_host:string,port:int,https:bool}|null
      */
-    public static function fallbackServingEndpoint(array $endpoint): ?array
+    public static function fallbackServingEndpoint(
+        array $endpoint,
+        ?float $deadlineMonotonic = null,
+    ): ?array
     {
-        if (self::fallbackWlsIsServing($endpoint)) {
-            $gateway = self::gateway($endpoint);
-            $proof = (array)$gateway['fallback_lease_proof'];
-            $bindHost = (string)$proof['bind_host'];
-            $authorityHost = (string)$proof['authority_host'];
-            $port = (int)$proof['port'];
+        try {
+            $deadlineMonotonic = self::projectionDeadline($deadlineMonotonic);
+        } catch (\Throwable) {
+            return null;
+        }
+        $observation = self::fallbackServingObservation(
+            $endpoint,
+            $deadlineMonotonic,
+        );
+        if ($observation !== null && $observation['authority_host'] !== null) {
+            $bindHost = $observation['bind_host'];
+            $authorityHost = $observation['authority_host'];
+            $port = $observation['port'];
             try {
                 $origin = \Weline\Server\Service\Edge\PureWlsPublicOrigin::fromHostAndPort(
                     $authorityHost,
@@ -114,7 +149,71 @@ final class GatewayRuntimeServingProjection
         return self::projectOwnedWlsServingEndpoint(
             $endpoint,
             GatewayStartupDecision::MODE_AUTO,
+            $deadlineMonotonic,
         );
+    }
+
+    /**
+     * Return the authenticated listener projection even when wildcard-only TLS
+     * cannot supply a concrete browser authority. `bind_endpoint` describes the
+     * transport listener only; callers must not turn it into an HTTPS URL.
+     *
+     * @param array<string,mixed> $endpoint
+     * @return array{
+     *   bind_host:string,
+     *   bind_endpoint:string,
+     *   connect_host:string,
+     *   authority_host:?string,
+     *   route_domains:list<string>,
+     *   limitations:list<string>,
+     *   port:int,
+     *   https:true
+     * }|null
+     */
+    public static function fallbackServingObservation(
+        array $endpoint,
+        ?float $deadlineMonotonic = null,
+    ): ?array
+    {
+        try {
+            $deadlineMonotonic = self::projectionDeadline($deadlineMonotonic);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!self::fallbackWlsIsServing($endpoint, $deadlineMonotonic)) {
+            return null;
+        }
+        $gateway = self::gateway($endpoint);
+        $proof = (array)$gateway['fallback_lease_proof'];
+        $bindHost = (string)$proof['bind_host'];
+        $authorityHost = (string)$proof['authority_host'];
+        $port = (int)$proof['port'];
+        $bindAuthority = \str_contains($bindHost, ':')
+            ? '[' . $bindHost . ']'
+            : $bindHost;
+        $limitations = [
+            'not_public_80_443',
+            'dns_mapping_required',
+            'firewall_or_load_balancer_may_block',
+        ];
+        if ($authorityHost === '') {
+            $limitations[] = 'hostname_and_sni_required';
+            $limitations[] = 'wildcard_route_requires_concrete_hostname';
+        }
+        return [
+            'bind_host' => $bindHost,
+            'bind_endpoint' => $bindAuthority . ':' . $port,
+            'connect_host' => match ($bindHost) {
+                '0.0.0.0' => '127.0.0.1',
+                '::' => '::1',
+                default => $bindHost,
+            },
+            'authority_host' => $authorityHost !== '' ? $authorityHost : null,
+            'route_domains' => (array)$proof['route_domains'],
+            'limitations' => $limitations,
+            'port' => $port,
+            'https' => true,
+        ];
     }
 
     /**
@@ -127,11 +226,20 @@ final class GatewayRuntimeServingProjection
      * @param array<string,mixed> $endpoint
      * @return array{origin:string,bind_host:string,connect_host:string,authority_host:string,port:int,https:bool}|null
      */
-    public static function explicitPureWlsServingEndpoint(array $endpoint): ?array
+    public static function explicitPureWlsServingEndpoint(
+        array $endpoint,
+        ?float $deadlineMonotonic = null,
+    ): ?array
     {
+        try {
+            $deadlineMonotonic = self::projectionDeadline($deadlineMonotonic);
+        } catch (\Throwable) {
+            return null;
+        }
         return self::projectOwnedWlsServingEndpoint(
             $endpoint,
             GatewayStartupDecision::MODE_WLS,
+            $deadlineMonotonic,
         );
     }
 
@@ -142,6 +250,7 @@ final class GatewayRuntimeServingProjection
     private static function projectOwnedWlsServingEndpoint(
         array $endpoint,
         string $requestedMode,
+        float $deadlineMonotonic,
     ): ?array
     {
         if (!\hash_equals(
@@ -218,7 +327,9 @@ final class GatewayRuntimeServingProjection
         }
 
         try {
-            $leases = new GatewayPortLeaseAllocator();
+            $leases = new GatewayPortLeaseAllocator(
+                operationDeadlineMonotonic: $deadlineMonotonic,
+            );
             $liveLease = $leases->liveServingLeaseForAnyOwner(
                 $instanceId,
                 $bindHost,
@@ -264,6 +375,7 @@ final class GatewayRuntimeServingProjection
                 $gateway,
                 $generation,
                 $digest,
+                $deadlineMonotonic,
             );
             if ($manifest === null
                 || !self::manifestPayloadCoversHost(
@@ -447,6 +559,7 @@ final class GatewayRuntimeServingProjection
     private static function runtimeProjectProofMatchesEndpoint(
         array $endpoint,
         array $gateway,
+        float $deadlineMonotonic,
     ): bool {
         $proof = \is_array($gateway['runtime_project_proof'] ?? null)
             ? $gateway['runtime_project_proof']
@@ -457,7 +570,18 @@ final class GatewayRuntimeServingProjection
         $digest = \strtolower(\trim((string)($proof['proof_digest'] ?? '')));
         $unsigned = $proof;
         unset($unsigned['proof_digest']);
-        if (($proof['schema_version'] ?? null) !== 2
+        $proofTrustProfile = (string)($proof['certificate_trust_profile'] ?? '');
+        try {
+            $proofTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+                $proofTrustProfile,
+            );
+            $runtimeTrustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+                (string)($gateway['certificate_profile'] ?? ''),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+        if (($proof['schema_version'] ?? null) !== 3
             || ($proof['public_probe_verified'] ?? false) !== true
             || !\hash_equals(
                 (string)($gateway['project_uuid'] ?? ''),
@@ -467,6 +591,7 @@ final class GatewayRuntimeServingProjection
                 (string)($gateway['instance_id'] ?? ''),
                 (string)($proof['instance_id'] ?? ''),
             )
+            || !\hash_equals($runtimeTrustProfile, $proofTrustProfile)
             || !\hash_equals(
                 \strtolower((string)($gateway['epoch'] ?? '')),
                 (string)($proof['gateway_epoch'] ?? ''),
@@ -529,15 +654,48 @@ final class GatewayRuntimeServingProjection
                 return false;
             }
             $routeId = (string)($route['route_id'] ?? '');
+            $domain = (string)($route['domain'] ?? '');
+            $sourceDigest = \strtolower(\trim((string)(
+                $route['certificate_source_digest'] ?? ''
+            )));
+            $trustProfile = (string)($route['certificate_trust_profile'] ?? '');
+            $provider = (string)($route['certificate_provider'] ?? '');
+            $materialClass = \strtolower(\trim((string)(
+                $route['certificate_material_class'] ?? ''
+            )));
+            $provenanceDigest = \strtolower(\trim((string)(
+                $route['certificate_provenance_digest'] ?? ''
+            )));
+            try {
+                $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+                    $trustProfile,
+                );
+                $provider = ProjectCertificateGenerationStore::normalizeProvider($provider);
+                $provenanceValid = \hash_equals(
+                    ProjectCertificateGenerationStore::provenanceDigest(
+                        $domain,
+                        $sourceDigest,
+                        $trustProfile,
+                        $provider,
+                        $materialClass,
+                    ),
+                    $provenanceDigest,
+                );
+            } catch (\Throwable) {
+                $provenanceValid = false;
+            }
             if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
                 || isset($seen[$routeId])
-                || \trim((string)($route['domain'] ?? '')) === ''
+                || \trim($domain) === ''
                 || (int)($route['route_generation'] ?? 0) < 1
                 || (int)($route['certificate_generation'] ?? 0) < 1
                 || \preg_match(
                     '/\A[a-f0-9]{64}\z/D',
                     (string)($route['certificate_source_digest'] ?? ''),
                 ) !== 1
+                || !\hash_equals($proofTrustProfile, $trustProfile)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $provenanceDigest) !== 1
+                || !$provenanceValid
                 || \preg_match(
                     '/\A[a-f0-9]{64}\z/D',
                     (string)($route['backend_public_digest'] ?? ''),
@@ -559,7 +717,12 @@ final class GatewayRuntimeServingProjection
             }
             $seen[$routeId] = true;
         }
-        return self::currentManifestMatchesGatewayProof($endpoint, $gateway, $proof);
+        return self::currentManifestMatchesGatewayProof(
+            $endpoint,
+            $gateway,
+            $proof,
+            $deadlineMonotonic,
+        );
     }
 
     /** @param array<string,mixed> $gateway */
@@ -604,6 +767,7 @@ final class GatewayRuntimeServingProjection
     private static function fallbackLeaseProofMatches(
         array $endpoint,
         array $gateway,
+        float $deadlineMonotonic,
     ): bool {
         $proof = \is_array($gateway['fallback_lease_proof'] ?? null)
             ? $gateway['fallback_lease_proof']
@@ -622,14 +786,21 @@ final class GatewayRuntimeServingProjection
             (string)($proof['bind_host'] ?? ''),
             " \t\n\r\0\x0B[]",
         ));
+        $rawAuthorityHost = (string)($proof['authority_host'] ?? '');
         try {
-            $authorityHost = ProjectServingManifestStore::normalizeHost(
-                (string)($proof['authority_host'] ?? ''),
-                false,
+            $authorityHost = $rawAuthorityHost === ''
+                ? ''
+                : ProjectServingManifestStore::normalizeHost(
+                    $rawAuthorityHost,
+                    false,
+                );
+            $routeDomains = self::fallbackRouteDomains(
+                $proof['route_domains'] ?? null,
             );
         } catch (\Throwable) {
             return false;
         }
+        $projectedRouteDomains = $gateway['fallback_route_domains'] ?? null;
         if (($proof['schema_version'] ?? null) !== 2
             || !\hash_equals((string)($gateway['project_uuid'] ?? ''), (string)(
                 $proof['project_uuid'] ?? ''
@@ -646,7 +817,9 @@ final class GatewayRuntimeServingProjection
             )) !== 1
             || !self::validCanonicalBindHost($bindHost)
             || \str_starts_with($authorityHost, '*.')
-            || !\hash_equals($authorityHost, (string)($proof['authority_host'] ?? ''))
+            || !\hash_equals($authorityHost, $rawAuthorityHost)
+            || !\is_array($projectedRouteDomains)
+            || $routeDomains !== $projectedRouteDomains
             || (int)($proof['port'] ?? 0) !== $port
             || (int)($proof['master_pid'] ?? 0) !== $masterPid
             || !\hash_equals('ACTIVE', (string)($proof['state'] ?? ''))
@@ -670,7 +843,9 @@ final class GatewayRuntimeServingProjection
             return false;
         }
         try {
-            $live = (new GatewayPortLeaseAllocator())->liveServingLease(
+            $live = (new GatewayPortLeaseAllocator(
+                operationDeadlineMonotonic: $deadlineMonotonic,
+            ))->liveServingLease(
                 $leaseInstanceId,
                 $bindHost,
                 $port,
@@ -694,12 +869,68 @@ final class GatewayRuntimeServingProjection
             $gateway,
             (int)$proof['serving_manifest_generation'],
             (string)$proof['serving_manifest_digest'],
+            $deadlineMonotonic,
         );
-        return $manifest !== null
-            && self::manifestPayloadCoversHost(
-                (array)$manifest['payload'],
-                $authorityHost,
+        if ($manifest === null) {
+            return false;
+        }
+        try {
+            $manifestRouteDomains = self::fallbackRouteDomains(
+                (array)($manifest['payload']['routes'] ?? []),
+                true,
             );
+        } catch (\Throwable) {
+            return false;
+        }
+        if ($routeDomains !== $manifestRouteDomains) {
+            return false;
+        }
+        if ($authorityHost === '') {
+            foreach ($routeDomains as $domain) {
+                if (!\str_starts_with($domain, '*.')) {
+                    return false;
+                }
+            }
+            return $routeDomains !== [];
+        }
+        return self::manifestPayloadCoversHost(
+            (array)$manifest['payload'],
+            $authorityHost,
+        );
+    }
+
+    /** @return list<string> */
+    private static function fallbackRouteDomains(
+        mixed $value,
+        bool $routes = false,
+    ): array {
+        if (!\is_array($value)
+            || !\array_is_list($value)
+            || $value === []
+            || \count($value) > 256
+        ) {
+            throw new \RuntimeException('Fallback route-domain proof is invalid.');
+        }
+        $domains = [];
+        foreach ($value as $entry) {
+            $candidate = $routes && \is_array($entry)
+                ? ($entry['domain'] ?? null)
+                : $entry;
+            if (!\is_string($candidate)) {
+                throw new \RuntimeException('Fallback route-domain proof is invalid.');
+            }
+            $domain = ProjectServingManifestStore::normalizeHost($candidate);
+            if (isset($domains[$domain])) {
+                throw new \RuntimeException('Fallback route-domain proof is duplicated.');
+            }
+            $domains[$domain] = true;
+        }
+        \ksort($domains, SORT_STRING);
+        $normalized = \array_keys($domains);
+        if (!$routes && $normalized !== $value) {
+            throw new \RuntimeException('Fallback route-domain proof is not canonical.');
+        }
+        return $normalized;
     }
 
     /** @param array<string,mixed> $proof */
@@ -707,12 +938,14 @@ final class GatewayRuntimeServingProjection
         array $endpoint,
         array $gateway,
         array $proof,
+        float $deadlineMonotonic,
     ): bool {
         $manifest = self::currentManifest(
             $endpoint,
             $gateway,
             (int)($proof['serving_manifest_generation'] ?? 0),
             (string)($proof['serving_manifest_digest'] ?? ''),
+            $deadlineMonotonic,
         );
         if ($manifest === null) {
             return false;
@@ -720,6 +953,10 @@ final class GatewayRuntimeServingProjection
         $payload = (array)$manifest['payload'];
         if ((int)($payload['project_generation'] ?? 0)
                 !== (int)($proof['project_generation'] ?? -1)
+            || !\hash_equals(
+                (string)($payload['certificate_trust_profile'] ?? ''),
+                (string)($proof['certificate_trust_profile'] ?? ''),
+            )
             || !\hash_equals(
                 (string)($payload['request_digest'] ?? ''),
                 (string)($proof['request_digest'] ?? ''),
@@ -761,6 +998,22 @@ final class GatewayRuntimeServingProjection
                 || !\hash_equals(
                     (string)($manifestRoute['certificate_source_digest'] ?? ''),
                     (string)($proofRoute['certificate_source_digest'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($manifestRoute['certificate_trust_profile'] ?? ''),
+                    (string)($proofRoute['certificate_trust_profile'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($manifestRoute['certificate_provider'] ?? ''),
+                    (string)($proofRoute['certificate_provider'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($manifestRoute['certificate_material_class'] ?? ''),
+                    (string)($proofRoute['certificate_material_class'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($manifestRoute['certificate_provenance_digest'] ?? ''),
+                    (string)($proofRoute['certificate_provenance_digest'] ?? ''),
                 )
                 || ($policy['force_https'] ?? null)
                     !== ($proofRoute['force_https'] ?? null)
@@ -820,19 +1073,23 @@ final class GatewayRuntimeServingProjection
         array $gateway,
         int $generation,
         string $digest,
+        float $deadlineMonotonic,
     ): ?array {
         $digest = \strtolower(\trim($digest));
         if ($generation < 1 || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1) {
             return null;
         }
         try {
-            $manifest = (new ProjectServingManifestStore())->currentForFence([
-                'instance_id' => (string)($gateway['instance_id'] ?? ''),
-                'instance_generation' => (int)($gateway['instance_generation'] ?? 0),
-                'master_pid' => (int)($endpoint['master_pid'] ?? 0),
-                'master_epoch' => (int)($endpoint['master_epoch'] ?? 0),
-                'launch_id' => (string)($gateway['launch_id'] ?? ''),
-            ]);
+            $manifest = (new ProjectServingManifestStore())->currentForFence(
+                [
+                    'instance_id' => (string)($gateway['instance_id'] ?? ''),
+                    'instance_generation' => (int)($gateway['instance_generation'] ?? 0),
+                    'master_pid' => (int)($endpoint['master_pid'] ?? 0),
+                    'master_epoch' => (int)($endpoint['master_epoch'] ?? 0),
+                    'launch_id' => (string)($gateway['launch_id'] ?? ''),
+                ],
+                $deadlineMonotonic,
+            );
         } catch (\Throwable) {
             return null;
         }
@@ -848,6 +1105,32 @@ final class GatewayRuntimeServingProjection
             return null;
         }
         return $manifest;
+    }
+
+    private static function projectionDeadline(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return self::monotonicNow() + self::READ_BUDGET_SECONDS;
+        }
+        if (!\is_finite($deadlineMonotonic)
+            || $deadlineMonotonic <= self::monotonicNow()
+        ) {
+            throw new \RuntimeException(
+                'Gateway runtime serving projection deadline was exhausted.',
+            );
+        }
+        return $deadlineMonotonic;
+    }
+
+    private static function monotonicNow(): float
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException(
+                'Gateway runtime serving projection monotonic clock is invalid.',
+            );
+        }
+        return $now;
     }
 
     /** @param array<string,mixed> $endpoint @return array<string,mixed> */

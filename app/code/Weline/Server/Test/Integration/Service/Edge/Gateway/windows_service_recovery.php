@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-const WLS_WINDOWS_TEST_SERVICE = 'weline-wls-gateway-v2';
-
 /** @return array{code:int,output:string} */
 function wlsRun(array $command, float $timeoutSeconds = 20.0): array
 {
@@ -87,31 +85,6 @@ function wlsRun(array $command, float $timeoutSeconds = 20.0): array
         $exitCode = $closed;
     }
     return ['code' => $exitCode, 'output' => \trim($output)];
-}
-
-/** @return array{code:int,output:string} */
-function wlsSc(array $arguments, float $timeoutSeconds = 20.0): array
-{
-    $systemRoot = (string)\getenv('SystemRoot');
-    if ($systemRoot === '') {
-        throw new \RuntimeException('SystemRoot is unavailable.');
-    }
-    return wlsRun(
-        [$systemRoot . '\\System32\\sc.exe', ...$arguments],
-        $timeoutSeconds,
-    );
-}
-
-function wlsCheckedSc(array $arguments, float $timeoutSeconds = 20.0): string
-{
-    $result = wlsSc($arguments, $timeoutSeconds);
-    if ($result['code'] !== 0) {
-        throw new \RuntimeException(
-            'sc.exe failed (' . $result['code'] . '): '
-                . \implode(' ', $arguments) . "\n" . $result['output'],
-        );
-    }
-    return $result['output'];
 }
 
 function wlsChecked(array $command, float $timeoutSeconds = 20.0): string
@@ -308,7 +281,7 @@ function wlsRemoveTree(string $root): void
         return;
     }
     if (\preg_match(
-        '/\Aweline-wls2-ci-(?:path|scm)-[a-f0-9]{16}\z/D',
+        '/\Aweline-wls2-ci-(?:path|bounded)-[a-f0-9]{16}\z/D',
         \basename($root),
     ) !== 1) {
         throw new \RuntimeException('Refusing unsafe fixture cleanup target: ' . $root);
@@ -330,70 +303,6 @@ function wlsRemoveTree(string $root): void
         $item->isDir() && !$item->isLink() ? @\rmdir($path) : @\unlink($path);
     }
     @\rmdir($root);
-}
-
-function wlsServiceState(): ?int
-{
-    $result = wlsSc(['queryex', WLS_WINDOWS_TEST_SERVICE]);
-    if ($result['code'] !== 0) {
-        return \str_contains($result['output'], '1060') ? null : -1;
-    }
-    return \preg_match('/STATE\s*:\s*([0-9]+)/i', $result['output'], $matches) === 1
-        ? (int)$matches[1]
-        : -1;
-}
-
-function wlsWaitServiceState(int $expected, float $timeoutSeconds): string
-{
-    $deadline = \hrtime(true) + (int)\round($timeoutSeconds * 1_000_000_000);
-    do {
-        $result = wlsSc(['queryex', WLS_WINDOWS_TEST_SERVICE]);
-        if ($result['code'] === 0
-            && \preg_match('/STATE\s*:\s*([0-9]+)/i', $result['output'], $matches) === 1
-            && (int)$matches[1] === $expected) {
-            return $result['output'];
-        }
-        \usleep(100_000);
-    } while (\hrtime(true) < $deadline);
-    throw new \RuntimeException(
-        'Service did not reach state ' . $expected . '. Last result: ' . $result['output'],
-    );
-}
-
-function wlsWaitServiceDeleted(float $timeoutSeconds): void
-{
-    $deadline = \hrtime(true) + (int)\round($timeoutSeconds * 1_000_000_000);
-    do {
-        if (wlsServiceState() === null) {
-            return;
-        }
-        \usleep(100_000);
-    } while (\hrtime(true) < $deadline);
-    throw new \RuntimeException('Temporary Windows service was not deleted.');
-}
-
-function wlsStartCount(string $marker): int
-{
-    if (!\is_file($marker)) {
-        return 0;
-    }
-    $lines = \file($marker, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    return \is_array($lines) ? \count($lines) : 0;
-}
-
-function wlsWaitStarts(string $marker, int $minimum, float $timeoutSeconds): int
-{
-    $deadline = \hrtime(true) + (int)\round($timeoutSeconds * 1_000_000_000);
-    do {
-        $count = wlsStartCount($marker);
-        if ($count >= $minimum) {
-            return $count;
-        }
-        \usleep(100_000);
-    } while (\hrtime(true) < $deadline);
-    throw new \RuntimeException(
-        'Broker start count did not reach ' . $minimum . '; last count=' . $count,
-    );
 }
 
 function wlsKeygen(array $arguments): void
@@ -738,6 +647,183 @@ function wlsBoundedResult(string $directory): array
     return $result;
 }
 
+function wlsCrossProcessPipeOrphanReaper(
+    string $autoload,
+    string $helper,
+): void {
+    $leaf = 'pipe-' . \bin2hex(\random_bytes(16));
+    $ready = \sys_get_temp_dir() . '\\wls-pipe-orphan-ready-'
+        . \bin2hex(\random_bytes(8));
+    $producerCode = <<<'PHP'
+require $argv[1];
+$class = 'Weline\\Server\\Service\\Edge\\Gateway\\GatewayBoundedCommandRunner';
+$parentMethod = new ReflectionMethod($class, 'windowsResultParent');
+$parent = $parentMethod->invoke(null);
+$directory = $parent . DIRECTORY_SEPARATOR . $argv[3];
+$process = proc_open(
+    [$argv[2], '--pipe-prepare', '--transaction-dir=' . $directory],
+    [0 => ['file', 'NUL', 'r'], 1 => ['file', 'NUL', 'a'], 2 => ['file', 'NUL', 'a']],
+    $pipes,
+    null,
+    null,
+    ['bypass_shell' => true],
+);
+if (!is_resource($process)) { exit(31); }
+$status = proc_get_status($process);
+while (($status['running'] ?? false) === true) {
+    usleep(10000);
+    $status = proc_get_status($process);
+}
+$code = (int)($status['exitcode'] ?? -1);
+$closed = (int)proc_close($process);
+if (($code >= 0 ? $code : $closed) !== 0 || !touch($directory, time() - 120)) {
+    exit(32);
+}
+$ready = $directory . "\n";
+if (file_put_contents($argv[4], $ready, LOCK_EX) !== strlen($ready)) { exit(33); }
+sleep(60);
+PHP;
+    $producer = \proc_open(
+        [\PHP_BINARY, '-r', $producerCode, $autoload, $helper, $leaf, $ready],
+        [
+            0 => ['file', 'NUL', 'r'],
+            1 => ['file', 'NUL', 'a'],
+            2 => ['file', 'NUL', 'a'],
+        ],
+        $producerPipes,
+        null,
+        null,
+        ['bypass_shell' => true],
+    );
+    if (!\is_resource($producer)) {
+        throw new \RuntimeException('Unable to launch pipe orphan producer PHP.');
+    }
+    $directory = '';
+    $nextDirectory = '';
+    try {
+        $readyDeadline = \hrtime(true) + 10_000_000_000;
+        while (!\is_file($ready)) {
+            $status = \proc_get_status($producer);
+            if (!(bool)($status['running'] ?? false)
+                || \hrtime(true) >= $readyDeadline) {
+                throw new \RuntimeException(
+                    'Pipe orphan producer did not publish its durable residue.',
+                );
+            }
+            \usleep(10_000);
+        }
+        $publishedDirectory = \trim((string)\file_get_contents($ready));
+        if ($publishedDirectory === ''
+            || !\str_ends_with($publishedDirectory, '\\' . $leaf)
+            || \is_link($publishedDirectory)
+            || !\is_dir($publishedDirectory)) {
+            throw new \RuntimeException('Pipe orphan producer published an unsafe path.');
+        }
+        $directory = $publishedDirectory;
+        if (!@\proc_terminate($producer, 9)) {
+            throw new \RuntimeException('Unable to kill pipe orphan producer PHP.');
+        }
+        $exitDeadline = \hrtime(true) + 5_000_000_000;
+        do {
+            \usleep(10_000);
+            $status = \proc_get_status($producer);
+        } while ((bool)($status['running'] ?? false)
+            && \hrtime(true) < $exitDeadline);
+        if ((bool)($status['running'] ?? false)) {
+            throw new \RuntimeException('Killed pipe orphan producer PHP remained alive.');
+        }
+        @\proc_close($producer);
+        $producer = null;
+
+        $reaperCode = <<<'PHP'
+require $argv[1];
+$path = realpath($argv[2]);
+if (!is_string($path)) { exit(41); }
+$proof = [
+    'path' => $path,
+    'size' => filesize($path),
+    'sha256' => hash_file('sha256', $path),
+    'source' => 'windows-integration',
+];
+$method = new ReflectionMethod(
+    'Weline\\Server\\Service\\Edge\\Gateway\\GatewayBoundedCommandRunner',
+    'reapWindowsPipeOrphans',
+);
+$ok = $method->invoke(null, $proof, (hrtime(true) / 1000000000) + 15.0);
+echo $ok ? 'reaped' : 'failed';
+exit($ok ? 0 : 42);
+PHP;
+        $reaped = wlsRun([
+            \PHP_BINARY,
+            '-r',
+            $reaperCode,
+            $autoload,
+            $helper,
+        ], 20.0);
+        if ($reaped['code'] !== 0 || $reaped['output'] !== 'reaped') {
+            throw new \RuntimeException(
+                'A new PHP process did not converge the killed parent residue: '
+                    . $reaped['output'],
+            );
+        }
+
+        $parentCode = <<<'PHP'
+require $argv[1];
+$method = new ReflectionMethod(
+    'Weline\\Server\\Service\\Edge\\Gateway\\GatewayBoundedCommandRunner',
+    'windowsResultParent',
+);
+echo $method->invoke(null);
+PHP;
+        $parentResult = wlsRun([
+            \PHP_BINARY, '-r', $parentCode, $autoload,
+        ], 10.0);
+        if ($parentResult['code'] !== 0 || $parentResult['output'] === '') {
+            throw new \RuntimeException('Unable to resolve the pipe result parent.');
+        }
+        $directory = $parentResult['output'] . '\\' . $leaf;
+        if (\file_exists($directory) || \is_link($directory)) {
+            throw new \RuntimeException('Cross-process pipe orphan was retained.');
+        }
+
+        $nextLeaf = 'pipe-' . \bin2hex(\random_bytes(16));
+        $nextDirectory = $parentResult['output'] . '\\' . $nextLeaf;
+        if (wlsRunWithNullOutput([
+            $helper,
+            '--pipe-prepare',
+            '--transaction-dir=' . $nextDirectory,
+        ]) !== 0 || !@\touch($nextDirectory, \time() - 120)) {
+            throw new \RuntimeException(
+                'The request after orphan convergence could not be prepared.',
+            );
+        }
+        $nextReaped = wlsRun([
+            \PHP_BINARY,
+            '-r',
+            $reaperCode,
+            $autoload,
+            $helper,
+        ], 20.0);
+        if ($nextReaped['code'] !== 0
+            || \file_exists($nextDirectory)
+            || \is_link($nextDirectory)) {
+            throw new \RuntimeException('Next-request pipe fixture did not cleanly converge.');
+        }
+    } finally {
+        if (\is_resource($producer)) {
+            @\proc_terminate($producer, 9);
+            @\proc_close($producer);
+        }
+        @\unlink($ready);
+        if ($directory !== '' && \is_dir($directory)) {
+            wlsRemoveTree($directory);
+        }
+        if ($nextDirectory !== '' && \is_dir($nextDirectory)) {
+            wlsRemoveTree($nextDirectory);
+        }
+    }
+}
+
 function wlsBoundedCommandTest(array $arguments): void
 {
     if (PHP_OS_FAMILY !== 'Windows') {
@@ -752,6 +838,10 @@ function wlsBoundedCommandTest(array $arguments): void
     $helper = \realpath($helperInput);
     if (!\is_string($helper) || !\is_file($helper)) {
         throw new \RuntimeException('Bounded-command helper is missing: ' . $helperInput);
+    }
+    $autoload = \realpath(\dirname(__DIR__, 9) . '/vendor/autoload.php');
+    if (!\is_string($autoload) || !\is_file($autoload)) {
+        throw new \RuntimeException('WLS autoload is unavailable for cross-process reaping.');
     }
     $programData = (string)\getenv('ProgramData');
     if ($programData === '') {
@@ -906,6 +996,8 @@ function wlsBoundedCommandTest(array $arguments): void
             throw new \RuntimeException('KILL_ON_CLOSE left a descendant alive after helper death.');
         }
 
+        wlsCrossProcessPipeOrphanReaper($autoload, $helper);
+
         $existing = $root . '\\existing';
         wlsMkdirExclusive($existing);
         if (wlsRunWithNullOutput([
@@ -929,308 +1021,1192 @@ function wlsBoundedCommandTest(array $arguments): void
     }
 }
 
-function wlsPrepareHome(
-    string $root,
-    string $launcher,
-    string $testBroker,
-    string $secretKey,
-): array
+/** @return array<string,mixed> */
+function wlsCapacityJson(array $result, string $label): array
 {
-    $home = $root . '\\home';
-    $run = $root . '\\run';
-    $slot = $home . '\\slots\\A';
-    $release = $slot . '\\release';
-    $bin = $slot . '\\bin';
-    $app = $slot . '\\app';
-    $launcherBin = $root . '\\bin';
-    $directories = [
-        $home . '\\state',
-        $home . '\\trust',
-        $run,
-        $release,
-        $bin,
-        $app,
-        $launcherBin,
-    ];
-    foreach ($directories as $directory) {
-        wlsMkdir($directory);
-    }
-    $installedLauncher = $launcherBin . '\\wls-gateway-launcher.exe';
-    wlsCopy($launcher, $installedLauncher);
-    foreach (\glob(\dirname($launcher) . '\\*.dll') ?: [] as $dll) {
-        wlsCopy($dll, $launcherBin . '\\' . \basename($dll));
-    }
-    $componentFiles = [
-        'bin/wls-gateway-broker.exe' => $testBroker,
-        'bin/php.exe' => PHP_BINARY,
-        'bin/nginx.exe' => $testBroker,
-    ];
-    foreach ($componentFiles as $relative => $source) {
-        wlsCopy($source, $slot . '\\' . \str_replace('/', '\\', $relative));
-    }
-    wlsWrite($app . '\\controller.php', "<?php\n");
-    $componentFiles['app/controller.php'] = $app . '\\controller.php';
-    $components = [];
-    foreach ($componentFiles as $relative => $source) {
-        $installed = $slot . '\\' . \str_replace('/', '\\', $relative);
-        $digest = \hash_file('sha256', $installed);
-        $size = \filesize($installed);
-        if (!\is_string($digest) || !\is_int($size)) {
-            throw new \RuntimeException('Unable to inspect component ' . $installed);
-        }
-        $components[$relative] = ['sha256' => $digest, 'size' => $size, 'mode' => 0550];
-    }
-    $manifest = \json_encode([
-        'schema_version' => 2,
-        'version' => '2.0.0-windows-scm-test',
-        'components' => $components,
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-    wlsWrite($release . '\\manifest.json', $manifest);
-    wlsWrite(
-        $release . '\\manifest.sig',
-        \base64_encode(\sodium_crypto_sign_detached($manifest, $secretKey)) . PHP_EOL,
-    );
-    wlsWrite(
-        $slot . '\\manifest.json',
-        \json_encode([
-            'schema_version' => 1,
-            'role' => 'host_gateway',
-            'runtime_generation' => \str_repeat('a', 64),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-    );
-    wlsWrite($home . '\\trust\\active-slot', "A\n");
-    return [
-        'home' => $home,
-        'run' => $run,
-        'launcher' => $installedLauncher,
-        'marker' => $home . '\\state\\test-starts.log',
-        'hold' => $home . '\\state\\test-hold',
-    ];
-}
-
-function wlsServiceTest(array $arguments): void
-{
-    if (PHP_OS_FAMILY !== 'Windows') {
-        throw new \RuntimeException('The SCM integration test requires Windows.');
-    }
-    if ((string)\getenv('WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION') !== '1') {
+    if ($result['code'] !== 0) {
         throw new \RuntimeException(
-            'Set WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION=1 explicitly.',
+            $label . ' failed (' . $result['code'] . '): ' . $result['output'],
         );
     }
-    $keyFile = wlsOption($arguments, 'key-file');
-    $launcher = wlsOption($arguments, 'launcher');
-    $testBroker = wlsOption($arguments, 'test-broker');
-    $secret = null;
-    $root = '';
-    $rootCreated = false;
-    $createAttempted = false;
-    $created = false;
-    $serviceReferenceReleased = true;
-    $fixture = [];
-    $failure = null;
+    $decoded = \json_decode($result['output'], true, flags: JSON_THROW_ON_ERROR);
+    if (!\is_array($decoded) || \array_is_list($decoded)) {
+        throw new \RuntimeException($label . ' did not return a JSON object.');
+    }
+    return $decoded;
+}
+
+/** @return array{code:int,output:string} */
+function wlsCapacityCommand(
+    string $launcher,
+    array $common,
+    string $operation,
+    array $extra = [],
+    float $timeoutSeconds = 180.0,
+): array {
+    return wlsRun([
+        $launcher,
+        '--capacity-reserve=' . $operation,
+        ...$common,
+        ...$extra,
+    ], $timeoutSeconds);
+}
+
+/** @return array{schema:string,state:string} */
+function wlsCapacityInspect(string $launcher, array $common): array
+{
+    $inspect = wlsCapacityJson(
+        wlsCapacityCommand($launcher, $common, 'inspect'),
+        'Windows capacity inspect',
+    );
+    if (\array_keys($inspect) !== ['schema', 'state']
+        || ($inspect['schema'] ?? null) !== 'wls-capacity-inspect/1'
+        || !\in_array(
+            $inspect['state'] ?? null,
+            ['NONE', 'ALLOCATING', 'HELD', 'RELEASING'],
+            true,
+        )) {
+        throw new \RuntimeException('Windows capacity inspect response drifted.');
+    }
+    /** @var array{schema:string,state:string} $inspect */
+    return $inspect;
+}
+
+function wlsCapacityFailpointMarker(string $definition, string $nonce): string
+{
+    if (\preg_match('/\A[a-f0-9]{32}\z/D', $nonce) !== 1) {
+        throw new \RuntimeException('Capacity failpoint nonce is invalid.');
+    }
+    return \dirname($definition) . '\\' . $nonce
+        . '.platform.reserve.failpoint';
+}
+
+function wlsCapacityRemoveFailpointMarker(
+    string $marker,
+    string $definition,
+    string $nonce,
+): void {
+    $expected = wlsCapacityFailpointMarker($definition, $nonce);
+    if (\strcasecmp($marker, $expected) !== 0
+        || !\is_file($marker) || \is_link($marker)) {
+        throw new \RuntimeException('Refusing unsafe capacity failpoint marker.');
+    }
+    $powershell = wlsWindowsTool('WindowsPowerShell\\v1.0\\powershell.exe');
+    $plain = wlsRun([
+        $powershell,
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        '$item = Get-Item -LiteralPath $args[0] -Force -ErrorAction Stop; '
+            . 'if ($item.PSIsContainer) { exit 20 }; '
+            . 'if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { exit 21 }',
+        $marker,
+    ], 10.0);
+    if ($plain['code'] !== 0 || !\unlink($marker)) {
+        throw new \RuntimeException('Unable to remove exact capacity failpoint marker.');
+    }
+}
+
+function wlsCapacityKillAtFailpoint(
+    string $launcher,
+    array $common,
+    string $operation,
+    array $extra,
+    string $definition,
+    string $nonce,
+    string $failpoint,
+    float $timeoutSeconds = 3600.0,
+): void {
+    if (!\in_array(
+        $failpoint,
+        [
+            'allocation',
+            'token-directory',
+            'token-batch',
+            'direct-seal',
+            'rename',
+            'begin',
+            'control-token-partial',
+            'release',
+            'primary-token-partial',
+        ],
+        true,
+    )) {
+        throw new \RuntimeException('Unknown capacity test failpoint.');
+    }
+    $marker = wlsCapacityFailpointMarker($definition, $nonce);
+    if (\file_exists($marker) || \is_link($marker)) {
+        throw new \RuntimeException('Capacity failpoint marker was not reaped.');
+    }
+    $previous = \getenv('WLS_CAPACITY_TEST_FAILPOINT');
+    if (!\putenv('WLS_CAPACITY_TEST_FAILPOINT=' . $failpoint)) {
+        throw new \RuntimeException('Unable to arm capacity test failpoint.');
+    }
+    $process = null;
     try {
-        foreach ([$keyFile, $launcher, $testBroker] as $required) {
-            if (!\is_file($required)) {
-                throw new \RuntimeException('Required fixture file is missing: ' . $required);
-            }
+        $process = \proc_open(
+            [
+                $launcher,
+                '--capacity-reserve=' . $operation,
+                ...$common,
+                ...$extra,
+            ],
+            [
+                0 => ['file', 'NUL', 'r'],
+                1 => ['file', 'NUL', 'a'],
+                2 => ['file', 'NUL', 'a'],
+            ],
+            $pipes,
+            null,
+            null,
+            ['bypass_shell' => true],
+        );
+    } finally {
+        if ($previous === false) {
+            \putenv('WLS_CAPACITY_TEST_FAILPOINT');
+        } else {
+            \putenv('WLS_CAPACITY_TEST_FAILPOINT=' . $previous);
         }
-        $existing = wlsSc(['query', WLS_WINDOWS_TEST_SERVICE]);
-        if ($existing['code'] === 0 || !\str_contains($existing['output'], '1060')) {
-            throw new \RuntimeException(
-                'Refusing to replace an existing or indeterminate service: ' . $existing['output'],
+    }
+    if (!\is_resource($process)) {
+        throw new \RuntimeException('Unable to start capacity crash helper.');
+    }
+    $deadline = \hrtime(true) + (int)\round($timeoutSeconds * 1_000_000_000);
+    $killed = false;
+    try {
+        for (;;) {
+            $status = \proc_get_status($process);
+            if (!(bool)($status['running'] ?? false)) {
+                throw new \RuntimeException(
+                    'Capacity helper exited before publishing its durable failpoint marker.',
+                );
+            }
+            \clearstatcache(true, $marker);
+            if (\is_file($marker) && !\is_link($marker)) {
+                break;
+            }
+            if (\hrtime(true) >= $deadline) {
+                throw new \RuntimeException('Capacity failpoint marker timed out.');
+            }
+            \usleep(50_000);
+        }
+        if (!@\proc_terminate($process)) {
+            throw new \RuntimeException('Unable to kill capacity helper at failpoint.');
+        }
+        $killDeadline = \hrtime(true) + 10_000_000_000;
+        do {
+            $status = \proc_get_status($process);
+            if (!(bool)($status['running'] ?? false)) {
+                $killed = true;
+                break;
+            }
+            \usleep(50_000);
+        } while (\hrtime(true) < $killDeadline);
+        if (!$killed) {
+            throw new \RuntimeException('Capacity helper resisted bounded termination.');
+        }
+        wlsCapacityRemoveFailpointMarker($marker, $definition, $nonce);
+    } finally {
+        if (!$killed) {
+            @\proc_terminate($process);
+            @\proc_terminate($process, 9);
+        }
+        @\proc_close($process);
+    }
+}
+
+function wlsCapacityCandidate(string $home, string $source, string $nonce): string
+{
+    $bin = $home . '\\rebootstrap\\candidates\\' . $nonce . '\\bin';
+    wlsMkdir($bin);
+    $candidate = $bin . '\\wls-gateway-launcher.exe';
+    wlsCopy($source, $candidate);
+    foreach (new \FilesystemIterator(
+        \dirname($source),
+        \FilesystemIterator::SKIP_DOTS,
+    ) as $dependency) {
+        if ($dependency->isFile()
+            && \preg_match('/\.dll\z/iD', $dependency->getFilename()) === 1
+        ) {
+            wlsCopy(
+                $dependency->getPathname(),
+                $bin . '\\' . $dependency->getFilename(),
             );
         }
-        $keyPayload = \file_get_contents($keyFile);
-        if (!\is_string($keyPayload)) {
-            throw new \RuntimeException('Unable to read the ephemeral signing key.');
+    }
+    return $candidate;
+}
+
+function wlsCapacityWriteDurableExclusive(string $path, string $contents): void
+{
+    $file = @\fopen($path, 'x+b');
+    if (!\is_resource($file)) {
+        throw new \RuntimeException('Refusing to replace durable capacity marker ' . $path);
+    }
+    $failure = null;
+    try {
+        if (!\flock($file, LOCK_EX)) {
+            throw new \RuntimeException('Unable to lock durable capacity marker.');
         }
-        try {
-            $key = \json_decode($keyPayload, true, flags: JSON_THROW_ON_ERROR);
-        } finally {
-            \sodium_memzero($keyPayload);
+        $offset = 0;
+        while ($offset < \strlen($contents)) {
+            $written = \fwrite($file, \substr($contents, $offset));
+            if (!\is_int($written) || $written < 1) {
+                throw new \RuntimeException('Unable to write durable capacity marker.');
+            }
+            $offset += $written;
         }
-        if (!\is_array($key)) {
-            throw new \RuntimeException('The ephemeral signing key payload is invalid.');
+        if (!\fflush($file)
+            || !\function_exists('fsync')
+            || !\fsync($file)) {
+            throw new \RuntimeException('Unable to durably flush capacity marker.');
         }
-        $secret = \base64_decode((string)($key['secret_key_base64'] ?? ''), true);
-        if (\is_string($key['secret_key_base64'] ?? null)) {
-            \sodium_memzero($key['secret_key_base64']);
+    } catch (\Throwable $exception) {
+        $failure = $exception;
+    } finally {
+        @\flock($file, LOCK_UN);
+        @\fclose($file);
+    }
+    if ($failure !== null) {
+        @\unlink($path);
+        throw $failure;
+    }
+}
+
+function wlsCapacityProductionMarker(string $home): string
+{
+    return $home . '\\rebootstrap\\capacity\\production-gate.marker.json';
+}
+
+function wlsCapacityWriteProductionMarker(
+    string $home,
+    string $nonce,
+    string $definition,
+): void {
+    $marker = wlsCapacityProductionMarker($home);
+    $payload = [
+        'schema' => 'wls-capacity-production-gate/1',
+        'nonce' => $nonce,
+        'definition' => $definition,
+    ];
+    wlsCapacityWriteDurableExclusive(
+        $marker,
+        \json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ) . "\n",
+    );
+}
+
+/** @return array{schema:string,nonce:string,definition:string}|null */
+function wlsCapacityReadProductionMarker(
+    string $home,
+    string $expectedDefinition,
+): ?array {
+    $marker = wlsCapacityProductionMarker($home);
+    if (!\file_exists($marker) && !\is_link($marker)) {
+        return null;
+    }
+    if (!\is_file($marker) || \is_link($marker)) {
+        throw new \RuntimeException('Production capacity marker is not a plain file.');
+    }
+    $decoded = \json_decode(
+        (string)\file_get_contents($marker),
+        true,
+        flags: JSON_THROW_ON_ERROR,
+    );
+    if (!\is_array($decoded) || \array_is_list($decoded)
+        || \array_keys($decoded) !== ['schema', 'nonce', 'definition']
+        || ($decoded['schema'] ?? null) !== 'wls-capacity-production-gate/1'
+        || !\is_string($decoded['nonce'] ?? null)
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $decoded['nonce']) !== 1
+        || !\is_string($decoded['definition'] ?? null)
+        || \strcasecmp($decoded['definition'], $expectedDefinition) !== 0) {
+        throw new \RuntimeException('Production capacity marker is malformed or foreign.');
+    }
+    /** @var array{schema:string,nonce:string,definition:string} $decoded */
+    return $decoded;
+}
+
+function wlsCapacityRecoverDurableMarker(
+    string $home,
+    string $definition,
+): void {
+    $markerState = wlsCapacityReadProductionMarker($home, $definition);
+    if ($markerState === null) {
+        return;
+    }
+    $nonce = $markerState['nonce'];
+    $candidate = $home . '\\rebootstrap\\candidates\\' . $nonce
+        . '\\bin\\wls-gateway-launcher.exe';
+    if (!\is_file($candidate) || \is_link($candidate)) {
+        throw new \RuntimeException('Durable capacity recovery candidate is unavailable.');
+    }
+    $failpointMarker = wlsCapacityFailpointMarker($definition, $nonce);
+    if (\file_exists($failpointMarker) || \is_link($failpointMarker)) {
+        wlsCapacityRemoveFailpointMarker(
+            $failpointMarker,
+            $definition,
+            $nonce,
+        );
+    }
+    $common = [
+        '--home=' . $home,
+        '--nonce=' . $nonce,
+        '--bytes=10737418240',
+        '--inodes=65536',
+        '--platform-definition=' . $definition,
+        '--test-mode=0',
+    ];
+    $inspect = wlsCapacityInspect($candidate, $common);
+    $capacity = $home . '\\rebootstrap\\capacity';
+    $manifest = $capacity . '\\' . $nonce . '.held.json';
+    $expectedManifest = '{"nonce":"' . $nonce
+        . '","state":"HELD"}' . "\n";
+    $binding = null;
+    if ($inspect === [
+        'schema' => 'wls-capacity-inspect/1',
+        'state' => 'ALLOCATING',
+    ]) {
+        wlsCapacityJson(
+            wlsCapacityCommand(
+                $candidate,
+                $common,
+                'complete-release',
+                ['--release-reason=cancel'],
+                3600.0,
+            ),
+            'Windows production ALLOCATING crash recovery',
+        );
+    } elseif (($inspect['state'] ?? null) === 'HELD') {
+        if (!\file_exists($manifest)) {
+            wlsCapacityWriteDurableExclusive(
+                $manifest,
+                $expectedManifest,
+            );
         }
-        $public = (string)($key['public_key_hex'] ?? '');
-        if (!\is_string($secret)
-            || \strlen($secret) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES
-            || !\preg_match('/\A[0-9a-f]{64}\z/D', $public)
-            || !\hash_equals(
-                $public,
-                \bin2hex(\sodium_crypto_sign_publickey_from_secretkey($secret)),
-            )) {
-            throw new \RuntimeException('The ephemeral signing key is invalid.');
+        if (!\is_file($manifest) || \is_link($manifest)
+            || \file_get_contents($manifest) !== $expectedManifest) {
+            throw new \RuntimeException('Production capacity manifest is unsafe.');
         }
-        $programData = (string)\getenv('ProgramData');
-        if ($programData === '') {
-            throw new \RuntimeException('ProgramData is unavailable.');
+        $digest = \hash_file('sha256', $manifest);
+        if (!\is_string($digest)) {
+            throw new \RuntimeException('Unable to bind recovered production capacity manifest.');
         }
-        wlsAssertPlainDirectory($programData);
-        $root = $programData . '\\weline-wls2-ci-scm-' . \bin2hex(\random_bytes(8));
+        $binding = '--expected-manifest-sha256=' . $digest;
+        wlsCapacityJson(
+            wlsCapacityCommand(
+                $candidate,
+                $common,
+                'begin-release',
+                ['--release-reason=cancel', $binding],
+                3600.0,
+            ),
+            'Windows production HELD crash recovery',
+        );
+    } elseif (($inspect['state'] ?? null) === 'RELEASING') {
+        if (!\is_file($manifest) || \is_link($manifest)
+            || \file_get_contents($manifest) !== $expectedManifest) {
+            throw new \RuntimeException(
+                'RELEASING production capacity lacks its authenticated manifest.',
+            );
+        }
+        $digest = \hash_file('sha256', $manifest);
+        if (!\is_string($digest)) {
+            throw new \RuntimeException('Unable to bind releasing capacity manifest.');
+        }
+        $binding = '--expected-manifest-sha256=' . $digest;
+        $beginReplay = wlsCapacityCommand(
+            $candidate,
+            $common,
+            'begin-release',
+            ['--release-reason=cancel', $binding],
+            3600.0,
+        );
+        if ($beginReplay['code'] === 0) {
+            wlsCapacityJson(
+                $beginReplay,
+                'Windows production RELEASING begin replay',
+            );
+        }
+    } elseif (($inspect['state'] ?? null) !== 'NONE') {
+        throw new \RuntimeException('Unsupported production capacity recovery state.');
+    }
+    if ($binding !== null) {
+        wlsCapacityJson(
+            wlsCapacityCommand(
+                $candidate,
+                $common,
+                'complete-release',
+                ['--release-reason=cancel', $binding],
+                3600.0,
+            ),
+            'Windows production capacity release recovery',
+        );
+    }
+    if (wlsCapacityInspect($candidate, $common) !== [
+        'schema' => 'wls-capacity-inspect/1',
+        'state' => 'NONE',
+    ]) {
+        throw new \RuntimeException('Production capacity recovery did not converge to NONE.');
+    }
+    if (\file_exists($manifest)) {
+        if (!\is_file($manifest) || \is_link($manifest)
+            || \file_get_contents($manifest) !== $expectedManifest
+            || !\unlink($manifest)) {
+            throw new \RuntimeException(
+                'Unable to remove exact recovered production manifest.',
+            );
+        }
+    }
+    $marker = wlsCapacityProductionMarker($home);
+    if (!\is_file($marker) || \is_link($marker) || !\unlink($marker)) {
+        throw new \RuntimeException('Unable to retire production capacity marker.');
+    }
+}
+
+function wlsRemoveCapacityTree(string $root): void
+{
+    if (!\file_exists($root) && !\is_link($root)) {
+        return;
+    }
+    if (\preg_match(
+        '/\Aweline-wls2-capacity-[a-f0-9]{16}\z/D',
+        \basename($root),
+    ) !== 1 || \is_link($root)) {
+        throw new \RuntimeException('Refusing unsafe capacity cleanup target: ' . $root);
+    }
+    $temporary = \realpath(\sys_get_temp_dir());
+    $parent = \realpath(\dirname($root));
+    if (!\is_string($temporary) || !\is_string($parent)
+        || \strcasecmp($temporary, $parent) !== 0
+    ) {
+        throw new \RuntimeException('Capacity fixture cleanup escaped temporary storage.');
+    }
+    wlsAssertPlainDirectory($root);
+    $iterator = new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+        \RecursiveIteratorIterator::CHILD_FIRST,
+    );
+    foreach ($iterator as $item) {
+        $path = $item->getPathname();
+        if ($item->isDir() && !$item->isLink()) {
+            if (!@\rmdir($path)) {
+                throw new \RuntimeException('Unable to remove capacity directory ' . $path);
+            }
+        } elseif (!@\unlink($path)) {
+            throw new \RuntimeException('Unable to remove capacity file ' . $path);
+        }
+    }
+    if (!@\rmdir($root)) {
+        throw new \RuntimeException('Unable to remove capacity fixture root ' . $root);
+    }
+}
+
+function wlsWindowsCapacityTest(array $arguments): void
+{
+    if (PHP_OS_FAMILY !== 'Windows') {
+        throw new \RuntimeException('The native capacity integration test requires Windows.');
+    }
+    if ((string)\getenv('WLS_RUN_NATIVE_GATEWAY_WINDOWS_CAPACITY_INTEGRATION') !== '1') {
+        throw new \RuntimeException(
+            'Set WLS_RUN_NATIVE_GATEWAY_WINDOWS_CAPACITY_INTEGRATION=1 explicitly.',
+        );
+    }
+    $sourceLauncher = \realpath(wlsOption($arguments, 'launcher'));
+    if (!\is_string($sourceLauncher) || !\is_file($sourceLauncher)) {
+        throw new \RuntimeException('Native launcher fixture is missing.');
+    }
+    $contract = wlsCapacityJson(
+        wlsRun([$sourceLauncher, '--capacity-reserve-contract-self-test']),
+        'Windows capacity contract self-test',
+    );
+    if ($contract !== [
+        'production_inodes' => 65_536,
+        'token_flush_batch' => 4_096,
+        'production_volume_flushes' => 16,
+        'test_volume_flushes' => 1,
+    ]) {
+        throw new \RuntimeException('Windows capacity batching contract changed.');
+    }
+
+    $temporaryRoot = \realpath(\sys_get_temp_dir());
+    if (!\is_string($temporaryRoot)) {
+        throw new \RuntimeException('Windows temporary directory is not canonical.');
+    }
+    $root = $temporaryRoot . '\\weline-wls2-capacity-'
+        . \bin2hex(\random_bytes(8));
+    $created = false;
+    $failure = null;
+    try {
         wlsMkdirExclusive($root);
-        $rootCreated = true;
-        wlsRestrictFixtureRoot($root);
-        $fixture = wlsPrepareHome($root, $launcher, $testBroker, $secret);
-        $binaryPath = '"' . $fixture['launcher'] . '" --service --home "'
-            . $fixture['home'] . '" --run "' . $fixture['run'] . '" --profile=default';
-        $createAttempted = true;
-        $serviceReferenceReleased = false;
-        wlsCheckedSc([
-            'create',
-            WLS_WINDOWS_TEST_SERVICE,
-            'binPath=',
-            $binaryPath,
-            'start=',
-            'demand',
-            'obj=',
-            'LocalSystem',
-            'DisplayName=',
-            'Weline WLS Gateway v2 CI',
-        ]);
         $created = true;
-        wlsCheckedSc(['sidtype', WLS_WINDOWS_TEST_SERVICE, 'unrestricted']);
-        wlsCheckedSc([
-            'failure',
-            WLS_WINDOWS_TEST_SERVICE,
-            'reset=',
-            '0',
-            'actions=',
-            'restart/1000/restart/1000/restart/1000',
-        ]);
-        wlsCheckedSc(['failureflag', WLS_WINDOWS_TEST_SERVICE, '1']);
-        $icacls = wlsWindowsTool('icacls.exe');
-        wlsChecked([
-            $icacls,
+        wlsRestrictFixtureRoot($root);
+        foreach ([
+            'bin',
+            'trust',
+            'state',
+            'runtime',
+            'runtime\\conf',
+            'runtime\\temp',
+            'runtime\\shadow',
+            'runtime\\run',
+            'snapshots',
+            'snapshots-v2',
+            'snapshot-candidates-v2',
+            'slots',
+            'rebootstrap',
+            'rebootstrap\\candidates',
+            'rebootstrap\\backups',
+            'rebootstrap\\capacity',
+        ] as $relative) {
+            wlsMkdir($root . '\\' . $relative);
+        }
+        $definition = $root . '\\state\\service-definition.test';
+        wlsWriteExclusive($definition, "test-service\n");
+        $capacity = $root . '\\rebootstrap\\capacity';
+        $commonFor = static fn (string $nonce): array => [
+            '--home=' . $root,
+            '--nonce=' . $nonce,
+            '--bytes=8388608',
+            '--inodes=128',
+            '--platform-definition=' . $definition,
+            '--test-mode=1',
+        ];
+
+        $junctionNonce = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+        $junctionCandidate = wlsCapacityCandidate(
             $root,
-            '/grant:r',
-            'NT SERVICE\\' . WLS_WINDOWS_TEST_SERVICE . ':(OI)(CI)(RX)',
-            '/T',
-            '/C',
-            '/Q',
-        ]);
-        foreach ([$fixture['home'] . '\\state', $fixture['run']] as $mutable) {
-            wlsChecked([
-                $icacls,
-                $mutable,
-                '/grant:r',
-                'NT SERVICE\\' . WLS_WINDOWS_TEST_SERVICE . ':(OI)(CI)(M)',
-                '/T',
-                '/C',
-                '/Q',
-            ]);
+            $sourceLauncher,
+            $junctionNonce,
+        );
+        $junctionPath = $root . '\\runtime\\conf';
+        $junctionTarget = $root . '\\runtime-conf-junction-target';
+        if (!\rmdir($junctionPath)) {
+            throw new \RuntimeException('Unable to stage the Windows derived-root junction fault.');
         }
-        wlsWrite($fixture['hold'], "hold\n");
-        wlsCheckedSc(['start', WLS_WINDOWS_TEST_SERVICE]);
-        wlsWaitStarts($fixture['marker'], 2, 30.0);
-        wlsWaitServiceState(4, 30.0);
-        $beforeStop = wlsStartCount($fixture['marker']);
-        wlsCheckedSc(['stop', WLS_WINDOWS_TEST_SERVICE]);
-        $stopped = wlsWaitServiceState(1, 30.0);
-        if (\preg_match('/WIN32_EXIT_CODE\s*:\s*([0-9]+)/i', $stopped, $win32) !== 1
-            || \preg_match('/SERVICE_EXIT_CODE\s*:\s*([0-9]+)/i', $stopped, $specific) !== 1
-            || (int)$win32[1] !== 0
-            || (int)$specific[1] !== 0) {
-            throw new \RuntimeException('Explicit stop did not report success: ' . $stopped);
+        wlsMkdir($junctionTarget);
+        $powershell = wlsWindowsTool('WindowsPowerShell\\v1.0\\powershell.exe');
+        $junction = wlsRun([
+            $powershell,
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            'New-Item -ItemType Junction -Path $args[0] -Target $args[1] '
+                . '-ErrorAction Stop | Out-Null',
+            $junctionPath,
+            $junctionTarget,
+        ], 15.0);
+        if ($junction['code'] !== 0) {
+            throw new \RuntimeException(
+                'Unable to create the Windows derived-root junction fault: '
+                    . $junction['output'],
+            );
         }
-        \usleep(2_500_000);
-        if (wlsServiceState() !== 1 || wlsStartCount($fixture['marker']) !== $beforeStop) {
-            throw new \RuntimeException('Explicit SCM stop incorrectly triggered recovery.');
+        $junctionFailure = wlsCapacityCommand(
+            $junctionCandidate,
+            $commonFor($junctionNonce),
+            'create',
+        );
+        if ($junctionFailure['code'] === 0
+            || \is_dir($capacity . '\\' . $junctionNonce . '.held')
+            || \is_dir($capacity . '\\' . $junctionNonce . '.allocating')
+        ) {
+            throw new \RuntimeException(
+                'Windows derived-root junction/other-volume anchor failed open before HELD.',
+            );
         }
+        $junctionRemoval = wlsRun([
+            $powershell,
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            'Remove-Item -LiteralPath $args[0] -Force -ErrorAction Stop',
+            $junctionPath,
+        ], 15.0);
+        if ($junctionRemoval['code'] !== 0 || \is_dir($junctionPath)) {
+            throw new \RuntimeException(
+                'Unable to remove the Windows derived-root junction fault: '
+                    . $junctionRemoval['output'],
+            );
+        }
+        wlsMkdir($junctionPath);
+
+        $nonce = '0123456789abcdef0123456789abcdef';
+        $candidate = wlsCapacityCandidate($root, $sourceLauncher, $nonce);
+        $common = $commonFor($nonce);
+        $held = wlsCapacityJson(
+            wlsCapacityCommand($candidate, $common, 'create'),
+            'Windows physical reserve create',
+        );
+        if (($held['state'] ?? null) !== 'HELD'
+            || ($held['inode_count'] ?? null) !== 128
+            || !\is_int($held['physical_bytes'] ?? null)
+            || $held['physical_bytes'] < 8_388_608
+        ) {
+            throw new \RuntimeException('Windows native reserve did not prove physical capacity.');
+        }
+        if (wlsCapacityInspect($candidate, $common) !== [
+            'schema' => 'wls-capacity-inspect/1',
+            'state' => 'HELD',
+        ]) {
+            throw new \RuntimeException('Windows HELD inspect contract drifted.');
+        }
+        $directPrefix = \dirname($definition) . '\\' . $nonce
+            . '.platform.reserve.';
+        foreach ([0, 1] as $index) {
+            $directCredit = $directPrefix . $index;
+            if (!\is_file($directCredit) || \is_link($directCredit)
+                || \filesize($directCredit) !== 2_097_152) {
+                throw new \RuntimeException(
+                    'Windows definition-parent direct capacity credit drifted.',
+                );
+            }
+        }
+        $foreignDirect = $directPrefix . 'foreign';
+        wlsWriteExclusive($foreignDirect, 'foreign');
+        $foreignInspect = wlsCapacityCommand(
+            $candidate,
+            $common,
+            'inspect',
+        );
+        if ($foreignInspect['code'] !== 77 || !\unlink($foreignDirect)) {
+            throw new \RuntimeException(
+                'Windows inspect accepted a foreign definition-parent credit.',
+            );
+        }
+        $conflictRoot = $capacity . '\\' . $nonce . '.allocating';
+        wlsMkdir($conflictRoot);
+        $conflictInspect = wlsCapacityCommand(
+            $candidate,
+            $common,
+            'inspect',
+        );
+        if ($conflictInspect['code'] !== 78 || !\rmdir($conflictRoot)) {
+            throw new \RuntimeException('Windows inspect failed its conflict exit contract.');
+        }
+        if (wlsCapacityCommand(
+            $candidate,
+            $common,
+            'inspect',
+            ['--release-reason=cancel'],
+        )['code'] !== 64) {
+            throw new \RuntimeException('Windows inspect accepted forbidden release arguments.');
+        }
+        $heldRoot = $capacity . '\\' . $nonce . '.held';
+        $bytes = $heldRoot . '\\bytes.reserve';
+        if (\filesize($bytes) !== 8_388_608) {
+            throw new \RuntimeException('Windows byte reserve has the wrong logical size.');
+        }
+        $tokenNames = \array_values(\array_diff(
+            \scandir($heldRoot . '\\tokens') ?: [],
+            ['.', '..'],
+        ));
+        \sort($tokenNames, SORT_STRING);
+        if (\count($tokenNames) !== 128) {
+            throw new \RuntimeException('Windows inode reserve did not create 128 tokens.');
+        }
+        foreach ($tokenNames as $index => $leaf) {
+            if ($leaf !== \sprintf('%08x.reserve', $index)
+                || \filesize($heldRoot . '\\tokens\\' . $leaf) !== 0
+            ) {
+                throw new \RuntimeException('Windows inode token set is not canonical.');
+            }
+        }
+        $manifest = $capacity . '\\' . $nonce . '.held.json';
+        wlsWriteExclusive(
+            $manifest,
+            '{"nonce":"' . $nonce . '","state":"HELD"}' . "\n",
+        );
+        $manifestHash = \hash_file('sha256', $manifest);
+        if (!\is_string($manifestHash)) {
+            throw new \RuntimeException('Unable to hash Windows capacity manifest.');
+        }
+        $binding = '--expected-manifest-sha256=' . $manifestHash;
+        $wrong = wlsCapacityCommand(
+            $candidate,
+            $common,
+            'verify',
+            ['--expected-manifest-sha256=' . \str_repeat('a', 64)],
+        );
+        if ($wrong['code'] === 0) {
+            throw new \RuntimeException('Windows reserve accepted the wrong manifest binding.');
+        }
+        $verified = wlsCapacityJson(
+            wlsCapacityCommand($candidate, $common, 'verify', [$binding]),
+            'Windows capacity verify',
+        );
+        if ($verified !== $held) {
+            throw new \RuntimeException('Windows capacity evidence changed after verification.');
+        }
+        $direct = wlsCapacityCommand(
+            $candidate,
+            $common,
+            'complete-release',
+            ['--release-reason=cancel', $binding],
+        );
+        if ($direct['code'] === 0 || !\is_dir($heldRoot)) {
+            throw new \RuntimeException('Windows HELD reserve bypassed begin-release.');
+        }
+        $control = \fopen($heldRoot . '\\control.reserve', 'r+b');
+        if (!\is_resource($control)
+            || \fwrite($control, 'WLS-CAPACITY-REL') !== \strlen('WLS-CAPACITY-REL')
+            || !\fflush($control)
+        ) {
+            if (\is_resource($control)) {
+                \fclose($control);
+            }
+            throw new \RuntimeException('Unable to stage a torn Windows release marker.');
+        }
+        if (\function_exists('fsync') && !\fsync($control)) {
+            \fclose($control);
+            throw new \RuntimeException('Unable to flush a torn Windows release marker.');
+        }
+        if (!\fclose($control)) {
+            throw new \RuntimeException('Unable to close a torn Windows release marker.');
+        }
+        if (wlsCapacityJson(
+            wlsCapacityCommand($candidate, $common, 'verify', [$binding]),
+            'Windows torn-marker capacity verify',
+        ) !== $held) {
+            throw new \RuntimeException('Windows torn release marker was not replayable.');
+        }
+        $release = ['--release-reason=forward', $binding];
+        $releasing = wlsCapacityJson(
+            wlsCapacityCommand($candidate, $common, 'begin-release', $release),
+            'Windows begin-release',
+        );
+        $releasingRoot = $capacity . '\\' . $nonce . '.releasing';
+        if (($releasing['state'] ?? null) !== 'RELEASING'
+            || ($releasing['entry_set_sha256'] ?? null)
+                !== ($held['entry_set_sha256'] ?? null)
+            || \is_file($releasingRoot . '\\control.reserve')
+            || \is_dir($releasingRoot . '\\control-tokens')
+        ) {
+            throw new \RuntimeException('Windows release transition lost its durable contract.');
+        }
+        \clearstatcache(true, $directPrefix . '0');
+        \clearstatcache(true, $directPrefix . '1');
+        if (wlsCapacityInspect($candidate, $common) !== [
+            'schema' => 'wls-capacity-inspect/1',
+            'state' => 'RELEASING',
+        ] || \file_exists($directPrefix . '0')
+            || \file_exists($directPrefix . '1')) {
+            throw new \RuntimeException(
+                'Windows RELEASING inspect/direct-credit contract drifted.',
+            );
+        }
+        if (wlsCapacityCommand($candidate, $common, 'verify', [$binding])['code'] === 0) {
+            throw new \RuntimeException('Windows RELEASING reserve was accepted as HELD.');
+        }
+        if (wlsCapacityJson(
+            wlsCapacityCommand($candidate, $common, 'begin-release', $release),
+            'Windows begin-release replay',
+        ) !== $releasing) {
+            throw new \RuntimeException('Windows begin-release replay changed evidence.');
+        }
+        foreach ([1, 2] as $attempt) {
+            $released = wlsCapacityJson(
+                wlsCapacityCommand($candidate, $common, 'complete-release', $release),
+                'Windows complete-release #' . $attempt,
+            );
+            if ($released !== ['state' => 'RELEASED']) {
+                throw new \RuntimeException('Windows release did not reach RELEASED.');
+            }
+        }
+        if (wlsCapacityInspect($candidate, $common) !== [
+            'schema' => 'wls-capacity-inspect/1',
+            'state' => 'NONE',
+        ]) {
+            throw new \RuntimeException('Windows released inspect did not converge to NONE.');
+        }
+
+        $tamperNonce = 'fedcba9876543210fedcba9876543210';
+        $tamperCandidate = wlsCapacityCandidate(
+            $root,
+            $sourceLauncher,
+            $tamperNonce,
+        );
+        $tamperCommon = $commonFor($tamperNonce);
+        wlsCapacityJson(
+            wlsCapacityCommand($tamperCandidate, $tamperCommon, 'create'),
+            'Windows tamper reserve create',
+        );
+        $tamperManifest = $capacity . '\\' . $tamperNonce . '.held.json';
+        wlsWriteExclusive(
+            $tamperManifest,
+            '{"nonce":"' . $tamperNonce . '","state":"HELD"}' . "\n",
+        );
+        $tamperHash = \hash_file('sha256', $tamperManifest);
+        if (!\is_string($tamperHash)) {
+            throw new \RuntimeException('Unable to hash tamper manifest.');
+        }
+        $tamperBinding = '--expected-manifest-sha256=' . $tamperHash;
+        $tamperHeld = $capacity . '\\' . $tamperNonce . '.held';
+        $missingToken = $tamperHeld . '\\control-tokens\\00000000.reserve';
+        if (!\unlink($missingToken)
+            || wlsCapacityCommand(
+                $tamperCandidate,
+                $tamperCommon,
+                'verify',
+                [$tamperBinding],
+            )['code'] === 0
+            || wlsCapacityCommand(
+                $tamperCandidate,
+                $tamperCommon,
+                'begin-release',
+                ['--release-reason=cancel', $tamperBinding],
+            )['code'] === 0
+        ) {
+            throw new \RuntimeException('Partial Windows control credits failed open.');
+        }
+        wlsWriteExclusive($missingToken, '');
+        if (wlsCapacityCommand(
+            $tamperCandidate,
+            $tamperCommon,
+            'verify',
+            [$tamperBinding],
+        )['code'] === 0) {
+            throw new \RuntimeException(
+                'Inherited-ACL replacement token was accepted as authoritative.',
+            );
+        }
+
+        $controlNonce = 'cccccccccccccccccccccccccccccccc';
+        $controlCandidate = wlsCapacityCandidate(
+            $root,
+            $sourceLauncher,
+            $controlNonce,
+        );
+        $controlCommon = $commonFor($controlNonce);
+        wlsCapacityJson(
+            wlsCapacityCommand($controlCandidate, $controlCommon, 'create'),
+            'Windows control-reserve tamper create',
+        );
+        $controlManifest = $capacity . '\\' . $controlNonce . '.held.json';
+        wlsWriteExclusive(
+            $controlManifest,
+            '{"nonce":"' . $controlNonce . '","state":"HELD"}' . "\n",
+        );
+        $controlHash = \hash_file('sha256', $controlManifest);
+        if (!\is_string($controlHash)) {
+            throw new \RuntimeException('Unable to hash control-reserve manifest.');
+        }
+        $controlBinding = '--expected-manifest-sha256=' . $controlHash;
+        $controlHeld = $capacity . '\\' . $controlNonce . '.held';
+        if (!\unlink($controlHeld . '\\control.reserve')
+            || wlsCapacityCommand(
+                $controlCandidate,
+                $controlCommon,
+                'begin-release',
+                ['--release-reason=cancel', $controlBinding],
+            )['code'] === 0
+            || wlsCapacityCommand(
+                $controlCandidate,
+                $controlCommon,
+                'complete-release',
+                ['--release-reason=cancel', $controlBinding],
+            )['code'] === 0
+        ) {
+            throw new \RuntimeException('Missing Windows control reserve failed open.');
+        }
+
+        $primaryTamperNonce = 'dddddddddddddddddddddddddddddddd';
+        $primaryTamperCandidate = wlsCapacityCandidate(
+            $root,
+            $sourceLauncher,
+            $primaryTamperNonce,
+        );
+        $primaryTamperCommon = $commonFor($primaryTamperNonce);
+        wlsCapacityJson(
+            wlsCapacityCommand(
+                $primaryTamperCandidate,
+                $primaryTamperCommon,
+                'create',
+            ),
+            'Windows primary-token tamper create',
+        );
+        $primaryTamperManifest = $capacity . '\\'
+            . $primaryTamperNonce . '.held.json';
+        wlsWriteExclusive(
+            $primaryTamperManifest,
+            '{"nonce":"' . $primaryTamperNonce . '","state":"HELD"}' . "\n",
+        );
+        $primaryTamperHash = \hash_file('sha256', $primaryTamperManifest);
+        if (!\is_string($primaryTamperHash)) {
+            throw new \RuntimeException('Unable to hash primary-token manifest.');
+        }
+        $primaryTamperHeld = $capacity . '\\' . $primaryTamperNonce . '.held';
+        if (!\unlink($primaryTamperHeld . '\\tokens\\0000007f.reserve')
+            || wlsCapacityCommand(
+                $primaryTamperCandidate,
+                $primaryTamperCommon,
+                'complete-release',
+                [
+                    '--release-reason=cancel',
+                    '--expected-manifest-sha256=' . $primaryTamperHash,
+                ],
+            )['code'] === 0
+            || !\is_dir($primaryTamperHeld)) {
+            throw new \RuntimeException(
+                'Malformed HELD primary tokens were downgraded to removable state.',
+            );
+        }
+
+        $allocatingNonce = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        $allocatingCandidate = wlsCapacityCandidate(
+            $root,
+            $sourceLauncher,
+            $allocatingNonce,
+        );
+        $allocating = $capacity . '\\' . $allocatingNonce . '.allocating';
+        wlsCapacityKillAtFailpoint(
+            $allocatingCandidate,
+            $commonFor($allocatingNonce),
+            'create',
+            [],
+            $definition,
+            $allocatingNonce,
+            'token-directory',
+            30.0,
+        );
+        if (wlsCapacityInspect(
+            $allocatingCandidate,
+            $commonFor($allocatingNonce),
+        ) !== [
+            'schema' => 'wls-capacity-inspect/1',
+            'state' => 'ALLOCATING',
+        ]) {
+            throw new \RuntimeException('Windows ALLOCATING inspect contract drifted.');
+        }
+        $cancelled = wlsCapacityJson(
+            wlsCapacityCommand(
+                $allocatingCandidate,
+                $commonFor($allocatingNonce),
+                'complete-release',
+                ['--release-reason=cancel'],
+            ),
+            'Windows allocating cancellation',
+        );
+        if ($cancelled !== ['state' => 'RELEASED'] || \is_dir($allocating)) {
+            throw new \RuntimeException('Windows ALLOCATING cancellation did not converge.');
+        }
+        if (wlsCapacityInspect(
+            $allocatingCandidate,
+            $commonFor($allocatingNonce),
+        ) !== [
+            'schema' => 'wls-capacity-inspect/1',
+            'state' => 'NONE',
+        ]) {
+            throw new \RuntimeException('Windows ALLOCATING cleanup did not inspect as NONE.');
+        }
+
         echo \json_encode([
-            'service' => WLS_WINDOWS_TEST_SERVICE,
-            'unexpected_clean_exit_restarted' => true,
-            'explicit_stop_remained_stopped' => true,
-            'broker_starts' => $beforeStop,
+            'physical_bytes' => $held['physical_bytes'],
+            'inode_count' => $held['inode_count'],
+            'manifest_binding_rejected' => true,
+            'derived_root_junction_rejected' => true,
+            'release_replay' => true,
+            'partial_control_rejected' => true,
+            'allocating_cancelled' => true,
+            'inspect_states' => ['NONE', 'ALLOCATING', 'HELD', 'RELEASING'],
+            'definition_parent_direct_credits' => 2,
         ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
     } catch (\Throwable $exception) {
         $failure = $exception;
     } finally {
-        if (\is_string($secret)) {
-            \sodium_memzero($secret);
-        }
-        $cleanupErrors = [];
-        if (!$created && $createAttempted && isset($fixture['launcher'])) {
-            try {
-                $definition = wlsSc(['qc', WLS_WINDOWS_TEST_SERVICE], 10.0);
-                $created = $definition['code'] === 0
-                    && \str_contains(
-                        \strtolower($definition['output']),
-                        \strtolower((string)$fixture['launcher']),
-                    );
-                if ($definition['code'] !== 0
-                    && !\str_contains($definition['output'], '1060')
-                ) {
-                    throw new \RuntimeException(
-                        'Temporary Windows service ownership is indeterminate: '
-                        . $definition['output'],
-                    );
-                }
-                if ($definition['code'] === 0 && !$created) {
-                    throw new \RuntimeException(
-                        'The temporary service name now belongs to another executable; '
-                        . 'the fixture directory will be retained.',
-                    );
-                }
-                if ($definition['code'] !== 0) {
-                    $serviceReferenceReleased = true;
-                }
-            } catch (\Throwable $cleanupError) {
-                $cleanupErrors[] = 'ownership: ' . $cleanupError->getMessage();
-            }
-        }
         if ($created) {
-            if (isset($fixture['hold']) && \is_string($fixture['hold'])) {
-                @\file_put_contents($fixture['hold'], "hold\n", LOCK_EX);
-            }
             try {
-                $state = wlsServiceState();
-                if ($state !== null && $state !== 1) {
-                    wlsSc(['stop', WLS_WINDOWS_TEST_SERVICE], 10.0);
-                    wlsWaitServiceState(1, 15.0);
-                }
-            } catch (\Throwable $cleanupError) {
-                $cleanupErrors[] = 'stop: ' . $cleanupError->getMessage();
-            }
-            try {
-                $deleted = wlsSc(['delete', WLS_WINDOWS_TEST_SERVICE], 10.0);
-                if ($deleted['code'] !== 0) {
+                wlsRemoveCapacityTree($root);
+            } catch (\Throwable $cleanup) {
+                if ($failure !== null) {
                     throw new \RuntimeException(
-                        'Temporary Windows service deletion failed: ' . $deleted['output'],
+                        $failure->getMessage() . ' Cleanup: ' . $cleanup->getMessage(),
+                        0,
+                        $failure,
                     );
                 }
-                wlsWaitServiceDeleted(15.0);
-                $serviceReferenceReleased = true;
-            } catch (\Throwable $cleanupError) {
-                $cleanupErrors[] = 'delete: ' . $cleanupError->getMessage();
+                throw $cleanup;
             }
-        }
-        if ($rootCreated) {
-            if ($serviceReferenceReleased) {
-                wlsRemoveTree($root);
-                if (\is_dir($root)) {
-                    $cleanupErrors[] = 'Temporary Windows fixture directory was not removed.';
-                }
-            } else {
-                $cleanupErrors[] = 'Temporary Windows fixture was retained because SCM may still reference it: '
-                    . $root;
-            }
-        }
-        if ($cleanupErrors !== []) {
-            $message = \implode(' ', $cleanupErrors);
-            if ($failure !== null) {
-                $message = $failure->getMessage() . ' Cleanup: ' . $message;
-            }
-            throw new \RuntimeException($message, 0, $failure);
         }
     }
     if ($failure !== null) {
         throw $failure;
+    }
+}
+
+/**
+ * Dedicated lab-only production-shape capacity gate.  This deliberately uses
+ * the native ProgramData authority and exact production reservation rather
+ * than a temporary directory or the reduced test-mode fixture.
+ */
+function wlsWindowsProductionCapacityTest(array $arguments): void
+{
+    if (PHP_OS_FAMILY !== 'Windows') {
+        throw new \RuntimeException('The production capacity gate requires Windows.');
+    }
+    if ((string)\getenv(
+        'WLS_RUN_NATIVE_GATEWAY_WINDOWS_PRODUCTION_CAPACITY_INTEGRATION',
+    ) !== '1') {
+        throw new \RuntimeException(
+            'Set WLS_RUN_NATIVE_GATEWAY_WINDOWS_PRODUCTION_CAPACITY_INTEGRATION=1 explicitly.',
+        );
+    }
+    $launcher = \realpath(wlsOption($arguments, 'launcher'));
+    $home = \realpath(wlsOption($arguments, 'home'));
+    $definition = \realpath(wlsOption($arguments, 'platform-definition'));
+    if (!\is_string($launcher) || !\is_file($launcher)
+        || !\is_string($home) || !\is_dir($home)
+        || !\is_string($definition) || !\is_file($definition)) {
+        throw new \RuntimeException(
+            'Production capacity gate requires existing launcher, ProgramData home, and platform definition.',
+        );
+    }
+    $authority = wlsCapacityJson(
+        wlsRun([$launcher, '--programdata-authority'], 30.0),
+        'Windows ProgramData authority proof',
+    );
+    if (($authority['authority'] ?? null) !== 'FOLDERID_ProgramData'
+        || ($authority['ready'] ?? null) !== true
+        || !\is_string($authority['home'] ?? null)
+        || \strcasecmp(
+            \str_replace('/', '\\', $home),
+            \str_replace('/', '\\', $authority['home']),
+        ) !== 0) {
+        throw new \RuntimeException(
+            'Production capacity gate home is not the native ProgramData authority.',
+        );
+    }
+
+    $matrix = [];
+    $lastHeld = null;
+    wlsCapacityRecoverDurableMarker($home, $definition);
+    try {
+        foreach (
+            [
+                'allocation',
+                'token-directory',
+                'token-batch',
+                'direct-seal',
+                'rename',
+                'begin',
+                'control-token-partial',
+                'release',
+                'primary-token-partial',
+            ]
+            as $failpoint
+        ) {
+            wlsCapacityRecoverDurableMarker($home, $definition);
+            $nonce = \bin2hex(\random_bytes(16));
+            $candidate = wlsCapacityCandidate($home, $launcher, $nonce);
+            $common = [
+                '--home=' . $home,
+                '--nonce=' . $nonce,
+                '--bytes=10737418240',
+                '--inodes=65536',
+                '--platform-definition=' . $definition,
+                '--test-mode=0',
+            ];
+            wlsCapacityWriteProductionMarker($home, $nonce, $definition);
+            $operation = 'create';
+            $extra = [];
+            if (in_array($failpoint, [
+                'begin',
+                'control-token-partial',
+                'release',
+                'primary-token-partial',
+            ], true)) {
+                $held = wlsCapacityJson(
+                    wlsCapacityCommand(
+                        $candidate,
+                        $common,
+                        'create',
+                        [],
+                        3600.0,
+                    ),
+                    'Windows production capacity create before ' . $failpoint,
+                );
+                if (($held['state'] ?? null) !== 'HELD'
+                    || ($held['inode_count'] ?? null) !== 65_536
+                    || !\is_int($held['physical_bytes'] ?? null)
+                    || $held['physical_bytes'] < 10_737_418_240) {
+                    throw new \RuntimeException(
+                        'Windows production capacity gate did not reserve 10GiB/65536 inodes.',
+                    );
+                }
+                $lastHeld = $held;
+                $manifest = $home . '\\rebootstrap\\capacity\\'
+                    . $nonce . '.held.json';
+                wlsCapacityWriteDurableExclusive(
+                    $manifest,
+                    '{"nonce":"' . $nonce . '","state":"HELD"}' . "\n",
+                );
+                $digest = \hash_file('sha256', $manifest);
+                if (!\is_string($digest)) {
+                    throw new \RuntimeException(
+                        'Unable to bind production crash manifest.',
+                    );
+                }
+                $operation = 'begin-release';
+                $extra = [
+                    '--release-reason=cancel',
+                    '--expected-manifest-sha256=' . $digest,
+                ];
+                if ($failpoint === 'primary-token-partial') {
+                    wlsCapacityJson(
+                        wlsCapacityCommand(
+                            $candidate,
+                            $common,
+                            'begin-release',
+                            $extra,
+                            3600.0,
+                        ),
+                        'Windows production begin before primary-token crash',
+                    );
+                    $operation = 'complete-release';
+                }
+            }
+            wlsCapacityKillAtFailpoint(
+                $candidate,
+                $common,
+                $operation,
+                $extra,
+                $definition,
+                $nonce,
+                $failpoint,
+            );
+            $inspect = wlsCapacityInspect($candidate, $common);
+            $expected = match ($failpoint) {
+                'allocation', 'token-directory', 'token-batch', 'direct-seal'
+                    => 'ALLOCATING',
+                'rename' => 'HELD',
+                'begin', 'control-token-partial', 'release',
+                'primary-token-partial' => 'RELEASING',
+            };
+            if (($inspect['state'] ?? null) !== $expected) {
+                throw new \RuntimeException(
+                    'Production crash failpoint did not publish expected durable state.',
+                );
+            }
+            $matrix[$failpoint] = $expected;
+            wlsCapacityRecoverDurableMarker($home, $definition);
+        }
+        echo \json_encode([
+            'physical_bytes' => $lastHeld['physical_bytes'] ?? null,
+            'inode_count' => $lastHeld['inode_count'] ?? null,
+            'crash_matrix' => $matrix,
+        ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+    } finally {
+        wlsCapacityRecoverDurableMarker($home, $definition);
     }
 }
 
@@ -1242,13 +2218,17 @@ try {
         wlsPathSecurityTest(\array_slice($argv, 2));
     } elseif ($mode === 'bounded-command-test') {
         wlsBoundedCommandTest(\array_slice($argv, 2));
-    } elseif ($mode === 'service-test') {
-        wlsServiceTest(\array_slice($argv, 2));
+    } elseif ($mode === 'capacity-test') {
+        wlsWindowsCapacityTest(\array_slice($argv, 2));
+    } elseif ($mode === 'capacity-production-test') {
+        wlsWindowsProductionCapacityTest(\array_slice($argv, 2));
     } else {
         throw new \InvalidArgumentException(
             'Usage: keygen --output=<file> | path-security-test --broker=<file> | '
                 . 'bounded-command-test --helper=<file> | '
-                . 'service-test --key-file=<file> --launcher=<file> --test-broker=<file>',
+                . 'capacity-test --launcher=<file> | '
+                . 'capacity-production-test --launcher=<file> --home=<ProgramData home> '
+                . '--platform-definition=<file>',
         );
     }
 } catch (\Throwable $exception) {

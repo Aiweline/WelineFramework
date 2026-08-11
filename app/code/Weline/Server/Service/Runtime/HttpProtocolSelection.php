@@ -9,20 +9,13 @@ namespace Weline\Server\Service\Runtime;
  *
  * Managed Nginx uses a plaintext HTTP/1.1 backend. Explicit pure-WLS mode
  * terminates TLS in PHP Stream SSL and negotiates HTTP/2 with HTTP/1.1
- * fallback. Native/Caddy protocol-edge sidecars and pure-WLS HTTP/3 are not
- * part of this contract.
+ * fallback. Pure-WLS HTTP/3 is not part of this contract.
  */
 final readonly class HttpProtocolSelection
 {
     public const HTTP_3 = 'h3';
     public const HTTP_2 = 'h2';
     public const HTTP_1 = 'h1';
-
-    /** @deprecated External native/Caddy protocol-edge processes are retired. */
-    public const EDGE_NATIVE = 'native';
-    /** @deprecated Caddy is not a supported WLS edge. */
-    public const EDGE_CADDY = 'caddy';
-    public const EDGE_DISABLED = 'disabled';
 
     /** @var list<string> */
     public const DEFAULT_PROTOCOLS = [self::HTTP_2, self::HTTP_1];
@@ -33,7 +26,6 @@ final readonly class HttpProtocolSelection
     public function __construct(
         public array $protocols,
         public string $preferred,
-        public string $edge,
         public bool $tlsSessionResumption,
         public bool $altSvc,
     ) {
@@ -49,11 +41,6 @@ final readonly class HttpProtocolSelection
         }
         if (!\in_array($preferred, $protocols, true)) {
             throw new \InvalidArgumentException('Preferred HTTP protocol must exist in the enabled protocol list.');
-        }
-        if ($edge !== self::EDGE_DISABLED) {
-            throw new \InvalidArgumentException(
-                'WLS protocol-edge sidecars are retired; use the in-process PHP HTTP/2 implementation.'
-            );
         }
         if ($altSvc) {
             throw new \InvalidArgumentException('Pure WLS does not advertise HTTP/3 Alt-Svc.');
@@ -76,7 +63,6 @@ final readonly class HttpProtocolSelection
             return new self(
                 [self::HTTP_1],
                 self::HTTP_1,
-                self::EDGE_DISABLED,
                 false,
                 false,
             );
@@ -85,11 +71,10 @@ final readonly class HttpProtocolSelection
         $http = \is_array($config['http'] ?? null) ? $config['http'] : [];
         $protocols = self::normalizeProtocols($http['protocols'] ?? self::DEFAULT_PROTOCOLS);
         $preferred = self::normalizeProtocol($http['preferred'] ?? self::HTTP_2);
-        $edge = self::normalizeEdge($http['protocol_edge'] ?? self::EDGE_DISABLED);
         $tlsSessionResumption = (bool)($http['tls_session_resumption'] ?? true);
         $altSvc = (bool)($http['alt_svc'] ?? false);
 
-        return new self($protocols, $preferred, $edge, $tlsSessionResumption, $altSvc);
+        return new self($protocols, $preferred, $tlsSessionResumption, $altSvc);
     }
 
     /**
@@ -99,35 +84,12 @@ final readonly class HttpProtocolSelection
     {
         $protocols = self::normalizeProtocols($data['protocols'] ?? [self::HTTP_1]);
         $preferred = self::normalizeProtocol($data['preferred'] ?? self::HTTP_1);
-        $edge = self::normalizeEdge($data['edge'] ?? self::EDGE_DISABLED);
-
         return new self(
             $protocols,
             $preferred,
-            $edge,
             (bool)($data['tls_session_resumption'] ?? false),
             (bool)($data['alt_svc'] ?? false),
         );
-    }
-
-    public function isProtocolEdgeEnabled(): bool
-    {
-        return false;
-    }
-
-    public function isNativeProtocolEdge(): bool
-    {
-        return false;
-    }
-
-    public function isCaddyProtocolEdge(): bool
-    {
-        return false;
-    }
-
-    public function requiresProtocolEdge(): bool
-    {
-        return false;
     }
 
     public function supports(string $protocol): bool
@@ -164,19 +126,12 @@ final readonly class HttpProtocolSelection
         );
     }
 
-    /** @return list<string> */
-    public function caddyProtocols(): array
-    {
-        return $this->protocols;
-    }
-
     /** @return array<string, mixed> */
     public function toArray(): array
     {
         return [
             'protocols' => $this->protocols,
             'preferred' => $this->preferred,
-            'edge' => self::EDGE_DISABLED,
             'tls_session_resumption' => $this->tlsSessionResumption,
             'alt_svc' => false,
             'http3_transport' => 'disabled',
@@ -193,8 +148,6 @@ final readonly class HttpProtocolSelection
         return [
             'protocols' => $this->protocols,
             'preferred' => $this->preferred,
-            'protocol_edge' => self::EDGE_DISABLED,
-            'protocol_edge_enabled' => false,
             'tls_session_resumption' => $this->tlsSessionResumption,
             'alt_svc' => false,
         ];
@@ -238,18 +191,4 @@ final readonly class HttpProtocolSelection
         };
     }
 
-    private static function normalizeEdge(mixed $edge): string
-    {
-        if (\is_bool($edge)) {
-            $edge = $edge ? self::EDGE_NATIVE : self::EDGE_DISABLED;
-        }
-        $edge = \strtolower(\trim((string)$edge));
-        if (\in_array($edge, ['', 'off', 'disabled', 'false', '0', 'none'], true)) {
-            return self::EDGE_DISABLED;
-        }
-
-        throw new \InvalidArgumentException(
-            'wls.http.protocol_edge must be disabled; native and Caddy sidecars are not used.'
-        );
-    }
 }

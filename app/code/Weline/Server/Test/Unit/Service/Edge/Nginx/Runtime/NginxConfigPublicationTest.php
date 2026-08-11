@@ -59,6 +59,58 @@ final class NginxConfigPublicationTest extends TestCase
         self::assertFileDoesNotExist($rollback);
     }
 
+    public function testPublishedCandidateReplacementKeepsOriginalRollbackIdentity(): void
+    {
+        self::assertSame(10, \file_put_contents($this->active, 'old-config'));
+        $transactionId = \str_repeat('0', 32);
+        $http3 = $this->publication->stageCandidate('http3-config');
+        $published = $this->publication->publishCandidate($http3, $transactionId);
+        $rollback = $published['rollback'];
+        self::assertIsString($rollback);
+        $http2 = $this->publication->stageCandidate('http2-config');
+
+        $replaced = $this->publication->replacePublishedCandidate(
+            $http2,
+            $transactionId,
+            $rollback,
+            \hash('sha256', 'http3-config'),
+        );
+
+        self::assertSame($rollback, $replaced['rollback']);
+        self::assertSame('http2-config', \file_get_contents($this->active));
+        self::assertSame('old-config', \file_get_contents($rollback));
+        self::assertFileDoesNotExist($http2);
+        $this->publication->rollbackPublished($rollback);
+        self::assertSame('old-config', \file_get_contents($this->active));
+    }
+
+    public function testPublishedReplacementAcceptsExactPostRenameAfterImage(): void
+    {
+        self::assertSame(10, \file_put_contents($this->active, 'old-config'));
+        $transactionId = \str_repeat('f', 32);
+        $http3 = $this->publication->stageCandidate('http3-config');
+        $published = $this->publication->publishCandidate($http3, $transactionId);
+        $rollback = $published['rollback'];
+        self::assertIsString($rollback);
+        $http2 = $this->publication->stageCandidate('http2-config');
+
+        $this->withPostRenameSyncFailure(
+            $this->active,
+            function () use ($http2, $transactionId, $rollback): void {
+                $this->publication->replacePublishedCandidate(
+                    $http2,
+                    $transactionId,
+                    $rollback,
+                    \hash('sha256', 'http3-config'),
+                );
+            },
+        );
+
+        self::assertSame('http2-config', \file_get_contents($this->active));
+        self::assertSame('old-config', \file_get_contents($rollback));
+        self::assertFileDoesNotExist($http2);
+    }
+
     public function testCommitCollectsItsRollbackAtomicTemporary(): void
     {
         self::assertSame(10, \file_put_contents($this->active, 'old-config'));
@@ -596,6 +648,37 @@ final class NginxConfigPublicationTest extends TestCase
 
         self::assertFileExists($activeBackup);
         self::assertFileExists($lastGoodBackup);
+    }
+
+    private function withPostRenameSyncFailure(string $target, callable $operation): void
+    {
+        $previousMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $previousFailure = \getenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE');
+        $previousTarget = \getenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256',
+        );
+        \putenv('WLS_GATEWAY_TEST_MODE=1');
+        \putenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE=directory_fsync_after_rename_failed',
+        );
+        \putenv(
+            'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256=' . \hash('sha256', $target),
+        );
+        try {
+            $operation();
+        } finally {
+            $previousMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $previousMode);
+            $previousFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE=' . $previousFailure);
+            $previousTarget === false
+                ? \putenv('WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256')
+                : \putenv(
+                    'WLS_GATEWAY_TEST_PROJECT_STATE_FAILURE_TARGET_SHA256=' . $previousTarget,
+                );
+        }
     }
 
     private function removeTree(string $root): void

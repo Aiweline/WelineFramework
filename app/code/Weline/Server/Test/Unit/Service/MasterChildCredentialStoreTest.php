@@ -104,7 +104,10 @@ final class MasterChildCredentialStoreTest extends TestCase
         self::assertNotFalse(@\copy($path, $backup));
         @\chmod($backup, 0600);
         $this->recoveryBackups[] = $backup;
-        GatewayProjectStateFilesystem::atomicWrite($path, "{}\n", 0600);
+        // Simulate out-of-band corruption while the previous committed
+        // generation remains as crash-recovery evidence. The production atomic
+        // writer correctly refuses to layer a new transaction over that backup.
+        self::assertSame(3, @\file_put_contents($path, "{}\n", LOCK_EX));
 
         try {
             $store->authorizeServices($lease, $instance, $masterPid, 3, $token, $child);
