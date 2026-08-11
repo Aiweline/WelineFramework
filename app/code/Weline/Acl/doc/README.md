@@ -120,6 +120,9 @@ upsert。接口只接收标量数组，不向 Backend 暴露 ORM 或查询构造
 `setup:upgrade --route` 收集控制器 ACL 时，既有父级查询与 upsert 必须以固定小批次执行并
 保持在同一事务内，避免 SQLite 的绑定变量上限使大型模块路由同步提前中止；写入异常只记
 诊断日志并继续向上抛出，禁止调试输出提前结束命令并伪造成功退出码。
+全量 `setup:upgrade` 在 `upgrade_after` 为超级管理员补齐 `RoleAccess` 时也必须在同一事务内
+固定分批插入；每批 250 行、每行两个绑定参数，兼容旧 SQLite 的 999 变量上限。只有全部批次
+成功后才能提交并刷新 ACL 缓存，避免大型权限集合只写入一部分。
 审计、遥测等模块需要把 `class + HTTP method + route` 解析为 ACL 资源时，使用
 `AuthorizationServiceInterface::findRouteResource()`。结果是 final readonly `RouteResource`，
 只含 `acl_id` 与 `source_name`；未匹配返回 `null`，ORM Model 和 Query Builder 留在 Acl 内部。

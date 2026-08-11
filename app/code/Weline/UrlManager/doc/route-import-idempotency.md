@@ -8,6 +8,7 @@
 - `UrlManager` 只通过 Framework 的 `ModuleIdentityProviderInterface` 批量解析模块名与 `module_id`；禁止重新引用 `ModuleManager` 内部 Model。
 - Provider 不可用时路由导入必须明确失败，不得把模块 ID 默认为 `0` 后静默丢弃路由。
 - 每批数据先在内存中按 `identify` 去重，然后使用单语句原子 upsert。
+- 单批最多写入 100 条路由；每行 6 个字段时最多约 600 个绑定变量，须兼容旧 SQLite 常见的 999 变量上限。
 - 禁止改回“先删除、再插入”；并发升级会在两条语句之间形成竞态窗口，导致 `url_manager.identify` 唯一键冲突。
 - SQLite/PostgreSQL 必须生成 `ON CONFLICT (identify) DO UPDATE`，MySQL 必须生成等价的 `ON DUPLICATE KEY UPDATE`。
 - 已存在但曾被标记删除的路由再次出现时，同步必须将 `is_deleted` 恢复为 `0`。
