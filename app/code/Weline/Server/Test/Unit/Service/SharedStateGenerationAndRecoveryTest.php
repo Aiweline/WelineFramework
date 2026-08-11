@@ -653,6 +653,101 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
         self::assertArrayNotHasKey('_authenticated_identity_verified', $runtime);
     }
 
+    public function testAuthenticatedLiveSidecarAdvancesPastHigherStaleRuntimeGeneration(): void
+    {
+        $directory = $this->temporaryDirectory('authenticated-higher-runtime-recovery');
+        $runtimeFile = $directory . DIRECTORY_SEPARATOR . 'session.json';
+        $registry = $this->registryAt(
+            $directory . DIRECTORY_SEPARATOR . 'registry.json',
+        );
+        $role = ControlMessage::ROLE_SESSION_SERVER;
+        $liveAuthority = SharedStateServiceRegistry::bindLifecycleGeneration($role, [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 26277,
+            'pid' => 4385,
+            'token_file_name' => 'session_server.token',
+            'started_at' => '2026-08-12T00:00:00+08:00',
+            'process_name' => 'weline-wls-session-live-recovery',
+            'instance_name' => 'shared-session-live-recovery',
+            'service_instance_name' => 'shared-session-live-recovery',
+        ]);
+        $liveAuthority['lifecycle_generation'] = 3;
+        $registry->putRecord($role, $liveAuthority);
+        $staleRuntime = SharedStateServiceRegistry::bindLifecycleGeneration($role, [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'pid' => 4386,
+            'token_file_name' => 'session_server.token',
+            'started_at' => '2026-08-11T00:00:00+08:00',
+            'process_name' => 'weline-wls-session-stale-runtime',
+            'instance_name' => 'shared-session-stale-runtime',
+            'service_instance_name' => 'shared-session-stale-runtime',
+        ]);
+        $staleRuntime['lifecycle_generation'] = 68;
+
+        $manager = new class($runtimeFile, $registry) extends SharedStateServiceManager {
+            public function __construct(
+                private readonly string $runtimeFile,
+                private readonly SharedStateServiceRegistry $registry,
+            ) {
+            }
+
+            /** @param array<string,mixed> $runtime */
+            public function publishRuntime(array $runtime): void
+            {
+                $this->writeRuntimeFile(ControlMessage::ROLE_SESSION_SERVER, $runtime);
+            }
+
+            /** @param array<string,mixed> $runtime @return array<string,mixed> */
+            public function finalize(array $runtime): array
+            {
+                return $this->finalizeEnsuredRuntime(
+                    ControlMessage::ROLE_SESSION_SERVER,
+                    $runtime,
+                    'authenticated-higher-runtime-recovery',
+                );
+            }
+
+            protected function getRuntimeFilePath(string $role): string
+            {
+                return $this->runtimeFile;
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function ensureSharedProcessLogVisible(
+                array $runtime,
+                string $requesterInstanceName,
+            ): void {
+            }
+        };
+        $manager->publishRuntime($staleRuntime);
+
+        $candidate = $liveAuthority;
+        $candidate['_authenticated_identity_verified'] = true;
+        $selected = $manager->finalize($candidate);
+        $record = $registry->getRecord($role);
+        $runtime = \json_decode((string)\file_get_contents($runtimeFile), true);
+
+        self::assertSame(69, $selected['lifecycle_generation'] ?? null);
+        self::assertSame(4385, $selected['pid'] ?? null);
+        self::assertSame(69, $record['lifecycle_generation'] ?? null);
+        self::assertSame(69, $runtime['lifecycle_generation'] ?? null);
+        self::assertSame(
+            $selected['lifecycle_identity_digest'] ?? null,
+            $record['lifecycle_identity_digest'] ?? null,
+        );
+        self::assertSame(
+            $selected['lifecycle_identity_digest'] ?? null,
+            $runtime['lifecycle_identity_digest'] ?? null,
+        );
+    }
+
     public function testDelayedStopCannotDeleteAReplacementGeneration(): void
     {
         $directory = $this->temporaryDirectory('generation-cas');
