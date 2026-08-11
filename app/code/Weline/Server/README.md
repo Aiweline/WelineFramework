@@ -31,6 +31,12 @@ php bin/w server:benchmark
 php bin/w server:stop
 ```
 
+## ♻️ 可恢复任务观察
+
+- WLS 模式由 Master 托管唯一的 `runtime:task:watch --daemon` 服务。
+- PHP-FPM、Apache 等非 WLS 部署由 `weline_runtime_task_watch` Cron 每分钟执行一次 `RuntimeTaskWatchdog::tick()`；`setup:upgrade` 会自动收集并安装该任务，无需另建系统 crontab。
+- 两种入口复用同一持久状态和原子恢复声明；短暂重叠只会有一个观察者取得恢复权，不会重复启动业务任务。
+
 ## 📖 服务器类型
 
 ### 1. WLS (Weline Server) - 高性能服务器
