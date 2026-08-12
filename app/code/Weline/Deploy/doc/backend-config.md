@@ -26,6 +26,16 @@ php bin/w setup:upgrade
 
 不要在有未提交代码的开发工作区里触发部署或 Webhook 测试。
 
+### 1.1 静态资源发布
+
+发布或更新后执行：
+
+```bash
+php bin/w deploy:upgrade
+```
+
+该命令会发布各启用模块的 `view/statics`，并从 `view/theme` 复制 CSS、JavaScript、字体、图片等允许的前端资源；PHP、PHTML、服务端脚本和未知扩展名不会进入 `pub/static`。生成目录继承 `pub/static` 的 owner/group，并统一使用目录 `0775`、文件 `0664`，避免由 root 执行发布后 WLS/PHP 运行用户无法继续刷新静态资源。
+
 ## 2. 配置优先级
 
 部署配置按以下优先级读取：
