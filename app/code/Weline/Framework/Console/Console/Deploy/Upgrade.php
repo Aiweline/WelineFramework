@@ -33,44 +33,111 @@ class Upgrade extends CommandAbstract
 
     public function execute(array $args = [], array $data = [])
     {
-        // 活跃模块
-        $modules = Env::getInstance()->getActiveModules();
-        // 注册模块
-        foreach ($modules as $module) {
-            $name                   = $module['name'];
-            $module_view_static_dir = $module['base_path'] . DataInterface::dir . DS . DataInterface::dir_type_STATICS;
-            $module_view_dir        = (DEV?$module['path']:str_replace('_', DS, $module['name']).DS) . DataInterface::dir;
-            // windows的文件复制兼容
-            if (IS_WIN) {
-                $module_view_dir .= DS.DataInterface::dir_type_STATICS . DS;
+        $modules    = Env::getInstance()->getActiveModules();
+        $theme      = Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
+        $staticRoot = PUB . 'static';
+
+        if (!is_dir($staticRoot) && !mkdir($staticRoot, 0775, true) && !is_dir($staticRoot)) {
+            throw new \RuntimeException('Unable to create static deployment directory: ' . $staticRoot);
+        }
+
+        $staticOwner = @fileowner($staticRoot);
+        $staticGroup = @filegroup($staticRoot);
+        $applyPermissions = static function (string $path) use ($staticOwner, $staticGroup): void {
+            if (is_link($path) || (!file_exists($path) && !is_dir($path))) {
+                return;
             }
-            $origin_view_dir = $module_view_static_dir;
-            if (is_dir($origin_view_dir)) {
+            @chmod($path, is_dir($path) ? 0775 : 0664);
+            if ($staticOwner !== false && function_exists('chown')) {
+                @chown($path, $staticOwner);
+            }
+            if ($staticGroup !== false && function_exists('chgrp')) {
+                @chgrp($path, $staticGroup);
+            }
+        };
+        $normalizePermissions = static function (string $path) use ($applyPermissions): void {
+            if (!is_dir($path)) {
+                $applyPermissions($path);
+                return;
+            }
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::SELF_FIRST
+            );
+            foreach ($iterator as $item) {
+                if (!$item->isLink()) {
+                    $applyPermissions($item->getPathname());
+                }
+            }
+            $applyPermissions($path);
+        };
+
+        $themeAssetExtensions = [
+            'css', 'js', 'mjs', 'json', 'map', 'svg', 'png', 'jpg', 'jpeg', 'gif',
+            'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'otf', 'eot', 'txt',
+            'xml', 'webmanifest', 'wasm', 'mp4', 'webm', 'mp3', 'ogg', 'wav',
+        ];
+        $publishThemeAssets = static function (string $source, string $target) use ($themeAssetExtensions): int {
+            if (!is_dir($source)) {
+                return 0;
+            }
+
+            $published = 0;
+            $iterator  = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::LEAVES_ONLY
+            );
+            foreach ($iterator as $item) {
+                if ($item->isLink() || !$item->isFile()) {
+                    continue;
+                }
+                $extension = strtolower(pathinfo($item->getFilename(), PATHINFO_EXTENSION));
+                if (!in_array($extension, $themeAssetExtensions, true)) {
+                    continue;
+                }
+                $sourcePath = $item->getPathname();
+                $relative   = ltrim(substr($sourcePath, strlen($source)), '/\\');
+                $targetPath = $target . DS . str_replace(['/', '\\'], DS, $relative);
+                $targetDir  = dirname($targetPath);
+                if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+                    throw new \RuntimeException('Unable to create theme asset directory: ' . $targetDir);
+                }
+                if (!@copy($sourcePath, $targetPath)) {
+                    throw new \RuntimeException('Unable to publish theme asset: ' . $sourcePath);
+                }
+                $published++;
+            }
+
+            return $published;
+        };
+
+        foreach ($modules as $module) {
+            $name          = $module['name'];
+            $moduleViewDir = (DEV ? $module['path'] : str_replace('_', DS, $name) . DS) . DataInterface::dir;
+            $staticSource  = $module['base_path'] . DataInterface::dir . DS . DataInterface::dir_type_STATICS;
+            $themeSource   = $module['base_path'] . DataInterface::dir . DS . 'theme';
+
+            if (is_dir($staticSource) || is_dir($themeSource)) {
                 $this->printer->note($name . '...');
-                // 主题配置
-                $theme = Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
+            }
 
-                # 主题目录
-                $pub_view_dir =  PUB . 'static' . DS . $theme['path'] . DS . $module_view_dir;
-
-                if (!is_dir($pub_view_dir)) {
-                    mkdir($pub_view_dir, 0775, true);
+            if (is_dir($staticSource)) {
+                $staticTarget = $staticRoot . DS . $theme['path'] . DS . $moduleViewDir
+                    . DS . DataInterface::dir_type_STATICS;
+                if (!is_dir($staticTarget) && !mkdir($staticTarget, 0775, true) && !is_dir($staticTarget)) {
+                    throw new \RuntimeException('Unable to create module static directory: ' . $staticTarget);
                 }
+                $this->recursiveCopy($staticSource, $staticTarget);
+            }
 
-                // 使用跨平台的文件复制方法
-                if (IS_WIN) {
-                    // Windows系统：使用PHP递归复制
-                    $this->recursiveCopy($origin_view_dir, $pub_view_dir);
-                } else {
-                    // Linux/Unix系统：使用系统命令
-                    $out = $this->system->exec("cp -rf $origin_view_dir $pub_view_dir");
-                    if ($out) {
-                        $this->printer->warning(implode('', $out['output']));
-                    }
-                }
+            if (is_dir($themeSource)) {
+                $themeTarget = $staticRoot . DS . $theme['path'] . DS . $moduleViewDir . DS . 'theme';
+                $publishThemeAssets($themeSource, $themeTarget);
             }
         }
+
         $this->publishFlatStaticRuntimeFiles($modules);
+        $normalizePermissions($staticRoot);
         $this->printer->success('静态文件部署完毕！');
     }
 
