@@ -36,13 +36,38 @@ final class RuntimeRunnerProcessLauncher implements RuntimeRunnerProcessLauncher
         }
 
         $liveCommand = trim(Processer::getProcessCommandLine($pid, true));
-        if ($liveCommand === '') {
-            $liveCommand = implode(' ', $argv);
+        if (!$this->matchesInvocation($liveCommand, $command)) {
+            // The POSIX parent can observe the freshly-forked child before
+            // pcntl_exec replaces its inherited command line. Persist the
+            // intended argv identity instead of accidentally binding the
+            // parent Runner command to the child PID.
+            $liveCommand = $command->toShellCommand();
         }
         return $command->invocation->process->withStartedProcess(
             $pid,
             $liveCommand,
             new DateTimeImmutable('now'),
         );
+    }
+
+    private function matchesInvocation(string $liveCommand, RuntimeRunnerCommand $command): bool
+    {
+        if ($liveCommand === '') {
+            return false;
+        }
+
+        $process = $command->invocation->process;
+        foreach ([
+            '--task-id=' . $process->taskId,
+            '--runner-id=' . $command->invocation->runnerId,
+            '--name=' . $process->processName,
+            '--launch-id=' . $process->launchId,
+        ] as $identityToken) {
+            if (!str_contains($liveCommand, $identityToken)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
