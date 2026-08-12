@@ -7,6 +7,7 @@ namespace Weline\Framework\Runtime\Resumable\Runner;
 use DateTimeImmutable;
 use Throwable;
 use Weline\Framework\Runtime\Resumable\TaskStopRequestedException;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * Independent process entrypoint adapter.
@@ -16,6 +17,9 @@ use Weline\Framework\Runtime\Resumable\TaskStopRequestedException;
  */
 final class RuntimeTaskRunner
 {
+    private const ACQUIRE_ATTEMPTS = 10;
+    private const ACQUIRE_RETRY_DELAY_MICROSECONDS = 10_000;
+
     public function __construct(
         private readonly RuntimeRunnerStoreInterface $store,
         private readonly RuntimeRunnerExecutionDelegateInterface $delegate,
@@ -24,7 +28,20 @@ final class RuntimeTaskRunner
 
     public function run(RuntimeRunnerInvocation $invocation): RuntimeRunnerExecutionResult
     {
-        $claim = $this->store->acquire($invocation, new DateTimeImmutable('now'));
+        $claim = null;
+        for ($attempt = 1; $attempt <= self::ACQUIRE_ATTEMPTS; $attempt++) {
+            $claim = $this->store->acquire($invocation, new DateTimeImmutable('now'));
+            if ($claim !== null) {
+                break;
+            }
+            if ($attempt < self::ACQUIRE_ATTEMPTS) {
+                // The parent persists the launch identity immediately after
+                // fork/exec. A concurrent CAS can make the first claim look
+                // stale for a few milliseconds; bounded retries preserve the
+                // fence while avoiding a permanent orphan in `starting`.
+                SchedulerSystem::usleep(self::ACQUIRE_RETRY_DELAY_MICROSECONDS);
+            }
+        }
         if ($claim === null) {
             return RuntimeRunnerExecutionResult::staleFence();
         }
