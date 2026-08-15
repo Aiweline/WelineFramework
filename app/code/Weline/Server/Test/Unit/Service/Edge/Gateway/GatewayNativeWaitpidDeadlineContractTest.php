@@ -27,9 +27,9 @@ final class GatewayNativeWaitpidDeadlineContractTest extends TestCase
             $broker,
         );
         self::assertSame(
-            4,
+            14,
             \substr_count($broker, 'wls_wait_root_self_test_child('),
-            'The helper definition and all three root-only fork sites must remain bounded.',
+            'The helper definition and all thirteen root-owned self-test call sites must remain bounded.',
         );
         self::assertStringContainsString(
             'WLS_ROOT_SELF_TEST_CHILD_KILL_REAP_MS',

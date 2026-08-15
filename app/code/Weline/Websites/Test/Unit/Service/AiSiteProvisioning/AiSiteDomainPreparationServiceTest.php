@@ -230,6 +230,63 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
         }
     }
 
+    public function testBindModeSkipsHostsForPublicPoolDomainEvenWhenIsLocalServerIsStale(): void
+    {
+        $purchaseService = $this->createMock(DomainPurchaseService::class);
+        $purchaseService->expects(self::never())->method('createAndProcessOrder');
+        $defaultWebsiteService = $this->createMock(DefaultWebsiteService::class);
+        $defaultWebsiteService->expects(self::once())
+            ->method('ensureDefaultWebsite')
+            ->with(false)
+            ->willReturn([]);
+        $hostsSyncService = $this->createMock(LocalWelineHostsSyncService::class);
+        $hostsSyncService->expects(self::once())
+            ->method('isEligibleDomain')
+            ->with('www.qipaisaas.com')
+            ->willReturn(false);
+        $hostsSyncService->expects(self::never())->method('ensureHostsInjected');
+        $certificateService = $this->createMock(LocalWelineWildcardCertificateService::class);
+        $certificateService->expects(self::never())->method('ensureWildcardCertificateForDomain');
+        $websiteTargetResolver = $this->createMock(AiSiteWebsiteTargetResolver::class);
+        $websiteTargetResolver->expects(self::once())
+            ->method('resolve')
+            ->with(self::isInstanceOf(AiSiteProvisioningRequest::class), 'www.qipaisaas.com', '/rummyguide')
+            ->willReturn(12);
+        $pool = $this->poolMock(['loadByPoolId', 'isLocalServer', 'isSiteCreated', 'setSiteCreated']);
+        $pool->method('clearData')->willReturnSelf();
+        $pool->expects(self::once())->method('loadByDomain')->with('www.qipaisaas.com')->willReturnSelf();
+        $pool->expects(self::once())->method('loadByPoolId')->with(2)->willReturnSelf();
+        $pool->method('getPoolId')->willReturn(2);
+        $pool->method('isLocalServer')->willReturn(true);
+        $pool->method('isSiteCreated')->willReturn(false);
+        $pool->expects(self::once())->method('setSiteCreated')->with(true)->willReturnSelf();
+        $pool->expects(self::once())->method('save')->willReturn(1);
+        $binding = $this->bindingDomain(12);
+        $binding->expects(self::once())->method('setHttpsEnabled')->with(true)->willReturnSelf();
+        $binding->expects(self::once())->method('setSubPath')->with('/rummyguide')->willReturnSelf();
+
+        $result = (new AiSiteDomainPreparationService(
+            $this->accountService($this->createMock(DomainRegistrarInterface::class)),
+            $purchaseService,
+            $defaultWebsiteService,
+            $pool,
+            $binding,
+            $hostsSyncService,
+            $certificateService,
+            $websiteTargetResolver,
+            $this->websiteWithUrlSync(12, 'https://aisite.example.internal', 'https://www.qipaisaas.com/rummyguide'),
+        ))->prepare($this->request(AiSiteProvisioningRequest::DOMAIN_MODE_BIND, 'www.qipaisaas.com', [
+            AiSiteProvisioningRequest::schema_fields_SUB_PATH => '/rummyguide',
+            AiSiteProvisioningRequest::schema_fields_REQUESTED_WEBSITE_ID => 12,
+        ]));
+
+        self::assertSame(12, $result['website_id']);
+        self::assertSame(0, $result['purchase_order_id']);
+        self::assertTrue($result['local_ready']);
+        self::assertFalse($result['availability']['simulated']);
+        self::assertSame('/rummyguide', $result['availability']['sub_path']);
+    }
+
     private function preparation(
         AiSiteDomainPurchaseAccountService $accountService,
         DomainPurchaseService $purchaseService,
@@ -399,6 +456,11 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
 
     private function unusedWebsite(): Website|MockObject
     {
+        return $this->websiteWithUrlSync(0, '', '');
+    }
+
+    private function websiteWithUrlSync(int $websiteId, string $currentUrl, string $expectedUrl): Website|MockObject
+    {
         $website = $this->getMockBuilder(Website::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['clearData', 'load', 'getWebsiteId', 'getUrl', 'setUrl', 'save'])
@@ -407,10 +469,15 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
         $website->method('clearData')->willReturnSelf();
         $website->method('clearQuery')->willReturnSelf();
         $website->method('load')->willReturnSelf();
-        $website->method('getWebsiteId')->willReturn(0);
-        $website->method('getUrl')->willReturn('');
-        $website->method('setUrl')->willReturnSelf();
-        $website->method('save')->willReturn(1);
+        $website->method('getWebsiteId')->willReturn($websiteId);
+        $website->method('getUrl')->willReturn($currentUrl);
+        if ($websiteId > 0 && $expectedUrl !== '' && \strtolower($currentUrl) !== \strtolower($expectedUrl)) {
+            $website->expects(self::once())->method('setUrl')->with($expectedUrl)->willReturnSelf();
+            $website->expects(self::once())->method('save')->willReturn(1);
+        } else {
+            $website->method('setUrl')->willReturnSelf();
+            $website->method('save')->willReturn(1);
+        }
 
         return $website;
     }

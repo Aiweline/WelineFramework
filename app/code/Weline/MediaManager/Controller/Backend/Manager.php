@@ -28,6 +28,9 @@ class Manager extends BackendController
         $this->assign('ai_draw_preview_url', $this->_url->getBackendUrl('media/backend/ai-draw/preview'));
         $this->assign('start_path', $startPath);
         $this->assign('is_iframe', '0');
+        $themeState = $this->resolveIframeThemeState();
+        $this->assign('theme_preference', $themeState['preference']);
+        $this->assign('theme_mode', $themeState['resolved']);
         return $this->fetch('manager.phtml');
     }
 
@@ -67,17 +70,27 @@ class Manager extends BackendController
         $this->assign('ext', $params['ext'] ?? '*');
         $this->assign('size', $params['size'] ?? '102400');
         $this->assign('lock_path', $params['lockPath'] ?? '0');
-        $this->assign('theme_mode', $this->resolveIframeThemeMode());
+        $themeState = $this->resolveIframeThemeState();
+        $this->assign('theme_preference', $themeState['preference']);
+        $this->assign('theme_mode', $themeState['resolved']);
         return $this->fetch('manager.phtml');
     }
 
-    private function resolveIframeThemeMode(): string
+    /** @return array{preference:string,resolved:string} */
+    private function resolveIframeThemeState(): array
     {
         try {
-            $mode = $this->backendThemeConfig->getThemeConfig('theme-mode-switch');
-            return $mode === 'dark' || $mode === 'light' ? $mode : 'light';
+            $preference = $this->backendThemeConfig->getOriginThemeConfig('theme-mode-switch');
+            $preference = is_string($preference) && in_array($preference, ['system', 'light', 'dark'], true)
+                ? $preference
+                : 'system';
+
+            return [
+                'preference' => $preference,
+                'resolved' => $preference === 'dark' ? 'dark' : 'light',
+            ];
         } catch (\Throwable) {
-            return 'light';
+            return ['preference' => 'system', 'resolved' => 'light'];
         }
     }
 }

@@ -469,6 +469,59 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
+     * 清空缓存内容但保留运行时目录边界。
+     *
+     * setup:upgrade 可能由 root 执行，而 Web/WLS 通常由项目运行用户执行。
+     * 删除整个 var/cache 会让后续重建目录继承 CLI 用户，导致运行时无法创建锁文件。
+     */
+    private function clearCacheContentsPreservingRuntimeOwner(): void
+    {
+        $varDir = BP . 'var';
+        $cacheDir = $varDir . DS . 'cache';
+
+        if (!is_dir($cacheDir) && !mkdir($cacheDir, 0775, true) && !is_dir($cacheDir)) {
+            throw new \RuntimeException((string)__('无法创建缓存目录：%{1}', [$cacheDir]));
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($cacheDir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            $removed = $item->isLink() || !$item->isDir()
+                ? @unlink($path)
+                : @rmdir($path);
+            if (!$removed && (file_exists($path) || is_link($path))) {
+                throw new \RuntimeException((string)__('无法清理缓存路径：%{1}', [$path]));
+            }
+        }
+
+        // setup:upgrade 可能由 root 启动；项目根目录才代表部署时约定的运行身份。
+        $runtimeOwner = @fileowner(BP);
+        $runtimeGroup = @filegroup(BP);
+        foreach ([$varDir, $cacheDir] as $runtimeDir) {
+            if ($runtimeOwner !== false && function_exists('chown')) {
+                @chown($runtimeDir, $runtimeOwner);
+            }
+            if ($runtimeGroup !== false && function_exists('chgrp')) {
+                @chgrp($runtimeDir, $runtimeGroup);
+            }
+            @chmod($runtimeDir, 0775);
+        }
+        clearstatcache(true, $varDir);
+        clearstatcache(true, $cacheDir);
+
+        foreach ([$varDir, $cacheDir] as $runtimeDir) {
+            if (($runtimeOwner !== false && @fileowner($runtimeDir) !== $runtimeOwner)
+                || ($runtimeGroup !== false && @filegroup($runtimeDir) !== $runtimeGroup)
+            ) {
+                throw new \RuntimeException((string)__('无法恢复缓存目录所有权：%{1}', [$runtimeDir]));
+            }
+        }
+    }
+
+    /**
      * @inheritDoc
      * 系统升级主流程，按照 SOLID 原则组织：
      * 1. 准备阶段：获取锁、检查系统状态、准备环境
@@ -1966,7 +2019,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             /**@var \Weline\Framework\Cache\Console\Cache\Flush $cacheManagerConsole */
             $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Flush::class);
             $cacheManagerConsole->execute();
-            $system->exec('rm -rf ' . BP . 'var' . DS . 'cache');
+            $this->clearCacheContentsPreservingRuntimeOwner();
         } elseif ($argsModule) {
             // 指定模块时，清理指定模块的缓存
             $i += 1;

@@ -45,15 +45,16 @@ class CssVariableInjectorTest extends TestCore
         }
         
         $cssVariables = $this->injector->generateCssVariables('frontend', $theme);
+        $marker = '/* Weline Theme variables v2: explicit non-palette tokens only */';
         
         $this->assertIsString($cssVariables);
-        
-        // 验证包含:root
-        $this->assertStringContainsString(':root', $cssVariables);
-        
-        // 如果有变量，应该包含CSS变量定义
-        if (!empty($cssVariables)) {
+        $this->assertStringContainsString($marker, $cssVariables);
+        $this->assertStringNotContainsString('--color-bg-primary:', $cssVariables);
+
+        if (str_contains($cssVariables, ':root')) {
             $this->assertStringContainsString('--', $cssVariables);
+        } else {
+            $this->assertSame($marker . "\n", $cssVariables);
         }
     }
     
@@ -72,20 +73,17 @@ class CssVariableInjectorTest extends TestCore
         }
         
         $cssVariables = $this->injector->generateCssVariables('frontend', $theme);
+        $marker = '/* Weline Theme variables v2: explicit non-palette tokens only */';
         
         $this->assertIsString($cssVariables);
-        
-        // 如果有变量，应该包含分组注释或变量定义
-        if (!empty($cssVariables) && strpos($cssVariables, '--') !== false) {
-            // 验证包含:root或变量定义
-            $this->assertTrue(
-                strpos($cssVariables, ':root') !== false || 
-                strpos($cssVariables, '--') !== false,
-                'CSS变量应该包含:root或变量定义'
-            );
+        $this->assertStringContainsString($marker, $cssVariables);
+        $this->assertStringNotContainsString('--color-bg-primary:', $cssVariables);
+
+        if (str_contains($cssVariables, ':root')) {
+            $this->assertMatchesRegularExpression('/^\s*--[A-Za-z0-9_-]+\s*:/m', $cssVariables);
+            $this->assertStringContainsString('/* ==========', $cssVariables);
         } else {
-            // 如果没有变量，至少应该返回空字符串或基本结构
-            $this->assertIsString($cssVariables);
+            $this->assertSame($marker . "\n", $cssVariables);
         }
     }
     
@@ -96,9 +94,15 @@ class CssVariableInjectorTest extends TestCore
     {
         // 创建一个没有变量的主题场景
         $cssVariables = $this->injector->generateCssVariables('frontend', null);
+        $marker = '/* Weline Theme variables v2: explicit non-palette tokens only */';
         
-        // 如果没有变量，应该返回空字符串或基本的:root结构
         $this->assertIsString($cssVariables);
+        $this->assertStringContainsString($marker, $cssVariables);
+        $this->assertStringNotContainsString('--color-bg-primary:', $cssVariables);
+        if (str_contains($cssVariables, ':root')) {
+            $this->assertStringContainsString('--', $cssVariables);
+        } else {
+            $this->assertSame($marker . "\n", $cssVariables);
+        }
     }
 }
-

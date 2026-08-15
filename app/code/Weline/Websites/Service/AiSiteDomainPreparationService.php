@@ -255,15 +255,21 @@ final class AiSiteDomainPreparationService
         $pool = clone $this->domainPool;
         $pool->clearData()->loadByDomain($domain);
         $poolId = $pool->getPoolId() > 0 ? $pool->getPoolId() : 0;
-        $isLocal = ($poolId > 0 && $pool->isLocalServer())
-            || \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain) === 1;
+        $isWelineTest = \preg_match(
+            '/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D',
+            $domain
+        ) === 1;
+        // Pool rows for public SaaS hosts (www.qipaisaas.com) can be stale
+        // is_local_server=1 after Cloudflare. Only inject hosts for domains
+        // that LocalWelineHostsSyncService actually accepts.
+        $needsLocalHosts = $isWelineTest || $this->hostsSyncService->isEligibleDomain($domain);
 
-        if ($isLocal && $poolId <= 0) {
+        if ($needsLocalHosts && $poolId <= 0) {
             $poolId = $this->persistLocalPool($domain);
         }
 
         $localReady = false;
-        if ($isLocal) {
+        if ($needsLocalHosts) {
             $hosts = $this->hostsSyncService->ensureHostsInjected($domain);
             if (($hosts['success'] ?? false) !== true) {
                 if (($hosts['authorization_pending'] ?? false) === true) {
@@ -299,16 +305,16 @@ final class AiSiteDomainPreparationService
         }
 
         $websiteId = $this->websiteTargetResolver->resolve($request, $domain, $subPath);
-        $this->bindDomain($domain, $subPath, $websiteId, $poolId, $isLocal);
+        $this->bindDomain($domain, $subPath, $websiteId, $poolId, true);
 
         return [
             'website_id' => $websiteId,
             'purchase_order_id' => 0,
-            'local_ready' => $localReady || !$isLocal,
+            'local_ready' => $needsLocalHosts ? $localReady : true,
             'availability' => [
                 'domain' => $domain,
                 'available' => true,
-                'simulated' => $isLocal,
+                'simulated' => $needsLocalHosts,
                 'sub_path' => $subPath,
             ],
         ];

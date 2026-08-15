@@ -95,22 +95,18 @@ moduleDescribe(test, MODULE, 'R4.3 商品中心菜单与真实写操作', () => 
       await submit(page, 'product-sku-register-form');
 
       await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:products', CAPABILITIES[0]);
-      await page.locator('[data-testid="product-create-form"] [name="website_id"]').fill(String(data.website_id));
       await page.locator('[data-testid="product-create-form"] [name="sku"]').fill(data.sku);
       await submit(page, 'product-create-form');
 
       await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:offers', CAPABILITIES[1]);
-      await page.locator('[data-testid="product-offer-create-form"] [name="website_id"]').fill(String(data.website_id));
       await page.locator('[data-testid="product-offer-create-form"] [name="sku"]').fill(data.sku);
       await submit(page, 'product-offer-create-form');
 
       await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:categories', CAPABILITIES[3]);
-      await page.locator('[data-testid="product-category-create-form"] [name="website_id"]').fill(String(data.website_id));
       await page.locator('[data-testid="product-category-create-form"] [name="path"]').fill(data.category_path);
       await submit(page, 'product-category-create-form');
 
       await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:media', CAPABILITIES[4]);
-      await page.locator('[data-testid="product-media-create-form"] [name="website_id"]').fill(String(data.website_id));
       await page.locator('[data-testid="product-media-create-form"] [name="sku"]').fill(data.sku);
       await page.locator('[data-testid="product-media-create-form"] [name="path"]').fill(data.media_path);
       await page.locator('[data-testid="product-media-create-form"] [name="blob_key"]').fill(data.blob_key);
@@ -146,7 +142,6 @@ moduleDescribe(test, MODULE, 'R4.3 商品中心菜单与真实写操作', () => 
       await submit(page, 'product-sku-register-form');
 
       await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:products', CAPABILITIES[0]);
-      await page.locator('[data-testid="product-create-form"] [name="website_id"]').fill(String(data.website_id));
       await page.locator('[data-testid="product-create-form"] [name="sku"]').fill(data.sku);
       await submit(page, 'product-create-form');
 
@@ -159,7 +154,6 @@ moduleDescribe(test, MODULE, 'R4.3 商品中心菜单与真实写操作', () => 
       expect(capability).toBeTruthy();
       await openBackendMenuBySource(page, capability.sourceId, capability);
       const form = page.locator('[data-testid="product-site-content-form"]');
-      await form.locator('[name="website_id"]').fill(String(data.website_id));
       await form.locator('[name="store_id"]').fill(String(data.store_id));
       await form.locator('[name="entity_id"]').fill(String(productId));
       await form.locator('[name="attribute_code"]').fill(data.attribute_code);
@@ -178,6 +172,50 @@ moduleDescribe(test, MODULE, 'R4.3 商品中心菜单与真实写操作', () => 
       try {
         const cleanup = fixture('cleanup', data);
         expect(Object.values(cleanup.remaining).every((count) => count === 0)).toBeTruthy();
+      } finally {
+        guards.assertClean();
+      }
+    }
+  });
+
+  moduleCase(test, { module: MODULE, id: 'CK-R43-PRODUCT-EDIT-001' }, '从商品列表进入编辑页并完成 SKU 修改', async ({ page }) => {
+    const data = fixture('prepare', { token: 'e' + Date.now().toString(36) });
+    const guards = installBackendBrowserGuards(page);
+    await loginAsAdmin(page, { timeout: 90000, settleMs: 800 });
+    try {
+      await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:sku-registry', CAPABILITIES[2]);
+      await page.locator('[data-testid="product-sku-register-form"] [name="sku"]').fill(data.sku);
+      await page.locator('[data-testid="product-sku-register-form"] [name="request_hash"]').fill(data.request_hash);
+      await submit(page, 'product-sku-register-form');
+
+      await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:products', CAPABILITIES[0]);
+      await page.locator('[data-testid="product-create-form"] [name="sku"]').fill(data.sku);
+      await submit(page, 'product-create-form');
+
+      const created = fixture('inspect', data);
+      expect(created.products).toHaveLength(1);
+      const productId = Number(created.products[0].product_id);
+      expect(productId).toBeGreaterThan(0);
+
+      const editButton = page.locator('[data-testid="product-edit-button"][data-product-id="' + productId + '"]').first();
+      await expect(editButton).toBeVisible();
+      await editButton.click();
+      await page.waitForLoadState('domcontentloaded');
+
+      const updatedSku = data.sku + '-EDIT';
+      await page.locator('[data-testid="product-edit-form"] [name="sku"]').fill(updatedSku);
+      await page.locator('[data-testid="product-edit-form"] [type="submit"]').click();
+      await page.waitForLoadState('domcontentloaded');
+
+      const persisted = fixture('inspect', { ...data, sku: updatedSku });
+      expect(persisted.products).toHaveLength(1);
+      expect(persisted.products[0].sku).toBe(updatedSku);
+    } finally {
+      try {
+        const cleanupUpdated = fixture('cleanup', { ...data, sku: updatedSku });
+        const cleanupOriginal = fixture('cleanup', data);
+        expect(Object.values(cleanupUpdated.remaining).every((count) => count === 0)).toBeTruthy();
+        expect(Object.values(cleanupOriginal.remaining).every((count) => count === 0)).toBeTruthy();
       } finally {
         guards.assertClean();
       }

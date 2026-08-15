@@ -220,8 +220,7 @@ trait TraitTemplate
                     if ($name_for_base !== '') {
                         $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/statics/';
                         if (defined('PROD') && PROD) {
-                            $themePath = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
-                            $themePath = str_replace('\\', '/', $themePath);
+                            $themePath = $this->resolvePublicThemeNamespace();
                             $url_base = '/static/' . $themePath . '/' . ltrim($url_base, '/');
                         }
                         $url_base = rtrim($url_base, '/') . '/';
@@ -294,8 +293,7 @@ trait TraitTemplate
                     if ($name_for_base !== '') {
                         $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/statics/';
                         if (defined('PROD') && PROD) {
-                            $themePath = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
-                            $themePath = str_replace('\\', '/', $themePath);
+                            $themePath = $this->resolvePublicThemeNamespace();
                             $url_base = '/static/' . $themePath . '/' . ltrim($url_base, '/');
                         }
                         $url_base = rtrim($url_base, '/') . '/';
@@ -566,8 +564,9 @@ trait TraitTemplate
                 }
                 break;
             case DataInterface::dir_type_STATICS:
-                // key 必须含模块名与 BP，避免跨模块/跨环境串用（如 CLI 与 Web 路径不一致导致缓存错）
-                $cache_key = 'getViewDir' . (defined('BP') ? BP : '') . $module_name . $module_view_dir_path . $type . (PROD ? 'prod' : 'dev');
+                // key 必须含模块名、BP 与公开主题命名空间，避免跨模块/跨环境/跨主题串用旧目录。
+                $cache_key = 'getViewDir' . (defined('BP') ? BP : '') . $module_name . $module_view_dir_path . $type
+                    . (PROD ? 'prod|theme:' . $this->resolvePublicThemeNamespace() : 'dev');
                 if ($cache_static_dir = $this->viewCache->get($cache_key)) {
                     return $cache_static_dir;
                 }
@@ -583,20 +582,23 @@ trait TraitTemplate
                 $path = $module_view_dir_path . DataInterface::view_STATICS_DIR . DS;
                 # 生产环境处理
                 if (PROD) {
-                    $path = str_replace(APP_CODE_PATH, PUB . 'static' . DS . $this->theme['path'] . DS, $path);
-                    $path = str_replace(VENDOR_PATH, PUB . 'static' . DS . $this->theme['path'] . DS, $path);
+                    $publicThemePath = str_replace('/', DS, $this->resolvePublicThemeNamespace());
+                    $path = str_replace(APP_CODE_PATH, PUB . 'static' . DS . $publicThemePath . DS, $path);
+                    $path = str_replace(VENDOR_PATH, PUB . 'static' . DS . $publicThemePath . DS, $path);
                 }
                 $this->viewCache->set($cache_key, $path);
                 break;
             case DataInterface::dir_type_THEME:
-                $cache_key = 'getViewDir' . (defined('BP') ? BP : '') . $module_name . $module_view_dir_path . $type . (PROD ? 'prod' : 'dev');
+                $cache_key = 'getViewDir' . (defined('BP') ? BP : '') . $module_name . $module_view_dir_path . $type
+                    . (PROD ? 'prod|theme:' . $this->resolvePublicThemeNamespace() : 'dev');
                 if ($cache_static_dir = $this->viewCache->get($cache_key)) {
                     return $cache_static_dir;
                 }
                 $path = $module_view_dir_path . 'theme' . DS;
                 if (PROD) {
-                    $path = str_replace(APP_CODE_PATH, PUB . 'static' . DS . $this->theme['path'] . DS, $path);
-                    $path = str_replace(VENDOR_PATH, PUB . 'static' . DS . $this->theme['path'] . DS, $path);
+                    $publicThemePath = str_replace('/', DS, $this->resolvePublicThemeNamespace());
+                    $path = str_replace(APP_CODE_PATH, PUB . 'static' . DS . $publicThemePath . DS, $path);
+                    $path = str_replace(VENDOR_PATH, PUB . 'static' . DS . $publicThemePath . DS, $path);
                 }
                 $this->viewCache->set($cache_key, $path);
                 break;
@@ -611,6 +613,41 @@ trait TraitTemplate
         }
 
         return $path;
+    }
+
+    /**
+     * 将主题配置中的源码路径归一化为 pub/static 使用的公开设计主题命名空间。
+     */
+    private function resolvePublicThemeNamespace(): string
+    {
+        $configuredPath = $this->theme['path']
+            ?? Env::get('theme')['path']
+            ?? Env::default_theme_DATA['path'];
+        $themePath = rtrim(str_replace('\\', '/', trim((string)$configuredPath)), '/');
+        $defaultPath = trim(str_replace('\\', '/', (string)Env::default_theme_DATA['path']), '/');
+
+        if ($themePath === '') {
+            return $defaultPath;
+        }
+
+        // 模块主题标识和 app/code 绝对源码路径不是公开设计主题命名空间。
+        if (preg_match('#^[^/:]+_[^/:]+::.+$#', $themePath)) {
+            return $defaultPath;
+        }
+
+        $designRoot = rtrim(str_replace('\\', '/', Env::path_THEME_DESIGN_DIR), '/');
+        if ($designRoot !== '' && ($themePath === $designRoot || str_starts_with($themePath, $designRoot . '/'))) {
+            $relativePath = trim(substr($themePath, strlen($designRoot)), '/');
+            return $relativePath !== '' ? $relativePath : $defaultPath;
+        }
+
+        $isAbsolutePath = preg_match('#^[A-Za-z]:/#', $themePath) === 1
+            || str_starts_with($themePath, '/');
+        if ($isAbsolutePath || strcasecmp(trim($themePath, '/'), 'Weline/Theme/view/theme') === 0) {
+            return $defaultPath;
+        }
+
+        return trim($themePath, '/');
     }
 
     /**

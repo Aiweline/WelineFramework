@@ -29,21 +29,21 @@
 - 配置合并和深度合并机制
 
 ### 4. 主题管理
-- **动态主题扫描**：自动扫描 `colors/` 目录下的主题文件（`_*.css`），动态获取可用主题列表
-- 多主题支持（默认：light、dark、amazon，实际由扫描结果决定）
-- 主题切换和持久化
-- 自动检测系统主题偏好
-- 主题切换事件通知
+- 固定三态偏好：`system`、`light`、`dark`
+- 主题切换和偏好持久化；`getCurrent()` 始终返回解析后的 `light|dark`
+- 仅 `system` 自动检测并响应系统主题变化
+- 主题切换事件同时通知偏好与解析模式
 
 ## 快速开始
 
 ### 1. 引入 Theme.js
 
-在模板的 `<head>` 部分引入：
+标准 Theme Head 会自动加载 Theme.js；业务模板不得用可继承的 `<theme:js>` 重新声明它。四个全局运行时/组件资产（前后台 `assets/css/theme.css` 与 `assets/js/theme.js`）固定由 `Weline_Theme` 提供，设计主题只能覆盖 palette Token。
+
+只有独立壳确实未使用标准 Head 时，才以 canonical module URL 显式加载：
 
 ```php
-<!-- 主题JS -->
-<theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
+<script src="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/assets/js/theme.js', ENT_QUOTES, 'UTF-8') ?>"></script>
 ```
 
 ### 2. 配置初始化
@@ -230,12 +230,11 @@ Weline.Theme.init();
 切换主题。
 
 **参数**:
-- `theme` (string): 主题名称（从 `colors/` 目录动态扫描获取，如 'light'、'dark'、'amazon'）
+- `theme` (string): `system`、`light` 或 `dark`。
 
 **说明**:
-- 主题列表会从 `Weline_Theme::theme/{area}/colors/` 目录下的 `_*.css` 文件中动态扫描获取
-- 前端区域扫描 `frontend/colors/`，后端区域扫描 `backend/colors/`
-- 如果主题不存在，会在开发模式下显示警告信息
+- `switch()` 只接受三态颜色偏好；业务色盘通过语义 Token 覆盖，而非运行时切换任意 CSS 文件。
+- 非法值会被拒绝，并在开发模式下显示警告信息。
 
 **示例**:
 ```javascript
@@ -245,20 +244,29 @@ Weline.Theme.switch('dark');
 // 切换到亮色主题
 Weline.Theme.switch('light');
 
-// 获取可用主题列表
-const availableThemes = Weline.Theme.themes;
-console.log('可用主题:', availableThemes);
+// 跟随系统（保存 preference，不会把当前解析结果写成 light/dark）
+Weline.Theme.switch('system');
+
+// 获取保存偏好和当前解析结果
+console.log(Weline.Theme.getPreference(), Weline.Theme.getCurrent());
 ```
 
+#### 三态颜色模式契约
+
+- `getPreference()` 返回保存的 `system|light|dark` 偏好；`getCurrent()` 始终返回实际 `light|dark`。
+- 每次切换会更新 `data-theme-preference`、`data-theme`、`data-bs-theme` 和 `color-scheme`；`themechange` 的 `detail.theme` 是实际模式，`detail.preference` 是用户偏好。
+- 前台 localStorage key 固定为 `weline-theme`。缺失或不可读时按 `system` 运行；仅 system 会监听 `prefers-color-scheme` 变化。
+- `[data-weline-theme-mode="system|light|dark"]` 是声明式三态控件；`[data-theme-toggle]` 保持为显式亮/暗快捷切换。
+
 #### `Weline.Theme.getCurrent()`
-获取当前主题。
+获取当前解析模式（不是用户保存的偏好）。
 
 **返回值**: string
 
 **示例**:
 ```javascript
 const currentTheme = Weline.Theme.getCurrent();
-console.log('当前主题:', currentTheme); // 'light' | 'dark' | 'amazon'
+console.log('当前解析模式:', currentTheme); // 'light' | 'dark'
 ```
 
 #### `Weline.Theme.isDark()`
@@ -274,19 +282,14 @@ if (Weline.Theme.isDark()) {
 ```
 
 #### `Weline.Theme.applyConfig(config)`
-应用主题配置。
+合并非主题模式的运行时配置。颜色模式不通过配置覆盖；请调用 `Weline.Theme.switch('system'|'light'|'dark')`。
 
 **参数**:
 - `config` (object): 配置对象
 
 **示例**:
 ```javascript
-Weline.Theme.applyConfig({
-    theme: {
-        current: 'dark',
-        available: ['light', 'dark', 'amazon']
-    }
-});
+Weline.Theme.applyConfig({ debug: true });
 ```
 
 ### URL 管理
@@ -439,7 +442,7 @@ if (window.Weline) {
     // 初始化主题
     Weline.Theme.init();
     
-    // 切换主题
+    // 切换显式偏好；旧的亮/暗快捷按钮仍可使用
     document.getElementById('theme-toggle').addEventListener('click', function() {
         const currentTheme = Weline.Theme.getCurrent();
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -551,7 +554,7 @@ console.log('主色调:', primaryColor);
 // 设置 CSS 变量
 Weline.ThemeUtils.setVariable('--color-primary', '#ff0000');
 
-// 动态更新主题色
+// 仅在受控编辑器中更新一个 palette Token
 function updateThemeColor(color) {
     Weline.ThemeUtils.setVariable('--color-primary', color);
 }
@@ -567,7 +570,8 @@ function updateThemeColor(color) {
 ```javascript
 {
     detail: {
-        theme: 'dark' // 新主题名称
+        theme: 'dark',       // 解析后的实际模式：light|dark
+        preference: 'system' // 保存的偏好：system|light|dark
     }
 }
 ```
@@ -671,10 +675,9 @@ window.__WelineThemeConfig = {
         apiUrl: '/i18n/frontend/word/get-translations'
     },
     
-    // 主题配置（available 数组由 PHP 动态扫描 colors 目录生成）
+    // 主题运行时固定为三态偏好；品牌差异由 palette Token 提供
     theme: {
-        current: 'light',
-        available: ['light', 'dark', 'amazon'] // 动态扫描 colors/ 目录下的 _*.css 文件
+        preference: 'system'
     },
     
     // 站点配置
@@ -696,13 +699,13 @@ window.__WelineThemeConfig = {
 ### 2. 主题管理
 - 让 Theme.js 自动初始化主题，不要手动调用 `Weline.Theme.init()` 除非必要
 - 使用 `themechange` 事件监听主题切换，而不是轮询检查
-- **主题列表会自动从 `colors/` 目录扫描**，无需手动配置
-- 添加新主题时，只需在 `colors/` 目录下添加 `_{themeName}.css` 文件即可
+- 只使用 `switch('system'|'light'|'dark')`；`system` 保存偏好但不固化解析结果
+- 自定义品牌只能覆盖 palette/语义 Token，不能增加运行时主题名或复制全局组件 adapter
 
 ### 3. 配置管理
 - 在 PHP 模板中设置 `window.__WelineThemeConfig`，而不是在 JavaScript 中硬编码
 - 使用 `Weline.applyConfig()` 更新配置，而不是直接修改 `Weline.config`
-- 主题列表由 PHP 动态扫描生成，无需手动维护
+- 使用 `Weline.Theme.switch()` 更新颜色偏好，不要向配置注入 `available` 或 `current` 主题列表
 
 ### 4. 错误处理
 - 使用 Promise 的 `.catch()` 处理模块加载错误
@@ -713,10 +716,9 @@ window.__WelineThemeConfig = {
 - 避免在页面加载时立即加载所有模块
 
 ### 6. 主题开发
-- 主题文件命名规范：`colors/_{themeName}.css`（下划线前缀 + 主题名 + .css 后缀）
-- 前端主题放在 `view/theme/frontend/colors/` 目录
-- 后端主题放在 `view/theme/backend/colors/` 目录（如果支持）
-- 主题列表会自动扫描，无需修改代码
+- 前端与后端 palette 分别位于 `view/theme/{frontend|backend}/colors/_light.css` 与 `_dark.css`
+- palette 提供品牌/基础颜色，`Weline_Theme` 语义 Token 与 Bootstrap adapter 提供组件适配
+- 不新增自定义运行时主题名，也不在设计主题复制 `assets/css/theme.css` 或 `assets/js/theme.js`
 
 ## 常见问题
 
@@ -751,32 +753,16 @@ document.addEventListener('themechange', function(event) {
 });
 ```
 
-### Q: 如何添加新的主题？
+### Q: 如何自定义品牌颜色？
 
-A: 只需在对应的 `colors/` 目录下添加主题文件即可：
+A: 颜色模式固定为 `system|light|dark`。在当前设计主题的 `_light.css` 与 `_dark.css` 覆盖 palette Token；不要创建新主题名、扫描规则或组件 CSS。
 
-1. **前端主题**：在 `app/code/Weline/Theme/view/theme/frontend/colors/` 目录下添加 `_{themeName}.css` 文件
-2. **后端主题**：在 `app/code/Weline/Theme/view/theme/backend/colors/` 目录下添加 `_{themeName}.css` 文件（如果支持）
+### Q: 如何读取主题状态？
 
-例如，添加一个名为 `blue` 的主题：
-- 创建文件：`app/code/Weline/Theme/view/theme/frontend/colors/_blue.css`
-- 主题会自动出现在可用主题列表中，无需修改代码
-
-### Q: 主题列表是如何获取的？
-
-A: 主题列表由 PHP 在模板渲染时动态扫描 `colors/` 目录生成：
-- 扫描 `view/theme/{area}/colors/_*.css` 文件
-- 从文件名中提取主题名称（去掉 `_` 前缀和 `.css` 后缀）
-- 将主题列表传递给 JavaScript 配置
-- Theme.js 从配置中读取可用主题列表
-
-### Q: 如何获取当前可用的主题列表？
-
-A: 使用 `Weline.Theme.themes` 属性：
+A: 使用 `Weline.Theme.getPreference()` 读取 `system|light|dark`，并使用 `Weline.Theme.getCurrent()` 读取解析后的 `light|dark`：
 
 ```javascript
-const availableThemes = Weline.Theme.themes;
-console.log('可用主题:', availableThemes); // ['light', 'dark', 'amazon', ...]
+console.log(Weline.Theme.getPreference(), Weline.Theme.getCurrent());
 ```
 
 ### Q: 如何获取当前配置？
@@ -803,4 +789,3 @@ const config = Weline.getConfig();
 - 支持主题管理
 - 支持国际化
 - 支持 URL 解析
-

@@ -1,0 +1,15 @@
+/** Weline Default backend brand overlay (light). */
+:root,
+[data-theme="light"],
+[data-theme-mode="light"] {
+    --backend-color-primary: #4f46e5;
+    --backend-color-primary-rgb: 79, 70, 229;
+    --backend-color-primary-light: #6366f1;
+    --backend-color-primary-dark: #4338ca;
+    --backend-color-primary-hover: #4338ca;
+    --backend-color-primary-active: #3730a3;
+    --backend-color-primary-border: #4338ca;
+    --backend-color-primary-bg-subtle: rgba(79, 70, 229, 0.12);
+    --backend-color-primary-bg-light: rgba(79, 70, 229, 0.18);
+    --backend-color-on-primary: #ffffff;
+}

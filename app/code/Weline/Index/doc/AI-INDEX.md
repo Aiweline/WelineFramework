@@ -34,7 +34,7 @@
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：6
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：9
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：1
+- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：2
 
 ## 从源码识别到的开发提示
 
@@ -47,6 +47,8 @@
 ## doc 目录
 
 - `app/code/Weline/Index/doc/README.md`
+- `app/code/Weline/Index/doc/开发日志.md`
+- `app/code/Weline/Index/doc/需求.md`
 
 ## 开发前门禁
 

@@ -47,6 +47,14 @@ final class GatewayLauncherRecoveryContractTest extends TestCase
         self::assertStringContainsString('RestartSec=5', $systemd);
         self::assertStringContainsString('PrivateTmp=false', $systemd);
         self::assertStringNotContainsString('PrivateTmp=true', $systemd);
+        self::assertStringContainsString(
+            'CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_CHOWN CAP_KILL CAP_FOWNER',
+            $systemd,
+        );
+        self::assertStringContainsString(
+            'AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_CHOWN CAP_KILL CAP_FOWNER',
+            $systemd,
+        );
 
         $installer = (string)\file_get_contents(
             $gateway . '/GatewayPlatformServiceInstaller.php',
@@ -67,7 +75,9 @@ final class GatewayLauncherRecoveryContractTest extends TestCase
         $start = \strpos(
             $source,
             "static int wls_recovery_attested_process_live(\n"
-                . "    const struct wls_process_attestation_receipt *receipt\n"
+                . "    const struct wls_process_attestation_receipt *receipt,\n"
+                . "    const char *home,\n"
+                . "    char active_slot\n"
                 . ') {',
         );
         $end = \strpos(

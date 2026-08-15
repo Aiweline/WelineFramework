@@ -117,6 +117,28 @@ role id、名称和说明，不得直接实例化 ACL Role Model。`RoleRecord` 
 后台 menu.xml 的解析和拓扑仍由 Backend 所有，ACL 通过
 `Weline\Acl\Api\Resource\MenuRegistryInterface` 独占 ACL 菜单表的查询、禁用、删除和
 upsert。接口只接收标量数组，不向 Backend 暴露 ORM 或查询构造器。
+后台保存角色权限时，事务提交成功后必须执行 `CacheManager::flushAll()`；缓存失败不得回滚已经
+提交的权限数据，而要明确提示“权限已保存、缓存刷新失败”。WLS 下的缓存清理广播通过
+`process_cache_resetter.Weline_Acl` 与 `process_cache_resetter.Weline_Backend` 同步清空每个 Worker
+中的 ACL 资源树和后台菜单树进程缓存，因此新增菜单或权限变更不依赖 120 秒 TTL，也不需要
+运维逐个 Worker 手工清缓存。
+`CacheManager::flushAll()` 完成后还必须通过 `ModuleProcessCacheResetterRegistry` 重置当前请求
+进程的 ACL/Menu 运行时缓存；广播负责其他 Worker，当前进程重置负责保存请求所在 Worker，
+两者缺一都会出现“权限已写入但当前用户菜单仍未更新”。
+角色权限保存依赖的单表 `DELETE` 必须使用不带主表别名的跨数据库兼容 SQL，并同步移除
+`WHERE` 字段上的主表别名前缀；MariaDB 不接受旧式 `DELETE FROM table AS main_table`。
+PDO `exec/execute` 返回 `false` 时必须立即抛出异常，让事务回滚并显示保存失败，禁止把
+SQL 语法错误或唯一键冲突当作零影响行继续提交，否则会出现勾选项提交后仍保持旧授权。
+
+角色权限树初始化时只允许预选数据库真实授权的叶子节点，禁止把仅用于祖先可见性的父菜单
+当成整棵子树已授权。运营主动勾选有子节点的菜单时，界面必须显式选中其全部后代并一并保存；
+取消父菜单时必须递归取消全部后代。页面显示、提交数据和数据库授权必须保持一致。
+权限树顶层分组必须让展开箭头、复选框、图标和标题处于同一行并垂直居中。jstree 节点本身
+保持 `block + relative` 以兼容 wholerow 绝对定位；顶层 anchor 使用 `inline-flex` 占据 caret
+之外的剩余宽度，禁止以块级 flex 把前置 caret 挤到独立行，也禁止用 JavaScript 坐标补丁。
+权限树使用 jsTree 原生三态计算：未选后代显示空框，部分已选后代在复选框元素自身的
+`.jstree-undetermined` 状态显示横向方格标记，全部后代已选显示勾选。三态仅表达派生视觉状态，
+不得改变真实 selected 集合、叶子授权提交或父节点点击级联语义；菜单与标签两个维度必须一致。
 审计、遥测等模块需要把 `class + HTTP method + route` 解析为 ACL 资源时，使用
 `AuthorizationServiceInterface::findRouteResource()`。结果是 final readonly `RouteResource`，
 只含 `acl_id` 与 `source_name`；未匹配返回 `null`，ORM Model 和 Query Builder 留在 Acl 内部。

@@ -1,7 +1,14 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+/**@var \Weline\Backend\Api\View\BackendThemeConfigInterface $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
+$isDev = defined('DEV') && DEV;
+$themeAssetBaseUrl = $isDev ? '/Weline/Theme/view/theme/' : '/static/Weline/Theme/theme/';
+$themeAssetVersion = '20260810-color-mode';
+$backendThemePreference = $themeConfig->getOriginThemeConfig('theme-mode-switch');
+if (!in_array($backendThemePreference, ['system', 'light', 'dark'], true)) {
+    $backendThemePreference = 'light';
+}
 
 // 语言/货币以 State::getLang/getCurrency 为准（路由语言段最高优先），勿直接读可能过期的 w_env。
 $currentLang = \Weline\Framework\App\State::getLang() ?: 'zh_Hans_CN';
@@ -14,6 +21,19 @@ $headDescription = (string)($this->getData('description') ?? '');
 $jsonEncodeFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 ?>
 <base href="@backend-url('/')">
+<script data-no-extract="true">
+    (function(root, preference) {
+        var dark = preference === 'dark' || (preference === 'system' && window.matchMedia
+            && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var current = dark ? 'dark' : 'light';
+        root.setAttribute('data-theme-preference', preference);
+        root.setAttribute('data-theme', current);
+        root.setAttribute('data-bs-theme', current);
+        root.setAttribute('data-theme-mode', current);
+        root.setAttribute('data-layout-mode', current);
+        root.style.colorScheme = current;
+    })(document.documentElement, <?= json_encode($backendThemePreference, $jsonEncodeFlags) ?>);
+</script>
 <meta charset="UTF-8">
 <title><?= htmlspecialchars($headTitle, ENT_QUOTES, 'UTF-8') ?></title>
 <!--元数据-->
@@ -61,7 +81,7 @@ endif;
         -webkit-appearance: auto;
         appearance: auto;
         background-image: none !important;
-        accent-color: #0bb197;
+        accent-color: var(--backend-color-primary);
     }
     .form-switch .form-check-input {
         width: 2em;
@@ -71,17 +91,14 @@ endif;
 // 始终加载主题基础变量CSS（所有变量的默认值）
 // 注意：必须先加载 _colors.css（定义所有 --backend-* 颜色变量）
 ?>
-<theme:css>Weline_Theme::theme/backend/variables/_colors.css</theme:css>
-<theme:css>Weline_Theme::theme/backend/variables/_typography.css</theme:css>
-<theme:css>Weline_Theme::theme/backend/variables/_spacing.css</theme:css>
-<theme:css>Weline_Theme::theme/backend/variables/_borders.css</theme:css>
-<theme:css>Weline_Theme::theme/backend/variables/_shadows.css</theme:css>
-<theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
-<theme:css>Weline_Theme::theme/backend/assets/css/theme.css</theme:css>
-<?php
-// 始终加载暗色模式CSS（通过属性选择器 [data-layout-mode="dark"] 等控制生效）
-// 这样用户可以动态切换主题模式，无需重新加载页面
-?>
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_colors.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_typography.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_spacing.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_borders.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_shadows.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/colors/_light.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<theme:css>Weline_Theme::theme/backend/colors/_light.css</theme:css>
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/colors/_dark.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
 <theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
 <?php
 // 加载主题色系和变量CSS文件（预览配置）
@@ -116,7 +133,6 @@ if ($previewContextService->shouldUseStoredContext()) {
 <js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>
 <?php
 // 注入主题配置（必须在 theme.js 加载前）
-$isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
 $baseHost = rtrim($this->request->getBaseHost(), '/');
 
@@ -142,6 +158,7 @@ $themeConfigPayload = [
     'modulesBaseUrl' => $modulesBaseUrl,
     'deployVersion' => ($__dv && is_array($__dv)) ? ($__dv['deploy_version'] ?? 'dev') : 'dev',
     'workerBuildId' => ($__dv && is_array($__dv)) ? ($__dv['worker_build_id'] ?? 'dev') : 'dev',
+    'themePreference' => $backendThemePreference,
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'debug' => DEV,
@@ -169,9 +186,9 @@ $themeConfigPayload = [
 window.__WelineThemeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFlags) ?>;
 </script>
 <!-- 主题核心 JS（Weline 对象、模块加载器、API 代理等） -->
-<theme:js>Weline_Theme::theme/backend/assets/js/theme.js</theme:js>
+<script src="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/js/theme.js?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 <!-- 后台全局组件（BackendToast、BackendConfirm 等） -->
-<theme:js>Weline_Theme::theme/backend/assets/js/backend-components.js</theme:js>
+<script src="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/js/backend-components.js?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 <?php if (DEV): ?>
     <!--        <script src="@static(Weline_Backend::/backend/lib/jquery/3.6.0/jquery.map)"></script>-->
 <?php endif; ?>
@@ -181,16 +198,25 @@ window.__WelineThemeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFla
     'use strict';
     // 监听来自Visual Editor的postMessage (Live Preview支持)
     window.addEventListener('message', function(event) {
-        if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
-            var cssVars = event.data.cssVars || {};
-            var root = document.documentElement;
-            for (var varName in cssVars) {
-                if (cssVars.hasOwnProperty(varName)) {
-                    root.style.setProperty(varName, cssVars[varName]);
-                }
-            }
-            console.log('[Theme] Live preview updated:', Object.keys(cssVars).length, 'variables');
+        if (event.origin !== window.location.origin || !event.data || event.data.type !== 'WELINE_THEME_UPDATE') {
+            return;
         }
+        var cssVars = event.data.cssVars || {};
+        var root = document.documentElement;
+        for (var varName in cssVars) {
+            var value = cssVars[varName];
+            if (
+                Object.prototype.hasOwnProperty.call(cssVars, varName)
+                && /^--[A-Za-z0-9_-]+$/.test(varName)
+                && (typeof value === 'string' || typeof value === 'number')
+                && String(value).length > 0
+                && String(value).length <= 1024
+                && !/[;{}<>\\]/.test(String(value))
+            ) {
+                root.style.setProperty(varName, String(value));
+            }
+        }
+        console.log('[Theme] Live preview updated:', Object.keys(cssVars).length, 'variables');
     });
 })();
 </script>
@@ -214,7 +240,7 @@ if($this->getHeader()){
     line-height: 1 !important;
 }
 #page-topbar #vertical-menu-btn,
-#page-topbar #theme-mode-toggle,
+#page-topbar [data-weline-backend-theme-trigger],
 #page-topbar .navbar-header .noti-icon,
 #page-topbar .navbar-header .weline-notif-btn {
     width: 44px !important;
@@ -301,7 +327,7 @@ body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
         border-radius: 12px !important;
     }
     #page-topbar #vertical-menu-btn,
-    #page-topbar #theme-mode-toggle,
+    #page-topbar [data-weline-backend-theme-trigger],
     #page-topbar .navbar-header .noti-icon,
     #page-topbar .navbar-header .weline-notif-btn {
         width: 38px !important;
@@ -362,7 +388,7 @@ body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
         border-radius: 12px !important;
     }
     html body #page-topbar #vertical-menu-btn,
-    html body #page-topbar #theme-mode-toggle,
+    html body #page-topbar [data-weline-backend-theme-trigger],
     html body #page-topbar .navbar-header .noti-icon,
     html body #page-topbar .navbar-header .weline-notif-btn {
         width: 38px !important;
@@ -394,7 +420,7 @@ body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
     #page-topbar .navbar-header .dropdown .header-item,
     #page-topbar .navbar-header .dropdown .show.header-item,
     #page-topbar #vertical-menu-btn,
-    #page-topbar #theme-mode-toggle,
+    #page-topbar [data-weline-backend-theme-trigger],
     #page-topbar .navbar-header .noti-icon,
     #page-topbar .navbar-header .weline-notif-btn,
     #page-topbar .user-dropdown .header-item {
@@ -416,7 +442,7 @@ body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
     html body #page-topbar .navbar-header .dropdown .header-item,
     html body #page-topbar .navbar-header .dropdown .show.header-item,
     html body #page-topbar #vertical-menu-btn,
-    html body #page-topbar #theme-mode-toggle,
+    html body #page-topbar [data-weline-backend-theme-trigger],
     html body #page-topbar .navbar-header .noti-icon,
     html body #page-topbar .navbar-header .weline-notif-btn,
     html body #page-topbar .user-dropdown .header-item {
@@ -433,3 +459,5 @@ body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
     }
 }
 </style>
+<!-- Canonical adapter follows every Admin/header stylesheet and inline override. -->
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/css/theme.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Seo\Service;
 
 use Weline\Queue\Api\QueueStatus;
+use Weline\Seo\Model\SeoOptimizationPolicy;
 use Weline\Seo\Queue\SeoOptimizationAnalyzeQueue;
 use Weline\Seo\Queue\SeoOptimizationEvaluateQueue;
 
@@ -20,12 +21,13 @@ final class SeoOptimizationQueueService
         $this->timing = $timing ?? new OptimizationTiming();
     }
 
-    /** @param array<string,mixed> $target @return array<string,mixed> */
+    /** @param array<string,mixed> $target @param array<string,mixed> $options @return array<string,mixed> */
     public function enqueueAnalyze(
         int $websiteId,
         string $adapter = 'pagebuilder_ai_site',
         array $target = [],
         string $requestKey = '',
+        array $options = [],
     ): array {
         if ($websiteId < 0) {
             throw new \InvalidArgumentException('website_id must be non-negative.');
@@ -48,6 +50,20 @@ final class SeoOptimizationQueueService
             'target' => $this->target($target),
             'request_key' => $requestKey,
         ];
+        $triggerSource = \trim((string)($options['trigger_source'] ?? ''));
+        if ($triggerSource !== '') {
+            if (\preg_match('/^[a-z][a-z0-9_]{1,31}$/D', $triggerSource) !== 1) {
+                throw new \InvalidArgumentException('Optimization trigger_source is invalid.');
+            }
+            $payload['trigger_source'] = $triggerSource;
+        }
+        $applyIntent = \trim((string)($options['apply_intent'] ?? ''));
+        if ($applyIntent !== '') {
+            if ($applyIntent !== SeoOptimizationPolicy::MODE_AUTO_DRAFT) {
+                throw new \InvalidArgumentException('Optimization apply_intent is invalid.');
+            }
+            $payload['apply_intent'] = $applyIntent;
+        }
 
         return $this->create(SeoOptimizationAnalyzeQueue::class, (string)__('SEO 自动优化分析'), $payload, $bizKey);
     }

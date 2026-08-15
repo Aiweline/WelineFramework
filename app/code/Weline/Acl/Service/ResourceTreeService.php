@@ -24,11 +24,47 @@ use Weline\Framework\Runtime\RequestContext;
 class ResourceTreeService implements ResourceTreeServiceInterface
 {
     private const BACKEND_MENU_TREE_CACHE_TTL = 120.0;
+    private const MENU_TREE_GENERATION_KEY = 'backend_menu_tree_generation';
 
     /**
      * @var array<string, array{expires: float, data: array}>
      */
     private static array $backendMenuTreeCache = [];
+
+    private static ?string $localMenuTreeGeneration = null;
+
+    public static function clearProcessCache(): void
+    {
+        self::$backendMenuTreeCache = [];
+        self::$localMenuTreeGeneration = null;
+    }
+
+    public static function invalidateBackendMenuTreeCache(): void
+    {
+        self::$backendMenuTreeCache = [];
+        self::$localMenuTreeGeneration = null;
+        try {
+            w_cache('acl')->set(self::MENU_TREE_GENERATION_KEY, (string)\microtime(true));
+        } catch (\Throwable) {
+        }
+    }
+
+    private static function syncMenuTreeGeneration(): void
+    {
+        $generation = '0';
+        try {
+            $cached = w_cache('acl')->get(self::MENU_TREE_GENERATION_KEY);
+            if ($cached !== false && $cached !== null && $cached !== '') {
+                $generation = (string)$cached;
+            }
+        } catch (\Throwable) {
+            $generation = '0';
+        }
+        if (self::$localMenuTreeGeneration !== $generation) {
+            self::$backendMenuTreeCache = [];
+            self::$localMenuTreeGeneration = $generation;
+        }
+    }
 
     protected function newAclModel(): Acl
     {
@@ -60,6 +96,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             $websiteId = 0;
         }
         $cacheKey = 'role:' . $roleId . ':w:' . $websiteId;
+        self::syncMenuTreeGeneration();
         $now = microtime(true);
         if (isset(self::$backendMenuTreeCache[$cacheKey]) && self::$backendMenuTreeCache[$cacheKey]['expires'] >= $now) {
             return self::$backendMenuTreeCache[$cacheKey]['data'];

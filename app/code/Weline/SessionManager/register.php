@@ -13,6 +13,6 @@ Register::register(
     Register::MODULE,
     'Weline_SessionManager',
     __DIR__,
-    '1.0.1',
+    '1.1.0',
     '<a href="https://bbs.aiweline.com">Session管理</a>'
 );

@@ -1021,7 +1021,9 @@ final class CertificateMaterialUpdateCoordinator
                     }
                 }
             } catch (\Throwable $throwable) {
-                $failures[] = 'legacy managed Nginx: ' . $throwable->getMessage();
+                if ($legacyManaged) {
+                    $failures[] = 'legacy managed Nginx: ' . $throwable->getMessage();
+                }
             }
         }
 

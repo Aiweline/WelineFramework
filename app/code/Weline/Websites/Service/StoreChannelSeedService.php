@@ -268,13 +268,15 @@ class StoreChannelSeedService
         bool $lockingRead = false,
     ): Store
     {
-        $store = $this->newStore($connection)
-            ->where(Store::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(Store::schema_fields_CODE, Store::CODE_DEFAULT);
-        if ($lockingRead && $this->supportsForUpdate($connection)) {
-            $store->additional('FOR UPDATE');
+        $store = $this->newStore($connection);
+        $row = $this->fetchRow($connection, $store->getTable(), [
+            Store::schema_fields_WEBSITE_ID => $websiteId,
+            Store::schema_fields_CODE => Store::CODE_DEFAULT,
+        ], $lockingRead);
+        if ($row !== null) {
+            $store->setData($row);
         }
-        return $store->find()->fetch();
+        return $store;
     }
 
     private function assertDefaultStore(Store $store, int $websiteId): Store
@@ -296,13 +298,15 @@ class StoreChannelSeedService
         bool $lockingRead = false,
     ): SalesChannel
     {
-        $channel = $this->newChannel($connection)
-            ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
-            ->where(SalesChannel::schema_fields_CODE, SalesChannel::CODE_DEFAULT);
-        if ($lockingRead && $this->supportsForUpdate($connection)) {
-            $channel->additional('FOR UPDATE');
+        $channel = $this->newChannel($connection);
+        $row = $this->fetchRow($connection, $channel->getTable(), [
+            SalesChannel::schema_fields_STORE_ID => $storeId,
+            SalesChannel::schema_fields_CODE => SalesChannel::CODE_DEFAULT,
+        ], $lockingRead);
+        if ($row !== null) {
+            $channel->setData($row);
         }
-        return $channel->find()->fetch();
+        return $channel;
     }
 
     private function assertDefaultChannel(
@@ -330,16 +334,21 @@ class StoreChannelSeedService
         int $websiteId,
         bool $lockingRead,
     ): Website {
-        $website = $this->newWebsite($connection)
-            ->where(Website::schema_fields_ID, $websiteId);
+        $website = $this->newWebsite($connection);
+        $sql = 'SELECT * FROM ' . $website->getTable()
+            . ' WHERE ' . Website::schema_fields_ID . ' = :website_id';
         if ($lockingRead && $this->supportsForUpdate($connection)) {
-            $website->additional('FOR UPDATE');
+            $sql .= ' FOR UPDATE';
         }
-        $website->find()->fetch();
-        if (!$website->hasData(Website::schema_fields_ID)
-            || $website->getWebsiteId() !== $websiteId) {
+        $statement = $connection->getConnector()->getWrappedConnection()->prepare($sql);
+        $statement->execute(['website_id' => $websiteId]);
+        $row = $statement->fetch(\PDO::FETCH_ASSOC);
+        if (!is_array($row)
+            || !array_key_exists(Website::schema_fields_ID, $row)
+            || (int)$row[Website::schema_fields_ID] !== $websiteId) {
             throw new \RuntimeException(__('补种目标 Website 不存在'));
         }
+        $website->setData($row);
         return $website;
     }
 
@@ -367,6 +376,30 @@ class StoreChannelSeedService
     {
         $model = clone $this->channel;
         return $model->setConnection($connection)->clearData()->clearQuery();
+    }
+
+    /** @param array<string, int|string> $conditions */
+    private function fetchRow(
+        ConnectionFactory $connection,
+        string $table,
+        array $conditions,
+        bool $lockingRead,
+    ): ?array {
+        $where = [];
+        $params = [];
+        foreach ($conditions as $field => $value) {
+            $placeholder = 'value_' . count($params);
+            $where[] = $field . ' = :' . $placeholder;
+            $params[$placeholder] = $value;
+        }
+        $sql = 'SELECT * FROM ' . $table . ' WHERE ' . implode(' AND ', $where) . ' LIMIT 1';
+        if ($lockingRead && $this->supportsForUpdate($connection)) {
+            $sql .= ' FOR UPDATE';
+        }
+        $statement = $connection->getConnector()->getWrappedConnection()->prepare($sql);
+        $statement->execute($params);
+        $row = $statement->fetch(\PDO::FETCH_ASSOC);
+        return is_array($row) ? $row : null;
     }
 
     private function supportsForUpdate(ConnectionFactory $connection): bool

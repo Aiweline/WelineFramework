@@ -572,6 +572,80 @@ final class GatewayWindowsHostRootAuthority
         );
     }
 
+    /**
+     * Verify, without creating or repairing anything, the exact Windows ACL
+     * profile of a first-bootstrap scaffold that may be retired.  The caller
+     * supplies the lstat-derived identity so the capture holds the fixed path
+     * chain and rejects replacement races before any deletion can follow.
+     *
+     * @param array{device:string,inode:string} $expectedIdentity
+     */
+    public static function assertInitialBootstrapScaffoldingAuthority(
+        string $path,
+        bool $directory,
+        array $expectedIdentity,
+    ): void {
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            throw new \RuntimeException(
+                'Windows bootstrap authority validation is unavailable on this platform.',
+            );
+        }
+        $ffi = self::bindings();
+        $home = self::normalizeLocalFixedPath(self::resolveHome(), $ffi['kernel']);
+        $normalized = self::normalizeLocalFixedPath($path, $ffi['kernel']);
+        $prefix = \strtolower($home . '\\');
+        if (!\str_starts_with(\strtolower($normalized), $prefix)) {
+            throw new \RuntimeException(
+                'Windows bootstrap scaffold escaped the fixed Gateway root.',
+            );
+        }
+        $relative = \strtolower(\str_replace(
+            '\\',
+            '/',
+            \substr($normalized, \strlen($home) + 1),
+        ));
+        if ($directory) {
+            $profiles = self::bootstrapProfiles()[$relative] ?? null;
+            if (!\is_array($profiles) || \count($profiles) !== 1) {
+                throw new \RuntimeException(
+                    'Windows bootstrap scaffold directory has no exact profile.',
+                );
+            }
+            $expected = $profiles[0];
+        } else {
+            $controllerReadLeaf = 'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)'
+                . '(A;;0x1200a9;;;' . self::CONTROLLER_SERVICE_SID . ')';
+            $rootOnlyLeaf = 'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)';
+            $expected = match ($relative) {
+                'trust/host-id' => 'O:BAD:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)'
+                    . '(A;ID;0x1200a9;;;' . self::CONTROLLER_SERVICE_SID . ')',
+                'trust/admin.token',
+                'guardian/v1/wls-gateway-guardian.exe' => $controllerReadLeaf,
+                'trust/guardian.sha256',
+                'trust/launcher-recovery.ledger',
+                'trust/guardian-generation-head.lock' => $rootOnlyLeaf,
+                default => throw new \RuntimeException(
+                    'Windows bootstrap scaffold file has no exact profile.',
+                ),
+            };
+        }
+        $expected = self::canonicalSddl(
+            $expected,
+            $ffi['advapi'],
+            $ffi['kernel'],
+        );
+        $actual = self::captureExactPathSddl(
+            $path,
+            $directory,
+            $expectedIdentity,
+        );
+        if (!\hash_equals($expected, $actual)) {
+            throw new \RuntimeException(
+                'Gateway Windows bootstrap authority differs from its exact profile.',
+            );
+        }
+    }
+
     /** @return array<string,list<string>> */
     private static function bootstrapProfiles(): array
     {
@@ -613,6 +687,19 @@ final class GatewayWindowsHostRootAuthority
             'snapshot-candidates-v2' => [
                 'O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)'
                     . "(A;;GA;;;$controller)",
+            ],
+            // Broker-owned serving namespace: controller access stops at the
+            // private state sources, never at published neutral-TLS leaves.
+            'neutral-tls' => [
+                'O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)'
+                    . "(A;;0x20;;;$dataPlane)",
+            ],
+            // The broker-owned PID root is traversable by both unprivileged
+            // services, but no persistent write ACE is inherited or granted.
+            'nginx-pid' => [
+                'O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)'
+                    . "(A;;0x20;;;$controller)"
+                    . "(A;;0x20;;;$dataPlane)",
             ],
             'bin' => [$controllerRead],
         ];

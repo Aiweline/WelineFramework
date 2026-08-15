@@ -22,6 +22,13 @@
 #error "WLS_RELEASE_PUBLIC_KEY_HEX must be defined by the release build"
 #endif
 
+#ifndef OBJ_DONT_REPARSE
+#define OBJ_DONT_REPARSE 0x1000L
+#endif
+#ifndef FILE_OPEN_REPARSE_POINT
+#define FILE_OPEN_REPARSE_POINT 0x00200000
+#endif
+
 #define WLS_PATH_CHARS 32768U
 #define WLS_MAX_MANIFEST (4U * 1024U * 1024U)
 #define WLS_LAUNCHER_JSON_MAX_DEPTH 128U
@@ -41,10 +48,26 @@
 #define WLS_REBOOTSTRAP_JOURNAL_MAX_BYTES 131072U
 #define WLS_REBOOTSTRAP_START_AUTHORIZATION_MAX_BYTES 2048U
 #define WLS_REBOOTSTRAP_RECOVERY_DIRECTORY_MAX_ENTRIES 16384U
+#define WLS_NGINX_PID_RESIDUE_MAX 3U
+#define WLS_NGINX_PID_RESIDUE_NAME_MAX 127U
+#define WLS_NGINX_PID_RESIDUE_PID_MAX_BYTES 32U
+#define WLS_NGINX_PID_RESIDUE_CONFIG_MAX_BYTES (16U * 1024U * 1024U)
+#define WLS_PID_RESIDUE_EVIDENCE_CLEAN 0
+#define WLS_PID_RESIDUE_EVIDENCE_PENDING 1
+#define WLS_PID_RESIDUE_EVIDENCE_UNSAFE 2
+#define WLS_RETIREMENT_RECEIPT_PRESENT 0
+#define WLS_RETIREMENT_RECEIPT_ABSENT 1
+#define WLS_RETIREMENT_RECEIPT_INVALID 2
+#define WLS_RESTART_JOB_DRAIN_MILLISECONDS 5000U
 #define WLS_GATEWAY_SERVICE_SID_TEXT \
     L"S-1-5-80-3070340479-3168417268-2770794561-992406300-110075626"
 #define WLS_DATA_PLANE_SERVICE_SID_TEXT \
     L"S-1-5-80-3611316956-1833621424-61377994-3153356469-2496947245"
+
+static const wchar_t *wls_service_name = L"weline-wls-gateway-v2";
+#ifdef WLS_NATIVE_TEST_HOOKS
+static int wls_service_test_mode = 0;
+#endif
 
 struct wls_upgrade {
     int present;
@@ -109,6 +132,22 @@ struct wls_platform_retirement_receipt {
     char completed_runtime_generation[65];
 };
 
+struct wls_nginx_pid_residue_entry {
+    char name[WLS_NGINX_PID_RESIDUE_NAME_MAX + 1U];
+    DWORD volume_serial;
+    DWORD file_index_high;
+    DWORD file_index_low;
+};
+
+struct wls_nginx_pid_residue_intent {
+    char platform[16];
+    char service_id[65];
+    char requested_launcher_generation[65];
+    char runtime_generation[65];
+    unsigned int count;
+    struct wls_nginx_pid_residue_entry entries[WLS_NGINX_PID_RESIDUE_MAX];
+};
+
 struct wls_process_attestation_receipt {
     unsigned long pid;
     unsigned long long start_id;
@@ -137,6 +176,20 @@ typedef NTSTATUS (NTAPI *wls_nt_query_system_information_fn)(
     PULONG
 );
 
+typedef NTSTATUS (NTAPI *wls_nt_create_file_fn)(
+    PHANDLE,
+    ACCESS_MASK,
+    POBJECT_ATTRIBUTES,
+    PIO_STATUS_BLOCK,
+    PLARGE_INTEGER,
+    ULONG,
+    ULONG,
+    ULONG,
+    ULONG,
+    PVOID,
+    ULONG
+);
+
 static SERVICE_STATUS_HANDLE wls_status_handle = NULL;
 static SERVICE_STATUS wls_service_status;
 static HANDLE wls_broker_stop_event = NULL;
@@ -155,6 +208,9 @@ static const wchar_t *wls_service_run = NULL;
 #endif
 static char wls_service_id[65];
 static char wls_launcher_generation[65];
+/* Only the validated Guardian-child command has the service-tree proof that
+ * permits cross-generation nginx-pid residue replay. */
+static volatile LONG wls_authenticated_platform_generation = 0;
 
 static int wls_checked_add_long_long(
     long long value,
@@ -307,6 +363,38 @@ static int wls_launcher_gateway_service_sid(PSID *sid)
 {
     if (sid == NULL) return 1;
     *sid = NULL;
+#ifdef WLS_NATIVE_TEST_HOOKS
+    if (wls_service_test_mode) {
+        wchar_t account[256];
+        wchar_t domain[256];
+        DWORD sid_bytes = 0U;
+        DWORD domain_chars = sizeof(domain) / sizeof(domain[0]);
+        SID_NAME_USE use;
+        if (wls_service_name == NULL
+            || _snwprintf_s(
+                account,
+                sizeof(account) / sizeof(account[0]),
+                _TRUNCATE,
+                L"NT SERVICE\\%ls",
+                wls_service_name
+            ) < 0) return 1;
+        (void)LookupAccountNameW(
+            NULL, account, NULL, &sid_bytes, domain, &domain_chars, &use
+        );
+        if (sid_bytes == 0U || GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+            return 1;
+        }
+        *sid = LocalAlloc(LMEM_FIXED, sid_bytes);
+        if (*sid == NULL || !LookupAccountNameW(
+                NULL, account, *sid, &sid_bytes, domain, &domain_chars, &use
+            ) || !IsValidSid(*sid)) {
+            if (*sid != NULL) LocalFree(*sid);
+            *sid = NULL;
+            return 1;
+        }
+        return 0;
+    }
+#endif
     if (!ConvertStringSidToSidW(WLS_GATEWAY_SERVICE_SID_TEXT, sid)
         || *sid == NULL || !IsValidSid(*sid)) {
         if (*sid != NULL) LocalFree(*sid);
@@ -553,6 +641,13 @@ static int wls_launcher_host_data_plane_directory_acl_valid(
     );
 }
 
+static int wls_launcher_root_only_directory_acl_valid(HANDLE object)
+{
+    return wls_launcher_slot_acl_valid_profile(
+        object, 1, NULL, 0, NULL, 0, 1, 0, 0U
+    );
+}
+
 static int wls_launcher_slot_acl_valid(
     HANDLE object,
     int directory,
@@ -638,6 +733,125 @@ static int wls_launcher_data_plane_directory_valid(
             )) == 0) result = 0;
     if (directory != INVALID_HANDLE_VALUE) CloseHandle(directory);
     return result;
+}
+
+/* Resolve only one leaf beneath an already-validated directory handle.  The
+ * residue recovery path must not reopen an attacker-controlled textual path
+ * between identity validation and deletion. */
+static int wls_launcher_handle_is_reparse(HANDLE handle)
+{
+    FILE_ATTRIBUTE_TAG_INFO attributes;
+    ZeroMemory(&attributes, sizeof(attributes));
+    return handle == NULL || handle == INVALID_HANDLE_VALUE
+        || !GetFileInformationByHandleEx(
+            handle, FileAttributeTagInfo, &attributes, sizeof(attributes)
+        ) || (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0U;
+}
+
+static int wls_launcher_directory_identity(
+    HANDLE directory,
+    BY_HANDLE_FILE_INFORMATION *identity
+)
+{
+    FILE_ATTRIBUTE_TAG_INFO attributes;
+    ZeroMemory(&attributes, sizeof(attributes));
+    return directory == NULL || directory == INVALID_HANDLE_VALUE
+        || identity == NULL
+        || wls_launcher_handle_is_reparse(directory)
+        || !GetFileInformationByHandleEx(
+            directory, FileAttributeTagInfo, &attributes, sizeof(attributes)
+        ) || (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0U
+        || !GetFileInformationByHandle(directory, identity)
+        || identity->nNumberOfLinks == 0U ? 1 : 0;
+}
+
+static int wls_launcher_flush_verified_directory(HANDLE directory)
+{
+    typedef NTSTATUS (NTAPI *wls_nt_flush_buffers_file_fn)(
+        HANDLE, PIO_STATUS_BLOCK
+    );
+    BY_HANDLE_FILE_INFORMATION before;
+    BY_HANDLE_FILE_INFORMATION after;
+    IO_STATUS_BLOCK status;
+    HMODULE ntdll;
+    wls_nt_flush_buffers_file_fn native_flush = NULL;
+    int flushed = 0;
+    ZeroMemory(&before, sizeof(before));
+    ZeroMemory(&after, sizeof(after));
+    ZeroMemory(&status, sizeof(status));
+    if (wls_launcher_directory_identity(directory, &before) != 0) return 1;
+    if (FlushFileBuffers(directory)) {
+        flushed = 1;
+    } else if ((ntdll = GetModuleHandleW(L"ntdll.dll")) != NULL
+        && (native_flush = (wls_nt_flush_buffers_file_fn)(void *)GetProcAddress(
+            ntdll, "NtFlushBuffersFile"
+        )) != NULL && native_flush(directory, &status) >= 0) {
+        flushed = 1;
+    }
+    return !flushed || wls_launcher_directory_identity(directory, &after) != 0
+        || before.dwVolumeSerialNumber != after.dwVolumeSerialNumber
+        || before.nFileIndexHigh != after.nFileIndexHigh
+        || before.nFileIndexLow != after.nFileIndexLow
+        || before.nNumberOfLinks != after.nNumberOfLinks ? 1 : 0;
+}
+
+static HANDLE wls_nt_open_child(
+    HANDLE parent,
+    const wchar_t *name,
+    size_t name_length,
+    ACCESS_MASK access,
+    ULONG share_access,
+    ULONG disposition,
+    int directory
+) {
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    wls_nt_create_file_fn nt_create_file;
+    UNICODE_STRING unicode_name;
+    OBJECT_ATTRIBUTES attributes;
+    IO_STATUS_BLOCK status_block;
+    HANDLE child = INVALID_HANDLE_VALUE;
+    NTSTATUS status;
+    if (parent == NULL || parent == INVALID_HANDLE_VALUE || name == NULL
+        || name_length == 0U || name_length > 32767U) {
+        SetLastError(ERROR_INVALID_NAME);
+        return INVALID_HANDLE_VALUE;
+    }
+    if (ntdll == NULL || (nt_create_file = (wls_nt_create_file_fn)(void *)
+            GetProcAddress(ntdll, "NtCreateFile")) == NULL) {
+        SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+        return INVALID_HANDLE_VALUE;
+    }
+    unicode_name.Buffer = (PWSTR)name;
+    unicode_name.Length = (USHORT)(name_length * sizeof(wchar_t));
+    unicode_name.MaximumLength = unicode_name.Length;
+    InitializeObjectAttributes(
+        &attributes,
+        &unicode_name,
+        OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE,
+        parent,
+        NULL
+    );
+    status = nt_create_file(
+        &child,
+        access | SYNCHRONIZE,
+        &attributes,
+        &status_block,
+        NULL,
+        FILE_ATTRIBUTE_NORMAL,
+        share_access,
+        disposition,
+        FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT
+            | (directory ? FILE_DIRECTORY_FILE : FILE_NON_DIRECTORY_FILE),
+        NULL,
+        0U
+    );
+    if (status < 0 || child == INVALID_HANDLE_VALUE
+        || wls_launcher_handle_is_reparse(child)) {
+        if (child != INVALID_HANDLE_VALUE) CloseHandle(child);
+        SetLastError(RtlNtStatusToDosError(status));
+        return INVALID_HANDLE_VALUE;
+    }
+    return child;
 }
 
 static int wls_read_file(
@@ -4253,6 +4467,90 @@ static int wls_write_platform_retirement_v2(
     return 0;
 }
 
+/* Receipt absence is a CreateFileW-only result.  Once a handle exists, every
+ * authority, size, read, or identity failure is invalid regardless of any
+ * ambient LastError value left by an earlier API call. */
+static int wls_platform_retirement_receipt_read(
+    const wchar_t *home,
+    struct wls_platform_retirement_receipt *receipt
+)
+{
+    wchar_t path[WLS_PATH_CHARS];
+    char contents[2048];
+    HANDLE file = INVALID_HANDLE_VALUE;
+    FILE_ATTRIBUTE_TAG_INFO attributes;
+    BY_HANDLE_FILE_INFORMATION before;
+    BY_HANDLE_FILE_INFORMATION after;
+    LARGE_INTEGER size;
+    DWORD used = 0U;
+    DWORD amount = 0U;
+    int result = WLS_RETIREMENT_RECEIPT_INVALID;
+    ZeroMemory(path, sizeof(path));
+    ZeroMemory(contents, sizeof(contents));
+    ZeroMemory(&attributes, sizeof(attributes));
+    ZeroMemory(&before, sizeof(before));
+    ZeroMemory(&after, sizeof(after));
+    if (home == NULL || receipt == NULL
+        || wls_join(path, WLS_PATH_CHARS, home,
+            L"trust\\process-tree-retirement.receipt") != 0) goto cleanup;
+    file = CreateFileW(
+        path,
+        GENERIC_READ | READ_CONTROL,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+        NULL
+    );
+    if (file == INVALID_HANDLE_VALUE) {
+        DWORD error = GetLastError();
+        result = error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND
+            ? WLS_RETIREMENT_RECEIPT_ABSENT
+            : WLS_RETIREMENT_RECEIPT_INVALID;
+        goto cleanup;
+    }
+    if (!GetFileInformationByHandleEx(
+            file, FileAttributeTagInfo, &attributes, sizeof(attributes)
+        )
+        || !GetFileInformationByHandle(file, &before)
+        || (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0U
+        || (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0U
+        || before.nNumberOfLinks != 1U
+        || wls_recovery_acl_safe(file, 0) != 0) goto cleanup;
+    size.HighPart = (LONG)before.nFileSizeHigh;
+    size.LowPart = before.nFileSizeLow;
+    if (size.QuadPart <= 0 || (unsigned long long)size.QuadPart
+            >= (unsigned long long)sizeof(contents)
+        || size.QuadPart > MAXDWORD) goto cleanup;
+    while (used < (DWORD)size.QuadPart) {
+        if (!ReadFile(file, contents + used, (DWORD)size.QuadPart - used,
+                &amount, NULL) || amount == 0U) goto cleanup;
+        used += amount;
+    }
+    if (!GetFileInformationByHandle(file, &after)
+        || before.dwVolumeSerialNumber != after.dwVolumeSerialNumber
+        || before.nFileIndexHigh != after.nFileIndexHigh
+        || before.nFileIndexLow != after.nFileIndexLow
+        || before.nFileSizeHigh != after.nFileSizeHigh
+        || before.nFileSizeLow != after.nFileSizeLow
+        || before.nNumberOfLinks != after.nNumberOfLinks
+        || CompareFileTime(&before.ftLastWriteTime, &after.ftLastWriteTime) != 0
+        || memchr(contents, '\0', used) != NULL) goto cleanup;
+    contents[used] = '\0';
+    if (wls_parse_platform_retirement_v2(contents, (size_t)used, receipt) != 0) {
+        goto cleanup;
+    }
+    result = WLS_RETIREMENT_RECEIPT_PRESENT;
+cleanup:
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    SecureZeroMemory(path, sizeof(path));
+    SecureZeroMemory(contents, sizeof(contents));
+    if (result != WLS_RETIREMENT_RECEIPT_PRESENT && receipt != NULL) {
+        SecureZeroMemory(receipt, sizeof(*receipt));
+    }
+    return result;
+}
+
 static int wls_seal_platform_retirement_pending(
     const wchar_t *home,
     const char *runtime_generation
@@ -4273,6 +4571,9 @@ static int wls_seal_platform_retirement_pending(
     ZeroMemory(&sealed, sizeof(sealed));
     ZeroMemory(&process, sizeof(process));
     if (home == NULL || runtime_generation == NULL
+        || InterlockedCompareExchange(
+            &wls_authenticated_platform_generation, 0, 0
+        ) == 0
         || wls_join(
             retirement_path,
             WLS_PATH_CHARS,
@@ -4386,39 +4687,18 @@ static int wls_promote_platform_retirement(
     const wchar_t *home,
     const char *runtime_generation
 ) {
-    wchar_t path[WLS_PATH_CHARS];
-    unsigned char *contents = NULL;
-    size_t length = 0U;
     char boot_id[65];
+    int receipt_state;
     int result = 1;
     struct wls_platform_retirement_receipt receipt;
     ZeroMemory(&receipt, sizeof(receipt));
     if (home == NULL || runtime_generation == NULL
-        || wls_join(
-            path,
-            WLS_PATH_CHARS,
-            home,
-            L"trust\\process-tree-retirement.receipt"
-        ) != 0) return 1;
-    if (wls_read_file(path, 2048U, &contents, &length) != 0) {
-        DWORD error = GetLastError();
-        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND
-            ? 0
-            : 1;
-    }
-    if (strncmp(
-            (const char *)contents,
-            "WLS-PROCESS-TREE-RETIRE/2\n",
-            26U
-        ) != 0) {
-        result = 0;
-        goto cleanup;
-    }
-    if (wls_parse_platform_retirement_v2(
-            (const char *)contents,
-            length,
-            &receipt
-        ) != 0) goto cleanup;
+        || InterlockedCompareExchange(
+            &wls_authenticated_platform_generation, 0, 0
+        ) == 0) return 1;
+    receipt_state = wls_platform_retirement_receipt_read(home, &receipt);
+    if (receipt_state == WLS_RETIREMENT_RECEIPT_ABSENT) return 0;
+    if (receipt_state != WLS_RETIREMENT_RECEIPT_PRESENT) goto cleanup;
     if (strcmp(receipt.status, "COMPLETE") == 0) {
         result = 0;
         goto cleanup;
@@ -4449,10 +4729,601 @@ static int wls_promote_platform_retirement(
 cleanup:
     SecureZeroMemory(&receipt, sizeof(receipt));
     SecureZeroMemory(boot_id, sizeof(boot_id));
-    if (contents != NULL) {
-        SecureZeroMemory(contents, length);
-        HeapFree(GetProcessHeap(), 0U, contents);
+    return result;
+}
+
+static int wls_nginx_pid_residue_kind(const wchar_t *name)
+{
+    wchar_t token[17];
+    int consumed = 0;
+    if (name != NULL && swscanf_s(
+            name, L".nginx.pid.test.%16[0-9a-f].pid%n", token,
+            (unsigned int)(sizeof(token) / sizeof(token[0])), &consumed
+        ) == 1 && wcslen(token) == 16U && consumed == (int)wcslen(name)) return 1;
+    if (name != NULL && swscanf_s(
+            name, L".nginx.pid.test.%16[0-9a-f].conf%n", token,
+            (unsigned int)(sizeof(token) / sizeof(token[0])), &consumed
+        ) == 1 && wcslen(token) == 16U && consumed == (int)wcslen(name)) return 2;
+    if (name != NULL && swscanf_s(
+            name, L".nginx.pid.seal.%16[0-9a-f]%n", token,
+            (unsigned int)(sizeof(token) / sizeof(token[0])), &consumed
+        ) == 1 && wcslen(token) == 16U && consumed == (int)wcslen(name)) return 3;
+    return 0;
+}
+
+/* Exact Broker staging contracts: only TEST PID source grants data write;
+ * shadow configs and seal staging grant controller/data read-only. */
+static int wls_nginx_pid_residue_acl_valid(
+    HANDLE leaf,
+    int kind,
+    PSID controller_sid,
+    PSID data_plane_sid
+)
+{
+    if (leaf == INVALID_HANDLE_VALUE || controller_sid == NULL
+        || data_plane_sid == NULL || kind < 1 || kind > 3) return 1;
+    if (wls_launcher_slot_acl_valid_profile(
+            leaf, 0, controller_sid, 1, data_plane_sid, 1, 1, 0,
+            kind == 1 ? FILE_GENERIC_READ | FILE_GENERIC_WRITE
+                : FILE_GENERIC_READ
+        ) == 0) return 0;
+    /* Broker FILE_CREATE supplies this explicit profile before applying the
+     * final kind-specific DACL; no token-default or inherited ACL is valid. */
+    return wls_launcher_slot_acl_valid_profile(
+        leaf, 0, NULL, 0, NULL, 0, 1, 0, 0U
+    );
+}
+
+static int wls_nginx_pid_residue_intent_name_valid(const char *name)
+{
+    wchar_t wide[WLS_NGINX_PID_RESIDUE_NAME_MAX + 1U];
+    int length;
+    ZeroMemory(wide, sizeof(wide));
+    if (name == NULL || name[0] == '\0') return 0;
+    length = MultiByteToWideChar(
+        CP_UTF8, MB_ERR_INVALID_CHARS, name, -1, wide,
+        (int)(sizeof(wide) / sizeof(wide[0]))
+    );
+    return length > 1 && wls_nginx_pid_residue_kind(wide) != 0;
+}
+
+static int wls_nginx_pid_residue_directory(
+    const wchar_t *home,
+    HANDLE *directory
+)
+{
+    wchar_t path[WLS_PATH_CHARS];
+    PSID controller_sid = NULL;
+    FILE_ATTRIBUTE_TAG_INFO attributes;
+    int result = 1;
+    ZeroMemory(path, sizeof(path));
+    ZeroMemory(&attributes, sizeof(attributes));
+    if (directory == NULL || home == NULL
+        || wls_join(path, WLS_PATH_CHARS, home, L"nginx-pid") != 0
+        || wls_launcher_gateway_service_sid(&controller_sid) != 0) goto cleanup;
+    *directory = CreateFileW(
+        path,
+        FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_WRITE_DATA | READ_CONTROL
+            | SYNCHRONIZE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL, OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+        NULL
+    );
+    if (*directory == INVALID_HANDLE_VALUE
+        || wls_launcher_handle_is_reparse(*directory)
+        || !GetFileInformationByHandleEx(
+            *directory, FileAttributeTagInfo, &attributes, sizeof(attributes)
+        ) || (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0U
+        || wls_launcher_host_data_plane_directory_acl_valid(
+            *directory, controller_sid
+        ) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (controller_sid != NULL) LocalFree(controller_sid);
+    SecureZeroMemory(path, sizeof(path));
+    if (result != 0 && directory != NULL && *directory != INVALID_HANDLE_VALUE) {
+        CloseHandle(*directory);
+        *directory = INVALID_HANDLE_VALUE;
     }
+    return result;
+}
+
+static int wls_nginx_pid_residue_leaf(
+    HANDLE directory,
+    const wchar_t *name,
+    struct wls_nginx_pid_residue_entry *entry
+)
+{
+    HANDLE leaf = INVALID_HANDLE_VALUE;
+    BY_HANDLE_FILE_INFORMATION before;
+    BY_HANDLE_FILE_INFORMATION after;
+    PSID controller_sid = NULL;
+    PSID data_plane_sid = NULL;
+    int kind;
+    unsigned long long size;
+    int result = 1;
+    ZeroMemory(&before, sizeof(before));
+    ZeroMemory(&after, sizeof(after));
+    if (directory == INVALID_HANDLE_VALUE || name == NULL || entry == NULL
+        || (kind = wls_nginx_pid_residue_kind(name)) == 0
+        || wls_launcher_gateway_service_sid(&controller_sid) != 0
+        || !ConvertStringSidToSidW(
+            WLS_DATA_PLANE_SERVICE_SID_TEXT, &data_plane_sid
+        ) || data_plane_sid == NULL || !IsValidSid(data_plane_sid)) goto cleanup;
+    leaf = wls_nt_open_child(
+        directory, name, wcslen(name), GENERIC_READ | READ_CONTROL,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN, 0
+    );
+    if (leaf == INVALID_HANDLE_VALUE || wls_launcher_handle_is_reparse(leaf)
+        || !GetFileInformationByHandle(leaf, &before)
+        || before.nNumberOfLinks != 1U) goto cleanup;
+    size = ((unsigned long long)before.nFileSizeHigh << 32U)
+        | (unsigned long long)before.nFileSizeLow;
+    if ((kind == 2 && (size == 0ULL
+                || size > WLS_NGINX_PID_RESIDUE_CONFIG_MAX_BYTES))
+        || (kind != 2 && size > WLS_NGINX_PID_RESIDUE_PID_MAX_BYTES)
+        || wls_nginx_pid_residue_acl_valid(
+            leaf, kind, controller_sid, data_plane_sid
+        ) != 0) goto cleanup;
+    if (!GetFileInformationByHandle(leaf, &after)
+        || before.dwVolumeSerialNumber != after.dwVolumeSerialNumber
+        || before.nFileIndexHigh != after.nFileIndexHigh
+        || before.nFileIndexLow != after.nFileIndexLow
+        || before.nNumberOfLinks != after.nNumberOfLinks
+        || before.nFileSizeHigh != after.nFileSizeHigh
+        || before.nFileSizeLow != after.nFileSizeLow) goto cleanup;
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, name, -1,
+            entry->name, (int)sizeof(entry->name), NULL, NULL) <= 1) goto cleanup;
+    entry->volume_serial = before.dwVolumeSerialNumber;
+    entry->file_index_high = before.nFileIndexHigh;
+    entry->file_index_low = before.nFileIndexLow;
+    result = 0;
+cleanup:
+    if (leaf != INVALID_HANDLE_VALUE) CloseHandle(leaf);
+    if (controller_sid != NULL) LocalFree(controller_sid);
+    if (data_plane_sid != NULL) LocalFree(data_plane_sid);
+    return result;
+}
+
+static int wls_nginx_pid_residue_scan(
+    const wchar_t *home,
+    struct wls_nginx_pid_residue_entry entries[WLS_NGINX_PID_RESIDUE_MAX],
+    unsigned int *count
+)
+{
+    wchar_t pattern[WLS_PATH_CHARS];
+    WIN32_FIND_DATAW found;
+    HANDLE directory = INVALID_HANDLE_VALUE;
+    HANDLE enumeration = INVALID_HANDLE_VALUE;
+    int status = 1;
+    if (entries == NULL || count == NULL || home == NULL) return 1;
+    ZeroMemory(entries, sizeof(*entries) * WLS_NGINX_PID_RESIDUE_MAX);
+    *count = 0U;
+    if (wls_nginx_pid_residue_directory(home, &directory) != 0
+        || wls_join(pattern, WLS_PATH_CHARS, home, L"nginx-pid\\*") != 0) {
+        goto cleanup;
+    }
+    enumeration = FindFirstFileW(pattern, &found);
+    if (enumeration == INVALID_HANDLE_VALUE) {
+        /* The parent handle was already pinned and validated.  An exact
+         * no-match is the only empty manifest; every other enumeration error
+         * leaves recovery fail-closed. */
+        if (GetLastError() == ERROR_FILE_NOT_FOUND) {
+            status = 0;
+        }
+        goto cleanup;
+    }
+    do {
+        if (wcscmp(found.cFileName, L".") == 0
+            || wcscmp(found.cFileName, L"..") == 0
+            || wcscmp(found.cFileName, L"nginx.pid") == 0) continue;
+        if (wls_nginx_pid_residue_kind(found.cFileName) == 0
+            || *count >= WLS_NGINX_PID_RESIDUE_MAX
+            || wls_nginx_pid_residue_leaf(
+                directory, found.cFileName, &entries[*count]
+            ) != 0) goto cleanup;
+        (*count)++;
+    } while (FindNextFileW(enumeration, &found));
+    if (GetLastError() != ERROR_NO_MORE_FILES) goto cleanup;
+    /* FindFirstFile ordering is unspecified. Sort the fixed record set before
+     * serializing so same-generation crash replay is byte-identical. */
+    for (unsigned int left = 0U; left < *count; left++) {
+        for (unsigned int right = left + 1U; right < *count; right++) {
+            if (strcmp(entries[left].name, entries[right].name) > 0) {
+                struct wls_nginx_pid_residue_entry swap = entries[left];
+                entries[left] = entries[right]; entries[right] = swap;
+            }
+        }
+        if (left > 0U && strcmp(entries[left - 1U].name, entries[left].name) == 0) {
+            goto cleanup;
+        }
+    }
+    status = 0;
+cleanup:
+    if (enumeration != INVALID_HANDLE_VALUE) FindClose(enumeration);
+    if (directory != INVALID_HANDLE_VALUE) CloseHandle(directory);
+    if (status != 0) {
+        SecureZeroMemory(entries, sizeof(*entries) * WLS_NGINX_PID_RESIDUE_MAX);
+        *count = 0U;
+    }
+    return status;
+}
+
+static int wls_write_nginx_pid_residue_intent(
+    const wchar_t *home, const struct wls_nginx_pid_residue_intent *intent
+)
+{
+    wchar_t path[WLS_PATH_CHARS];
+    char payload[2048];
+    char existing[2048];
+    size_t existing_length = 0U;
+    int written;
+    int read_status;
+    if (home == NULL || intent == NULL || intent->count == 0U
+        || intent->count > WLS_NGINX_PID_RESIDUE_MAX
+        || wls_join(path, WLS_PATH_CHARS, home,
+            L"trust\\nginx-pid-residue.intent") != 0) return 1;
+    written = _snprintf_s(payload, sizeof(payload), _TRUNCATE,
+        "WLS-NGINX-PID-RESIDUE/1\nplatform=%s\nservice_id=%s\n"
+        "requested_launcher_generation=%s\nruntime_generation=%s\ncount=%u\n"
+        "name1=%s\nvol1=%lu\nhigh1=%lu\nlow1=%lu\n"
+        "name2=%s\nvol2=%lu\nhigh2=%lu\nlow2=%lu\n"
+        "name3=%s\nvol3=%lu\nhigh3=%lu\nlow3=%lu\n",
+        intent->platform, intent->service_id, intent->requested_launcher_generation,
+        intent->runtime_generation, intent->count,
+        intent->entries[0].name, (unsigned long)intent->entries[0].volume_serial,
+        (unsigned long)intent->entries[0].file_index_high,
+        (unsigned long)intent->entries[0].file_index_low,
+        intent->entries[1].name, (unsigned long)intent->entries[1].volume_serial,
+        (unsigned long)intent->entries[1].file_index_high,
+        (unsigned long)intent->entries[1].file_index_low,
+        intent->entries[2].name, (unsigned long)intent->entries[2].volume_serial,
+        (unsigned long)intent->entries[2].file_index_high,
+        (unsigned long)intent->entries[2].file_index_low);
+    if (written <= 0) return 1;
+    read_status = wls_recovery_read_secure(path, 0, existing, sizeof(existing),
+        &existing_length);
+    if ((read_status == 0 && (existing_length != (size_t)written
+                || sodium_memcmp(existing, payload, existing_length) != 0))
+        || (read_status != 0 && read_status != 2)
+        || (read_status == 2 && wls_atomic_system_text(path, payload) != 0)) {
+        SecureZeroMemory(payload, sizeof(payload));
+        SecureZeroMemory(existing, sizeof(existing));
+        return 1;
+    }
+    SecureZeroMemory(payload, sizeof(payload));
+    SecureZeroMemory(existing, sizeof(existing));
+    return 0;
+}
+
+static int wls_seal_nginx_pid_residue_pending(
+    const wchar_t *home, const char *runtime_generation
+)
+{
+    struct wls_nginx_pid_residue_intent intent;
+    if (home == NULL || runtime_generation == NULL
+        || InterlockedCompareExchange(
+            &wls_authenticated_platform_generation, 0, 0
+        ) == 0) return 1;
+    ZeroMemory(&intent, sizeof(intent));
+    if (wls_nginx_pid_residue_scan(home, intent.entries, &intent.count) != 0) {
+        return 1;
+    }
+    if (intent.count == 0U) return 0;
+    for (unsigned int index = intent.count; index < WLS_NGINX_PID_RESIDUE_MAX;
+         index++) strcpy_s(intent.entries[index].name,
+            sizeof(intent.entries[index].name), "-");
+    strcpy_s(intent.platform, sizeof(intent.platform), "windows-job");
+    memcpy(intent.service_id, wls_service_id, sizeof(intent.service_id));
+    memcpy(intent.requested_launcher_generation, wls_launcher_generation,
+        sizeof(intent.requested_launcher_generation));
+    memcpy(intent.runtime_generation, runtime_generation,
+        sizeof(intent.runtime_generation));
+    return wls_write_nginx_pid_residue_intent(home, &intent);
+}
+
+static int wls_flush_trust_directory(const wchar_t *home)
+{
+    wchar_t trust[WLS_PATH_CHARS];
+    HANDLE directory = INVALID_HANDLE_VALUE;
+    int result = 1;
+    if (home == NULL || wls_join(trust, WLS_PATH_CHARS, home, L"trust") != 0) {
+        return 1;
+    }
+    directory = CreateFileW(
+        trust, FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_WRITE_DATA
+            | READ_CONTROL | SYNCHRONIZE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL
+    );
+    if (directory != INVALID_HANDLE_VALUE && !wls_launcher_handle_is_reparse(directory)
+        && wls_launcher_root_only_directory_acl_valid(directory) == 0
+        && wls_launcher_flush_verified_directory(directory) == 0) result = 0;
+    if (directory != INVALID_HANDLE_VALUE) CloseHandle(directory);
+    SecureZeroMemory(trust, sizeof(trust));
+    return result;
+}
+
+/* Read-only classifier for a direct launcher.  No absence of Guardian proof
+ * may turn a damaged receipt, intent, or staging namespace into cleanup. */
+static int wls_pid_residue_recovery_evidence_state(const wchar_t *home)
+{
+    wchar_t intent_path[WLS_PATH_CHARS];
+    char intent[2048];
+    size_t intent_length = 0U;
+    struct wls_platform_retirement_receipt receipt;
+    struct wls_nginx_pid_residue_entry entries[WLS_NGINX_PID_RESIDUE_MAX];
+    struct wls_nginx_pid_residue_intent recorded;
+    unsigned int residue_count = 0U;
+    int retirement_pending = 0;
+    int intent_pending = 0;
+    int read_status;
+    int receipt_state;
+    unsigned int count = 0U;
+    int consumed = 0;
+    int result = WLS_PID_RESIDUE_EVIDENCE_UNSAFE;
+    ZeroMemory(&receipt, sizeof(receipt));
+    ZeroMemory(entries, sizeof(entries));
+    ZeroMemory(&recorded, sizeof(recorded));
+    if (home == NULL
+        || wls_join(intent_path, WLS_PATH_CHARS, home,
+            L"trust\\nginx-pid-residue.intent") != 0
+        || wls_nginx_pid_residue_scan(home, entries, &residue_count) != 0) {
+        goto cleanup;
+    }
+    receipt_state = wls_platform_retirement_receipt_read(home, &receipt);
+    if (receipt_state == WLS_RETIREMENT_RECEIPT_PRESENT) {
+        if (strcmp(receipt.status, "INDETERMINATE") == 0) {
+            retirement_pending = 1;
+        } else if (strcmp(receipt.status, "COMPLETE") != 0) {
+            goto cleanup;
+        }
+    } else if (receipt_state != WLS_RETIREMENT_RECEIPT_ABSENT) {
+        goto cleanup;
+    }
+    read_status = wls_recovery_read_secure(
+        intent_path, 0, intent, sizeof(intent), &intent_length
+    );
+    if (read_status != 2) {
+        if (read_status != 0
+            || sscanf_s(intent,
+                "WLS-NGINX-PID-RESIDUE/1\nplatform=%15[a-z-]\nservice_id=%64[0-9a-f]\n"
+                "requested_launcher_generation=%64[0-9a-f]\nruntime_generation=%64[0-9a-f]\ncount=%u\n"
+                "name1=%127[-.a-z0-9]\nvol1=%lu\nhigh1=%lu\nlow1=%lu\n"
+                "name2=%127[-.a-z0-9]\nvol2=%lu\nhigh2=%lu\nlow2=%lu\n"
+                "name3=%127[-.a-z0-9]\nvol3=%lu\nhigh3=%lu\nlow3=%lu\n%n",
+                recorded.platform, (unsigned int)sizeof(recorded.platform),
+                recorded.service_id, (unsigned int)sizeof(recorded.service_id),
+                recorded.requested_launcher_generation,
+                    (unsigned int)sizeof(recorded.requested_launcher_generation),
+                recorded.runtime_generation, (unsigned int)sizeof(recorded.runtime_generation),
+                &count,
+                recorded.entries[0].name, (unsigned int)sizeof(recorded.entries[0].name),
+                &recorded.entries[0].volume_serial, &recorded.entries[0].file_index_high,
+                &recorded.entries[0].file_index_low,
+                recorded.entries[1].name, (unsigned int)sizeof(recorded.entries[1].name),
+                &recorded.entries[1].volume_serial, &recorded.entries[1].file_index_high,
+                &recorded.entries[1].file_index_low,
+                recorded.entries[2].name, (unsigned int)sizeof(recorded.entries[2].name),
+                &recorded.entries[2].volume_serial, &recorded.entries[2].file_index_high,
+                &recorded.entries[2].file_index_low,
+                &consumed) != 17 || consumed != (int)intent_length
+            || count == 0U || count > WLS_NGINX_PID_RESIDUE_MAX) goto cleanup;
+        recorded.count = count;
+        for (unsigned int index = 0U; index < count; index++) {
+            if (!wls_nginx_pid_residue_intent_name_valid(recorded.entries[index].name)
+                || (recorded.entries[index].volume_serial == 0U)
+                || (recorded.entries[index].file_index_high == 0U
+                    && recorded.entries[index].file_index_low == 0U)) goto cleanup;
+            for (unsigned int prior = 0U; prior < index; prior++) {
+                if (strcmp(recorded.entries[index].name,
+                        recorded.entries[prior].name) == 0) goto cleanup;
+            }
+        }
+        for (unsigned int index = count; index < WLS_NGINX_PID_RESIDUE_MAX;
+             index++) {
+            if (strcmp(recorded.entries[index].name, "-") != 0
+                || recorded.entries[index].volume_serial != 0U
+                || recorded.entries[index].file_index_high != 0U
+                || recorded.entries[index].file_index_low != 0U) goto cleanup;
+        }
+        intent_pending = 1;
+    }
+    if (!retirement_pending && !intent_pending && residue_count == 0U) {
+        result = WLS_PID_RESIDUE_EVIDENCE_CLEAN;
+    } else if (retirement_pending && !intent_pending && residue_count == 0U) {
+        /* A receipt-only crash must be promoted only by the authenticated
+         * Guardian child; a direct launcher has no platform boundary proof. */
+        result = WLS_PID_RESIDUE_EVIDENCE_PENDING;
+    } else if (retirement_pending && intent_pending) {
+        result = WLS_PID_RESIDUE_EVIDENCE_PENDING;
+    }
+cleanup:
+    SecureZeroMemory(intent_path, sizeof(intent_path));
+    SecureZeroMemory(intent, sizeof(intent));
+    SecureZeroMemory(&receipt, sizeof(receipt));
+    SecureZeroMemory(entries, sizeof(entries));
+    SecureZeroMemory(&recorded, sizeof(recorded));
+    return result;
+}
+
+/* A residue intent is actionable only as the companion of the same pending
+ * V2 platform retirement.  Completion is deliberately deferred until the
+ * residue namespace has been durably emptied. */
+static int wls_validate_pending_retirement_for_pid_residue(
+    const wchar_t *home,
+    const struct wls_nginx_pid_residue_intent *intent
+)
+{
+    struct wls_platform_retirement_receipt receipt;
+    int receipt_state;
+    int result = 1;
+    ZeroMemory(&receipt, sizeof(receipt));
+    if (home == NULL || intent == NULL
+        || InterlockedCompareExchange(
+            &wls_authenticated_platform_generation, 0, 0
+        ) == 0
+        || strcmp(intent->platform, "windows-job") != 0
+        || strcmp(intent->service_id, wls_service_id) != 0
+        || sodium_memcmp(intent->requested_launcher_generation,
+            wls_launcher_generation, 64U) == 0) goto cleanup;
+    receipt_state = wls_platform_retirement_receipt_read(home, &receipt);
+    if (receipt_state != WLS_RETIREMENT_RECEIPT_PRESENT
+        || strcmp(receipt.status, "INDETERMINATE") != 0
+        || strcmp(receipt.platform, intent->platform) != 0
+        || strcmp(receipt.service_id, intent->service_id) != 0
+        || sodium_memcmp(receipt.requested_launcher_generation,
+            intent->requested_launcher_generation, 64U) != 0
+        || sodium_memcmp(receipt.runtime_generation,
+            intent->runtime_generation, 64U) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    SecureZeroMemory(&receipt, sizeof(receipt));
+    return result;
+}
+
+static int wls_consume_nginx_pid_residue_pending(const wchar_t *home)
+{
+    wchar_t path[WLS_PATH_CHARS];
+    char contents[2048];
+    size_t length = 0U;
+    struct wls_nginx_pid_residue_intent recorded;
+    struct wls_nginx_pid_residue_intent actual;
+    unsigned int count = 0U;
+    int consumed = 0;
+    int read_status;
+    HANDLE directory = INVALID_HANDLE_VALUE;
+    int result = 1;
+    ZeroMemory(&recorded, sizeof(recorded));
+    ZeroMemory(&actual, sizeof(actual));
+    if (home == NULL || wls_join(path, WLS_PATH_CHARS, home,
+            L"trust\\nginx-pid-residue.intent") != 0) goto cleanup;
+    if (InterlockedCompareExchange(
+            &wls_authenticated_platform_generation, 0, 0
+        ) == 0) {
+        /* A direct/standalone launcher has no Guardian Job retirement proof:
+         * retain every residue or pending intent and refuse to start. */
+        read_status = wls_recovery_read_secure(
+            path, 0, contents, sizeof(contents), &length
+        );
+        if (read_status == 2) {
+            result = wls_nginx_pid_residue_scan(
+                home, actual.entries, &actual.count
+            ) == 0 && actual.count == 0U ? 0 : 1;
+        }
+        goto cleanup;
+    }
+    read_status = wls_recovery_read_secure(path, 0, contents, sizeof(contents),
+        &length);
+    if (read_status == 2) {
+        result = wls_nginx_pid_residue_scan(home, actual.entries, &actual.count) == 0
+            && actual.count == 0U ? 0 : 1;
+        goto cleanup;
+    }
+    if (read_status != 0 || sscanf_s(contents,
+            "WLS-NGINX-PID-RESIDUE/1\nplatform=%15[a-z-]\nservice_id=%64[0-9a-f]\n"
+            "requested_launcher_generation=%64[0-9a-f]\nruntime_generation=%64[0-9a-f]\ncount=%u\n"
+            "name1=%127[-.a-z0-9]\nvol1=%lu\nhigh1=%lu\nlow1=%lu\n"
+            "name2=%127[-.a-z0-9]\nvol2=%lu\nhigh2=%lu\nlow2=%lu\n"
+            "name3=%127[-.a-z0-9]\nvol3=%lu\nhigh3=%lu\nlow3=%lu\n%n",
+            recorded.platform, (unsigned int)sizeof(recorded.platform),
+            recorded.service_id, (unsigned int)sizeof(recorded.service_id),
+            recorded.requested_launcher_generation,
+                (unsigned int)sizeof(recorded.requested_launcher_generation),
+            recorded.runtime_generation, (unsigned int)sizeof(recorded.runtime_generation),
+            &count,
+            recorded.entries[0].name, (unsigned int)sizeof(recorded.entries[0].name),
+            &recorded.entries[0].volume_serial, &recorded.entries[0].file_index_high,
+            &recorded.entries[0].file_index_low,
+            recorded.entries[1].name, (unsigned int)sizeof(recorded.entries[1].name),
+            &recorded.entries[1].volume_serial, &recorded.entries[1].file_index_high,
+            &recorded.entries[1].file_index_low,
+            recorded.entries[2].name, (unsigned int)sizeof(recorded.entries[2].name),
+            &recorded.entries[2].volume_serial, &recorded.entries[2].file_index_high,
+            &recorded.entries[2].file_index_low,
+            &consumed) != 17 || consumed != (int)length
+        || count == 0U || count > WLS_NGINX_PID_RESIDUE_MAX
+        || strcmp(recorded.platform, "windows-job") != 0
+        || strcmp(recorded.service_id, wls_service_id) != 0
+        || !wls_is_hex(recorded.requested_launcher_generation, 64U)
+        || !wls_is_hex(recorded.runtime_generation, 64U)
+        || sodium_memcmp(recorded.requested_launcher_generation,
+            wls_launcher_generation, 64U) == 0) goto cleanup;
+    recorded.count = count;
+    for (unsigned int index = 0U; index < recorded.count; index++) {
+        if (!wls_nginx_pid_residue_intent_name_valid(recorded.entries[index].name)) {
+            goto cleanup;
+        }
+        for (unsigned int previous = 0U; previous < index; previous++) {
+            if (strcmp(recorded.entries[index].name,
+                    recorded.entries[previous].name) == 0) goto cleanup;
+        }
+    }
+    for (unsigned int index = count; index < WLS_NGINX_PID_RESIDUE_MAX; index++) {
+        if (strcmp(recorded.entries[index].name, "-") != 0
+            || recorded.entries[index].volume_serial != 0U
+            || recorded.entries[index].file_index_high != 0U
+            || recorded.entries[index].file_index_low != 0U) goto cleanup;
+    }
+    if (wls_validate_pending_retirement_for_pid_residue(home, &recorded) != 0) {
+        goto cleanup;
+    }
+    if (wls_nginx_pid_residue_scan(home, actual.entries, &actual.count) != 0) {
+        goto cleanup;
+    }
+    for (unsigned int index = 0U; index < actual.count; index++) {
+        unsigned int match = 0U;
+        for (unsigned int candidate = 0U; candidate < recorded.count; candidate++) {
+            if (strcmp(actual.entries[index].name, recorded.entries[candidate].name) == 0
+                && actual.entries[index].volume_serial
+                    == recorded.entries[candidate].volume_serial
+                && actual.entries[index].file_index_high
+                    == recorded.entries[candidate].file_index_high
+                && actual.entries[index].file_index_low
+                    == recorded.entries[candidate].file_index_low) match = 1U;
+        }
+        if (!match) goto cleanup; /* present unknown/mismatch is never deletable */
+    }
+    if (actual.count > 0U
+        && wls_nginx_pid_residue_directory(home, &directory) != 0) goto cleanup;
+    for (unsigned int index = 0U; index < actual.count; index++) {
+        wchar_t name[WLS_NGINX_PID_RESIDUE_NAME_MAX + 1U];
+        HANDLE leaf = INVALID_HANDLE_VALUE;
+        FILE_DISPOSITION_INFO disposition;
+        struct wls_nginx_pid_residue_entry verified;
+        ZeroMemory(name, sizeof(name));
+        ZeroMemory(&disposition, sizeof(disposition));
+        if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                actual.entries[index].name, -1, name,
+                (int)(sizeof(name) / sizeof(name[0]))) <= 1
+            || wls_nginx_pid_residue_leaf(directory, name, &verified) != 0
+            || verified.volume_serial != actual.entries[index].volume_serial
+            || verified.file_index_high != actual.entries[index].file_index_high
+            || verified.file_index_low != actual.entries[index].file_index_low) goto cleanup;
+        leaf = wls_nt_open_child(directory, name, wcslen(name),
+            GENERIC_READ | DELETE | READ_CONTROL,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN, 0);
+        disposition.DeleteFile = TRUE;
+        if (leaf == INVALID_HANDLE_VALUE || wls_launcher_handle_is_reparse(leaf)
+            || !SetFileInformationByHandle(
+                leaf, FileDispositionInfo, &disposition, sizeof(disposition)
+            ) || !CloseHandle(leaf)) {
+            if (leaf != INVALID_HANDLE_VALUE) CloseHandle(leaf);
+            goto cleanup;
+        }
+        leaf = INVALID_HANDLE_VALUE;
+        if (wls_launcher_flush_verified_directory(directory) != 0) goto cleanup;
+    }
+    if (wls_nginx_pid_residue_scan(home, actual.entries, &actual.count) != 0
+        || actual.count != 0U) goto cleanup;
+    if (!DeleteFileW(path) || wls_flush_trust_directory(home) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (directory != INVALID_HANDLE_VALUE) CloseHandle(directory);
+    SecureZeroMemory(contents, sizeof(contents));
+    SecureZeroMemory(&recorded, sizeof(recorded));
+    SecureZeroMemory(&actual, sizeof(actual));
     return result;
 }
 
@@ -5154,7 +6025,7 @@ static HANDLE wls_open_verified_job_nginx(
         || active_slot[1] != L'\0'
         || expected_runtime_generation == NULL
         || strlen(expected_runtime_generation) != 64U
-        || wls_join(pid_path, WLS_PATH_CHARS, home, L"runtime\\run\\nginx.pid") != 0
+        || wls_join(pid_path, WLS_PATH_CHARS, home, L"nginx-pid\\nginx.pid") != 0
         || wls_read_file(pid_path, 64U, &pid_text, &pid_length) != 0) {
         return NULL;
     }
@@ -5211,26 +6082,70 @@ static int wls_force_terminate_process(HANDLE process, DWORD exit_code)
     return 0;
 }
 
-static int wls_launch(
+#ifdef WLS_NATIVE_TEST_HOOKS
+static void wls_service_test_record_stage(
+    const wchar_t *home,
+    const wchar_t *stage
+) {
+    wchar_t path[WLS_PATH_CHARS];
+    HANDLE file;
+    if (!wls_service_test_mode || home == NULL || stage == NULL
+        || _snwprintf_s(
+            path,
+            WLS_PATH_CHARS,
+            _TRUNCATE,
+            L"%ls\\state\\service-stage-%ls",
+            home,
+            stage
+        ) < 0) return;
+    file = CreateFileW(
+        path,
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH,
+        NULL
+    );
+    if (file == INVALID_HANDLE_VALUE) return;
+    (void)FlushFileBuffers(file);
+    CloseHandle(file);
+}
+#else
+#define wls_service_test_record_stage(home, stage) \
+    do { (void)(home); (void)(stage); } while (0)
+#endif
+
+struct wls_launch_path_workspace {
+    wchar_t slot[WLS_PATH_CHARS];
+    wchar_t broker[WLS_PATH_CHARS];
+    wchar_t php[WLS_PATH_CHARS];
+    wchar_t controller[WLS_PATH_CHARS];
+    wchar_t fencing[WLS_PATH_CHARS];
+    wchar_t command[WLS_PATH_CHARS * 4U];
+};
+
+static int wls_launch_with_workspace(
     const wchar_t *home,
     const wchar_t *run_directory,
     HANDLE job,
     HANDLE data_plane_job,
     const wchar_t *data_plane_job_name,
     DWORD adopted_nginx_pid,
-    DWORD *preserved_nginx_pid
+    DWORD *preserved_nginx_pid,
+    struct wls_launch_path_workspace *workspace
 )
 {
     wchar_t active[2];
-    wchar_t slot[WLS_PATH_CHARS];
-    wchar_t broker[WLS_PATH_CHARS];
-    wchar_t php[WLS_PATH_CHARS];
-    wchar_t controller[WLS_PATH_CHARS];
-    wchar_t fencing[WLS_PATH_CHARS];
+    wchar_t *slot;
+    wchar_t *broker;
+    wchar_t *php;
+    wchar_t *controller;
+    wchar_t *fencing;
     wchar_t stop_event_name[96];
     wchar_t ready_event_name[128];
     wchar_t ready_nonce_wide[33];
-    wchar_t command[WLS_PATH_CHARS * 4U];
+    wchar_t *command;
     char runtime_generation[65];
     unsigned char ready_nonce[16];
     char ready_nonce_hex[33];
@@ -5256,8 +6171,17 @@ static int wls_launch(
     int automatic_launch_allowed;
     int reconcile_result;
     int recovery_prepare;
+    int pid_evidence_state;
     wchar_t launched_slot;
     size_t ready_nonce_index;
+    if (workspace == NULL) return 1;
+    slot = workspace->slot;
+    broker = workspace->broker;
+    php = workspace->php;
+    controller = workspace->controller;
+    fencing = workspace->fencing;
+    command = workspace->command;
+    wls_service_test_record_stage(home, L"launch-entry");
     if (preserved_nginx_pid == NULL || job == NULL
         || data_plane_job == NULL
         || data_plane_job_name == NULL
@@ -5271,11 +6195,14 @@ static int wls_launch(
     if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) != 0) return 0;
     if (wls_admin_stopped(home) != 0) return 0;
     if (wls_active_slot(home, active) != 0) return 1;
+    wls_service_test_record_stage(home, L"active-slot-ready");
     reconcile_result = wls_reconcile_upgrade(home, active, 0, 1);
     if (reconcile_result == 1 || reconcile_result == 2) return 1;
+    wls_service_test_record_stage(home, L"reconcile-ready");
     if (wls_verify_slot_durable_state_contract_v2(
             home, active[0], runtime_generation
         ) != 0) return 1;
+    wls_service_test_record_stage(home, L"durable-slot-ready");
     launched_slot = active[0];
     if (_snwprintf_s(
             slot,
@@ -5327,7 +6254,7 @@ static int wls_launch(
         || wcschr(home, L'"') != NULL || wcschr(run_directory, L'"') != NULL
         || _snwprintf_s(
             command,
-            sizeof(command) / sizeof(command[0]),
+            WLS_PATH_CHARS * 4U,
             _TRUNCATE,
             L"\"%ls\" --serve "
             L"--admin-pipe \"\\\\.\\pipe\\weline-wls-gateway-v2-admin\" "
@@ -5361,12 +6288,37 @@ static int wls_launch(
     if (recovery_prepare == 1) return 0;
     if (recovery_prepare == 2) return (int)WLS_CONTROL_TREE_RELOAD;
     if (recovery_prepare != 0) return 1;
+    wls_service_test_record_stage(home, L"recovery-ready");
+    pid_evidence_state = wls_pid_residue_recovery_evidence_state(home);
+    if (pid_evidence_state == WLS_PID_RESIDUE_EVIDENCE_UNSAFE) {
+        (void)wls_recovery_finish_attempt(&recovery, 0, "SPAWN_FAILED");
+        return 1;
+    }
+    if (InterlockedCompareExchange(
+            &wls_authenticated_platform_generation, 0, 0
+        ) == 0) {
+        /* A direct binary may start only from a demonstrably clean namespace;
+         * it must not consume or promote pending recovery evidence. */
+        if (pid_evidence_state != WLS_PID_RESIDUE_EVIDENCE_CLEAN) {
+            (void)wls_recovery_finish_attempt(&recovery, 0, "SPAWN_FAILED");
+            return 1;
+        }
+        goto pid_residue_recovery_ready;
+    }
+    if (wls_consume_nginx_pid_residue_pending(home) != 0) {
+        (void)wls_recovery_finish_attempt(
+            &recovery, 0, "SPAWN_FAILED"
+        );
+        return 1;
+    }
     if (wls_promote_platform_retirement(home, runtime_generation) != 0) {
         (void)wls_recovery_finish_attempt(
             &recovery, 0, "SPAWN_FAILED"
         );
         return 1;
     }
+pid_residue_recovery_ready:
+    wls_service_test_record_stage(home, L"pid-recovery-ready");
     ZeroMemory(&startup, sizeof(startup));
     ZeroMemory(&process, sizeof(process));
     ZeroMemory(&event_security_attributes, sizeof(event_security_attributes));
@@ -5455,6 +6407,7 @@ static int wls_launch(
         (void)wls_recovery_finish_attempt(&recovery, 1, NULL);
         return (int)WLS_CONTROL_TREE_RELOAD;
     }
+    wls_service_test_record_stage(home, L"before-create-process");
     if (!CreateProcessW(
         broker,
         command,
@@ -5474,6 +6427,7 @@ static int wls_launch(
         );
         return 1;
     }
+    wls_service_test_record_stage(home, L"after-create-process");
     if (!AssignProcessToJobObject(job, process.hProcess)
         || ResumeThread(process.hThread) == (DWORD)-1) {
         (void)wls_force_terminate_process(process.hProcess, 1U);
@@ -5681,14 +6635,23 @@ static int wls_launch(
         automatic_launch_allowed,
         reload_authorized
     );
-    if (broker_exit == WLS_SERVICE_TREE_RESTART
-        && wls_seal_platform_retirement_pending(
-            home,
-            runtime_generation
-        ) != 0) {
-        OutputDebugStringW(
-            L"WLS Gateway could not seal pending process-tree retirement.\n"
-        );
+    if (broker_exit == WLS_SERVICE_TREE_RESTART) {
+        if (wls_seal_platform_retirement_pending(
+                home,
+                runtime_generation
+            ) != 0) {
+            /* Without the durable V2 INDETERMINATE retirement receipt, an
+             * nginx-pid intent would be unbound authority and is unsafe. */
+            OutputDebugStringW(
+                L"WLS Gateway could not seal pending process-tree retirement.\n"
+            );
+        } else if (wls_seal_nginx_pid_residue_pending(
+                home, runtime_generation
+            ) != 0) {
+            OutputDebugStringW(
+                L"WLS Gateway could not seal nginx pid staging recovery.\n"
+            );
+        }
     }
     if (broker_exit == WLS_CONTROL_TREE_RELOAD && reload_request_observed) {
         InterlockedExchange(
@@ -5720,6 +6683,37 @@ static int wls_launch(
     return broker_exit == 0U
         ? 0
         : (broker_exit <= 255U ? (int)broker_exit : 1);
+}
+
+static int wls_launch(
+    const wchar_t *home,
+    const wchar_t *run_directory,
+    HANDLE job,
+    HANDLE data_plane_job,
+    const wchar_t *data_plane_job_name,
+    DWORD adopted_nginx_pid,
+    DWORD *preserved_nginx_pid
+)
+{
+    struct wls_launch_path_workspace *workspace;
+    int result;
+    workspace = (struct wls_launch_path_workspace *)HeapAlloc(
+        GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*workspace)
+    );
+    if (workspace == NULL) return 1;
+    result = wls_launch_with_workspace(
+        home,
+        run_directory,
+        job,
+        data_plane_job,
+        data_plane_job_name,
+        adopted_nginx_pid,
+        preserved_nginx_pid,
+        workspace
+    );
+    SecureZeroMemory(workspace, sizeof(*workspace));
+    HeapFree(GetProcessHeap(), 0U, workspace);
+    return result;
 }
 
 static void wls_report_service_pending(DWORD state, DWORD wait_hint)
@@ -5889,13 +6883,112 @@ cleanup:
     return job;
 }
 
+static int wls_job_active_processes_zero(HANDLE job, int *zero)
+{
+    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting;
+    if (job == NULL || zero == NULL) return 1;
+    ZeroMemory(&accounting, sizeof(accounting));
+    if (!QueryInformationJobObject(
+            job,
+            JobObjectBasicAccountingInformation,
+            &accounting,
+            sizeof(accounting),
+            NULL
+        )) return 1;
+    *zero = accounting.ActiveProcesses == 0U ? 1 : 0;
+    return 0;
+}
+
+/* Exit 79 authorizes a new Guardian child only after both old job trees were
+ * explicitly terminated and their zero-process state was observed.  Closing a
+ * KILL_ON_JOB_CLOSE handle alone does not establish that boundary. */
+static int wls_terminate_jobs_and_wait_zero(HANDLE job, HANDLE data_plane_job)
+{
+    HANDLE completion_port = NULL;
+    JOBOBJECT_ASSOCIATE_COMPLETION_PORT association;
+    ULONGLONG deadline;
+    int supervision_zero = 0;
+    int data_plane_zero = 0;
+    int associations_ready = 0;
+    int supervision_terminated;
+    int data_plane_terminated;
+    int result = 1;
+    if (job == NULL || data_plane_job == NULL) return 1;
+    completion_port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0U, 1U);
+    if (completion_port != NULL) {
+        ZeroMemory(&association, sizeof(association));
+        association.CompletionPort = completion_port;
+        association.CompletionKey = (PVOID)(ULONG_PTR)1U;
+        if (SetInformationJobObject(
+                job,
+                JobObjectAssociateCompletionPortInformation,
+                &association,
+                sizeof(association)
+            )) {
+            association.CompletionKey = (PVOID)(ULONG_PTR)2U;
+            if (SetInformationJobObject(
+                    data_plane_job,
+                    JobObjectAssociateCompletionPortInformation,
+                    &association,
+                    sizeof(association)
+                )) {
+                associations_ready = 1;
+            }
+        }
+    }
+    /* Do not short-circuit: both tree boundaries must receive exit 79 even if
+     * the first termination reports an error. */
+    supervision_terminated = TerminateJobObject(job, WLS_SERVICE_TREE_RESTART) ? 1 : 0;
+    data_plane_terminated = TerminateJobObject(
+        data_plane_job, WLS_SERVICE_TREE_RESTART
+    ) ? 1 : 0;
+    if (!associations_ready || !supervision_terminated || !data_plane_terminated) {
+        goto cleanup;
+    }
+    deadline = GetTickCount64() + WLS_RESTART_JOB_DRAIN_MILLISECONDS;
+    for (;;) {
+        DWORD message = 0U;
+        DWORD wait_milliseconds;
+        ULONG_PTR completion_key = 0U;
+        OVERLAPPED *overlapped = NULL;
+        ULONGLONG now;
+        if (wls_job_active_processes_zero(job, &supervision_zero) != 0
+            || wls_job_active_processes_zero(data_plane_job, &data_plane_zero) != 0) {
+            goto cleanup;
+        }
+        if (supervision_zero != 0 && data_plane_zero != 0) {
+            result = 0;
+            goto cleanup;
+        }
+        now = GetTickCount64();
+        if (now >= deadline) goto cleanup;
+        wait_milliseconds = (DWORD)(deadline - now);
+        if (!GetQueuedCompletionStatus(
+                completion_port,
+                &message,
+                &completion_key,
+                &overlapped,
+                wait_milliseconds
+            )) goto cleanup;
+        if (message != JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO
+            || (completion_key != (ULONG_PTR)1U && completion_key != (ULONG_PTR)2U)) {
+            continue;
+        }
+    }
+cleanup:
+    if (completion_port != NULL) CloseHandle(completion_port);
+    return result;
+}
+
 static int wls_run_supervisor(const wchar_t *home, const wchar_t *run_directory)
 {
-    HANDLE job = wls_create_supervision_job();
+    HANDLE job;
     HANDLE data_plane_job = NULL;
     wchar_t data_plane_job_name[128];
     DWORD adopted_nginx_pid = 0U;
     int result = 1;
+    wls_service_test_record_stage(home, L"supervisor-entry");
+    job = wls_create_supervision_job();
     ZeroMemory(data_plane_job_name, sizeof(data_plane_job_name));
     if (job == NULL
         || (data_plane_job = wls_create_data_plane_job(
@@ -5904,6 +6997,7 @@ static int wls_run_supervisor(const wchar_t *home, const wchar_t *run_directory)
         if (job != NULL) CloseHandle(job);
         return 1;
     }
+    wls_service_test_record_stage(home, L"jobs-ready");
     do {
         DWORD preserved_nginx_pid = 0U;
         result = wls_launch(
@@ -5918,6 +7012,13 @@ static int wls_run_supervisor(const wchar_t *home, const wchar_t *run_directory)
         adopted_nginx_pid = preserved_nginx_pid;
     } while (result == (int)WLS_CONTROL_TREE_RELOAD
         && InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0);
+    if (result == (int)WLS_SERVICE_TREE_RESTART
+        && InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0
+        && wls_terminate_jobs_and_wait_zero(job, data_plane_job) != 0) {
+        /* Returning anything other than 79 prevents the Guardian from
+         * spawning a child that could consume the pending residue intent. */
+        result = 1;
+    }
     CloseHandle(data_plane_job);
     CloseHandle(job);
     if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) != 0) {
@@ -5933,7 +7034,7 @@ static VOID WINAPI wls_service_main(DWORD argc, LPWSTR *argv)
     (void)argc;
     (void)argv;
     wls_status_handle = RegisterServiceCtrlHandlerExW(
-        L"weline-wls-gateway-v2",
+        wls_service_name,
         wls_service_control,
         NULL
     );
@@ -5942,7 +7043,24 @@ static VOID WINAPI wls_service_main(DWORD argc, LPWSTR *argv)
     wls_service_checkpoint = 0U;
     InterlockedExchange(&wls_service_preshutdown_unsealed, 0);
     wls_report_service(SERVICE_START_PENDING, NO_ERROR, 0U);
+#ifdef WLS_NATIVE_TEST_HOOKS
+    if (wls_service_test_mode) {
+        wls_service_test_record_stage(wls_service_home, L"service-entry");
+        if (wls_initialize_service_generation() != 0) {
+            result = 1;
+        } else {
+            wls_service_test_record_stage(
+                wls_service_home,
+                L"service-generation-ready"
+            );
+            result = wls_run_supervisor(wls_service_home, wls_service_run);
+        }
+    } else {
+        result = wls_guardian_service_run(wls_service_home, wls_service_run);
+    }
+#else
     result = wls_guardian_service_run(wls_service_home, wls_service_run);
+#endif
     if (InterlockedCompareExchange(
             &wls_service_preshutdown_unsealed,
             0,
@@ -6988,10 +8106,30 @@ static int wls_absolute_windows_path(const wchar_t *path)
             || (path[0] == L'\\' && path[1] == L'\\'));
 }
 
+#ifdef WLS_NATIVE_TEST_HOOKS
+static int wls_service_test_name_valid(const wchar_t *name)
+{
+    static const wchar_t prefix[] = L"ai-test-wls-gateway-";
+    size_t index;
+    size_t prefix_length = sizeof(prefix) / sizeof(prefix[0]) - 1U;
+    if (name == NULL || wcslen(name) != prefix_length + 32U
+        || wcsncmp(name, prefix, prefix_length) != 0) return 0;
+    for (index = prefix_length; index < prefix_length + 32U; index++) {
+        if (!((name[index] >= L'0' && name[index] <= L'9')
+            || (name[index] >= L'a' && name[index] <= L'f'))) return 0;
+    }
+    return 1;
+}
+#endif
+
 int wmain(int argc, wchar_t **argv)
 {
     const wchar_t *home;
     const wchar_t *run_directory;
+#ifdef WLS_GUARDIAN_EXECUTABLE
+    const wchar_t *service_name;
+    const wchar_t *service_test_root;
+#endif
     unsigned char public_key[crypto_sign_PUBLICKEYBYTES];
     int service_mode = 0;
     int index;
@@ -7057,12 +8195,47 @@ int wmain(int argc, wchar_t **argv)
     }
     home = wls_argument(argc, argv, L"--home");
     run_directory = wls_argument(argc, argv, L"--run");
+#ifdef WLS_GUARDIAN_EXECUTABLE
+    service_name = wls_argument(argc, argv, L"--service-name");
+    service_test_root = wls_argument(argc, argv, L"--service-test-root");
+#endif
     if (!wls_absolute_windows_path(home)
         || !wls_absolute_windows_path(run_directory)) {
         return 64;
     }
 #ifdef WLS_GUARDIAN_EXECUTABLE
-    if (!service_mode || argc != 4) return 64;
+    if (!service_mode) return 64;
+#ifdef WLS_NATIVE_TEST_HOOKS
+    if (service_name != NULL || service_test_root != NULL) {
+        if (argc != 6 || service_name == NULL || service_test_root == NULL
+            || !wls_service_test_name_valid(service_name)
+            || !wls_absolute_windows_path(service_test_root)
+            || wcschr(service_test_root, L'"') != NULL
+            || wcschr(home, L'"') != NULL
+            || wcschr(run_directory, L'"') != NULL
+            || wcscmp(service_test_root, home) != 0) return 64;
+        wls_service_name = service_name;
+        wls_service_test_mode = 1;
+    } else
+#else
+    if (service_name != NULL || service_test_root != NULL) return 64;
+#endif
+    {
+        if (argc != 4) return 64;
+    }
+#ifdef WLS_NATIVE_TEST_HOOKS
+    if (wls_service_test_mode) {
+        wls_service_home = home;
+        wls_service_run = run_directory;
+        {
+            SERVICE_TABLE_ENTRYW dispatch[] = {
+                {(LPWSTR)wls_service_name, wls_service_main},
+                {NULL, NULL}
+            };
+            return StartServiceCtrlDispatcherW(dispatch) ? 0 : 1;
+        }
+    }
+#endif
     {
         wchar_t fixed_home[WLS_PATH_CHARS];
         wchar_t fixed_run[WLS_PATH_CHARS];
@@ -7076,7 +8249,7 @@ int wmain(int argc, wchar_t **argv)
     }
     {
         SERVICE_TABLE_ENTRYW dispatch[] = {
-            {L"weline-wls-gateway-v2", wls_service_main},
+            {(LPWSTR)wls_service_name, wls_service_main},
             {NULL, NULL}
         };
         wls_service_home = home;

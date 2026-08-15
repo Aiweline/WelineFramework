@@ -13,6 +13,11 @@
 (function(window, document) {
     'use strict';
 
+    if (window.__WelineBackendComponentsRuntime) {
+        return;
+    }
+    window.__WelineBackendComponentsRuntime = true;
+
     /**
      * i18n 翻译：使用 __() 函数，系统会从模块 i18n/*.csv 收集词并注入
      * 规范：JS 内不直接写词，词写到 CSV，详见 theme-development / i18n-internationalization 技能
@@ -91,10 +96,10 @@
             toast.className = `backend-toast backend-toast-${type}`;
             toast.style.cssText = `
                 padding: 14px 18px;
-                border-radius: var(--backend-border-radius, 0.5rem);
-                background: var(--backend-color-card-bg, #fff);
+                border-radius: var(--backend-theme-radius-md);
+                background: var(--backend-component-surface);
                 border-left: 4px solid;
-                box-shadow: var(--backend-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+                box-shadow: var(--backend-component-shadow-lg);
                 animation: backendSlideIn 0.3s ease;
                 display: flex;
                 align-items: flex-start;
@@ -102,10 +107,10 @@
             `;
             
             const colors = {
-                success: 'var(--backend-color-success, #34c38f)',
-                warning: 'var(--backend-color-warning, #f1b44c)',
-                danger: 'var(--backend-color-danger, #f46a6a)',
-                info: 'var(--backend-color-info, #50a5f1)'
+                success: 'var(--backend-theme-success)',
+                warning: 'var(--backend-theme-warning)',
+                danger: 'var(--backend-theme-danger)',
+                info: 'var(--backend-theme-info)'
             };
             const icons = {
                 success: 'mdi-check-circle',
@@ -120,8 +125,8 @@
             
             toast.innerHTML = `
                 <i class="mdi ${icons[type] || icons.info}" style="color: ${colors[type]}; font-size: 1.25rem; flex-shrink: 0;"></i>
-                <div style="flex: 1; color: var(--backend-color-text-primary, #212529); word-break: break-word;">${messageContent}</div>
-                <button type="button" data-backend-toast-dismiss style="background: none; border: none; cursor: pointer; color: var(--backend-color-text-tertiary, #adb5bd); font-size: 1.25rem; padding: 0; line-height: 1; flex-shrink: 0;">
+                <div style="flex: 1; color: var(--backend-component-text-primary); word-break: break-word;">${messageContent}</div>
+                <button type="button" data-backend-toast-dismiss style="background: none; border: none; cursor: pointer; color: var(--backend-component-text-muted); font-size: 1.25rem; padding: 0; line-height: 1; flex-shrink: 0;">
                     <i class="mdi mdi-close"></i>
                 </button>
             `;
@@ -189,7 +194,7 @@
                 overlay.style.cssText = `
                     position: fixed;
                     inset: 0;
-                    background: rgba(0, 0, 0, 0.5);
+                    background: var(--backend-component-overlay);
                     z-index: 12050;
                     display: flex;
                     align-items: center;
@@ -198,33 +203,33 @@
                 `;
                 
                 const typeColors = {
-                    warning: 'var(--backend-color-warning, #f1b44c)',
-                    danger: 'var(--backend-color-danger, #f46a6a)',
-                    info: 'var(--backend-color-info, #50a5f1)',
-                    success: 'var(--backend-color-success, #34c38f)'
+                    warning: 'var(--backend-theme-warning)',
+                    danger: 'var(--backend-theme-danger)',
+                    info: 'var(--backend-theme-info)',
+                    success: 'var(--backend-theme-success)'
                 };
                 
                 const borderColor = typeColors[type] || typeColors.warning;
                 
                 overlay.innerHTML = `
                     <div class="backend-confirm-dialog" style="
-                        background: var(--backend-color-card-bg, #fff);
-                        border-radius: var(--backend-border-radius-lg, 0.75rem);
+                        background: var(--backend-component-surface);
+                        border-radius: var(--backend-theme-radius-lg);
                         padding: 24px;
                         max-width: 400px;
                         width: 90%;
-                        box-shadow: var(--backend-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+                        box-shadow: var(--backend-component-shadow-lg);
                         border-top: 3px solid ${borderColor};
                     ">
-                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-color-text-primary, #212529);">${this.escapeHtml(title)}</h4>
-                        <p style="margin: 0 0 20px; color: var(--backend-color-text-secondary, #6c757d); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>
+                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-component-text-primary);">${this.escapeHtml(title)}</h4>
+                        <p style="margin: 0 0 20px; color: var(--backend-component-text-secondary); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>
                         <div style="display: flex; justify-content: flex-end; gap: 10px;">
                             <button class="backend-confirm-btn backend-confirm-btn-cancel" data-action="cancel" style="
                                 padding: 8px 16px;
-                                border: 1px solid var(--backend-color-border-default, #dee2e6);
-                                border-radius: var(--backend-border-radius, 0.375rem);
-                                background: var(--backend-color-bg-primary, #fff);
-                                color: var(--backend-color-text-secondary, #6c757d);
+                                border: 1px solid var(--backend-component-border);
+                                border-radius: var(--backend-theme-radius-md);
+                                background: var(--backend-component-surface);
+                                color: var(--backend-component-text-secondary);
                                 cursor: pointer;
                                 font-size: 0.875rem;
                                 transition: all 0.2s ease;
@@ -232,9 +237,9 @@
                             <button class="backend-confirm-btn backend-confirm-btn-confirm" data-action="confirm" style="
                                 padding: 8px 16px;
                                 border: none;
-                                border-radius: var(--backend-border-radius, 0.375rem);
-                                background: var(--backend-color-primary, #556ee6);
-                                color: var(--backend-color-text-inverse, #fff);
+                                border-radius: var(--backend-theme-radius-md);
+                                background: var(--backend-component-primary);
+                                color: var(--backend-theme-on-primary);
                                 cursor: pointer;
                                 font-size: 0.875rem;
                                 transition: all 0.2s ease;
@@ -307,7 +312,7 @@
                 overlay.style.cssText = `
                     position: fixed;
                     inset: 0;
-                    background: rgba(0, 0, 0, 0.5);
+                    background: var(--backend-component-overlay);
                     z-index: 12050;
                     display: flex;
                     align-items: center;
@@ -316,33 +321,33 @@
                 `;
 
                 const typeColors = {
-                    warning: 'var(--backend-color-warning, #f1b44c)',
-                    danger: 'var(--backend-color-danger, #f46a6a)',
-                    info: 'var(--backend-color-info, #50a5f1)',
-                    success: 'var(--backend-color-success, #34c38f)'
+                    warning: 'var(--backend-theme-warning)',
+                    danger: 'var(--backend-theme-danger)',
+                    info: 'var(--backend-theme-info)',
+                    success: 'var(--backend-theme-success)'
                 };
 
                 const borderColor = typeColors[type] || typeColors.info;
 
                 overlay.innerHTML = `
                     <div class="backend-confirm-dialog" style="
-                        background: var(--backend-color-card-bg, #fff);
-                        border-radius: var(--backend-border-radius-lg, 0.75rem);
+                        background: var(--backend-component-surface);
+                        border-radius: var(--backend-theme-radius-lg);
                         padding: 24px;
                         max-width: 480px;
                         width: 90%;
-                        box-shadow: var(--backend-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+                        box-shadow: var(--backend-component-shadow-lg);
                         border-top: 3px solid ${borderColor};
                     ">
-                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-color-text-primary, #212529);">${this.escapeHtml(title)}</h4>
-                        ${message ? `<p style="margin: 0 0 12px; color: var(--backend-color-text-secondary, #6c757d); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>` : ''}
+                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-component-text-primary);">${this.escapeHtml(title)}</h4>
+                        ${message ? `<p style="margin: 0 0 12px; color: var(--backend-component-text-secondary); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>` : ''}
                         <input type="text" class="backend-input-value" value="${this.escapeHtml(defaultValue)}" placeholder="${this.escapeHtml(placeholder)}" style="
                             width: 100%;
                             padding: 10px 14px;
-                            border: 1px solid var(--backend-color-border-default, #dee2e6);
-                            border-radius: var(--backend-border-radius, 0.375rem);
-                            background: var(--backend-color-input-bg, #fff);
-                            color: var(--backend-color-text-primary, #333);
+                            border: 1px solid var(--backend-component-border);
+                            border-radius: var(--backend-theme-radius-md);
+                            background: var(--backend-component-input-surface);
+                            color: var(--backend-component-text-primary);
                             font-size: 0.9375rem;
                             margin-bottom: 20px;
                             box-sizing: border-box;
@@ -351,10 +356,10 @@
                         <div style="display: flex; justify-content: flex-end; gap: 10px;">
                             <button class="backend-confirm-btn backend-confirm-btn-cancel" data-action="cancel" style="
                                 padding: 8px 16px;
-                                border: 1px solid var(--backend-color-border-default, #dee2e6);
-                                border-radius: var(--backend-border-radius, 0.375rem);
-                                background: var(--backend-color-bg-primary, #fff);
-                                color: var(--backend-color-text-secondary, #6c757d);
+                                border: 1px solid var(--backend-component-border);
+                                border-radius: var(--backend-theme-radius-md);
+                                background: var(--backend-component-surface);
+                                color: var(--backend-component-text-secondary);
                                 cursor: pointer;
                                 font-size: 0.875rem;
                                 transition: all 0.2s ease;
@@ -362,9 +367,9 @@
                             <button class="backend-confirm-btn backend-confirm-btn-confirm" data-action="confirm" style="
                                 padding: 8px 16px;
                                 border: none;
-                                border-radius: var(--backend-border-radius, 0.375rem);
-                                background: var(--backend-color-primary, #556ee6);
-                                color: var(--backend-color-text-inverse, #fff);
+                                border-radius: var(--backend-theme-radius-md);
+                                background: var(--backend-component-primary);
+                                color: var(--backend-theme-on-primary);
                                 cursor: pointer;
                                 font-size: 0.875rem;
                                 transition: all 0.2s ease;
@@ -411,11 +416,11 @@
                 document.addEventListener('keydown', escHandler);
 
                 inputEl.addEventListener('focus', function() {
-                    this.style.borderColor = 'var(--backend-color-primary, #556ee6)';
-                    this.style.boxShadow = 'var(--backend-focus-ring)';
+                    this.style.borderColor = 'var(--backend-component-primary)';
+                    this.style.boxShadow = 'var(--backend-component-focus-ring)';
                 });
                 inputEl.addEventListener('blur', function() {
-                    this.style.borderColor = 'var(--backend-color-border-default, #dee2e6)';
+                    this.style.borderColor = 'var(--backend-component-border)';
                     this.style.boxShadow = 'none';
                 });
             });
@@ -448,10 +453,10 @@
                 } = options;
 
                 const typeColors = {
-                    danger: 'var(--backend-color-danger, #f46a6a)',
-                    warning: 'var(--backend-color-warning, #f1b44c)',
-                    success: 'var(--backend-color-success, #34c38f)',
-                    info: 'var(--backend-color-info, #50a5f1)'
+                    danger: 'var(--backend-theme-danger)',
+                    warning: 'var(--backend-theme-warning)',
+                    success: 'var(--backend-theme-success)',
+                    info: 'var(--backend-theme-info)'
                 };
                 const borderColor = typeColors[type] || typeColors.danger;
 
@@ -460,7 +465,7 @@
                 overlay.style.cssText = `
                     position: fixed;
                     inset: 0;
-                    background: rgba(0, 0, 0, 0.5);
+                    background: var(--backend-component-overlay);
                     z-index: 10001;
                     display: flex;
                     align-items: center;
@@ -470,26 +475,26 @@
 
                 overlay.innerHTML = `
                     <div class="backend-modal-dialog" style="
-                        background: var(--backend-color-card-bg);
-                        border-radius: var(--backend-border-radius-lg, 0.75rem);
+                        background: var(--backend-component-surface);
+                        border-radius: var(--backend-theme-radius-lg);
                         padding: 24px;
                         max-width: 400px;
                         width: 90%;
-                        box-shadow: var(--backend-shadow-lg);
+                        box-shadow: var(--backend-component-shadow-lg);
                         border-top: 4px solid ${borderColor};
                         text-align: center;
                     ">
                         <div style="margin-bottom: 16px;">
                             <i class="mdi ${icon}" style="font-size: 48px; color: ${borderColor};"></i>
                         </div>
-                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-color-text-primary);">${this.escapeHtml(title)}</h4>
-                        ${message ? `<p style="margin: 0 0 20px; color: var(--backend-color-text-secondary); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>` : ''}
+                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-component-text-primary);">${this.escapeHtml(title)}</h4>
+                        ${message ? `<p style="margin: 0 0 20px; color: var(--backend-component-text-secondary); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>` : ''}
                         <button class="backend-modal-btn" data-action="confirm" style="
                             padding: 8px 24px;
                             border: none;
-                            border-radius: var(--backend-border-radius, 0.375rem);
-                            background: var(--backend-color-primary);
-                            color: var(--backend-color-text-inverse);
+                            border-radius: var(--backend-theme-radius-md);
+                            background: var(--backend-component-primary);
+                            color: var(--backend-theme-on-primary);
                             cursor: pointer;
                             font-size: 0.9375rem;
                             transition: all 0.2s ease;
@@ -555,10 +560,10 @@
                 filter: brightness(0.95);
             }
             .backend-confirm-btn-cancel:hover {
-                background: var(--backend-color-bg-secondary, #f8f9fa) !important;
+                background: var(--backend-component-surface-subtle) !important;
             }
             .backend-confirm-btn-confirm:hover {
-                background: var(--backend-color-primary-hover, #4857d4) !important;
+                background: var(--backend-theme-primary-hover) !important;
             }
         `;
         document.head.appendChild(style);
@@ -573,6 +578,9 @@
 
     // 向后兼容：保留 BackendToast 和 AdminConfirm 别名
     window.BackendToast = BackendToast;
+    if (!window.AdminToast || typeof window.AdminToast.success !== 'function') {
+        window.AdminToast = BackendToast;
+    }
     window.AdminConfirm = BackendConfirm;
 
 })(window, document);

@@ -10,9 +10,10 @@
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. 本文件：`app/code/Weline/Admin/doc/AI-INDEX.md`
 5. 模块说明：`app/code/Weline/Admin/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-8. 只读取本次任务相关源码、配置和验证入口
+6. 认证/设备任务：`app/code/Weline/Admin/doc/需求.md`、`app/code/Weline/Admin/doc/开发日志.md`、`app/code/Weline/SessionManager/doc/设备管理架构.md`
+7. `app/code/Weline/Theme/doc/AI-INDEX.md`
+8. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+9. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -38,9 +39,9 @@
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：1
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：1242
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：1377
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：24
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：41
+- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：40
 
 ## 从源码识别到的开发提示
 
@@ -62,7 +63,9 @@
 - `app/code/Weline/Admin/doc/主题配色变量文档.md`
 - `app/code/Weline/Admin/doc/开发/plan.md`
 - `app/code/Weline/Admin/doc/开发/task.md`
+- `app/code/Weline/Admin/doc/开发日志.md`
 - `app/code/Weline/Admin/doc/登录页交互.md`
+- `app/code/Weline/Admin/doc/需求.md`
 
 ## 开发前门禁
 

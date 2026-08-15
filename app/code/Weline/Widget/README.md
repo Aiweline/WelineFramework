@@ -90,6 +90,10 @@ Weline_Widget/
 
 ## 🎯 核心功能
 
+## 变更记录
+
+- **1.0.1**：参数控件视觉层迁移至 Theme 全局语义 Token，亮色、暗色和跟随系统模式无需业务页面补丁。
+
 ### 1. 部件扩展机制
 
 #### 扩展点定义
@@ -343,4 +347,3 @@ app/code/YourModule/extends/Weline_Widget/Weline_Widget/
 ---
 
 **提示**：首次使用前请确保已安装并配置好 Weline Framework 和相关依赖模块。
-

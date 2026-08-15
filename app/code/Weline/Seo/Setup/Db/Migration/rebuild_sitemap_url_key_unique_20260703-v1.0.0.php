@@ -35,6 +35,16 @@ class RebuildSitemapUrlKeyUnique20260703V100 extends AbstractMigration
         return [SitemapUrl::schema_table];
     }
 
+    public function requiresBackup(): bool
+    {
+        return true;
+    }
+
+    public function getBackupStrategy(): array
+    {
+        return ['strategy' => 'table', 'tables' => [SitemapUrl::schema_table], 'columns' => []];
+    }
+
     public function install(): bool
     {
         $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
@@ -56,7 +66,10 @@ class RebuildSitemapUrlKeyUnique20260703V100 extends AbstractMigration
 
         foreach (['idx_unique_url', 'uk_sitemap_url_entity', 'uk_sitemap_url_entity_scope'] as $legacyIndex) {
             if ($connection->hasIndex($table, $legacyIndex)) {
-                $connection->query($connection->buildDropIndexSql($table, $legacyIndex))->fetch();
+                $connection->query($connection->buildDropIndexSql(
+                    $connection->formatTableName($table),
+                    $legacyIndex,
+                ))->fetch();
             }
         }
 
@@ -166,7 +179,7 @@ class RebuildSitemapUrlKeyUnique20260703V100 extends AbstractMigration
 
         foreach ($indexes as $name => $index) {
             if (!$connection->hasIndex($table, $name)) {
-                $connection->query($connection->buildAddIndexSql($table, [
+                $connection->query($connection->buildAddIndexSql($connection->formatTableName($table), [
                     'name' => $name,
                     'type' => $index['type'],
                     'columns' => $index['columns'],

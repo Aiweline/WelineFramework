@@ -4,15 +4,22 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+
 /**
  * Builds aggregate-only evidence and metric samples for continuous-window
  * optimization. Raw Visitor payloads never cross this boundary.
  */
 final class OptimizationEvidenceService
 {
-    public function __construct(private readonly SearchPerformanceSnapshotService $searchSnapshot)
-    {
+    public function __construct(
+        private readonly SearchPerformanceSnapshotService $searchSnapshot,
+        ?SeoSearchQueryHeatService $queryHeat = null,
+    ) {
+        $this->queryHeat = $queryHeat;
     }
+
+    private ?SeoSearchQueryHeatService $queryHeat;
 
     /**
      * @param array<string,mixed> $target
@@ -26,7 +33,7 @@ final class OptimizationEvidenceService
         string $startDate,
         string $endDate,
     ): array {
-        $visitor = $this->visitorSnapshot($websiteId, $target, $startDate, $endDate, [
+        $visitor = $this->tryVisitorSnapshot($websiteId, $target, $startDate, $endDate, [
             'target_event' => (string)($target['target_event'] ?? ''),
             'block_key' => (string)($target['block_key'] ?? ''),
             'content_fingerprint' => (string)($target['content_fingerprint'] ?? ''),
@@ -38,18 +45,30 @@ final class OptimizationEvidenceService
         $previousEnd = \date('Y-m-d H:i:s', (int)\strtotime($startDate) - 1);
         $previousStart = \date('Y-m-d H:i:s', (int)\strtotime($previousEnd) - $duration + 1);
         $previousSearch = $this->searchSnapshot->snapshot($websiteId, $previousStart, $previousEnd);
-        if (empty($search['complete']) || empty($previousSearch['complete'])) {
-            throw new \RuntimeException('search_evidence_unavailable');
+        $ownerValues = \is_array($target['current_values'] ?? null) ? $target['current_values'] : [];
+        $searchQueries = $this->searchQueryEvidence($websiteId, $ownerValues);
+        $hasVisitor = !empty($visitor['data_quality']['complete']);
+        $hasSearch = !empty($search['complete']) && !empty($previousSearch['complete']);
+        $hasQueries = ($searchQueries['top'] ?? []) !== [] || ($searchQueries['matching_owner'] ?? []) !== [];
+        if (!$hasVisitor && !$hasSearch && !$hasQueries) {
+            throw new \RuntimeException(
+                !empty($visitor['data_quality']['reasons'])
+                    ? 'visitor_evidence_unavailable'
+                    : 'search_evidence_unavailable'
+            );
         }
+        $eventCounts = \is_array($visitor['summary']['event_counts'] ?? null) ? $visitor['summary']['event_counts'] : [];
 
         return [
             'contract' => 'seo.optimization_evidence.v1',
             'window' => ['start' => $startDate, 'end' => $endDate],
             'visitor' => $visitor,
+            'visitor_events' => $eventCounts,
             'search' => [
                 'current' => $search,
                 'previous' => $previousSearch,
             ],
+            'search_queries' => $searchQueries,
         ];
     }
 
@@ -73,17 +92,22 @@ final class OptimizationEvidenceService
             }
             if ($metricName === 'organic_ctr') {
                 $search = $this->searchSnapshot->snapshot($websiteId, $startDate, $endDate);
-                if (empty($search['complete'])) {
+                if (!empty($search['complete'])) {
+                    $metrics[$metricName] = [
+                        'value' => (float)($search['ctr'] ?? 0.0),
+                        'numerator' => \max(0, (int)($search['clicks'] ?? 0)),
+                        'denominator' => \max(0, (int)($search['impressions'] ?? 0)),
+                        'sample_size' => \max(0, (int)($search['impressions'] ?? 0)),
+                        'source' => 'search',
+                        'complete' => true,
+                    ];
+                    continue;
+                }
+                $fallback = $this->queryHeatMetric($websiteId, $target);
+                if ($fallback === null) {
                     throw new \RuntimeException('search_evidence_unavailable');
                 }
-                $metrics[$metricName] = [
-                    'value' => (float)($search['ctr'] ?? 0.0),
-                    'numerator' => \max(0, (int)($search['clicks'] ?? 0)),
-                    'denominator' => \max(0, (int)($search['impressions'] ?? 0)),
-                    'sample_size' => \max(0, (int)($search['impressions'] ?? 0)),
-                    'source' => 'search',
-                    'complete' => true,
-                ];
+                $metrics[$metricName] = $fallback;
                 continue;
             }
             if (\preg_match('/^([a-z][a-z0-9_]{2,120})_rate$/D', $metricName, $matches) !== 1) {
@@ -93,13 +117,22 @@ final class OptimizationEvidenceService
             $event = $isPrimary && (string)($target['target_event'] ?? '') !== ''
                 ? (string)$target['target_event']
                 : (string)$matches[1];
-            $snapshot = $this->visitorSnapshot($websiteId, $target, $startDate, $endDate, [
-                'target_event' => $event,
-                'block_key' => $isPrimary ? (string)($target['block_key'] ?? '') : '',
-                'content_fingerprint' => $isPrimary ? (string)($target['content_fingerprint'] ?? '') : '',
-                'min_page_views' => 0,
-                'min_conversions' => 0,
-            ]);
+            try {
+                $snapshot = $this->visitorSnapshot($websiteId, $target, $startDate, $endDate, [
+                    'target_event' => $event,
+                    'block_key' => $isPrimary ? (string)($target['block_key'] ?? '') : '',
+                    'content_fingerprint' => $isPrimary ? (string)($target['content_fingerprint'] ?? '') : '',
+                    'min_page_views' => 0,
+                    'min_conversions' => 0,
+                ]);
+            } catch (\Throwable $throwable) {
+                $fallback = $this->queryHeatMetric($websiteId, $target);
+                if ($fallback === null) {
+                    throw $throwable;
+                }
+                $metrics[$metricName] = $fallback;
+                continue;
+            }
             $summary = \is_array($snapshot['summary'] ?? null) ? $snapshot['summary'] : [];
             $quality = \is_array($snapshot['data_quality'] ?? null) ? $snapshot['data_quality'] : [];
             $metrics[$metricName] = [
@@ -119,6 +152,9 @@ final class OptimizationEvidenceService
     /** @param array<string,mixed> $target @param array<string,mixed> $policy */
     public function sampleEligible(array $target, array $policy, array $evidence): bool
     {
+        if ($this->isQueryHeatEligible($target, $policy, $evidence)) {
+            return true;
+        }
         if ((string)($target['target_type'] ?? '') === 'page' || (string)($target['block_key'] ?? '') === '') {
             $search = \is_array($evidence['search']['current'] ?? null) ? $evidence['search']['current'] : [];
             return (int)($search['impressions'] ?? 0) >= (int)($policy['min_search_impressions'] ?? 1000);
@@ -129,6 +165,60 @@ final class OptimizationEvidenceService
             && !empty($quality['eligible'])
             && (int)($summary['page_views'] ?? 0) >= (int)($policy['min_page_views'] ?? 500)
             && (int)($summary['target_events'] ?? 0) >= (int)($policy['min_conversions'] ?? 30);
+    }
+
+    /** @param array<string,mixed> $target @param array<string,mixed> $policy @param array<string,mixed> $evidence */
+    public function isQueryHeatEligible(array $target, array $policy, array $evidence): bool
+    {
+        $queries = \is_array($evidence['search_queries'] ?? null) ? $evidence['search_queries'] : [];
+        $matched = \is_array($queries['matching_owner'] ?? null) ? $queries['matching_owner'] : [];
+        $top = \is_array($queries['top'] ?? null) ? $queries['top'] : [];
+        $isPage = (string)($target['target_type'] ?? '') === 'page' || (string)($target['block_key'] ?? '') === '';
+        $candidates = $matched !== [] ? $matched : ($isPage ? $top : []);
+        if ($candidates === [] || !\is_array($candidates[0] ?? null)) {
+            return false;
+        }
+        $best = $candidates[0];
+        $minHeat = (float)($policy['min_query_heat'] ?? 15);
+        $minImpressions = \max(50, (int)\floor(((int)($policy['min_search_impressions'] ?? 1000)) / 20));
+
+        return (float)($best['heat'] ?? 0) >= $minHeat
+            || (int)($best['impressions'] ?? 0) >= $minImpressions
+            || (int)($best['clicks'] ?? 0) >= 5;
+    }
+
+    /**
+     * @param array<string,mixed> $target
+     * @param array<string,mixed> $overrides
+     * @return array<string,mixed>
+     */
+    private function tryVisitorSnapshot(
+        int $websiteId,
+        array $target,
+        string $startDate,
+        string $endDate,
+        array $overrides,
+    ): array {
+        try {
+            return $this->visitorSnapshot($websiteId, $target, $startDate, $endDate, $overrides);
+        } catch (\Throwable) {
+            return [
+                'contract' => 'visitor.optimization_snapshot.v1',
+                'summary' => [
+                    'page_views' => 0,
+                    'target_events' => 0,
+                    'conversion_rate' => 0.0,
+                    'conversion_denominator' => 0,
+                    'block_impressions' => 0,
+                    'event_counts' => [],
+                ],
+                'data_quality' => [
+                    'complete' => false,
+                    'eligible' => false,
+                    'reasons' => ['evidence_unavailable'],
+                ],
+            ];
+        }
     }
 
     /**
@@ -184,5 +274,81 @@ final class OptimizationEvidenceService
         }
 
         return $snapshot;
+    }
+
+    /**
+     * @param array<string,mixed> $ownerValues
+     * @return array{top:list<array<string,mixed>>,matching_owner:list<array<string,mixed>>}
+     */
+    private function searchQueryEvidence(int $websiteId, array $ownerValues): array
+    {
+        $heat = $this->heatService();
+        if ($heat === null) {
+            return ['top' => [], 'matching_owner' => []];
+        }
+        try {
+            $cloud = $heat->cloud($websiteId, 40);
+
+            return [
+                'top' => $cloud['items'],
+                'matching_owner' => $heat->matchingOwner($websiteId, $ownerValues, 12),
+            ];
+        } catch (\Throwable) {
+            return ['top' => [], 'matching_owner' => []];
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $target
+     * @return array<string,mixed>|null
+     */
+    private function queryHeatMetric(int $websiteId, array $target): ?array
+    {
+        $heat = $this->heatService();
+        if ($heat === null) {
+            return null;
+        }
+        $ownerValues = \is_array($target['current_values'] ?? null) ? $target['current_values'] : [];
+        $matched = [];
+        try {
+            $matched = $ownerValues !== [] ? $heat->matchingOwner($websiteId, $ownerValues, 1) : [];
+            if ($matched === []) {
+                $matched = $heat->cloud($websiteId, 1)['items'] ?? [];
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+        $best = \is_array($matched[0] ?? null) ? $matched[0] : null;
+        if ($best === null) {
+            return null;
+        }
+        $clicks = \max(0, (int)($best['clicks'] ?? 0));
+        $impressions = \max(0, (int)($best['impressions'] ?? 0));
+        $heatScore = (float)($best['heat'] ?? 0);
+        if ($impressions < 1 && $clicks < 1 && $heatScore < 15.0) {
+            return null;
+        }
+
+        return [
+            'value' => $impressions > 0 ? ($clicks / $impressions) : (float)($best['ctr'] ?? 0),
+            'numerator' => $clicks,
+            'denominator' => \max(1, $impressions),
+            'sample_size' => \max($impressions, $clicks, 1),
+            'source' => 'search_query',
+            'complete' => true,
+        ];
+    }
+
+    private function heatService(): ?SeoSearchQueryHeatService
+    {
+        if ($this->queryHeat instanceof SeoSearchQueryHeatService) {
+            return $this->queryHeat;
+        }
+        try {
+            $this->queryHeat = ObjectManager::getInstance(SeoSearchQueryHeatService::class);
+            return $this->queryHeat;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

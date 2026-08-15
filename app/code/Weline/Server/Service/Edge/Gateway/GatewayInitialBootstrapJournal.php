@@ -11,8 +11,9 @@ namespace Weline\Server\Service\Edge\Gateway;
  */
 final class GatewayInitialBootstrapJournal
 {
-    private const SCHEMA_VERSION = 1;
+    private const SCHEMA_VERSION = 2;
     private const MAX_BYTES = 16_384;
+    private const PROFILES = ['default', 'ipv4-only'];
     private const PHASES = [
         'PREPARING' => 0,
         'STAGED' => 1,
@@ -33,6 +34,7 @@ final class GatewayInitialBootstrapJournal
         'platform',
         'arch',
         'profile',
+        'host_id',
         'phase',
         'slot',
         'runtime_generation',
@@ -103,6 +105,7 @@ final class GatewayInitialBootstrapJournal
             'runtime_generation' => '',
             'previous_active_slot' => '',
             'service_kind' => '',
+            'host_id' => '',
             'created_at' => $now,
             'updated_at' => $now,
         ];
@@ -134,6 +137,7 @@ final class GatewayInitialBootstrapJournal
                 'runtime_generation',
                 'previous_active_slot',
                 'service_kind',
+                'host_id',
             ], true)) {
                 throw new \RuntimeException(
                     'Gateway initial bootstrap journal fact is unsupported.',
@@ -159,8 +163,8 @@ final class GatewayInitialBootstrapJournal
         $journal = $this->load();
         $profile = \strtolower(\trim($profile));
         if ($journal === null
+            || !\in_array($profile, self::PROFILES, true)
             || \hash_equals('PREPARING', (string)($journal['phase'] ?? ''))
-            || \hash_equals('ROLLING_BACK', (string)($journal['phase'] ?? ''))
             || !\hash_equals($profile, (string)($journal['profile'] ?? ''))
             || !\hash_equals(
                 (string)$journal['fingerprint'],
@@ -221,7 +225,7 @@ final class GatewayInitialBootstrapJournal
         if ($path === ''
             || $identity['platform'] === ''
             || $identity['arch'] === ''
-            || !\hash_equals('default', $identity['profile'])
+            || !\in_array($identity['profile'], self::PROFILES, true)
         ) {
             throw new \RuntimeException(
                 'Gateway initial bootstrap package identity is incomplete.',
@@ -297,6 +301,11 @@ final class GatewayInitialBootstrapJournal
             || !\hash_equals(self::recordDigest($unsigned), $recordDigest)
             || !\is_int($journal['created_at'] ?? null)
             || !\is_int($journal['updated_at'] ?? null)
+            || !\in_array(
+                (string)($journal['profile'] ?? ''),
+                self::PROFILES,
+                true,
+            )
         ) {
             throw new \RuntimeException(
                 'Gateway initial bootstrap journal contract or digest is invalid.',
@@ -323,6 +332,8 @@ final class GatewayInitialBootstrapJournal
         }
         if (!\in_array((string)($journal['slot'] ?? ''), ['', 'A', 'B'], true)
             || !\in_array((string)($journal['previous_active_slot'] ?? ''), ['', 'A', 'B'], true)
+            || ((string)($journal['host_id'] ?? '') !== ''
+                && \preg_match('/\A[a-f0-9]{32}\z/D', (string)$journal['host_id']) !== 1)
         ) {
             throw new \RuntimeException(
                 'Gateway initial bootstrap journal slot binding is invalid.',
@@ -351,6 +362,7 @@ final class GatewayInitialBootstrapJournal
             'platform',
             'arch',
             'profile',
+            'host_id',
         ] as $field) {
             $host[$field] = (string)($identity[$field] ?? '');
         }

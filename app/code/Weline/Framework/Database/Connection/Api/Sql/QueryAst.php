@@ -26,6 +26,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Debug;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 
 /**
  * QueryAst - 查询抽象语法树类
@@ -35,7 +36,7 @@ use Weline\Framework\Runtime\RequestLifecycleTrace;
  * 2. 各适配器仅实现 prepareSql()：先 buildAst($action)，再将 AST 编译为方言 SQL
  * 唯一不经 AST 的入口为 query(string $sql)，用于执行原始 SQL。
  */
-abstract class QueryAst implements WriteIntentQueryInterface
+abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQueryInterface
 {
     use SqlTrait;
 
@@ -171,6 +172,16 @@ abstract class QueryAst implements WriteIntentQueryInterface
         } else {
             $this->updateAstTable($this->table, $this->table_alias);
         }
+        return $this;
+    }
+
+    public function tablePhysical(PhysicalTableIdentity $identity): QueryInterface
+    {
+        $this->table = $this->identifierFormatter->quoteQualified(
+            $identity->namespace(),
+            $identity->table(),
+        );
+        $this->updateAstTable($this->table, $this->table_alias);
         return $this;
     }
 
@@ -902,6 +913,20 @@ abstract class QueryAst implements WriteIntentQueryInterface
         return $this;
     }
 
+    /**
+     * Execute a prepared statement and convert warning-mode PDO failures into
+     * exceptions so transaction callers cannot commit a failed write.
+     */
+    private function executePreparedStatement(PDOStatement $statement, array $bindings = []): void
+    {
+        if ($statement->execute($bindings)) {
+            return;
+        }
+
+        $errorInfo = $statement->errorInfo();
+        throw new DbException(__('数据库语句执行失败：%{1}', [$errorInfo[2] ?? 'unknown']));
+    }
+
     public function fetch(string $model_class = ''): mixed
     {
         $dbTraceStart = 0.0;
@@ -913,7 +938,7 @@ abstract class QueryAst implements WriteIntentQueryInterface
         if (Env::get('log.dev_sql.enabled', false)) {
             $log_file = Env::get('log.dev_sql.file', 'dev_sql');
             // Get SQL with bound values replaced
-            $sqlWithValues = $this->getSqlWithBounds($this->sql);
+            $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             Env::log($log_file, $sqlWithValues, 'QUERY', true, true, 0);
         }
         
@@ -921,17 +946,18 @@ abstract class QueryAst implements WriteIntentQueryInterface
         if (Env::get('log.db.enabled', false)) {
             $file = Env::get('log.db.file', 'db');
             // Use compact standard format: [timestamp] [QUERY] source - SQL
-            $sqlWithValues = $this->getSqlWithBounds($this->sql);
+            $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             Env::log($file, $sqlWithValues, 'QUERY', true, true, 0);
         }
         # 调试环境信息
         if (DEV && Debug::target('pre_fetch')) {
+            $sensitiveDiagnostic = RequestLifecycleTrace::containsAuthenticationPersistence($this->sql);
             $msg = __('即将执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
-            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
-            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
-            $msg .= 'Format SQL:' . $this->getSql(true);
+            $msg .= '$this->sql:' . RequestLifecycleTrace::redactDatabaseSql($this->sql) . PHP_EOL;
+            $msg .= '$this->bound_values:' . ($sensitiveDiagnostic ? '[REDACTED]' : json_encode($this->bound_values)) . PHP_EOL;
+            $msg .= 'Format SQL:' . RequestLifecycleTrace::redactDatabaseSql((string)$this->getSql(true));
             Debug::target('pre_fetch', $msg);
         }
         // 防御：fetch_type 为空但 sql 已有时，根据 SQL 推断操作类型（避免链式操作中 query 被 reset/clear 后丢失类型）
@@ -942,9 +968,9 @@ abstract class QueryAst implements WriteIntentQueryInterface
         $dbTraceSql = '';
         if ($dbTraceStart > 0) {
             try {
-                $dbTraceSql = $this->getSqlWithBounds($this->sql);
+                $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             } catch (\Throwable) {
-                $dbTraceSql = $this->sql;
+                $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->sql);
             }
         }
         $fetchRowLimit = $this->getFetchRowLimit();
@@ -956,7 +982,7 @@ abstract class QueryAst implements WriteIntentQueryInterface
                 if ($hasReturning) {
                 // 如果使用 RETURNING，需要使用 prepare/execute 来获取结果
                 $this->PDOStatement = $this->getConnectionInterface()->prepare($this->sql);
-                $this->PDOStatement->execute($this->bound_values);
+                $this->executePreparedStatement($this->PDOStatement, $this->bound_values);
                 $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
                 // 批量插入时，返回最后一个插入的 ID
                 if (!empty($origin_data) && is_array($origin_data)) {
@@ -984,7 +1010,7 @@ abstract class QueryAst implements WriteIntentQueryInterface
             } else {
                 try {
                     $this->PDOStatement = $this->getConnectionInterface()->prepare($this->sql);
-                    $this->PDOStatement->execute($this->bound_values);
+                    $this->executePreparedStatement($this->PDOStatement, $this->bound_values);
                 } catch (\PDOException $e) {
                     throw $e;
                 }
@@ -1122,12 +1148,13 @@ abstract class QueryAst implements WriteIntentQueryInterface
         $this->fetch_type = '';
         # 调试环境信息
         if (DEV && Debug::target('fetch')) {
+            $sensitiveDiagnostic = RequestLifecycleTrace::containsAuthenticationPersistence($this->sql);
             $msg = __('执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
-            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
-            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
-            $msg .= 'Format SQL:' . $this->getSql(true);
+            $msg .= '$this->sql:' . RequestLifecycleTrace::redactDatabaseSql($this->sql) . PHP_EOL;
+            $msg .= '$this->bound_values:' . ($sensitiveDiagnostic ? '[REDACTED]' : json_encode($this->bound_values)) . PHP_EOL;
+            $msg .= 'Format SQL:' . RequestLifecycleTrace::redactDatabaseSql((string)$this->getSql(true));
             Debug::target('fetch', $msg);
         }
         //        $this->clear();
@@ -1174,7 +1201,7 @@ abstract class QueryAst implements WriteIntentQueryInterface
             }
         }
 
-        $this->PDOStatement->execute($this->bound_values);
+        $this->executePreparedStatement($this->PDOStatement, $this->bound_values);
         $batch = [];
         if ($batchSize === 1) {
             while (($row = $this->PDOStatement->fetch(PDO::FETCH_ASSOC)) !== false) {
@@ -1898,7 +1925,7 @@ abstract class QueryAst implements WriteIntentQueryInterface
         $this->backup($backup_file, $table);
         # 清理表
         $PDOStatement = $this->getConnectionInterface()->prepare("TRUNCATE TABLE $table");
-        $PDOStatement->execute();
+        $this->executePreparedStatement($PDOStatement);
         return $this;
     }
 
@@ -1912,7 +1939,7 @@ abstract class QueryAst implements WriteIntentQueryInterface
         }
         // 获取表的创建语句
         $PDOStatement = $this->getConnectionInterface()->prepare("SHOW CREATE TABLE $table");
-        $PDOStatement->execute();
+        $this->executePreparedStatement($PDOStatement);
         $createTableResult = $PDOStatement->fetchAll(PDO::FETCH_ASSOC);
         $createTableSql = $createTableResult[0]['Create Table'];
         $createTableSql = str_replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS', $createTableSql);
@@ -1943,7 +1970,7 @@ abstract class QueryAst implements WriteIntentQueryInterface
         fwrite($file, $createTableSql . ';' . PHP_EOL);
         // 获取表的数据并写入备份文件
         $PDOStatement = $this->getConnectionInterface()->prepare("SELECT * FROM $table");
-        $PDOStatement->execute();
+        $this->executePreparedStatement($PDOStatement);
         $results = $PDOStatement->fetchAll(PDO::FETCH_ASSOC);
         fwrite($file, PHP_EOL);
         fwrite($file, "-- $table 数据 " . PHP_EOL);

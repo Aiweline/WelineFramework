@@ -9,7 +9,12 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
+use Weline\Websites\Model\SalesChannel;
+use Weline\Websites\Model\Store;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteCurrency;
+use Weline\Websites\Model\WebsiteDomain;
+use Weline\Websites\Model\WebsiteLanguage;
 
 function fail(string $message): void
 {
@@ -191,10 +196,47 @@ function cleanup_dashboard_identity_fixture(
         ->delete()
         ->fetch();
 
-    $website->clearQuery()->clearData()->load($websiteId);
-    if ($website->getWebsiteId() > 0 && $website->getCode() !== Website::CODE_DEFAULT) {
-        $website->delete();
+    cleanup_fixture_website_relations($websiteId, $code);
+}
+
+function cleanup_fixture_website_relations(int $websiteId, string $code): void
+{
+    if ($websiteId <= Website::ID_DEFAULT || !str_starts_with($code, 'e2e-theme-default-')) {
+        throw new RuntimeException('Refusing Theme E2E website cleanup outside its owned namespace.');
     }
+
+    /** @var Website $website */
+    $website = clone ObjectManager::getInstance(Website::class);
+    $owned = $website->clearQuery()->clearData()
+        ->where(Website::schema_fields_ID, $websiteId)
+        ->where(Website::schema_fields_CODE, $code)
+        ->find()
+        ->fetchArray();
+    if (!is_array($owned) || (int)($owned[Website::schema_fields_ID] ?? 0) !== $websiteId) {
+        return;
+    }
+
+    foreach ([
+        SalesChannel::class,
+        Store::class,
+        WebsiteDomain::class,
+        WebsiteCurrency::class,
+        WebsiteLanguage::class,
+    ] as $modelClass) {
+        $model = clone ObjectManager::getInstance($modelClass);
+        $model->getConnection()->getQuery()
+            ->table($model->getTable())
+            ->where($modelClass::schema_fields_WEBSITE_ID, $websiteId)
+            ->delete()
+            ->fetch();
+    }
+
+    $website->getConnection()->getQuery()
+        ->table($website->getTable())
+        ->where(Website::schema_fields_ID, $websiteId)
+        ->where(Website::schema_fields_CODE, $code)
+        ->delete()
+        ->fetch();
 }
 
 function prepare_dashboard_identity_fixture(

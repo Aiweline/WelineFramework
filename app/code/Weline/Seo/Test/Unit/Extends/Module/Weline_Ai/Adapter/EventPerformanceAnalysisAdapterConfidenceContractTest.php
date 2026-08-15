@@ -19,9 +19,13 @@ final class EventPerformanceAnalysisAdapterConfidenceContractTest extends TestCa
             $prompt,
         );
         self::assertStringContainsString(
-            'When that definition and the eligibility/no-reason conditions all hold, return confidence from 0.80 to 1.00; otherwise return confidence below 0.80.',
+            'When matching_owner is empty and that definition plus the eligibility/no-reason conditions all hold, return confidence from 0.80 to 1.00; otherwise return confidence below 0.80.',
             $prompt,
         );
+        self::assertStringContainsString('treat query heat as sufficient signal', $prompt);
+        self::assertStringContainsString('aggregated_evidence.search_queries.matching_owner', $prompt);
+        self::assertStringContainsString('hottest matched query', $prompt);
+        self::assertStringContainsString('visitor_events', $prompt);
     }
 
     public function testPromptRestrictsGuardrailsToServerObservableMetrics(): void

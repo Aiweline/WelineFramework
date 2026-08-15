@@ -16,6 +16,9 @@ final class OptimizationEvidenceAvailabilityContractTest extends TestCase
 
         self::assertStringContainsString('visitor_evidence_unavailable', $evidence);
         self::assertStringContainsString('search_evidence_unavailable', $evidence);
+        self::assertStringContainsString('tryVisitorSnapshot', $evidence);
+        self::assertStringContainsString('isQueryHeatEligible', $evidence);
+        self::assertStringContainsString('queryHeatMetric', $evidence);
         self::assertStringContainsString('$this->finishRun($run, \'evidence_unavailable\'', $orchestrator);
         self::assertStringContainsString("'evidence_unavailable' : 'metric_evidence_failed'", $orchestrator);
         self::assertLessThan(

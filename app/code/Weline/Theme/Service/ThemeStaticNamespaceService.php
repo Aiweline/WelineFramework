@@ -140,6 +140,11 @@ final class ThemeStaticNamespaceService
     private function resolveThemePath(WelineTheme $theme): string
     {
         $themePath = $this->normalizePublicThemePath((string)$theme->getOriginPath());
+        if (strcasecmp($themePath, 'Weline/Theme/view/theme') === 0) {
+            // Weline_Theme 是默认主题源码，不是可公开访问的设计主题命名空间。
+            // 生产发布固定落在框架默认设计主题下，例如 Weline/default/Weline/Theme/...
+            return $this->normalizePublicThemePath((string)Env::default_theme_DATA['path']);
+        }
         if ($themePath !== '') {
             return $themePath;
         }

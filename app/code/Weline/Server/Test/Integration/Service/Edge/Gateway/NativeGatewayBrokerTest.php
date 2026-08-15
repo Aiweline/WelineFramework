@@ -48,6 +48,7 @@ final class NativeGatewayBrokerTest extends TestCase
             'cc',
             '-std=c11',
             \PHP_OS_FAMILY === 'Darwin' ? '-D_DARWIN_C_SOURCE' : '-D_GNU_SOURCE',
+            '-DWLS_NATIVE_TEST_HOOKS=1',
             '-Wall',
             '-Wextra',
             '-Werror',
@@ -122,6 +123,584 @@ final class NativeGatewayBrokerTest extends TestCase
         }
     }
 
+    public function testNginxTestChildReceivesThePreparedListenerDescriptors(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-test-fd-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'nginx TEST listener descriptor handoff verified',
+            $result['output'],
+        );
+    }
+
+    public function testInheritedNginxListenersAreNonblockingBeforeWorkerHandoff(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-inherited-listener-nonblocking-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'inherited TCP and UDP listeners are nonblocking',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'empty inherited TCP accept returned EAGAIN',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'cleared nonblocking listener lease was rejected',
+            $result['output'],
+        );
+    }
+
+    public function testNginxStartReturnsForForegroundInheritedListenerMaster(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-start-foreground-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertMatchesRegularExpression(
+            '/nginx START foreground inherited-listener master verified\n'
+                . 'spawned_pid=[1-9][0-9]*\n'
+                . 'start_id=[1-9][0-9]*\z/D',
+            $result['output'],
+        );
+    }
+
+    public function testNginxStartTreeAmbiguityRequiresPlatformServiceRestart(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-start-tree-restart-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'NGINX_START_SERVICE_TREE_RESTART_REQUIRED',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'second START refused until platform service restart',
+            $result['output'],
+        );
+    }
+
+    public function testNginxTestPidArtifactIsRemovedAndStartPidIsControllerReadable(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-pid-authority-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'nginx TEST removed only its exact empty pid artifact',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'nginx START pid sealed for controller read authority',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'foreign or replaced nginx pid artifact retained',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'nginx pid parent remained stable without a write window',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'data-plane source handle cannot modify sealed canonical pid',
+            $result['output'],
+        );
+    }
+
+    public function testNginxPidSourcePublicationKeepsParentStableAndRejectsPreheldWrites(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-pid-source-publication-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'nginx pid parent remained root:data 0711 without a write window',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'precreated canonical source was data-owned before publication',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'preheld source handle changed only detached source bytes',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'sealed nginx pid canonical remained root:controller 0444',
+            $result['output'],
+        );
+    }
+
+    public function testDeadSealedNginxPidIsRecoveredOnlyAfterExactDeath(): void
+    {
+        if (\posix_geteuid() !== 0) {
+            self::markTestSkipped('The sealed PID recovery selftest requires root:data isolation.');
+        }
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-pid-stale-sealed-recovery-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'mismatched platform receipt retained sealed nginx pid',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'live sealed nginx pid was retained',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'dead sealed nginx pid was recovered after exact platform death',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'noncanonical stale nginx pid was retained',
+            $result['output'],
+        );
+    }
+
+    public function testNginxTestPidSourceUsesTheAuthenticatedCandidateConfigAndLeavesNoResidue(): void
+    {
+        if (\posix_geteuid() !== 0) {
+            self::markTestSkipped('The candidate PID-source selftest requires root:data isolation.');
+        }
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-pid-candidate-config-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'nginx TEST used its authenticated candidate config path',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'failed candidate config preparation removed only its exact pid source',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'source creation fault removed only its exact pid leaf',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'replaced source leaf was retained and latched restart',
+            $result['output'],
+        );
+    }
+
+    public function testLifecycleStartReportsImmediateRecoveryWhenItsTestCleanupLatches(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-start-cleanup-latch-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'committed START retained its OK reply and listener lease',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'post-spawn precommit failure requires service-tree restart',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'late cleanup latch replaced committed START and cleared its listener lease',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'unlock failure requires service-tree restart',
+            $result['output'],
+        );
+    }
+
+    public function testProcessAttestUsesTheBrokerLeaseWithoutPtraceAcrossDistinctUids(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux') {
+            self::markTestSkipped('The no-CAP_SYS_PTRACE PROCESS_ATTEST contract is Linux-specific.');
+        }
+        if (posix_geteuid() !== 0) {
+            self::markTestSkipped('The PROCESS_ATTEST lease selftest requires root and a distinct data UID.');
+        }
+        $result = $this->runCommand([
+            $this->broker,
+            '--process-attest-lease-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'PROCESS_ATTEST full ACTIVE fixture verified a distinct-UID master without CAP_SYS_PTRACE',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'mismatched pid/start request preserved the valid listener lease',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'physical listener lease damage was rejected and cleared',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'damaged listener lease was cleared even when the request pid/start mismatched',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'no listener lease failed closed through the full PROCESS_ATTEST verifier',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'fixture cleanup preserved an unowned private directory and removed only its created directory',
+            $result['output'],
+        );
+    }
+
+    public function testPrecreatedCanonicalPidLeafAcceptsNginxCreateTruncateWithoutParentWrite(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-pid-precreated-leaf-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'precreated nginx pid accepted O_CREAT|O_TRUNC under non-writable parent',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'nginx pid parent mode remained without data namespace write',
+            $result['output'],
+        );
+    }
+
+    public function testTestShadowIsPidRootBoundAndNeverAcceptedForStart(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-pid-test-shadow-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'nginx TEST shadow is bound inside stable pid root',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'nginx START accepts only permanent canonical config',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'nginx TEST rejects permanent canonical config',
+            $result['output'],
+        );
+    }
+
+    public function testNginxPidWriteWindowFaultRestoresOrLatchesRestart(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-pid-authority-fault-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'pid write grant fault restored stable 0711',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'pid write revoke uncertainty requires service-tree restart',
+            $result['output'],
+        );
+    }
+
+    public function testNginxPidNamespaceRejectsLegacyPidAndSealsWithoutControllerWrite(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-pid-namespace-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'legacy runtime/run nginx pid rejected',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'nginx pid namespace sealed root:data 0711',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'nginx pid leaf sealed root:controller 0444',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'controller and data cannot replace sealed nginx pid leaf',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'authenticated action reclaims crash window before pid handling',
+            $result['output'],
+        );
+    }
+
+    public function testNginxListenerLeaseRejectsMismatchedMasterIdentity(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-listener-lease-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'nginx listener lease identity fence verified',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'mismatched request preserved live lease',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'listener topology rejected non-production variants',
+            $result['output'],
+        );
+    }
+
+    public function testNginxCrossUidIdentityAvoidsExeReadlinkOnLinux(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--nginx-cross-uid-identity-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertTrue(
+            str_contains($result['output'], 'cross-uid Linux start-id and cmdline identity verified')
+            || str_contains($result['output'], 'self-test skipped'),
+            $result['output'],
+        );
+    }
+
+    public function testNeutralTlsPublicationRejectsSourceReplacementBeforeNginxSpawn(): void
+    {
+        if (!\function_exists('posix_geteuid') || \posix_geteuid() !== 0) {
+            self::markTestSkipped('The neutral TLS publication race self-test requires root.');
+        }
+
+        $result = $this->runCommand([
+            $this->broker,
+            '--neutral-tls-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString(
+            'neutral TLS sealed-pair replacement race rejected',
+            $result['output'],
+        );
+        self::assertStringContainsString(
+            'neutral TLS canonical 0600 source modes accepted and rejected',
+            $result['output'],
+        );
+    }
+
+    public function testSnapshotEntitySelfTestUsesUnprivilegedIdentityWhenRoot(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 5)
+            . '/Service/Edge/Gateway/Native/posix/wls_gateway_broker.c');
+        $start = \strpos($source, 'static int wls_self_test_snapshot_entity(');
+        $end = \strpos($source, 'static int wls_self_test_snapshot_orphan_recovery(');
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+        $selfTest = \substr($source, $start, $end - $start);
+
+        self::assertMatchesRegularExpression(
+            '/if \(self_test_uid == 0\) \{\s*'
+                . 'unprivileged = getpwnam\("_nobody"\);\s*'
+                . 'if \(unprivileged == NULL\) unprivileged = getpwnam\("nobody"\);\s*'
+                . 'if \(unprivileged == NULL \|\| unprivileged->pw_uid == 0\s*'
+                . '\|\| unprivileged->pw_gid == 0\) goto cleanup;\s*'
+                . 'self_test_uid = unprivileged->pw_uid;\s*'
+                . 'self_test_gid = unprivileged->pw_gid;\s*\}/s',
+            $selfTest,
+        );
+        self::assertStringContainsString(
+            'fchown(fullchain_fd, self_test_uid, self_test_gid)',
+            $selfTest,
+        );
+        self::assertStringContainsString(
+            'fchown(private_key_fd, self_test_uid, self_test_gid)',
+            $selfTest,
+        );
+        self::assertMatchesRegularExpression(
+            '/wls_snapshot_uid_gid_value\(\s*self_test_uid, self_test_gid, '
+                . 'receipt\.data_plane_identity_value/s',
+            $selfTest,
+        );
+        self::assertMatchesRegularExpression(
+            '/wls_snapshot_receipt_entity_valid_for_owner\(\s*canonical_home, '
+                . '&receipt, self_test_uid, 0/s',
+            $selfTest,
+        );
+    }
+
+    public function testLinuxControllerIdentityPublishesOnlyAfterAuthenticatedPeerProof(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 5)
+            . '/Service/Edge/Gateway/Native/posix/wls_gateway_broker.c');
+        $startController = $this->brokerFunction(
+            $source,
+            'static pid_t wls_start_controller(',
+            'static int wls_wait_for_controller(',
+        );
+        $waitController = $this->brokerFunction(
+            $source,
+            'static int wls_wait_for_controller(',
+            'static int wls_controller_restart_backoff(',
+        );
+        $identity = $this->brokerFunction(
+            $source,
+            'static int wls_write_controller_process_identity(',
+            'static int wls_pid_is_gone(',
+        );
+
+        self::assertStringNotContainsString(
+            'wls_write_controller_process_identity(',
+            $startController,
+        );
+        self::assertStringContainsString('authenticated_controller_fd', $waitController);
+        self::assertStringContainsString('SO_PEERCRED', $identity);
+        self::assertStringContainsString('peer.pid != controller_pid', $identity);
+        self::assertStringContainsString('wls_process_start_id(', $identity);
+        self::assertMatchesRegularExpression(
+            '/#if defined\(WLS_NATIVE_TEST_HOOKS\).*?controller_pid > 0.*?'
+                . 'wls_write_controller_process_identity\(.*?#else.*?'
+                . 'wls_write_controller_process_identity\(/s',
+            $source,
+        );
+        self::assertMatchesRegularExpression(
+            '/#if defined\(WLS_NATIVE_TEST_HOOKS\).*?php == NULL.*?'
+                . 'runtime_generation == NULL.*?#endif/s',
+            $source,
+        );
+
+        $serve = \strpos($source, 'static int wls_serve(');
+        $initialWait = \strpos($source, 'wls_wait_for_controller(', $serve + 1);
+        $initialIdentity = \strpos(
+            $source,
+            'wls_write_controller_process_identity(',
+            $initialWait + 1,
+        );
+        $adminListener = \strpos(
+            $source,
+            'wls_create_listener(admin_socket, 0600)',
+            $initialIdentity + 1,
+        );
+        self::assertIsInt($serve);
+        self::assertIsInt($initialWait);
+        self::assertIsInt($initialIdentity);
+        self::assertIsInt($adminListener);
+        self::assertLessThan($adminListener, $initialIdentity);
+        self::assertLessThan($initialIdentity, $initialWait);
+
+        $restartWait = \strpos(
+            $source,
+            'wls_wait_for_controller(',
+            $initialIdentity + 1,
+        );
+        $restartIdentity = \strpos(
+            $source,
+            'wls_write_controller_process_identity(',
+            $restartWait + 1,
+        );
+        $restartBootstrap = \strpos(
+            $source,
+            'wls_bootstrap_controller(',
+            $restartIdentity + 1,
+        );
+        self::assertIsInt($restartWait);
+        self::assertIsInt($restartIdentity);
+        self::assertIsInt($restartBootstrap);
+        self::assertLessThan($restartIdentity, $restartWait);
+        self::assertLessThan($restartBootstrap, $restartIdentity);
+    }
+
+    public function testProductionBinaryRejectsTheExternalControllerFixtureTuple(): void
+    {
+        $productionBroker = $this->root . DIRECTORY_SEPARATOR
+            . 'wls-gateway-broker-production';
+        $this->compileProductionBroker($productionBroker);
+        $home = $this->root . DIRECTORY_SEPARATOR . 'production-home';
+        self::assertTrue(\mkdir($home, 0700));
+        $baseArguments = [
+            $productionBroker,
+            '--serve',
+            '--admin-socket',
+            $home . DIRECTORY_SEPARATOR . 'admin.sock',
+            '--project-socket',
+            $home . DIRECTORY_SEPARATOR . 'project.sock',
+            '--controller-socket',
+            $home . DIRECTORY_SEPARATOR . 'controller.sock',
+            '--lock-file',
+            $home . DIRECTORY_SEPARATOR . 'broker.lock',
+            '--fencing-file',
+            $home . DIRECTORY_SEPARATOR . 'trust'
+                . DIRECTORY_SEPARATOR . 'broker-fencing-token',
+            '--home',
+            $home,
+        ];
+
+        $missingIdentity = $this->runCommand($baseArguments);
+        self::assertSame(64, $missingIdentity['code'], $missingIdentity['output']);
+
+        $partialIdentity = $this->runCommand([
+            ...$baseArguments,
+            '--php',
+            '/missing/wls-test-php',
+        ]);
+        self::assertSame(64, $partialIdentity['code'], $partialIdentity['output']);
+
+        $user = \posix_getpwuid(\posix_geteuid());
+        self::assertIsArray($user);
+        $completeIdentity = $this->runCommand([
+            ...$baseArguments,
+            '--php',
+            '/missing/wls-test-php',
+            '--controller',
+            '/missing/wls-test-controller.php',
+            '--controller-user',
+            (string)$user['name'],
+            '--data-plane-user',
+            (string)$user['name'],
+            '--active-slot',
+            'A',
+            '--runtime-generation',
+            \str_repeat('a', 64),
+        ]);
+        self::assertNotSame(
+            64,
+            $completeIdentity['code'],
+            'A complete production Controller identity tuple must pass argument parsing. '
+                . $completeIdentity['output'],
+        );
+    }
+
     public function testDualChannelsBindKernelPeerIdentityAndOneFencingToken(): void
     {
         if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
@@ -146,6 +725,9 @@ final class NativeGatewayBrokerTest extends TestCase
         $controllerPid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $controllerPid);
         if ($controllerPid === 0) {
+            if (!$this->acceptBrokerReadinessProbe($controller, $fencingFile)) {
+                exit(19);
+            }
             for ($index = 0; $index < 2; $index++) {
                 $client = @\stream_socket_accept($controller, 5);
                 if (!\is_resource($client)) {
@@ -287,6 +869,9 @@ final class NativeGatewayBrokerTest extends TestCase
         $controllerPid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $controllerPid);
         if ($controllerPid === 0) {
+            if (!$this->acceptBrokerReadinessProbe($controller, $fencingFile)) {
+                exit(19);
+            }
             foreach (["WLS-ACTION/2\tERR\tBUSY\tSTOP\t-\t-", "WLS-ACTION/2\tOK\tSTOP\t-\t-"] as $expected) {
                 $client = @\stream_socket_accept($controller, 5);
                 if (!\is_resource($client)) exit(80);
@@ -484,6 +1069,9 @@ final class NativeGatewayBrokerTest extends TestCase
         $controllerPid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $controllerPid);
         if ($controllerPid === 0) {
+            if (!$this->acceptBrokerReadinessProbe($controller, $fencingFile)) {
+                exit(19);
+            }
             $actions = [
                 ['WLS-ACTION/2' . "\t" . \implode("\t", [
                     'AUTH_PREPARE',
@@ -716,6 +1304,9 @@ final class NativeGatewayBrokerTest extends TestCase
         $controllerPid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $controllerPid);
         if ($controllerPid === 0) {
+            if (!$this->acceptBrokerReadinessProbe($controller, $fencingFile)) {
+                exit(19);
+            }
             foreach ($actions as $index => $action) {
                 $client = @\stream_socket_accept($controller, 5);
                 if (!\is_resource($client)) exit(90);
@@ -928,6 +1519,9 @@ final class NativeGatewayBrokerTest extends TestCase
         $controllerPid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $controllerPid);
         if ($controllerPid === 0) {
+            if (!$this->acceptBrokerReadinessProbe($controller, $fencingFile)) {
+                exit(19);
+            }
             $slow = @\stream_socket_accept($controller, 5);
             if (!\is_resource($slow)
                 || !$this->authenticateBrokerProbe($slow, $fencingFile)
@@ -1591,6 +2185,9 @@ PHP;
         $controllerPid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $controllerPid);
         if ($controllerPid === 0) {
+            if (!$this->acceptBrokerReadinessProbe($controller, $fencingFile)) {
+                exit(19);
+            }
             foreach ([false, true, true, false] as $expectedSuccess) {
                 $client = @\stream_socket_accept($controller, 5);
                 if (!\is_resource($client)) exit(70);
@@ -1771,6 +2368,18 @@ PHP;
         ]);
     }
 
+    private function brokerFunction(
+        string $source,
+        string $startSignature,
+        string $nextSignature,
+    ): string {
+        $start = \strpos($source, $startSignature);
+        $end = \strpos($source, $nextSignature, \is_int($start) ? $start + 1 : 0);
+        self::assertIsInt($start, 'Missing native Broker function: ' . $startSignature);
+        self::assertIsInt($end, 'Missing native Broker function: ' . $nextSignature);
+        return \substr($source, $start, $end - $start);
+    }
+
     /**
      * @param list<string> $command
      * @return array{code:int,output:string}
@@ -1867,6 +2476,58 @@ PHP;
         } finally {
             \sodium_memzero($key);
         }
+    }
+
+    /** @param resource $controller */
+    private function acceptBrokerReadinessProbe($controller, string $fencingFile): bool
+    {
+        $client = @\stream_socket_accept($controller, 5);
+        if (!\is_resource($client)) {
+            return false;
+        }
+        try {
+            return $this->authenticateBrokerProbe($client, $fencingFile);
+        } finally {
+            @\fclose($client);
+        }
+    }
+
+    private function compileProductionBroker(string $output): void
+    {
+        $source = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR . 'Service'
+            . DIRECTORY_SEPARATOR . 'Edge' . DIRECTORY_SEPARATOR . 'Gateway'
+            . DIRECTORY_SEPARATOR . 'Native' . DIRECTORY_SEPARATOR . 'posix'
+            . DIRECTORY_SEPARATOR . 'wls_gateway_broker.c';
+        $sodiumCflags = $this->runCommand(['pkg-config', '--cflags', 'libsodium']);
+        self::assertSame(0, $sodiumCflags['code'], $sodiumCflags['output']);
+        $sodiumLdflags = $this->runCommand(['pkg-config', '--libs', 'libsodium']);
+        self::assertSame(0, $sodiumLdflags['code'], $sodiumLdflags['output']);
+        $sodiumCompileFlags = \array_values(\array_filter(
+            \preg_split('/\s+/', \trim($sodiumCflags['output'])) ?: [],
+            static fn (string $flag): bool => $flag !== '',
+        ));
+        $sodiumLinkFlags = \array_values(\array_filter(
+            \preg_split('/\s+/', \trim($sodiumLdflags['output'])) ?: [],
+            static fn (string $flag): bool => $flag !== '',
+        ));
+        $result = $this->runCommand([
+            'cc',
+            '-std=c11',
+            \PHP_OS_FAMILY === 'Darwin' ? '-D_DARWIN_C_SOURCE' : '-D_GNU_SOURCE',
+            '-Wall',
+            '-Wextra',
+            '-Werror',
+            '-fstack-protector-strong',
+            '-pthread',
+            ...$sodiumCompileFlags,
+            $source,
+            ...$sodiumLinkFlags,
+            ...(\PHP_OS_FAMILY === 'Darwin' ? ['-lproc'] : []),
+            '-o',
+            $output,
+        ]);
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertTrue(\is_executable($output));
     }
 
     /**

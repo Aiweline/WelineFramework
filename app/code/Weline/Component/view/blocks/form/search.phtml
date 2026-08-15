@@ -1,4 +1,4 @@
-<w:form class='app-search' data-app-search-keydown method='{{method}}' action='{{action}}'>
+<form class='app-search' data-app-search-keydown method='{{method}}' action='{{action}}'>
     <div class='position-relative'>
         <input type='text' id='{{id}}' name='{{keyword}}' class='form-control' placeholder='{{placeholder}}' value='{{value}}'>
         <span class='ri-search-line'></span>
@@ -8,16 +8,25 @@
             <input type="hidden" name="{{key}}" value="{{v}}">
         </foreach>
     </notempty>
-</w:form>
+</form>
 <script type='text/javascript'>
-    function searchKeyDown(ev) {
-        ev = ev || window.event;
-        if (ev.keyCode === 13) {
-            $('#{{id}}').submit()
-        }
-    }
-
-    document.querySelectorAll('form.app-search[data-app-search-keydown]').forEach(function(form) {
-        form.addEventListener('keydown', searchKeyDown);
-    });
+    (function () {
+        document.querySelectorAll('form.app-search[data-app-search-keydown]').forEach(function (form) {
+            if (form.dataset.appSearchBound === '1') {
+                return;
+            }
+            form.dataset.appSearchBound = '1';
+            form.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter' || event.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+                event.preventDefault();
+                if (typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                    return;
+                }
+                form.submit();
+            });
+        });
+    })();
 </script>

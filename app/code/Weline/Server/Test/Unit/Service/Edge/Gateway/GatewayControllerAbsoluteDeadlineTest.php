@@ -227,6 +227,55 @@ final class GatewayControllerAbsoluteDeadlineTest extends TestCase
         }
     }
 
+    public function testNativeStartTreeAmbiguityRequestsPlatformServiceRestart(): void
+    {
+        $lifecycle = $this->methodSource('nativeNginxLifecycleAction');
+        $start = $this->methodSource('startDataPlane');
+
+        self::assertStringContainsString(
+            'catch (WlsNativeBrokerActionException $exception)',
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            "\$opcode === 'NGINX_START'",
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            "'NGINX_START_SERVICE_TREE_RESTART_REQUIRED'",
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            '$this->requestServiceTreeRestart($exception->getMessage());',
+            $lifecycle,
+        );
+        self::assertMatchesRegularExpression(
+            '/if \(\(\$start\[\'service_tree_restart_required\'\] \?\? false\) === true\) \{\s*'
+                . '\$this->requestServiceTreeRestart\(/s',
+            $start,
+        );
+    }
+
+    public function testNativeStartReservesResponseTimeBeforeSpawning(): void
+    {
+        $lifecycle = $this->methodSource('nativeNginxLifecycleAction');
+
+        self::assertStringContainsString(
+            'private const NGINX_START_RESPONSE_RESERVE_SECONDS = 0.5;',
+            (string)\file_get_contents(
+                \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR . 'bin'
+                    . DIRECTORY_SEPARATOR . 'wls_gateway_controller.php',
+            ),
+        );
+        self::assertMatchesRegularExpression(
+            '/\$remaining <= self::NGINX_START_RESPONSE_RESERVE_SECONDS \+ 0\.001/s',
+            $lifecycle,
+        );
+        self::assertMatchesRegularExpression(
+            '/\$remaining - self::NGINX_START_RESPONSE_RESERVE_SECONDS/s',
+            $lifecycle,
+        );
+    }
+
     private function methodSource(string $method): string
     {
         $reflection = new \ReflectionMethod(\WlsEdgeGatewayController::class, $method);

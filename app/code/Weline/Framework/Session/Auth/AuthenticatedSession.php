@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session\Auth;
 
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolution;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Session\Auth\Device\AuthenticatedDeviceContext;
+use Weline\Framework\Session\Auth\Device\AuthenticatedDeviceRegistryInterface;
+use Weline\Framework\Session\Auth\Device\AuthenticatedLoginContext;
 use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\SessionInterface;
 
@@ -31,14 +37,20 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     /** 缓存的用户实例 */
     private ?AuthenticableInterface $cachedUser = null;
 
+    /** 当前请求内设备状态只校验一次；null 表示尚未校验。 */
+    private ?bool $deviceValidationResult = null;
+
     /**
      * 构造函数
      *
      * @param SessionInterface $session 底层 Session 实例
      * @param AreaConfig $areaConfig 区域配置
      */
-    public function __construct(SessionInterface $session, AreaConfig $areaConfig)
-    {
+    public function __construct(
+        SessionInterface $session,
+        AreaConfig $areaConfig,
+        private ?RuntimeProviderResolver $runtimeProviders = null,
+    ) {
         $this->session = $session;
         $this->areaConfig = $areaConfig;
     }
@@ -49,18 +61,91 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      * 使用当前请求的 Session：先 regenerate 再写入登录态，避免旧 sess_id 切换导致 WLS/Redis 下不一致；
      * 且须在 regenerate 之后 set，否则 Session::regenerate() 会清空 dirty，登录键无法可靠落盘。
      */
-    public function login(AuthenticableInterface $user): void
+    public function login(
+        AuthenticableInterface $user,
+        ?AuthenticatedLoginContext $context = null,
+    ): void
     {
         $this->session->start();
+
+        $registry = null;
+        try {
+            $registry = $this->resolveDeviceRegistry();
+            $this->revokePreviousDeviceForNewLogin($registry, $context);
+        } catch (\Throwable) {
+            $this->clearAuthenticationState(true);
+            throw new \RuntimeException((string)__('认证设备登记失败。'));
+        }
+
         $this->session->regenerate(true);
 
-        $this->session->set($this->areaConfig->getLoginKey(), $user->getAuthUsername());
-        $this->session->set($this->areaConfig->getLoginIdKey(), $user->getAuthIdentifier());
-        $this->session->set($this->areaConfig->getUserModelKey(), $user::getAuthModelClass());
+        $deviceContext = null;
+        try {
+            if ($registry !== null) {
+                $deviceContext = $this->buildDeviceContext($user->getAuthIdentifier());
+                if ($registry->supportsArea($deviceContext->area)) {
+                    $binding = $registry->register($deviceContext, $context);
+                    if (!$binding->valid) {
+                        throw new \RuntimeException((string)__('认证设备登记失败。'));
+                    }
+                    $deviceContext = $deviceContext->withDeviceId($binding->deviceId);
+                }
+            }
+        } catch (\Throwable) {
+            // regenerate() has already persisted the previous session payload
+            // under the new id on WLS/File/Redis strategies. Persist the
+            // cleared auth keys as well so a failed device registration cannot
+            // leave a recoverable authentication payload behind.
+            $this->clearAuthenticationState(true);
+            throw new \RuntimeException((string)__('认证设备登记失败。'));
+        }
 
-        $this->session->save();
+        try {
+            $this->session->set($this->areaConfig->getLoginKey(), $user->getAuthUsername());
+            $this->session->set($this->areaConfig->getLoginIdKey(), $user->getAuthIdentifier());
+            $this->session->set($this->areaConfig->getUserModelKey(), $user::getAuthModelClass());
+            if ($deviceContext?->deviceId !== null && $deviceContext->deviceId !== '') {
+                $this->session->set(
+                    AuthenticatedDeviceContext::sessionKeyForArea($this->areaConfig->getArea()),
+                    $deviceContext->deviceId,
+                );
+            }
+            $this->session->save();
+        } catch (\Throwable) {
+            if ($registry !== null
+                && $deviceContext instanceof AuthenticatedDeviceContext
+                && $registry->supportsArea($deviceContext->area)) {
+                try {
+                    $registry->revokeCurrent($deviceContext, 'login_persist_failed');
+                } catch (\Throwable) {
+                }
+            }
+            $this->clearAuthenticationState(true);
+            throw new \RuntimeException((string)__('认证登录状态保存失败。'));
+        }
 
         $this->cachedUser = $user;
+        $this->deviceValidationResult = true;
+    }
+
+    private function revokePreviousDeviceForNewLogin(
+        ?AuthenticatedDeviceRegistryInterface $registry,
+        ?AuthenticatedLoginContext $loginContext,
+    ): void {
+        if ($registry === null
+            || $loginContext?->source === AuthenticatedLoginContext::SOURCE_REMEMBERED) {
+            return;
+        }
+
+        $principalId = $this->session->get($this->areaConfig->getLoginIdKey());
+        if ($principalId === null || $principalId === '') {
+            return;
+        }
+
+        $context = $this->buildDeviceContext($principalId);
+        if ($registry->supportsArea($context->area)) {
+            $registry->revokeCurrent($context, 'relogin');
+        }
     }
 
     /**
@@ -68,11 +153,21 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function logout(): void
     {
-        $this->session->delete($this->areaConfig->getLoginKey());
-        $this->session->delete($this->areaConfig->getLoginIdKey());
-        $this->session->delete($this->areaConfig->getUserModelKey());
+        $principalId = $this->getUserId();
+        if ($principalId !== null && $principalId !== '') {
+            try {
+                $registry = $this->resolveDeviceRegistry();
+                $context = $this->buildDeviceContext($principalId);
+                if ($registry !== null && $registry->supportsArea($context->area)) {
+                    $registry->revokeCurrent($context, 'logout');
+                }
+            } catch (\Throwable) {
+                // Local logout must remain available even when the optional registry is down.
+            }
+        }
 
-        $this->cachedUser = null;
+        $this->clearAuthenticationState(true);
+        $this->deviceValidationResult = false;
     }
 
     /**
@@ -86,8 +181,43 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
 
         $loginKey = $this->session->get($this->areaConfig->getLoginKey());
         $loginIdKey = $this->session->get($this->areaConfig->getLoginIdKey());
-        
-        return $loginKey !== null && $loginKey !== '' && $loginIdKey !== null;
+        if ($loginKey === null || $loginKey === '' || $loginIdKey === null || $loginIdKey === '') {
+            $this->deviceValidationResult = false;
+            return false;
+        }
+        if ($this->deviceValidationResult !== null) {
+            return $this->deviceValidationResult;
+        }
+
+        try {
+            $registry = $this->resolveDeviceRegistry();
+            if ($registry === null) {
+                return $this->deviceValidationResult = true;
+            }
+            $context = $this->buildDeviceContext($loginIdKey);
+            if (!$registry->supportsArea($context->area)) {
+                return $this->deviceValidationResult = true;
+            }
+            $validation = $registry->validate($context);
+            if ($validation->valid) {
+                if (($context->deviceId === null || $context->deviceId === '')
+                    && $validation->deviceId !== null
+                    && $validation->deviceId !== '') {
+                    $this->session->set(
+                        AuthenticatedDeviceContext::sessionKeyForArea($this->areaConfig->getArea()),
+                        $validation->deviceId,
+                    );
+                    $this->session->save();
+                }
+                return $this->deviceValidationResult = true;
+            }
+        } catch (\Throwable) {
+            // A configured device provider is fail-closed; resolveDeviceRegistry already
+            // distinguishes it from the optional-not-configured legacy path.
+        }
+
+        $this->clearAuthenticationState(true);
+        return $this->deviceValidationResult = false;
     }
 
     /**
@@ -145,7 +275,7 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function getUserId(): int|string|null
     {
-        if (!$this->canReadExistingSession()) {
+        if (!$this->isLoggedIn()) {
             return null;
         }
 
@@ -163,7 +293,7 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function getUsername(): ?string
     {
-        if (!$this->canReadExistingSession()) {
+        if (!$this->isLoggedIn()) {
             return null;
         }
 
@@ -298,6 +428,7 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     public function reset(): void
     {
         $this->cachedUser = null;
+        $this->deviceValidationResult = null;
         
         if (\method_exists($this->session, 'reset')) {
             $this->session->reset();
@@ -343,6 +474,82 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
             );
         }
         return $this->cookieHeaderContains($cookieHeader, $cookieName);
+    }
+
+    private function resolveDeviceRegistry(): ?AuthenticatedDeviceRegistryInterface
+    {
+        $resolver = $this->runtimeProviders ??= $this->defaultRuntimeProviderResolver();
+
+        $resolution = $resolver->resolveDetailed(AuthenticatedDeviceRegistryInterface::class);
+        if ($resolution->status === RuntimeProviderResolution::NOT_CONFIGURED) {
+            return null;
+        }
+        if (!$resolution->isAvailable()
+            || !$resolution->provider instanceof AuthenticatedDeviceRegistryInterface) {
+            throw new \RuntimeException((string)__('认证设备服务不可用。'));
+        }
+        return $resolution->provider;
+    }
+
+    /**
+     * Direct construction must honor the same compiled provider registry as
+     * SessionFactory. Otherwise a caller could accidentally bypass a configured
+     * fail-closed device registry simply by omitting the optional constructor
+     * argument. A genuinely absent declaration still keeps legacy behavior.
+     */
+    private function defaultRuntimeProviderResolver(): RuntimeProviderResolver
+    {
+        try {
+            return ObjectManager::getInstance(RuntimeProviderResolver::class);
+        } catch (\Throwable) {
+            return new RuntimeProviderResolver(new ServiceProviderRegistry());
+        }
+    }
+
+    private function buildDeviceContext(int|string $principalId): AuthenticatedDeviceContext
+    {
+        $sessionId = $this->session->getId();
+        if ($sessionId === '') {
+            throw new \RuntimeException((string)__('当前 Session 尚未建立。'));
+        }
+        $ttl = 3600;
+        if (\method_exists($this->session, 'getDefaultTtl')) {
+            $ttl = max(1, (int)$this->session->getDefaultTtl());
+        }
+        return new AuthenticatedDeviceContext(
+            area: $this->areaConfig->getArea(),
+            principalId: (string)$principalId,
+            sessionId: $sessionId,
+            sessionExpiresAt: time() + $ttl,
+            deviceId: $this->readBoundDeviceId(),
+        );
+    }
+
+    private function readBoundDeviceId(): ?string
+    {
+        $value = $this->session->get(
+            AuthenticatedDeviceContext::sessionKeyForArea($this->areaConfig->getArea()),
+        );
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
+    }
+
+    private function clearAuthenticationState(bool $save): void
+    {
+        $this->session->delete($this->areaConfig->getLoginKey());
+        $this->session->delete($this->areaConfig->getLoginIdKey());
+        $this->session->delete($this->areaConfig->getUserModelKey());
+        $this->session->delete(
+            AuthenticatedDeviceContext::sessionKeyForArea($this->areaConfig->getArea()),
+        );
+        $this->cachedUser = null;
+        if ($save && $this->session->isStarted()) {
+            try {
+                $this->session->save();
+            } catch (\Throwable) {
+                // Authentication is already cleared in memory. A later request
+                // must validate again and cannot use the cached result.
+            }
+        }
     }
 
     private function cookieHeaderContains(string $cookieHeader, string $cookieName): bool

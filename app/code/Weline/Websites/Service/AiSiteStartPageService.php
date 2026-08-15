@@ -35,9 +35,15 @@ class AiSiteStartPageService
     /**
      * @return array{website_id:int,target_domain:string,page_id:int,start_page_path:string,cache_broadcast:array<string,mixed>}
      */
-    public function configure(int $websiteId, string $targetDomain, int $pageId): array
+    public function configure(int $websiteId, string $targetDomain, int $pageId, string $subPath = ''): array
     {
         $targetDomain = \strtolower(\trim($targetDomain));
+        $subPath = \trim($subPath);
+        if ($subPath === '/' ) {
+            $subPath = '';
+        } elseif ($subPath !== '') {
+            $subPath = '/' . \trim($subPath, '/');
+        }
         if ($websiteId < Website::ID_DEFAULT || $targetDomain === '' || $pageId <= 0) {
             throw new AiSiteProvisioningException(
                 'START_PAGE_REQUIRED',
@@ -46,7 +52,7 @@ class AiSiteStartPageService
         }
 
         $binding = clone $this->websiteDomainModel;
-        $binding->clearData()->clearQuery()->loadByDomainAndSubPath($targetDomain, '');
+        $binding->clearData()->clearQuery()->loadByDomainAndSubPath($targetDomain, $subPath);
         if ((int)$binding->getId() <= 0
             || (int)$binding->getData(WebsiteDomain::schema_fields_WEBSITE_ID) !== $websiteId
         ) {
@@ -71,31 +77,33 @@ class AiSiteStartPageService
         }
 
         $startPagePath = 'pagebuilder/frontend/page/view?page_id=' . $pageId;
-        $domainConfigKey = DomainStartPageConfig::key($targetDomain);
-        if ($domainConfigKey === '') {
-            throw new AiSiteProvisioningException(
-                'START_PAGE_REQUIRED',
-                (string)__('目标域名无法建立独立首页配置。')
+        if ($subPath === '') {
+            $domainConfigKey = DomainStartPageConfig::key($targetDomain);
+            if ($domainConfigKey === '') {
+                throw new AiSiteProvisioningException(
+                    'START_PAGE_REQUIRED',
+                    (string)__('目标域名无法建立独立首页配置。')
+                );
+            }
+            $saved = $this->configStore->setScopedConfig(
+                key: $domainConfigKey,
+                value: $startPagePath,
+                module: self::CONFIG_MODULE,
+                area: ConfigStore::area_FRONTEND,
+                // Root-route resolution runs before the normal website-detection
+                // observer has populated RequestContext. The key already contains
+                // a collision-safe hash of the exact domain, so it must be readable
+                // from the global scope during that early routing phase.
+                scope: ConfigStore::SCOPE_GLOBAL,
+                locale: ConfigStore::LOCALE_DEFAULT,
+                options: ['operation' => 'pb_ai_start_page_publish']
             );
-        }
-        $saved = $this->configStore->setScopedConfig(
-            key: $domainConfigKey,
-            value: $startPagePath,
-            module: self::CONFIG_MODULE,
-            area: ConfigStore::area_FRONTEND,
-            // Root-route resolution runs before the normal website-detection
-            // observer has populated RequestContext. The key already contains
-            // a collision-safe hash of the exact domain, so it must be readable
-            // from the global scope during that early routing phase.
-            scope: ConfigStore::SCOPE_GLOBAL,
-            locale: ConfigStore::LOCALE_DEFAULT,
-            options: ['operation' => 'pb_ai_start_page_publish']
-        );
-        if (!$saved) {
-            throw new AiSiteProvisioningException(
-                'START_PAGE_CONFIG_FAILED',
-                (string)__('保存站点首页入口失败。')
-            );
+            if (!$saved) {
+                throw new AiSiteProvisioningException(
+                    'START_PAGE_CONFIG_FAILED',
+                    (string)__('保存站点首页入口失败。')
+                );
+            }
         }
 
         // Also mirror the website-scoped key used by admin forms / StarPage so

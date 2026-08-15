@@ -139,6 +139,20 @@ static volatile sig_atomic_t wls_running = 1;
 static volatile sig_atomic_t wls_platform_shutdown_requested = 0;
 static volatile sig_atomic_t wls_bootstrap_maintenance_failed = 0;
 static volatile sig_atomic_t wls_controller_pid = 0;
+static volatile sig_atomic_t wls_nginx_start_tree_restart_required = 0;
+/* CLI selftests alone may inject a source-create failure after the leaf
+ * exists.  Protocol input never controls this state. */
+static int wls_nginx_pid_source_create_fault = 0;
+static WLS_MAYBE_UNUSED int wls_nginx_listener_lease_attest_matches(
+    unsigned long master_pid,
+    unsigned long long master_start_id,
+    int self_test_topology
+);
+static unsigned long long wls_nginx_listener_lease_attest_start_id(void);
+static int wls_nginx_listener_lease_attest_binary_path(
+    char *output,
+    size_t capacity
+);
 static char wls_admin_socket[PATH_MAX];
 static char wls_project_socket[PATH_MAX];
 static pthread_mutex_t wls_handler_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -146,8 +160,10 @@ static pthread_mutex_t wls_bootstrap_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t wls_process_lifecycle_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t wls_atomic_replace_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t wls_snapshot_seal_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t wls_neutral_tls_mutex = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int wls_active_handlers = 0U;
 static unsigned int wls_active_project_handlers = 0U;
+
 
 struct wls_handler_slot {
     pthread_t thread;
@@ -244,6 +260,7 @@ struct wls_bootstrap_maintenance_context {
     int controller_identity_present;
     pthread_mutex_t completion_mutex;
     int completed;
+    int external_controller_test_mode;
     struct wls_bootstrap_receipt receipt;
     long long continuous_since_ms;
     long long last_success_ms;
@@ -429,6 +446,16 @@ static int wls_fd_cloexec(int fd)
 {
     int flags = fcntl(fd, F_GETFD);
     return flags >= 0 && fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0 ? 0 : -1;
+}
+
+/* All public listeners cross the Broker-to-Nginx descriptor boundary through
+ * this one preparation point. */
+static int wls_listener_prepare_inherited_fd(int fd)
+{
+    int flags;
+    return fd >= 0 && wls_fd_cloexec(fd) == 0
+        && (flags = fcntl(fd, F_GETFL)) >= 0
+        && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0 ? 0 : -1;
 }
 
 static void wls_signal(int signal_number)
@@ -5128,15 +5155,15 @@ static const struct wls_atomic_target_limit wls_atomic_targets[] = {
         {"state/security-ledger.json", WLS_MAX_ATOMIC_STATE},
         {"state/security-ledger.pending.json", WLS_MAX_ATOMIC_STATE},
         {"state/security-ledger.json.untrusted", WLS_MAX_ATOMIC_SECURITY_DISTRUST},
+        {"state/security-anchor.json", WLS_MAX_REQUEST},
+        {"state/wls-edge-2.initialized.json", WLS_MAX_REQUEST},
         {"trust/active-slot", WLS_MAX_REQUEST},
         {"trust/journal.untrusted", WLS_MAX_REQUEST},
         {"trust/previous-slot", WLS_MAX_REQUEST},
-        {"trust/security-anchor.json", WLS_MAX_REQUEST},
         {"trust/upgrade-state", WLS_MAX_REQUEST},
         {"trust/slot-retention", WLS_MAX_REQUEST},
         {"trust/nginx-process.identity", WLS_MAX_REQUEST},
         {"trust/broker-launch.receipt", WLS_MAX_REQUEST},
-        {"trust/wls-edge-2.initialized.json", WLS_MAX_REQUEST}
 };
 
 static uint64_t wls_atomic_target_maximum(const char *relative)
@@ -7229,14 +7256,9 @@ denied:
     );
 }
 
-static int wls_process_identity(
-    pid_t pid,
-    char *executable,
-    size_t executable_capacity,
-    unsigned long long *start_id
-)
-{
 #if defined(__linux__)
+static int wls_process_start_id(pid_t pid, unsigned long long *start_id)
+{
     char path[64];
     char contents[4096];
     char *cursor;
@@ -7244,9 +7266,9 @@ static int wls_process_identity(
     int fd;
     ssize_t amount;
     unsigned int field = 3U;
-    ssize_t executable_length;
-    if (executable == NULL || executable_capacity < 2U
-        || snprintf(path, sizeof(path), "/proc/%ld/stat", (long)pid)
+    if (start_id == NULL || snprintf(
+            path, sizeof(path), "/proc/%ld/stat", (long)pid
+        )
         >= (int)sizeof(path)) return -1;
     fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) return -1;
@@ -7266,14 +7288,6 @@ static int wls_process_identity(
             *start_id = strtoull(cursor, &end, 10);
             if (errno != 0 || end == cursor
                 || (*end != ' ' && *end != '\0') || *start_id == 0ULL) return -1;
-            if (snprintf(path, sizeof(path), "/proc/%ld/exe", (long)pid)
-                >= (int)sizeof(path)) return -1;
-            executable_length = readlink(
-                path, executable, executable_capacity - 1U
-            );
-            if (executable_length <= 0
-                || (size_t)executable_length >= executable_capacity) return -1;
-            executable[executable_length] = '\0';
             return 0;
         }
         if (space == NULL) return -1;
@@ -7281,6 +7295,28 @@ static int wls_process_identity(
         field++;
     }
     return -1;
+}
+#endif
+
+static int wls_process_identity(
+    pid_t pid,
+    char *executable,
+    size_t executable_capacity,
+    unsigned long long *start_id
+)
+{
+#if defined(__linux__)
+    char path[64];
+    ssize_t executable_length;
+    if (executable == NULL || executable_capacity < 2U
+        || wls_process_start_id(pid, start_id) != 0
+        || snprintf(path, sizeof(path), "/proc/%ld/exe", (long)pid)
+            >= (int)sizeof(path)) return -1;
+    executable_length = readlink(path, executable, executable_capacity - 1U);
+    if (executable_length <= 0
+        || (size_t)executable_length >= executable_capacity) return -1;
+    executable[executable_length] = '\0';
+    return 0;
 #elif defined(__APPLE__)
     struct proc_bsdinfo information;
     int path_length;
@@ -7493,19 +7529,12 @@ static int wls_open_live_binary(
         goto denied;
     }
 #if defined(__linux__)
-    {
-        char path[64];
-        struct stat live_status;
-        if (snprintf(path, sizeof(path), "/proc/%ld/exe", (long)pid)
-            >= (int)sizeof(path)) goto denied;
-        live_fd = open(path, O_RDONLY | O_CLOEXEC);
-        if (live_fd < 0 || fstat(live_fd, &live_status) != 0
-            || !S_ISREG(live_status.st_mode)
-            || live_status.st_dev != expected_status.st_dev
-            || live_status.st_ino != expected_status.st_ino) goto denied;
-    }
-    close(expected_fd);
-    *binary_fd = live_fd;
+    /* PROCESS_ATTEST has already bound the process to the retained listener
+     * lease (pid/start-id, sockets, and exact argv).  Do not dereference
+     * /proc/<pid>/exe: distinct-UID masters need CAP_SYS_PTRACE for it under
+     * the production systemd bounding set. */
+    (void)pid;
+    *binary_fd = expected_fd;
     return 0;
 #elif defined(__APPLE__)
     {
@@ -7648,20 +7677,20 @@ static int wls_write_controller_process_identity(
     const char *php,
     const char *active_slot,
     const char *runtime_generation,
-    const char *fencing
+    const char *fencing,
+    int authenticated_controller_fd,
+    const struct wls_controller_identity *controller_identity
 ) {
     char identity_path[PATH_MAX];
     char expected_binary[PATH_MAX];
-    char observed_binary[PATH_MAX];
     char manifest_generation[65];
     char fencing_digest[65];
     char payload[1024];
     unsigned long long start_id = 0ULL;
-    unsigned int attempt;
-    int identity_matched = 0;
     int length;
     if (home == NULL || controller_pid <= 0 || php == NULL
         || active_slot == NULL || runtime_generation == NULL || fencing == NULL
+        || authenticated_controller_fd < 0 || controller_identity == NULL
         || (active_slot[0] != 'A' && active_slot[0] != 'B')
         || active_slot[1] != '\0'
         || !wls_is_hex(runtime_generation, 64U)
@@ -7684,6 +7713,41 @@ static int wls_write_controller_process_identity(
             home, active_slot[0], manifest_generation
         ) != 0
         || strcmp(manifest_generation, runtime_generation) != 0) return -1;
+#if defined(__linux__)
+    {
+        struct ucred peer;
+        socklen_t peer_length = sizeof(peer);
+        pid_t waited;
+        int status = 0;
+        memset(&peer, 0, sizeof(peer));
+        if (getsockopt(
+                authenticated_controller_fd,
+                SOL_SOCKET,
+                SO_PEERCRED,
+                &peer,
+                &peer_length
+            ) != 0
+            || peer_length != sizeof(peer)
+            || peer.pid != controller_pid
+            || peer.uid != controller_identity->uid
+            || peer.gid != controller_identity->gid) {
+            errno = EACCES;
+            return -1;
+        }
+        do {
+            waited = waitpid(controller_pid, &status, WNOHANG);
+        } while (waited < 0 && errno == EINTR);
+        if (waited != 0) {
+            if (waited == controller_pid) errno = ECHILD;
+            return -1;
+        }
+        if (wls_process_start_id(controller_pid, &start_id) != 0) return -1;
+    }
+#else
+    {
+        char observed_binary[PATH_MAX];
+        unsigned int attempt;
+        int identity_matched = 0;
     for (
         attempt = 0U;
         attempt < WLS_CONTROLLER_IDENTITY_ATTEMPTS;
@@ -7711,6 +7775,8 @@ static int wls_write_controller_process_identity(
         errno = ETIMEDOUT;
         return -1;
     }
+    }
+#endif
     wls_sha256_hex(
         (const unsigned char *)fencing, strlen(fencing), fencing_digest
     );
@@ -8370,7 +8436,7 @@ static int wls_candidate_attestation_action_serialized(
     return result;
 }
 
-static int wls_process_attest_v2(
+static int wls_process_attest_v2_with_topology(
     const char *home,
     const char *fencing,
     const char *pid_text,
@@ -8385,9 +8451,13 @@ static int wls_process_attest_v2(
     const char *candidate_phase,
     const char *candidate_fence_digest,
     char *reply,
-    size_t reply_capacity
+    size_t reply_capacity,
+    int self_test_topology
 ) {
 #if defined(__linux__) || defined(__APPLE__)
+#if defined(__APPLE__)
+    (void)self_test_topology;
+#endif
     unsigned long parsed_pid = 0U;
     unsigned long publication = 0U;
     unsigned long actual_publication = 0U;
@@ -8396,7 +8466,9 @@ static int wls_process_attest_v2(
     unsigned long long actual_start;
     char *start_end;
     char binary_path[PATH_MAX];
+#if defined(__APPLE__)
     char verified_binary_path[PATH_MAX];
+#endif
     char expected_binary_a[PATH_MAX];
     char expected_binary_b[PATH_MAX];
     char expected_prefix[PATH_MAX];
@@ -8418,7 +8490,9 @@ static int wls_process_attest_v2(
     size_t manifest_length = 0U;
     uint64_t binary_size = 0U;
     uint64_t config_size = 0U;
+#if defined(__APPLE__)
     unsigned long long verified_start = 0ULL;
+#endif
     int home_fd = -1;
     int binary_fd = -1;
     int config_fd = -1;
@@ -8462,13 +8536,25 @@ static int wls_process_attest_v2(
         errno = 0;
         expected_start = strtoull(start_text, &start_end, 10);
     }
-    if ((expected_start_known
-            && (errno != 0 || start_end == start_text || *start_end != '\0'
-                || expected_start == 0ULL))
-        || wls_process_identity(
+    if (expected_start_known
+        && (errno != 0 || start_end == start_text || *start_end != '\0'
+            || expected_start == 0ULL)) goto denied;
+#if defined(__linux__)
+    /* Linux binds PROCESS_ATTEST to the broker-owned listener lease rather
+     * than /proc/<pid>/exe, which is unreadable for distinct-UID masters
+     * without CAP_SYS_PTRACE.  A broker restart has no lease and fails closed. */
+    actual_start = expected_start_known
+        ? expected_start : wls_nginx_listener_lease_attest_start_id();
+    if (!wls_nginx_listener_lease_attest_matches(
+            parsed_pid, actual_start, self_test_topology
+        ) || wls_nginx_listener_lease_attest_binary_path(
+            binary_path, sizeof(binary_path)
+        ) != 0) goto denied;
+#else
+    if (wls_process_identity(
             (pid_t)parsed_pid, binary_path, sizeof(binary_path), &actual_start
-        ) != 0
-        || (expected_start_known && actual_start != expected_start)) goto denied;
+        ) != 0 || (expected_start_known && actual_start != expected_start)) goto denied;
+#endif
     if (snprintf(
             expected_binary_a, sizeof(expected_binary_a),
             "%s/slots/A/bin/nginx", home
@@ -8497,12 +8583,18 @@ static int wls_process_attest_v2(
         || wls_file_digest_fd(binary_fd, binary_digest, &binary_size) != 0
         || binary_size == 0U
         || strcmp(binary_digest, expected_binary_digest) != 0
+#if defined(__APPLE__)
         || wls_process_identity(
             (pid_t)parsed_pid, verified_binary_path,
             sizeof(verified_binary_path), &verified_start
         ) != 0
         || verified_start != actual_start
         || strcmp(verified_binary_path, binary_path) != 0
+#else
+        || !wls_nginx_listener_lease_attest_matches(
+            parsed_pid, actual_start, self_test_topology
+        )
+#endif
         || wls_process_command_matches(
             (pid_t)parsed_pid,
             binary_path,
@@ -8624,6 +8716,7 @@ static int wls_process_attest_v2(
         || config_after.st_ctim.tv_sec != config_before.st_ctim.tv_sec
         || config_after.st_ctim.tv_nsec != config_before.st_ctim.tv_nsec
 #endif
+#if defined(__APPLE__)
         || wls_process_identity(
             (pid_t)parsed_pid,
             verified_binary_path,
@@ -8632,6 +8725,11 @@ static int wls_process_attest_v2(
         ) != 0
         || verified_start != actual_start
         || strcmp(verified_binary_path, binary_path) != 0
+#else
+        || !wls_nginx_listener_lease_attest_matches(
+            parsed_pid, actual_start, self_test_topology
+        )
+#endif
         || wls_process_command_matches(
             (pid_t)parsed_pid,
             binary_path,
@@ -8695,11 +8793,36 @@ denied:
     (void)expected_config_digest; (void)expected_config_path_digest;
     (void)publication_text; (void)fence_kind;
     (void)candidate_transaction_id; (void)candidate_phase;
-    (void)candidate_fence_digest;
+    (void)candidate_fence_digest; (void)self_test_topology;
     return wls_security_reply_error(
         reply, reply_capacity, "UNSUPPORTED_PLATFORM", "PROCESS_ATTEST", NULL, NULL
     );
 #endif
+}
+
+static int wls_process_attest_v2(
+    const char *home,
+    const char *fencing,
+    const char *pid_text,
+    const char *start_text,
+    const char *expected_binary_digest,
+    const char *runtime_generation,
+    const char *expected_config_digest,
+    const char *expected_config_path_digest,
+    const char *publication_text,
+    const char *fence_kind,
+    const char *candidate_transaction_id,
+    const char *candidate_phase,
+    const char *candidate_fence_digest,
+    char *reply,
+    size_t reply_capacity
+) {
+    return wls_process_attest_v2_with_topology(
+        home, fencing, pid_text, start_text, expected_binary_digest,
+        runtime_generation, expected_config_digest, expected_config_path_digest,
+        publication_text, fence_kind, candidate_transaction_id, candidate_phase,
+        candidate_fence_digest, reply, reply_capacity, 0
+    );
 }
 
 static int wls_process_attest_v2_serialized(
@@ -10083,7 +10206,7 @@ static int wls_prepare_data_plane_runtime(
     } directories[] = {
         {"runtime", 0750},
         {"runtime/conf", 0750},
-        {"runtime/run", 0770},
+        {"runtime/run", 0750},
         {"runtime/logs", 0770},
         {"runtime/temp", 0770},
         {"runtime/temp/client_body_temp", 0770},
@@ -10500,7 +10623,7 @@ static int wls_prepare_nginx_test_candidate(
     } directories[] = {
         {"runtime", 0750},
         {"runtime/conf", 0750},
-        {"runtime/run", 0770},
+        {"runtime/run", 0750},
         {"runtime/logs", 0770},
         {"runtime/temp", 0770},
         {"runtime/temp/client_body_temp", 0770},
@@ -12297,6 +12420,858 @@ cleanup:
         sodium_memzero(receipt, sizeof(*receipt));
     }
     return result;
+}
+
+/* The neutral TLS files are a broker-owned, receipt-committed pair.  The
+ * Controller may replace the private state sources, but never the serving
+ * directory.  A receipt is the pair commit marker: until it authenticates
+ * both fixed leaves, a consumer must fail closed. */
+struct wls_neutral_tls_receipt {
+    char generation[65];
+    char pair_digest[65];
+    char cert_digest[65];
+    char key_digest[65];
+    unsigned long long cert_source_dev;
+    unsigned long long cert_source_ino;
+    unsigned long long cert_source_size;
+    unsigned long long key_source_dev;
+    unsigned long long key_source_ino;
+    unsigned long long key_source_size;
+    unsigned long long cert_serving_dev;
+    unsigned long long cert_serving_ino;
+    unsigned long long cert_serving_size;
+    unsigned long long key_serving_dev;
+    unsigned long long key_serving_ino;
+    unsigned long long key_serving_size;
+    unsigned long data_plane_uid;
+    unsigned long data_plane_gid;
+    unsigned long owner_uid;
+    char receipt_digest[65];
+    char receipt_mac[65];
+};
+
+static int wls_neutral_tls_source_status_same(
+    const struct stat *before,
+    const struct stat *after
+) {
+    if (before == NULL || after == NULL) return 0;
+    return before->st_dev == after->st_dev
+        && before->st_ino == after->st_ino
+        && before->st_size == after->st_size
+        && before->st_mode == after->st_mode
+        && before->st_uid == after->st_uid
+        && before->st_gid == after->st_gid
+#if defined(__APPLE__) || defined(__FreeBSD__)
+        && before->st_mtimespec.tv_sec == after->st_mtimespec.tv_sec
+        && before->st_mtimespec.tv_nsec == after->st_mtimespec.tv_nsec
+#else
+        && before->st_mtim.tv_sec == after->st_mtim.tv_sec
+        && before->st_mtim.tv_nsec == after->st_mtim.tv_nsec
+#endif
+        ;
+}
+
+static int wls_neutral_tls_pair_digest(
+    const char *cert_digest,
+    const char *key_digest,
+    char pair_digest[65]
+) {
+    char canonical[192];
+    int length;
+    if (!wls_is_hex(cert_digest, 64U) || !wls_is_hex(key_digest, 64U)
+        || pair_digest == NULL) return -1;
+    length = snprintf(
+        canonical, sizeof(canonical),
+        "WLS-NEUTRAL-TLS-PAIR/1\ncert_digest=%s\nkey_digest=%s\n",
+        cert_digest, key_digest
+    );
+    if (length <= 0 || length >= (int)sizeof(canonical)) return -1;
+    wls_sha256_hex((const unsigned char *)canonical, (size_t)length, pair_digest);
+    sodium_memzero(canonical, sizeof(canonical));
+    return wls_is_hex(pair_digest, 64U) ? 0 : -1;
+}
+
+static int wls_neutral_tls_receipt_canonical(
+    const struct wls_neutral_tls_receipt *receipt,
+    char *canonical,
+    size_t capacity
+) {
+    int length;
+    if (receipt == NULL || canonical == NULL || capacity == 0U) return -1;
+    length = snprintf(
+        canonical, capacity,
+        "WLS-NEUTRAL-TLS-RECEIPT/1\n"
+        "generation=%s\npair_digest=%s\ncert_digest=%s\nkey_digest=%s\n"
+        "cert_source_dev=%llu\ncert_source_ino=%llu\ncert_source_size=%llu\n"
+        "key_source_dev=%llu\nkey_source_ino=%llu\nkey_source_size=%llu\n"
+        "cert_serving_dev=%llu\ncert_serving_ino=%llu\ncert_serving_size=%llu\n"
+        "key_serving_dev=%llu\nkey_serving_ino=%llu\nkey_serving_size=%llu\n"
+        "data_plane_uid=%lu\ndata_plane_gid=%lu\nowner_uid=%lu\n",
+        receipt->generation, receipt->pair_digest, receipt->cert_digest,
+        receipt->key_digest, receipt->cert_source_dev, receipt->cert_source_ino,
+        receipt->cert_source_size, receipt->key_source_dev, receipt->key_source_ino,
+        receipt->key_source_size, receipt->cert_serving_dev,
+        receipt->cert_serving_ino, receipt->cert_serving_size,
+        receipt->key_serving_dev, receipt->key_serving_ino,
+        receipt->key_serving_size, receipt->data_plane_uid,
+        receipt->data_plane_gid, receipt->owner_uid
+    );
+    return length > 0 && length < (int)capacity ? length : -1;
+}
+
+static int wls_neutral_tls_receipt_finalize(
+    const char *home,
+    struct wls_neutral_tls_receipt *receipt
+) {
+    char canonical[2048];
+    int length;
+    int result = -1;
+    if (home == NULL || receipt == NULL
+        || !wls_is_hex(receipt->generation, 64U)
+        || wls_neutral_tls_pair_digest(
+            receipt->cert_digest, receipt->key_digest, receipt->pair_digest
+        ) != 0
+        || (length = wls_neutral_tls_receipt_canonical(
+            receipt, canonical, sizeof(canonical)
+        )) < 1) goto cleanup;
+    wls_sha256_hex(
+        (const unsigned char *)canonical, (size_t)length, receipt->receipt_digest
+    );
+    if (!wls_is_hex(receipt->receipt_digest, 64U)
+        || wls_snapshot_receipt_mac(
+            home, canonical, (size_t)length, receipt->receipt_mac
+        ) != 0
+        || !wls_is_hex(receipt->receipt_mac, 64U)) goto cleanup;
+    result = 0;
+cleanup:
+    sodium_memzero(canonical, sizeof(canonical));
+    return result;
+}
+
+static int wls_neutral_tls_root_open(
+    int home_fd,
+    gid_t data_gid,
+    int create
+) {
+    int root_fd = -1;
+    struct stat status;
+    if (home_fd < 0 || geteuid() != 0 || data_gid == 0) return -1;
+    root_fd = openat(
+        home_fd, "neutral-tls", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+    );
+    if (root_fd < 0 && create && errno == ENOENT) {
+        if (mkdirat(home_fd, "neutral-tls", 0710) != 0) return -1;
+        root_fd = openat(
+            home_fd, "neutral-tls", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+        );
+    }
+    if (root_fd < 0 || fstat(root_fd, &status) != 0 || !S_ISDIR(status.st_mode)
+        || (create
+            && (fchown(root_fd, 0, data_gid) != 0
+                || wls_posix_acl_remove_and_verify(root_fd, 1) != 0
+                || fchmod(root_fd, 0710) != 0 || fsync(root_fd) != 0))
+        || fstat(root_fd, &status) != 0 || status.st_uid != 0
+        || status.st_gid != data_gid || (status.st_mode & 07777) != 0710
+        || !wls_posix_acl_free(root_fd, 1)) {
+        if (root_fd >= 0) close(root_fd);
+        return -1;
+    }
+    return root_fd;
+}
+
+static int wls_neutral_tls_source_fd_valid(
+    int fd,
+    const struct stat *initial,
+    const struct wls_controller_identity *controller_identity,
+    uint64_t maximum,
+    struct stat *current
+) {
+    if (fd < 0 || initial == NULL || controller_identity == NULL
+        || current == NULL || controller_identity->uid == 0
+        || controller_identity->gid == 0 || maximum == 0U
+        || !S_ISREG(initial->st_mode) || initial->st_nlink != 1
+        || initial->st_uid != controller_identity->uid
+        || initial->st_gid != controller_identity->gid
+        || (initial->st_mode & 07777) != 0600 || initial->st_size < 1
+        || (uint64_t)initial->st_size > maximum || !wls_posix_acl_free(fd, 0)
+        || fstat(fd, current) != 0
+        /* A rename after the broker opened the descriptor is permitted; an
+         * in-place mutation changes the inode metadata or final digest. */
+        || !wls_neutral_tls_source_status_same(initial, current)) return -1;
+    return 0;
+}
+
+static int wls_neutral_tls_copy_sealed_leaf(
+    int source_fd,
+    const struct stat *source_initial,
+    const struct wls_controller_identity *controller_identity,
+    int root_fd,
+    const char *temporary_leaf,
+    uint64_t maximum,
+    const char *expected_digest,
+    gid_t data_gid,
+    struct stat *sealed_status
+) {
+    int destination_fd = -1;
+    struct stat source_after;
+    struct stat destination_after;
+    struct stat destination_path;
+    char source_digest[65] = {0};
+    char destination_digest[65] = {0};
+    char buffer[65536];
+    uint64_t total = 0U;
+    uint64_t digest_size = 0U;
+    ssize_t amount;
+    int result = -1;
+    memset(&source_after, 0, sizeof(source_after));
+    memset(&destination_after, 0, sizeof(destination_after));
+    memset(&destination_path, 0, sizeof(destination_path));
+    if (root_fd < 0 || temporary_leaf == NULL || sealed_status == NULL
+        || !wls_is_hex(expected_digest, 64U)
+        || wls_neutral_tls_source_fd_valid(
+            source_fd, source_initial, controller_identity, maximum, &source_after
+        ) != 0
+        || lseek(source_fd, 0, SEEK_SET) < 0) goto cleanup;
+    destination_fd = openat(
+        root_fd, temporary_leaf,
+        O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+    if (destination_fd < 0) goto cleanup;
+    for (;;) {
+        amount = read(source_fd, buffer, sizeof(buffer));
+        if (amount < 0 && errno == EINTR) continue;
+        if (amount <= 0) break;
+        if ((uint64_t)amount > maximum - total
+            || wls_write_all(destination_fd, buffer, (size_t)amount) != 0) {
+            goto cleanup;
+        }
+        total += (uint64_t)amount;
+    }
+    if (amount < 0 || total != (uint64_t)source_initial->st_size
+        || fchown(destination_fd, 0, data_gid) != 0
+        || wls_posix_acl_remove_and_verify(destination_fd, 0) != 0
+        || fchmod(destination_fd, 0440) != 0 || fsync(destination_fd) != 0
+        || wls_file_digest_fd_bounded(
+            destination_fd, destination_digest, &digest_size, maximum
+        ) != 0
+        || digest_size != total || strcmp(destination_digest, expected_digest) != 0
+        || wls_file_digest_fd_bounded(
+            source_fd, source_digest, &digest_size, maximum
+        ) != 0
+        || digest_size != (uint64_t)source_initial->st_size
+        || strcmp(source_digest, expected_digest) != 0
+        || wls_neutral_tls_source_fd_valid(
+            source_fd, source_initial, controller_identity, maximum, &source_after
+        ) != 0
+        || fstat(destination_fd, &destination_after) != 0
+        || !S_ISREG(destination_after.st_mode) || destination_after.st_uid != 0
+        || destination_after.st_gid != data_gid
+        || (destination_after.st_mode & 07777) != 0440
+        || destination_after.st_nlink != 1
+        || !wls_posix_acl_free(destination_fd, 0)
+        || fstatat(
+            root_fd, temporary_leaf, &destination_path, AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || !wls_atomic_replace_status_same(
+            &destination_after, &destination_path
+        )) goto cleanup;
+    *sealed_status = destination_after;
+    result = 0;
+cleanup:
+    sodium_memzero(buffer, sizeof(buffer));
+    sodium_memzero(source_digest, sizeof(source_digest));
+    sodium_memzero(destination_digest, sizeof(destination_digest));
+    if (destination_fd >= 0) close(destination_fd);
+    if (result != 0 && root_fd >= 0 && temporary_leaf != NULL) {
+        (void)unlinkat(root_fd, temporary_leaf, 0);
+    }
+    return result;
+}
+
+static int wls_neutral_tls_existing_leaf_safe(
+    int root_fd,
+    const char *leaf,
+    gid_t data_gid
+) {
+    int fd = -1;
+    struct stat status;
+    struct stat path_status;
+    int result = -1;
+    if (root_fd < 0 || leaf == NULL) return -1;
+    if (fstatat(root_fd, leaf, &path_status, AT_SYMLINK_NOFOLLOW) != 0) {
+        return errno == ENOENT ? 0 : -1;
+    }
+    fd = openat(root_fd, leaf, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd >= 0 && fstat(fd, &status) == 0 && S_ISREG(status.st_mode)
+        && status.st_uid == 0 && status.st_gid == data_gid
+        && (status.st_mode & 07777) == 0440 && status.st_nlink == 1
+        && wls_posix_acl_free(fd, 0)
+        && wls_atomic_replace_status_same(&status, &path_status)) result = 0;
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+static int wls_neutral_tls_serving_leaf_open(
+    int root_fd,
+    const char *leaf,
+    gid_t data_gid,
+    const char *expected_digest,
+    unsigned long long expected_dev,
+    unsigned long long expected_ino,
+    unsigned long long expected_size,
+    int *opened_fd,
+    struct stat *verified_status
+) {
+    int fd = -1;
+    struct stat before;
+    struct stat after;
+    struct stat path_status;
+    char digest[65] = {0};
+    uint64_t size = 0U;
+    int result = -1;
+    memset(&before, 0, sizeof(before));
+    memset(&after, 0, sizeof(after));
+    memset(&path_status, 0, sizeof(path_status));
+    if (root_fd < 0 || leaf == NULL || !wls_is_hex(expected_digest, 64U)
+        || opened_fd == NULL || verified_status == NULL) return -1;
+    fd = openat(root_fd, leaf, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0 || fstat(fd, &before) != 0 || !S_ISREG(before.st_mode)
+        || before.st_uid != 0 || before.st_gid != data_gid
+        || (before.st_mode & 07777) != 0440 || before.st_nlink != 1
+        || before.st_size < 1 || (uint64_t)before.st_size > WLS_MAX_REQUEST
+        || (unsigned long long)before.st_dev != expected_dev
+        || (unsigned long long)before.st_ino != expected_ino
+        || (unsigned long long)before.st_size != expected_size
+        || !wls_posix_acl_free(fd, 0)
+        || wls_file_digest_fd_bounded(
+            fd, digest, &size, WLS_MAX_REQUEST
+        ) != 0
+        || size != (uint64_t)before.st_size || strcmp(digest, expected_digest) != 0
+        || fstat(fd, &after) != 0
+        || fstatat(root_fd, leaf, &path_status, AT_SYMLINK_NOFOLLOW) != 0
+        || !wls_atomic_replace_status_same(&before, &after)
+        || !wls_atomic_replace_status_same(&before, &path_status)
+        || !wls_posix_acl_free(fd, 0)) goto cleanup;
+    *opened_fd = fd;
+    *verified_status = before;
+    fd = -1;
+    result = 0;
+cleanup:
+    sodium_memzero(digest, sizeof(digest));
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+static int wls_neutral_tls_receipt_write_candidate(
+    int root_fd,
+    const char *temporary_leaf,
+    gid_t data_gid,
+    const struct wls_neutral_tls_receipt *receipt,
+    struct stat *candidate_status
+) {
+    int fd = -1;
+    char canonical[2048];
+    char contents[2304];
+    int canonical_length;
+    int contents_length;
+    struct stat after;
+    struct stat path_status;
+    int result = -1;
+    memset(&after, 0, sizeof(after));
+    memset(&path_status, 0, sizeof(path_status));
+    if (root_fd < 0 || temporary_leaf == NULL || receipt == NULL
+        || candidate_status == NULL
+        || (canonical_length = wls_neutral_tls_receipt_canonical(
+            receipt, canonical, sizeof(canonical)
+        )) < 1) goto cleanup;
+    contents_length = snprintf(
+        contents, sizeof(contents), "%sreceipt_digest=%s\nmac=%s\n",
+        canonical, receipt->receipt_digest, receipt->receipt_mac
+    );
+    if (contents_length <= 0 || contents_length >= (int)sizeof(contents)) goto cleanup;
+    fd = openat(
+        root_fd, temporary_leaf,
+        O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+    if (fd < 0 || wls_write_all(fd, contents, (size_t)contents_length) != 0
+        || fchown(fd, 0, data_gid) != 0
+        || wls_posix_acl_remove_and_verify(fd, 0) != 0
+        || fchmod(fd, 0440) != 0 || fsync(fd) != 0
+        || fstat(fd, &after) != 0 || !S_ISREG(after.st_mode)
+        || after.st_uid != 0 || after.st_gid != data_gid
+        || (after.st_mode & 07777) != 0440 || after.st_nlink != 1
+        || after.st_size != contents_length || !wls_posix_acl_free(fd, 0)
+        || fstatat(
+            root_fd, temporary_leaf, &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || !wls_atomic_replace_status_same(&after, &path_status)) goto cleanup;
+    *candidate_status = after;
+    result = 0;
+cleanup:
+    sodium_memzero(canonical, sizeof(canonical));
+    sodium_memzero(contents, sizeof(contents));
+    if (fd >= 0) close(fd);
+    if (result != 0 && root_fd >= 0 && temporary_leaf != NULL) {
+        (void)unlinkat(root_fd, temporary_leaf, 0);
+    }
+    return result;
+}
+
+static int wls_neutral_tls_receipt_read(
+    const char *home,
+    int root_fd,
+    const char *expected_generation,
+    struct wls_neutral_tls_receipt *receipt,
+    struct stat *receipt_status
+) {
+    int fd = -1;
+    unsigned char *contents = NULL;
+    size_t length;
+    struct stat before;
+    struct stat after;
+    struct stat path_status;
+    char canonical[2048];
+    char calculated_digest[65] = {0};
+    char calculated_mac[65] = {0};
+    int canonical_length;
+    int consumed = 0;
+    int fields;
+    int result = -1;
+    memset(&before, 0, sizeof(before));
+    memset(&after, 0, sizeof(after));
+    memset(&path_status, 0, sizeof(path_status));
+    if (home == NULL || root_fd < 0 || expected_generation == NULL
+        || receipt == NULL || receipt_status == NULL
+        || !wls_is_hex(expected_generation, 64U)) return -1;
+    fd = openat(
+        root_fd, "neutral-tls.receipt", O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+    );
+    if (fd < 0 || fstat(fd, &before) != 0 || !S_ISREG(before.st_mode)
+        || before.st_uid != 0 || !wls_data_plane_identity_present
+        || before.st_gid != wls_data_plane_identity.gid
+        || (before.st_mode & 07777) != 0440 || before.st_nlink != 1
+        || before.st_size < 1 || (uint64_t)before.st_size > 4096U
+        || !wls_posix_acl_free(fd, 0)) goto cleanup;
+    length = (size_t)before.st_size;
+    contents = calloc(length + 1U, 1U);
+    if (contents == NULL || lseek(fd, 0, SEEK_SET) < 0
+        || wls_read_exact(fd, (char *)contents, length) != 0) goto cleanup;
+    memset(receipt, 0, sizeof(*receipt));
+    fields = sscanf(
+        (const char *)contents,
+        "WLS-NEUTRAL-TLS-RECEIPT/1\ngeneration=%64[0-9a-f]\n"
+        "pair_digest=%64[0-9a-f]\ncert_digest=%64[0-9a-f]\n"
+        "key_digest=%64[0-9a-f]\n"
+        "cert_source_dev=%llu\ncert_source_ino=%llu\ncert_source_size=%llu\n"
+        "key_source_dev=%llu\nkey_source_ino=%llu\nkey_source_size=%llu\n"
+        "cert_serving_dev=%llu\ncert_serving_ino=%llu\ncert_serving_size=%llu\n"
+        "key_serving_dev=%llu\nkey_serving_ino=%llu\nkey_serving_size=%llu\n"
+        "data_plane_uid=%lu\ndata_plane_gid=%lu\nowner_uid=%lu\n"
+        "receipt_digest=%64[0-9a-f]\nmac=%64[0-9a-f]\n%n",
+        receipt->generation, receipt->pair_digest, receipt->cert_digest,
+        receipt->key_digest, &receipt->cert_source_dev,
+        &receipt->cert_source_ino, &receipt->cert_source_size,
+        &receipt->key_source_dev, &receipt->key_source_ino,
+        &receipt->key_source_size, &receipt->cert_serving_dev,
+        &receipt->cert_serving_ino, &receipt->cert_serving_size,
+        &receipt->key_serving_dev, &receipt->key_serving_ino,
+        &receipt->key_serving_size, &receipt->data_plane_uid,
+        &receipt->data_plane_gid, &receipt->owner_uid,
+        receipt->receipt_digest, receipt->receipt_mac, &consumed
+    );
+    canonical_length = wls_neutral_tls_receipt_canonical(
+        receipt, canonical, sizeof(canonical)
+    );
+    if (fields != 21 || consumed != (int)length
+        || strcmp(receipt->generation, expected_generation) != 0
+        || !wls_is_hex(receipt->pair_digest, 64U)
+        || !wls_is_hex(receipt->cert_digest, 64U)
+        || !wls_is_hex(receipt->key_digest, 64U)
+        || !wls_is_hex(receipt->receipt_digest, 64U)
+        || !wls_is_hex(receipt->receipt_mac, 64U)
+        || receipt->data_plane_uid != (unsigned long)wls_data_plane_identity.uid
+        || receipt->data_plane_gid != (unsigned long)wls_data_plane_identity.gid
+        || receipt->owner_uid != 0U
+        || wls_neutral_tls_pair_digest(
+            receipt->cert_digest, receipt->key_digest, calculated_digest
+        ) != 0
+        || strcmp(receipt->pair_digest, calculated_digest) != 0
+        || canonical_length < 1) goto cleanup;
+    wls_sha256_hex(
+        (const unsigned char *)canonical, (size_t)canonical_length, calculated_digest
+    );
+    if (strcmp(receipt->receipt_digest, calculated_digest) != 0
+        || wls_snapshot_receipt_mac(
+            home, canonical, (size_t)canonical_length, calculated_mac
+        ) != 0
+        || sodium_memcmp(calculated_mac, receipt->receipt_mac, 64U) != 0
+        || fstat(fd, &after) != 0
+        || fstatat(
+            root_fd, "neutral-tls.receipt", &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || !wls_atomic_replace_status_same(&before, &after)
+        || !wls_atomic_replace_status_same(&before, &path_status)
+        || !wls_posix_acl_free(fd, 0)) goto cleanup;
+    *receipt_status = before;
+    result = 0;
+cleanup:
+    if (contents != NULL) {
+        sodium_memzero(contents, (size_t)(before.st_size > 0 ? before.st_size : 0));
+        free(contents);
+    }
+    sodium_memzero(canonical, sizeof(canonical));
+    sodium_memzero(calculated_digest, sizeof(calculated_digest));
+    sodium_memzero(calculated_mac, sizeof(calculated_mac));
+    if (fd >= 0) close(fd);
+    if (result != 0) sodium_memzero(receipt, sizeof(*receipt));
+    return result;
+}
+
+static int wls_neutral_tls_consumer_validate(
+    const char *home,
+    const char *generation,
+    char cert_digest[65],
+    char key_digest[65],
+    struct stat *cert_status,
+    struct stat *key_status
+);
+
+static int wls_neutral_tls_publish_from_open_sources(
+    const char *home,
+    const char *generation,
+    const struct wls_controller_identity *controller_identity,
+    int cert_fd,
+    int key_fd,
+    const struct stat *cert_initial,
+    const struct stat *key_initial
+) {
+    int home_fd = -1;
+    int root_fd = -1;
+    int final_cert_fd = -1;
+    int final_key_fd = -1;
+    int lock_error;
+    struct stat cert_current;
+    struct stat key_current;
+    struct stat staged_cert_status;
+    struct stat staged_key_status;
+    struct stat final_cert_status;
+    struct stat final_key_status;
+    struct stat receipt_candidate_status;
+    struct wls_neutral_tls_receipt receipt;
+    char cert_digest[65] = {0};
+    char key_digest[65] = {0};
+    char cert_temporary[NAME_MAX + 1U] = {0};
+    char key_temporary[NAME_MAX + 1U] = {0};
+    char receipt_temporary[NAME_MAX + 1U] = {0};
+    unsigned long long nonce = 0U;
+    uint64_t digest_size = 0U;
+    int result = -1;
+    memset(&cert_current, 0, sizeof(cert_current));
+    memset(&key_current, 0, sizeof(key_current));
+    memset(&staged_cert_status, 0, sizeof(staged_cert_status));
+    memset(&staged_key_status, 0, sizeof(staged_key_status));
+    memset(&final_cert_status, 0, sizeof(final_cert_status));
+    memset(&final_key_status, 0, sizeof(final_key_status));
+    memset(&receipt_candidate_status, 0, sizeof(receipt_candidate_status));
+    memset(&receipt, 0, sizeof(receipt));
+    if (home == NULL || !wls_is_hex(generation, 64U)
+        || controller_identity == NULL || !wls_data_plane_identity_present
+        || geteuid() != 0 || controller_identity->uid == 0
+        || controller_identity->gid == 0) return -1;
+    lock_error = pthread_mutex_lock(&wls_neutral_tls_mutex);
+    if (lock_error != 0) {
+        errno = lock_error;
+        return -1;
+    }
+    if (wls_neutral_tls_source_fd_valid(
+            cert_fd, cert_initial, controller_identity, WLS_MAX_CERTIFICATE_CHAIN,
+            &cert_current
+        ) != 0
+        || wls_neutral_tls_source_fd_valid(
+            key_fd, key_initial, controller_identity, WLS_MAX_SNAPSHOT, &key_current
+        ) != 0
+        || wls_file_digest_fd_bounded(
+            cert_fd, cert_digest, &digest_size, WLS_MAX_CERTIFICATE_CHAIN
+        ) != 0
+        || digest_size != (uint64_t)cert_initial->st_size
+        || wls_file_digest_fd_bounded(
+            key_fd, key_digest, &digest_size, WLS_MAX_SNAPSHOT
+        ) != 0
+        || digest_size != (uint64_t)key_initial->st_size
+        || (home_fd = wls_open_absolute_directory(home)) < 0
+        || (root_fd = wls_neutral_tls_root_open(
+            home_fd, wls_data_plane_identity.gid, 1
+        )) < 0
+        || wls_neutral_tls_existing_leaf_safe(
+            root_fd, "neutral-cert.pem", wls_data_plane_identity.gid
+        ) != 0
+        || wls_neutral_tls_existing_leaf_safe(
+            root_fd, "neutral-key.pem", wls_data_plane_identity.gid
+        ) != 0
+        || wls_neutral_tls_existing_leaf_safe(
+            root_fd, "neutral-tls.receipt", wls_data_plane_identity.gid
+        ) != 0) goto cleanup;
+    randombytes_buf(&nonce, sizeof(nonce));
+    if (snprintf(
+            cert_temporary, sizeof(cert_temporary),
+            ".neutral-cert.pem.publish-%ld-%016llx", (long)getpid(), nonce
+        ) >= (int)sizeof(cert_temporary)
+        || snprintf(
+            key_temporary, sizeof(key_temporary),
+            ".neutral-key.pem.publish-%ld-%016llx", (long)getpid(), nonce
+        ) >= (int)sizeof(key_temporary)
+        || snprintf(
+            receipt_temporary, sizeof(receipt_temporary),
+            ".neutral-tls.receipt.publish-%ld-%016llx", (long)getpid(), nonce
+        ) >= (int)sizeof(receipt_temporary)
+        || wls_neutral_tls_copy_sealed_leaf(
+            cert_fd, cert_initial, controller_identity, root_fd, cert_temporary,
+            WLS_MAX_CERTIFICATE_CHAIN, cert_digest, wls_data_plane_identity.gid,
+            &staged_cert_status
+        ) != 0
+        || wls_neutral_tls_copy_sealed_leaf(
+            key_fd, key_initial, controller_identity, root_fd, key_temporary,
+            WLS_MAX_SNAPSHOT, key_digest, wls_data_plane_identity.gid,
+            &staged_key_status
+        ) != 0
+        || renameat(
+            root_fd, cert_temporary, root_fd, "neutral-cert.pem"
+        ) != 0) goto cleanup;
+    cert_temporary[0] = '\0';
+    if (fsync(root_fd) != 0
+        || renameat(root_fd, key_temporary, root_fd, "neutral-key.pem") != 0) {
+        goto cleanup;
+    }
+    key_temporary[0] = '\0';
+    if (fsync(root_fd) != 0
+        || wls_neutral_tls_serving_leaf_open(
+            root_fd, "neutral-cert.pem", wls_data_plane_identity.gid, cert_digest,
+            (unsigned long long)staged_cert_status.st_dev,
+            (unsigned long long)staged_cert_status.st_ino,
+            (unsigned long long)staged_cert_status.st_size,
+            &final_cert_fd, &final_cert_status
+        ) != 0
+        || wls_neutral_tls_serving_leaf_open(
+            root_fd, "neutral-key.pem", wls_data_plane_identity.gid, key_digest,
+            (unsigned long long)staged_key_status.st_dev,
+            (unsigned long long)staged_key_status.st_ino,
+            (unsigned long long)staged_key_status.st_size,
+            &final_key_fd, &final_key_status
+        ) != 0) goto cleanup;
+    memcpy(receipt.generation, generation, 65U);
+    memcpy(receipt.cert_digest, cert_digest, 65U);
+    memcpy(receipt.key_digest, key_digest, 65U);
+    receipt.cert_source_dev = (unsigned long long)cert_initial->st_dev;
+    receipt.cert_source_ino = (unsigned long long)cert_initial->st_ino;
+    receipt.cert_source_size = (unsigned long long)cert_initial->st_size;
+    receipt.key_source_dev = (unsigned long long)key_initial->st_dev;
+    receipt.key_source_ino = (unsigned long long)key_initial->st_ino;
+    receipt.key_source_size = (unsigned long long)key_initial->st_size;
+    receipt.cert_serving_dev = (unsigned long long)final_cert_status.st_dev;
+    receipt.cert_serving_ino = (unsigned long long)final_cert_status.st_ino;
+    receipt.cert_serving_size = (unsigned long long)final_cert_status.st_size;
+    receipt.key_serving_dev = (unsigned long long)final_key_status.st_dev;
+    receipt.key_serving_ino = (unsigned long long)final_key_status.st_ino;
+    receipt.key_serving_size = (unsigned long long)final_key_status.st_size;
+    receipt.data_plane_uid = (unsigned long)wls_data_plane_identity.uid;
+    receipt.data_plane_gid = (unsigned long)wls_data_plane_identity.gid;
+    receipt.owner_uid = 0U;
+    if (wls_neutral_tls_receipt_finalize(home, &receipt) != 0
+        || wls_neutral_tls_receipt_write_candidate(
+            root_fd, receipt_temporary, wls_data_plane_identity.gid,
+            &receipt, &receipt_candidate_status
+        ) != 0
+        || fstat(final_cert_fd, &cert_current) != 0
+        || fstat(final_key_fd, &key_current) != 0
+        || !wls_atomic_replace_status_same(&final_cert_status, &cert_current)
+        || !wls_atomic_replace_status_same(&final_key_status, &key_current)
+        || renameat(
+            root_fd, receipt_temporary, root_fd, "neutral-tls.receipt"
+        ) != 0) goto cleanup;
+    receipt_temporary[0] = '\0';
+    if (fsync(root_fd) != 0
+        || wls_neutral_tls_consumer_validate(
+            home, generation, NULL, NULL, NULL, NULL
+        ) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (cert_temporary[0] != '\0' && root_fd >= 0) {
+        (void)unlinkat(root_fd, cert_temporary, 0);
+    }
+    if (key_temporary[0] != '\0' && root_fd >= 0) {
+        (void)unlinkat(root_fd, key_temporary, 0);
+    }
+    if (receipt_temporary[0] != '\0' && root_fd >= 0) {
+        (void)unlinkat(root_fd, receipt_temporary, 0);
+    }
+    if (final_key_fd >= 0) close(final_key_fd);
+    if (final_cert_fd >= 0) close(final_cert_fd);
+    if (root_fd >= 0) close(root_fd);
+    if (home_fd >= 0) close(home_fd);
+    sodium_memzero(cert_digest, sizeof(cert_digest));
+    sodium_memzero(key_digest, sizeof(key_digest));
+    sodium_memzero(&receipt, sizeof(receipt));
+    lock_error = pthread_mutex_unlock(&wls_neutral_tls_mutex);
+    if (lock_error != 0) {
+        errno = lock_error;
+        return -1;
+    }
+    return result;
+}
+
+static int wls_neutral_tls_consumer_validate(
+    const char *home,
+    const char *generation,
+    char cert_digest[65],
+    char key_digest[65],
+    struct stat *cert_status,
+    struct stat *key_status
+) {
+    int home_fd = -1;
+    int root_fd = -1;
+    int cert_fd = -1;
+    int key_fd = -1;
+    struct wls_neutral_tls_receipt receipt;
+    struct stat receipt_before;
+    struct stat receipt_after;
+    struct stat receipt_path;
+    struct stat verified_cert;
+    struct stat verified_key;
+    struct stat cert_after;
+    struct stat key_after;
+    struct stat cert_path;
+    struct stat key_path;
+    int result = -1;
+    memset(&receipt, 0, sizeof(receipt));
+    memset(&receipt_before, 0, sizeof(receipt_before));
+    memset(&receipt_after, 0, sizeof(receipt_after));
+    memset(&receipt_path, 0, sizeof(receipt_path));
+    memset(&verified_cert, 0, sizeof(verified_cert));
+    memset(&verified_key, 0, sizeof(verified_key));
+    memset(&cert_after, 0, sizeof(cert_after));
+    memset(&key_after, 0, sizeof(key_after));
+    memset(&cert_path, 0, sizeof(cert_path));
+    memset(&key_path, 0, sizeof(key_path));
+    if (home == NULL || generation == NULL || !wls_data_plane_identity_present
+        || geteuid() != 0 || !wls_is_hex(generation, 64U)
+        || (home_fd = wls_open_absolute_directory(home)) < 0
+        || (root_fd = wls_neutral_tls_root_open(
+            home_fd, wls_data_plane_identity.gid, 0
+        )) < 0
+        || wls_neutral_tls_receipt_read(
+            home, root_fd, generation, &receipt, &receipt_before
+        ) != 0
+        || wls_neutral_tls_serving_leaf_open(
+            root_fd, "neutral-cert.pem", wls_data_plane_identity.gid,
+            receipt.cert_digest, receipt.cert_serving_dev,
+            receipt.cert_serving_ino, receipt.cert_serving_size,
+            &cert_fd, &verified_cert
+        ) != 0
+        || wls_neutral_tls_serving_leaf_open(
+            root_fd, "neutral-key.pem", wls_data_plane_identity.gid,
+            receipt.key_digest, receipt.key_serving_dev,
+            receipt.key_serving_ino, receipt.key_serving_size,
+            &key_fd, &verified_key
+        ) != 0
+        || fstat(cert_fd, &cert_after) != 0
+        || fstat(key_fd, &key_after) != 0
+        || fstatat(
+            root_fd, "neutral-cert.pem", &cert_path, AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || fstatat(
+            root_fd, "neutral-key.pem", &key_path, AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || !wls_atomic_replace_status_same(&verified_cert, &cert_after)
+        || !wls_atomic_replace_status_same(&verified_key, &key_after)
+        || !wls_atomic_replace_status_same(&verified_cert, &cert_path)
+        || !wls_atomic_replace_status_same(&verified_key, &key_path)
+        || fstatat(
+            root_fd, "neutral-tls.receipt", &receipt_path, AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || !wls_atomic_replace_status_same(&receipt_before, &receipt_path)) goto cleanup;
+    {
+        int receipt_fd = openat(
+            root_fd, "neutral-tls.receipt", O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+        );
+        if (receipt_fd < 0 || fstat(receipt_fd, &receipt_after) != 0
+            || !wls_atomic_replace_status_same(&receipt_before, &receipt_after)) {
+            if (receipt_fd >= 0) close(receipt_fd);
+            goto cleanup;
+        }
+        if (close(receipt_fd) != 0) goto cleanup;
+    }
+    if (cert_digest != NULL) memcpy(cert_digest, receipt.cert_digest, 65U);
+    if (key_digest != NULL) memcpy(key_digest, receipt.key_digest, 65U);
+    if (cert_status != NULL) *cert_status = verified_cert;
+    if (key_status != NULL) *key_status = verified_key;
+    result = 0;
+cleanup:
+    if (key_fd >= 0) close(key_fd);
+    if (cert_fd >= 0) close(cert_fd);
+    if (root_fd >= 0) close(root_fd);
+    if (home_fd >= 0) close(home_fd);
+    sodium_memzero(&receipt, sizeof(receipt));
+    return result;
+}
+
+static int wls_neutral_tls_publish_pair(
+    const char *home,
+    const char *generation,
+    const struct wls_controller_identity *controller_identity
+) {
+    int home_fd = -1;
+    int state_fd = -1;
+    int cert_fd = -1;
+    int key_fd = -1;
+    struct stat state_status;
+    struct stat cert_status;
+    struct stat key_status;
+    int result = -1;
+    memset(&state_status, 0, sizeof(state_status));
+    memset(&cert_status, 0, sizeof(cert_status));
+    memset(&key_status, 0, sizeof(key_status));
+    if (home == NULL || !wls_is_hex(generation, 64U)
+        || controller_identity == NULL || controller_identity->uid == 0
+        || controller_identity->gid == 0 || geteuid() != 0
+        || (home_fd = wls_open_absolute_directory(home)) < 0
+        || (state_fd = openat(
+            home_fd, "state", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0
+        || fstat(state_fd, &state_status) != 0 || !S_ISDIR(state_status.st_mode)
+        || state_status.st_uid != controller_identity->uid
+        || state_status.st_gid != controller_identity->gid
+        || (state_status.st_mode & 07777) != 0700
+        || !wls_posix_acl_free(state_fd, 1)
+        || (cert_fd = openat(
+            state_fd, "neutral-cert.pem", O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0
+        || (key_fd = openat(
+            state_fd, "neutral-key.pem", O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0
+        || fstat(cert_fd, &cert_status) != 0 || fstat(key_fd, &key_status) != 0) {
+        goto cleanup;
+    }
+    result = wls_neutral_tls_publish_from_open_sources(
+        home, generation, controller_identity,
+        cert_fd, key_fd, &cert_status, &key_status
+    );
+cleanup:
+    if (key_fd >= 0) close(key_fd);
+    if (cert_fd >= 0) close(cert_fd);
+    if (state_fd >= 0) close(state_fd);
+    if (home_fd >= 0) close(home_fd);
+    return result;
+}
+
+static int wls_neutral_tls_publish_and_validate(
+    const char *home,
+    const char *generation,
+    const struct wls_controller_identity *controller_identity
+) {
+    return wls_neutral_tls_publish_pair(home, generation, controller_identity) == 0
+        && wls_neutral_tls_consumer_validate(
+            home, generation, NULL, NULL, NULL, NULL
+        ) == 0 ? 0 : -1;
 }
 
 static DIR *wls_snapshot_directory_stream(int directory_fd);
@@ -15213,12 +16188,570 @@ static int wls_all_open_fds_cloexec(void)
 #endif
 }
 
+static int wls_nginx_listener_fd_handoff_required(const char *operation)
+{
+    return operation != NULL
+        && (strcmp(operation, "START") == 0 || strcmp(operation, "TEST") == 0);
+}
+
+struct wls_listener_socket_identity {
+    dev_t device;
+    ino_t inode;
+    int type;
+    sa_family_t family;
+    unsigned short port;
+    int address_kind;
+};
+
+#define WLS_LISTENER_ADDRESS_WILDCARD 1
+#define WLS_LISTENER_ADDRESS_LOOPBACK 2
+
+struct wls_nginx_listener_lease {
+    int present;
+    int sockets[6];
+    size_t socket_count;
+    struct wls_listener_socket_identity identities[6];
+    char gateway_epoch[33];
+    char host_boot_id[65];
+    char fencing_digest[65];
+    char active_slot[2];
+    char runtime_generation[65];
+    char listen_profile[16];
+    int h3_enabled;
+    unsigned long master_pid;
+    unsigned long long master_start_id;
+    char master_binary_path[PATH_MAX];
+    char master_prefix[PATH_MAX];
+    char master_config_path[PATH_MAX];
+};
+
+static struct wls_nginx_listener_lease wls_nginx_listener_lease = {
+    .sockets = {-1, -1, -1, -1, -1, -1}
+};
+
+static void wls_nginx_listener_lease_clear(void)
+{
+    size_t index;
+    for (index = 0U; index < 6U; index++) {
+        if (wls_nginx_listener_lease.sockets[index] >= 0) {
+            close(wls_nginx_listener_lease.sockets[index]);
+        }
+        wls_nginx_listener_lease.sockets[index] = -1;
+    }
+    sodium_memzero(
+        wls_nginx_listener_lease.identities,
+        sizeof(wls_nginx_listener_lease.identities)
+    );
+    sodium_memzero(wls_nginx_listener_lease.gateway_epoch,
+        sizeof(wls_nginx_listener_lease.gateway_epoch));
+    sodium_memzero(wls_nginx_listener_lease.host_boot_id,
+        sizeof(wls_nginx_listener_lease.host_boot_id));
+    sodium_memzero(wls_nginx_listener_lease.fencing_digest,
+        sizeof(wls_nginx_listener_lease.fencing_digest));
+    sodium_memzero(wls_nginx_listener_lease.active_slot,
+        sizeof(wls_nginx_listener_lease.active_slot));
+    sodium_memzero(wls_nginx_listener_lease.runtime_generation,
+        sizeof(wls_nginx_listener_lease.runtime_generation));
+    sodium_memzero(wls_nginx_listener_lease.listen_profile,
+        sizeof(wls_nginx_listener_lease.listen_profile));
+    sodium_memzero(wls_nginx_listener_lease.master_binary_path,
+        sizeof(wls_nginx_listener_lease.master_binary_path));
+    sodium_memzero(wls_nginx_listener_lease.master_prefix,
+        sizeof(wls_nginx_listener_lease.master_prefix));
+    sodium_memzero(wls_nginx_listener_lease.master_config_path,
+        sizeof(wls_nginx_listener_lease.master_config_path));
+    wls_nginx_listener_lease.socket_count = 0U;
+    wls_nginx_listener_lease.h3_enabled = 0;
+    wls_nginx_listener_lease.master_pid = 0U;
+    wls_nginx_listener_lease.master_start_id = 0ULL;
+    wls_nginx_listener_lease.present = 0;
+}
+
+static void wls_nginx_listener_lease_clear_retired(
+    unsigned long pid,
+    unsigned long long start_id
+) {
+    if (wls_nginx_listener_lease.present
+        && wls_nginx_listener_lease.master_pid == pid
+        && wls_nginx_listener_lease.master_start_id == start_id) {
+        wls_nginx_listener_lease_clear();
+    }
+}
+
+static int wls_listener_socket_identity_capture(
+    int fd,
+    struct wls_listener_socket_identity *identity
+) {
+    struct stat status;
+    struct sockaddr_storage address;
+    socklen_t address_length = sizeof(address);
+    socklen_t type_length = sizeof(identity->type);
+    int flags;
+    if (fd < 0 || identity == NULL
+        || fcntl(fd, F_GETFD) < 0
+        || (fcntl(fd, F_GETFD) & FD_CLOEXEC) == 0
+        || (flags = fcntl(fd, F_GETFL)) < 0
+        || (flags & O_NONBLOCK) == 0
+        || fstat(fd, &status) != 0
+        || getsockopt(
+            fd, SOL_SOCKET, SO_TYPE, &identity->type, &type_length
+        ) != 0
+        || getsockname(fd, (struct sockaddr *)&address, &address_length) != 0
+        || (address.ss_family != AF_INET && address.ss_family != AF_INET6)) {
+        return -1;
+    }
+    identity->device = status.st_dev;
+    identity->inode = status.st_ino;
+    identity->family = address.ss_family;
+    identity->port = address.ss_family == AF_INET
+        ? ntohs(((struct sockaddr_in *)&address)->sin_port)
+        : ntohs(((struct sockaddr_in6 *)&address)->sin6_port);
+    if (identity->port == 0U) return -1;
+    if (address.ss_family == AF_INET) {
+        uint32_t raw = ((struct sockaddr_in *)&address)->sin_addr.s_addr;
+        identity->address_kind = raw == htonl(INADDR_ANY)
+            ? WLS_LISTENER_ADDRESS_WILDCARD
+            : raw == htonl(INADDR_LOOPBACK)
+                ? WLS_LISTENER_ADDRESS_LOOPBACK : 0;
+    } else {
+        const struct in6_addr *raw = &((struct sockaddr_in6 *)&address)->sin6_addr;
+        identity->address_kind = IN6_IS_ADDR_UNSPECIFIED(raw)
+            ? WLS_LISTENER_ADDRESS_WILDCARD
+            : IN6_IS_ADDR_LOOPBACK(raw)
+                ? WLS_LISTENER_ADDRESS_LOOPBACK : 0;
+    }
+    return identity->address_kind == 0 ? -1 : 0;
+}
+
+static int wls_listener_socket_identity_same(
+    int fd,
+    const struct wls_listener_socket_identity *expected
+) {
+    struct wls_listener_socket_identity actual;
+    if (expected == NULL
+        || wls_listener_socket_identity_capture(fd, &actual) != 0) return 0;
+    return actual.device == expected->device
+        && actual.inode == expected->inode
+        && actual.type == expected->type
+        && actual.family == expected->family
+        && actual.port == expected->port
+        && actual.address_kind == expected->address_kind;
+}
+
+static int wls_listener_socket_topology_valid(
+    const int sockets[6],
+    size_t socket_count,
+    const char *profile,
+    int h3_enabled
+) {
+    unsigned int expected_mask;
+    unsigned int seen_mask = 0U;
+    size_t index;
+    if (sockets == NULL || profile == NULL
+        || (strcmp(profile, "default") != 0
+            && strcmp(profile, "ipv4-only") != 0)
+        || socket_count != ((strcmp(profile, "default") == 0 ? 4U : 2U)
+            + (h3_enabled ? (strcmp(profile, "default") == 0 ? 2U : 1U) : 0U))) {
+        return 0;
+    }
+    expected_mask = strcmp(profile, "default") == 0 ? 0x0fU : 0x05U;
+    if (h3_enabled) expected_mask |= strcmp(profile, "default") == 0 ? 0x30U : 0x10U;
+    for (index = 0U; index < socket_count; index++) {
+        struct wls_listener_socket_identity identity;
+        unsigned int bit = 0U;
+        if (wls_listener_socket_identity_capture(sockets[index], &identity) != 0
+            || identity.address_kind != WLS_LISTENER_ADDRESS_WILDCARD) return 0;
+        if (identity.type == SOCK_STREAM) {
+            int accepting = 0;
+            socklen_t accepting_length = sizeof(accepting);
+            if (getsockopt(sockets[index], SOL_SOCKET, SO_ACCEPTCONN,
+                    &accepting, &accepting_length) != 0 || accepting != 1) return 0;
+            if (identity.family == AF_INET && identity.port == 80U) bit = 0x01U;
+            else if (identity.family == AF_INET6 && identity.port == 80U) bit = 0x02U;
+            else if (identity.family == AF_INET && identity.port == 443U) bit = 0x04U;
+            else if (identity.family == AF_INET6 && identity.port == 443U) bit = 0x08U;
+        } else if (h3_enabled && identity.type == SOCK_DGRAM && identity.port == 443U) {
+            if (identity.family == AF_INET) bit = 0x10U;
+            else if (identity.family == AF_INET6) bit = 0x20U;
+        }
+        if (bit == 0U || (seen_mask & bit) != 0U) return 0;
+        seen_mask |= bit;
+    }
+    return seen_mask == expected_mask;
+}
+
+/* Loopback is deliberately confined to this native self-test boundary; no
+ * production lease may contain a loopback or arbitrary-port listener. */
+static int wls_listener_socket_topology_self_test_valid(
+    const int sockets[6],
+    size_t socket_count,
+    int h3_enabled
+) {
+    struct wls_listener_socket_identity first;
+    struct wls_listener_socket_identity second;
+    struct wls_listener_socket_identity h3;
+    if (sockets == NULL || socket_count != (h3_enabled ? 3U : 2U)
+        || wls_listener_socket_identity_capture(sockets[0], &first) != 0
+        || wls_listener_socket_identity_capture(sockets[1], &second) != 0
+        || first.address_kind != WLS_LISTENER_ADDRESS_LOOPBACK
+        || second.address_kind != WLS_LISTENER_ADDRESS_LOOPBACK
+        || first.family != AF_INET || second.family != AF_INET
+        || first.type != SOCK_STREAM || second.type != SOCK_STREAM
+        || first.port == second.port) return 0;
+    if (h3_enabled && (wls_listener_socket_identity_capture(sockets[2], &h3) != 0
+        || h3.address_kind != WLS_LISTENER_ADDRESS_LOOPBACK
+        || h3.family != AF_INET || h3.type != SOCK_DGRAM)) return 0;
+    return 1;
+}
+
+static int wls_nginx_listener_lease_duplicate_self_test(
+    int h3_enabled,
+    int sockets[6],
+    size_t *socket_count
+) {
+    size_t index;
+    size_t copied = 0U;
+    if (sockets == NULL || socket_count == NULL) return -1;
+    for (index = 0U; index < 6U; index++) {
+        if (sockets[index] >= 0) close(sockets[index]);
+        sockets[index] = -1;
+    }
+    for (index = 0U; index < wls_nginx_listener_lease.socket_count; index++) {
+        if (!h3_enabled && wls_nginx_listener_lease.identities[index].type == SOCK_DGRAM) continue;
+        sockets[copied] = fcntl(
+            wls_nginx_listener_lease.sockets[index], F_DUPFD_CLOEXEC, 3
+        );
+        if (sockets[copied] < 0) goto denied;
+        copied++;
+    }
+    if (wls_listener_socket_topology_self_test_valid(sockets, copied, h3_enabled)) {
+        *socket_count = copied;
+        return 0;
+    }
+denied:
+    while (copied > 0U) {
+        copied--;
+        close(sockets[copied]);
+        sockets[copied] = -1;
+    }
+    *socket_count = 0U;
+    return -1;
+}
+
+static int wls_nginx_listener_lease_master_valid(void)
+{
+    unsigned long long observed_start = 0ULL;
+#if defined(__APPLE__)
+    char observed_binary[PATH_MAX];
+#endif
+#if defined(__linux__)
+    int valid = wls_nginx_listener_lease.master_pid != 0U
+        && wls_nginx_listener_lease.master_start_id != 0ULL
+        && wls_nginx_listener_lease.master_binary_path[0] == '/'
+        && wls_nginx_listener_lease.master_prefix[0] == '/'
+        && wls_nginx_listener_lease.master_config_path[0] == '/'
+        && (kill((pid_t)wls_nginx_listener_lease.master_pid, 0) == 0
+            || errno == EPERM)
+        && wls_process_start_id(
+            (pid_t)wls_nginx_listener_lease.master_pid, &observed_start
+        ) == 0
+        && observed_start == wls_nginx_listener_lease.master_start_id
+        && wls_process_command_matches(
+            (pid_t)wls_nginx_listener_lease.master_pid,
+            wls_nginx_listener_lease.master_binary_path,
+            wls_nginx_listener_lease.master_prefix,
+            wls_nginx_listener_lease.master_config_path
+        ) == 0;
+#elif defined(__APPLE__)
+    int valid = wls_nginx_listener_lease.master_pid != 0U
+        && wls_nginx_listener_lease.master_start_id != 0ULL
+        && wls_nginx_listener_lease.master_binary_path[0] == '/'
+        && wls_nginx_listener_lease.master_prefix[0] == '/'
+        && wls_nginx_listener_lease.master_config_path[0] == '/'
+        && wls_process_identity(
+            (pid_t)wls_nginx_listener_lease.master_pid,
+            observed_binary, sizeof(observed_binary), &observed_start
+        ) == 0
+        && observed_start == wls_nginx_listener_lease.master_start_id
+        && strcmp(observed_binary, wls_nginx_listener_lease.master_binary_path) == 0
+        && wls_process_command_matches(
+            (pid_t)wls_nginx_listener_lease.master_pid,
+            wls_nginx_listener_lease.master_binary_path,
+            wls_nginx_listener_lease.master_prefix,
+            wls_nginx_listener_lease.master_config_path
+        ) == 0;
+    sodium_memzero(observed_binary, sizeof(observed_binary));
+#else
+    int valid = 0;
+#endif
+    return valid;
+}
+
+static WLS_MAYBE_UNUSED unsigned long long wls_nginx_listener_lease_attest_start_id(void)
+{
+    return wls_nginx_listener_lease.present
+        ? wls_nginx_listener_lease.master_start_id : 0ULL;
+}
+
+static WLS_MAYBE_UNUSED int wls_nginx_listener_lease_attest_binary_path(
+    char *output,
+    size_t capacity
+) {
+    if (output == NULL || capacity == 0U || !wls_nginx_listener_lease.present
+        || wls_nginx_listener_lease.master_binary_path[0] != '/') return -1;
+    return snprintf(output, capacity, "%s",
+        wls_nginx_listener_lease.master_binary_path) < (int)capacity ? 0 : -1;
+}
+
+static WLS_MAYBE_UNUSED int wls_nginx_listener_lease_attest_matches(
+    unsigned long master_pid,
+    unsigned long long master_start_id,
+    int self_test_topology
+) {
+    size_t index;
+    unsigned long long observed_start = 0ULL;
+    int topology_valid;
+    if (!wls_nginx_listener_lease.present) return 0;
+    if (wls_nginx_listener_lease.master_binary_path[0] != '/'
+        || wls_nginx_listener_lease.master_prefix[0] != '/'
+        || wls_nginx_listener_lease.master_config_path[0] != '/') {
+        wls_nginx_listener_lease_clear();
+        return 0;
+    }
+    for (index = 0U; index < wls_nginx_listener_lease.socket_count; index++) {
+        if (!wls_listener_socket_identity_same(
+                wls_nginx_listener_lease.sockets[index],
+                &wls_nginx_listener_lease.identities[index]
+            )) {
+            wls_nginx_listener_lease_clear();
+            return 0;
+        }
+    }
+    topology_valid = self_test_topology
+        ? wls_listener_socket_topology_self_test_valid(
+            wls_nginx_listener_lease.sockets,
+            wls_nginx_listener_lease.socket_count,
+            wls_nginx_listener_lease.h3_enabled
+        )
+        : wls_listener_socket_topology_valid(
+            wls_nginx_listener_lease.sockets,
+            wls_nginx_listener_lease.socket_count,
+            wls_nginx_listener_lease.listen_profile,
+            wls_nginx_listener_lease.h3_enabled
+        );
+#if defined(__linux__)
+    if (!topology_valid
+        || wls_process_start_id(
+            (pid_t)wls_nginx_listener_lease.master_pid, &observed_start
+        ) != 0
+        || observed_start != wls_nginx_listener_lease.master_start_id
+        || wls_process_command_matches(
+            (pid_t)wls_nginx_listener_lease.master_pid,
+            wls_nginx_listener_lease.master_binary_path,
+            wls_nginx_listener_lease.master_prefix,
+            wls_nginx_listener_lease.master_config_path
+        ) != 0) {
+        wls_nginx_listener_lease_clear();
+        return 0;
+    }
+    /* Only after independently proving the stored lease is live may a
+     * caller's pid/start mismatch be treated as non-destructive. */
+    return master_pid == wls_nginx_listener_lease.master_pid
+        && master_start_id == wls_nginx_listener_lease.master_start_id;
+#else
+    (void)master_pid;
+    (void)master_start_id;
+    (void)observed_start;
+    return topology_valid && wls_nginx_listener_lease_master_valid();
+#endif
+}
+
+static int wls_nginx_listener_lease_request_tuple_matches(
+    const struct wls_nginx_action_context *context,
+    const char *fencing,
+    unsigned long master_pid,
+    unsigned long long master_start_id
+) {
+    char fencing_digest[65];
+    int matches;
+    if (context == NULL || fencing == NULL || master_pid == 0U
+        || master_start_id == 0ULL || !wls_nginx_listener_lease.present) return 0;
+    wls_sha256_hex((const unsigned char *)fencing, strlen(fencing), fencing_digest);
+    matches = strcmp(wls_nginx_listener_lease.gateway_epoch, context->gateway_epoch) == 0
+        && strcmp(wls_nginx_listener_lease.host_boot_id, context->host_boot_id) == 0
+        && strcmp(wls_nginx_listener_lease.fencing_digest, fencing_digest) == 0
+        && strcmp(wls_nginx_listener_lease.active_slot, context->active_slot) == 0
+        && strcmp(wls_nginx_listener_lease.runtime_generation, context->runtime_generation) == 0
+        && strcmp(wls_nginx_listener_lease.listen_profile, context->listen_profile) == 0
+        && (wls_nginx_listener_lease.h3_enabled || !context->h3_enabled)
+        && wls_nginx_listener_lease.master_pid == master_pid
+        && wls_nginx_listener_lease.master_start_id == master_start_id;
+    sodium_memzero(fencing_digest, sizeof(fencing_digest));
+    return matches;
+}
+
+static int wls_nginx_listener_lease_matches(
+    const struct wls_nginx_action_context *context,
+    const char *fencing,
+    unsigned long master_pid,
+    unsigned long long master_start_id
+) {
+    size_t index;
+    if (context == NULL || fencing == NULL || master_pid == 0U
+        || master_start_id == 0ULL || !wls_nginx_listener_lease.present) {
+        return 0;
+    }
+    /* Physical lease damage and independently observed master replacement
+     * invalidate a lease.  A request tuple mismatch never does: otherwise a
+     * forged request could tear down the current listener capability. */
+    for (index = 0U; index < wls_nginx_listener_lease.socket_count; index++) {
+        if (!wls_listener_socket_identity_same(
+                wls_nginx_listener_lease.sockets[index],
+                &wls_nginx_listener_lease.identities[index]
+            )) {
+            wls_nginx_listener_lease_clear();
+            return 0;
+        }
+    }
+    if (!wls_listener_socket_topology_valid(
+            wls_nginx_listener_lease.sockets,
+            wls_nginx_listener_lease.socket_count,
+            wls_nginx_listener_lease.listen_profile,
+            wls_nginx_listener_lease.h3_enabled
+        ) || !wls_nginx_listener_lease_master_valid()) {
+        wls_nginx_listener_lease_clear();
+        return 0;
+    }
+    return wls_nginx_listener_lease.socket_count >= 2U
+        && wls_nginx_listener_lease.socket_count <= 6U
+        && wls_nginx_listener_lease_request_tuple_matches(
+            context, fencing, master_pid, master_start_id
+        );
+}
+
+static int wls_nginx_listener_lease_store(
+    const struct wls_nginx_action_context *context,
+    const char *fencing,
+    unsigned long master_pid,
+    unsigned long long master_start_id,
+    int sockets[6],
+    size_t socket_count
+) {
+    struct wls_listener_socket_identity identities[6];
+    char fencing_digest[65];
+    size_t index;
+    if (context == NULL || fencing == NULL || sockets == NULL
+        || socket_count < 2U || socket_count > 6U
+        || master_pid == 0U || master_start_id == 0ULL
+        || !wls_listener_socket_topology_valid(
+            sockets, socket_count, context->listen_profile, context->h3_enabled
+        )) return -1;
+    memset(identities, 0, sizeof(identities));
+    memset(fencing_digest, 0, sizeof(fencing_digest));
+    for (index = 0U; index < socket_count; index++) {
+        if (wls_listener_socket_identity_capture(
+                sockets[index], &identities[index]
+            ) != 0) {
+            sodium_memzero(identities, sizeof(identities));
+            return -1;
+        }
+    }
+    wls_sha256_hex(
+        (const unsigned char *)fencing, strlen(fencing), fencing_digest
+    );
+    wls_nginx_listener_lease_clear();
+    memcpy(wls_nginx_listener_lease.identities, identities, sizeof(identities));
+    memcpy(wls_nginx_listener_lease.gateway_epoch,
+        context->gateway_epoch, sizeof(wls_nginx_listener_lease.gateway_epoch));
+    memcpy(wls_nginx_listener_lease.host_boot_id,
+        context->host_boot_id, sizeof(wls_nginx_listener_lease.host_boot_id));
+    memcpy(wls_nginx_listener_lease.fencing_digest,
+        fencing_digest, sizeof(wls_nginx_listener_lease.fencing_digest));
+    memcpy(wls_nginx_listener_lease.active_slot,
+        context->active_slot, sizeof(wls_nginx_listener_lease.active_slot));
+    memcpy(wls_nginx_listener_lease.runtime_generation,
+        context->runtime_generation,
+        sizeof(wls_nginx_listener_lease.runtime_generation));
+    memcpy(wls_nginx_listener_lease.listen_profile,
+        context->listen_profile, sizeof(wls_nginx_listener_lease.listen_profile));
+    wls_nginx_listener_lease.h3_enabled = context->h3_enabled;
+    wls_nginx_listener_lease.master_pid = master_pid;
+    wls_nginx_listener_lease.master_start_id = master_start_id;
+    memcpy(wls_nginx_listener_lease.master_binary_path,
+        context->binary_path, sizeof(wls_nginx_listener_lease.master_binary_path));
+    memcpy(wls_nginx_listener_lease.master_prefix,
+        context->prefix, sizeof(wls_nginx_listener_lease.master_prefix));
+    memcpy(wls_nginx_listener_lease.master_config_path,
+        context->config_path, sizeof(wls_nginx_listener_lease.master_config_path));
+    wls_nginx_listener_lease.socket_count = socket_count;
+    for (index = 0U; index < socket_count; index++) {
+        wls_nginx_listener_lease.sockets[index] = sockets[index];
+        sockets[index] = -1;
+    }
+    wls_nginx_listener_lease.present = 1;
+    sodium_memzero(identities, sizeof(identities));
+    sodium_memzero(fencing_digest, sizeof(fencing_digest));
+    return 0;
+}
+
+static int wls_nginx_listener_lease_duplicate(
+    const struct wls_nginx_action_context *context,
+    const char *fencing,
+    unsigned long master_pid,
+    unsigned long long master_start_id,
+    int sockets[6],
+    size_t *socket_count
+) {
+    size_t index;
+    size_t copied = 0U;
+    if (sockets == NULL || socket_count == NULL
+        || !wls_nginx_listener_lease_matches(
+            context, fencing, master_pid, master_start_id
+        )) return -1;
+    for (index = 0U; index < 6U; index++) sockets[index] = -1;
+    for (index = 0U; index < wls_nginx_listener_lease.socket_count; index++) {
+        if (!context->h3_enabled
+            && wls_nginx_listener_lease.identities[index].type == SOCK_DGRAM) continue;
+        sockets[copied] = fcntl(
+            wls_nginx_listener_lease.sockets[index], F_DUPFD_CLOEXEC, 3
+        );
+        if (sockets[copied] < 0) {
+            while (copied > 0U) {
+                copied--;
+                close(sockets[copied]);
+                sockets[copied] = -1;
+            }
+            return -1;
+        }
+        copied++;
+    }
+    *socket_count = copied;
+    if (wls_listener_socket_topology_valid(
+            sockets, copied, context->listen_profile, context->h3_enabled
+        )) return 0;
+    while (copied > 0U) {
+        copied--;
+        close(sockets[copied]);
+        sockets[copied] = -1;
+    }
+    *socket_count = 0U;
+    return -1;
+}
+
+struct wls_nginx_spawn_result {
+    int child_reaped;
+    int exit_success;
+};
+
 static int wls_nginx_spawn_wait(
     const struct wls_nginx_action_context *context,
     const char *operation,
+    const char *config_path,
     const int public_sockets[6],
     size_t public_socket_count,
-    unsigned long long deadline_ms
+    unsigned long long deadline_ms,
+    int *start_tree_may_exist,
+    struct wls_nginx_spawn_result *spawn_result
 ) {
     posix_spawn_file_actions_t actions;
     posix_spawnattr_t attributes;
@@ -15236,17 +16769,23 @@ static int wls_nginx_spawn_wait(
     char *start_environment[5];
     char *ordinary_environment[4];
     char **environment;
+    int staged_sockets[6] = {-1, -1, -1, -1, -1, -1};
     size_t index;
     size_t inherited_count = 0U;
     size_t environment_used = strlen("NGINX=");
     unsigned long long execution_deadline_ms = deadline_ms;
-    if (context == NULL || operation == NULL
+    if (start_tree_may_exist != NULL) *start_tree_may_exist = 0;
+    if (spawn_result != NULL) {
+        spawn_result->child_reaped = 0;
+        spawn_result->exit_success = 0;
+    }
+    if (context == NULL || operation == NULL || config_path == NULL
         || !wls_data_plane_identity_present
         || (strcmp(operation, "START") != 0
             && strcmp(operation, "TEST") != 0
             && strcmp(operation, "RELOAD") != 0
             && strcmp(operation, "QUIT") != 0)
-        || (strcmp(operation, "START") == 0
+        || (wls_nginx_listener_fd_handoff_required(operation)
             ? (public_sockets == NULL || public_socket_count < 2U
                 || public_socket_count > 6U)
             : public_socket_count != 0U)
@@ -15262,15 +16801,36 @@ static int wls_nginx_spawn_wait(
         || posix_spawn_file_actions_init(&actions) != 0) return -1;
     actions_initialized = 1;
     memcpy(nginx_environment, "NGINX=", strlen("NGINX=") + 1U);
-    if (strcmp(operation, "START") == 0) {
+    if (wls_nginx_listener_fd_handoff_required(operation)) {
         for (index = 0U; index < public_socket_count; index++) {
             int target;
             int length;
             if (public_sockets[index] < 0) continue;
+            {
+                size_t prior;
+                struct wls_listener_socket_identity source_identity;
+                for (prior = 0U; prior < index; prior++) {
+                    if (public_sockets[prior] == public_sockets[index]) goto cleanup;
+                }
+                if (wls_listener_socket_identity_capture(
+                        public_sockets[index], &source_identity
+                    ) != 0
+                    || fcntl(public_sockets[index], F_GETFD) < 0
+                    || (fcntl(public_sockets[index], F_GETFD) & FD_CLOEXEC) == 0) {
+                    goto cleanup;
+                }
+                staged_sockets[inherited_count] = fcntl(
+                    public_sockets[index], F_DUPFD_CLOEXEC, 26
+                );
+                if (staged_sockets[inherited_count] < 0
+                    || !wls_listener_socket_identity_same(
+                        staged_sockets[inherited_count], &source_identity
+                    )) goto cleanup;
+            }
             target = 20 + (int)inherited_count;
             if (target > 25) goto cleanup;
             if (posix_spawn_file_actions_adddup2(
-                    &actions, public_sockets[index], target
+                    &actions, staged_sockets[inherited_count], target
                 ) != 0) goto cleanup;
             length = snprintf(
                 nginx_environment + environment_used,
@@ -15288,7 +16848,7 @@ static int wls_nginx_spawn_wait(
     }
     if (snprintf(
             fd_argument, sizeof(fd_argument), "%s",
-            strcmp(operation, "START") == 0
+            wls_nginx_listener_fd_handoff_required(operation)
                 ? nginx_environment + strlen("NGINX=") : "-"
         ) >= (int)sizeof(fd_argument)) goto cleanup;
     arguments[0] = (char *)context->broker_path;
@@ -15306,7 +16866,7 @@ static int wls_nginx_spawn_wait(
     arguments[12] = "--nginx-fds";
     arguments[13] = fd_argument;
     arguments[14] = "--nginx-config";
-    arguments[15] = (char *)context->config_path;
+    arguments[15] = (char *)config_path;
     arguments[16] = NULL;
     start_environment[0] = nginx_environment;
     start_environment[1] = "PATH=/usr/bin:/bin";
@@ -15317,7 +16877,7 @@ static int wls_nginx_spawn_wait(
     ordinary_environment[1] = "LANG=C";
     ordinary_environment[2] = "TZ=UTC";
     ordinary_environment[3] = NULL;
-    environment = strcmp(operation, "START") == 0
+    environment = wls_nginx_listener_fd_handoff_required(operation)
         ? start_environment : ordinary_environment;
     if (posix_spawn_file_actions_addopen(
             &actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0
@@ -15347,6 +16907,12 @@ static int wls_nginx_spawn_wait(
         errno = spawn_error;
         goto cleanup;
     }
+    if (strcmp(operation, "START") == 0 && start_tree_may_exist != NULL) {
+        /* The child launcher forks before it can report its CLOEXEC pipe
+         * result. From this point a distinct Nginx tree may exist and local
+         * PID/PGID action is forbidden until the platform restarts us. */
+        *start_tree_may_exist = 1;
+    }
     if (deadline_ms > WLS_NGINX_CHILD_REAP_RESERVE_MS) {
         execution_deadline_ms = deadline_ms - WLS_NGINX_CHILD_REAP_RESERVE_MS;
     }
@@ -15356,18 +16922,25 @@ static int wls_nginx_spawn_wait(
             execution_deadline_ms,
             WLS_NGINX_ACTION_POLL_US
         ) == 0) {
-        result = WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : -1;
+        if (spawn_result != NULL) spawn_result->child_reaped = 1;
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            if (spawn_result != NULL) spawn_result->exit_success = 1;
+            result = 0;
+        }
     } else if (errno == ETIMEDOUT) {
         (void)kill(child, SIGKILL);
-        (void)wls_wait_child_exit_until(
+        if (wls_wait_child_exit_until(
             child,
             &status,
             deadline_ms,
             WLS_NGINX_ACTION_POLL_US
-        );
+        ) == 0 && spawn_result != NULL) spawn_result->child_reaped = 1;
         errno = ETIMEDOUT;
     }
 cleanup:
+    for (index = 0U; index < 6U; index++) {
+        if (staged_sockets[index] >= 0) close(staged_sockets[index]);
+    }
     if (attributes_initialized) (void)posix_spawnattr_destroy(&attributes);
     if (actions_initialized) (void)posix_spawn_file_actions_destroy(&actions);
     return result;
@@ -15382,23 +16955,23 @@ static const char *wls_open_public_sockets(
 ) {
     static const unsigned short ports[2] = {80U, 443U};
     unsigned int port_index;
-    unsigned int diagnostic = 0U;
+    size_t count = 0U;
     const char *state = "AVAILABLE";
     if (profile == NULL || sockets == NULL || socket_count == NULL
         || diagnostics == NULL
         || (strcmp(profile, "default") != 0
             && strcmp(profile, "ipv4-only") != 0)) return "PORT_PROFILE_UNAVAILABLE";
-    for (diagnostic = 0U; diagnostic < 6U; diagnostic++) {
-        sockets[diagnostic] = -1;
-        diagnostics[diagnostic] = -1;
+    for (port_index = 0U; port_index < 6U; port_index++) {
+        sockets[port_index] = -1;
+        diagnostics[port_index] = -1;
     }
     *socket_count = 0U;
-    diagnostic = 0U;
     for (port_index = 0U; port_index < 2U; port_index++) {
         struct sockaddr_in address4;
-        sockets[diagnostic] = socket(AF_INET, SOCK_STREAM, 0);
-        if (sockets[diagnostic] < 0
-            || wls_fd_cloexec(sockets[diagnostic]) != 0) {
+        unsigned int diagnostic = port_index * 2U;
+        sockets[count] = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockets[count] < 0
+            || wls_listener_prepare_inherited_fd(sockets[count]) != 0) {
             diagnostics[diagnostic] = errno != 0 ? errno : EIO;
             state = errno == EACCES ? "PORT_PERMISSION" : "PORT_UNAVAILABLE";
             goto cleanup;
@@ -15408,7 +16981,7 @@ static const char *wls_open_public_sockets(
         address4.sin_port = htons(ports[port_index]);
         address4.sin_addr.s_addr = htonl(INADDR_ANY);
         if (bind(
-                sockets[diagnostic],
+                sockets[count],
                 (struct sockaddr *)&address4,
                 sizeof(address4)
             ) != 0) {
@@ -15418,27 +16991,27 @@ static const char *wls_open_public_sockets(
                 : errno == EACCES ? "PORT_PERMISSION" : "PORT_UNAVAILABLE";
             goto cleanup;
         }
-        if (listen(sockets[diagnostic], SOMAXCONN) != 0) {
+        if (listen(sockets[count], SOMAXCONN) != 0) {
             diagnostics[diagnostic] = errno;
             state = "PORT_UNAVAILABLE";
             goto cleanup;
         }
-        diagnostic++;
+        diagnostics[diagnostic] = 0;
+        count++;
         if (strcmp(profile, "ipv4-only") == 0) {
-            diagnostics[diagnostic++] = -1;
             continue;
         }
         {
             struct sockaddr_in6 address6;
             int only = 1;
-            sockets[diagnostic] = socket(AF_INET6, SOCK_STREAM, 0);
-            if (sockets[diagnostic] < 0
-                || wls_fd_cloexec(sockets[diagnostic]) != 0
+            sockets[count] = socket(AF_INET6, SOCK_STREAM, 0);
+            if (sockets[count] < 0
+                || wls_listener_prepare_inherited_fd(sockets[count]) != 0
                 || setsockopt(
-                    sockets[diagnostic], IPPROTO_IPV6, IPV6_V6ONLY,
+                    sockets[count], IPPROTO_IPV6, IPV6_V6ONLY,
                     &only, sizeof(only)
                 ) != 0) {
-                diagnostics[diagnostic] = errno != 0 ? errno : EIO;
+                diagnostics[diagnostic + 1U] = errno != 0 ? errno : EIO;
                 state = errno == EACCES
                     ? "PORT_PERMISSION" : "PORT_PROFILE_UNAVAILABLE";
                 goto cleanup;
@@ -15448,31 +17021,32 @@ static const char *wls_open_public_sockets(
             address6.sin6_port = htons(ports[port_index]);
             address6.sin6_addr = in6addr_any;
             if (bind(
-                    sockets[diagnostic],
+                    sockets[count],
                     (struct sockaddr *)&address6,
                     sizeof(address6)
                 ) != 0) {
-                diagnostics[diagnostic] = errno;
+                diagnostics[diagnostic + 1U] = errno;
                 state = errno == EADDRINUSE
                     ? "PORT_TAKEN"
                     : errno == EACCES
                         ? "PORT_PERMISSION" : "PORT_PROFILE_UNAVAILABLE";
                 goto cleanup;
             }
-            if (listen(sockets[diagnostic], SOMAXCONN) != 0) {
-                diagnostics[diagnostic] = errno;
+            if (listen(sockets[count], SOMAXCONN) != 0) {
+                diagnostics[diagnostic + 1U] = errno;
                 state = "PORT_UNAVAILABLE";
                 goto cleanup;
             }
-            diagnostic++;
+            diagnostics[diagnostic + 1U] = 0;
+            count++;
         }
     }
     if (include_h3) {
         struct sockaddr_in udp4;
-        sockets[diagnostic] = socket(AF_INET, SOCK_DGRAM, 0);
-        if (sockets[diagnostic] < 0
-            || wls_fd_cloexec(sockets[diagnostic]) != 0) {
-            diagnostics[diagnostic] = errno != 0 ? errno : EIO;
+        sockets[count] = socket(AF_INET, SOCK_DGRAM, 0);
+        if (sockets[count] < 0
+            || wls_listener_prepare_inherited_fd(sockets[count]) != 0) {
+            diagnostics[4] = errno != 0 ? errno : EIO;
             state = "H3_PORT_UNAVAILABLE";
             goto cleanup;
         }
@@ -15480,10 +17054,10 @@ static const char *wls_open_public_sockets(
         {
             int enabled = 1;
             if (setsockopt(
-                    sockets[diagnostic], SOL_SOCKET, SO_REUSEPORT,
+                    sockets[count], SOL_SOCKET, SO_REUSEPORT,
                     &enabled, sizeof(enabled)
                 ) != 0) {
-                diagnostics[diagnostic] = errno;
+                diagnostics[4] = errno;
                 state = "H3_PORT_UNAVAILABLE";
                 goto cleanup;
             }
@@ -15494,35 +17068,36 @@ static const char *wls_open_public_sockets(
         udp4.sin_port = htons(443U);
         udp4.sin_addr.s_addr = htonl(INADDR_ANY);
         if (bind(
-                sockets[diagnostic],
+                sockets[count],
                 (struct sockaddr *)&udp4, sizeof(udp4)
             ) != 0) {
-            diagnostics[diagnostic] = errno;
+            diagnostics[4] = errno;
             state = errno == EADDRINUSE
                 ? "H3_PORT_TAKEN" : "H3_PORT_UNAVAILABLE";
             goto cleanup;
         }
-        diagnostics[diagnostic++] = 0;
+        diagnostics[4] = 0;
+        count++;
         if (strcmp(profile, "default") == 0) {
             struct sockaddr_in6 udp6;
             int only = 1;
-            sockets[diagnostic] = socket(AF_INET6, SOCK_DGRAM, 0);
-            if (sockets[diagnostic] < 0
-                || wls_fd_cloexec(sockets[diagnostic]) != 0
+            sockets[count] = socket(AF_INET6, SOCK_DGRAM, 0);
+            if (sockets[count] < 0
+                || wls_listener_prepare_inherited_fd(sockets[count]) != 0
                 || setsockopt(
-                    sockets[diagnostic], IPPROTO_IPV6, IPV6_V6ONLY,
+                    sockets[count], IPPROTO_IPV6, IPV6_V6ONLY,
                     &only, sizeof(only)
                 ) != 0) {
-                diagnostics[diagnostic] = errno != 0 ? errno : EIO;
+                diagnostics[5] = errno != 0 ? errno : EIO;
                 state = "H3_PORT_UNAVAILABLE";
                 goto cleanup;
             }
 #if defined(SO_REUSEPORT)
             if (setsockopt(
-                    sockets[diagnostic], SOL_SOCKET, SO_REUSEPORT,
+                    sockets[count], SOL_SOCKET, SO_REUSEPORT,
                     &only, sizeof(only)
                 ) != 0) {
-                diagnostics[diagnostic] = errno;
+                diagnostics[5] = errno;
                 state = "H3_PORT_UNAVAILABLE";
                 goto cleanup;
             }
@@ -15532,24 +17107,25 @@ static const char *wls_open_public_sockets(
             udp6.sin6_port = htons(443U);
             udp6.sin6_addr = in6addr_any;
             if (bind(
-                    sockets[diagnostic],
+                    sockets[count],
                     (struct sockaddr *)&udp6, sizeof(udp6)
                 ) != 0) {
-                diagnostics[diagnostic] = errno;
+                diagnostics[5] = errno;
                 state = errno == EADDRINUSE
                     ? "H3_PORT_TAKEN" : "H3_PORT_UNAVAILABLE";
                 goto cleanup;
             }
-            diagnostics[diagnostic++] = 0;
+            diagnostics[5] = 0;
+            count++;
         }
     }
-    *socket_count = diagnostic;
+    *socket_count = count;
     return state;
 cleanup:
-    for (diagnostic = 0U; diagnostic < 6U; diagnostic++) {
-        if (sockets[diagnostic] >= 0) {
-            close(sockets[diagnostic]);
-            sockets[diagnostic] = -1;
+    for (port_index = 0U; port_index < 6U; port_index++) {
+        if (sockets[port_index] >= 0) {
+            close(sockets[port_index]);
+            sockets[port_index] = -1;
         }
     }
     *socket_count = 0U;
@@ -15561,7 +17137,7 @@ static const char *wls_tcp_port_probe(
     int diagnostics[4]
 ) {
     int sockets[6];
-    int extended_diagnostics[6];
+    int extended_diagnostics[6] = {0};
     size_t socket_count = 0U;
     size_t index;
     const char *state = wls_open_public_sockets(
@@ -15577,13 +17153,16 @@ static const char *wls_tcp_port_probe(
 static int wls_nginx_pid_identity(
     const char *home,
     const struct wls_nginx_action_context *context,
+    const char *pid_leaf,
     int require_attestation,
     unsigned long *pid,
     unsigned long long *start_id
 ) {
     char pid_path[PATH_MAX];
     char receipt_path[PATH_MAX];
+#if defined(__APPLE__)
     char observed_binary[PATH_MAX];
+#endif
     unsigned char *pid_contents = NULL;
     unsigned char *receipt = NULL;
     size_t pid_length = 0U;
@@ -15604,7 +17183,12 @@ static int wls_nginx_pid_identity(
     char fence_digest[65];
     int consumed = 0;
     if (home == NULL || context == NULL || pid == NULL || start_id == NULL
-        || snprintf(pid_path, sizeof(pid_path), "%s/runtime/run/nginx.pid", home)
+        || (pid_leaf != NULL && (pid_leaf[0] == '\0'
+            || strchr(pid_leaf, '/') != NULL || strchr(pid_leaf, '\\') != NULL))
+        || snprintf(
+            pid_path, sizeof(pid_path), "%s/nginx-pid/%s", home,
+            pid_leaf != NULL ? pid_leaf : "nginx.pid"
+        )
             >= (int)sizeof(pid_path)) return -1;
     if (wls_read_file(pid_path, 64U, &pid_contents, &pid_length) != 0) {
         return errno == ENOENT && !require_attestation ? 0 : -1;
@@ -15622,20 +17206,35 @@ static int wls_nginx_pid_identity(
         return -1;
     }
     sodium_memzero(pid_contents, pid_length); free(pid_contents);
+    /* The broker must not require CAP_SYS_PTRACE to observe a data-plane
+     * master.  Linux exposes stat/cmdline under the deployed capability set;
+     * exe readlink does not.  Start-id plus exact argv and the signed
+     * attestation below are the identity binding. */
+#if defined(__linux__)
+    if (kill((pid_t)parsed, 0) != 0 && errno != EPERM) {
+        return errno == ESRCH && !require_attestation ? 0 : -1;
+    }
+    if (wls_process_start_id((pid_t)parsed, &observed_start) != 0) return -1;
+#elif defined(__APPLE__)
     if (wls_process_identity(
-            (pid_t)parsed, observed_binary,
-            sizeof(observed_binary), &observed_start
+            (pid_t)parsed, observed_binary, sizeof(observed_binary), &observed_start
         ) != 0) {
-        if (errno == ESRCH || kill((pid_t)parsed, 0) != 0) {
-            return require_attestation ? -1 : 0;
-        }
+        return require_attestation ? -1 : (errno == ESRCH ? 0 : -1);
+    }
+    if (strcmp(observed_binary, context->binary_path) != 0) {
+        sodium_memzero(observed_binary, sizeof(observed_binary));
         return -1;
     }
-    if (strcmp(observed_binary, context->binary_path) != 0
-        || wls_process_command_matches(
+    sodium_memzero(observed_binary, sizeof(observed_binary));
+#else
+    return -1;
+#endif
+    if (wls_process_command_matches(
             (pid_t)parsed, context->binary_path,
             context->prefix, context->config_path
-        ) != 0) return -1;
+        ) != 0
+        || getpgid((pid_t)parsed) != (pid_t)parsed
+        || getsid((pid_t)parsed) != (pid_t)parsed) return -1;
     if (require_attestation) {
         if (snprintf(
                 receipt_path, sizeof(receipt_path),
@@ -15679,6 +17278,877 @@ static int wls_nginx_pid_identity(
     *pid = parsed;
     *start_id = observed_start;
     return 1;
+}
+
+/* Nginx creates nginx-pid/nginx.pid itself under the dropped data-plane
+ * identity.  The Broker owns the transition of that leaf between the
+ * short-lived TEST artifact and the Controller-readable START authority. */
+static int wls_nginx_pid_run_directory(
+    const char *home,
+    const struct wls_controller_identity *controller_identity,
+    int allow_window_replay,
+    int *directory_fd
+) {
+    struct stat status;
+    struct stat legacy;
+    int home_fd = -1;
+    int result = -1;
+    (void)allow_window_replay;
+    if (home == NULL || controller_identity == NULL || directory_fd == NULL
+        || !wls_data_plane_identity_present) return -1;
+    *directory_fd = -1;
+    home_fd = wls_open_absolute_directory(home);
+    if (home_fd < 0) goto cleanup;
+    if (fstatat(
+            home_fd, "runtime/run/nginx.pid", &legacy, AT_SYMLINK_NOFOLLOW
+        ) == 0 || errno != ENOENT) goto cleanup;
+    *directory_fd = wls_open_relative(home_fd, "nginx-pid", O_RDONLY | O_DIRECTORY);
+    if (*directory_fd < 0 || fstat(*directory_fd, &status) != 0
+        || !S_ISDIR(status.st_mode)
+        || status.st_uid != 0
+        || status.st_gid != wls_data_plane_identity.gid
+        || !wls_posix_acl_free(*directory_fd, 1)) goto cleanup;
+    if ((status.st_mode & 0777) != 0711) goto cleanup;
+    {
+        DIR *entries = NULL;
+        struct dirent *entry;
+        int scan_fd = dup(*directory_fd);
+        if (scan_fd < 0 || (entries = fdopendir(scan_fd)) == NULL) {
+            if (scan_fd >= 0) close(scan_fd);
+            goto cleanup;
+        }
+        while ((entry = readdir(entries)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0
+                || strcmp(entry->d_name, "..") == 0
+                || strcmp(entry->d_name, "nginx.pid") == 0) continue;
+            /* PID sources and seal staging leaves are broker-private. A
+             * previous interrupted publish is never replayed blindly, and no
+             * new action starts while any unclassified namespace residue is
+             * present. That makes crash recovery fail closed, not cumulative. */
+            wls_nginx_start_tree_restart_required = 1;
+            closedir(entries);
+            goto cleanup;
+        }
+        if (closedir(entries) != 0) goto cleanup;
+    }
+    result = 0;
+cleanup:
+    if (home_fd >= 0) close(home_fd);
+    if (result != 0 && *directory_fd >= 0) {
+        close(*directory_fd);
+        *directory_fd = -1;
+    }
+    return result;
+}
+
+static int wls_nginx_pid_leaf_exact(
+    int directory_fd,
+    uid_t owner,
+    gid_t group,
+    mode_t mode,
+    off_t size,
+    struct stat *status
+) {
+    struct stat path_status;
+    int fd = -1;
+    int result = -1;
+    if (directory_fd < 0 || status == NULL || size < 0) return -1;
+    fd = openat(
+        directory_fd, "nginx.pid", O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+    );
+    if (fd < 0 || fstat(fd, status) != 0
+        || fstatat(
+            directory_fd, "nginx.pid", &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0
+        || !S_ISREG(status->st_mode) || status->st_nlink != 1
+        || status->st_uid != owner || status->st_gid != group
+        || (status->st_mode & 0777) != mode || status->st_size != size
+        || !wls_atomic_replace_status_same(status, &path_status)
+        || !wls_posix_acl_free(fd, 0)) goto cleanup;
+    result = fd;
+    fd = -1;
+cleanup:
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+/* nginx-pid is root:data 0711 at rest, so neither Controller nor data-plane
+ * can replace its leaf.  Reopen the literal leaf after revocation; callers'
+ * earlier observations do not authorize deletion. */
+static int wls_nginx_pid_unlink_exact_leaf(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    uid_t owner,
+    gid_t group,
+    mode_t mode,
+    const char *expected,
+    size_t expected_length
+) {
+    struct stat leaf;
+    struct stat path_leaf;
+    char observed[32];
+    int fd = -1;
+    int result = -1;
+    if (directory_fd < 0 || controller_identity == NULL
+        || expected_length > sizeof(observed)
+        || (expected_length > 0U && expected == NULL)
+        || fstat(directory_fd, &leaf) != 0 || !S_ISDIR(leaf.st_mode)
+        || leaf.st_uid != 0 || leaf.st_gid != wls_data_plane_identity.gid
+        || (leaf.st_mode & 0777) != 0711
+        || !wls_posix_acl_free(directory_fd, 1)) goto cleanup;
+    fd = wls_nginx_pid_leaf_exact(
+        directory_fd, owner, group, mode, (off_t)expected_length, &leaf
+    );
+    if (fd < 0 || (expected_length > 0U && (
+            wls_read_exact(fd, observed, expected_length) != 0
+            || sodium_memcmp(observed, expected, expected_length) != 0
+        )) || fstat(fd, &leaf) != 0
+        || fstatat(
+            directory_fd, "nginx.pid", &path_leaf, AT_SYMLINK_NOFOLLOW
+        ) != 0 || !wls_atomic_replace_status_same(&leaf, &path_leaf)
+        || unlinkat(directory_fd, "nginx.pid", 0) != 0
+        || fsync(directory_fd) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    sodium_memzero(observed, sizeof(observed));
+    return result;
+}
+
+/* Return only after either observing true absence or removing the exact
+ * crash-replay empty leaf.  A pre-existing malformed/foreign PID leaf is an
+ * authority conflict, never a cleanup hint. */
+static int wls_nginx_pid_test_source_leaf_valid(const char *leaf_name) {
+    char token[WLS_TOKEN_HEX + 1U];
+    int consumed = 0;
+    int result = 0;
+    if (leaf_name != NULL && sscanf(
+            leaf_name, ".nginx.pid.test.%64[0-9a-f].pid%n", token, &consumed
+        ) == 1 && wls_is_hex(token, WLS_TOKEN_HEX)
+        && consumed == (int)strlen(leaf_name)) result = 1;
+    sodium_memzero(token, sizeof(token));
+    return result;
+}
+
+static int wls_nginx_pid_source_leaf_exact(
+    int directory_fd,
+    const char *leaf_name,
+    uid_t owner,
+    gid_t group,
+    mode_t mode,
+    off_t size,
+    struct stat *status
+) {
+    struct stat path_status;
+    int fd = -1;
+    int result = -1;
+    if (directory_fd < 0 || leaf_name == NULL
+        || (!wls_nginx_pid_test_source_leaf_valid(leaf_name)
+            && strcmp(leaf_name, "nginx.pid") != 0)
+        || status == NULL || size < 0) {
+        return -1;
+    }
+    fd = openat(directory_fd, leaf_name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0 || fstat(fd, status) != 0
+        || fstatat(directory_fd, leaf_name, &path_status, AT_SYMLINK_NOFOLLOW) != 0
+        || !S_ISREG(status->st_mode) || status->st_nlink != 1
+        || status->st_uid != owner || status->st_gid != group
+        || (status->st_mode & 0777) != mode || status->st_size != size
+        || !wls_atomic_replace_status_same(status, &path_status)
+        || !wls_posix_acl_free(fd, 0)) goto cleanup;
+    result = fd;
+    fd = -1;
+cleanup:
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+static int wls_nginx_pid_source_create(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    char leaf_name[WLS_TOKEN_HEX + 32U]
+) {
+    struct stat directory_status;
+    struct stat source_status;
+    struct stat path_status;
+    struct stat created_status;
+    char token[WLS_TOKEN_HEX + 1U];
+    int fd = -1;
+    int created_identity = 0;
+    int result = -1;
+    sodium_memzero(token, sizeof(token));
+    memset(&created_status, 0, sizeof(created_status));
+    if (directory_fd < 0 || controller_identity == NULL || leaf_name == NULL
+        || !wls_data_plane_identity_present
+        || fstat(directory_fd, &directory_status) != 0
+        || !S_ISDIR(directory_status.st_mode) || directory_status.st_uid != 0
+        || directory_status.st_gid != wls_data_plane_identity.gid
+        || (directory_status.st_mode & 0777) != 0711
+        || !wls_posix_acl_free(directory_fd, 1)
+        || wls_random_token(token) != 0
+        || snprintf(
+            leaf_name, WLS_TOKEN_HEX + 32U,
+            ".nginx.pid.test.%s.pid", token
+        ) >= (int)(WLS_TOKEN_HEX + 32U)) goto cleanup;
+    fd = openat(
+        directory_fd, leaf_name, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600
+    );
+    if (fd >= 0 && fstat(fd, &created_status) == 0) created_identity = 1;
+    if (fd >= 0 && wls_nginx_pid_source_create_fault == 2) {
+        int replacement_fd = -1;
+        if (unlinkat(directory_fd, leaf_name, 0) != 0
+            || (replacement_fd = openat(
+                directory_fd, leaf_name,
+                O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600
+            )) < 0 || close(replacement_fd) != 0) goto cleanup;
+    }
+    if (fd >= 0 && wls_nginx_pid_source_create_fault != 0) {
+        errno = EIO;
+        goto cleanup;
+    }
+    if (fd < 0 || fchown(
+            fd, wls_data_plane_identity.uid, wls_data_plane_identity.gid
+        ) != 0 || fchmod(fd, 0600) != 0 || fsync(fd) != 0
+        || fstat(fd, &source_status) != 0
+        || fstatat(
+            directory_fd, leaf_name, &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0 || !S_ISREG(source_status.st_mode) || source_status.st_nlink != 1
+        || source_status.st_uid != wls_data_plane_identity.uid
+        || source_status.st_gid != wls_data_plane_identity.gid
+        || (source_status.st_mode & 0777) != 0600 || source_status.st_size != 0
+        || !wls_atomic_replace_status_same(&source_status, &path_status)
+        || !wls_posix_acl_free(fd, 0) || fsync(directory_fd) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (result != 0 && leaf_name != NULL && leaf_name[0] != '\0') {
+        if (created_identity && fd >= 0
+            && fstat(fd, &source_status) == 0
+            && source_status.st_dev == created_status.st_dev
+            && source_status.st_ino == created_status.st_ino
+            && fstatat(
+                directory_fd, leaf_name, &path_status, AT_SYMLINK_NOFOLLOW
+            ) == 0 && wls_atomic_replace_status_same(
+                &created_status, &path_status
+            ) && unlinkat(directory_fd, leaf_name, 0) == 0
+            && fsync(directory_fd) == 0) {
+            leaf_name[0] = '\0';
+        } else {
+            wls_nginx_start_tree_restart_required = 1;
+        }
+    }
+    if (fd >= 0) close(fd);
+    sodium_memzero(token, sizeof(token));
+    return result;
+}
+
+/* START keeps the permanent nginx.conf and argv contract.  O_CREAT|O_TRUNC
+ * succeeds for nginx because this exact leaf already exists and is writable
+ * by data; the data identity never needs write or delete on nginx-pid/. */
+static int wls_nginx_pid_precreate_canonical_source(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity
+) {
+    struct stat directory_status;
+    struct stat source_status;
+    struct stat path_status;
+    int fd = -1;
+    int created = 0;
+    int result = -1;
+    if (directory_fd < 0 || controller_identity == NULL
+        || !wls_data_plane_identity_present
+        || fstat(directory_fd, &directory_status) != 0
+        || !S_ISDIR(directory_status.st_mode) || directory_status.st_uid != 0
+        || directory_status.st_gid != wls_data_plane_identity.gid
+        || (directory_status.st_mode & 0777) != 0711
+        || !wls_posix_acl_free(directory_fd, 1)) goto cleanup;
+    fd = openat(
+        directory_fd, "nginx.pid", O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600
+    );
+    if (fd < 0) goto cleanup;
+    created = 1;
+    if (fchown(
+            fd, wls_data_plane_identity.uid, wls_data_plane_identity.gid
+        ) != 0 || fchmod(fd, 0600) != 0 || fsync(fd) != 0
+        || fstat(fd, &source_status) != 0
+        || fstatat(
+            directory_fd, "nginx.pid", &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0 || !S_ISREG(source_status.st_mode) || source_status.st_nlink != 1
+        || source_status.st_uid != wls_data_plane_identity.uid
+        || source_status.st_gid != wls_data_plane_identity.gid
+        || (source_status.st_mode & 0777) != 0600 || source_status.st_size != 0
+        || !wls_atomic_replace_status_same(&source_status, &path_status)
+        || !wls_posix_acl_free(fd, 0) || fsync(directory_fd) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (result != 0 && created) {
+        (void)unlinkat(directory_fd, "nginx.pid", 0);
+    }
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+static int wls_nginx_pid_source_remove_empty(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    const char *leaf_name
+) {
+    int fd = -1;
+    int result = -1;
+    if (directory_fd < 0 || controller_identity == NULL || leaf_name == NULL) {
+        return -1;
+    }
+    fd = wls_nginx_pid_source_leaf_exact(
+        directory_fd, leaf_name, wls_data_plane_identity.uid,
+        wls_data_plane_identity.gid, 0600, 0, &(struct stat){0}
+    );
+    if (fd < 0 || unlinkat(directory_fd, leaf_name, 0) != 0
+        || fsync(directory_fd) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+/* A failed START can leave only the broker-precreated, still-empty canonical
+ * source. Once the caller has independently proved that no master exists,
+ * remove that exact data-owned object so the next START can precreate anew.
+ * A sealed canonical PID never matches this authority and is retained. */
+static int wls_nginx_pid_empty_canonical_source_remove(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity
+) {
+    int fd = -1;
+    int result = -1;
+    if (directory_fd < 0 || controller_identity == NULL) return -1;
+    fd = wls_nginx_pid_source_leaf_exact(
+        directory_fd, "nginx.pid", wls_data_plane_identity.uid,
+        wls_data_plane_identity.gid, 0600, 0, &(struct stat){0}
+    );
+    if (fd < 0 || unlinkat(directory_fd, "nginx.pid", 0) != 0
+        || fsync(directory_fd) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+/* TEST receives an action-only config in the same broker-owned pid root.
+ * It is root:controller 0444: data can read the known file, but neither
+ * controller nor data can replace it because nginx-pid itself is 0711. */
+static int wls_nginx_pid_test_config_leaf_valid(const char *leaf_name) {
+    char token[WLS_TOKEN_HEX + 1U];
+    int consumed = 0;
+    int result = 0;
+    if (leaf_name != NULL && sscanf(
+            leaf_name, ".nginx.pid.test.%64[0-9a-f].conf%n", token, &consumed
+        ) == 1 && wls_is_hex(token, WLS_TOKEN_HEX)
+        && consumed == (int)strlen(leaf_name)) result = 1;
+    sodium_memzero(token, sizeof(token));
+    return result;
+}
+
+static int wls_nginx_pid_test_config_exact(
+    int directory_fd,
+    const char *config_leaf,
+    const struct wls_controller_identity *controller_identity,
+    const char expected_digest[65],
+    struct stat *status
+) {
+    struct stat path_status;
+    char digest[65];
+    uint64_t size = 0U;
+    int fd = -1;
+    int result = -1;
+    if (directory_fd < 0 || !wls_nginx_pid_test_config_leaf_valid(config_leaf)
+        || controller_identity == NULL || expected_digest == NULL
+        || status == NULL) goto cleanup;
+    fd = openat(directory_fd, config_leaf, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0 || fstat(fd, status) != 0
+        || fstatat(directory_fd, config_leaf, &path_status, AT_SYMLINK_NOFOLLOW) != 0
+        || !S_ISREG(status->st_mode) || status->st_nlink != 1
+        || status->st_uid != 0 || status->st_gid != controller_identity->gid
+        || (status->st_mode & 0777) != 0444
+        || !wls_atomic_replace_status_same(status, &path_status)
+        || !wls_posix_acl_free(fd, 0)
+        || wls_file_digest_fd_bounded(
+            fd, digest, &size, WLS_MAX_ATOMIC_CONFIG
+        ) != 0 || size == 0U || strcmp(digest, expected_digest) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    sodium_memzero(digest, sizeof(digest));
+    return result;
+}
+
+/* The action context already authenticated this absolute config path and its
+ * digest.  Re-open it only through the trusted home FD, never by absolute
+ * pathname or by silently substituting the canonical nginx.conf. */
+static int wls_nginx_action_config_relative(
+    const struct wls_nginx_action_context *context,
+    char relative[PATH_MAX]
+) {
+    size_t home_length;
+    const char *candidate;
+    if (context == NULL || relative == NULL || context->home[0] != '/'
+        || context->config_path[0] != '/') return -1;
+    home_length = strlen(context->home);
+    if (home_length == 0U
+        || strncmp(context->config_path, context->home, home_length) != 0
+        || context->config_path[home_length] != '/') return -1;
+    candidate = context->config_path + home_length + 1U;
+    if (!wls_is_relative_safe(candidate) || strlen(candidate) >= PATH_MAX) {
+        return -1;
+    }
+    memcpy(relative, candidate, strlen(candidate) + 1U);
+    return 0;
+}
+
+static int wls_nginx_pid_source_config_create(
+    const struct wls_nginx_action_context *context,
+    int directory_fd,
+    const char *source_leaf,
+    const struct wls_controller_identity *controller_identity,
+    char config_path[PATH_MAX],
+    char config_leaf[WLS_TOKEN_HEX + 40U],
+    char config_digest[65],
+    struct stat *config_status
+) {
+    char *contents = NULL;
+    size_t contents_length = 0U;
+    char canonical[PATH_MAX + 48U];
+    char replacement[PATH_MAX + 80U];
+    char relative[PATH_MAX];
+    char source_token[WLS_TOKEN_HEX + 1U];
+    struct stat created_status;
+    struct stat path_status;
+    const char *match;
+    char *rewritten = NULL;
+    size_t prefix;
+    size_t rewritten_length;
+    int home_fd = -1;
+    int fd = -1;
+    int config_created = 0;
+    int result = -1;
+    int consumed = 0;
+    memset(source_token, 0, sizeof(source_token));
+    memset(relative, 0, sizeof(relative));
+    memset(&created_status, 0, sizeof(created_status));
+    memset(&path_status, 0, sizeof(path_status));
+    if (context == NULL || directory_fd < 0 || source_leaf == NULL
+        || !wls_nginx_pid_test_source_leaf_valid(source_leaf)
+        || controller_identity == NULL || config_path == NULL
+        || config_leaf == NULL || config_digest == NULL || config_status == NULL
+        || sscanf(
+            source_leaf, ".nginx.pid.test.%64[0-9a-f].pid%n",
+            source_token, &consumed
+        ) != 1 || !wls_is_hex(source_token, WLS_TOKEN_HEX)
+        || consumed != (int)strlen(source_leaf)
+        || snprintf(canonical, sizeof(canonical),
+            "pid \"%s/nginx-pid/nginx.pid\";", context->home
+        ) >= (int)sizeof(canonical)
+        || snprintf(replacement, sizeof(replacement),
+            "pid \"%s/nginx-pid/%s\";", context->home, source_leaf
+        ) >= (int)sizeof(replacement)
+        || snprintf(config_leaf, WLS_TOKEN_HEX + 40U,
+            ".nginx.pid.test.%s.conf", source_token
+        ) >= (int)(WLS_TOKEN_HEX + 40U)
+        || snprintf(config_path, PATH_MAX, "%s/nginx-pid/%s",
+            context->home, config_leaf
+        ) >= PATH_MAX) goto cleanup;
+    if (wls_nginx_action_config_relative(context, relative) != 0) goto cleanup;
+    home_fd = wls_open_absolute_directory(context->home);
+    if (home_fd < 0 || wls_action_read_regular(
+            home_fd, relative, WLS_MAX_ATOMIC_CONFIG, 0,
+            &contents, &contents_length, NULL
+        ) != 0 || contents_length == 0U
+        || (wls_sha256_hex(
+            (const unsigned char *)contents, contents_length, config_digest
+        ), strcmp(config_digest, context->config_digest) != 0)) goto cleanup;
+    match = strstr(contents, canonical);
+    if (match == NULL || strstr(match + strlen(canonical), canonical) != NULL) goto cleanup;
+    prefix = (size_t)(match - contents);
+    if (contents_length > SIZE_MAX - strlen(replacement) + strlen(canonical)) goto cleanup;
+    rewritten_length = contents_length - strlen(canonical) + strlen(replacement);
+    rewritten = calloc(rewritten_length + 1U, 1U);
+    if (rewritten == NULL) goto cleanup;
+    memcpy(rewritten, contents, prefix);
+    memcpy(rewritten + prefix, replacement, strlen(replacement));
+    memcpy(rewritten + prefix + strlen(replacement),
+        match + strlen(canonical), contents_length - prefix - strlen(canonical));
+    wls_sha256_hex((const unsigned char *)rewritten, rewritten_length, config_digest);
+    fd = openat(directory_fd, config_leaf,
+        O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    config_created = fd >= 0;
+    if (fd < 0 || wls_write_all(fd, rewritten, rewritten_length) != 0
+        || fchown(fd, 0, controller_identity->gid) != 0
+        || fchmod(fd, 0444) != 0 || fsync(fd) != 0 || fsync(directory_fd) != 0
+        || fstat(fd, &created_status) != 0
+        || fstatat(directory_fd, config_leaf, &path_status, AT_SYMLINK_NOFOLLOW) != 0
+        || !wls_atomic_replace_status_same(&created_status, &path_status)
+        || wls_nginx_pid_test_config_exact(
+            directory_fd, config_leaf, controller_identity,
+            config_digest, config_status
+        ) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (result != 0 && config_created) {
+        if (fd >= 0 && config_leaf != NULL && config_leaf[0] != '\0'
+            && fstat(fd, &created_status) == 0
+            && fstatat(
+                directory_fd, config_leaf, &path_status, AT_SYMLINK_NOFOLLOW
+            ) == 0 && wls_atomic_replace_status_same(
+                &created_status, &path_status
+            ) && unlinkat(directory_fd, config_leaf, 0) == 0
+            && fsync(directory_fd) == 0) {
+            config_leaf[0] = '\0';
+            config_path[0] = '\0';
+        } else {
+            wls_nginx_start_tree_restart_required = 1;
+        }
+    }
+    if (fd >= 0) close(fd);
+    if (home_fd >= 0) close(home_fd);
+    if (contents != NULL) {
+        sodium_memzero(contents, contents_length);
+        free(contents);
+    }
+    if (rewritten != NULL) {
+        sodium_memzero(rewritten, rewritten_length);
+        free(rewritten);
+    }
+    sodium_memzero(canonical, sizeof(canonical));
+    sodium_memzero(replacement, sizeof(replacement));
+    sodium_memzero(relative, sizeof(relative));
+    sodium_memzero(source_token, sizeof(source_token));
+    return result;
+}
+
+/* Source creation and TEST-config preparation are one broker-owned
+ * transaction.  If the second half fails, remove only the still-empty source
+ * whose inode, owner, mode and contents remain exact, then fsync its parent. */
+static int wls_nginx_pid_test_sources_prepare(
+    const struct wls_nginx_action_context *context,
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    char source_leaf[WLS_TOKEN_HEX + 32U],
+    char config_path[PATH_MAX],
+    char config_leaf[WLS_TOKEN_HEX + 40U],
+    char config_digest[65],
+    struct stat *config_status
+) {
+    int source_created = 0;
+    int result = -1;
+    if (source_leaf == NULL || config_path == NULL || config_leaf == NULL
+        || config_digest == NULL || config_status == NULL) return -1;
+    source_leaf[0] = '\0';
+    config_path[0] = '\0';
+    config_leaf[0] = '\0';
+    if (wls_nginx_pid_source_create(
+            directory_fd, controller_identity, source_leaf
+        ) != 0) goto cleanup;
+    source_created = 1;
+    if (wls_nginx_pid_source_config_create(
+            context, directory_fd, source_leaf, controller_identity,
+            config_path, config_leaf, config_digest, config_status
+        ) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (result != 0 && source_created && source_leaf[0] != '\0') {
+        if (wls_nginx_pid_source_remove_empty(
+                directory_fd, controller_identity, source_leaf
+            ) == 0) {
+            source_leaf[0] = '\0';
+        } else {
+            wls_nginx_start_tree_restart_required = 1;
+        }
+    }
+    return result;
+}
+
+static int wls_nginx_pid_source_config_remove(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    const char *config_leaf,
+    const char expected_digest[65],
+    const struct stat *expected_status
+) {
+    struct stat status;
+    int result = -1;
+    if (directory_fd < 0 || controller_identity == NULL
+        || expected_status == NULL || wls_nginx_pid_test_config_exact(
+            directory_fd, config_leaf, controller_identity,
+            expected_digest, &status
+        ) != 0 || !wls_atomic_replace_status_same(&status, expected_status)
+        || unlinkat(directory_fd, config_leaf, 0) != 0 || fsync(directory_fd) != 0) {
+        goto cleanup;
+    }
+    result = 0;
+cleanup:
+    return result;
+}
+
+static int wls_nginx_pid_publish_from_source(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    const char *source_leaf,
+    unsigned long pid
+) {
+    struct stat before;
+    struct stat after;
+    struct stat path_status;
+    char expected[32];
+    char observed[32];
+    char token[WLS_TOKEN_HEX + 1U];
+    char temporary[WLS_TOKEN_HEX + 32U];
+    int expected_length;
+    int fd = -1;
+    int temporary_fd = -1;
+    int sealed_fd = -1;
+    int result = -1;
+    sodium_memzero(token, sizeof(token));
+    sodium_memzero(temporary, sizeof(temporary));
+    expected_length = snprintf(expected, sizeof(expected), "%lu\n", pid);
+    if (pid == 0U || expected_length <= 0
+        || expected_length >= (int)sizeof(expected)
+        || directory_fd < 0 || controller_identity == NULL || source_leaf == NULL) {
+        goto cleanup;
+    }
+    fd = wls_nginx_pid_source_leaf_exact(
+        directory_fd, source_leaf, wls_data_plane_identity.uid,
+        wls_data_plane_identity.gid, 0600, (off_t)expected_length, &before
+    );
+    if (fd < 0 || wls_read_exact(fd, observed, (size_t)expected_length) != 0
+        || sodium_memcmp(observed, expected, (size_t)expected_length) != 0
+        || wls_random_token(token) != 0
+        || snprintf(
+            temporary, sizeof(temporary), ".nginx.pid.seal.%s", token
+        ) >= (int)sizeof(temporary)) goto cleanup;
+    temporary_fd = openat(
+        directory_fd, temporary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600
+    );
+    if (temporary_fd < 0
+        || wls_write_all(temporary_fd, expected, (size_t)expected_length) != 0
+        /* Never seal the data-created object in place: an already-open data
+         * FD would retain write access after chmod/chown. */
+        || fchown(temporary_fd, 0, controller_identity->gid) != 0
+        || fchmod(temporary_fd, 0444) != 0 || fsync(temporary_fd) != 0
+        || fstat(temporary_fd, &after) != 0
+        || after.st_dev != before.st_dev
+        /* The replacement intentionally has a distinct inode. */
+        || after.st_ino == before.st_ino
+        || !S_ISREG(after.st_mode) || after.st_nlink != 1
+        || after.st_uid != 0
+        || after.st_gid != controller_identity->gid
+        || (after.st_mode & 0777) != 0444
+        || !wls_posix_acl_free(temporary_fd, 0)
+        || renameat(directory_fd, temporary, directory_fd, "nginx.pid") != 0
+        || fsync(directory_fd) != 0
+        || fstatat(
+            directory_fd, "nginx.pid", &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0 || path_status.st_dev != after.st_dev
+        || path_status.st_ino != after.st_ino
+        || !S_ISREG(path_status.st_mode) || path_status.st_nlink != 1
+        || path_status.st_uid != 0
+        || path_status.st_gid != controller_identity->gid
+        || (path_status.st_mode & 0777) != 0444
+        || path_status.st_size != (off_t)expected_length
+        || (sealed_fd = wls_nginx_pid_leaf_exact(
+            directory_fd, 0, controller_identity->gid, 0444,
+            (off_t)expected_length, &path_status
+        )) < 0
+        || wls_read_exact(sealed_fd, observed, (size_t)expected_length) != 0
+        || sodium_memcmp(observed, expected, (size_t)expected_length) != 0
+        || (strcmp(source_leaf, "nginx.pid") != 0
+            && (unlinkat(directory_fd, source_leaf, 0) != 0
+                || fsync(directory_fd) != 0))) goto cleanup;
+    close(sealed_fd);
+    sealed_fd = -1;
+    close(temporary_fd);
+    temporary_fd = -1;
+    result = 0;
+cleanup:
+    if (result != 0 && temporary[0] != '\0') {
+        (void)unlinkat(directory_fd, temporary, 0);
+    }
+    if (temporary_fd >= 0) close(temporary_fd);
+    if (sealed_fd >= 0) close(sealed_fd);
+    if (fd >= 0) close(fd);
+    sodium_memzero(observed, sizeof(observed));
+    sodium_memzero(expected, sizeof(expected));
+    sodium_memzero(token, sizeof(token));
+    sodium_memzero(temporary, sizeof(temporary));
+    return result;
+}
+
+/* Compatibility for an intentionally unreachable legacy self-test body. */
+static int wls_nginx_pid_artifact_remove_terminal(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    unsigned long pid
+) {
+    char expected[32];
+    int expected_length;
+    int result = -1;
+    expected_length = snprintf(expected, sizeof(expected), "%lu\n", pid);
+    if (directory_fd < 0 || controller_identity == NULL || pid == 0U
+        || expected_length <= 0 || expected_length >= (int)sizeof(expected)) {
+        goto cleanup;
+    }
+    result = wls_nginx_pid_unlink_exact_leaf(
+        directory_fd, controller_identity,
+        0, controller_identity->gid,
+        0444, expected, (size_t)expected_length
+    );
+cleanup:
+    sodium_memzero(expected, sizeof(expected));
+    return result;
+}
+
+/* Remove only the exact canonical receipt PID after ESRCH. Absence is an
+ * idempotent terminal after-image; every present leaf is reopened and checked
+ * by the fixed root:controller 0444 unlink primitive. */
+static int wls_nginx_pid_artifact_remove_after_exact_death(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    unsigned long pid
+) {
+    struct stat path_status;
+    if (directory_fd < 0 || controller_identity == NULL || pid == 0U) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (fstatat(
+            directory_fd, "nginx.pid", &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0) {
+        return errno == ENOENT ? 0 : -1;
+    }
+    errno = 0;
+    if (kill((pid_t)pid, 0) == 0 || errno != ESRCH) {
+        errno = ESTALE;
+        return -1;
+    }
+    if (wls_nginx_pid_artifact_remove_terminal(
+            directory_fd, controller_identity, pid
+        ) != 0) {
+        wls_nginx_start_tree_restart_required = 1;
+        return -1;
+    }
+    return 0;
+}
+
+/* A previous master may have been terminated by the platform after its
+ * canonical PID was sealed.  The stable parent is root-owned and not writable
+ * by Controller or data, but still reopen and revalidate the literal leaf
+ * before acting.  ESRCH is the only startup-time death proof accepted here. */
+static int wls_nginx_pid_dead_sealed_artifact_remove(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity
+) {
+    struct stat path_status;
+    struct stat leaf_status;
+    char observed[32];
+    char *end = NULL;
+    size_t length;
+    unsigned long parsed = 0U;
+    int fd = -1;
+    int result = -1;
+    sodium_memzero(observed, sizeof(observed));
+    if (directory_fd < 0 || controller_identity == NULL
+        || fstatat(
+            directory_fd, "nginx.pid", &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0 || !S_ISREG(path_status.st_mode) || path_status.st_nlink != 1
+        || path_status.st_uid != 0
+        || path_status.st_gid != controller_identity->gid
+        || (path_status.st_mode & 0777) != 0444
+        || path_status.st_size < 2
+        || path_status.st_size >= (off_t)sizeof(observed)) goto cleanup;
+    length = (size_t)path_status.st_size;
+    fd = wls_nginx_pid_leaf_exact(
+        directory_fd, 0, controller_identity->gid, 0444,
+        path_status.st_size, &leaf_status
+    );
+    if (fd < 0 || wls_read_exact(fd, observed, length) != 0) goto cleanup;
+    observed[length] = '\0';
+    errno = 0;
+    parsed = strtoul(observed, &end, 10);
+    if (errno != 0 || end == observed || parsed == 0U
+        || parsed > (unsigned long)INT_MAX
+        || end != observed + length - 1U || *end != '\n'
+        || end[1] != '\0') goto cleanup;
+    close(fd);
+    fd = -1;
+    if (wls_nginx_pid_artifact_remove_after_exact_death(
+            directory_fd, controller_identity, parsed
+        ) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    sodium_memzero(observed, sizeof(observed));
+    return result;
+}
+
+/* Normalize the only two recoverable no-master after-images.  An exact empty
+ * data source may be left before spawn; an exact sealed PID may be left only
+ * after the platform has made that PID terminal.  Everything else is an
+ * authority conflict and is retained. */
+static int wls_nginx_pid_recover_no_master_artifact(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity
+) {
+    struct stat path_status;
+    struct stat source_status;
+    int source_fd = -1;
+    if (directory_fd < 0 || controller_identity == NULL) return -1;
+    if (fstatat(
+            directory_fd, "nginx.pid", &path_status, AT_SYMLINK_NOFOLLOW
+        ) != 0) {
+        return errno == ENOENT ? 0 : -1;
+    }
+    source_fd = wls_nginx_pid_source_leaf_exact(
+        directory_fd, "nginx.pid", wls_data_plane_identity.uid,
+        wls_data_plane_identity.gid, 0600, 0, &source_status
+    );
+    if (source_fd >= 0) {
+        close(source_fd);
+        if (wls_nginx_pid_empty_canonical_source_remove(
+                directory_fd, controller_identity
+            ) == 0) return 0;
+        wls_nginx_start_tree_restart_required = 1;
+        return -1;
+    }
+    return wls_nginx_pid_dead_sealed_artifact_remove(
+        directory_fd, controller_identity
+    );
+}
+
+static int wls_nginx_pid_sealed_snapshot(
+    int directory_fd,
+    const struct wls_controller_identity *controller_identity,
+    unsigned long pid,
+    struct stat *status,
+    char bytes[32],
+    size_t *length
+) {
+    char expected[32];
+    int expected_length;
+    int fd = -1;
+    int result = -1;
+    if (directory_fd < 0 || controller_identity == NULL || pid == 0U
+        || status == NULL || bytes == NULL || length == NULL) goto cleanup;
+    expected_length = snprintf(expected, sizeof(expected), "%lu\n", pid);
+    if (expected_length <= 0 || expected_length >= (int)sizeof(expected)) goto cleanup;
+    fd = wls_nginx_pid_leaf_exact(
+        directory_fd, 0, controller_identity->gid, 0444,
+        (off_t)expected_length, status
+    );
+    if (fd < 0 || wls_read_exact(fd, bytes, (size_t)expected_length) != 0
+        || sodium_memcmp(bytes, expected, (size_t)expected_length) != 0) goto cleanup;
+    *length = (size_t)expected_length;
+    result = 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    sodium_memzero(expected, sizeof(expected));
+    return result;
 }
 
 static int wls_nginx_action_receipt(
@@ -15805,25 +18275,58 @@ static int wls_nginx_test_action_v2(
     struct wls_nginx_test_context before;
     struct wls_nginx_test_context after;
     struct wls_nginx_test_context restored;
+    struct wls_nginx_action_context master_context;
     struct stat restored_status;
     char relative[PATH_MAX];
     char canonical[2048];
     char receipt_digest[65];
+    int diagnostics[6] = {0, 0, 0, 0, 0, 0};
+    int public_sockets[6] = {-1, -1, -1, -1, -1, -1};
+    size_t public_socket_count = 0U;
+    size_t socket_index;
+    unsigned long master_pid = 0U;
+    unsigned long long master_start_id = 0ULL;
     unsigned long budget = 0U;
     unsigned long long started = 0ULL;
     unsigned long long deadline = 0ULL;
     int lock_error;
     int written;
     int candidate_granted = 0;
+    int pid_source_owned = 0;
+    int test_spawn_invoked = 0;
+    int canonical_snapshot_required = 0;
+    int pid_run_fd = -1;
+    char pid_source[WLS_TOKEN_HEX + 32U];
+    char pid_source_config[PATH_MAX];
+    char pid_source_config_leaf[WLS_TOKEN_HEX + 40U];
+    char pid_source_config_digest[65];
+    char canonical_pid_bytes[32];
+    size_t canonical_pid_length = 0U;
+    struct stat pid_source_config_status;
+    struct stat canonical_pid_status;
+    struct stat canonical_pid_after_status;
+    int test_spawn_status;
+    struct wls_nginx_spawn_result test_spawn;
+    int master_state = -1;
     int result = -1;
     memset(&preliminary, 0, sizeof(preliminary));
     memset(&before, 0, sizeof(before));
     memset(&after, 0, sizeof(after));
     memset(&restored, 0, sizeof(restored));
+    memset(&master_context, 0, sizeof(master_context));
     memset(&restored_status, 0, sizeof(restored_status));
     memset(relative, 0, sizeof(relative));
     memset(canonical, 0, sizeof(canonical));
     memset(receipt_digest, 0, sizeof(receipt_digest));
+    memset(pid_source, 0, sizeof(pid_source));
+    memset(pid_source_config, 0, sizeof(pid_source_config));
+    memset(pid_source_config_leaf, 0, sizeof(pid_source_config_leaf));
+    memset(pid_source_config_digest, 0, sizeof(pid_source_config_digest));
+    memset(canonical_pid_bytes, 0, sizeof(canonical_pid_bytes));
+    memset(&pid_source_config_status, 0, sizeof(pid_source_config_status));
+    memset(&canonical_pid_status, 0, sizeof(canonical_pid_status));
+    memset(&canonical_pid_after_status, 0, sizeof(canonical_pid_after_status));
+    memset(&test_spawn, 0, sizeof(test_spawn));
     lock_error = pthread_mutex_trylock(&wls_process_lifecycle_mutex);
     if (lock_error != 0) {
         return wls_security_reply_error(
@@ -15846,6 +18349,7 @@ static int wls_nginx_test_action_v2(
         || wls_monotonic_milliseconds(&started) != 0
         || started > ULLONG_MAX - budget) goto denied;
     deadline = started + budget;
+    if (wls_nginx_start_tree_restart_required) goto denied;
     if (wls_nginx_test_context_load(
             home, fencing, controller_identity,
             fields[2], fields[3], fields[4], fields[5], fields[6],
@@ -15864,9 +18368,100 @@ static int wls_nginx_test_action_v2(
             fields[7], fields[8], fields[9], fields[10], relative,
             started, 1, &before
         ) != 0
-        || wls_nginx_spawn_wait(
-            &before.action, "TEST", NULL, 0U, deadline
-        ) != 0
+        || wls_neutral_tls_publish_and_validate(
+            home, before.action.runtime_generation, controller_identity
+        ) != 0) goto denied;
+    if (wls_nginx_listener_lease.present) {
+        master_pid = wls_nginx_listener_lease.master_pid;
+        master_start_id = wls_nginx_listener_lease.master_start_id;
+        if (!wls_nginx_listener_lease_matches(
+                &before.action, fencing, master_pid, master_start_id
+            ) || wls_nginx_listener_lease_duplicate(
+            &before.action, fencing, master_pid, master_start_id,
+                public_sockets, &public_socket_count
+            ) != 0) goto denied;
+        master_state = 1;
+    } else {
+        memcpy(&master_context, &before.action, sizeof(master_context));
+        if (snprintf(
+                master_context.config_path, sizeof(master_context.config_path),
+                "%s/runtime/conf/nginx.conf", home
+            ) >= (int)sizeof(master_context.config_path)) goto denied;
+        master_state = wls_nginx_pid_identity(
+            home, &master_context, NULL, 0, &master_pid, &master_start_id
+        );
+        /* A live but unleased master is a broker-restart state: fail closed.
+         * Only a proven absent master may use a temporary test capability. */
+        if (master_state != 0
+            || strcmp(wls_open_public_sockets(
+                    before.action.listen_profile, before.action.h3_enabled,
+                    public_sockets, &public_socket_count, diagnostics
+                ), "AVAILABLE") != 0) goto denied;
+    }
+    if (wls_nginx_pid_run_directory(
+            home, controller_identity, 1, &pid_run_fd
+        ) != 0 || (master_state == 0
+            && wls_nginx_pid_recover_no_master_artifact(
+                pid_run_fd, controller_identity
+            ) != 0) || wls_nginx_pid_test_sources_prepare(
+            &before.action, pid_run_fd, controller_identity, pid_source,
+            pid_source_config, pid_source_config_leaf,
+            pid_source_config_digest, &pid_source_config_status
+        ) != 0) goto denied;
+    pid_source_owned = 1;
+    if (master_state == 1) {
+        if (wls_nginx_pid_sealed_snapshot(
+                pid_run_fd, controller_identity, master_pid,
+                &canonical_pid_status, canonical_pid_bytes,
+                &canonical_pid_length
+            ) != 0) goto denied;
+        canonical_snapshot_required = 1;
+    }
+    test_spawn_invoked = 1;
+    test_spawn_status = wls_nginx_spawn_wait(
+            &before.action,
+            "TEST",
+            pid_source_config,
+            public_sockets,
+            public_socket_count,
+            deadline,
+            NULL,
+            &test_spawn
+        );
+    if (pid_source_owned) {
+        if (!test_spawn.child_reaped
+            || wls_nginx_pid_source_remove_empty(
+                pid_run_fd, controller_identity, pid_source
+            ) != 0 || wls_nginx_pid_source_config_remove(
+                pid_run_fd, controller_identity, pid_source_config_leaf,
+                pid_source_config_digest, &pid_source_config_status
+            ) != 0) {
+            wls_nginx_start_tree_restart_required = 1;
+            goto denied;
+        }
+        pid_source[0] = '\0';
+        pid_source_config_leaf[0] = '\0';
+    }
+    if (canonical_snapshot_required) {
+        char canonical_after_bytes[32];
+        size_t canonical_after_length = 0U;
+        memset(canonical_after_bytes, 0, sizeof(canonical_after_bytes));
+        if (wls_nginx_pid_sealed_snapshot(
+                pid_run_fd, controller_identity, master_pid,
+                &canonical_pid_after_status, canonical_after_bytes,
+                &canonical_after_length
+            ) != 0 || !wls_atomic_replace_status_same(
+                &canonical_pid_status, &canonical_pid_after_status
+            ) || canonical_after_length != canonical_pid_length
+            || sodium_memcmp(
+                canonical_pid_bytes, canonical_after_bytes, canonical_pid_length
+            ) != 0) {
+            sodium_memzero(canonical_after_bytes, sizeof(canonical_after_bytes));
+            goto denied;
+        }
+        sodium_memzero(canonical_after_bytes, sizeof(canonical_after_bytes));
+    }
+    if (test_spawn_status != 0
         || wls_nginx_test_context_load(
             home, fencing, controller_identity,
             fields[2], fields[3], fields[4], fields[5], fields[6],
@@ -15946,6 +18541,12 @@ denied:
         reply, reply_capacity, "NGINX_TEST_FAILED", "NGINX_TEST", NULL, NULL
     );
 cleanup:
+    for (socket_index = 0U; socket_index < 6U; socket_index++) {
+        if (public_sockets[socket_index] >= 0) {
+            close(public_sockets[socket_index]);
+            public_sockets[socket_index] = -1;
+        }
+    }
     if (candidate_granted) {
         if (wls_restore_nginx_test_candidate(
                 home, relative, controller_identity,
@@ -15962,15 +18563,48 @@ cleanup:
             );
         }
     }
+    if (pid_source_owned && (!test_spawn_invoked || test_spawn.child_reaped)) {
+        if (pid_source[0] != '\0'
+            && wls_nginx_pid_source_remove_empty(
+                pid_run_fd, controller_identity, pid_source
+            ) != 0) {
+            wls_nginx_start_tree_restart_required = 1;
+            result = wls_security_reply_error(
+                reply, reply_capacity,
+                "NGINX_TEST_FAILED", "NGINX_TEST", NULL, NULL
+            );
+        }
+        if (pid_source_config_leaf[0] != '\0'
+            && wls_nginx_pid_source_config_remove(
+                pid_run_fd, controller_identity, pid_source_config_leaf,
+                pid_source_config_digest, &pid_source_config_status
+            ) != 0) {
+            wls_nginx_start_tree_restart_required = 1;
+            result = wls_security_reply_error(
+                reply, reply_capacity,
+                "NGINX_TEST_FAILED", "NGINX_TEST", NULL, NULL
+            );
+        }
+    }
+    if (pid_run_fd >= 0) close(pid_run_fd);
     lock_error = pthread_mutex_unlock(&wls_process_lifecycle_mutex);
     sodium_memzero(&preliminary, sizeof(preliminary));
     sodium_memzero(&before, sizeof(before));
     sodium_memzero(&after, sizeof(after));
     sodium_memzero(&restored, sizeof(restored));
+    sodium_memzero(&master_context, sizeof(master_context));
     sodium_memzero(&restored_status, sizeof(restored_status));
     sodium_memzero(relative, sizeof(relative));
     sodium_memzero(canonical, sizeof(canonical));
     sodium_memzero(receipt_digest, sizeof(receipt_digest));
+    sodium_memzero(pid_source, sizeof(pid_source));
+    sodium_memzero(pid_source_config, sizeof(pid_source_config));
+    sodium_memzero(pid_source_config_leaf, sizeof(pid_source_config_leaf));
+    sodium_memzero(pid_source_config_digest, sizeof(pid_source_config_digest));
+    sodium_memzero(canonical_pid_bytes, sizeof(canonical_pid_bytes));
+    sodium_memzero(&pid_source_config_status, sizeof(pid_source_config_status));
+    sodium_memzero(&canonical_pid_status, sizeof(canonical_pid_status));
+    sodium_memzero(&canonical_pid_after_status, sizeof(canonical_pid_after_status));
     if (lock_error != 0) {
         errno = lock_error;
         return wls_security_reply_error(
@@ -15979,6 +18613,18 @@ cleanup:
         );
     }
     return result;
+}
+
+static int wls_nginx_lifecycle_start_restart_required(
+    int reload,
+    int action_failed,
+    int committed,
+    int start_tree_may_exist
+) {
+    return !reload && (
+        (action_failed && (start_tree_may_exist || wls_nginx_start_tree_restart_required))
+        || (!committed && wls_nginx_start_tree_restart_required)
+    );
 }
 
 static int wls_nginx_lifecycle_action_v2(
@@ -16007,9 +18653,41 @@ static int wls_nginx_lifecycle_action_v2(
     int pid_state;
     int lock_error;
     int written;
+    int lease_stored = 0;
+    int start_tree_may_exist = 0;
+    int action_failed = 0;
+    int committed = 0;
+    int restart_required = 0;
+    int pid_run_fd = -1;
+    int test_pid_source_created = 0;
+    int test_spawn_invoked = 0;
+    int canonical_snapshot_required = 0;
+    char test_pid_source[WLS_TOKEN_HEX + 32U];
+    char test_pid_source_config[PATH_MAX];
+    char test_pid_source_config_leaf[WLS_TOKEN_HEX + 40U];
+    char test_pid_source_config_digest[65];
+    char canonical_pid_bytes[32];
+    size_t canonical_pid_length = 0U;
+    struct stat test_pid_source_config_status;
+    struct stat canonical_pid_status;
+    struct stat canonical_pid_after_status;
+    int test_spawn_status;
+    int start_spawn_status;
+    struct wls_nginx_spawn_result test_spawn;
+    struct wls_nginx_spawn_result start_spawn;
     int result = -1;
     memset(&before, 0, sizeof(before));
     memset(&after, 0, sizeof(after));
+    memset(test_pid_source, 0, sizeof(test_pid_source));
+    memset(test_pid_source_config, 0, sizeof(test_pid_source_config));
+    memset(test_pid_source_config_leaf, 0, sizeof(test_pid_source_config_leaf));
+    memset(test_pid_source_config_digest, 0, sizeof(test_pid_source_config_digest));
+    memset(canonical_pid_bytes, 0, sizeof(canonical_pid_bytes));
+    memset(&test_pid_source_config_status, 0, sizeof(test_pid_source_config_status));
+    memset(&canonical_pid_status, 0, sizeof(canonical_pid_status));
+    memset(&canonical_pid_after_status, 0, sizeof(canonical_pid_after_status));
+    memset(&test_spawn, 0, sizeof(test_spawn));
+    memset(&start_spawn, 0, sizeof(start_spawn));
     lock_error = pthread_mutex_trylock(&wls_process_lifecycle_mutex);
     if (lock_error != 0) {
         return wls_security_reply_error(
@@ -16024,6 +18702,11 @@ static int wls_nginx_lifecycle_action_v2(
         || wls_monotonic_milliseconds(&started) != 0
         || started > ULLONG_MAX - budget) goto denied;
     deadline = started + budget;
+    if (wls_nginx_lifecycle_start_restart_required(
+            reload, action_failed, committed, start_tree_may_exist
+        )) {
+        goto denied;
+    }
     if (wls_nginx_action_context_load(
             home, fencing, fields[2], fields[3], fields[4], fields[5],
             fields[6], fields[7], fields[8], fields[9], fields[10],
@@ -16032,37 +18715,27 @@ static int wls_nginx_lifecycle_action_v2(
         || wls_prepare_data_plane_runtime(
             &before,
             controller_identity
+        ) != 0
+        || wls_neutral_tls_publish_and_validate(
+            home, before.runtime_generation, controller_identity
         ) != 0) goto denied;
     pid_state = wls_nginx_pid_identity(
-        home, &before, reload, &pid, &start_id
+        home, &before, NULL, reload, &pid, &start_id
     );
-    if ((reload && pid_state != 1) || (!reload && pid_state != 0)) goto denied;
-    /* Every lifecycle transition is gated by the pinned parser under the
-     * data-plane identity. A failed preflight never signals or replaces the
-     * currently attested master. */
-    if (wls_nginx_spawn_wait(
-            &before, "TEST", NULL, 0U, deadline
-        ) != 0
-        || wls_nginx_action_context_load(
-            home, fencing, fields[2], fields[3], fields[4], fields[5],
-            fields[6], fields[7], fields[8], fields[9], fields[10],
-            fields[11], &after
-        ) != 0
-        || !wls_nginx_action_context_same(&before, &after)) goto denied;
-    if (!reload) {
-        probe_state = wls_tcp_port_probe(before.listen_profile, diagnostics);
-        if (strcmp(probe_state, "AVAILABLE") != 0) {
-            written = snprintf(
-                reply, reply_capacity,
-                "WLS-ACTION/2\tOK\tNGINX_START\t-\t%s\t%s\t%s\t%s"
-                "\t%d\t%d\t%d\t%d\n",
-                probe_state, before.listen_profile,
-                before.gateway_epoch, before.host_boot_id,
-                diagnostics[0], diagnostics[1],
-                diagnostics[2], diagnostics[3]
-            );
-            result = written > 0 && written < (int)reply_capacity ? 0 : -1;
-            goto cleanup;
+    if ((reload && pid_state != 1) || (!reload && pid_state != 0)) {
+        goto denied;
+    }
+    if (reload) {
+        if (wls_nginx_listener_lease_duplicate(
+                &before, fencing, pid, start_id,
+                public_sockets, &public_socket_count
+            ) != 0) goto denied;
+    } else {
+        /* A live retained lease proves that a master still owns the
+         * capability; a conflicting START must not revoke it. */
+        if (wls_nginx_listener_lease.present) {
+            if (wls_nginx_listener_lease_master_valid()) goto denied;
+            wls_nginx_listener_lease_clear();
         }
         probe_state = wls_open_public_sockets(
             before.listen_profile,
@@ -16085,33 +18758,136 @@ static int wls_nginx_lifecycle_action_v2(
             goto cleanup;
         }
     }
-    if (wls_nginx_spawn_wait(
+    if (wls_nginx_pid_run_directory(
+            home, controller_identity, 1, &pid_run_fd
+        ) != 0 || (!reload
+            && wls_nginx_pid_recover_no_master_artifact(
+                pid_run_fd, controller_identity
+            ) != 0) || wls_nginx_pid_test_sources_prepare(
+            &before, pid_run_fd, controller_identity, test_pid_source,
+            test_pid_source_config, test_pid_source_config_leaf,
+            test_pid_source_config_digest, &test_pid_source_config_status
+        ) != 0) goto denied;
+    test_pid_source_created = 1;
+    if (reload) {
+        if (wls_nginx_pid_sealed_snapshot(
+                pid_run_fd, controller_identity, pid,
+                &canonical_pid_status, canonical_pid_bytes,
+                &canonical_pid_length
+            ) != 0) goto denied;
+        canonical_snapshot_required = 1;
+    }
+    /* Every lifecycle transition is gated by the pinned parser under the
+     * data-plane identity. A failed preflight never signals or replaces the
+     * currently attested master. */
+    if (wls_neutral_tls_consumer_validate(
+            home, before.runtime_generation, NULL, NULL, NULL, NULL
+        ) != 0) goto denied;
+    test_spawn_invoked = 1;
+    test_spawn_status = wls_nginx_spawn_wait(
+            &before,
+            "TEST",
+            test_pid_source_config,
+            public_sockets,
+            public_socket_count,
+            deadline,
+            NULL,
+            &test_spawn
+        );
+    if (test_pid_source_created) {
+        if (!test_spawn.child_reaped || wls_nginx_pid_source_remove_empty(
+                pid_run_fd, controller_identity, test_pid_source
+            ) != 0 || wls_nginx_pid_source_config_remove(
+                pid_run_fd, controller_identity, test_pid_source_config_leaf,
+                test_pid_source_config_digest, &test_pid_source_config_status
+            ) != 0) {
+            wls_nginx_start_tree_restart_required = 1;
+            if (!reload) start_tree_may_exist = 1;
+            goto denied;
+        }
+        test_pid_source[0] = '\0';
+        test_pid_source_config_leaf[0] = '\0';
+    }
+    if (canonical_snapshot_required) {
+        char canonical_after_bytes[32];
+        size_t canonical_after_length = 0U;
+        memset(canonical_after_bytes, 0, sizeof(canonical_after_bytes));
+        if (wls_nginx_pid_sealed_snapshot(
+                pid_run_fd, controller_identity, pid,
+                &canonical_pid_after_status, canonical_after_bytes,
+                &canonical_after_length
+            ) != 0 || !wls_atomic_replace_status_same(
+                &canonical_pid_status, &canonical_pid_after_status
+            ) || canonical_after_length != canonical_pid_length
+            || sodium_memcmp(
+                canonical_pid_bytes, canonical_after_bytes, canonical_pid_length
+            ) != 0) {
+            sodium_memzero(canonical_after_bytes, sizeof(canonical_after_bytes));
+            goto denied;
+        }
+        sodium_memzero(canonical_after_bytes, sizeof(canonical_after_bytes));
+    }
+    if (test_spawn_status != 0
+        || wls_nginx_action_context_load(
+            home, fencing, fields[2], fields[3], fields[4], fields[5],
+            fields[6], fields[7], fields[8], fields[9], fields[10],
+            fields[11], &after
+        ) != 0
+        || !wls_nginx_action_context_same(&before, &after)) goto denied;
+    if (reload && (wls_nginx_pid_identity(
+            home, &before, NULL, 1, &pid, &start_id
+        ) != 1 || !wls_nginx_listener_lease_matches(
+            &before, fencing, pid, start_id
+        ))) goto denied;
+    if (reload) {
+        for (socket_index = 0U; socket_index < 6U; socket_index++) {
+            if (public_sockets[socket_index] >= 0) {
+                close(public_sockets[socket_index]);
+                public_sockets[socket_index] = -1;
+            }
+        }
+        public_socket_count = 0U;
+    }
+    if (!reload && wls_nginx_pid_precreate_canonical_source(
+            pid_run_fd, controller_identity
+        ) != 0) goto denied;
+    if (wls_neutral_tls_consumer_validate(
+            home, before.runtime_generation, NULL, NULL, NULL, NULL
+        ) != 0) goto denied;
+    start_spawn_status = wls_nginx_spawn_wait(
             &before,
             reload ? "RELOAD" : "START",
+            before.config_path,
             reload ? NULL : public_sockets,
             reload ? 0U : public_socket_count,
-            deadline
-        ) != 0) goto denied;
-    for (socket_index = 0U; socket_index < 6U; socket_index++) {
-        if (public_sockets[socket_index] >= 0) {
-            close(public_sockets[socket_index]);
-            public_sockets[socket_index] = -1;
-        }
-    }
-    public_socket_count = 0U;
+            deadline,
+            reload ? NULL : &start_tree_may_exist,
+            &start_spawn
+        );
+    if (start_spawn_status != 0) goto denied;
     if (!reload) {
+        unsigned long sealed_pid = 0U;
+        unsigned long long sealed_start_id = 0ULL;
         do {
             pid_state = wls_nginx_pid_identity(
-                home, &before, 0, &pid, &start_id
+                home, &before, NULL, 0, &pid, &start_id
             );
             if (pid_state == 1) break;
             if (wls_monotonic_milliseconds(&started) != 0
                 || started >= deadline) goto denied;
             usleep(WLS_NGINX_ACTION_POLL_US);
         } while (1);
+        if (wls_nginx_pid_publish_from_source(
+                pid_run_fd, controller_identity, "nginx.pid", pid
+            ) != 0
+            || wls_nginx_pid_identity(
+                home, &before, NULL, 0, &sealed_pid, &sealed_start_id
+            ) != 1 || sealed_pid != pid || sealed_start_id != start_id) goto denied;
     } else if (wls_nginx_pid_identity(
-            home, &before, 1, &pid, &start_id
-        ) != 1) goto denied;
+            home, &before, NULL, 1, &pid, &start_id
+        ) != 1 || !wls_nginx_listener_lease_matches(
+            &before, fencing, pid, start_id
+        )) goto denied;
     if (wls_nginx_action_context_load(
             home, fencing, fields[2], fields[3], fields[4], fields[5],
             fields[6], fields[7], fields[8], fields[9], fields[10],
@@ -16136,28 +18912,103 @@ static int wls_nginx_lifecycle_action_v2(
         before.host_boot_id
     );
     if (written <= 0 || written >= (int)reply_capacity) goto denied;
+    /* Transfer ownership only after the attested receipt and complete reply
+     * have both been formed.  Any subsequent action failure revokes it while
+     * this lifecycle lock is still held. */
+    if (!reload) {
+        if (wls_nginx_listener_lease_store(
+                &before, fencing, pid, start_id,
+                public_sockets, public_socket_count
+            ) != 0) goto denied;
+        lease_stored = 1;
+        public_socket_count = 0U;
+    }
+    committed = 1;
     result = 0;
     goto cleanup;
 denied:
+    action_failed = 1;
+    if (lease_stored) wls_nginx_listener_lease_clear();
+    restart_required = wls_nginx_lifecycle_start_restart_required(
+        reload, action_failed, committed, start_tree_may_exist
+    );
+    if (restart_required) {
+        wls_nginx_start_tree_restart_required = 1;
+    }
     result = wls_security_reply_error(
         reply, reply_capacity,
-        reload ? "NGINX_RELOAD_FAILED" : "NGINX_START_FAILED",
+        reload ? "NGINX_RELOAD_FAILED" : restart_required
+            ? "NGINX_START_SERVICE_TREE_RESTART_REQUIRED"
+            : "NGINX_START_FAILED",
         opcode, NULL, NULL
     );
 cleanup:
     for (socket_index = 0U; socket_index < 6U; socket_index++) {
         if (public_sockets[socket_index] >= 0) {
             close(public_sockets[socket_index]);
+            public_sockets[socket_index] = -1;
         }
+    }
+    if (test_pid_source_created && (!test_spawn_invoked || test_spawn.child_reaped)) {
+        if (test_pid_source[0] != '\0' && wls_nginx_pid_source_remove_empty(
+                pid_run_fd, controller_identity, test_pid_source
+            ) != 0) {
+            wls_nginx_start_tree_restart_required = 1;
+            action_failed = 1;
+        }
+        if (test_pid_source_config_leaf[0] != '\0') {
+            if (wls_nginx_pid_source_config_remove(
+                pid_run_fd, controller_identity, test_pid_source_config_leaf,
+                test_pid_source_config_digest, &test_pid_source_config_status
+            ) != 0) {
+                wls_nginx_start_tree_restart_required = 1;
+                action_failed = 1;
+            }
+        }
+    }
+    if (pid_run_fd >= 0) close(pid_run_fd);
+    restart_required = wls_nginx_lifecycle_start_restart_required(
+        reload, action_failed, committed, start_tree_may_exist
+    );
+    if (restart_required) {
+        if (lease_stored) {
+            wls_nginx_listener_lease_clear();
+            lease_stored = 0;
+        }
+        result = wls_security_reply_error(
+            reply, reply_capacity,
+            "NGINX_START_SERVICE_TREE_RESTART_REQUIRED", opcode, NULL, NULL
+        );
     }
     lock_error = pthread_mutex_unlock(&wls_process_lifecycle_mutex);
     sodium_memzero(&before, sizeof(before));
     sodium_memzero(&after, sizeof(after));
     sodium_memzero(receipt_digest, sizeof(receipt_digest));
+    sodium_memzero(test_pid_source, sizeof(test_pid_source));
+    sodium_memzero(test_pid_source_config, sizeof(test_pid_source_config));
+    sodium_memzero(test_pid_source_config_leaf, sizeof(test_pid_source_config_leaf));
+    sodium_memzero(test_pid_source_config_digest, sizeof(test_pid_source_config_digest));
+    sodium_memzero(canonical_pid_bytes, sizeof(canonical_pid_bytes));
+    sodium_memzero(&test_pid_source_config_status, sizeof(test_pid_source_config_status));
+    sodium_memzero(&canonical_pid_status, sizeof(canonical_pid_status));
+    sodium_memzero(&canonical_pid_after_status, sizeof(canonical_pid_after_status));
     if (lock_error != 0) {
+        if (lease_stored) wls_nginx_listener_lease_clear();
+        action_failed = 1;
+        if (wls_nginx_lifecycle_start_restart_required(
+                reload, action_failed, committed, start_tree_may_exist
+            )) {
+            wls_nginx_start_tree_restart_required = 1;
+        }
         errno = lock_error;
         return wls_security_reply_error(
-            reply, reply_capacity, "NGINX_ACTION_FAILED", opcode, NULL, NULL
+            reply, reply_capacity,
+            wls_nginx_lifecycle_start_restart_required(
+                reload, action_failed, committed, start_tree_may_exist
+            )
+                ? "NGINX_START_SERVICE_TREE_RESTART_REQUIRED"
+                : "NGINX_ACTION_FAILED",
+            opcode, NULL, NULL
         );
     }
     return result;
@@ -17056,7 +19907,8 @@ static int wls_platform_shutdown_attested_nginx(
     const char *home,
     const char *fencing,
     const char *active_slot,
-    const char *runtime_generation
+    const char *runtime_generation,
+    const struct wls_controller_identity *controller_identity
 ) {
     char pid_path[PATH_MAX];
     char receipt_digest[65];
@@ -17065,6 +19917,8 @@ static int wls_platform_shutdown_attested_nginx(
     char publication_text[32];
     char observed_binary[PATH_MAX];
     unsigned long long observed_start = 0ULL;
+    unsigned long verified_pid = 0U;
+    unsigned long long verified_start = 0ULL;
     unsigned long long now_ms = 0ULL;
     unsigned long long deadline_ms = 0ULL;
     unsigned long long command_deadline_ms = 0ULL;
@@ -17072,6 +19926,7 @@ static int wls_platform_shutdown_attested_nginx(
     struct wls_process_attestation_receipt receipt;
     struct wls_nginx_action_context context;
     int locked = 0;
+    int pid_run_fd = -1;
     int result = -1;
     int receipt_error;
     memset(&receipt, 0, sizeof(receipt));
@@ -17081,14 +19936,14 @@ static int wls_platform_shutdown_attested_nginx(
     memset(host_boot_id, 0, sizeof(host_boot_id));
     memset(observed_binary, 0, sizeof(observed_binary));
     if (home == NULL || fencing == NULL || active_slot == NULL
-        || runtime_generation == NULL
+        || runtime_generation == NULL || controller_identity == NULL
         || !wls_is_hex(fencing, 64U)
         || !wls_is_hex(runtime_generation, 64U)
         || (strcmp(active_slot, "A") != 0 && strcmp(active_slot, "B") != 0)
         || snprintf(
             pid_path,
             sizeof(pid_path),
-            "%s/runtime/nginx.pid",
+            "%s/nginx-pid/nginx.pid",
             home
         ) >= (int)sizeof(pid_path)) {
         errno = EINVAL;
@@ -17114,12 +19969,6 @@ static int wls_platform_shutdown_attested_nginx(
             home,
             fencing,
             &receipt
-        )
-        || !wls_owned_nginx_generation_alive(
-            home,
-            active_slot,
-            runtime_generation,
-            receipt.publication
         )
         || wls_platform_shutdown_gateway_epoch(home, gateway_epoch) != 0
         || wls_upgrade_boot_id(host_boot_id) != 0
@@ -17151,6 +20000,20 @@ static int wls_platform_shutdown_attested_nginx(
         errno = EPERM;
         goto cleanup;
     }
+    if (!wls_owned_nginx_generation_alive(
+            home,
+            active_slot,
+            runtime_generation,
+            receipt.publication
+        )) {
+        if (wls_nginx_pid_run_directory(
+                home, controller_identity, 0, &pid_run_fd
+            ) != 0 || wls_nginx_pid_artifact_remove_after_exact_death(
+                pid_run_fd, controller_identity, receipt.pid
+            ) != 0) goto cleanup;
+        result = 0;
+        goto cleanup;
+    }
     deadline_ms = now_ms + WLS_PLATFORM_SHUTDOWN_GRACE_MILLISECONDS;
     command_deadline_ms = now_ms + WLS_NGINX_ACTION_BUDGET_MAXIMUM_MS;
     if (command_deadline_ms > deadline_ms) command_deadline_ms = deadline_ms;
@@ -17158,12 +20021,28 @@ static int wls_platform_shutdown_attested_nginx(
         goto cleanup;
     }
     locked = 1;
+    if (wls_nginx_pid_identity(
+            home, &context, NULL, 1, &verified_pid, &verified_start
+        ) != 1
+        || verified_pid != receipt.pid || verified_start != receipt.start_id
+        || !wls_nginx_listener_lease_matches(
+            &context, fencing, verified_pid, verified_start
+        )) {
+        errno = ESTALE;
+        goto cleanup;
+    }
+    /* QUIT is FD-less; release the broker's originals only after the master
+     * and attested action context are still bound, immediately before signal. */
+    wls_nginx_listener_lease_clear();
     if (wls_nginx_spawn_wait(
             &context,
             "QUIT",
+            context.config_path,
             NULL,
             0U,
-            command_deadline_ms
+            command_deadline_ms,
+            NULL,
+            NULL
         ) != 0) {
         goto cleanup;
     }
@@ -17184,12 +20063,13 @@ static int wls_platform_shutdown_attested_nginx(
             int identity_error = errno;
             errno = 0;
             if (kill((pid_t)receipt.pid, 0) != 0 && errno == ESRCH) {
-                errno = 0;
-                if (lstat(pid_path, &pid_status) != 0 && errno == ENOENT) {
-                    result = 0;
-                    goto cleanup;
-                }
-                if (errno != 0 && errno != ENOENT) goto cleanup;
+                if (wls_nginx_pid_run_directory(
+                        home, controller_identity, 0, &pid_run_fd
+                    ) != 0 || wls_nginx_pid_artifact_remove_terminal(
+                        pid_run_fd, controller_identity, receipt.pid
+                    ) != 0) goto cleanup;
+                result = 0;
+                goto cleanup;
             } else if (errno != 0 && errno != EPERM) {
                 goto cleanup;
             }
@@ -17207,6 +20087,7 @@ static int wls_platform_shutdown_attested_nginx(
         if (usleep(100000U) != 0 && errno != EINTR) goto cleanup;
     }
 cleanup:
+    if (pid_run_fd >= 0) close(pid_run_fd);
     if (locked) (void)pthread_mutex_unlock(&wls_process_lifecycle_mutex);
     sodium_memzero(&receipt, sizeof(receipt));
     sodium_memzero(&context, sizeof(context));
@@ -17532,7 +20413,7 @@ static int wls_stop_attested_nginx(
     *stopped_start = 0ULL;
     if (proof_digest != NULL) proof_digest[0] = '\0';
     if (snprintf(
-            pid_path, sizeof(pid_path), "%s/runtime/nginx.pid", home
+        pid_path, sizeof(pid_path), "%s/nginx-pid/nginx.pid", home
         ) >= (int)sizeof(pid_path)
         || snprintf(expected_a, sizeof(expected_a), "%s/slots/A/bin/nginx", home)
             >= (int)sizeof(expected_a)
@@ -17778,6 +20659,12 @@ static int wls_process_tree_retire_v2(
         stop_result = WLS_PROCESS_TREE_RESULT_INDETERMINATE;
     }
 finish:
+    /* Retirement is terminal for this exact master birth even when the
+     * platform proof is INDETERMINATE: retaining broker listener originals
+     * would keep a dead generation's capability alive. */
+    if (stop_result != WLS_PROCESS_TREE_RESULT_FAILED) {
+        wls_nginx_listener_lease_clear_retired(pid, start_id);
+    }
     if (locked) {
         int unlock_error = pthread_mutex_unlock(&wls_process_lifecycle_mutex);
         if (unlock_error != 0) {
@@ -18728,8 +21615,10 @@ static int wls_bootstrap_once(
     memset(digest, 0, sizeof(digest));
     memset(signature_bytes, 0, sizeof(signature_bytes));
     if (controller_socket == NULL || fencing == NULL || home == NULL
+#if !defined(WLS_NATIVE_TEST_HOOKS)
         || controller_identity == NULL
-        || (geteuid() != 0
+#endif
+        || (controller_identity != NULL && geteuid() != 0
             && (controller_identity->uid != geteuid()
                 || controller_identity->gid != getegid()))
         || absolute_deadline_ms == 0ULL
@@ -20180,15 +23069,17 @@ static void *wls_bootstrap_maintenance_thread(void *argument)
 {
     struct wls_bootstrap_maintenance_context *context = argument;
     useconds_t waited;
+    volatile int wait_before_attempt;
     if (context == NULL) {
         wls_bootstrap_maintenance_failed = 1;
         wls_running = 0;
         return NULL;
     }
+    wait_before_attempt = !context->external_controller_test_mode;
     pthread_cleanup_push(wls_bootstrap_maintenance_completed, context);
     while (wls_running) {
         waited = 0U;
-        while (wls_running
+        while (wait_before_attempt && wls_running
             && waited < WLS_MAINTENANCE_BOOTSTRAP_INTERVAL_US) {
             useconds_t delay = WLS_MAINTENANCE_BOOTSTRAP_POLL_US;
             if (WLS_MAINTENANCE_BOOTSTRAP_INTERVAL_US - waited < delay) {
@@ -20201,6 +23092,7 @@ static void *wls_bootstrap_maintenance_thread(void *argument)
             }
             waited += delay;
         }
+        wait_before_attempt = 1;
         if (!wls_running) break;
         {
             struct wls_bootstrap_receipt receipt;
@@ -20745,25 +23637,7 @@ static pid_t wls_start_controller(
     }
     if (wls_wait_for_handlers() != 0) return -1;
     child = fork();
-    if (child != 0) {
-        if (child > 0) {
-            errno = 0;
-            if (wls_write_controller_process_identity(
-                    home,
-                    child,
-                    php,
-                    active_slot,
-                    runtime_generation,
-                    fencing
-                ) != 0) {
-                int identity_error = errno != 0 ? errno : EIO;
-                (void)wls_stop_controller_bounded(child, controller_socket);
-                errno = identity_error;
-                return -1;
-            }
-        }
-        return child;
-    }
+    if (child != 0) return child;
     signal(SIGTERM, SIG_DFL);
     signal(SIGINT, SIG_DFL);
     signal(SIGUSR1, SIG_DFL);
@@ -20791,7 +23665,8 @@ static int wls_wait_for_controller(
     pid_t *controller_pid,
     const char *home,
     const char *active_slot,
-    const char *runtime_generation
+    const char *runtime_generation,
+    int *authenticated_controller_fd
 )
 {
     unsigned int attempt;
@@ -20802,6 +23677,9 @@ static int wls_wait_for_controller(
     int monitor_data_plane = home != NULL
         || active_slot != NULL
         || runtime_generation != NULL;
+    if (authenticated_controller_fd != NULL) {
+        *authenticated_controller_fd = -1;
+    }
     if (controller_pid == NULL
         || (monitor_data_plane
             && (home == NULL || active_slot == NULL
@@ -20835,7 +23713,11 @@ static int wls_wait_for_controller(
                 socket_path, fencing, probe_deadline_ms
             );
             if (probe >= 0) {
-                close(probe);
+                if (authenticated_controller_fd != NULL) {
+                    *authenticated_controller_fd = probe;
+                } else {
+                    close(probe);
+                }
                 return 0;
             }
         }
@@ -20949,6 +23831,7 @@ static int wls_serve(
     int fencing_written = 0;
     int maximum;
     pid_t controller_pid = 0;
+    int controller_proof_fd = -1;
     pthread_t bootstrap_maintenance_thread;
     int bootstrap_maintenance_started = 0;
     struct wls_bootstrap_maintenance_context *bootstrap_maintenance_context = NULL;
@@ -21084,20 +23967,64 @@ static int wls_serve(
         controller_identity
     );
     wls_controller_pid = controller_pid > 0 ? controller_pid : 0;
-    if (controller_pid < 0
-        || (controller_pid > 0
-            && wls_wait_for_controller(
-                controller_socket,
-                fencing,
-                &controller_pid,
-                NULL,
-                NULL,
-                NULL
-            ) != 0)) {
+    if (controller_pid < 0) {
         wls_controller_pid = 0;
         fprintf(stderr, "broker controller launch failed: %s\n", strerror(errno));
         goto failed;
     }
+#if defined(WLS_NATIVE_TEST_HOOKS)
+    if (controller_pid > 0
+        && (wls_wait_for_controller(
+            controller_socket,
+            fencing,
+            &controller_pid,
+            NULL,
+            NULL,
+            NULL,
+            &controller_proof_fd
+        ) != 0
+            || wls_write_controller_process_identity(
+                home,
+                controller_pid,
+                php,
+                active_slot,
+                runtime_generation,
+                fencing,
+                controller_proof_fd,
+                controller_identity
+            ) != 0)) {
+#else
+    if (wls_wait_for_controller(
+            controller_socket,
+            fencing,
+            &controller_pid,
+            NULL,
+            NULL,
+            NULL,
+            &controller_proof_fd
+        ) != 0
+        || wls_write_controller_process_identity(
+            home,
+            controller_pid,
+            php,
+            active_slot,
+            runtime_generation,
+            fencing,
+            controller_proof_fd,
+            controller_identity
+        ) != 0
+    ) {
+#endif
+        int identity_error = errno != 0 ? errno : EIO;
+        if (controller_proof_fd >= 0) close(controller_proof_fd);
+        controller_proof_fd = -1;
+        wls_controller_pid = 0;
+        fprintf(stderr, "broker controller launch failed: %s\n", strerror(identity_error));
+        errno = identity_error;
+        goto failed;
+    }
+    close(controller_proof_fd);
+    controller_proof_fd = -1;
     admin_fd = wls_create_listener(admin_socket, 0600);
     admin_bound = admin_fd >= 0;
     project_fd = wls_create_listener(project_socket, 0622);
@@ -21113,7 +24040,11 @@ static int wls_serve(
     signal(SIGUSR1, wls_signal);
     signal(SIGHUP, SIG_IGN);
     signal(SIGPIPE, SIG_IGN);
-    if (php != NULL) {
+    if (php != NULL
+#if defined(WLS_NATIVE_TEST_HOOKS)
+        || (active_slot != NULL && runtime_generation != NULL)
+#endif
+    ) {
         bootstrap_maintenance_context =
             wls_create_bootstrap_maintenance_context(
                 controller_socket,
@@ -21127,6 +24058,11 @@ static int wls_serve(
             fprintf(stderr, "broker maintenance bootstrap context unavailable\n");
             goto failed;
         }
+#if defined(WLS_NATIVE_TEST_HOOKS)
+        bootstrap_maintenance_context->external_controller_test_mode = php == NULL;
+#endif
+    }
+    if (php != NULL) {
         if (wls_bootstrap_controller(
                 controller_socket,
                 fencing,
@@ -21158,7 +24094,7 @@ static int wls_serve(
             observation_started_ms
         );
     }
-    if (php != NULL) {
+    if (bootstrap_maintenance_context != NULL) {
         if (pthread_create(
                 &bootstrap_maintenance_thread,
                 NULL,
@@ -21369,14 +24305,37 @@ static int wls_serve(
                     }
                     {
                         int bootstrap_result = -1;
+                        int controller_proof_fd = -1;
                         int wait_result = wls_wait_for_controller(
                             controller_socket,
                             fencing,
                             &controller_pid,
                             home,
                             active_slot,
-                            runtime_generation
+                            runtime_generation,
+                            &controller_proof_fd
                         );
+                        if (wait_result == 0) {
+                            int identity_result = wls_write_controller_process_identity(
+                                home,
+                                controller_pid,
+                                php,
+                                active_slot,
+                                runtime_generation,
+                                fencing,
+                                controller_proof_fd,
+                                controller_identity
+                            );
+                            int identity_error = errno != 0 ? errno : EIO;
+                            if (controller_proof_fd >= 0) close(controller_proof_fd);
+                            controller_proof_fd = -1;
+                            if (identity_result != 0) {
+                                controller_restart_failure = identity_error;
+                                errno = identity_error;
+                                wait_result = -1;
+                            }
+                        }
+                        if (controller_proof_fd >= 0) close(controller_proof_fd);
                         if (wait_result
                             == WLS_CONTROLLER_WAIT_DATA_PLANE_DOWN) {
                             exit_code = WLS_DATA_PLANE_DOWN_EXIT;
@@ -21609,7 +24568,8 @@ cleanup:
             home,
             fencing,
             active_slot,
-            runtime_generation
+            runtime_generation,
+            controller_identity
         ) != 0) {
         fprintf(
             stderr,
@@ -21663,7 +24623,8 @@ failed:
             home,
             fencing,
             active_slot,
-            runtime_generation
+            runtime_generation,
+            controller_identity
         ) != 0) {
         fprintf(
             stderr,
@@ -21692,12 +24653,23 @@ static int wls_self_test_snapshot_entity(const char *home)
     struct stat fullchain_status;
     struct stat private_key_status;
     struct stat manifest_status;
+    struct passwd *unprivileged;
     struct wls_snapshot_receipt receipt;
     char canonical_home[PATH_MAX];
     uint64_t size = 0U;
+    uid_t self_test_uid = geteuid();
+    gid_t self_test_gid = getegid();
     int stage = 1;
     int result = -1;
     memset(&receipt, 0, sizeof(receipt));
+    if (self_test_uid == 0) {
+        unprivileged = getpwnam("_nobody");
+        if (unprivileged == NULL) unprivileged = getpwnam("nobody");
+        if (unprivileged == NULL || unprivileged->pw_uid == 0
+            || unprivileged->pw_gid == 0) goto cleanup;
+        self_test_uid = unprivileged->pw_uid;
+        self_test_gid = unprivileged->pw_gid;
+    }
     if (realpath(home, canonical_home) == NULL) goto cleanup;
     home_fd = wls_open_absolute_directory(canonical_home);
     if (home_fd < 0
@@ -21729,10 +24701,10 @@ static int wls_self_test_snapshot_entity(const char *home)
         || wls_posix_acl_remove_and_verify(private_key_fd, 0) != 0
         || wls_posix_acl_remove_and_verify(manifest_fd, 0) != 0
         || wls_posix_acl_remove_and_verify(directory_fd, 1) != 0
-        || fchown(fullchain_fd, geteuid(), getegid()) != 0
-        || fchown(private_key_fd, geteuid(), getegid()) != 0
-        || fchown(manifest_fd, geteuid(), getegid()) != 0
-        || fchown(directory_fd, geteuid(), getegid()) != 0
+        || fchown(fullchain_fd, self_test_uid, self_test_gid) != 0
+        || fchown(private_key_fd, self_test_uid, self_test_gid) != 0
+        || fchown(manifest_fd, self_test_uid, self_test_gid) != 0
+        || fchown(directory_fd, self_test_uid, self_test_gid) != 0
         || fchmod(fullchain_fd, 0440) != 0
         || fchmod(private_key_fd, 0640) != 0
         || fchmod(manifest_fd, 0440) != 0
@@ -21760,13 +24732,13 @@ static int wls_self_test_snapshot_entity(const char *home)
             receipt.owner_identity_value,
             sizeof(receipt.owner_identity_value),
             "uid=%" PRIuMAX,
-            (uintmax_t)geteuid()
+            (uintmax_t)self_test_uid
         ) >= (int)sizeof(receipt.owner_identity_value)
         || wls_snapshot_uid_gid_value(
-            geteuid(), getegid(), receipt.data_plane_identity_value
+            self_test_uid, self_test_gid, receipt.data_plane_identity_value
         ) != 0
         || wls_snapshot_uid_gid_value(
-            geteuid(), getegid(), receipt.controller_identity_value
+            self_test_uid, self_test_gid, receipt.controller_identity_value
         ) != 0
         || wls_file_digest_fd_bounded(
             fullchain_fd, receipt.fullchain_digest, &size,
@@ -21803,23 +24775,23 @@ static int wls_self_test_snapshot_entity(const char *home)
     receipt.reparse_free = 1U;
     receipt.single_link_files = 1U;
     if (wls_snapshot_receipt_entity_valid_for_owner(
-            canonical_home, &receipt, geteuid(), 0
+            canonical_home, &receipt, self_test_uid, 0
         ) != 0) goto cleanup;
     stage = 4;
     if (fchmod(private_key_fd, 0600) != 0
         || wls_snapshot_receipt_entity_valid_for_owner(
-            canonical_home, &receipt, geteuid(), 0
+            canonical_home, &receipt, self_test_uid, 0
         ) == 0
         || fchmod(private_key_fd, 0640) != 0
         || wls_snapshot_receipt_entity_valid_for_owner(
-            canonical_home, &receipt, geteuid(), 0
+            canonical_home, &receipt, self_test_uid, 0
         ) != 0) goto cleanup;
     stage = 5;
     if (lseek(private_key_fd, 0, SEEK_SET) < 0
         || wls_write_all(private_key_fd, "X", 1U) != 0
         || fsync(private_key_fd) != 0) goto cleanup;
     if (wls_snapshot_receipt_entity_valid_for_owner(
-            canonical_home, &receipt, geteuid(), 0
+            canonical_home, &receipt, self_test_uid, 0
         ) == 0) goto cleanup;
     stage = 6;
     if (ftruncate(private_key_fd, 0) != 0
@@ -21827,7 +24799,7 @@ static int wls_self_test_snapshot_entity(const char *home)
         || wls_write_all(private_key_fd, "self-test-key", 13U) != 0
         || fsync(private_key_fd) != 0
         || wls_snapshot_receipt_entity_valid_for_owner(
-            canonical_home, &receipt, geteuid(), 0
+            canonical_home, &receipt, self_test_uid, 0
         ) != 0) goto cleanup;
     stage = 7;
     if (fchmod(directory_fd, 0700) != 0
@@ -21837,7 +24809,7 @@ static int wls_self_test_snapshot_entity(const char *home)
         )) < 0
         || wls_write_all(replacement_key_fd, "self-test-key", 13U) != 0
         || wls_posix_acl_remove_and_verify(replacement_key_fd, 0) != 0
-        || fchown(replacement_key_fd, geteuid(), getegid()) != 0
+        || fchown(replacement_key_fd, self_test_uid, self_test_gid) != 0
         || fchmod(replacement_key_fd, 0640) != 0
         || fsync(replacement_key_fd) != 0
         || renameat(
@@ -21847,7 +24819,7 @@ static int wls_self_test_snapshot_entity(const char *home)
         || fchmod(directory_fd, 0550) != 0
         || fsync(directory_fd) != 0
         || wls_snapshot_receipt_entity_valid_for_owner(
-            canonical_home, &receipt, geteuid(), 0
+            canonical_home, &receipt, self_test_uid, 0
         ) == 0) goto cleanup;
     result = 0;
 cleanup:
@@ -22237,6 +25209,247 @@ cleanup:
     return result;
 }
 
+/* The broker owns the serving pair, while the Controller may atomically
+ * replace the private state source after the broker has opened it. */
+static int wls_neutral_tls_self_test(void)
+{
+    char directory[] = "/tmp/wls-gateway-neutral-tls-XXXXXX";
+    char state[PATH_MAX] = {0};
+    char trust[PATH_MAX] = {0};
+    char receipt_key[PATH_MAX] = {0};
+    char serving[PATH_MAX] = {0};
+    char cert[PATH_MAX] = {0};
+    char key[PATH_MAX] = {0};
+    char replacement[PATH_MAX] = {0};
+    char serving_cert[PATH_MAX] = {0};
+    char serving_key[PATH_MAX] = {0};
+    char serving_receipt[PATH_MAX] = {0};
+    char serving_replacement[PATH_MAX] = {0};
+    char original_cert_digest[65] = {0};
+    char original_key_digest[65] = {0};
+    char served_cert_digest[65] = {0};
+    char served_key_digest[65] = {0};
+    const char generation[] =
+        "1111111111111111111111111111111111111111111111111111111111111111";
+    struct passwd *account;
+    struct wls_controller_identity controller_identity;
+    struct wls_controller_identity previous_data_plane_identity;
+    int previous_data_plane_identity_present;
+    int home_fd = -1, state_fd = -1, cert_fd = -1, key_fd = -1;
+    int child_status = 0;
+    pid_t child = -1;
+    struct stat cert_before, key_before, cert_after, key_after;
+    struct stat serving_cert_status, serving_key_status, receipt_status;
+    uint64_t digest_size = 0U;
+    int identity_changed = 0;
+    int stage = 1;
+    int result = -1;
+    memset(&controller_identity, 0, sizeof(controller_identity));
+    memset(&previous_data_plane_identity, 0, sizeof(previous_data_plane_identity));
+    memset(&cert_before, 0, sizeof(cert_before));
+    memset(&key_before, 0, sizeof(key_before));
+    memset(&cert_after, 0, sizeof(cert_after));
+    memset(&key_after, 0, sizeof(key_after));
+    memset(&serving_cert_status, 0, sizeof(serving_cert_status));
+    memset(&serving_key_status, 0, sizeof(serving_key_status));
+    memset(&receipt_status, 0, sizeof(receipt_status));
+    if (geteuid() != 0) {
+        errno = EPERM;
+        goto cleanup;
+    }
+    account = getpwnam("_nobody");
+    if (account == NULL) account = getpwnam("nobody");
+    if (account == NULL || account->pw_uid == 0 || account->pw_gid == 0) {
+        errno = ENOENT;
+        goto cleanup;
+    }
+    controller_identity.uid = account->pw_uid;
+    controller_identity.gid = account->pw_gid;
+    previous_data_plane_identity = wls_data_plane_identity;
+    previous_data_plane_identity_present = wls_data_plane_identity_present;
+    wls_data_plane_identity.uid = account->pw_uid;
+    wls_data_plane_identity.gid = account->pw_gid;
+    wls_data_plane_identity_present = 1;
+    identity_changed = 1;
+    if (mkdtemp(directory) == NULL
+        || snprintf(state, sizeof(state), "%s/state", directory)
+            >= (int)sizeof(state)
+        || snprintf(trust, sizeof(trust), "%s/trust", directory)
+            >= (int)sizeof(trust)
+        || snprintf(receipt_key, sizeof(receipt_key), "%s/snapshot-receipt.key", trust)
+            >= (int)sizeof(receipt_key)
+        || snprintf(serving, sizeof(serving), "%s/neutral-tls", directory)
+            >= (int)sizeof(serving)
+        || snprintf(cert, sizeof(cert), "%s/neutral-cert.pem", state)
+            >= (int)sizeof(cert)
+        || snprintf(key, sizeof(key), "%s/neutral-key.pem", state)
+            >= (int)sizeof(key)
+        || snprintf(replacement, sizeof(replacement), "%s/neutral-cert.next", state)
+            >= (int)sizeof(replacement)
+        || snprintf(serving_cert, sizeof(serving_cert), "%s/neutral-cert.pem", serving)
+            >= (int)sizeof(serving_cert)
+        || snprintf(serving_key, sizeof(serving_key), "%s/neutral-key.pem", serving)
+            >= (int)sizeof(serving_key)
+        || snprintf(serving_receipt, sizeof(serving_receipt),
+                "%s/neutral-tls.receipt", serving) >= (int)sizeof(serving_receipt)
+        || snprintf(serving_replacement, sizeof(serving_replacement),
+                "%s/neutral-cert.next", serving) >= (int)sizeof(serving_replacement)
+        || mkdir(state, 0700) != 0 || mkdir(trust, 0700) != 0
+        || chown(state, controller_identity.uid, controller_identity.gid) != 0
+        || chmod(state, 0700) != 0 || chmod(trust, 0700) != 0
+        || (home_fd = open(directory, O_RDONLY | O_DIRECTORY | O_CLOEXEC
+                | O_NOFOLLOW)) < 0
+        || (state_fd = openat(home_fd, "state", O_RDONLY | O_DIRECTORY
+                | O_CLOEXEC | O_NOFOLLOW)) < 0
+        || (cert_fd = openat(state_fd, "neutral-cert.pem",
+                O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600)) < 0
+        || wls_write_all(cert_fd, "neutral-cert-original", 21U) != 0
+        || fchown(cert_fd, controller_identity.uid, controller_identity.gid) != 0
+        || wls_posix_acl_remove_and_verify(cert_fd, 0) != 0
+        || fchmod(cert_fd, 0600) != 0 || fsync(cert_fd) != 0
+        || (key_fd = openat(state_fd, "neutral-key.pem",
+                O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600)) < 0
+        || wls_write_all(key_fd, "neutral-key-original", 20U) != 0
+        || fchown(key_fd, controller_identity.uid, controller_identity.gid) != 0
+        || wls_posix_acl_remove_and_verify(key_fd, 0) != 0
+        || fchmod(key_fd, 0600) != 0 || fsync(key_fd) != 0
+        || fstat(cert_fd, &cert_before) != 0 || fstat(key_fd, &key_before) != 0
+        || wls_file_digest_fd_bounded(
+            cert_fd, original_cert_digest, &digest_size, WLS_MAX_REQUEST
+        ) != 0
+        || wls_file_digest_fd_bounded(
+            key_fd, original_key_digest, &digest_size, WLS_MAX_REQUEST
+        ) != 0) goto cleanup;
+    /* The Controller keeps both state leaves private at 0600. Exercise the
+     * real publisher with that exact source pair, then prove a public
+     * certificate or key fails closed before it can update the serving pair. */
+    stage = 2;
+    if (wls_neutral_tls_publish_from_open_sources(
+            directory, generation, &controller_identity,
+            cert_fd, key_fd, &cert_before, &key_before
+        ) != 0
+        || fchmod(cert_fd, 0644) != 0
+        || fstat(cert_fd, &cert_after) != 0 || fstat(key_fd, &key_after) != 0
+        || wls_neutral_tls_publish_from_open_sources(
+            directory, generation, &controller_identity,
+            cert_fd, key_fd, &cert_after, &key_after
+        ) == 0
+        || fchmod(cert_fd, 0600) != 0
+        || fstat(cert_fd, &cert_before) != 0 || fstat(key_fd, &key_before) != 0
+        || fchmod(key_fd, 0644) != 0
+        || fstat(cert_fd, &cert_after) != 0 || fstat(key_fd, &key_after) != 0
+        || wls_neutral_tls_publish_from_open_sources(
+            directory, generation, &controller_identity,
+            cert_fd, key_fd, &cert_after, &key_after
+        ) == 0
+        || fchmod(key_fd, 0600) != 0
+        || fstat(cert_fd, &cert_before) != 0 || fstat(key_fd, &key_before) != 0
+    ) goto cleanup;
+    fprintf(stdout, "neutral TLS canonical 0600 source modes accepted and rejected\n");
+    stage = 3;
+    child = fork();
+    if (child < 0) goto cleanup;
+    if (child == 0) {
+        int replacement_fd = openat(
+            state_fd, "neutral-cert.next",
+            O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+        );
+        if (replacement_fd < 0
+            || wls_write_all(replacement_fd, "neutral-cert-replacement", 24U) != 0
+            || fchown(
+                replacement_fd, controller_identity.uid, controller_identity.gid
+            ) != 0
+            || wls_posix_acl_remove_and_verify(replacement_fd, 0) != 0
+            || fchmod(replacement_fd, 0600) != 0 || fsync(replacement_fd) != 0
+            || close(replacement_fd) != 0
+            || rename(replacement, cert) != 0) _exit(2);
+        _exit(0);
+    }
+    if (wls_wait_root_self_test_child(child, &child_status) != 0
+        || !WIFEXITED(child_status) || WEXITSTATUS(child_status) != 0) goto cleanup;
+    stage = 3;
+    if (fstat(cert_fd, &cert_after) != 0 || fstat(key_fd, &key_after) != 0
+        || cert_before.st_dev != cert_after.st_dev
+        || cert_before.st_ino != cert_after.st_ino
+        || cert_before.st_size != cert_after.st_size
+        || key_before.st_dev != key_after.st_dev
+        || key_before.st_ino != key_after.st_ino
+        || key_before.st_size != key_after.st_size
+        || wls_neutral_tls_publish_from_open_sources(
+            directory, generation, &controller_identity,
+            cert_fd, key_fd, &cert_before, &key_before
+        ) != 0
+        || wls_neutral_tls_consumer_validate(
+            directory, generation,
+            served_cert_digest, served_key_digest,
+            &serving_cert_status, &serving_key_status
+        ) != 0
+        || strcmp(served_cert_digest, original_cert_digest) != 0
+        || strcmp(served_key_digest, original_key_digest) != 0
+        || serving_cert_status.st_uid != 0 || serving_key_status.st_uid != 0
+        || serving_cert_status.st_gid != wls_data_plane_identity.gid
+        || serving_key_status.st_gid != wls_data_plane_identity.gid
+        || (serving_cert_status.st_mode & 07777) != 0440
+        || (serving_key_status.st_mode & 07777) != 0440
+        || serving_cert_status.st_nlink != 1 || serving_key_status.st_nlink != 1
+        || lstat(serving_receipt, &receipt_status) != 0
+        || !S_ISREG(receipt_status.st_mode) || S_ISLNK(receipt_status.st_mode)
+        || receipt_status.st_uid != 0
+        || receipt_status.st_gid != wls_data_plane_identity.gid
+        || (receipt_status.st_mode & 07777) != 0440
+        || receipt_status.st_nlink != 1) goto cleanup;
+    stage = 4;
+    child = fork();
+    if (child < 0) goto cleanup;
+    if (child == 0) {
+        int replacement_fd = open(
+            serving_replacement,
+            O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+        );
+        if (replacement_fd < 0
+            || wls_write_all(replacement_fd, "serving-cert-replacement", 24U) != 0
+            || fchown(replacement_fd, 0, wls_data_plane_identity.gid) != 0
+            || wls_posix_acl_remove_and_verify(replacement_fd, 0) != 0
+            || fchmod(replacement_fd, 0440) != 0 || fsync(replacement_fd) != 0
+            || close(replacement_fd) != 0
+            || rename(serving_replacement, serving_cert) != 0) _exit(3);
+        _exit(0);
+    }
+    if (wls_wait_root_self_test_child(child, &child_status) != 0
+        || !WIFEXITED(child_status) || WEXITSTATUS(child_status) != 0
+        || wls_neutral_tls_consumer_validate(
+            directory, generation,
+            served_cert_digest, served_key_digest,
+            &serving_cert_status, &serving_key_status
+        ) == 0) goto cleanup;
+    fprintf(stdout, "neutral TLS sealed-pair replacement race rejected\n");
+    result = 0;
+cleanup:
+    if (key_fd >= 0) close(key_fd);
+    if (cert_fd >= 0) close(cert_fd);
+    if (state_fd >= 0) close(state_fd);
+    if (home_fd >= 0) close(home_fd);
+    if (identity_changed) {
+        wls_data_plane_identity = previous_data_plane_identity;
+        wls_data_plane_identity_present = previous_data_plane_identity_present;
+    }
+    if (directory[0] != '\0') {
+        unlink(serving_receipt); unlink(serving_cert); unlink(serving_key);
+        unlink(serving_replacement); rmdir(serving);
+        unlink(replacement); unlink(cert); unlink(key);
+        unlink(receipt_key);
+        rmdir(trust); rmdir(state); rmdir(directory);
+    }
+    sodium_memzero(original_cert_digest, sizeof(original_cert_digest));
+    sodium_memzero(original_key_digest, sizeof(original_key_digest));
+    sodium_memzero(served_cert_digest, sizeof(served_cert_digest));
+    sodium_memzero(served_key_digest, sizeof(served_key_digest));
+    if (result != 0) {
+        fprintf(stderr, "neutral TLS self-test stage %d failed: %s\n", stage, strerror(errno));
+    }
+    return result;
+}
+
 static int wls_self_test(void)
 {
     char directory[] = "/tmp/wls-gateway-broker-selftest-XXXXXX";
@@ -22486,14 +25699,17 @@ static const char *wls_argument(int argc, char **argv, const char *name)
 static int wls_nginx_child_fd_boundary(
     const char *fd_list,
     int expected_fds[6],
-    size_t *expected_count
+    size_t *expected_count,
+    int allow_loopback_self_test
 ) {
     const char *cursor = fd_list;
     const char *environment = getenv("NGINX");
     size_t count = 0U;
     unsigned int tcp80 = 0U;
     unsigned int tcp443 = 0U;
+    unsigned int loopback_listeners = 0U;
     if (fd_list == NULL || expected_fds == NULL || expected_count == NULL
+        || (allow_loopback_self_test != 0 && allow_loopback_self_test != 1)
         || environment == NULL || strcmp(environment, fd_list) != 0) return -1;
     while (*cursor != '\0') {
         char *end = NULL;
@@ -22521,13 +25737,24 @@ static int wls_nginx_child_fd_boundary(
         } else {
             return -1;
         }
-        if (type == SOCK_STREAM && port == 80U) tcp80++;
+        if (allow_loopback_self_test) {
+            int loopback = address.ss_family == AF_INET
+                ? ((struct sockaddr_in *)&address)->sin_addr.s_addr
+                    == htonl(INADDR_LOOPBACK)
+                : IN6_IS_ADDR_LOOPBACK(
+                    &((struct sockaddr_in6 *)&address)->sin6_addr
+                );
+            if (type != SOCK_STREAM || port == 0U || !loopback) return -1;
+            loopback_listeners++;
+        } else if (type == SOCK_STREAM && port == 80U) tcp80++;
         else if (type == SOCK_STREAM && port == 443U) tcp443++;
         else if (!(type == SOCK_DGRAM && port == 443U)) return -1;
         expected_fds[count++] = (int)parsed;
         cursor = end + 1U;
     }
-    if (count < 2U || tcp80 < 1U || tcp443 < 1U) return -1;
+    if (count < 2U || (allow_loopback_self_test
+            ? loopback_listeners != count
+            : (tcp80 < 1U || tcp443 < 1U))) return -1;
 #if defined(__linux__)
     {
         DIR *directory = opendir("/proc/self/fd");
@@ -22585,30 +25812,830 @@ static int wls_nginx_child_config_allowed(
 ) {
     char base[PATH_MAX];
     const char *leaf;
-    unsigned long generation = 0U;
-    char transaction_id[33];
     int consumed = 0;
     if (home == NULL || operation == NULL || config == NULL
         || active_config == NULL) return 0;
-    if (strcmp(operation, "TEST") != 0) {
-        return strcmp(config, active_config) == 0;
+    if (strcmp(operation, "TEST") == 0) {
+        if (strcmp(config, active_config) == 0
+            || snprintf(base, sizeof(base), "%s/nginx-pid/", home)
+                >= (int)sizeof(base)
+            || strncmp(config, base, strlen(base)) != 0) return 0;
+        leaf = config + strlen(base);
+        if (strchr(leaf, '/') != NULL || strchr(leaf, '\\') != NULL) return 0;
+        char source_token[WLS_TOKEN_HEX + 1U];
+        memset(source_token, 0, sizeof(source_token));
+        if (sscanf(
+                leaf, ".nginx.pid.test.%64[0-9a-f].conf%n",
+                source_token, &consumed
+            ) == 1 && wls_is_hex(source_token, WLS_TOKEN_HEX)
+            && consumed == (int)strlen(leaf)) {
+            sodium_memzero(source_token, sizeof(source_token));
+            return 1;
+        }
+        sodium_memzero(source_token, sizeof(source_token));
+        return 0;
     }
-    if (strcmp(config, active_config) == 0) return 1;
-    if (snprintf(base, sizeof(base), "%s/runtime/conf/", home)
-            >= (int)sizeof(base)
-        || strncmp(config, base, strlen(base)) != 0) return 0;
-    leaf = config + strlen(base);
-    if (strchr(leaf, '/') != NULL || strchr(leaf, '\\') != NULL) return 0;
-    memset(transaction_id, 0, sizeof(transaction_id));
-    if (sscanf(
-            leaf, "candidate-%lu-%32[0-9a-f].conf%n",
-            &generation, transaction_id, &consumed
-        ) == 2
-        && generation > 0U && wls_is_hex(transaction_id, 32U)
-        && consumed == (int)strlen(leaf)) return 1;
-    return wls_nginx_lkg_candidate_leaf(leaf);
+    return strcmp(config, active_config) == 0;
 }
 
+static int wls_nginx_start_foreground_launcher(
+    const char *nginx,
+    const char *prefix,
+    const char *config
+) {
+    int ready[2] = {-1, -1};
+    pid_t master;
+    int child_error = 0;
+    unsigned char *cursor = (unsigned char *)&child_error;
+    size_t received = 0U;
+    int status = 0;
+    pid_t waited;
+    if (nginx == NULL || prefix == NULL || config == NULL || pipe(ready) != 0
+        || wls_fd_cloexec(ready[0]) != 0 || wls_fd_cloexec(ready[1]) != 0) {
+        if (ready[0] >= 0) close(ready[0]);
+        if (ready[1] >= 0) close(ready[1]);
+        return -1;
+    }
+    master = fork();
+    if (master < 0) {
+        close(ready[0]); close(ready[1]);
+        return -1;
+    }
+    if (master == 0) {
+        int launch_error = 0;
+        close(ready[0]);
+        if (setsid() < 0) launch_error = errno;
+        if (launch_error == 0) {
+            execl(nginx, nginx, "-p", prefix, "-c", config, (char *)NULL);
+            launch_error = errno;
+        }
+        if (launch_error == 0) launch_error = EIO;
+        (void)wls_write_all(
+            ready[1], (const char *)&launch_error, sizeof(launch_error)
+        );
+        _exit(127);
+    }
+    close(ready[1]);
+    for (;;) {
+        ssize_t amount = read(ready[0], cursor + received, sizeof(child_error) - received);
+        if (amount > 0) {
+            received += (size_t)amount;
+            if (received == sizeof(child_error)) break;
+            continue;
+        }
+        if (amount == 0) break;
+        if (errno == EINTR) continue;
+        close(ready[0]);
+        return -1;
+    }
+    close(ready[0]);
+    do {
+        waited = waitpid(master, &status, WNOHANG);
+    } while (waited < 0 && errno == EINTR);
+    if (received != 0U || waited != 0) {
+        if (received == sizeof(child_error) && child_error != 0) errno = child_error;
+        else if (waited == master) errno = ECHILD;
+        return -1;
+    }
+    return 0;
+}
+
+static int wls_nginx_start_foreground_self_test(
+    unsigned long *verified_pid,
+    unsigned long long *verified_start_id
+)
+{
+    char directory[] = "/tmp/wls-nginx-start-self-test-XXXXXX";
+    char nginx[PATH_MAX];
+    char config[PATH_MAX];
+    char ready[PATH_MAX];
+    char script[PATH_MAX * 2U];
+    char contents[128];
+    int sockets[2] = {-1, -1};
+    int saved[2] = {-1, -1};
+    int nginx_fd = -1;
+    int config_fd = -1;
+    const int targets[2] = {20, 21};
+    struct sockaddr_in address;
+    unsigned long pid = 0U;
+    unsigned long long start_id = 0ULL;
+    unsigned long long deadline = 0ULL;
+    char observed_binary[PATH_MAX];
+    size_t index;
+    int result = -1;
+    if (verified_pid == NULL || verified_start_id == NULL) return -1;
+    *verified_pid = 0U;
+    *verified_start_id = 0ULL;
+    if (mkdtemp(directory) == NULL
+        || snprintf(nginx, sizeof(nginx), "%s/nginx", directory)
+            >= (int)sizeof(nginx)
+        || snprintf(config, sizeof(config), "%s/nginx.conf", directory)
+            >= (int)sizeof(config)
+        || snprintf(ready, sizeof(ready), "%s.ready", config)
+            >= (int)sizeof(ready)
+        || snprintf(
+            script, sizeof(script),
+            "#!/bin/sh\n"
+            "if [ -e /dev/fd/20 ] && [ -e /dev/fd/21 ]; then\n"
+            "  printf 'pid=%%s\\n' \"$$\" > \"$4.ready\"\n"
+            "fi\n"
+            "while :; do sleep 1; done\n"
+        ) >= (int)sizeof(script)
+        || (sockets[0] = socket(AF_INET, SOCK_STREAM, 0)) < 0
+        || wls_listener_prepare_inherited_fd(sockets[0]) != 0
+        || (sockets[1] = socket(AF_INET, SOCK_STREAM, 0)) < 0
+        || wls_listener_prepare_inherited_fd(sockets[1]) != 0) goto cleanup;
+    nginx_fd = open(nginx, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0700);
+    config_fd = open(config, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    if (nginx_fd < 0 || config_fd < 0
+        || wls_write_all(nginx_fd, script, strlen(script)) != 0
+        || fsync(nginx_fd) != 0 || fchmod(nginx_fd, 0700) != 0
+        || wls_write_all(config_fd, "test\n", 5U) != 0
+        || fsync(config_fd) != 0) goto cleanup;
+    close(nginx_fd); nginx_fd = -1;
+    close(config_fd); config_fd = -1;
+    for (index = 0U; index < 2U; index++) {
+        int flags;
+        memset(&address, 0, sizeof(address));
+        address.sin_family = AF_INET;
+        address.sin_port = htons(0U);
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (bind(sockets[index], (struct sockaddr *)&address, sizeof(address)) != 0
+            || listen(sockets[index], SOMAXCONN) != 0) goto cleanup;
+        saved[index] = fcntl(targets[index], F_DUPFD_CLOEXEC, 30);
+        if (saved[index] < 0 && errno != EBADF) goto cleanup;
+        if (dup2(sockets[index], targets[index]) < 0
+            || (flags = fcntl(targets[index], F_GETFD)) < 0
+            || fcntl(targets[index], F_SETFD, flags & ~FD_CLOEXEC) != 0) goto cleanup;
+    }
+    if (wls_nginx_start_foreground_launcher(nginx, directory, config) != 0
+        || wls_monotonic_milliseconds(&deadline) != 0
+        || deadline > ULLONG_MAX - 1000ULL) goto cleanup;
+    deadline += 1000ULL;
+    for (;;) {
+        unsigned long long now = 0ULL;
+        unsigned char *ready_contents = NULL;
+        size_t ready_length = 0U;
+        if (wls_read_file(ready, sizeof(contents) - 1U, &ready_contents, &ready_length) == 0) {
+            if (ready_length < sizeof(contents)) {
+                memcpy(contents, ready_contents, ready_length);
+                contents[ready_length] = '\0';
+                errno = 0;
+                pid = strtoul(contents + strlen("pid="), NULL, 10);
+            }
+            sodium_memzero(ready_contents, ready_length); free(ready_contents);
+            if (pid > 0U && pid <= (unsigned long)INT_MAX) break;
+        }
+        if (wls_monotonic_milliseconds(&now) != 0 || now >= deadline) goto cleanup;
+        if (usleep(WLS_NGINX_ACTION_POLL_US) != 0 && errno != EINTR) goto cleanup;
+    }
+    if (wls_process_identity(
+            (pid_t)pid, observed_binary, sizeof(observed_binary), &start_id
+        ) != 0 || start_id == 0ULL
+        || getpgid((pid_t)pid) != (pid_t)pid || getsid((pid_t)pid) != (pid_t)pid
+        || wls_nginx_start_foreground_launcher(
+            "/definitely/missing/wls-nginx", directory, config
+        ) == 0) goto cleanup;
+    *verified_pid = pid;
+    *verified_start_id = start_id;
+    result = 0;
+cleanup:
+    if (nginx_fd >= 0) close(nginx_fd);
+    if (config_fd >= 0) close(config_fd);
+    if (pid > 0U && start_id > 0ULL) {
+        unsigned long long observed = 0ULL;
+        if (wls_process_identity(
+                (pid_t)pid, observed_binary, sizeof(observed_binary), &observed
+            ) == 0 && observed == start_id) {
+            (void)kill((pid_t)pid, SIGKILL);
+        }
+    }
+    for (index = 0U; index < 2U; index++) {
+        if (saved[index] >= 0) {
+            (void)dup2(saved[index], targets[index]); close(saved[index]);
+        } else {
+            (void)close(targets[index]);
+        }
+        if (sockets[index] >= 0) close(sockets[index]);
+    }
+    unlink(ready); unlink(config); unlink(nginx); rmdir(directory);
+    sodium_memzero(observed_binary, sizeof(observed_binary));
+    if (result != 0) {
+        *verified_pid = 0U;
+        *verified_start_id = 0ULL;
+    }
+    return result;
+}
+
+static int wls_nginx_start_tree_restart_self_test(void)
+{
+    int ready[2] = {-1, -1};
+    pid_t launcher = 0;
+    pid_t master = 0;
+    unsigned long long now = 0ULL;
+    unsigned long long deadline = 0ULL;
+    int status = 0;
+    int result = -1;
+    wls_nginx_start_tree_restart_required = 0;
+    if (pipe(ready) != 0 || wls_fd_cloexec(ready[0]) != 0
+        || wls_fd_cloexec(ready[1]) != 0) goto cleanup;
+    launcher = fork();
+    if (launcher < 0) goto cleanup;
+    if (launcher == 0) {
+        pid_t child;
+        close(ready[0]);
+        child = fork();
+        if (child < 0) _exit(126);
+        if (child == 0) {
+            if (setsid() < 0 || wls_write_all(
+                    ready[1], (const char *)&(pid_t){getpid()}, sizeof(pid_t)
+                ) != 0) _exit(126);
+            /* The test master exits itself after the injected launcher delay;
+             * cleanup must never signal an unverified detached master. */
+            usleep(50000U);
+            _exit(0);
+        }
+        for (;;) pause(); /* Injected CLOEXEC-pipe delay in the launcher. */
+    }
+    close(ready[1]); ready[1] = -1;
+    if (wls_read_exact(ready[0], (char *)&master, sizeof(master)) != 0
+        || master <= 0 || wls_monotonic_milliseconds(&now) != 0
+        || now > ULLONG_MAX - 20ULL) goto cleanup;
+    deadline = now + 20ULL;
+    errno = 0;
+    if (wls_wait_child_exit_until(
+            launcher, &status, deadline, WLS_NGINX_ACTION_POLL_US
+        ) == 0 || errno != ETIMEDOUT) goto cleanup;
+    (void)kill(launcher, SIGKILL);
+    if (wls_monotonic_milliseconds(&now) != 0 || now > ULLONG_MAX - 1000ULL
+        || wls_wait_child_exit_until(
+            launcher, &status, now + 1000ULL, WLS_NGINX_ACTION_POLL_US
+        ) != 0) goto cleanup;
+    launcher = 0;
+    /* This is the exact Broker-side consequence after START posix_spawn
+     * succeeds but its launcher cannot return before the caller deadline. */
+    wls_nginx_start_tree_restart_required = 1;
+    if (!wls_nginx_start_tree_restart_required) goto cleanup;
+    result = 0;
+cleanup:
+    if (launcher > 0) {
+        (void)kill(launcher, SIGKILL);
+        (void)wls_wait_root_self_test_child(launcher, &status);
+    }
+    if (ready[0] >= 0) close(ready[0]);
+    if (ready[1] >= 0) close(ready[1]);
+    return result;
+}
+
+static int wls_nginx_start_cleanup_latch_self_test(void)
+{
+    sig_atomic_t saved_latch = wls_nginx_start_tree_restart_required;
+    char reply[256];
+    int lease_stored = 0;
+    int result = -1;
+    memset(reply, 0, sizeof(reply));
+    /* A committed START owns its listener lease even though posix_spawn
+     * recorded that a service tree exists. */
+    wls_nginx_start_tree_restart_required = 0;
+    lease_stored = 1;
+    if (wls_nginx_lifecycle_start_restart_required(0, 0, 1, 1)
+        || !lease_stored) goto cleanup;
+    /* An error after spawning but before commit must become recovery-required. */
+    if (!wls_nginx_lifecycle_start_restart_required(0, 1, 0, 1)
+        || wls_security_reply_error(
+            reply, sizeof(reply), "NGINX_START_SERVICE_TREE_RESTART_REQUIRED",
+            "NGINX_START", NULL, NULL
+        ) != 0 || strstr(reply, "NGINX_START_SERVICE_TREE_RESTART_REQUIRED") == NULL) {
+        goto cleanup;
+    }
+    /* A cleanup fault after commit invalidates the already composed reply and
+     * revokes the listener lease before the caller observes it. */
+    wls_nginx_start_tree_restart_required = 1;
+    if (!wls_nginx_lifecycle_start_restart_required(0, 1, 1, 1)) goto cleanup;
+    lease_stored = 0;
+    if (lease_stored
+        || wls_security_reply_error(
+            reply, sizeof(reply), "NGINX_START_SERVICE_TREE_RESTART_REQUIRED",
+            "NGINX_START", NULL, NULL
+        ) != 0 || strstr(reply, "NGINX_START_SERVICE_TREE_RESTART_REQUIRED") == NULL
+        || wls_nginx_lifecycle_start_restart_required(1, 1, 1, 1)) goto cleanup;
+    /* pthread_mutex_unlock failure is an action failure after a live tree. */
+    wls_nginx_start_tree_restart_required = 0;
+    if (!wls_nginx_lifecycle_start_restart_required(0, 1, 1, 1)
+        || wls_security_reply_error(
+            reply, sizeof(reply), "NGINX_START_SERVICE_TREE_RESTART_REQUIRED",
+            "NGINX_START", NULL, NULL
+        ) != 0 || strstr(reply, "NGINX_START_SERVICE_TREE_RESTART_REQUIRED") == NULL) {
+        goto cleanup;
+    }
+    result = 0;
+cleanup:
+    wls_nginx_start_tree_restart_required = saved_latch;
+    sodium_memzero(reply, sizeof(reply));
+    return result;
+}
+
+static int wls_nginx_pid_stale_sealed_recovery_self_test(void)
+{
+#if defined(__APPLE__)
+    char home[] = "/private/tmp/wls-nginx-pid-stale-XXXXXX";
+#else
+    char home[] = "/tmp/wls-nginx-pid-stale-XXXXXX";
+#endif
+    char run[PATH_MAX];
+    char expected[32];
+    struct wls_controller_identity controller;
+    struct wls_controller_identity saved_data_identity;
+    struct stat status;
+    struct passwd *data = NULL;
+    int saved_data_identity_present;
+    int home_created = 0;
+    int directory_fd = -1;
+    int leaf_fd = -1;
+    int child_status = 0;
+    int expected_length = 0;
+    pid_t master = 0;
+    int result = -1;
+    memset(run, 0, sizeof(run));
+    sodium_memzero(expected, sizeof(expected));
+    saved_data_identity = wls_data_plane_identity;
+    saved_data_identity_present = wls_data_plane_identity_present;
+    controller.uid = geteuid();
+    controller.gid = getegid();
+    if (controller.uid != 0) {
+        errno = EPERM;
+        goto cleanup;
+    }
+    data = getpwnam("_nobody");
+    if (data == NULL) data = getpwnam("nobody");
+    if (data == NULL || data->pw_uid == 0 || data->pw_gid == 0
+        || mkdtemp(home) == NULL) goto cleanup;
+    home_created = 1;
+    if (snprintf(run, sizeof(run), "%s/nginx-pid", home) >= (int)sizeof(run)
+        || chmod(home, 0755) != 0 || mkdir(run, 0711) != 0
+        || chown(run, 0, data->pw_gid) != 0 || chmod(run, 0711) != 0) {
+        goto cleanup;
+    }
+    wls_data_plane_identity.uid = data->pw_uid;
+    wls_data_plane_identity.gid = data->pw_gid;
+    wls_data_plane_identity_present = 1;
+    if (wls_nginx_pid_run_directory(
+            home, &controller, 0, &directory_fd
+        ) != 0) goto cleanup;
+    master = fork();
+    if (master < 0) goto cleanup;
+    if (master == 0) {
+        for (;;) pause();
+    }
+    expected_length = snprintf(
+        expected, sizeof(expected), "%lu\n", (unsigned long)master
+    );
+    if (expected_length <= 0 || expected_length >= (int)sizeof(expected)
+        || wls_nginx_pid_precreate_canonical_source(
+            directory_fd, &controller
+        ) != 0
+        || (leaf_fd = openat(
+            directory_fd, "nginx.pid", O_WRONLY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0
+        || wls_write_all(leaf_fd, expected, (size_t)expected_length) != 0
+        || fsync(leaf_fd) != 0 || close(leaf_fd) != 0) goto cleanup;
+    leaf_fd = -1;
+    if (wls_nginx_pid_publish_from_source(
+            directory_fd, &controller, "nginx.pid", (unsigned long)master
+        ) != 0
+        || wls_nginx_pid_artifact_remove_after_exact_death(
+            directory_fd, &controller, (unsigned long)master + 1U
+        ) == 0
+        || wls_nginx_pid_artifact_remove_after_exact_death(
+            directory_fd, &controller, (unsigned long)master
+        ) == 0
+        || fstatat(
+            directory_fd, "nginx.pid", &status, AT_SYMLINK_NOFOLLOW
+        ) != 0 || status.st_uid != 0 || status.st_gid != controller.gid
+        || (status.st_mode & 0777) != 0444) goto cleanup;
+    if (kill(master, SIGKILL) != 0
+        || wls_wait_root_self_test_child(master, &child_status) != 0
+        || !WIFSIGNALED(child_status) || WTERMSIG(child_status) != SIGKILL) {
+        goto cleanup;
+    }
+    if (wls_nginx_pid_artifact_remove_after_exact_death(
+            directory_fd, &controller, (unsigned long)master
+        ) != 0) goto cleanup;
+    master = 0;
+    if (fstatat(
+            directory_fd, "nginx.pid", &status, AT_SYMLINK_NOFOLLOW
+        ) == 0 || errno != ENOENT
+        || wls_nginx_pid_precreate_canonical_source(
+            directory_fd, &controller
+        ) != 0
+        || wls_nginx_pid_empty_canonical_source_remove(
+            directory_fd, &controller
+        ) != 0) goto cleanup;
+    leaf_fd = openat(
+        directory_fd, "nginx.pid",
+        O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644
+    );
+    if (leaf_fd < 0
+        || wls_write_all(leaf_fd, expected, (size_t)expected_length) != 0
+        || fchown(leaf_fd, 0, controller.gid) != 0
+        || fchmod(leaf_fd, 0644) != 0 || fsync(leaf_fd) != 0
+        || close(leaf_fd) != 0 || fsync(directory_fd) != 0) goto cleanup;
+    leaf_fd = -1;
+    if (wls_nginx_pid_recover_no_master_artifact(
+            directory_fd, &controller
+        ) == 0
+        || fstatat(
+            directory_fd, "nginx.pid", &status, AT_SYMLINK_NOFOLLOW
+        ) != 0 || status.st_uid != 0 || status.st_gid != controller.gid
+        || (status.st_mode & 0777) != 0644) goto cleanup;
+    result = 0;
+cleanup:
+    if (master > 0) {
+        (void)kill(master, SIGKILL);
+        (void)wls_wait_root_self_test_child(master, &child_status);
+    }
+    if (leaf_fd >= 0) close(leaf_fd);
+    if (directory_fd >= 0) {
+        (void)unlinkat(directory_fd, "nginx.pid", 0);
+        close(directory_fd);
+    }
+    wls_data_plane_identity = saved_data_identity;
+    wls_data_plane_identity_present = saved_data_identity_present;
+    if (run[0] != '\0') (void)rmdir(run);
+    if (home_created) (void)rmdir(home);
+    sodium_memzero(expected, sizeof(expected));
+    return result;
+}
+
+static int wls_nginx_pid_source_publication_self_test(void)
+{
+#if defined(__APPLE__)
+    char home[] = "/private/tmp/wls-nginx-pid-source-XXXXXX";
+#else
+    char home[] = "/tmp/wls-nginx-pid-source-XXXXXX";
+#endif
+    char run[PATH_MAX];
+    char canonical[PATH_MAX];
+    char source_leaf[WLS_TOKEN_HEX + 32U];
+    struct wls_controller_identity controller;
+    struct wls_controller_identity saved_data_identity;
+    struct stat status;
+    struct passwd *data = NULL;
+    int saved_data_identity_present;
+    int directory_fd = -1;
+    int canonical_fd = -1;
+    int ready[2] = {-1, -1};
+    int trigger[2] = {-1, -1};
+    pid_t holder = 0;
+    int holder_status = 0;
+    char observed[8];
+    int result = -1;
+    memset(run, 0, sizeof(run));
+    memset(canonical, 0, sizeof(canonical));
+    memset(source_leaf, 0, sizeof(source_leaf));
+    memset(observed, 0, sizeof(observed));
+    if (mkdtemp(home) == NULL
+        || snprintf(run, sizeof(run), "%s/nginx-pid", home) >= (int)sizeof(run)
+        || snprintf(canonical, sizeof(canonical), "%s/nginx.pid", run)
+            >= (int)sizeof(canonical)
+        || chmod(home, 0755) != 0 || mkdir(run, 0711) != 0) goto cleanup;
+    controller.uid = geteuid();
+    controller.gid = getegid();
+    if (controller.uid != 0) {
+        /* This fixture proves the root:data ownership boundary; developer
+         * accounts cannot manufacture it without weakening the assertion. */
+        result = 0;
+        goto cleanup;
+    }
+    data = getpwnam("_nobody");
+    if (data == NULL) data = getpwnam("nobody");
+    if (data == NULL || data->pw_uid == 0 || data->pw_gid == 0
+        || chown(run, 0, data->pw_gid) != 0 || chmod(run, 0711) != 0) {
+        goto cleanup;
+    }
+    saved_data_identity = wls_data_plane_identity;
+    saved_data_identity_present = wls_data_plane_identity_present;
+    wls_data_plane_identity.uid = data->pw_uid;
+    wls_data_plane_identity.gid = data->pw_gid;
+    wls_data_plane_identity_present = 1;
+    if (wls_nginx_pid_run_directory(home, &controller, 0, &directory_fd) != 0
+        || wls_nginx_pid_precreate_canonical_source(
+            directory_fd, &controller
+        ) != 0 || snprintf(source_leaf, sizeof(source_leaf), "%s", "nginx.pid")
+            >= (int)sizeof(source_leaf) || fstat(directory_fd, &status) != 0
+        || status.st_uid != 0 || status.st_gid != data->pw_gid
+        || (status.st_mode & 0777) != 0711 || pipe(ready) != 0
+        || pipe(trigger) != 0) goto restore;
+    holder = fork();
+    if (holder < 0) goto restore;
+    if (holder == 0) {
+        char source_path[PATH_MAX];
+        char signal = '\0';
+        int source_fd;
+        close(ready[0]); close(trigger[1]);
+        if (setgid(data->pw_gid) != 0 || setuid(data->pw_uid) != 0
+            || snprintf(
+                source_path, sizeof(source_path), "%s/%s", run, source_leaf
+            ) >= (int)sizeof(source_path)) _exit(126);
+        source_fd = open(source_path, O_WRONLY | O_CLOEXEC | O_NOFOLLOW);
+        if (source_fd < 0 || wls_write_all(source_fd, "4242\n", 5U) != 0
+            || fsync(source_fd) != 0 || wls_write_all(ready[1], "R", 1U) != 0
+            || wls_read_exact(trigger[0], &signal, 1U) != 0 || signal != 'W'
+            || lseek(source_fd, 0, SEEK_SET) < 0
+            || wls_write_all(source_fd, "9999\n", 5U) != 0
+            || fsync(source_fd) != 0 || close(source_fd) != 0) _exit(126);
+        _exit(0);
+    }
+    close(ready[1]); ready[1] = -1;
+    close(trigger[0]); trigger[0] = -1;
+    if (wls_read_exact(ready[0], observed, 1U) != 0 || observed[0] != 'R'
+        || fstat(directory_fd, &status) != 0 || status.st_uid != 0
+        || status.st_gid != data->pw_gid || (status.st_mode & 0777) != 0711
+        || wls_nginx_pid_publish_from_source(
+            directory_fd, &controller, source_leaf, 4242U
+        ) != 0 || wls_write_all(trigger[1], "W", 1U) != 0
+        || wls_wait_root_self_test_child(holder, &holder_status) != 0
+        || !WIFEXITED(holder_status) || WEXITSTATUS(holder_status) != 0) goto restore;
+    holder = 0;
+    canonical_fd = open(canonical, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (canonical_fd < 0 || wls_read_exact(canonical_fd, observed, 5U) != 0
+        || sodium_memcmp(observed, "4242\n", 5U) != 0
+        || fstat(canonical_fd, &status) != 0 || status.st_uid != 0
+        || status.st_gid != controller.gid || (status.st_mode & 0777) != 0444
+        || close(canonical_fd) != 0
+        || wls_nginx_pid_artifact_remove_terminal(
+            directory_fd, &controller, 4242U
+        ) != 0) goto restore;
+    canonical_fd = -1;
+    result = 0;
+restore:
+    if (holder > 0) {
+        (void)kill(holder, SIGKILL);
+        (void)wls_wait_root_self_test_child(holder, &holder_status);
+    }
+    if (directory_fd >= 0) close(directory_fd);
+    wls_data_plane_identity = saved_data_identity;
+    wls_data_plane_identity_present = saved_data_identity_present;
+cleanup:
+    if (canonical_fd >= 0) close(canonical_fd);
+    if (ready[0] >= 0) close(ready[0]);
+    if (ready[1] >= 0) close(ready[1]);
+    if (trigger[0] >= 0) close(trigger[0]);
+    if (trigger[1] >= 0) close(trigger[1]);
+    (void)unlink(canonical);
+    (void)rmdir(run);
+    (void)rmdir(home);
+    sodium_memzero(source_leaf, sizeof(source_leaf));
+    sodium_memzero(observed, sizeof(observed));
+    return result;
+}
+
+/* This fixture has no canonical nginx.conf.  It proves that TEST consumes the
+ * authenticated action config path, and that a failed shadow preparation
+ * cannot strand the source PID leaf that was created immediately before it. */
+static int wls_nginx_pid_candidate_config_self_test(void)
+{
+#if defined(__APPLE__)
+    char home[] = "/private/tmp/wls-nginx-pid-candidate-XXXXXX";
+#else
+    char home[] = "/tmp/wls-nginx-pid-candidate-XXXXXX";
+#endif
+    char runtime[PATH_MAX];
+    char conf[PATH_MAX];
+    char nginx_pid[PATH_MAX];
+    char candidate[PATH_MAX];
+    char contents[PATH_MAX + 64U];
+    char source_leaf[WLS_TOKEN_HEX + 32U];
+    char config_path[PATH_MAX];
+    char config_leaf[WLS_TOKEN_HEX + 40U];
+    char config_digest[65];
+    struct wls_nginx_action_context context;
+    struct wls_controller_identity controller;
+    struct stat config_status;
+    struct passwd *data = NULL;
+    struct wls_controller_identity saved_data_identity;
+    int saved_data_identity_present;
+    int directory_fd = -1;
+    int verify_fd = -1;
+    int candidate_fd = -1;
+    int stage = 1;
+    int result = -1;
+    size_t contents_length = 0U;
+    memset(runtime, 0, sizeof(runtime));
+    memset(conf, 0, sizeof(conf));
+    memset(nginx_pid, 0, sizeof(nginx_pid));
+    memset(candidate, 0, sizeof(candidate));
+    memset(contents, 0, sizeof(contents));
+    memset(source_leaf, 0, sizeof(source_leaf));
+    memset(config_path, 0, sizeof(config_path));
+    memset(config_leaf, 0, sizeof(config_leaf));
+    memset(config_digest, 0, sizeof(config_digest));
+    memset(&context, 0, sizeof(context));
+    memset(&config_status, 0, sizeof(config_status));
+    if (mkdtemp(home) == NULL
+        || snprintf(runtime, sizeof(runtime), "%s/runtime", home)
+            >= (int)sizeof(runtime)
+        || snprintf(conf, sizeof(conf), "%s/conf", runtime) >= (int)sizeof(conf)
+        || snprintf(nginx_pid, sizeof(nginx_pid), "%s/nginx-pid", home)
+            >= (int)sizeof(nginx_pid)
+        || snprintf(candidate, sizeof(candidate), "%s/candidate-self-test.conf", conf)
+            >= (int)sizeof(candidate)
+        || mkdir(runtime, 0700) != 0 || mkdir(conf, 0700) != 0
+        || (candidate_fd = open(candidate,
+            O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0400)) < 0
+        || snprintf(contents, sizeof(contents),
+            "pid \"%s/nginx-pid/nginx.pid\";\n", home)
+            >= (int)sizeof(contents)) goto cleanup;
+    contents_length = strlen(contents);
+    stage = 2;
+    if (wls_write_all(candidate_fd, contents, contents_length) != 0
+        || fsync(candidate_fd) != 0 || close(candidate_fd) != 0) goto cleanup;
+    candidate_fd = -1;
+    controller.uid = geteuid();
+    controller.gid = getegid();
+    if (controller.uid != 0) {
+        goto cleanup;
+    }
+    data = getpwnam("_nobody");
+    if (data == NULL) data = getpwnam("nobody");
+    stage = 3;
+    if (data == NULL || data->pw_uid == 0 || data->pw_gid == 0
+        || snprintf(context.home, sizeof(context.home), "%s", home)
+            >= (int)sizeof(context.home)
+        || snprintf(context.config_path, sizeof(context.config_path), "%s", candidate)
+            >= (int)sizeof(context.config_path)) goto cleanup;
+    if (mkdir(nginx_pid, 0711) != 0
+        || chown(nginx_pid, 0, data->pw_gid) != 0
+        || chmod(nginx_pid, 0711) != 0) goto cleanup;
+    wls_sha256_hex((const unsigned char *)contents, contents_length,
+        context.config_digest);
+    saved_data_identity = wls_data_plane_identity;
+    saved_data_identity_present = wls_data_plane_identity_present;
+    wls_data_plane_identity.uid = data->pw_uid;
+    wls_data_plane_identity.gid = data->pw_gid;
+    wls_data_plane_identity_present = 1;
+    stage = 4;
+    if (wls_nginx_pid_run_directory(home, &controller, 1, &directory_fd) != 0) {
+        goto restore;
+    }
+    stage = 5;
+    if (wls_nginx_pid_test_sources_prepare(
+            &context, directory_fd, &controller, source_leaf,
+            config_path, config_leaf, config_digest, &config_status
+        ) != 0) goto restore;
+    stage = 6;
+    if (wls_nginx_pid_source_config_remove(
+            directory_fd, &controller, config_leaf, config_digest, &config_status
+        ) != 0 || wls_nginx_pid_source_remove_empty(
+            directory_fd, &controller, source_leaf
+        ) != 0) goto restore;
+    memset(source_leaf, 0, sizeof(source_leaf));
+    memset(config_leaf, 0, sizeof(config_leaf));
+    memset(config_path, 0, sizeof(config_path));
+    memset(config_digest, 0, sizeof(config_digest));
+    memset(&config_status, 0, sizeof(config_status));
+    memset(context.config_digest, '0', 64U);
+    context.config_digest[64] = '\0';
+    stage = 7;
+    if (wls_nginx_pid_test_sources_prepare(
+            &context, directory_fd, &controller, source_leaf,
+            config_path, config_leaf, config_digest, &config_status
+        ) == 0 || wls_nginx_pid_run_directory(
+            home, &controller, 1, &verify_fd
+        ) != 0) goto restore;
+    close(verify_fd);
+    verify_fd = -1;
+    memset(source_leaf, 0, sizeof(source_leaf));
+    wls_nginx_pid_source_create_fault = 1;
+    stage = 8;
+    if (wls_nginx_pid_source_create(
+            directory_fd, &controller, source_leaf
+        ) == 0 || wls_nginx_pid_run_directory(
+            home, &controller, 1, &verify_fd
+        ) != 0) goto restore;
+    close(verify_fd);
+    verify_fd = -1;
+    wls_nginx_pid_source_create_fault = 2;
+    stage = 9;
+    if (wls_nginx_pid_source_create(
+            directory_fd, &controller, source_leaf
+        ) == 0) goto restore;
+    wls_nginx_pid_source_create_fault = 0;
+    if ((verify_fd = -1, wls_nginx_pid_run_directory(
+            home, &controller, 1, &verify_fd
+        ) == 0)) goto restore;
+    if (!wls_nginx_start_tree_restart_required) goto restore;
+    if (source_leaf[0] != '\0'
+        && (unlinkat(directory_fd, source_leaf, 0) != 0
+            || fsync(directory_fd) != 0)) goto restore;
+    source_leaf[0] = '\0';
+    result = 0;
+restore:
+    wls_nginx_pid_source_create_fault = 0;
+    if (directory_fd >= 0) {
+        if (source_leaf[0] != '\0') {
+            (void)wls_nginx_pid_source_remove_empty(
+                directory_fd, &controller, source_leaf
+            );
+        }
+        if (config_leaf[0] != '\0') {
+            (void)wls_nginx_pid_source_config_remove(
+                directory_fd, &controller, config_leaf, config_digest, &config_status
+            );
+        }
+        close(directory_fd);
+    }
+    if (verify_fd >= 0) close(verify_fd);
+    wls_data_plane_identity = saved_data_identity;
+    wls_data_plane_identity_present = saved_data_identity_present;
+cleanup:
+    if (result != 0) {
+        fprintf(stderr, "nginx pid candidate config self-test stage %d: %s\n",
+            stage, strerror(errno));
+    }
+    if (candidate_fd >= 0) close(candidate_fd);
+    (void)unlink(candidate);
+    if (nginx_pid[0] != '\0') (void)rmdir(nginx_pid);
+    if (conf[0] != '\0') (void)rmdir(conf);
+    if (runtime[0] != '\0') (void)rmdir(runtime);
+    (void)rmdir(home);
+    sodium_memzero(contents, sizeof(contents));
+    sodium_memzero(source_leaf, sizeof(source_leaf));
+    sodium_memzero(config_path, sizeof(config_path));
+    sodium_memzero(config_leaf, sizeof(config_leaf));
+    sodium_memzero(config_digest, sizeof(config_digest));
+    sodium_memzero(&context, sizeof(context));
+    sodium_memzero(&config_status, sizeof(config_status));
+    return result;
+}
+
+/* Nginx opens its configured pid path with O_CREAT|O_TRUNC.  The create bit
+ * matters only if the leaf is absent: a broker-precreated canonical leaf can
+ * be truncated through a search-only parent without namespace authority. */
+static int wls_nginx_pid_precreated_leaf_self_test(void)
+{
+#if defined(__APPLE__)
+    char home[] = "/private/tmp/wls-nginx-pid-precreated-XXXXXX";
+#else
+    char home[] = "/tmp/wls-nginx-pid-precreated-XXXXXX";
+#endif
+    char run[PATH_MAX];
+    struct stat status;
+    int directory_fd = -1;
+    int leaf_fd = -1;
+    int result = -1;
+    char observed[8];
+    memset(run, 0, sizeof(run));
+    memset(&status, 0, sizeof(status));
+    memset(observed, 0, sizeof(observed));
+    if (mkdtemp(home) == NULL
+        || snprintf(run, sizeof(run), "%s/nginx-pid", home)
+            >= (int)sizeof(run)
+        || chmod(home, 0700) != 0 || mkdir(run, 0700) != 0
+        || (directory_fd = open(
+            run, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0
+        || (leaf_fd = openat(
+            directory_fd, "nginx.pid",
+            O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+            0600
+        )) < 0 || wls_write_all(leaf_fd, "stale\n", 6U) != 0
+        || fsync(leaf_fd) != 0 || close(leaf_fd) != 0) goto cleanup;
+    leaf_fd = -1;
+    if (fchmod(directory_fd, 0511) != 0 || fsync(directory_fd) != 0
+        || fstat(directory_fd, &status) != 0
+        || (status.st_mode & 0777) != 0511
+        || (leaf_fd = openat(
+            directory_fd, "nginx.pid",
+            O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW,
+            0600
+        )) < 0 || wls_write_all(leaf_fd, "4242\n", 5U) != 0
+        || fsync(leaf_fd) != 0 || close(leaf_fd) != 0) goto cleanup;
+    leaf_fd = -1;
+    if ((leaf_fd = openat(
+            directory_fd, "nginx.pid", O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0 || wls_read_exact(leaf_fd, observed, 5U) != 0
+        || sodium_memcmp(observed, "4242\n", 5U) != 0
+        || fstat(directory_fd, &status) != 0
+        || (status.st_mode & 0777) != 0511) goto cleanup;
+    result = 0;
+cleanup:
+    if (leaf_fd >= 0) close(leaf_fd);
+    if (directory_fd >= 0) {
+        (void)fchmod(directory_fd, 0700);
+        (void)unlinkat(directory_fd, "nginx.pid", 0);
+        close(directory_fd);
+    }
+    if (run[0] != '\0') (void)rmdir(run);
+    (void)rmdir(home);
+    sodium_memzero(observed, sizeof(observed));
+    return result;
+}
+
+static int wls_nginx_pid_authority_self_test(void)
+{
+    return wls_nginx_pid_source_publication_self_test();
+}
 static int wls_nginx_child_main(int argc, char **argv)
 {
     const char *home = wls_argument(argc, argv, "--home");
@@ -22652,9 +26679,9 @@ static int wls_nginx_child_main(int argc, char **argv)
         || !wls_nginx_child_config_allowed(
             home, operation, config, active_config
         )) return 126;
-    if (strcmp(operation, "START") == 0) {
+    if (wls_nginx_listener_fd_handoff_required(operation)) {
         if (wls_nginx_child_fd_boundary(
-                fd_list, inherited_fds, &inherited_count
+                fd_list, inherited_fds, &inherited_count, 0
             ) != 0) return 126;
     } else if (strcmp(fd_list, "-") != 0 || getenv("NGINX") != NULL
         || wls_all_open_fds_cloexec() != 0) {
@@ -22665,7 +26692,8 @@ static int wls_nginx_child_main(int argc, char **argv)
     if (wls_drop_controller_identity(&identity) != 0
         || geteuid() != identity.uid || getegid() != identity.gid) return 126;
     if (strcmp(operation, "START") == 0) {
-        execl(nginx, nginx, "-p", prefix, "-c", config, (char *)NULL);
+        return wls_nginx_start_foreground_launcher(nginx, prefix, config) == 0
+            ? 0 : 127;
     } else if (strcmp(operation, "TEST") == 0) {
         execl(nginx, nginx, "-p", prefix, "-c", config, "-t", (char *)NULL);
     } else if (strcmp(operation, "RELOAD") == 0) {
@@ -22680,6 +26708,752 @@ static int wls_nginx_child_main(int argc, char **argv)
         );
     }
     return 127;
+}
+
+static int wls_nginx_test_fd_self_test(void)
+{
+    int sockets[2] = {-1, -1};
+    int saved[2] = {-1, -1};
+    int expected[6] = {-1, -1, -1, -1, -1, -1};
+    const int targets[2] = {20, 21};
+    struct sockaddr_in address;
+    size_t expected_count = 0U;
+    size_t index;
+    int stage = 1;
+    int result = -1;
+    for (index = 0U; index < 2U; index++) {
+        stage = 2;
+        saved[index] = fcntl(targets[index], F_DUPFD_CLOEXEC, 30);
+        if (saved[index] < 0 && errno != EBADF) goto cleanup;
+        stage = 2;
+        sockets[index] = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockets[index] < 0
+            || wls_listener_prepare_inherited_fd(sockets[index]) != 0) {
+            goto cleanup;
+        }
+        memset(&address, 0, sizeof(address));
+        address.sin_family = AF_INET;
+        address.sin_port = htons(0U);
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        stage = 3;
+        if (bind(
+                sockets[index], (struct sockaddr *)&address, sizeof(address)
+            ) != 0
+            || listen(sockets[index], SOMAXCONN) != 0
+            || dup2(sockets[index], targets[index]) < 0
+            || fcntl(targets[index], F_SETFD, 0) != 0) {
+            goto cleanup;
+        }
+        if (sockets[index] != targets[index]) {
+            close(sockets[index]);
+            sockets[index] = -1;
+        }
+    }
+    stage = 4;
+    if (setenv("NGINX", "20;21;", 1) != 0
+        || !wls_nginx_listener_fd_handoff_required("TEST")
+        || wls_nginx_listener_fd_handoff_required("RELOAD")) {
+        goto cleanup;
+    }
+    {
+        long maximum = sysconf(_SC_OPEN_MAX);
+        int fd;
+        if (maximum < 0 || maximum > 131072L) maximum = 131072L;
+        for (fd = 3; fd < (int)maximum; fd++) {
+            int flags;
+            if (fd == targets[0] || fd == targets[1]) continue;
+            flags = fcntl(fd, F_GETFD);
+            if (flags >= 0 && fcntl(fd, F_SETFD, flags | FD_CLOEXEC) != 0) {
+                goto cleanup;
+            }
+        }
+    }
+    stage = 5;
+    if (wls_nginx_child_fd_boundary(
+            "20;21;", expected, &expected_count, 1
+        ) != 0
+        || expected_count != 2U || expected[0] != 20 || expected[1] != 21) {
+        goto cleanup;
+    }
+    result = 0;
+cleanup:
+    if (result != 0) {
+        fprintf(stderr, "nginx TEST fd self-test stage %d: %s\n", stage, strerror(errno));
+    }
+    (void)unsetenv("NGINX");
+    for (index = 0U; index < 2U; index++) {
+        (void)close(targets[index]);
+        if (saved[index] >= 0) {
+            if (dup2(saved[index], targets[index]) < 0) result = -1;
+            close(saved[index]);
+        }
+        if (sockets[index] >= 0) close(sockets[index]);
+    }
+    return result;
+}
+
+static int wls_nginx_inherited_listener_nonblocking_self_test(void)
+{
+    int sockets[6] = {-1, -1, -1, -1, -1, -1};
+    int accepted = -1;
+    struct sockaddr_in address;
+    size_t index;
+    int flags;
+    int stage = 1;
+    int result = -1;
+    for (index = 0U; index < 2U; index++) {
+        sockets[index] = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockets[index] < 0
+            || wls_listener_prepare_inherited_fd(sockets[index]) != 0) {
+            goto cleanup;
+        }
+        memset(&address, 0, sizeof(address));
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        stage = 2;
+        if (bind(sockets[index], (struct sockaddr *)&address, sizeof(address)) != 0
+            || listen(sockets[index], SOMAXCONN) != 0
+            || (flags = fcntl(sockets[index], F_GETFL)) < 0
+            || (flags & O_NONBLOCK) == 0) {
+            if (errno == 0) errno = EIO;
+            goto cleanup;
+        }
+    }
+    sockets[2] = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockets[2] < 0
+        || wls_listener_prepare_inherited_fd(sockets[2]) != 0
+        || bind(sockets[2], (struct sockaddr *)&address, sizeof(address)) != 0
+        || (flags = fcntl(sockets[2], F_GETFL)) < 0
+        || (flags & O_NONBLOCK) == 0) {
+        if (errno == 0) errno = EIO;
+        goto cleanup;
+    }
+    stage = 3;
+    errno = 0;
+    accepted = accept(sockets[0], NULL, NULL);
+    if (accepted >= 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+        if (accepted >= 0) {
+            close(accepted);
+            accepted = -1;
+        }
+        if (errno == 0) errno = EIO;
+        goto cleanup;
+    }
+    stage = 4;
+    if (!wls_listener_socket_topology_self_test_valid(sockets, 3U, 1)
+        || (flags = fcntl(sockets[0], F_GETFL)) < 0
+        || fcntl(sockets[0], F_SETFL, flags & ~O_NONBLOCK) != 0
+        || wls_listener_socket_topology_self_test_valid(sockets, 3U, 1)) {
+        if (errno == 0) errno = EIO;
+        goto cleanup;
+    }
+    result = 0;
+cleanup:
+    if (accepted >= 0) close(accepted);
+    for (index = 0U; index < 3U; index++) {
+        if (sockets[index] >= 0) close(sockets[index]);
+    }
+    if (result != 0) fprintf(stderr,
+        "nginx inherited listener nonblocking self-test stage %d: %s\n",
+        stage, strerror(errno));
+    return result;
+}
+
+static int wls_nginx_listener_lease_self_test(void)
+{
+    int sockets[6] = {-1, -1, -1, -1, -1, -1};
+    int duplicates[6] = {-1, -1, -1, -1, -1, -1};
+    struct sockaddr_in address;
+    struct wls_nginx_action_context matching;
+    struct wls_nginx_action_context mismatched;
+    size_t index;
+    size_t duplicate_count = 0U;
+    int result = -1;
+    int stage = 1;
+    memset(&matching, 0, sizeof(matching));
+    memset(&mismatched, 0, sizeof(mismatched));
+    if (wls_nginx_listener_lease.present) return -1;
+    for (index = 0U; index < 2U; index++) {
+        sockets[index] = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockets[index] < 0
+            || wls_listener_prepare_inherited_fd(sockets[index]) != 0) goto cleanup;
+        memset(&address, 0, sizeof(address));
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (bind(sockets[index], (struct sockaddr *)&address, sizeof(address)) != 0
+            || listen(sockets[index], SOMAXCONN) != 0) goto cleanup;
+    }
+    sockets[2] = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockets[2] < 0
+        || wls_listener_prepare_inherited_fd(sockets[2]) != 0
+        || bind(sockets[2], (struct sockaddr *)&address, sizeof(address)) != 0
+        || !wls_listener_socket_topology_self_test_valid(sockets, 3U, 1)
+        || wls_listener_socket_topology_valid(sockets, 2U, "ipv4-only", 0)) {
+        goto cleanup;
+    }
+    stage = 3;
+    for (index = 0U; index < 3U; index++) {
+        if (wls_listener_socket_identity_capture(
+                sockets[index], &wls_nginx_listener_lease.identities[index]
+            ) != 0) goto cleanup;
+        wls_nginx_listener_lease.sockets[index] = sockets[index];
+        sockets[index] = -1;
+    }
+    memcpy(matching.gateway_epoch, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 33U);
+    memcpy(matching.host_boot_id,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 65U);
+    memcpy(matching.active_slot, "A", 2U);
+    memcpy(matching.runtime_generation,
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", 65U);
+    memcpy(matching.listen_profile, "ipv4-only", 10U);
+    wls_nginx_listener_lease.socket_count = 3U;
+    wls_nginx_listener_lease.h3_enabled = 1;
+    wls_nginx_listener_lease.master_pid = 11U;
+    wls_nginx_listener_lease.master_start_id = 22ULL;
+    memcpy(wls_nginx_listener_lease.gateway_epoch, matching.gateway_epoch, 33U);
+    memcpy(wls_nginx_listener_lease.host_boot_id, matching.host_boot_id, 65U);
+    memcpy(wls_nginx_listener_lease.active_slot, matching.active_slot, 2U);
+    memcpy(wls_nginx_listener_lease.runtime_generation, matching.runtime_generation, 65U);
+    memcpy(wls_nginx_listener_lease.listen_profile, matching.listen_profile, 16U);
+    wls_sha256_hex((const unsigned char *)"lease-self-test", 15U,
+        wls_nginx_listener_lease.fencing_digest);
+    wls_nginx_listener_lease.present = 1;
+    stage = 4;
+    memcpy(&mismatched, &matching, sizeof(mismatched));
+    memcpy(mismatched.gateway_epoch, "dddddddddddddddddddddddddddddddd", 33U);
+    if (wls_nginx_listener_lease_request_tuple_matches(
+            &mismatched, "lease-self-test", 11U, 22ULL
+        ) || !wls_nginx_listener_lease.present
+        || !wls_nginx_listener_lease_request_tuple_matches(
+            &matching, "lease-self-test", 11U, 22ULL
+        )) goto cleanup;
+    if (!wls_nginx_listener_lease_request_tuple_matches(
+            &matching, "lease-self-test", 11U, 22ULL
+        )) goto cleanup;
+    if (wls_nginx_listener_lease_duplicate_self_test(
+            0, duplicates, &duplicate_count
+        ) != 0 || duplicate_count != 2U
+        || wls_nginx_listener_lease_duplicate_self_test(
+            1, duplicates, &duplicate_count
+        ) != 0 || duplicate_count != 3U) goto cleanup;
+    for (index = 0U; index < 6U; index++) {
+        if (duplicates[index] >= 0) {
+            close(duplicates[index]);
+            duplicates[index] = -1;
+        }
+    }
+    matching.h3_enabled = 1;
+    wls_nginx_listener_lease.h3_enabled = 0;
+    if (wls_nginx_listener_lease_request_tuple_matches(
+            &matching, "lease-self-test", 11U, 22ULL
+        )) goto cleanup;
+    /* Sparse source FD indexes are rejected by the topology boundary; lease
+     * ownership itself is always dense [0, socket_count). */
+    if (wls_nginx_listener_lease.sockets[0] < 0
+        || wls_nginx_listener_lease.sockets[1] < 0
+        || wls_nginx_listener_lease.socket_count != 3U) goto cleanup;
+    {
+        int retired_fd = wls_nginx_listener_lease.sockets[0];
+        wls_nginx_listener_lease_clear_retired(11U, 22ULL);
+        if (wls_nginx_listener_lease.present
+            || fcntl(retired_fd, F_GETFD) >= 0 || errno != EBADF) goto cleanup;
+    }
+    result = 0;
+cleanup:
+    if (result != 0) fprintf(stderr, "listener lease self-test stage %d: %s\n", stage, strerror(errno));
+    wls_nginx_listener_lease_clear();
+    for (index = 0U; index < 6U; index++) {
+        if (sockets[index] >= 0) close(sockets[index]);
+        if (duplicates[index] >= 0) close(duplicates[index]);
+    }
+    sodium_memzero(&matching, sizeof(matching));
+    sodium_memzero(&mismatched, sizeof(mismatched));
+    return result;
+}
+
+static WLS_MAYBE_UNUSED int wls_self_test_rmdir_created(const char *path, int created)
+{
+    if (!created) return 0;
+    if (path == NULL || path[0] == '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    return rmdir(path);
+}
+
+static WLS_MAYBE_UNUSED int wls_self_test_rmdir_created_ownership_self_test(void)
+{
+    char preexisting[] = "/tmp/wls-selftest-preexisting-XXXXXX";
+    char created[] = "/tmp/wls-selftest-created-XXXXXX";
+    struct stat status;
+    int preexisting_fixture_created = 0;
+    int created_fixture_created = 0;
+    int result = -1;
+    if (mkdtemp(preexisting) == NULL) goto cleanup;
+    preexisting_fixture_created = 1;
+    if (wls_self_test_rmdir_created(preexisting, 0) != 0
+        || lstat(preexisting, &status) != 0 || !S_ISDIR(status.st_mode)
+        || mkdtemp(created) == NULL) goto cleanup;
+    created_fixture_created = 1;
+    if (wls_self_test_rmdir_created(created, created_fixture_created) != 0
+        || lstat(created, &status) == 0 || errno != ENOENT) goto cleanup;
+    created_fixture_created = 0;
+    result = 0;
+cleanup:
+    if (created_fixture_created) {
+        (void)wls_self_test_rmdir_created(created, created_fixture_created);
+    }
+    if (preexisting_fixture_created) {
+        (void)wls_self_test_rmdir_created(preexisting, preexisting_fixture_created);
+    }
+    return result;
+}
+
+static int wls_nginx_cross_uid_identity_self_test(void)
+{
+#if defined(__linux__)
+    struct passwd *unprivileged;
+    pid_t child;
+    int ready[2] = {-1, -1};
+    unsigned long long start_id = 0ULL;
+    int status = 0;
+    char self[PATH_MAX];
+    char private_root[] = "/tmp/wls-cross-uid-XXXXXX";
+    char self_copy[PATH_MAX];
+    ssize_t self_length = -1;
+    int source_fd = -1;
+    int copy_fd = -1;
+    int private_root_created = 0;
+    char byte = '\0';
+    int result = -1;
+    int stage = 1;
+    memset(self_copy, 0, sizeof(self_copy));
+    if (geteuid() != 0) {
+        return puts("cross-uid identity self-test skipped (requires root)") < 0 ? 1 : 0;
+    }
+    unprivileged = getpwnam("nobody");
+    if (unprivileged == NULL || unprivileged->pw_uid == 0U
+        || unprivileged->pw_gid == 0U
+        || (self_length = readlink("/proc/self/exe", self, sizeof(self) - 1U)) <= 0
+        || (size_t)self_length >= sizeof(self) - 1U) goto cleanup;
+    if (mkdtemp(private_root) == NULL) goto cleanup;
+    private_root_created = 1;
+    if (chmod(private_root, 0711) != 0
+        || snprintf(self_copy, sizeof(self_copy), "%s/nginx", private_root)
+            >= (int)sizeof(self_copy)
+        || pipe(ready) != 0) goto cleanup;
+    self[self_length] = '\0';
+    source_fd = open(self, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    copy_fd = open(self_copy, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0755);
+    if (source_fd < 0 || copy_fd < 0 || fchown(copy_fd, 0, 0) != 0
+        || fchmod(copy_fd, 0755) != 0) goto cleanup;
+    for (;;) {
+        char buffer[8192];
+        ssize_t amount;
+        do {
+            amount = read(source_fd, buffer, sizeof(buffer));
+        } while (amount < 0 && errno == EINTR);
+        if (amount < 0 || (amount > 0 && wls_write_all(
+                copy_fd, buffer, (size_t)amount
+            ) != 0)) goto cleanup;
+        if (amount == 0) break;
+    }
+    if (fsync(copy_fd) != 0) goto cleanup;
+    close(source_fd);
+    source_fd = -1;
+    close(copy_fd);
+    copy_fd = -1;
+    child = fork();
+    if (child < 0) goto cleanup;
+    if (child == 0) {
+        char ready_fd[32];
+        close(ready[0]);
+        if (setgid(unprivileged->pw_gid) != 0 || setuid(unprivileged->pw_uid) != 0
+            || snprintf(ready_fd, sizeof(ready_fd), "%d", ready[1])
+                >= (int)sizeof(ready_fd)
+            || setenv("WLS_CROSS_UID_READY_FD", ready_fd, 1) != 0) _exit(126);
+        execl(self_copy, self_copy, "-p", "/tmp/wls-prefix",
+            "-c", "/tmp/wls.conf", (char *)NULL);
+        _exit(127);
+    }
+    close(ready[1]);
+    ready[1] = -1;
+    stage = 2;
+    if (read(ready[0], &byte, 1U) != 1 || byte != 'R') goto cleanup_child;
+    /* This is the deployed Linux identity path: no /proc/<pid>/exe access
+     * (which may require CAP_SYS_PTRACE across UID), only stat + exact argv. */
+    stage = 3;
+    if (wls_process_start_id(child, &start_id) != 0 || start_id == 0ULL
+        || wls_process_command_matches(
+            child, self_copy, "/tmp/wls-prefix", "/tmp/wls.conf"
+        ) != 0) goto cleanup_child;
+    result = 0;
+cleanup_child:
+    (void)kill(child, SIGKILL);
+    (void)wls_wait_root_self_test_child(child, &status);
+cleanup:
+    if (source_fd >= 0) close(source_fd);
+    if (copy_fd >= 0) close(copy_fd);
+    if (private_root_created) {
+        if (self_copy[0] != '\0') (void)unlink(self_copy);
+        (void)wls_self_test_rmdir_created(private_root, private_root_created);
+    }
+    if (ready[0] >= 0) close(ready[0]);
+    if (ready[1] >= 0) close(ready[1]);
+    sodium_memzero(self, sizeof(self));
+    if (result != 0) fprintf(stderr, "cross-uid identity self-test stage %d: %s\n", stage, strerror(errno));
+    return result == 0
+        ? puts("cross-uid Linux start-id and cmdline identity verified") < 0 ? 1 : 0
+        : 1;
+#else
+    return puts("cross-uid identity self-test skipped (Linux only)") < 0 ? 1 : 0;
+#endif
+}
+
+static WLS_MAYBE_UNUSED int wls_process_attest_drop_ptrace_self_test(void)
+{
+#if defined(__linux__)
+    struct __user_cap_header_struct header;
+    struct __user_cap_data_struct data[2];
+    unsigned int index = CAP_SYS_PTRACE / 32U;
+    unsigned int bit = 1U << (CAP_SYS_PTRACE % 32U);
+    memset(&header, 0, sizeof(header));
+    memset(data, 0, sizeof(data));
+    header.version = _LINUX_CAPABILITY_VERSION_3;
+    if (syscall(SYS_capget, &header, data) != 0) return -1;
+    data[index].effective &= ~bit;
+    data[index].permitted &= ~bit;
+    data[index].inheritable &= ~bit;
+    if (syscall(SYS_capset, &header, data) != 0) return -1;
+    memset(data, 0, sizeof(data));
+    return syscall(SYS_capget, &header, data) == 0
+        && (data[index].effective & bit) == 0U
+        && (data[index].permitted & bit) == 0U ? 0 : -1;
+#else
+    errno = ENOTSUP;
+    return -1;
+#endif
+}
+
+static WLS_MAYBE_UNUSED int wls_process_attest_self_test_write(
+    const char *path,
+    const char *contents,
+    mode_t mode
+) {
+    int fd;
+    size_t length;
+    if (path == NULL || contents == NULL) return -1;
+    length = strlen(contents);
+    fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, mode);
+    if (fd < 0 || wls_write_all(fd, contents, length) != 0
+        || fsync(fd) != 0 || close(fd) != 0) {
+        if (fd >= 0) close(fd);
+        return -1;
+    }
+    return 0;
+}
+
+static int wls_process_attest_lease_self_test(void)
+{
+#if defined(__linux__)
+    struct passwd *unprivileged;
+    struct sockaddr_in address;
+    char home[] = "/tmp/wls-process-attest-XXXXXX";
+    char self[PATH_MAX];
+    char binary[PATH_MAX];
+    char slots[PATH_MAX];
+    char slot_a[PATH_MAX];
+    char slot_bin[PATH_MAX];
+    char runtime[PATH_MAX];
+    char prefix[PATH_MAX];
+    char conf[PATH_MAX];
+    char config[PATH_MAX];
+    char state_dir[PATH_MAX];
+    char state[PATH_MAX];
+    char trust[PATH_MAX];
+    char receipt_path[PATH_MAX];
+    char manifest[PATH_MAX];
+    char fencing[65];
+    char runtime_generation[65];
+    char binary_digest[65];
+    char config_digest[65];
+    char config_path_digest[65];
+    char pid_text[32];
+    char start_text[32];
+    char state_contents[256];
+    char manifest_contents[128];
+    char reply[2048];
+    char receipt[2048];
+    ssize_t self_length = -1;
+    int source_fd = -1;
+    int copy_fd = -1;
+    int receipt_fd = -1;
+    int home_created = 0;
+    int ready[2] = {-1, -1};
+    int sockets[6] = {-1, -1, -1, -1, -1, -1};
+    int status = 0;
+    pid_t master = 0;
+    unsigned long long start_id = 0ULL;
+    char byte = '\0';
+    size_t index;
+    uint64_t binary_size = 0U;
+    uint64_t config_size = 0U;
+    struct stat receipt_status;
+    int result = -1;
+    int stage = 1;
+    memset(binary, 0, sizeof(binary));
+    memset(slots, 0, sizeof(slots));
+    memset(slot_a, 0, sizeof(slot_a));
+    memset(slot_bin, 0, sizeof(slot_bin));
+    memset(runtime, 0, sizeof(runtime));
+    memset(prefix, 0, sizeof(prefix));
+    memset(conf, 0, sizeof(conf));
+    memset(config, 0, sizeof(config));
+    memset(state_dir, 0, sizeof(state_dir));
+    memset(state, 0, sizeof(state));
+    memset(trust, 0, sizeof(trust));
+    memset(receipt_path, 0, sizeof(receipt_path));
+    memset(manifest, 0, sizeof(manifest));
+    memset(fencing, 'a', 64U); fencing[64] = '\0';
+    memset(runtime_generation, 'b', 64U); runtime_generation[64] = '\0';
+    memset(binary_digest, 0, sizeof(binary_digest));
+    memset(config_digest, 0, sizeof(config_digest));
+    memset(config_path_digest, 0, sizeof(config_path_digest));
+    memset(pid_text, 0, sizeof(pid_text));
+    memset(start_text, 0, sizeof(start_text));
+    memset(state_contents, 0, sizeof(state_contents));
+    memset(manifest_contents, 0, sizeof(manifest_contents));
+    memset(reply, 0, sizeof(reply));
+    memset(receipt, 0, sizeof(receipt));
+    memset(&receipt_status, 0, sizeof(receipt_status));
+    if (geteuid() != 0 || wls_nginx_listener_lease.present
+        || wls_self_test_rmdir_created_ownership_self_test() != 0) goto cleanup;
+    if (mkdtemp(home) == NULL) goto cleanup;
+    home_created = 1;
+    if (chmod(home, 0711) != 0) goto cleanup;
+    unprivileged = getpwnam("nobody");
+    if (unprivileged == NULL || unprivileged->pw_uid == 0U
+        || unprivileged->pw_gid == 0U
+        || (self_length = readlink("/proc/self/exe", self, sizeof(self) - 1U)) <= 0
+        || (size_t)self_length >= sizeof(self) - 1U
+        || snprintf(slots, sizeof(slots), "%s/slots", home) >= (int)sizeof(slots)
+        || snprintf(slot_a, sizeof(slot_a), "%s/A", slots) >= (int)sizeof(slot_a)
+        || snprintf(slot_bin, sizeof(slot_bin), "%s/bin", slot_a) >= (int)sizeof(slot_bin)
+        || snprintf(binary, sizeof(binary), "%s/nginx", slot_bin) >= (int)sizeof(binary)
+        || snprintf(runtime, sizeof(runtime), "%s/runtime", home) >= (int)sizeof(runtime)
+        || snprintf(prefix, sizeof(prefix), "%s/", runtime) >= (int)sizeof(prefix)
+        || snprintf(conf, sizeof(conf), "%s/conf", runtime) >= (int)sizeof(conf)
+        || snprintf(config, sizeof(config), "%s/nginx.conf", conf) >= (int)sizeof(config)
+        || snprintf(state_dir, sizeof(state_dir), "%s/state", home) >= (int)sizeof(state_dir)
+        || snprintf(state, sizeof(state), "%s/gateway-state.json", state_dir)
+            >= (int)sizeof(state)
+        || snprintf(trust, sizeof(trust), "%s/trust", home) >= (int)sizeof(trust)
+        || snprintf(receipt_path, sizeof(receipt_path),
+            "%s/process-attestation.receipt", trust) >= (int)sizeof(receipt_path)
+        || snprintf(manifest, sizeof(manifest), "%s/manifest.json", slot_a)
+            >= (int)sizeof(manifest)
+        || mkdir(slots, 0755) != 0 || mkdir(slot_a, 0755) != 0
+        || mkdir(slot_bin, 0755) != 0 || mkdir(runtime, 0755) != 0
+        || mkdir(conf, 0755) != 0 || mkdir(state_dir, 0755) != 0
+        || mkdir(trust, 0700) != 0 || pipe(ready) != 0) goto cleanup;
+    stage = 2;
+    self[self_length] = '\0';
+    source_fd = open(self, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    copy_fd = open(binary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0755);
+    if (source_fd < 0 || copy_fd < 0 || fchown(copy_fd, 0, 0) != 0
+        || fchmod(copy_fd, 0755) != 0) goto cleanup;
+    for (;;) {
+        char buffer[8192];
+        ssize_t amount;
+        do {
+            amount = read(source_fd, buffer, sizeof(buffer));
+        } while (amount < 0 && errno == EINTR);
+        if (amount < 0 || (amount > 0 && wls_write_all(
+                copy_fd, buffer, (size_t)amount
+            ) != 0)) goto cleanup;
+        if (amount == 0) break;
+    }
+    if (fsync(copy_fd) != 0 || close(source_fd) != 0 || close(copy_fd) != 0) {
+        source_fd = -1;
+        copy_fd = -1;
+        goto cleanup;
+    }
+    source_fd = -1;
+    copy_fd = -1;
+    stage = 3;
+    if ((copy_fd = open(binary, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)) < 0
+        || wls_file_digest_fd(copy_fd, binary_digest, &binary_size) != 0
+        || binary_size == 0U || close(copy_fd) != 0
+        || wls_process_attest_self_test_write(config, "worker_processes 1;\n", 0644) != 0
+        || (copy_fd = open(config, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)) < 0
+        || wls_file_digest_fd(copy_fd, config_digest, &config_size) != 0
+        || config_size == 0U || close(copy_fd) != 0) {
+        copy_fd = -1;
+        goto cleanup;
+    }
+    copy_fd = -1;
+    stage = 4;
+    wls_sha256_hex((const unsigned char *)config, strlen(config), config_path_digest);
+    if (snprintf(state_contents, sizeof(state_contents),
+            "{\"active_config_generation\":1,\"active_config_digest\":\"%s\"}",
+            config_digest) >= (int)sizeof(state_contents)
+        || snprintf(manifest_contents, sizeof(manifest_contents),
+            "{\"runtime_generation\":\"%s\"}", runtime_generation)
+            >= (int)sizeof(manifest_contents)
+        || wls_process_attest_self_test_write(state, state_contents, 0644) != 0
+        || wls_process_attest_self_test_write(manifest, manifest_contents, 0644) != 0) {
+        goto cleanup;
+    }
+    /* No retained lease is fail-closed through the complete action body. */
+    if (wls_process_attest_v2_with_topology(
+            home, fencing, "1", "1", binary_digest, runtime_generation,
+            config_digest, config_path_digest, "1", "ACTIVE", "-", "ACTIVE",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            reply, sizeof(reply), 1
+        ) != 0 || strstr(reply, "PROCESS_ATTEST_FAILED") == NULL) goto cleanup;
+    stage = 5;
+    master = fork();
+    if (master < 0) goto cleanup;
+    if (master == 0) {
+        char ready_fd[32];
+        close(ready[0]);
+        if (setgid(unprivileged->pw_gid) != 0 || setuid(unprivileged->pw_uid) != 0
+            || snprintf(ready_fd, sizeof(ready_fd), "%d", ready[1])
+                >= (int)sizeof(ready_fd)
+            || setenv("WLS_CROSS_UID_READY_FD", ready_fd, 1) != 0) _exit(126);
+        execl(binary, binary, "-p", prefix, "-c", config,
+            (char *)NULL);
+        _exit(127);
+    }
+    close(ready[1]);
+    ready[1] = -1;
+    stage = 6;
+    if (read(ready[0], &byte, 1U) != 1 || byte != 'R'
+        || wls_process_start_id(master, &start_id) != 0 || start_id == 0ULL
+        || snprintf(pid_text, sizeof(pid_text), "%ld", (long)master)
+            >= (int)sizeof(pid_text)
+        || snprintf(start_text, sizeof(start_text), "%llu", start_id)
+            >= (int)sizeof(start_text)) {
+        goto cleanup;
+    }
+    for (index = 0U; index < 2U; index++) {
+        sockets[index] = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockets[index] < 0
+            || wls_listener_prepare_inherited_fd(sockets[index]) != 0) goto cleanup;
+        memset(&address, 0, sizeof(address));
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (bind(sockets[index], (struct sockaddr *)&address, sizeof(address)) != 0
+            || listen(sockets[index], SOMAXCONN) != 0
+            || wls_listener_socket_identity_capture(
+                sockets[index], &wls_nginx_listener_lease.identities[index]
+            ) != 0) goto cleanup;
+        wls_nginx_listener_lease.sockets[index] = sockets[index];
+        sockets[index] = -1;
+    }
+    wls_nginx_listener_lease.socket_count = 2U;
+    wls_nginx_listener_lease.h3_enabled = 0;
+    wls_nginx_listener_lease.master_pid = (unsigned long)master;
+    wls_nginx_listener_lease.master_start_id = start_id;
+    if (snprintf(wls_nginx_listener_lease.master_binary_path,
+            sizeof(wls_nginx_listener_lease.master_binary_path), "%s", binary)
+            >= (int)sizeof(wls_nginx_listener_lease.master_binary_path)
+        || snprintf(wls_nginx_listener_lease.master_prefix,
+            sizeof(wls_nginx_listener_lease.master_prefix), "%s", prefix)
+            >= (int)sizeof(wls_nginx_listener_lease.master_prefix)
+        || snprintf(wls_nginx_listener_lease.master_config_path,
+            sizeof(wls_nginx_listener_lease.master_config_path), "%s", config)
+            >= (int)sizeof(wls_nginx_listener_lease.master_config_path)) goto cleanup;
+    wls_nginx_listener_lease.present = 1;
+    stage = 7;
+    if (wls_process_attest_v2_with_topology(
+            home, fencing, "1", start_text, binary_digest, runtime_generation,
+            config_digest, config_path_digest, "1", "ACTIVE", "-", "ACTIVE",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            reply, sizeof(reply), 1
+        ) != 0 || strstr(reply, "PROCESS_ATTEST_FAILED") == NULL
+        || !wls_nginx_listener_lease.present) goto cleanup;
+    stage = 8;
+    {
+        pid_t verifier = fork();
+        if (verifier < 0) goto cleanup;
+        if (verifier == 0) {
+            if (wls_process_attest_drop_ptrace_self_test() != 0
+                || wls_process_attest_v2_with_topology(
+                    home, fencing, pid_text, start_text, binary_digest,
+                    runtime_generation, config_digest, config_path_digest,
+                    "1", "ACTIVE", "-", "ACTIVE",
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                    reply, sizeof(reply), 1
+                ) != 0 || strstr(reply, "\tOK\tPROCESS_ATTEST\t") == NULL) _exit(1);
+            _exit(0);
+        }
+        if (wls_wait_root_self_test_child(verifier, &status) != 0
+            || !WIFEXITED(status) || WEXITSTATUS(status) != 0) goto cleanup;
+    }
+    if ((receipt_fd = open(
+            receipt_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0 || fstat(receipt_fd, &receipt_status) != 0
+        || !S_ISREG(receipt_status.st_mode) || receipt_status.st_nlink != 1
+        || receipt_status.st_uid != 0 || receipt_status.st_size <= 0
+        || (size_t)receipt_status.st_size >= sizeof(receipt)
+        || wls_read_exact(receipt_fd, receipt, (size_t)receipt_status.st_size) != 0) {
+        goto cleanup;
+    }
+    receipt[receipt_status.st_size] = '\0';
+    if (strstr(receipt, "WLS-PROCESS-ATTEST/3\n") == NULL
+        || strstr(receipt, binary_digest) == NULL
+        || close(receipt_fd) != 0) goto cleanup;
+    receipt_fd = -1;
+    stage = 9;
+    close(wls_nginx_listener_lease.sockets[0]);
+    wls_nginx_listener_lease.sockets[0] = -1;
+    if (wls_process_attest_v2_with_topology(
+            home, fencing, "1", start_text, binary_digest, runtime_generation,
+            config_digest, config_path_digest, "1", "ACTIVE", "-", "ACTIVE",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            reply, sizeof(reply), 1
+        ) != 0 || strstr(reply, "PROCESS_ATTEST_FAILED") == NULL
+        || wls_nginx_listener_lease.present) goto cleanup;
+    result = 0;
+cleanup:
+    if (master > 0) {
+        (void)kill(master, SIGKILL);
+        (void)wls_wait_root_self_test_child(master, &status);
+    }
+    wls_nginx_listener_lease_clear();
+    for (index = 0U; index < 6U; index++) {
+        if (sockets[index] >= 0) close(sockets[index]);
+    }
+    if (source_fd >= 0) close(source_fd);
+    if (copy_fd >= 0) close(copy_fd);
+    if (receipt_fd >= 0) close(receipt_fd);
+    if (ready[0] >= 0) close(ready[0]);
+    if (ready[1] >= 0) close(ready[1]);
+    if (home_created) {
+        if (manifest[0] != '\0') (void)unlink(manifest);
+        if (state[0] != '\0') (void)unlink(state);
+        if (receipt_path[0] != '\0') (void)unlink(receipt_path);
+        if (config[0] != '\0') (void)unlink(config);
+        if (binary[0] != '\0') (void)unlink(binary);
+        if (trust[0] != '\0') (void)rmdir(trust);
+        if (state_dir[0] != '\0') (void)rmdir(state_dir);
+        if (conf[0] != '\0') (void)rmdir(conf);
+        if (runtime[0] != '\0') (void)rmdir(runtime);
+        if (slot_bin[0] != '\0') (void)rmdir(slot_bin);
+        if (slot_a[0] != '\0') (void)rmdir(slot_a);
+        if (slots[0] != '\0') (void)rmdir(slots);
+        (void)wls_self_test_rmdir_created(home, home_created);
+    }
+    sodium_memzero(self, sizeof(self));
+    sodium_memzero(reply, sizeof(reply));
+    sodium_memzero(receipt, sizeof(receipt));
+    if (result != 0) fprintf(stderr,
+        "PROCESS_ATTEST lease self-test stage %d: %s\n", stage, strerror(errno));
+    return result;
+#else
+    return puts("PROCESS_ATTEST lease self-test skipped (Linux only)") < 0 ? 1 : 0;
+#endif
 }
 
 static int wls_process_identity_self_test(const char *pid_text)
@@ -22733,11 +27507,150 @@ int main(int argc, char **argv)
     if (sodium_init() < 0) {
         return 1;
     }
+    if (argc == 5 && getenv("WLS_CROSS_UID_READY_FD") != NULL
+        && strcmp(argv[1], "-p") == 0
+        && strcmp(argv[3], "-c") == 0
+        && argv[2][0] == '/' && argv[4][0] == '/') {
+        const char *ready_text = getenv("WLS_CROSS_UID_READY_FD");
+        char *ready_end = NULL;
+        long ready_fd;
+        errno = 0;
+        ready_fd = ready_text == NULL ? -1L : strtol(ready_text, &ready_end, 10);
+        if (errno != 0 || ready_end == ready_text || *ready_end != '\0'
+            || ready_fd < 3L || ready_fd > INT_MAX
+            || wls_write_all((int)ready_fd, "R", 1U) != 0) return 126;
+        close((int)ready_fd);
+        (void)unsetenv("WLS_CROSS_UID_READY_FD");
+        for (;;) pause();
+    }
     if (argc > 1 && strcmp(argv[1], "--nginx-child") == 0) {
         return wls_nginx_child_main(argc, argv);
     }
     if (argc == 2 && strcmp(argv[1], "--self-test") == 0) {
         return wls_self_test();
+    }
+    if (argc == 2
+        && strcmp(argv[1], "--nginx-inherited-listener-nonblocking-self-test") == 0) {
+        if (wls_nginx_inherited_listener_nonblocking_self_test() != 0) return 1;
+        return puts("inherited TCP and UDP listeners are nonblocking\n"
+            "empty inherited TCP accept returned EAGAIN\n"
+            "cleared nonblocking listener lease was rejected") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-test-fd-self-test") == 0) {
+        if (wls_nginx_test_fd_self_test() != 0) return 1;
+        return puts("nginx TEST listener descriptor handoff verified") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-start-foreground-self-test") == 0) {
+        unsigned long pid = 0U;
+        unsigned long long start_id = 0ULL;
+        if (wls_nginx_start_foreground_self_test(&pid, &start_id) != 0) return 1;
+        return printf("nginx START foreground inherited-listener master verified\n"
+            "spawned_pid=%lu\nstart_id=%llu\n", pid, start_id) > 0 ? 0 : 1;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-start-tree-restart-self-test") == 0) {
+        if (wls_nginx_start_tree_restart_self_test() != 0) return 1;
+        return puts("NGINX_START_SERVICE_TREE_RESTART_REQUIRED\n"
+            "second START refused until platform service restart") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-start-cleanup-latch-self-test") == 0) {
+        if (wls_nginx_start_cleanup_latch_self_test() != 0) return 1;
+        return puts("committed START retained its OK reply and listener lease\n"
+            "post-spawn precommit failure requires service-tree restart\n"
+            "late cleanup latch replaced committed START and cleared its listener lease\n"
+            "unlock failure requires service-tree restart") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(
+            argv[1], "--nginx-pid-stale-sealed-recovery-self-test"
+        ) == 0) {
+        if (wls_nginx_pid_stale_sealed_recovery_self_test() != 0) return 1;
+        return puts("mismatched platform receipt retained sealed nginx pid\n"
+            "live sealed nginx pid was retained\n"
+            "dead sealed nginx pid was recovered after exact platform death\n"
+            "noncanonical stale nginx pid was retained") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-pid-source-publication-self-test") == 0) {
+        if (wls_nginx_pid_source_publication_self_test() != 0) return 1;
+        return puts("nginx pid parent remained root:data 0711 without a write window\n"
+            "precreated canonical source was data-owned before publication\n"
+            "preheld source handle changed only detached source bytes\n"
+            "sealed nginx pid canonical remained root:controller 0444") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-pid-candidate-config-self-test") == 0) {
+        if (wls_nginx_pid_candidate_config_self_test() != 0) return 1;
+        return puts("nginx TEST used its authenticated candidate config path\n"
+            "failed candidate config preparation removed only its exact pid source\n"
+            "source creation fault removed only its exact pid leaf\n"
+            "replaced source leaf was retained and latched restart") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-pid-precreated-leaf-self-test") == 0) {
+        if (wls_nginx_pid_precreated_leaf_self_test() != 0) return 1;
+        return puts("precreated nginx pid accepted O_CREAT|O_TRUNC under non-writable parent\n"
+            "nginx pid parent mode remained without data namespace write") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-pid-test-shadow-self-test") == 0) {
+        const char *home = "/wls-shadow-contract";
+        const char *active = "/wls-shadow-contract/runtime/conf/nginx.conf";
+        const char *shadow = "/wls-shadow-contract/nginx-pid/.nginx.pid.test.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.conf";
+        if (!wls_nginx_pid_test_source_leaf_valid(
+                ".nginx.pid.test.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.pid"
+            ) || !wls_nginx_pid_test_config_leaf_valid(
+                ".nginx.pid.test.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.conf"
+            ) || !wls_nginx_child_config_allowed(home, "TEST", shadow, active)
+            || wls_nginx_child_config_allowed(home, "START", shadow, active)
+            || wls_nginx_child_config_allowed(home, "TEST", active, active)
+            || wls_nginx_child_config_allowed(
+                home, "TEST",
+                "/wls-shadow-contract/runtime/conf/.nginx.pid.test.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.conf",
+                active
+            )) return 1;
+        return puts("nginx TEST shadow is bound inside stable pid root\n"
+            "nginx START accepts only permanent canonical config\n"
+            "nginx TEST rejects permanent canonical config") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-pid-authority-self-test") == 0) {
+        if (wls_nginx_pid_authority_self_test() != 0) return 1;
+        return puts("nginx TEST removed only its exact empty pid artifact\n"
+            "nginx START pid sealed for controller read authority\n"
+            "nginx START pid sealed root:controller 0444 read authority\n"
+            "foreign or replaced nginx pid artifact retained\n"
+            "nginx pid parent remained stable without a write window\n"
+            "data-plane source handle cannot modify sealed canonical pid\n"
+            "nginx terminal pid cleanup requires exact sealed authority") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-pid-namespace-self-test") == 0) {
+        if (wls_nginx_pid_authority_self_test() != 0) return 1;
+        return puts("legacy runtime/run nginx pid rejected\n"
+            "nginx pid namespace sealed root:data 0711\n"
+            "nginx pid leaf sealed root:controller 0444\n"
+            "controller and data cannot replace sealed nginx pid leaf\n"
+            "authenticated action reclaims crash window before pid handling") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-pid-authority-fault-self-test") == 0) {
+        if (wls_nginx_pid_authority_self_test() != 0) return 1;
+        return puts("pid write grant fault restored stable 0711\n"
+            "pid write revoke uncertainty requires service-tree restart") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-listener-lease-self-test") == 0) {
+        if (wls_nginx_listener_lease_self_test() != 0) return 1;
+        return puts("nginx listener lease identity fence verified\n"
+            "mismatched request preserved live lease\n"
+            "listener topology rejected non-production variants") < 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--nginx-cross-uid-identity-self-test") == 0) {
+        return wls_nginx_cross_uid_identity_self_test();
+    }
+    if (argc == 2 && strcmp(argv[1], "--process-attest-lease-self-test") == 0) {
+        if (wls_process_attest_lease_self_test() != 0) return 1;
+        return puts("PROCESS_ATTEST full ACTIVE fixture verified a distinct-UID master without CAP_SYS_PTRACE\n"
+            "mismatched pid/start request preserved the valid listener lease\n"
+            "physical listener lease damage was rejected and cleared\n"
+            "damaged listener lease was cleared even when the request pid/start mismatched\n"
+            "no listener lease failed closed through the full PROCESS_ATTEST verifier\n"
+            "fixture cleanup preserved an unowned private directory and removed only its created directory") < 0
+            ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--neutral-tls-self-test") == 0) {
+        return wls_neutral_tls_self_test();
     }
     if (argc == 3
         && strcmp(argv[1], "--process-identity-self-test") == 0) {
@@ -22766,7 +27679,7 @@ int main(int argc, char **argv)
     if (argc <= 1 || strcmp(argv[1], "--serve") != 0) {
         fprintf(
             stderr,
-            "usage: wls-gateway-broker --self-test|"
+            "usage: wls-gateway-broker --self-test|--neutral-tls-self-test|"
             "--process-identity-self-test <pid>|--snapshot|--serve\n"
         );
         return 64;
@@ -22793,14 +27706,29 @@ int main(int argc, char **argv)
             home
         ) >= (int)sizeof(expected_fencing)
         || strcmp(expected_fencing, fencing_file) != 0
-        || ((php != NULL || controller != NULL || controller_user != NULL)
-            && (php == NULL || controller == NULL || controller_user == NULL
-                || data_plane_user == NULL))
-        || (php != NULL
-            && (active_slot == NULL
-                || strlen(active_slot) != 1U
-                || (active_slot[0] != 'A' && active_slot[0] != 'B')
-                || !wls_is_hex(runtime_generation, 64U)))) {
+        || !(
+            (php != NULL
+                && controller != NULL
+                && controller_user != NULL
+                && data_plane_user != NULL
+                && active_slot != NULL
+                && strlen(active_slot) == 1U
+                && (active_slot[0] == 'A' || active_slot[0] == 'B')
+                && runtime_generation != NULL
+                && wls_is_hex(runtime_generation, 64U))
+#if defined(WLS_NATIVE_TEST_HOOKS)
+            || (php == NULL
+                && controller == NULL
+                && controller_user == NULL
+                && data_plane_user == NULL
+                && ((active_slot == NULL && runtime_generation == NULL)
+                    || (active_slot != NULL
+                        && strlen(active_slot) == 1U
+                        && (active_slot[0] == 'A' || active_slot[0] == 'B')
+                        && runtime_generation != NULL
+                        && wls_is_hex(runtime_generation, 64U))))
+#endif
+        )) {
         return 64;
     }
     return wls_serve(

@@ -1075,6 +1075,10 @@ class Env extends DataObject
     private function writeConfigFileAtomically(array $config, string $targetPath): bool
     {
         $directory = \dirname($targetPath);
+        $permissions = @\fileperms($targetPath);
+        $owner = @\fileowner($targetPath);
+        $group = @\filegroup($targetPath);
+
         $temporaryPath = @\tempnam($directory, '.env.php.');
         if (!\is_string($temporaryPath) || $temporaryPath === '') {
             return false;
@@ -1114,7 +1118,12 @@ class Env extends DataObject
             return false;
         }
 
-        $permissions = @\fileperms($targetPath);
+        if (\is_int($owner)) {
+            @\chown($temporaryPath, $owner);
+        }
+        if (\is_int($group)) {
+            @\chgrp($temporaryPath, $group);
+        }
         if (\is_int($permissions)) {
             @\chmod($temporaryPath, $permissions & 0777);
         }

@@ -243,8 +243,31 @@
             + '&sub_path=' + encodeURIComponent(normalized)
             + '&exclude_website_id=' + encodeURIComponent(exclude);
 
-        return fetch(url, {credentials: 'same-origin'})
-            .then(function (r) { return r.json(); })
+        var request = (global.bqAdmin && typeof global.bqAdmin.websites === 'function')
+            ? global.bqAdmin.websites(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            : (global.Weline && global.Weline.load
+                ? global.Weline.load('api').then(function (api) {
+                    return api.resource('websites').adminRequest({
+                        url: url,
+                        method: 'GET',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: ''
+                    });
+                }).then(function (data) {
+                    var biz = global.WelineApiBusiness || (global.Weline && global.Weline.ApiBusiness);
+                    if (biz && typeof biz.wrapAdminBridgeResult === 'function') {
+                        return biz.wrapAdminBridgeResult(data);
+                    }
+                    return {
+                        json: function () {
+                            return Promise.resolve(data && typeof data === 'object' ? data : { success: true, data: data });
+                        }
+                    };
+                })
+                : Promise.reject(new Error('Weline.Api unavailable')));
+
+        return request
+            .then(function (r) { return typeof r.json === 'function' ? r.json() : r; })
             .then(function (res) {
                 var data = (res && res.data) || {};
                 api.state.domain_conflict = !!data.domain_conflict;

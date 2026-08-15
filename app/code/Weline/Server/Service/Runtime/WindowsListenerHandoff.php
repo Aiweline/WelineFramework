@@ -1779,8 +1779,10 @@ final class WindowsListenerHandoff
             $runtime,
         );
         $intentDigest = (string)$intent['intent_digest'];
-        if (self::hasMasterSocket($intentDigest, $deadlineMonotonic)) {
-            $existing = self::$masterSources[$intentDigest];
+        $existing = self::$masterSources[$intentDigest] ?? null;
+        if (\is_array($existing)
+            && ($existing['socket'] ?? null) instanceof \Socket
+        ) {
             if (\hash_equals(
                 (string)($existing['intent']['intent_digest'] ?? ''),
                 $intentDigest,
@@ -1952,11 +1954,47 @@ final class WindowsListenerHandoff
         if (!\defined('BP')) {
             throw new \RuntimeException('WLS project root is unavailable.');
         }
-        $directory = BP . 'var' . DIRECTORY_SEPARATOR . 'server'
-            . DIRECTORY_SEPARATOR . 'instances';
-        if (!\is_dir($directory) || \is_link($directory)) {
+        $serverDirectory = BP . 'var' . DIRECTORY_SEPARATOR . 'server';
+        $directory = $serverDirectory . DIRECTORY_SEPARATOR . 'instances';
+
+        return self::ensureHandoffDirectory($serverDirectory, $directory);
+    }
+
+    private static function ensureHandoffDirectory(
+        string $serverDirectory,
+        string $directory,
+    ): string {
+        if (!\is_dir($serverDirectory) || \is_link($serverDirectory)) {
             throw new \RuntimeException(
                 'WLS instance directory is unavailable for Windows listener handoff.'
+            );
+        }
+        $serverRealPath = @\realpath($serverDirectory);
+        if (!\is_string($serverRealPath) || $serverRealPath === '') {
+            throw new \RuntimeException(
+                'WLS instance directory parent cannot be verified for Windows listener handoff.'
+            );
+        }
+        if (!\is_dir($directory)) {
+            if (\file_exists($directory)
+                || \is_link($directory)
+                || (!@\mkdir($directory, 0700) && !\is_dir($directory))
+            ) {
+                throw new \RuntimeException(
+                    'WLS instance directory cannot be created for Windows listener handoff.'
+                );
+            }
+        }
+        \clearstatcache(true, $directory);
+        $directoryRealPath = @\realpath($directory);
+        if (!\is_dir($directory)
+            || \is_link($directory)
+            || !\is_string($directoryRealPath)
+            || $directoryRealPath === ''
+            || !self::samePath(\dirname($directoryRealPath), $serverRealPath)
+        ) {
+            throw new \RuntimeException(
+                'WLS instance directory is unsafe for Windows listener handoff.'
             );
         }
 

@@ -89,7 +89,9 @@ class ModelSelect implements TaglibInterface
             $html[] = 'color:#e6eef8;';
             $html[] = 'border-color:#64748b;}';
             $html[] = '.weline-ai-model-select-search{margin-bottom:0.5rem;}';
-            $html[] = '.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-search{';
+            $html[] = '.weline-ai-model-select-supplier{margin-bottom:0.5rem;}';
+            $html[] = '.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-search,';
+            $html[] = '.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-supplier{';
             $html[] = 'background-color:#0f172a;color:#e6eef8;border-color:rgba(148,163,184,0.25);}';
             $html[] = '.weline-ai-model-select-list{';
             $html[] = 'max-height:260px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;';
@@ -113,15 +115,18 @@ class ModelSelect implements TaglibInterface
             $html[] = '    <span id="<?= htmlspecialchars($Taglib__id) ?>_display"><?php if($Taglib__display!==' . "''" . '): echo htmlspecialchars($Taglib__display); else: ?>' . htmlspecialchars(__('使用默认模型')) . '<?php endif; ?></span>';
             $html[] = '  </button>';
             $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_container" class="weline-ai-model-select-dropdown"' . $dataAttrsStr . '>';
+            $html[] = '    <select class="form-select form-select-sm weline-ai-model-select-supplier" id="<?= htmlspecialchars($Taglib__id) ?>_supplier" aria-label="' . htmlspecialchars((string)__('供应商筛选')) . '">';
+            $html[] = '      <option value="">' . htmlspecialchars((string)__('全部供应商')) . '</option>';
+            $html[] = '    </select>';
             $html[] = '    <input type="text" class="form-control weline-ai-model-select-search" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off">';
             $html[] = '    <input type="hidden" id="<?= htmlspecialchars($Taglib__id) ?>_code" name="<?= htmlspecialchars($Taglib__name) ?>" value="<?= htmlspecialchars($Taglib__value) ?>"' . $dataAttrsStr . '>';
             $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_loading" style="padding:1rem; text-align:center; display:none;"></div>';
             $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_list" class="weline-ai-model-select-list" style="padding:0.25rem;"></div>';
             $html[] = '  </div>';
-            $html[] = '  <small class="text-muted d-block mt-1">' . __('提示：点击选择AI模型，输入关键词搜索') . '</small>';
+            $html[] = '  <small class="text-muted d-block mt-1">' . __('提示：先选供应商，再搜索并点击选择模型') . '</small>';
             $html[] = '</div>';
 
-            // 脚本：数据加载 + 搜索 + 选中回填
+            // 脚本：数据加载 + 供应商筛选 + 搜索 + 选中回填
             $html[] = '<script>(function(){';
             $html[] = 'const id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'const limit = Math.max(1, parseInt(\'<?=$Taglib__limit?>\', 10) || 50);';
@@ -130,11 +135,13 @@ class ModelSelect implements TaglibInterface
             $html[] = 'const list = document.getElementById(id+"_list");';
             $html[] = 'const loading = document.getElementById(id+"_loading");';
             $html[] = 'const search = document.getElementById(id+"_search");';
+            $html[] = 'const supplierSelect = document.getElementById(id+"_supplier");';
             $html[] = 'const hidden = document.getElementById(id+"_code");';
             $html[] = 'const display = document.getElementById(id+"_display");';
             // 初始化时已用服务端解析值，不再解析 JSON
             $t_no_match = __('未找到匹配的模型');
             $t_load_fail = __('加载失败');
+            $t_all_suppliers = __('全部供应商');
             $t_default_model = addslashes(__('使用默认模型'));
             $jsonFlags = JSON_UNESCAPED_UNICODE
                 | JSON_UNESCAPED_SLASHES
@@ -145,6 +152,7 @@ class ModelSelect implements TaglibInterface
                 | JSON_INVALID_UTF8_SUBSTITUTE;
             $html[] = 'const noMatchText = ' . json_encode((string)$t_no_match, $jsonFlags) . ';';
             $html[] = 'const loadFailText = ' . json_encode((string)$t_load_fail, $jsonFlags) . ';';
+            $html[] = 'const allSuppliersText = ' . json_encode((string)$t_all_suppliers, $jsonFlags) . ';';
             $html[] = <<<JS
  let aiApiPromise = null;
  function getAiApi(){
@@ -234,11 +242,36 @@ function normalizeModels(res){
   if(res && res.data && Array.isArray(res.data.data)){ return res.data.data; }
   return [];
 }
+function fillSuppliers(models){
+  if(!supplierSelect){ return; }
+  const current = String(supplierSelect.value || "");
+  const suppliers = [];
+  (models || []).forEach(function(m){
+    const s = String((m && m.supplier) || "").trim();
+    if(s && suppliers.indexOf(s) === -1){ suppliers.push(s); }
+  });
+  suppliers.sort();
+  supplierSelect.innerHTML = "";
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = allSuppliersText;
+  supplierSelect.appendChild(all);
+  suppliers.forEach(function(s){
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    supplierSelect.appendChild(opt);
+  });
+  if(current && suppliers.indexOf(current) !== -1){ supplierSelect.value = current; }
+}
 function applyFilter(kw){
   kw = String(kw || "").toLowerCase().trim();
   if(!cache){ return; }
-  if(!kw){ render(cache); return; }
+  const supplier = supplierSelect ? String(supplierSelect.value || "").trim().toLowerCase() : "";
   const data = cache.filter(function(m){
+    const modelSupplier = String((m && m.supplier) || "").trim().toLowerCase();
+    if(supplier && modelSupplier !== supplier){ return false; }
+    if(!kw){ return true; }
     const t = ((m.name||"")+" "+(m.supplier||"")+" "+modelCode(m)).toLowerCase();
     return t.indexOf(kw) !== -1;
   });
@@ -253,6 +286,7 @@ function ensureLoaded(){
     .then(function(res){
       loading.style.display = "none";
       cache = normalizeModels(res);
+      fillSuppliers(cache);
       loadPromise = null;
       return cache;
     })
@@ -288,6 +322,10 @@ function paintShell(){
   if(search){
     search.style.setProperty("background-color", dark ? "#111827" : "#ffffff", "important");
     search.style.color = fg;
+  }
+  if(supplierSelect){
+    supplierSelect.style.setProperty("background-color", dark ? "#111827" : "#ffffff", "important");
+    supplierSelect.style.color = fg;
   }
 }
 function placeFixed(){
@@ -353,6 +391,11 @@ search.addEventListener("mousedown", function(e){ e.stopPropagation(); });
 search.addEventListener("click", function(e){ e.stopPropagation(); });
 search.addEventListener("keydown", function(e){ e.stopPropagation(); if(e.key === "Escape"){ closeDropdown(); } });
 search.addEventListener("input", function(){ doFilter(); });
+if(supplierSelect){
+  supplierSelect.addEventListener("mousedown", function(e){ e.stopPropagation(); });
+  supplierSelect.addEventListener("click", function(e){ e.stopPropagation(); });
+  supplierSelect.addEventListener("change", function(){ applyFilter(search.value); });
+}
 JS;
             // 页面加载时，如果有初始值，自动加载并设置显示文本（无论当前显示文本是什么）
             $html[] = 'if(hidden.value){';

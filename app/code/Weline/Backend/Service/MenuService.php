@@ -20,6 +20,11 @@ class MenuService implements MenuServiceInterface
      */
     private static array $menuTreeCache = [];
 
+    public static function clearProcessCache(): void
+    {
+        self::$menuTreeCache = [];
+    }
+
     public function __construct(
         MenuResourceServiceInterface $menuResourceService,
         AuthorizationServiceInterface $authorizationService,

@@ -19,6 +19,8 @@ use PDOException;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Alter;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Create;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\Compiler\Dialect\MysqlDialect;
 use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Connection\PdoConnection;
@@ -35,7 +37,7 @@ use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Database\Helper\Standar;
 use Weline\Framework\Manager\ObjectManager;
 
-final class Connector extends Query implements ConnectorInterface
+final class Connector extends Query implements ConnectorInterface, PhysicalTableMetadataInterface
 {
     use CreatesTableFromSchemaTrait;
 
@@ -82,8 +84,17 @@ final class Connector extends Query implements ConnectorInterface
         }
 
         $db_type = $this->configProvider->getDbType();
-        if (!in_array($db_type, PDO::getAvailableDrivers())) {
-            throw new LinkException(__('驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。', [$db_type, implode(',', PDO::getAvailableDrivers())]));
+        $availableDrivers = PDO::getAvailableDrivers();
+        if (!in_array($db_type, $availableDrivers, true)) {
+            $installHint = PHP_OS_FAMILY === 'Windows'
+                ? 'Windows: enable php_pdo_mysql.dll in php.ini.'
+                : 'Linux: install/enable the pdo_mysql PHP extension, then restart PHP.';
+            throw new LinkException(sprintf(
+                'MySQL driver is not available: %s. Available drivers: %s. %s',
+                $db_type,
+                implode(',', $availableDrivers),
+                $installHint,
+            ));
         }
 
         // 从连接池获取连接
@@ -308,6 +319,16 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getCreateTableSql(string $table_name): string
     {
         [$schema, $table] = $this->resolveMetadataTable($table_name);
+        return $this->getPhysicalCreateTableSqlByParts($schema, $table);
+    }
+
+    public function getPhysicalCreateTableSql(PhysicalTableIdentity $identity): string
+    {
+        return $this->getPhysicalCreateTableSqlByParts($identity->namespace(), $identity->table());
+    }
+
+    private function getPhysicalCreateTableSqlByParts(string $schema, string $table): string
+    {
         $qualified = $this->quoteIdentifier($schema) . '.' . $this->quoteIdentifier($table);
         $rows = $this->query("SHOW CREATE TABLE {$qualified}")->fetch();
         return (string)($rows[0]['Create Table'] ?? $rows[0]['Create View'] ?? '');
@@ -337,6 +358,29 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     {
         $quoted = $this->formatTableName($table);
         $this->query("DROP TABLE IF EXISTS {$quoted}")->fetch();
+    }
+
+    public function quotePhysicalTable(PhysicalTableIdentity $identity): string
+    {
+        return $this->quoteIdentifier($identity->namespace()) . '.' . $this->quoteIdentifier($identity->table());
+    }
+
+    public function physicalTableExists(PhysicalTableIdentity $identity): bool
+    {
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT COUNT(*) FROM information_schema.tables '
+            . 'WHERE table_schema = :schema AND table_name = :table',
+        );
+        $statement->execute([
+            ':schema' => $identity->namespace(),
+            ':table' => $identity->table(),
+        ]);
+        return (int)$statement->fetchColumn() > 0;
+    }
+
+    public function dropPhysicalTableIfExists(PhysicalTableIdentity $identity): void
+    {
+        $this->query('DROP TABLE IF EXISTS ' . $this->quotePhysicalTable($identity))->fetch();
     }
 
     public function tableExist(string $table_name): bool
@@ -485,6 +529,16 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getTableColumns(string $table): array
     {
         [$schema, $physical] = $this->resolveMetadataTable($table);
+        return $this->getPhysicalTableColumnsByParts($schema, $physical);
+    }
+
+    public function getPhysicalTableColumns(PhysicalTableIdentity $identity): array
+    {
+        return $this->getPhysicalTableColumnsByParts($identity->namespace(), $identity->table());
+    }
+
+    private function getPhysicalTableColumnsByParts(string $schema, string $physical): array
+    {
         $statement = $this->getWrappedConnection()->prepare(
             'SELECT c.COLUMN_NAME AS Field, c.COLUMN_TYPE AS Type, c.IS_NULLABLE AS `Null`, '
             . 'c.COLUMN_KEY AS `Key`, c.COLUMN_DEFAULT AS `Default`, c.EXTRA AS Extra, '

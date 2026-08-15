@@ -888,7 +888,55 @@ class WidgetDefaultInjectionService
         } catch (\Throwable) {
         }
 
+        // Dashboard views are identities in their own right.  A newly created
+        // view can exist before a ThemeLayout row has been persisted, so the
+        // layout tables alone are not a complete source for the UI's
+        // “apply to all identities” action.
+        if ($pageType === self::DASHBOARD_PAGE_TYPE) {
+            $this->addDashboardViewIdentities($found, $identity);
+        }
+
         return array_values($found);
+    }
+
+    /**
+     * @param array<string,array{layout_option:string,scope:string,target_type:string,target_id:int}> $found
+     * @param array{layout_option:string,scope:string,target_type:string,target_id:int} $identity
+     */
+    private function addDashboardViewIdentities(array &$found, array $identity): void
+    {
+        $dashboardViewClass = 'Weline\\Dashboard\\Model\\DashboardView';
+        if (!class_exists($dashboardViewClass)) {
+            return;
+        }
+
+        try {
+            $dashboardView = clone ObjectManager::getInstance($dashboardViewClass);
+            $query = $dashboardView->clearQuery()->clearData()
+                ->where($dashboardViewClass::schema_fields_IS_ACTIVE, 1);
+            if ($identity['target_type'] === 'website' && $identity['target_id'] > 0) {
+                $query->where($dashboardViewClass::schema_fields_WEBSITE_ID, $identity['target_id']);
+            }
+            foreach ($query->select()->fetchArray() ?: [] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $viewId = (int)($row[$dashboardViewClass::schema_fields_ID] ?? 0);
+                if ($viewId <= 0) {
+                    continue;
+                }
+                $websiteId = max(0, (int)($row[$dashboardViewClass::schema_fields_WEBSITE_ID] ?? 0));
+                $dashboardIdentity = $this->normalizeIdentity([
+                    'layout_option' => $identity['layout_option'],
+                    'scope' => 'dashboard_view:' . $viewId,
+                    'target_type' => 'website',
+                    'target_id' => $websiteId,
+                ]);
+                $found[$this->identityMapKey($dashboardIdentity)] = $dashboardIdentity;
+            }
+        } catch (\Throwable) {
+            // Dashboard is optional for Theme; existing layout identities still work without it.
+        }
     }
 
     /**

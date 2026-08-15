@@ -6,10 +6,10 @@ namespace Weline\Customer\Controller\Account;
 
 use Weline\Captcha\Api\CaptchaManagerInterface;
 use Weline\Customer\Model\Customer;
-use Weline\Customer\Model\CustomerToken;
 use Weline\Customer\Api\CustomerLoginChallengeCreatorInterface;
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Customer\Service\CustomerAuthReturnUrlService;
+use Weline\Customer\Service\CustomerRememberDeviceService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
@@ -173,26 +173,8 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 ->save();
             $this->syncSandboxCookie($user->isSandboxAccount());
 
-            if ($rememberDuration > 0) {
-                $token = CustomerToken::generateToken();
-                $expireTime = time() + $rememberDuration;
-
-                /** @var CustomerToken $userToken */
-                $userToken = ObjectManager::getInstance(CustomerToken::class);
-                $userToken->reset()
-                    ->where(CustomerToken::schema_fields_user_id, $user->getId())
-                    ->where(CustomerToken::schema_fields_type, 'remember_me')
-                    ->delete();
-
-                $userToken->reset()
-                    ->setUserId($user->getId())
-                    ->setToken($token)
-                    ->setType('remember_me')
-                    ->setTokenExpireTime($expireTime)
-                    ->save();
-
-                Cookie::set('w_ut', $token, $rememberDuration, ['path' => '/']);
-            }
+            ObjectManager::getInstance(CustomerRememberDeviceService::class)
+                ->issueForAuthenticatedCustomer($user, $rememberDuration, $this->session);
 
             /** @var EventsManager $eventManager */
             $eventManager = ObjectManager::getInstance(EventsManager::class);

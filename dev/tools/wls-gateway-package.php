@@ -659,6 +659,12 @@ final class WlsGatewayPackageBuilder
         'nginx_test_schema' => 1,
     ];
 
+    /** @param null|\Closure(string,string):void $afterProvenanceRead */
+    public function __construct(
+        private readonly ?\Closure $afterProvenanceRead = null,
+    ) {
+    }
+
     /**
      * @param array<string,string> $options
      * @return array<string,mixed>
@@ -684,6 +690,9 @@ final class WlsGatewayPackageBuilder
         ) {
             throw new \RuntimeException('Unsupported WLS Gateway package target.');
         }
+        $expectedLauncherReleasePublicKeyHex = $production
+            ? $this->requiredProductionLauncherReleasePublicKeyHex($options)
+            : null;
 
         $version = \trim($this->requiredOption($options, 'version'));
         if (\preg_match('/\A[0-9A-Za-z][0-9A-Za-z._+-]{0,63}\z/D', $version) !== 1) {
@@ -760,6 +769,20 @@ final class WlsGatewayPackageBuilder
             $production,
         );
         if ($production) {
+            $approved = $this->requiredOption($options, 'approved-provenance-sha256');
+            $provenanceKey = (string)(
+                $provenance['components']['wls-gateway-launcher']
+                    ['embedded_release_public_key_hex'] ?? ''
+            );
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $approved) !== 1
+                || \hash_equals(\str_repeat('0', 64), $approved)
+                || !\hash_equals($approved, (string)$provenance['sha256'])
+                || !\hash_equals($expectedLauncherReleasePublicKeyHex, $provenanceKey)
+            ) {
+                throw new \RuntimeException('Production package requires approved provenance authority.');
+            }
+        }
+        if ($production) {
             foreach ($executables as $name => $binary) {
                 WlsGatewayDependencyAuditor::assertBaseSystemOnly(
                     $name,
@@ -768,7 +791,12 @@ final class WlsGatewayPackageBuilder
                 );
             }
         }
-        $this->runComponentSelfTests($controller, $executables, $platform);
+        $this->runComponentSelfTests(
+            $controller,
+            $executables,
+            $platform,
+            $expectedLauncherReleasePublicKeyHex,
+        );
 
         $output = '';
         try {
@@ -793,10 +821,7 @@ final class WlsGatewayPackageBuilder
         $provenanceFile = $output . '/provenance.json';
         $this->writeFile(
             $provenanceFile,
-            \json_encode(
-                $provenance,
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-            ) . PHP_EOL,
+            (string)$provenance['bytes'],
             0644,
         );
         $components['provenance.json'] = $this->componentDefinition(
@@ -861,6 +886,8 @@ final class WlsGatewayPackageBuilder
             'package_profile' => $profile,
             'release_ready' => false,
             'signing_key_id' => '',
+            'launcher_embedded_release_public_key_hex'
+                => $expectedLauncherReleasePublicKeyHex ?? '',
             'listen_profiles' => ['default', 'ipv4-only'],
             'capabilities' => $capabilities,
             'components' => $components,
@@ -906,6 +933,21 @@ final class WlsGatewayPackageBuilder
             throw new \InvalidArgumentException('Missing required option --' . $name . '.');
         }
         return $value;
+    }
+
+    /** @param array<string,string> $options */
+    private function requiredProductionLauncherReleasePublicKeyHex(
+        array $options,
+    ): string {
+        $key = $this->requiredOption($options, 'release-public-key-hex');
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $key) !== 1
+            || \hash_equals(\str_repeat('0', 64), $key)
+        ) {
+            throw new \RuntimeException(
+                'Production Launcher embedded release public key must be a non-zero lowercase Ed25519 public key.'
+            );
+        }
+        return $key;
     }
 
     private function outputTarget(string $output): string
@@ -987,21 +1029,37 @@ final class WlsGatewayPackageBuilder
             foreach ($executables as $name => $path) {
                 $components[$name] = $this->testProvenanceComponent($path);
             }
-            return [
+            $value = [
                 'schema_version' => 1,
                 'target' => ['platform' => $platform, 'arch' => $arch],
                 'components' => $components,
             ];
+            $bytes = \json_encode(
+                $value,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . PHP_EOL;
+            return $value + ['bytes' => $bytes, 'sha256' => \hash('sha256', $bytes)];
         }
 
         $file = $this->safeInput($file, self::MAX_METADATA_BYTES);
-        $decoded = \json_decode($this->readStableFile(
+        $bytes = $this->readStableFile(
             $file,
             self::MAX_METADATA_BYTES,
             'gateway component provenance',
-        ), true);
+        );
+        if ($this->afterProvenanceRead !== null) {
+            ($this->afterProvenanceRead)($file, $bytes);
+        }
+        $decoded = \json_decode($bytes, true);
+        $rootKeys = \is_array($decoded) ? \array_keys($decoded) : [];
+        \sort($rootKeys, SORT_STRING);
+        $targetKeys = \is_array($decoded['target'] ?? null)
+            ? \array_keys($decoded['target']) : [];
+        \sort($targetKeys, SORT_STRING);
         if (!\is_array($decoded)
-            || (int)($decoded['schema_version'] ?? 0) !== 1
+            || (int)($decoded['schema_version'] ?? 0) !== ($production ? 2 : 1)
+            || ($production && ($rootKeys !== ['components', 'schema_version', 'target']
+                || $targetKeys !== ['arch', 'platform']))
             || !\hash_equals($platform, (string)($decoded['target']['platform'] ?? ''))
             || !\hash_equals($arch, $this->normalizeArch((string)($decoded['target']['arch'] ?? '')))
             || !\is_array($decoded['components'] ?? null)
@@ -1012,22 +1070,55 @@ final class WlsGatewayPackageBuilder
             'controller' => $controller,
             'ca-bundle' => $caBundle,
         ] + $executables;
+        if ($production) {
+            $componentNames = \array_keys($decoded['components']);
+            $expectedComponentNames = \array_keys($sources);
+            \sort($componentNames, SORT_STRING);
+            \sort($expectedComponentNames, SORT_STRING);
+            if ($componentNames !== $expectedComponentNames
+                || !\hash_equals(
+                    \json_encode(
+                        $decoded,
+                        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                    ) . PHP_EOL,
+                    $bytes,
+                )) {
+                throw new \RuntimeException('Production component provenance is not canonical.');
+            }
+        }
         foreach (\array_keys($sources) as $name) {
             $definition = $decoded['components'][$name] ?? null;
+            $definitionKeys = \is_array($definition) ? \array_keys($definition) : [];
+            \sort($definitionKeys, SORT_STRING);
+            $expectedDefinitionKeys = [
+                'binary_sha256', 'license', 'self_contained', 'source_sha256',
+                'source_url', 'version',
+            ];
+            if ($name === 'wls-gateway-launcher') {
+                $expectedDefinitionKeys[] = 'embedded_release_public_key_hex';
+                \sort($expectedDefinitionKeys, SORT_STRING);
+            }
             if (!\is_array($definition)
+                || ($production && $definitionKeys !== $expectedDefinitionKeys)
                 || \trim((string)($definition['version'] ?? '')) === ''
                 || \trim((string)($definition['source_url'] ?? '')) === ''
                 || \preg_match(
                     '/\A[a-f0-9]{64}\z/D',
-                    \strtolower((string)($definition['source_sha256'] ?? '')),
+                    $production
+                        ? (string)($definition['source_sha256'] ?? '')
+                        : \strtolower((string)($definition['source_sha256'] ?? '')),
                 ) !== 1
                 || \trim((string)($definition['license'] ?? '')) === ''
                 || \preg_match(
                     '/\A[a-f0-9]{64}\z/D',
-                    \strtolower((string)($definition['binary_sha256'] ?? '')),
+                    $production
+                        ? (string)($definition['binary_sha256'] ?? '')
+                        : \strtolower((string)($definition['binary_sha256'] ?? '')),
                 ) !== 1
                 || !\hash_equals(
-                    \strtolower((string)$definition['binary_sha256']),
+                    $production
+                        ? (string)$definition['binary_sha256']
+                        : \strtolower((string)$definition['binary_sha256']),
                     $this->digestStableFile(
                         $sources[$name],
                         self::MAX_COMPONENT_BYTES,
@@ -1047,8 +1138,20 @@ final class WlsGatewayPackageBuilder
                     'Production component is not proven self-contained: ' . $name
                 );
             }
+            if ($production && $name === 'wls-gateway-launcher'
+                && (\preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    (string)($definition['embedded_release_public_key_hex'] ?? ''),
+                ) !== 1
+                || \hash_equals(
+                    \str_repeat('0', 64),
+                    (string)($definition['embedded_release_public_key_hex'] ?? ''),
+                ))
+            ) {
+                throw new \RuntimeException('Production Launcher provenance key is invalid.');
+            }
         }
-        return $decoded;
+        return $decoded + ['bytes' => $bytes, 'sha256' => \hash('sha256', $bytes)];
     }
 
     /** @return array<string,mixed> */
@@ -1074,6 +1177,7 @@ final class WlsGatewayPackageBuilder
         string $controller,
         array $executables,
         string $platform,
+        ?string $expectedLauncherReleasePublicKeyHex = null,
     ): void
     {
         $commands = [
@@ -1118,6 +1222,20 @@ final class WlsGatewayPackageBuilder
                 throw new \RuntimeException(
                     'Gateway package component self-test failed: '
                     . \basename($command[0]) . ': ' . $result['output']
+                );
+            }
+        }
+        if ($expectedLauncherReleasePublicKeyHex !== null) {
+            $result = $this->run([
+                $executables['wls-gateway-launcher'],
+                '--release-public-key-self-test',
+            ]);
+            $actual = \rtrim($result['output'], "\r\n");
+            if ($result['code'] !== 0
+                || !\hash_equals($expectedLauncherReleasePublicKeyHex, $actual)
+            ) {
+                throw new \RuntimeException(
+                    'Production Launcher embedded release public key does not match the declared release public key.'
                 );
             }
         }
@@ -1499,7 +1617,7 @@ final class WlsGatewayPackageSigner
     private const WINDOWS_BOOTSTRAP_MANIFEST = 'wls-bounded-command.manifest.json';
     private const WINDOWS_BOOTSTRAP_SIGNATURE = 'wls-bounded-command.manifest.sig';
     private const WINDOWS_BOOTSTRAP_MAX_HELPER_BYTES = 16_777_216;
-    private const SIGNING_TRANSACTION_SCHEMA = 'wls-gateway-signing-transaction/3';
+    private const SIGNING_TRANSACTION_SCHEMA = 'wls-gateway-signing-transaction/4';
     private const SIGNING_TRANSACTION_RECORD = 'record.json';
     private const SIGNING_TRANSACTION_ROLLBACK = 'unsigned-manifest.json';
     private const SIGNING_TRANSACTION_MANIFEST = 'signed-manifest.json';
@@ -1546,6 +1664,17 @@ final class WlsGatewayPackageSigner
         WlsGatewayDependencyAuditor::beginAudit();
         $verified = $this->verifyUnsignedCandidate($package, true);
         $manifest = $verified['manifest'];
+        $provenanceDigest = $this->packageProvenanceDigest($package);
+        $expectedProvenance = \strtolower($this->requiredOption(
+            $options,
+            'expected-provenance-sha256',
+        ));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $expectedProvenance) !== 1
+            || \hash_equals(\str_repeat('0', 64), $expectedProvenance)
+            || !\hash_equals($expectedProvenance, $provenanceDigest)
+        ) {
+            throw new \RuntimeException('Dependency-audit provenance does not match approved authority.');
+        }
         $receiptFile = $this->outputFileTarget(
             $this->requiredOption($options, 'receipt-output'),
         );
@@ -1584,6 +1713,7 @@ final class WlsGatewayPackageSigner
             'arch' => (string)$manifest['arch'],
             'component_count' => \count($manifest['components']),
             'component_set_sha256' => $this->componentSetDigest($manifest),
+            'provenance_sha256' => $provenanceDigest,
             'audit_environment_sha256' => $environmentDigest,
             'auditor' => $auditor,
         ];
@@ -1676,6 +1806,14 @@ final class WlsGatewayPackageSigner
                     $options,
                     'expected-audit-environment-sha256',
                 )),
+                \strtolower($this->requiredOption(
+                    $options,
+                    'expected-provenance-sha256',
+                )),
+            );
+            $this->verifyManifestLauncherSigningKeyBinding(
+                $manifest,
+                $secretKey,
             );
             $bootstrapOutput = null;
             if ((string)$manifest['platform'] === 'Windows') {
@@ -2850,6 +2988,10 @@ CDEF, 'kernel32.dll');
                 $options,
                 'expected-audit-environment-sha256',
             )),
+            \strtolower($this->requiredOption(
+                $options,
+                'expected-provenance-sha256',
+            )),
         );
 
         return $this->signingResult(
@@ -2885,6 +3027,10 @@ CDEF, 'kernel32.dll');
             'bootstrap_output' => $bootstrapOutput ?? '',
             'bootstrap_quarantine' => $bootstrapQuarantine ?? '',
             'bootstrap_stage' => $bootstrapStage ?? '',
+            'approved_provenance_sha256' => $this->packageProvenanceDigest($package),
+            'launcher_embedded_release_public_key_hex' => (string)(
+                $manifest['launcher_embedded_release_public_key_hex'] ?? ''
+            ),
             'identities' => $identities,
             'package_binding_sha256' => $this->signingPackageBinding(
                 $package,
@@ -3039,11 +3185,13 @@ CDEF, 'kernel32.dll');
         \sort($keys, SORT_STRING);
         if (!\is_array($record)
             || $keys !== [
+                'approved_provenance_sha256',
                 'arch',
                 'bootstrap_output',
                 'bootstrap_quarantine',
                 'bootstrap_stage',
                 'identities',
+                'launcher_embedded_release_public_key_hex',
                 'package_binding_sha256',
                 'platform',
                 'proof_signature_base64',
@@ -3096,6 +3244,23 @@ CDEF, 'kernel32.dll');
             true,
         );
         $manifest = $verified['manifest'];
+        $this->verifyManifestLauncherSigningKeyBinding($manifest, $secretKey);
+        $expectedProvenance = \strtolower($this->requiredOption(
+            $options,
+            'expected-provenance-sha256',
+        ));
+        if (!\hash_equals($expectedProvenance, $this->packageProvenanceDigest($package))
+            || !\hash_equals(
+                $expectedProvenance,
+                (string)$record['approved_provenance_sha256'],
+            )
+            || !\hash_equals(
+                (string)($manifest['launcher_embedded_release_public_key_hex'] ?? ''),
+                (string)$record['launcher_embedded_release_public_key_hex'],
+            )
+        ) {
+            throw new \RuntimeException('Release-signing provenance proof does not match its package.');
+        }
         if (!\hash_equals((string)$manifest['version'], (string)$record['version'])
             || !\hash_equals((string)$manifest['platform'], (string)$record['platform'])
             || !\hash_equals((string)$manifest['arch'], (string)$record['arch'])
@@ -4485,6 +4650,7 @@ CDEF, 'kernel32.dll');
             'components',
             'durable_state_contract',
             'implementation_level',
+            'launcher_embedded_release_public_key_hex',
             'listen_profiles',
             'package_profile',
             'platform',
@@ -4502,6 +4668,7 @@ CDEF, 'kernel32.dll');
             || !\hash_equals('production', (string)($manifest['package_profile'] ?? ''))
             || ($manifest['release_ready'] ?? true) !== false
             || (string)($manifest['signing_key_id'] ?? '') !== ''
+            || !$this->launcherEmbeddedReleaseKeyClaimValid($manifest)
             || !\hash_equals('wls-2.0', (string)($manifest['implementation_level'] ?? ''))
             || !\hash_equals('native-broker-v1', (string)($manifest['security_profile'] ?? ''))
             || !\in_array(
@@ -4702,6 +4869,7 @@ CDEF, 'kernel32.dll');
         array $manifest,
         string $manifestBytes,
         string $expectedEnvironmentDigest,
+        string $expectedProvenanceDigest,
     ): void {
         $receiptBytes = $this->readStableFile(
             $this->safeFile($file),
@@ -4763,6 +4931,7 @@ CDEF, 'kernel32.dll');
                 'component_set_sha256',
                 'manifest_sha256',
                 'platform',
+                'provenance_sha256',
                 'schema',
                 'version',
             ]
@@ -4770,6 +4939,10 @@ CDEF, 'kernel32.dll');
             || !\hash_equals(
                 \hash('sha256', $manifestBytes),
                 \strtolower((string)($receipt['manifest_sha256'] ?? '')),
+            )
+            || !\hash_equals(
+                $expectedProvenanceDigest,
+                \strtolower((string)($receipt['provenance_sha256'] ?? '')),
             )
             || !\hash_equals(
                 $this->componentSetDigest($manifest),
@@ -5302,6 +5475,15 @@ CDEF, 'kernel32.dll');
         return $real;
     }
 
+    private function packageProvenanceDigest(string $package): string
+    {
+        return $this->digestStableFile(
+            $this->safeFile($package . DIRECTORY_SEPARATOR . 'provenance.json'),
+            self::MAX_METADATA_BYTES,
+            'packaged production provenance',
+        )['sha256'];
+    }
+
     /** @param array<string,mixed> $manifest */
     private function verifyComponents(string $package, array $manifest): void
     {
@@ -5423,7 +5605,7 @@ CDEF, 'kernel32.dll');
         if (!\is_array($provenance)
             || $provenanceKeys !== ['components', 'schema_version', 'target']
             || $targetKeys !== ['arch', 'platform']
-            || (int)($provenance['schema_version'] ?? 0) !== 1
+            || (int)($provenance['schema_version'] ?? 0) !== 2
             || !\hash_equals(
                 (string)$manifest['platform'],
                 (string)($provenance['target']['platform'] ?? ''),
@@ -5477,18 +5659,19 @@ CDEF, 'kernel32.dll');
             );
             $definitionKeys = \is_array($definition) ? \array_keys($definition) : [];
             \sort($definitionKeys, SORT_STRING);
+            $expectedDefinitionKeys = [
+                'binary_sha256', 'license', 'self_contained', 'source_sha256',
+                'source_url', 'version',
+            ];
+            if ($name === 'wls-gateway-launcher') {
+                $expectedDefinitionKeys[] = 'embedded_release_public_key_hex';
+                \sort($expectedDefinitionKeys, SORT_STRING);
+            }
             if (!\is_array($definition)
-                || $definitionKeys !== [
-                    'binary_sha256',
-                    'license',
-                    'self_contained',
-                    'source_sha256',
-                    'source_url',
-                    'version',
-                ]
+                || $definitionKeys !== $expectedDefinitionKeys
                 || \preg_match(
                     '/\A[a-f0-9]{64}\z/D',
-                    \strtolower((string)($definition['source_sha256'] ?? '')),
+                    (string)($definition['source_sha256'] ?? ''),
                 ) !== 1
                 || \strlen(\trim((string)($definition['source_url'] ?? ''))) < 1
                 || \strlen((string)$definition['source_url']) > 4096
@@ -5497,11 +5680,19 @@ CDEF, 'kernel32.dll');
                 || \strlen(\trim((string)($definition['license'] ?? ''))) < 1
                 || \strlen((string)$definition['license']) > 1024
                 || !\hash_equals(
-                    \strtolower((string)($definition['binary_sha256'] ?? '')),
+                    (string)($definition['binary_sha256'] ?? ''),
                     $binary['sha256'],
                 )
                 || (!\in_array($name, ['controller', 'ca-bundle'], true)
                     && ($definition['self_contained'] ?? false) !== true)
+                || ($name === 'wls-gateway-launcher'
+                    && (\preg_match('/\A[a-f0-9]{64}\z/D', (string)($definition['embedded_release_public_key_hex'] ?? '')) !== 1
+                        || \hash_equals(\str_repeat('0', 64), (string)($definition['embedded_release_public_key_hex'] ?? ''))))
+                || ($name === 'wls-gateway-launcher'
+                    && !\hash_equals(
+                        (string)$manifest['launcher_embedded_release_public_key_hex'],
+                        (string)$definition['embedded_release_public_key_hex'],
+                    ))
             ) {
                 throw new \RuntimeException(
                     'Production provenance changed or is incomplete: ' . $name
@@ -5743,6 +5934,104 @@ CDEF, 'kernel32.dll');
                 'Release signing key does not match an enabled trusted key id.'
             );
         }
+    }
+
+    /** @param array<string,mixed> $manifest */
+    private function verifyManifestLauncherSigningKeyBinding(
+        array $manifest,
+        string $secretKey,
+    ): void {
+        $claimed = (string)(
+            $manifest['launcher_embedded_release_public_key_hex'] ?? ''
+        );
+        $derived = \bin2hex(
+            \sodium_crypto_sign_publickey_from_secretkey($secretKey),
+        );
+        if (!\hash_equals($derived, $claimed)) {
+            throw new \RuntimeException(
+                'Production Launcher embedded release public key does not match the signing key.'
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $manifest */
+    private function launcherEmbeddedReleaseKeyClaimValid(array $manifest): bool
+    {
+        $claim = (string)(
+            $manifest['launcher_embedded_release_public_key_hex'] ?? ''
+        );
+        return \preg_match('/\A[a-f0-9]{64}\z/D', $claim) === 1
+            && !\hash_equals(\str_repeat('0', 64), $claim);
+    }
+
+    /**
+     * @param array<string,mixed> $manifest
+     * @param array{nonce_hex:string,signature_base64:string}|null $recorded
+     * @return array{nonce_hex:string,signature_base64:string}
+     */
+    private function verifyLauncherReleaseSignatureChallenge(
+        string $package,
+        array $manifest,
+        string $secretKey,
+        ?array $recorded = null,
+    ): array {
+        if ((string)$manifest['platform'] === 'Windows') {
+            if ($recorded !== null
+                && ($recorded['nonce_hex'] !== ''
+                    || $recorded['signature_base64'] !== '')
+            ) {
+                throw new \RuntimeException('Windows signing proof has an unexpected Launcher challenge.');
+            }
+            return ['nonce_hex' => '', 'signature_base64' => ''];
+        }
+        $nonce = $recorded === null
+            ? \random_bytes(32)
+            : \hex2bin($recorded['nonce_hex']);
+        $signature = $recorded === null
+            ? \sodium_crypto_sign_detached($nonce, $secretKey)
+            : \base64_decode($recorded['signature_base64'], true);
+        if (!\is_string($nonce)
+            || \strlen($nonce) !== 32
+            || !\is_string($signature)
+            || \strlen($signature) !== SODIUM_CRYPTO_SIGN_BYTES
+            || !\sodium_crypto_sign_verify_detached(
+                $signature,
+                $nonce,
+                \sodium_crypto_sign_publickey_from_secretkey($secretKey),
+            )
+        ) {
+            throw new \RuntimeException('Release-signing Launcher challenge proof is invalid.');
+        }
+        $proof = [
+            'nonce_hex' => \bin2hex($nonce),
+            'signature_base64' => \base64_encode($signature),
+        ];
+        if (($recorded !== null
+                && (!\hash_equals($recorded['nonce_hex'], $proof['nonce_hex'])
+                    || !\hash_equals(
+                        $recorded['signature_base64'],
+                        $proof['signature_base64'],
+                    )))
+            || !$this->launcherEmbeddedReleaseKeyClaimValid($manifest)
+        ) {
+            throw new \RuntimeException('Release-signing Launcher challenge proof is invalid.');
+        }
+        $this->verifyComponents($package, $manifest);
+        $result = WlsGatewayPackageCommandRunner::run([
+            $package . DIRECTORY_SEPARATOR . 'bin'
+                . DIRECTORY_SEPARATOR . 'wls-gateway-launcher',
+            '--release-signature-self-test',
+            $proof['nonce_hex'],
+            $proof['signature_base64'],
+        ]);
+        $this->verifyComponents($package, $manifest);
+        if ($result['code'] !== 0) {
+            throw new \RuntimeException(
+                'Production Launcher release signature challenge failed: '
+                . $result['output'],
+            );
+        }
+        return $proof;
     }
 
     private function relativePath(string $relative): string

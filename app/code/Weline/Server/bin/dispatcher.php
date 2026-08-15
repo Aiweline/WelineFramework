@@ -317,6 +317,21 @@ if ($gatewayBackendTokenFile !== '') {
 }
 unset($gatewayBackendTokenConfiguration);
 
+$managedIdentity = '';
+if ($processName !== '') {
+    // Windows framework services are child-owned. Publish the redacted exact
+    // PID before waiting for the protected Master credential so the parent can
+    // bind that credential to this PHP process instead of a launcher PID.
+    $managedIdentity = '--name=' . $processName;
+    if (\preg_match('/\A[a-f0-9]{32}\z/D', $orchestratorLaunchId) === 1) {
+        $managedIdentity .= ' --launch-id=' . $orchestratorLaunchId;
+    }
+    if ($orchestratorEpoch > 0) {
+        $managedIdentity .= ' --epoch=' . $orchestratorEpoch;
+    }
+    \Weline\Framework\System\Process\Processer::setPid($managedIdentity, \getmypid());
+}
+
 $masterLeaseManager = new \Weline\Server\Service\MasterLeaseManager();
 $masterToken = $masterLeaseManager->resolveProtectedCredentialFromArguments(
         $argv,
@@ -604,17 +619,6 @@ WlsLogger::getInstance()
 
 if ($processName) {
     \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
-    // Publish generation fences with the managed lease so Master public-port
-    // confirmTransferred can match launch_id (name-only setPid left records
-    // without launch_id and blocked Dispatcher READY on Linux).
-    $managedIdentity = '--name=' . $processName;
-    if (\preg_match('/\A[a-f0-9]{32}\z/D', $orchestratorLaunchId) === 1) {
-        $managedIdentity .= ' --launch-id=' . $orchestratorLaunchId;
-    }
-    if ($orchestratorEpoch > 0) {
-        $managedIdentity .= ' --epoch=' . $orchestratorEpoch;
-    }
-    \Weline\Framework\System\Process\Processer::setPid($managedIdentity, \getmypid());
     if ($port > 0) {
         \Weline\Framework\System\Process\Processer::setProcessPorts('--name=' . $processName, [$port]);
     }

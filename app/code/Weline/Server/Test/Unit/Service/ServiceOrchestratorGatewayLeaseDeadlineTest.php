@@ -65,4 +65,32 @@ final class ServiceOrchestratorGatewayLeaseDeadlineTest extends TestCase
             ))->getValue($allocator),
         );
     }
+
+    public function testWindowsReadyLeaseBudgetIncludesStableProcessAttestation(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            protected function isWindowsRuntime(): bool
+            {
+                return true;
+            }
+        };
+        $before = \hrtime(true) / 1_000_000_000;
+        $allocator = (new \ReflectionMethod(
+            ServiceOrchestrator::class,
+            'boundedGatewayPortLeaseAllocator',
+        ))->invoke($orchestrator);
+        $after = \hrtime(true) / 1_000_000_000;
+        $deadline = (new \ReflectionProperty(
+            GatewayPortLeaseAllocator::class,
+            'operationDeadlineMonotonic',
+        ))->getValue($allocator);
+
+        self::assertIsFloat($deadline);
+        self::assertGreaterThanOrEqual(
+            $before + 7.9,
+            $deadline,
+            'Windows READY must leave time for exact process-birth and argv attestation before the bounded lease lock.',
+        );
+        self::assertLessThanOrEqual($after + 8.05, $deadline);
+    }
 }

@@ -282,6 +282,12 @@ final class CertificateMaterialUpdateCoordinatorTest extends TestCase
             'legacy managed Nginx is not installed or no longer owned',
             $source,
         );
+        self::assertStringContainsString(
+            "catch (\\Throwable \$throwable) {\n"
+                . "                if (\$legacyManaged) {\n"
+                . "                    \$failures[] = 'legacy managed Nginx: '",
+            $source,
+        );
     }
 
     public function testAdaptersDeclareTheirCertificateUpdateSourceMode(): void

@@ -2,10 +2,10 @@
 
 return [
     "name" => 'Weline_Customer',
-    "version" => '1.0.0',
+    "version" => '1.0.1',
     "requires" => [
         'Weline_Backend' => '*',
-        'Weline_Framework' => '*',
+        'Weline_Framework' => '^2.4',
         'Weline_Frontend' => '*',
     ],
     "optional" => [

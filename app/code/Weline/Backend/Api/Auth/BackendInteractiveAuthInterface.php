@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Api\Auth;
 
+use Weline\Framework\Session\Auth\Device\AuthenticatedLoginContext;
+
 /** Backend-owned password/session/remember-login boundary for the Admin UI. */
 interface BackendInteractiveAuthInterface
 {
@@ -31,5 +33,10 @@ interface BackendInteractiveAuthInterface
 
     public function invalidateRememberTokenForUser(int $userId): bool;
 
-    public function restoreRememberedSession(object $session, BackendLoginAccount $account, int $expireAt): void;
+    public function restoreRememberedSession(
+        object $session,
+        BackendLoginAccount $account,
+        int $expireAt,
+        ?AuthenticatedLoginContext $context = null,
+    ): void;
 }

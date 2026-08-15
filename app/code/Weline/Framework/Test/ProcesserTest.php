@@ -509,6 +509,532 @@ class ProcesserTest extends TestCore
         ], $resolved);
     }
 
+    public function testCollectLaunchItemsRechecksChildOwnedPidAfterWindowsEmulationTransition(): void
+    {
+        $items = [[
+            'key' => 'worker-emulated',
+            'block' => false,
+            'child_owns_pid' => true,
+            'command' => 'worker.php --name=weline-worker-emulated'
+                . ' --launch-id=0123456789abcdef0123456789abcdef'
+                . ' --slot-id=worker#1'
+                . ' --lease-id=fedcba9876543210fedcba9876543210',
+        ]];
+
+        $resolved = $this->invokePrivateStatic(Processer::class, 'collectLaunchItemsNeedingPidResolution', [
+            $items,
+            ['worker-emulated' => 4321],
+            false,
+        ]);
+
+        self::assertSame($items, $resolved);
+    }
+
+    public function testChildOwnedPidSelectionPrefersRegistrationAndRejectsAnExitedLauncher(): void
+    {
+        $currentPid = \getmypid();
+        self::assertGreaterThan(0, $currentPid);
+
+        self::assertSame($currentPid, $this->invokePrivateStatic(Processer::class, 'selectWindowsBatchCreatePid', [
+            ['child_owns_pid' => true],
+            $currentPid,
+            0,
+        ]));
+        self::assertSame(0, $this->invokePrivateStatic(Processer::class, 'selectWindowsBatchCreatePid', [
+            ['child_owns_pid' => true],
+            2147483647,
+            0,
+        ]));
+        self::assertSame($currentPid, $this->invokePrivateStatic(Processer::class, 'selectWindowsBatchCreatePid', [
+            ['child_owns_pid' => true],
+            4321,
+            $currentPid,
+        ]));
+    }
+
+    public function testRegisteredPidResolutionBindsNameLaunchIdAndIdentityKey(): void
+    {
+        $command = 'worker.php --name=weline-worker-emulated --launch-id=0123456789abcdef0123456789abcdef';
+        $item = [
+            'command' => $command,
+            'process_name' => 'weline-worker-emulated',
+            'launch_id' => '0123456789abcdef0123456789abcdef',
+        ];
+        $record = [
+            'pname_key' => '--name=weline-worker-emulated',
+            'process_name' => 'weline-worker-emulated',
+            'launch_id' => '0123456789abcdef0123456789abcdef',
+        ];
+
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchRegisteredPidMatchesLaunchItem',
+            [$record, $item],
+        ));
+
+        $record['launch_id'] = 'fedcba9876543210fedcba9876543210';
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchRegisteredPidMatchesLaunchItem',
+            [$record, $item],
+        ));
+    }
+
+    public function testChildOwnedWindowsLaunchDoesNotCommitTheFirstRegisteredTransitionPid(): void
+    {
+        $command = 'worker.php --name=weline-worker-emulated'
+            . ' --launch-id=0123456789abcdef0123456789abcdef';
+        $item = [
+            'command' => $command,
+            'process_name' => 'weline-worker-emulated',
+            'launch_id' => '0123456789abcdef0123456789abcdef',
+            'child_owns_pid' => true,
+        ];
+        $record = [
+            'pname_key' => '--name=weline-worker-emulated',
+            'process_name' => 'weline-worker-emulated',
+            'launch_id' => '0123456789abcdef0123456789abcdef',
+        ];
+
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchRegisteredPidCanResolveLaunchItem',
+            [$record, $item],
+        ));
+        $item['child_owns_pid'] = false;
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchRegisteredPidCanResolveLaunchItem',
+            [$record, $item],
+        ));
+    }
+
+    public function testWindowsTransitionPidMatcherRequiresEveryOpaqueChildIdentity(): void
+    {
+        $command = '"C:\\Tools\\PHP84\\php.exe" worker.php'
+            . ' --instance-name=isolated-win'
+            . ' --master-pid=9556'
+            . ' --epoch=9'
+            . ' --launch-id=0123456789abcdef0123456789abcdef'
+            . ' --slot-id=worker#1'
+            . ' --lease-id=fedcba9876543210fedcba9876543210'
+            . ' --name=weline-worker-emulated';
+        $item = [
+            'command' => $command,
+            'process_name' => 'weline-worker-emulated',
+            'launch_id' => '0123456789abcdef0123456789abcdef',
+        ];
+
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [$command, $item],
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [\str_replace('--master-pid=9556', '--master-pid=9557', $command), $item],
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [\str_replace('fedcba9876543210fedcba9876543210', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $command), $item],
+        ));
+    }
+
+    public function testWindowsEmulatedBatchUsesExactBoundedTransitionAuthority(): void
+    {
+        $nativeHelperParallelism = $this->invokePrivateStatic(
+            Processer::class,
+            'resolveWindowsBatchCreateHelperParallelism',
+            [6, true, false],
+        );
+        $emulatedHelperParallelism = $this->invokePrivateStatic(
+            Processer::class,
+            'resolveWindowsBatchCreateHelperParallelism',
+            [6, true, true],
+        );
+        $nativeResultBudget = $this->invokePrivateStatic(
+            Processer::class,
+            'resolveWindowsBatchCreateNonBlockingResultRowTimeout',
+            [6, true, false, 0.0],
+        );
+        $emulatedResultBudget = $this->invokePrivateStatic(
+            Processer::class,
+            'resolveWindowsBatchCreateNonBlockingResultRowTimeout',
+            [6, true, true, 0.0],
+        );
+        $nativePidBudget = $this->invokePrivateStatic(
+            Processer::class,
+            'resolveWindowsBatchCreateNonBlockingPidResolutionTimeout',
+            [6, true, false, 0.0],
+        );
+        $emulatedPidBudget = $this->invokePrivateStatic(
+            Processer::class,
+            'resolveWindowsBatchCreateNonBlockingPidResolutionTimeout',
+            [6, true, true, 0.0],
+        );
+        $emulatedTransitionScanDelay = $this->invokePrivateStatic(
+            Processer::class,
+            'resolveWindowsBatchCreateTransitionScanDelay',
+            [$emulatedPidBudget, true],
+        );
+
+        self::assertSame(4, $nativeHelperParallelism);
+        self::assertSame(1, $emulatedHelperParallelism);
+        self::assertLessThanOrEqual(0.6, $nativeResultBudget);
+        self::assertGreaterThanOrEqual(24.0, $emulatedResultBudget);
+        self::assertLessThanOrEqual(30.0, $emulatedResultBudget);
+        self::assertLessThanOrEqual(0.8, $nativePidBudget);
+        self::assertSame(8.0, $emulatedPidBudget);
+        self::assertSame(4.0, $emulatedTransitionScanDelay);
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchEmulatedRuntimeProfileActive',
+            [[
+                'profile' => 'native',
+                'requires_jit_isolation' => false,
+            ]],
+        ));
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchEmulatedRuntimeProfileActive',
+            [[
+                'profile' => 'windows-arm64-x64-cli-safe-v2',
+                'requires_jit_isolation' => true,
+            ]],
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchEmulatedRuntimeProfileActive',
+            [[
+                'profile' => 'unexpected-runtime-profile',
+                'requires_jit_isolation' => true,
+            ]],
+        ));
+
+        $command = '"C:\\Tools\\PHP84\\php.exe" dispatcher.php'
+            . ' --launch-id=0123456789abcdef0123456789abcdef'
+            . ' --slot-id=dispatcher#1'
+            . ' --lease-id=fedcba9876543210fedcba9876543210'
+            . ' --name=weline-wls-dispatcher-isolated-win';
+        $item = [
+            'command' => $command,
+            'process_name' => 'weline-wls-dispatcher-isolated-win',
+            'launch_id' => '0123456789abcdef0123456789abcdef',
+            'child_owns_pid' => false,
+        ];
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchTransitionPidRequiresResolution',
+            [$item, false],
+        ));
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchTransitionPidRequiresResolution',
+            [$item, true],
+        ));
+        $item['command'] = \str_replace(
+            ' --lease-id=fedcba9876543210fedcba9876543210',
+            '',
+            $command,
+        );
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchTransitionPidRequiresResolution',
+            [$item, true],
+        ));
+    }
+
+    public function testWindowsEmulatedBatchCarriesLaunchParentAndOnlySelectsItsExactLeaf(): void
+    {
+        $command = 'child.php'
+            . ' --name=weline-wls-worker-parent-bound'
+            . ' --launch-id=0123456789abcdef0123456789abcdef'
+            . ' --slot-id=worker#1'
+            . ' --lease-id=fedcba9876543210fedcba9876543210'
+            . ' --epoch=1'
+            . ' --master-pid=900';
+        $item = [
+            'key' => 'worker-1',
+            'command' => $command,
+            'process_name' => 'weline-wls-worker-parent-bound',
+            'child_owns_pid' => true,
+            'block' => false,
+        ];
+
+        $pending = $this->invokePrivateStatic(
+            Processer::class,
+            'collectLaunchItemsNeedingPidResolution',
+            [[$item], ['worker-1' => 4100], false, true, ['worker-1' => 4000]],
+        );
+        self::assertCount(1, $pending);
+        self::assertSame(4100, $pending[0]['launcher_pid'] ?? null);
+        self::assertSame(4000, $pending[0]['topology_root_pid'] ?? null);
+
+        $eligible = ['worker-1' => $pending[0] + [
+            'launch_id' => '0123456789abcdef0123456789abcdef',
+        ]];
+        $parentOnly = [
+            4000 => ['pid' => 4000, 'parent_pid' => 900, 'command_line' => 'powershell.exe batch.ps1'],
+            4100 => ['pid' => 4100, 'parent_pid' => 4000, 'command_line' => $command],
+        ];
+        self::assertSame(['worker-1' => 4100], $this->invokePrivateStatic(
+            Processer::class,
+            'selectWindowsBatchTransitionPidsFromSnapshot',
+            [$eligible, $parentOnly, true],
+        ));
+
+        $parentAndLeaf = $parentOnly + [
+            4101 => ['pid' => 4101, 'parent_pid' => 4100, 'command_line' => $command],
+        ];
+        self::assertSame(['worker-1' => 4101], $this->invokePrivateStatic(
+            Processer::class,
+            'selectWindowsBatchTransitionPidsFromSnapshot',
+            [$eligible, $parentAndLeaf, true],
+        ));
+
+        $brokerAndSibling = [
+            4000 => ['pid' => 4000, 'parent_pid' => 900, 'command_line' => 'powershell.exe batch.ps1'],
+            4200 => ['pid' => 4200, 'parent_pid' => 4000, 'command_line' => $command],
+        ];
+        self::assertSame(['worker-1' => 4200], $this->invokePrivateStatic(
+            Processer::class,
+            'selectWindowsBatchTransitionPidsFromSnapshot',
+            [$eligible, $brokerAndSibling, true],
+        ));
+    }
+
+    public function testWindowsExactMasterArgvParticipatesInBrokerBoundTopologyResolution(): void
+    {
+        $launchId = '0123456789abcdef0123456789abcdef';
+        $name = 'weline-wls-master-isolated-win';
+        $instance = 'isolated-win';
+        $command = 'windows-isolated-exact-argv'
+            . ' --name=' . $name
+            . ' --launch-id=' . $launchId;
+        $item = [
+            'command' => $command,
+            'process_name' => $name,
+            'launch_id' => $launchId,
+            'child_owns_pid' => true,
+            'exact_argv' => true,
+            'argument_list' => [
+                '-d',
+                'opcache.jit=0',
+                'C:\\repo\\bin\\w',
+                'server:start',
+                $instance,
+                '--master-only',
+                '--name=' . $name,
+                '--launch-id=' . $launchId,
+            ],
+        ];
+        $liveCommand = '"C:\\Tools\\PHP84\\php.exe"'
+            . ' -d opcache.jit=0 C:\\repo\\bin\\w server:start ' . $instance
+            . ' --master-only'
+            . ' --name=' . $name
+            . ' --launch-id=' . $launchId;
+
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchTransitionPidRequiresResolution',
+            [$item, true],
+        ));
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [$liveCommand, $item],
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [\str_replace('server:start isolated-win', 'server:start other-win', $liveCommand), $item],
+        ));
+    }
+
+    public function testWindowsManagedBatchPendingIdentityPreservesExactArgv(): void
+    {
+        $arguments = [
+            '-d',
+            'opcache.jit=0',
+            'C:\\repo\\bin\\w',
+            'server:start',
+            'isolated-win',
+            '--master-only',
+            '--name=weline-wls-master-isolated-win',
+            '--launch-id=0123456789abcdef0123456789abcdef',
+        ];
+        $pending = $this->invokePrivateStatic(
+            Processer::class,
+            'normalizeWindowsBatchPendingLaunchItem',
+            [[
+                'key' => 'master',
+                'command' => 'windows-isolated-exact-argv'
+                    . ' --name=weline-wls-master-isolated-win'
+                    . ' --launch-id=0123456789abcdef0123456789abcdef',
+                'process_name' => 'weline-wls-master-isolated-win',
+                'child_owns_pid' => true,
+                'launcher_pid' => 4100,
+                'topology_root_pid' => 4000,
+                'exact_argv' => true,
+                'argument_list' => $arguments,
+            ]],
+        );
+
+        self::assertIsArray($pending);
+        self::assertTrue($pending['exact_argv'] ?? false);
+        self::assertSame($arguments, $pending['argument_list'] ?? null);
+        self::assertSame(4100, $pending['launcher_pid'] ?? null);
+        self::assertSame(4000, $pending['topology_root_pid'] ?? null);
+    }
+
+    public function testCommittedWindowsIsolatedBatchSubmissionSkipsGlobalBrokerLookup(): void
+    {
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsIsolatedBatchSubmissionNeedsBrokerLookup',
+            [['state' => 'committed', 'broker_pid' => 4100]],
+        ));
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsIsolatedBatchSubmissionNeedsBrokerLookup',
+            [['state' => 'committed', 'broker_pid' => 0]],
+        ));
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsIsolatedBatchSubmissionNeedsBrokerLookup',
+            [['state' => 'ambiguous', 'broker_pid' => 4100]],
+        ));
+
+        self::assertSame([
+            'dispatcher' => 4100,
+            'worker-1' => 4100,
+        ], $this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchTopologyRootPidMap',
+            [[
+                [
+                    'isolated_submission_state' => 'committed',
+                    'isolated_broker_pid' => 4100,
+                    'launch_items' => [
+                        ['key' => 'dispatcher'],
+                        ['key' => 'worker-1'],
+                    ],
+                ],
+                [
+                    'isolated_submission_state' => 'ambiguous',
+                    'isolated_broker_pid' => 4200,
+                    'launch_items' => [['key' => 'worker-2']],
+                ],
+            ]],
+        ));
+    }
+
+    public function testWindowsTransitionPidMatcherAcceptsDispatcherWithoutSyntheticInstanceOption(): void
+    {
+        $command = '"C:\\Tools\\PHP84\\php.exe" dispatcher.php 127.0.0.1 29522 15504 4 isolated-win'
+            . ' --control-port=58967'
+            . ' --master-pid=5328'
+            . ' --epoch=13'
+            . ' --launch-id=0123456789abcdef0123456789abcdef'
+            . ' --slot-id=dispatcher#1'
+            . ' --lease-id=fedcba9876543210fedcba9876543210'
+            . ' --windows-listener-wls-instance=isolated-win'
+            . ' --name=weline-wls-dispatcher-isolated-win-p974cbfc5';
+        $item = [
+            'command' => $command,
+            'process_name' => 'weline-wls-dispatcher-isolated-win-p974cbfc5',
+            'launch_id' => '0123456789abcdef0123456789abcdef',
+        ];
+
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [$command, $item],
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [\str_replace(
+                '--windows-listener-wls-instance=isolated-win',
+                '--windows-listener-wls-instance=other-win',
+                $command,
+            ), $item],
+        ));
+    }
+
+    public function testWindowsTransitionPidSelectionRequiresAUniqueExactCommandLeaf(): void
+    {
+        self::assertSame(8064, $this->invokePrivateStatic(
+            Processer::class,
+            'selectWindowsBatchTransitionLeafPid',
+            [[2988, 8064], [2988 => 2476, 8064 => 2988]],
+        ));
+        self::assertSame(9128, $this->invokePrivateStatic(
+            Processer::class,
+            'selectWindowsBatchTransitionLeafPid',
+            [[2988, 8064, 9128], [2988 => 2476, 8064 => 2988, 9128 => 8064]],
+        ));
+        self::assertSame(0, $this->invokePrivateStatic(
+            Processer::class,
+            'selectWindowsBatchTransitionLeafPid',
+            [[2988, 8064], [2988 => 2476, 8064 => 2476]],
+        ));
+    }
+
+    public function testWindowsBatchTransitionSnapshotResolvesSixUniqueLeavesInOnePass(): void
+    {
+        $items = [];
+        $snapshot = [];
+        $expected = [];
+        for ($index = 1; $index <= 6; $index++) {
+            $name = 'weline-wls-child-batch-' . $index;
+            $launchId = \str_pad((string)$index, 32, (string)$index);
+            $parentPid = 1000 + ($index * 10);
+            $leafPid = $parentPid + 1;
+            $command = 'child.php'
+                . ' --name=' . $name
+                . ' --launch-id=' . $launchId
+                . ' --slot-id=worker#' . $index
+                . ' --lease-id=' . $launchId
+                . ' --epoch=1'
+                . ' --master-pid=900';
+
+            $items['child-' . $index] = [
+                'command' => $command,
+                'process_name' => $name,
+                'launch_id' => $launchId,
+            ];
+            $snapshot[$parentPid] = [
+                'pid' => $parentPid,
+                'parent_pid' => 900,
+                'command_line' => $command,
+            ];
+            $snapshot[$leafPid] = [
+                'pid' => $leafPid,
+                'parent_pid' => $parentPid,
+                'command_line' => $command,
+            ];
+            $expected['child-' . $index] = $leafPid;
+        }
+        $snapshot[9099] = [
+            'pid' => 9099,
+            'parent_pid' => 900,
+            'command_line' => \str_replace(
+                '--lease-id=11111111111111111111111111111111',
+                '--lease-id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                $items['child-1']['command'],
+            ),
+        ];
+
+        self::assertSame($expected, $this->invokePrivateStatic(
+            Processer::class,
+            'selectWindowsBatchTransitionPidsFromSnapshot',
+            [$items, $snapshot],
+        ));
+    }
+
     public function testBuildWindowsBatchSignalCommandUsesSingleTaskkillInvocation(): void
     {
         $command = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchSignalCommand', [[101, 202, 303]]);

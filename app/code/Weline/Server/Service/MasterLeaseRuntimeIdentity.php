@@ -6,6 +6,7 @@ namespace Weline\Server\Service;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
+use Weline\Server\Service\Runtime\PhpRuntimeSafetyProfile;
 
 /**
  * Host/process evidence used by the schema-2 Master lease.
@@ -22,6 +23,9 @@ final class MasterLeaseRuntimeIdentity
     private const MAX_PROCESS_NAME_BYTES = 512;
     private const MAX_PROCESS_PROBE_OUTPUT_BYTES = 131_072;
     private const MAX_WINDOWS_IMAGE_CHARACTERS = 8_192;
+    // WaitForSingleObject requires SYNCHRONIZE in addition to
+    // PROCESS_QUERY_LIMITED_INFORMATION on the inspected process handle.
+    private const WINDOWS_PROCESS_INSPECTION_ACCESS = 0x00101000;
     private const PROCESS_PROBE_TIMEOUT_SECONDS = 2.0;
 
     public const OWNER_MATCH = 'match';
@@ -35,6 +39,7 @@ final class MasterLeaseRuntimeIdentity
     private static array $selfProcessBirth = [];
     /** @var array<int,string> */
     private static array $selfManagedProcessBirth = [];
+    private static bool $windowsIsolatedLaunchCommitGraceConsumed = false;
     private static ?string $defaultHostBootId = null;
     /**
      * Successful Darwin libproc FFI binding only. Transient cdef failures under
@@ -152,7 +157,12 @@ final class MasterLeaseRuntimeIdentity
         // Dead PIDs must fail closed immediately. Retrying a recycled/exited
         // child for the full capture window turns one respawn into a multi-
         // second authorize storm that also contends the credential ledger lock.
-        if ($this->isProcessDefinitelyMissing($pid)) {
+        // Executing PHP is definitive proof that its own PID is still alive.
+        // Once the immutable self birth has been cached, do not re-enter the
+        // Windows process-table FFI merely to prove that fact again. This is
+        // also required by x64 PHP on Windows ARM64, where a later FFI call
+        // while native listener state is active can fault inside emulation.
+        if ($pid !== (int)\getmypid() && $this->isProcessDefinitelyMissing($pid)) {
             throw new \RuntimeException('WLS process is not running.');
         }
         $birth = $this->processBirth($pid, true, false);
@@ -252,21 +262,28 @@ final class MasterLeaseRuntimeIdentity
             );
         }
 
+        // Missing or reused PIDs release the old credential without needing a
+        // signalling handle. This observation is only a non-destructive
+        // preflight: a still-matching process must pass the platform's stable
+        // handle revalidation before any signal is sent. In particular,
+        // Windows ARM64/x64 isolation can safely retire an already-exited
+        // child through WMI evidence even though in-process FFI is disabled.
+        $ownerState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
+        $released = $this->releasedOwnerOutcome($pid, $ownerState);
+        if ($released !== null) {
+            return $released;
+        }
+        if ($ownerState !== self::OWNER_MATCH) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'process_identity_unknown',
+                $ownerState,
+            );
+        }
+
         if ($this->stableProcessTerminator !== null) {
-            $ownerState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
-            $released = $this->releasedOwnerOutcome($pid, $ownerState);
-            if ($released !== null) {
-                return $released;
-            }
-            if ($ownerState !== self::OWNER_MATCH) {
-                return $this->terminationOutcome(
-                    $pid,
-                    false,
-                    false,
-                    'process_identity_unknown',
-                    $ownerState,
-                );
-            }
             try {
                 $result = ($this->stableProcessTerminator)(
                     $pid,
@@ -520,6 +537,15 @@ CDEF,
         string $birth,
         float $graceSeconds,
     ): array {
+        if (PhpRuntimeSafetyProfile::requiresNativeExtensionIsolation()) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'windows_process_handle_ffi_unavailable',
+                self::OWNER_UNKNOWN,
+            );
+        }
         if (!\extension_loaded('FFI') || !\class_exists(\FFI::class) || PHP_INT_SIZE < 8) {
             return $this->terminationOutcome(
                 $pid,
@@ -539,6 +565,7 @@ CDEF,
                 self::OWNER_UNKNOWN,
             );
         }
+        $handle = null;
         try {
             $ffi = \FFI::cdef(
                 <<<'CDEF'
@@ -576,7 +603,7 @@ CDEF,
                 self::OWNER_UNKNOWN,
             );
         }
-        if (\FFI::isNull($handle)) {
+        if ($handle === null || \FFI::isNull($handle)) {
             $lastError = (int)$ffi->GetLastError();
             if ($lastError === 87) { // ERROR_INVALID_PARAMETER: PID absent.
                 return $this->terminationOutcome(
@@ -928,7 +955,11 @@ CDEF,
                 return $cache[$pid];
             }
         }
-        $info = $this->processInfo($pid);
+        $info = $this->processInfoResolver === null
+            && PHP_OS_FAMILY === 'Windows'
+            && !$includeMutableProcessMetadata
+                ? $this->inspectWindowsProcess($pid, false)
+                : $this->processInfo($pid);
         if (($info['exists'] ?? false) !== true) {
             return null;
         }
@@ -1022,6 +1053,13 @@ CDEF,
                 : null;
         }
         if (PHP_OS_FAMILY === 'Windows') {
+            $identity = \trim((string)($info['start_identity'] ?? ''));
+            if (\preg_match(
+                '/\Awindows-wmi-creation:[0-9]{14}\.[0-9]{6}[+-][0-9]{3}\z/D',
+                $identity,
+            ) === 1) {
+                return $identity;
+            }
             $ticks = \trim((string)($info['start_ticks'] ?? ''));
             return \preg_match('/\A[1-9][0-9]*\z/D', $ticks) === 1
                 ? 'windows-creation-ticks:' . $ticks
@@ -1543,8 +1581,12 @@ CDEF,
     }
 
     /** @return array<string,mixed> */
-    private function inspectWindowsProcess(int $pid): array
+    private function inspectWindowsProcess(int $pid, bool $includeImageMetadata = true): array
     {
+        if (PhpRuntimeSafetyProfile::requiresNativeExtensionIsolation()) {
+            self::consumeWindowsIsolatedLaunchCommitGrace();
+            return $this->inspectWindowsProcessWithCscript($pid, $includeImageMetadata);
+        }
         if (!\extension_loaded('FFI')
             || !\class_exists(\FFI::class)
             || !\function_exists('iconv')
@@ -1596,8 +1638,8 @@ CDEF,
         $lastError = 0;
         for ($attempt = 0; $attempt < 2; ++$attempt) {
             try {
-                $handle = $ffi->OpenProcess(0x1000, 0, $pid);
-                if (!\FFI::isNull($handle)) {
+                $handle = $ffi->OpenProcess(self::WINDOWS_PROCESS_INSPECTION_ACCESS, 0, $pid);
+                if ($handle !== null && !\FFI::isNull($handle)) {
                     break;
                 }
                 $lastError = (int)$ffi->GetLastError();
@@ -1620,6 +1662,30 @@ CDEF,
                 return [];
             }
 
+            if (!$includeImageMetadata) {
+                // Managed-child birth authorization needs only the immutable
+                // creation FILETIME from this already-stable process handle.
+                // Do not make it depend on QueryFullProcessImageNameW: x64
+                // children running through Windows ARM64 emulation can expose
+                // their creation time while denying that separate metadata
+                // query. Full ownership/name inspection keeps the default
+                // image-bound path below.
+                $creationAfter = $this->windowsProcessCreationTicks($ffi, $handle);
+                if ($creationAfter === null
+                    || !\hash_equals($creationBefore, $creationAfter)
+                    || $this->windowsProcessHandleIsActive($ffi, $handle) !== true
+                ) {
+                    return [];
+                }
+
+                return [
+                    'exists' => true,
+                    'pid' => $pid,
+                    'start_time' => 'windows-creation-ticks:' . $creationAfter,
+                    'start_ticks' => $creationAfter,
+                ];
+            }
+
             $buffer = $ffi->new('WCHAR[' . self::MAX_WINDOWS_IMAGE_CHARACTERS . ']');
             $length = $ffi->new('DWORD[1]');
             $length[0] = self::MAX_WINDOWS_IMAGE_CHARACTERS;
@@ -1630,11 +1696,15 @@ CDEF,
             if ($characterCount < 1 || $characterCount >= self::MAX_WINDOWS_IMAGE_CHARACTERS) {
                 return [];
             }
-            $rawPath = \FFI::string(
-                $ffi->cast('char *', $buffer),
-                $characterCount * 2,
+            // Reading the WCHAR buffer through FFI::string(char *) crashes
+            // x64 PHP under Windows ARM64 emulation even with CLI OPcache/JIT
+            // disabled. Copy each already-bounded code unit in PHP instead;
+            // the kernel handle and its before/after creation checks remain
+            // the authority for the process identity.
+            $imagePath = self::windowsWideCharacterBufferToUtf8(
+                $buffer,
+                $characterCount,
             );
-            $imagePath = @\iconv('UTF-16LE', 'UTF-8', $rawPath);
             if (!\is_string($imagePath)
                 || $imagePath === ''
                 || \str_contains($imagePath, "\0")
@@ -1673,6 +1743,339 @@ CDEF,
                 // The evidence has already been captured; best-effort close.
             }
         }
+    }
+
+    private static function consumeWindowsIsolatedLaunchCommitGrace(): void
+    {
+        if (self::$windowsIsolatedLaunchCommitGraceConsumed) {
+            return;
+        }
+        self::$windowsIsolatedLaunchCommitGraceConsumed = true;
+        $environmentName = 'WLS_WINDOWS_ISOLATED_BATCH_COMMIT_GRACE';
+        $pending = \trim((string)(\getenv($environmentName) ?: ''));
+        \putenv($environmentName);
+        unset($_ENV[$environmentName], $_SERVER[$environmentName]);
+        if (\hash_equals('1', $pending)) {
+            // The isolated WMI broker must durably publish every Start-Process
+            // PID row before a newborn child opens a second WMI query. Without
+            // this one-shot fence, ARM64 Windows serializes the two operations
+            // and the parent discards live children at its result deadline.
+            SchedulerSystem::usleep(1_000_000);
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function inspectWindowsProcessWithCscript(
+        int $pid,
+        bool $includeImageMetadata,
+    ): array {
+        if ($pid <= 0 || $pid > 4_294_967_295) {
+            return ['exists' => false];
+        }
+        $script = $this->windowsCscriptProcessProbeSource();
+        $scriptPath = @\tempnam(\sys_get_temp_dir(), 'wls-process-probe-');
+        if (!\is_string($scriptPath) || $scriptPath === '') {
+            return [];
+        }
+
+        $scriptStatus = false;
+        $evidence = [];
+        $scriptVerified = false;
+        $cleanupVerified = false;
+        try {
+            if (@\file_put_contents($scriptPath, $script, \LOCK_EX) !== \strlen($script)) {
+                return [];
+            }
+            $scriptStatus = @\lstat($scriptPath);
+            if (!$this->isSafeRegularFileStat($scriptStatus)
+                || !\hash_equals(
+                    $script,
+                    (string)($this->readStableNoFollowFile(
+                        $scriptPath,
+                        \strlen($script),
+                    ) ?? ''),
+                )
+            ) {
+                return [];
+            }
+
+            $stdout = $this->runWindowsCscriptProcessProbe($scriptPath, $pid);
+            if (!\is_string($stdout)) {
+                return [];
+            }
+            $afterStatus = @\lstat($scriptPath);
+            $afterSource = $this->readStableNoFollowFile($scriptPath, \strlen($script));
+            if (!$this->sameFileIdentity($scriptStatus, $afterStatus)
+                || !\is_string($afterSource)
+                || !\hash_equals($script, $afterSource)
+            ) {
+                return [];
+            }
+            $scriptVerified = true;
+            $evidence = $this->parseWindowsCscriptProcessProbe(
+                $stdout,
+                $pid,
+                $includeImageMetadata,
+            );
+        } finally {
+            $currentStatus = @\lstat($scriptPath);
+            if ($this->sameFileIdentity($scriptStatus, $currentStatus)
+                && @\unlink($scriptPath)
+            ) {
+                \clearstatcache(true, $scriptPath);
+                $cleanupVerified = @\lstat($scriptPath) === false;
+            }
+        }
+
+        return $scriptVerified && $cleanupVerified ? $evidence : [];
+    }
+
+    private function runWindowsCscriptProcessProbe(string $scriptPath, int $pid): ?string
+    {
+        if (!\function_exists('proc_open')
+            || !\function_exists('proc_get_status')
+            || !\function_exists('proc_terminate')
+            || !\function_exists('proc_close')
+        ) {
+            return null;
+        }
+        $cscript = $this->resolveWindowsCscriptExecutable();
+        if ($cscript === null) {
+            return null;
+        }
+        $process = @\proc_open(
+            [
+                $cscript,
+                '//NoLogo',
+                '//T:2',
+                '//E:vbscript',
+                $scriptPath,
+                (string)$pid,
+            ],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            \sys_get_temp_dir(),
+            null,
+            ['bypass_shell' => true, 'suppress_errors' => true],
+        );
+        if (!\is_resource($process)) {
+            return null;
+        }
+        if (isset($pipes[0]) && \is_resource($pipes[0])) {
+            @\fclose($pipes[0]);
+        }
+        foreach ([1, 2] as $index) {
+            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+                @\stream_set_blocking($pipes[$index], false);
+            }
+        }
+
+        $stdout = '';
+        $stderr = '';
+        $exitCode = -1;
+        $deadline = \hrtime(true) + (int)((self::PROCESS_PROBE_TIMEOUT_SECONDS + 0.5) * 1_000_000_000);
+        $timedOut = false;
+        do {
+            foreach ([1 => 'stdout', 2 => 'stderr'] as $index => $target) {
+                if (!isset($pipes[$index]) || !\is_resource($pipes[$index])) {
+                    continue;
+                }
+                $chunk = @\stream_get_contents($pipes[$index]);
+                if (!\is_string($chunk) || $chunk === '') {
+                    continue;
+                }
+                if ($target === 'stdout') {
+                    $stdout .= $chunk;
+                } else {
+                    $stderr .= $chunk;
+                }
+            }
+            if (\strlen($stdout) + \strlen($stderr) > self::MAX_PROCESS_PROBE_OUTPUT_BYTES) {
+                $timedOut = true;
+                break;
+            }
+            $status = @\proc_get_status($process);
+            if (!\is_array($status)) {
+                $timedOut = true;
+                break;
+            }
+            if (($status['running'] ?? true) !== true) {
+                $exitCode = (int)($status['exitcode'] ?? -1);
+                break;
+            }
+            if (\hrtime(true) >= $deadline) {
+                $timedOut = true;
+                break;
+            }
+            SchedulerSystem::usleep(10_000);
+        } while (true);
+
+        if ($timedOut) {
+            @\proc_terminate($process);
+            $killDeadline = \hrtime(true) + 500_000_000;
+            do {
+                $status = @\proc_get_status($process);
+                if (!\is_array($status) || ($status['running'] ?? false) !== true) {
+                    break;
+                }
+                SchedulerSystem::usleep(10_000);
+            } while (\hrtime(true) < $killDeadline);
+        }
+        foreach ([1, 2] as $index) {
+            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+                $chunk = @\stream_get_contents($pipes[$index]);
+                if (\is_string($chunk) && $chunk !== '') {
+                    if ($index === 1) {
+                        $stdout .= $chunk;
+                    } else {
+                        $stderr .= $chunk;
+                    }
+                }
+                @\fclose($pipes[$index]);
+            }
+        }
+        $closeCode = @\proc_close($process);
+        if ($exitCode < 0 && \is_int($closeCode)) {
+            $exitCode = $closeCode;
+        }
+
+        return !$timedOut
+            && $exitCode === 0
+            && $stderr === ''
+            && \strlen($stdout) <= self::MAX_PROCESS_PROBE_OUTPUT_BYTES
+                ? $stdout
+                : null;
+    }
+
+    /** @return array<string,mixed> */
+    private function parseWindowsCscriptProcessProbe(
+        string $stdout,
+        int $pid,
+        bool $includeImageMetadata,
+    ): array {
+        if ($pid <= 0
+            || \strlen($stdout) > self::MAX_PROCESS_PROBE_OUTPUT_BYTES
+            || \preg_match('/\A([^\r\n]*)(?:\r\n|\n)\z/D', $stdout, $line) !== 1
+        ) {
+            return [];
+        }
+        $row = (string)$line[1];
+        if (\hash_equals("WLS_MISSING\t" . $pid, $row)) {
+            return ['exists' => false];
+        }
+        if (\preg_match(
+            '/\AWLS_PROCESS\t([1-9][0-9]*)\t([0-9]{14}\.[0-9]{6}[+-][0-9]{3})\t([^\t\r\n]*)\z/D',
+            $row,
+            $matches,
+        ) !== 1 || (int)$matches[1] !== $pid) {
+            return [];
+        }
+        $creation = (string)$matches[2];
+        $startIdentity = 'windows-wmi-creation:' . $creation;
+        if (!$includeImageMetadata) {
+            return [
+                'exists' => true,
+                'pid' => $pid,
+                'start_time' => $startIdentity,
+                'start_identity' => $startIdentity,
+            ];
+        }
+        $imagePath = (string)$matches[3];
+        if ($imagePath === ''
+            || \strlen($imagePath) > self::MAX_PROCESS_COMMAND_BYTES
+            || \preg_match('/[\x00-\x1F\x7F]/', $imagePath) === 1
+        ) {
+            return [];
+        }
+        $name = \basename(\str_replace('\\', '/', $imagePath));
+        if ($name === '' || \strlen($name) > self::MAX_PROCESS_NAME_BYTES) {
+            return [];
+        }
+
+        return [
+            'exists' => true,
+            'pid' => $pid,
+            'name' => $name,
+            'command' => $imagePath,
+            'start_time' => $startIdentity,
+            'start_identity' => $startIdentity,
+        ];
+    }
+
+    private function resolveWindowsCscriptExecutable(): ?string
+    {
+        $systemRoot = \rtrim(
+            (string)(\getenv('SystemRoot') ?: \getenv('windir') ?: 'C:\\Windows'),
+            '\\/ ',
+        );
+        foreach ([
+            $systemRoot . '\\Sysnative\\cscript.exe',
+            $systemRoot . '\\System32\\cscript.exe',
+            $systemRoot . '\\SysWOW64\\cscript.exe',
+        ] as $candidate) {
+            $canonical = @\realpath($candidate);
+            if (\is_string($canonical)
+                && $canonical !== ''
+                && @\is_file($canonical)
+                && !@\is_link($candidate)
+            ) {
+                return $canonical;
+            }
+        }
+
+        return null;
+    }
+
+    private function windowsCscriptProcessProbeSource(): string
+    {
+        return \implode("\r\n", [
+            'Option Explicit',
+            'Dim processId, service, firstRows, secondRows, row',
+            'Dim firstCount, secondCount, firstCreation, secondCreation, firstPath, secondPath',
+            'If WScript.Arguments.Count <> 1 Then WScript.Quit 2',
+            'processId = WScript.Arguments(0)',
+            'If Len(processId) = 0 Or Not IsNumeric(processId) Then WScript.Quit 2',
+            'On Error Resume Next',
+            'Set service = GetObject("winmgmts:\\\\.\\root\\cimv2")',
+            'If Err.Number <> 0 Then WScript.Quit 10',
+            'Err.Clear',
+            'Set firstRows = service.ExecQuery("SELECT ProcessId, CreationDate, ExecutablePath FROM Win32_Process WHERE ProcessId = " & processId, "WQL", 48)',
+            'If Err.Number <> 0 Then WScript.Quit 11',
+            'firstCount = 0',
+            'For Each row In firstRows',
+            '    firstCount = firstCount + 1',
+            '    firstCreation = ""',
+            '    firstPath = ""',
+            '    If Not IsNull(row.CreationDate) Then firstCreation = CStr(row.CreationDate)',
+            '    If Not IsNull(row.ExecutablePath) Then firstPath = CStr(row.ExecutablePath)',
+            'Next',
+            'If firstCount = 0 Then',
+            '    WScript.Echo "WLS_MISSING" & vbTab & processId',
+            '    WScript.Quit 0',
+            'End If',
+            'If firstCount <> 1 Or Len(firstCreation) = 0 Then WScript.Quit 12',
+            'Err.Clear',
+            'Set secondRows = service.ExecQuery("SELECT ProcessId, CreationDate, ExecutablePath FROM Win32_Process WHERE ProcessId = " & processId, "WQL", 48)',
+            'If Err.Number <> 0 Then WScript.Quit 13',
+            'secondCount = 0',
+            'For Each row In secondRows',
+            '    secondCount = secondCount + 1',
+            '    secondCreation = ""',
+            '    secondPath = ""',
+            '    If Not IsNull(row.CreationDate) Then secondCreation = CStr(row.CreationDate)',
+            '    If Not IsNull(row.ExecutablePath) Then secondPath = CStr(row.ExecutablePath)',
+            'Next',
+            'If secondCount <> 1 Then WScript.Quit 14',
+            'If StrComp(firstCreation, secondCreation, 0) <> 0 Then WScript.Quit 15',
+            'If StrComp(firstPath, secondPath, 0) <> 0 Then WScript.Quit 16',
+            'WScript.Echo "WLS_PROCESS" & vbTab & processId & vbTab & secondCreation & vbTab & secondPath',
+            'WScript.Quit 0',
+            '',
+        ]);
     }
 
     private function windowsProcessHandleIsActive(\FFI $ffi, mixed $handle): ?bool
@@ -1722,6 +2125,33 @@ CDEF,
         }
 
         return $ticks > 0 ? (string)$ticks : null;
+    }
+
+    private static function windowsWideCharacterBufferToUtf8(
+        mixed $buffer,
+        int $characterCount,
+    ): ?string {
+        if ($characterCount < 1
+            || $characterCount >= self::MAX_WINDOWS_IMAGE_CHARACTERS
+            || !\function_exists('iconv')
+        ) {
+            return null;
+        }
+        $raw = '';
+        try {
+            for ($index = 0; $index < $characterCount; ++$index) {
+                $unit = self::ffiScalarInt($buffer[$index]);
+                if ($unit < 0 || $unit > 0xffff) {
+                    return null;
+                }
+                $raw .= \pack('v', $unit);
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+        $decoded = @\iconv('UTF-16LE', 'UTF-8', $raw);
+
+        return \is_string($decoded) && $decoded !== '' ? $decoded : null;
     }
 
     private function normalizeWindowsPath(string $path): string

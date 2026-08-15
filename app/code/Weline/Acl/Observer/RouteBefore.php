@@ -443,15 +443,13 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $resolvedCookie = (string) (\w_env_cookie($resolvedCookieName) ?? '');
             $legacyCookie = (string) (\w_env_cookie(WlsStrategy::SESSION_NAME) ?? '');
             $sidSource = $resolvedCookie !== '' ? $resolvedCookie : $legacyCookie;
-            $sidHint = \strlen($sidSource) > 0 ? \substr($sidSource, 0, 8) . '...' : 'none';
             $backendSess = $this->getBackendSession()->getSession();
             $actualSid = $backendSess->getId();
-            $sessIdHint = \strlen($actualSid) > 0 ? \substr($actualSid, 0, 8) . '...' : 'empty';
             $sessionKeys = \method_exists($backendSess, 'all') ? \count($backendSess->all()) : 0;
             w_auth_log('acl_not_logged_in', 'Session 无 user_id，重定向登录', [
                 'uri' => $uri,
-                'cookie_sid_hint' => $sidHint,
-                'session_id_hint' => $sessIdHint,
+                'cookie_present' => $sidSource !== '',
+                'session_id_present' => $actualSid !== '',
                 'session_keys' => $sessionKeys,
             ]);
         }

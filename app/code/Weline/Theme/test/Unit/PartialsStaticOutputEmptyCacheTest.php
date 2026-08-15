@@ -44,6 +44,23 @@ final class PartialsStaticOutputEmptyCacheTest extends TestCase
         self::assertSame('', $result['html']);
     }
 
+    public function testClearAllCachesContractClearsStaticPartialOutputCache(): void
+    {
+        $cacheKey = 'partial.output.clear-all';
+        $now = \microtime(true);
+        $this->writeStaticProperty('partialOutputCache', [
+            $cacheKey => [
+                'fresh_until' => $now + 60,
+                'stale_until' => $now + 120,
+                'html' => '<header>cached</header>',
+            ],
+        ]);
+
+        Partials::clearAllCaches();
+
+        self::assertSame([], $this->readStaticProperty('partialOutputCache'));
+    }
+
     /**
      * @return array<string, array{fresh_until: float, stale_until: float, html: string}>
      */

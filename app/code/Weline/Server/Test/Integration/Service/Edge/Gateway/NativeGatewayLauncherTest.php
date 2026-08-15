@@ -30,6 +30,7 @@ final class NativeGatewayLauncherTest extends TestCase
     private string $root = '';
     private string $launcher = '';
     private string $secretKey = '';
+    private string $releasePublicKeyHex = '';
     private bool $preserveRoot = false;
 
     protected function setUp(): void
@@ -49,6 +50,7 @@ final class NativeGatewayLauncherTest extends TestCase
         self::assertTrue(\mkdir($this->root, 0700, true));
         $keyPair = \sodium_crypto_sign_keypair();
         $publicKey = \sodium_crypto_sign_publickey($keyPair);
+        $this->releasePublicKeyHex = \bin2hex($publicKey);
         $this->secretKey = \sodium_crypto_sign_secretkey($keyPair);
         $build = $this->root . DIRECTORY_SEPARATOR . 'build';
         $source = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR . 'Service'
@@ -60,11 +62,14 @@ final class NativeGatewayLauncherTest extends TestCase
             $source,
             '-B',
             $build,
-            '-DWLS_RELEASE_PUBLIC_KEY_HEX=' . \bin2hex($publicKey),
+            '-DWLS_RELEASE_PUBLIC_KEY_HEX=' . $this->releasePublicKeyHex,
             '-DCMAKE_BUILD_TYPE=Release',
         ]);
         self::assertSame(0, $configure['code'], $configure['output']);
-        $compiled = $this->runCommand(['cmake', '--build', $build, '--parallel', '2']);
+        $compiled = $this->runCommand(
+            ['cmake', '--build', $build, '--parallel', '2'],
+            300.0,
+        );
         self::assertSame(0, $compiled['code'], $compiled['output']);
         $this->launcher = $build . DIRECTORY_SEPARATOR . 'wls-gateway-launcher';
         self::assertTrue(\is_executable($this->launcher));
@@ -78,6 +83,44 @@ final class NativeGatewayLauncherTest extends TestCase
         if (!$this->preserveRoot) {
             $this->removeTree($this->root);
         }
+    }
+
+    public function testLauncherReportsThePublicKeyEmbeddedAtBuildTime(): void
+    {
+        $reported = $this->runCommand([
+            $this->launcher,
+            '--release-public-key-self-test',
+        ]);
+        self::assertSame(0, $reported['code'], $reported['output']);
+        self::assertSame($this->releasePublicKeyHex, $reported['output']);
+    }
+
+    public function testLauncherReleaseSignatureChallengeUsesTheEmbeddedKeyVerifier(): void
+    {
+        $nonce = \random_bytes(32);
+        $embeddedSignature = \sodium_crypto_sign_detached(
+            $nonce,
+            $this->secretKey,
+        );
+        $accepted = $this->runCommand([
+            $this->launcher,
+            '--release-signature-self-test',
+            \bin2hex($nonce),
+            \base64_encode($embeddedSignature),
+        ]);
+        self::assertSame(0, $accepted['code'], $accepted['output']);
+
+        $otherSignature = \sodium_crypto_sign_detached(
+            $nonce,
+            \sodium_crypto_sign_secretkey(\sodium_crypto_sign_keypair()),
+        );
+        $rejected = $this->runCommand([
+            $this->launcher,
+            '--release-signature-self-test',
+            \bin2hex($nonce),
+            \base64_encode($otherSignature),
+        ]);
+        self::assertNotSame(0, $rejected['code'], $rejected['output']);
     }
 
     public function testSignedSlotExecutesButUnexpectedCleanExitAndTamperingAreFailures(): void
@@ -132,6 +175,73 @@ final class NativeGatewayLauncherTest extends TestCase
         ]);
         self::assertNotSame(0, $tampered['code']);
         self::assertFileDoesNotExist($marker);
+    }
+
+    public function testFreshAclFreePidNamespaceIsClassifiedClean(): void
+    {
+        if (!\function_exists('posix_geteuid') || \posix_geteuid() !== 0) {
+            self::markTestSkipped('The PID residue classifier behavior test requires root.');
+        }
+        $dataUser = \PHP_OS_FAMILY === 'Darwin'
+            ? '_welinegateway_nginx'
+            : 'weline-gateway-nginx';
+        if (!\function_exists('posix_getpwnam') || \posix_getpwnam($dataUser) === false) {
+            self::markTestSkipped('The gateway data-plane identity is unavailable.');
+        }
+
+        $classified = $this->runCommand([
+            $this->launcher,
+            '--pid-residue-classifier-self-test',
+        ]);
+
+        self::assertSame(0, $classified['code'], $classified['output']);
+        self::assertSame([
+            'fresh_root' => 'clean',
+            'valid_residue_entries' => 1,
+        ], \json_decode(
+            \trim($classified['output']),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        ));
+    }
+
+    public function testRecoveryAttestationKeepsDistinctUidDataPlaneLiveWithoutSysPtrace(): void
+    {
+        if (\PHP_OS_FAMILY !== 'Linux') {
+            self::markTestSkipped('The cross-UID capability-boundary behavior test is Linux-specific.');
+        }
+        if (!\function_exists('posix_geteuid') || \posix_geteuid() !== 0) {
+            self::markTestSkipped('The cross-UID capability-boundary behavior test requires root.');
+        }
+        $dataIdentity = \function_exists('posix_getpwnam')
+            ? \posix_getpwnam('weline-gateway-nginx')
+            : false;
+        if (!\is_array($dataIdentity)) {
+            self::markTestSkipped('The gateway data-plane identity is unavailable.');
+        }
+
+        $verified = $this->runCommand([
+            $this->launcher,
+            '--recovery-attested-process-capdrop-self-test',
+        ]);
+
+        self::assertSame(0, $verified['code'], $verified['output']);
+        self::assertSame([
+            'distinct_uid' => true,
+            'cap_sys_ptrace_effective' => false,
+            'cap_sys_ptrace_permitted' => false,
+            'attested_process_live' => true,
+            'reopened_acl_rejected' => true,
+            'final_redigest_acl_rejected' => true,
+            'isolated_negative_receipts' => true,
+            'start_id_mismatch_rejected' => true,
+            'binary_digest_mismatch_rejected' => true,
+            'argv_mismatch_rejected' => true,
+        ], \json_decode(
+            \trim($verified['output']),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        ));
     }
 
     public function testPhysicalCapacityReserveIsCrashReplayableAndActuallyAllocated(): void
@@ -784,6 +894,28 @@ final class NativeGatewayLauncherTest extends TestCase
             'A corrupted HELD reserve must not bypass begin-release cleanup.',
         );
         self::assertDirectoryExists($tamperHeld);
+    }
+
+    public function testProductionCapacityAnchorProfilesMatchInstalledAuthority(): void
+    {
+        $profile = $this->runCommand([
+            $this->launcher,
+            '--capacity-anchor-profile-self-test',
+        ]);
+        self::assertSame(0, $profile['code'], $profile['output']);
+        self::assertSame([
+            'production_profile_anchors' => 17,
+            'runtime_temp_mode' => '0770',
+            'runtime_temp_group' => 'data-plane',
+            'wrong_owner_rejected' => true,
+            'wrong_group_rejected' => true,
+            'wrong_mode_rejected' => true,
+            'non_temp_group_write_rejected' => true,
+        ], \json_decode(
+            \trim($profile['output']),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        ));
     }
 
     public function testGuardianPlatformShutdownUsesMainOnlyGracefulTreeHandoff(): void
@@ -3005,7 +3137,14 @@ final class NativeGatewayLauncherTest extends TestCase
                 ['sudo', '-n', '/bin/cp', '-R', $home, $rootHome],
                 ['sudo', '-n', '/bin/cp', '-R', $run, $rootRun],
                 ['sudo', '-n', '/bin/cp', $this->launcher, $rootLauncher],
-                ['sudo', '-n', '/usr/sbin/chown', '-R', 'root:wheel', $systemRoot],
+                ['sudo', '-n', '/usr/sbin/chown', '-R', 'root', $systemRoot],
+                [
+                    'sudo',
+                    '-n',
+                    '/usr/sbin/chown',
+                    'root:_welinegateway_nginx',
+                    $rootHome . '/nginx-pid',
+                ],
                 ['sudo', '-n', '/bin/chmod', '0755', $rootLauncher],
                 [
                     'sudo',
@@ -3033,13 +3172,15 @@ final class NativeGatewayLauncherTest extends TestCase
                 $rootPlist,
                 $rootLauncher,
                 $rootBroker,
+                $rootHome . '/nginx-pid',
             ]);
             self::assertSame(0, $ownership['code'], $ownership['output']);
             self::assertSame(
                 [
                     'root:wheel:644',
                     'root:wheel:755',
-                    'root:wheel:755',
+                    'root:wheel:555',
+                    'root:_welinegateway_nginx:711',
                 ],
                 \preg_split('/\R/', \trim($ownership['output'])),
             );
@@ -3074,7 +3215,12 @@ final class NativeGatewayLauncherTest extends TestCase
             self::assertGreaterThanOrEqual(
                 2,
                 $restartCount,
-                'The system LaunchDaemon must restart an unexpectedly clean Broker exit.',
+                'The system LaunchDaemon must restart an unexpectedly clean Broker exit.'
+                    . "\nLauncher log tail:\n"
+                    . \substr(
+                        (string)@\file_get_contents($systemRoot . '/launchd.log'),
+                        -4096,
+                    ),
             );
             $status = $this->runCommand([
                 'sudo',
@@ -3303,6 +3449,18 @@ final class NativeGatewayLauncherTest extends TestCase
         ?string $brokerOverride = null,
     ): array
     {
+        if (!\function_exists('posix_geteuid') || \posix_geteuid() !== 0) {
+            self::markTestSkipped('The signed launcher home requires root-owned production authority.');
+        }
+        $dataUser = \PHP_OS_FAMILY === 'Darwin'
+            ? '_welinegateway_nginx'
+            : 'weline-gateway-nginx';
+        $dataIdentity = \function_exists('posix_getpwnam')
+            ? \posix_getpwnam($dataUser)
+            : false;
+        if (!\is_array($dataIdentity) || !\is_int($dataIdentity['gid'] ?? null)) {
+            self::markTestSkipped('The gateway data-plane identity is unavailable.');
+        }
         $home = $this->root . DIRECTORY_SEPARATOR . 'home';
         $run = $this->root . DIRECTORY_SEPARATOR . 'run';
         $slot = $home . DIRECTORY_SEPARATOR . 'slots' . DIRECTORY_SEPARATOR . 'A';
@@ -3313,6 +3471,10 @@ final class NativeGatewayLauncherTest extends TestCase
         self::assertTrue(\mkdir($release, 0700, true));
         self::assertTrue(\mkdir($home . DIRECTORY_SEPARATOR . 'state', 0700, true));
         self::assertTrue(\mkdir($home . DIRECTORY_SEPARATOR . 'trust', 0700, true));
+        $pidDirectory = $home . DIRECTORY_SEPARATOR . 'nginx-pid';
+        self::assertTrue(\mkdir($pidDirectory, 0711, true));
+        self::assertTrue(\chgrp($pidDirectory, $dataIdentity['gid']));
+        self::assertTrue(\chmod($pidDirectory, 0711));
         self::assertTrue(\mkdir($run, 0700, true));
         self::assertTrue(\chmod($home, 0751));
         foreach ([

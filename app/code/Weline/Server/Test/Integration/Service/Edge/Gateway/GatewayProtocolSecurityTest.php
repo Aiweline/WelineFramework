@@ -79,8 +79,19 @@ final class GatewayProtocolSecurityTest extends TestCase
         ));
         self::assertTrue(\chmod($nginx, 0700));
 
-        $run = $this->home . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR . 'run';
-        self::assertTrue(\mkdir($run, 0700, true));
+        $runtime = $this->home . DIRECTORY_SEPARATOR . 'runtime';
+        self::assertTrue(\mkdir($runtime, 0750, true));
+        self::assertTrue(\mkdir($runtime . DIRECTORY_SEPARATOR . 'logs', 0770));
+        self::assertTrue(\chmod($runtime, 0750));
+        self::assertTrue(\chmod($runtime . DIRECTORY_SEPARATOR . 'logs', 0770));
+        $legacySnapshots = $this->home . DIRECTORY_SEPARATOR . 'snapshots';
+        self::assertTrue(\mkdir($legacySnapshots, 0710));
+        self::assertTrue(\chmod($legacySnapshots, 0710));
+        $nginxPid = $this->home . DIRECTORY_SEPARATOR . 'nginx-pid';
+        self::assertTrue(\mkdir($nginxPid, 0700));
+        self::assertTrue(\chmod($nginxPid, 0700));
+        $run = $runtime . DIRECTORY_SEPARATOR . 'run';
+        self::assertTrue(\mkdir($run, 0700));
         self::assertNotFalse(\file_put_contents(
             $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token',
             $this->fencing,
@@ -107,6 +118,227 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertSame(
             0750,
             (int)\fileperms($this->home . DIRECTORY_SEPARATOR . 'trust') & 0777,
+        );
+    }
+
+    public function testNativeStartTreeRestartStableCodeIsEscalatedToPlatformRecovery(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 5)
+            . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'wls_gateway_controller.php');
+
+        self::assertStringContainsString(
+            "'NGINX_START_SERVICE_TREE_RESTART_REQUIRED'",
+            $source,
+        );
+        self::assertStringContainsString(
+            '$this->requestServiceTreeRestart($exception->getMessage());',
+            $source,
+        );
+        self::assertStringContainsString(
+            "'service_tree_restart_required' => true",
+            $source,
+        );
+    }
+
+    public function testNativeStartReservePreventsBrokerSpawnWhenResponseCannotArrive(): void
+    {
+        $configDirectory = $this->home . DIRECTORY_SEPARATOR . 'runtime'
+            . DIRECTORY_SEPARATOR . 'conf';
+        self::assertTrue(\is_dir($configDirectory) || \mkdir($configDirectory, 0700));
+        $config = $configDirectory . DIRECTORY_SEPARATOR . 'nginx.conf';
+        self::assertNotFalse(\file_put_contents($config, "events {}\n"));
+        $configDigest = \hash_file('sha256', $config);
+        self::assertIsString($configDigest);
+        $state = new \ReflectionProperty($this->controller, 'state');
+        $stateValue = $state->getValue($this->controller);
+        $stateValue['active_config_generation'] = 1;
+        $stateValue['active_config_digest'] = $configDigest;
+        $state->setValue($this->controller, $stateValue);
+
+        $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($sockets);
+        $exchange = new \ReflectionProperty($this->controller, 'brokerExchange');
+        $peer = new \ReflectionProperty($this->controller, 'activeBrokerPeer');
+        $exchange->setValue($this->controller, $sockets[0]);
+        $peer->setValue($this->controller, [
+            'channel' => 'admin',
+            'action_protocol' => 2,
+        ]);
+        \stream_set_blocking($sockets[1], false);
+        try {
+            $result = (new \ReflectionMethod(
+                $this->controller,
+                'nativeNginxLifecycleAction',
+            ))->invoke(
+                $this->controller,
+                'NGINX_START',
+                \hrtime(true) / 1_000_000_000 + 0.1,
+            );
+
+            self::assertFalse($result['ok']);
+            self::assertStringContainsString('response reserve before spawn', $result['message']);
+            self::assertSame('', \fread($sockets[1], 4096));
+            self::assertFalse((new \ReflectionProperty(
+                $this->controller,
+                'serviceTreeRestartRequested',
+            ))->getValue($this->controller));
+        } finally {
+            $exchange->setValue($this->controller, null);
+            $peer->setValue($this->controller, null);
+            \fclose($sockets[0]);
+            \fclose($sockets[1]);
+        }
+    }
+
+    public function testNativeStartPreflightConsumptionPreservesResponseReserve(): void
+    {
+        $configDirectory = $this->home . DIRECTORY_SEPARATOR . 'runtime'
+            . DIRECTORY_SEPARATOR . 'conf';
+        self::assertTrue(\is_dir($configDirectory) || \mkdir($configDirectory, 0700));
+        $config = $configDirectory . DIRECTORY_SEPARATOR . 'nginx.conf';
+        $handle = \fopen($config, 'wb');
+        self::assertIsResource($handle);
+        try {
+            $chunk = \str_repeat("events {}\\n", 131_072);
+            for ($index = 0; $index < 96; $index++) {
+                self::assertSame(\strlen($chunk), \fwrite($handle, $chunk));
+            }
+        } finally {
+            \fclose($handle);
+        }
+        $configDigest = \hash_file('sha256', $config);
+        self::assertIsString($configDigest);
+
+        $state = new \ReflectionProperty($this->controller, 'state');
+        $stateValue = $state->getValue($this->controller);
+        $stateValue['active_config_generation'] = 1;
+        $stateValue['active_config_digest'] = $configDigest;
+        $state->setValue($this->controller, $stateValue);
+
+        $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($sockets);
+        $exchange = new \ReflectionProperty($this->controller, 'brokerExchange');
+        $peer = new \ReflectionProperty($this->controller, 'activeBrokerPeer');
+        $exchange->setValue($this->controller, $sockets[0]);
+        $peer->setValue($this->controller, [
+            'channel' => 'admin',
+            'action_protocol' => 2,
+        ]);
+        \stream_set_blocking($sockets[1], false);
+        try {
+            $result = (new \ReflectionMethod(
+                $this->controller,
+                'nativeNginxLifecycleAction',
+            ))->invoke(
+                $this->controller,
+                'NGINX_START',
+                \hrtime(true) / 1_000_000_000 + 0.515,
+            );
+
+            self::assertFalse($result['ok']);
+            self::assertStringContainsString('response reserve before spawn', $result['message']);
+            self::assertSame('', \fread($sockets[1], 4096));
+        } finally {
+            $exchange->setValue($this->controller, null);
+            $peer->setValue($this->controller, null);
+            \fclose($sockets[0]);
+            \fclose($sockets[1]);
+        }
+    }
+
+    public function testNativeStartTreeRestartBrokerErrorRequestsPlatformRestart(): void
+    {
+        $configDirectory = $this->home . DIRECTORY_SEPARATOR . 'runtime'
+            . DIRECTORY_SEPARATOR . 'conf';
+        self::assertTrue(\is_dir($configDirectory) || \mkdir($configDirectory, 0700));
+        $config = $configDirectory . DIRECTORY_SEPARATOR . 'nginx.conf';
+        self::assertNotFalse(\file_put_contents($config, "events {}\n"));
+        $configDigest = \hash_file('sha256', $config);
+        self::assertIsString($configDigest);
+
+        $state = new \ReflectionProperty($this->controller, 'state');
+        $stateValue = $state->getValue($this->controller);
+        $stateValue['active_config_generation'] = 1;
+        $stateValue['active_config_digest'] = $configDigest;
+        $state->setValue($this->controller, $stateValue);
+
+        $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($sockets);
+        $exchange = new \ReflectionProperty($this->controller, 'brokerExchange');
+        $peer = new \ReflectionProperty($this->controller, 'activeBrokerPeer');
+        $exchange->setValue($this->controller, $sockets[0]);
+        $peer->setValue($this->controller, [
+            'channel' => 'admin',
+            'action_protocol' => 2,
+        ]);
+        self::assertNotFalse(\fwrite(
+            $sockets[1],
+            "WLS-ACTION/2\tERR\tNGINX_START_SERVICE_TREE_RESTART_REQUIRED\tNGINX_START\t-\t-\n",
+        ));
+        try {
+            $result = (new \ReflectionMethod(
+                $this->controller,
+                'nativeNginxLifecycleAction',
+            ))->invoke(
+                $this->controller,
+                'NGINX_START',
+                \hrtime(true) / 1_000_000_000 + 2.0,
+            );
+
+            self::assertFalse($result['ok']);
+            self::assertTrue($result['service_tree_restart_required']);
+            self::assertStringContainsString(
+                'NGINX_START_SERVICE_TREE_RESTART_REQUIRED',
+                $result['message'],
+            );
+            self::assertStringContainsString("WLS-ACTION/2\tNGINX_START\t", (string)\fgets($sockets[1]));
+            self::assertTrue((new \ReflectionProperty(
+                $this->controller,
+                'serviceTreeRestartRequested',
+            ))->getValue($this->controller));
+            $restartedState = $state->getValue($this->controller);
+            self::assertSame('SERVICE_TREE_RESTART', $restartedState['recovery']['stage']);
+            self::assertSame(79, $this->controller->run());
+        } finally {
+            $exchange->setValue($this->controller, null);
+            $peer->setValue($this->controller, null);
+            \fclose($sockets[0]);
+            \fclose($sockets[1]);
+        }
+    }
+
+    public function testNeutralCertificateKeepsBothControllerStateLeavesPrivate(): void
+    {
+        (new \ReflectionMethod($this->controller, 'ensureNeutralCertificate'))
+            ->invoke($this->controller);
+
+        foreach (['neutral-cert.pem', 'neutral-key.pem'] as $leaf) {
+            $path = $this->home . DIRECTORY_SEPARATOR . 'state'
+                . DIRECTORY_SEPARATOR . $leaf;
+            self::assertFileExists($path);
+            self::assertSame(0600, (int)\fileperms($path) & 0777);
+        }
+    }
+
+    public function testControllerPreservesPreProvisionedRuntimeAuthorityProfiles(): void
+    {
+        self::assertSame(
+            0750,
+            (int)\fileperms($this->home . DIRECTORY_SEPARATOR . 'runtime') & 0777,
+        );
+        self::assertSame(
+            0770,
+            (int)\fileperms(
+                $this->home . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR . 'logs',
+            ) & 0777,
+        );
+    }
+
+    public function testControllerPreservesPreProvisionedLegacySnapshotAuthorityProfile(): void
+    {
+        self::assertSame(
+            0710,
+            (int)\fileperms($this->home . DIRECTORY_SEPARATOR . 'snapshots') & 0777,
         );
     }
 
@@ -380,6 +612,163 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'gid' => (int)\posix_getegid(),
             ],
         );
+    }
+
+    public function testProductionManifestRejectsUserOwnedBrokerFence(): void
+    {
+        if (!\function_exists('posix_geteuid') || \posix_geteuid() === 0) {
+            self::markTestSkipped(
+                'The user-owned production Broker fence regression requires a non-root POSIX runner.',
+            );
+        }
+        $manifestPath = $this->home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json';
+        $manifest = \json_decode(
+            (string)\file_get_contents($manifestPath),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $manifest['test_mode'] = false;
+        self::assertNotFalse(\file_put_contents(
+            $manifestPath,
+            \json_encode($manifest, JSON_THROW_ON_ERROR),
+        ));
+
+        try {
+            (new \ReflectionMethod($this->controller, 'persistState'))
+                ->invoke($this->controller);
+            self::fail('A user-owned Broker fencing token was accepted in production mode.');
+        } catch (\DomainException $exception) {
+            self::assertStringContainsString(
+                'Native Broker generation changed',
+                $exception->getMessage(),
+            );
+        }
+    }
+
+    public function testColdBootRecoveryDefersUntilNativeBrokerBootstrap(): void
+    {
+        $this->requireRootBrokerAuthority('cold-boot recovery');
+        $manifestPath = $this->home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json';
+        $manifest = \json_decode(
+            (string)\file_get_contents($manifestPath),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $manifest['test_mode'] = false;
+        self::assertNotFalse(\file_put_contents(
+            $manifestPath,
+            \json_encode($manifest, JSON_THROW_ON_ERROR),
+        ));
+        (new \ReflectionProperty(
+            $this->controller,
+            'startupDataPlaneRecoveryPending',
+        ))->setValue($this->controller, true);
+        (new \ReflectionMethod($this->controller, 'recoverDataPlane'))
+            ->invoke($this->controller);
+
+        $state = (new \ReflectionProperty($this->controller, 'state'))
+            ->getValue($this->controller);
+        self::assertSame(
+            'BROKER_ACTION_PENDING_STARTUP',
+            $state['recovery']['stage'],
+        );
+        self::assertFalse($state['ready']);
+        self::assertSame('CONTROL_DEGRADED', $state['health_state']);
+        self::assertSame(
+            'Nginx startup is waiting for the Native Broker internal recovery callback.',
+            $state['recovery']['last_failure'],
+        );
+        $persisted = \json_decode(
+            (string)\file_get_contents(
+                $this->home . DIRECTORY_SEPARATOR . 'state/gateway-state.json',
+            ),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame(
+            'BROKER_ACTION_PENDING_STARTUP',
+            $persisted['payload']['recovery']['stage'],
+        );
+        self::assertFalse($persisted['payload']['ready']);
+    }
+
+    /**
+     * @dataProvider coldBootRecoveryStagesThatRequirePreservation
+     */
+    public function testColdBootRecoveryPreservesExistingRecoveryStageWithoutBroker(
+        string $stage,
+        string $healthState,
+        string $lastFailure,
+    ): void {
+        $this->requireRootBrokerAuthority('cold-boot recovery');
+        $manifestPath = $this->home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json';
+        $manifest = \json_decode(
+            (string)\file_get_contents($manifestPath),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $manifest['test_mode'] = false;
+        self::assertNotFalse(\file_put_contents(
+            $manifestPath,
+            \json_encode($manifest, JSON_THROW_ON_ERROR),
+        ));
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['ready'] = false;
+        $state['health_state'] = $healthState;
+        $state['recovery']['stage'] = $stage;
+        $state['recovery']['last_failure'] = $lastFailure;
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionMethod($this->controller, 'persistState'))
+            ->invoke($this->controller);
+
+        $stateFile = $this->home . DIRECTORY_SEPARATOR . 'state/gateway-state.json';
+        $beforeHash = \hash_file('sha256', $stateFile);
+        self::assertIsString($beforeHash);
+        $beforeRecovery = $stateProperty->getValue($this->controller)['recovery'];
+        (new \ReflectionProperty(
+            $this->controller,
+            'startupDataPlaneRecoveryPending',
+        ))->setValue($this->controller, true);
+        (new \ReflectionMethod($this->controller, 'recoverDataPlane'))
+            ->invoke($this->controller);
+
+        $after = $stateProperty->getValue($this->controller);
+        self::assertSame($beforeRecovery, $after['recovery']);
+        self::assertSame($healthState, $after['health_state']);
+        self::assertFalse($after['ready']);
+        self::assertSame($beforeHash, \hash_file('sha256', $stateFile));
+    }
+
+    /** @return array<string,array{stage:string,healthState:string,lastFailure:string}> */
+    public static function coldBootRecoveryStagesThatRequirePreservation(): array
+    {
+        return [
+            'proven foreign public port owner' => [
+                'stage' => 'PORT_TAKEN',
+                'healthState' => 'PORT_TAKEN',
+                'lastFailure' => 'A foreign public listener is already durably recorded.',
+            ],
+            'public port permission denial' => [
+                'stage' => 'PORT_PERMISSION',
+                'healthState' => 'DATA_PLANE_DOWN',
+                'lastFailure' => 'Public TCP permission failure requires its existing retry policy.',
+            ],
+            'authenticated recovery action pending' => [
+                'stage' => 'BROKER_ACTION_PENDING_RECOVERY',
+                'healthState' => 'CONTROL_DEGRADED',
+                'lastFailure' => 'A prior Broker recovery action remains durable work.',
+            ],
+            'platform service tree restart' => [
+                'stage' => 'SERVICE_TREE_RESTART',
+                'healthState' => 'DATA_PLANE_DOWN',
+                'lastFailure' => 'The platform service tree requires Broker-supervised restart.',
+            ],
+        ];
     }
 
     public function testUnauthenticatedBrokerCannotHoldControlLoopForRequestTimeout(): void
@@ -1104,6 +1493,18 @@ final class GatewayProtocolSecurityTest extends TestCase
         ), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame(8, $ledger['payload']['schema_version']);
         self::assertTrue($ledger['payload']['nonce_wal_established']);
+        self::assertFileExists(
+            $this->home . DIRECTORY_SEPARATOR . 'state/security-anchor.json',
+        );
+        self::assertFileExists(
+            $this->home . DIRECTORY_SEPARATOR . 'state/wls-edge-2.initialized.json',
+        );
+        self::assertFileDoesNotExist(
+            $this->home . DIRECTORY_SEPARATOR . 'trust/security-anchor.json',
+        );
+        self::assertFileDoesNotExist(
+            $this->home . DIRECTORY_SEPARATOR . 'trust/wls-edge-2.initialized.json',
+        );
         self::assertSame(
             [],
             $ledger['payload']['security_publication_recovery_authority'],
@@ -6884,6 +7285,54 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
+    public function testNeutralTlsRenderTargetsPublishedLeavesWhileSourcesRemainPrivate(): void
+    {
+        $config = (new \ReflectionMethod($this->controller, 'renderNginxConfig'))
+            ->invoke($this->controller, false);
+        $privateCertificate = $this->home . DIRECTORY_SEPARATOR
+            . 'state' . DIRECTORY_SEPARATOR . 'neutral-cert.pem';
+        $privateKey = $this->home . DIRECTORY_SEPARATOR
+            . 'state' . DIRECTORY_SEPARATOR . 'neutral-key.pem';
+        $publishedCertificate = $this->home . DIRECTORY_SEPARATOR
+            . 'neutral-tls' . DIRECTORY_SEPARATOR . 'neutral-cert.pem';
+        $publishedKey = $this->home . DIRECTORY_SEPARATOR
+            . 'neutral-tls' . DIRECTORY_SEPARATOR . 'neutral-key.pem';
+
+        self::assertFileExists($privateCertificate);
+        self::assertFileExists($privateKey);
+        self::assertStringContainsString(
+            'ssl_certificate "' . $publishedCertificate . '";',
+            $config,
+        );
+        self::assertStringContainsString(
+            'ssl_certificate_key "' . $publishedKey . '";',
+            $config,
+        );
+        self::assertStringNotContainsString($privateCertificate, $config);
+        self::assertStringNotContainsString($privateKey, $config);
+    }
+
+    public function testNginxTemporaryPathsStayInsideBrokerPreparedRuntimeTree(): void
+    {
+        $config = (new \ReflectionMethod($this->controller, 'renderNginxConfig'))
+            ->invoke($this->controller, false);
+        $tempRoot = $this->home . DIRECTORY_SEPARATOR
+            . 'runtime' . DIRECTORY_SEPARATOR . 'temp';
+
+        foreach ([
+            'client_body_temp_path' => 'client_body_temp',
+            'proxy_temp_path' => 'proxy_temp',
+            'fastcgi_temp_path' => 'fastcgi_temp',
+            'uwsgi_temp_path' => 'uwsgi_temp',
+            'scgi_temp_path' => 'scgi_temp',
+        ] as $directive => $leaf) {
+            self::assertStringContainsString(
+                $directive . ' "' . $tempRoot . DIRECTORY_SEPARATOR . $leaf . '";',
+                $config,
+            );
+        }
+    }
+
     public function testH3UnknownSniUsesTheNeutralDefaultQuicServer(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174034';
@@ -7035,6 +7484,24 @@ final class GatewayProtocolSecurityTest extends TestCase
                 . 'var/server/nginx-build/nginx-1.30.4/objs/nginx';
         }
         if (\is_file($nginx) && \is_executable($nginx)) {
+            $neutralTls = $this->home . DIRECTORY_SEPARATOR . 'neutral-tls';
+            self::assertTrue(\mkdir($neutralTls, 0755));
+            self::assertTrue(\copy(
+                $this->home . DIRECTORY_SEPARATOR . 'state/neutral-cert.pem',
+                $neutralTls . DIRECTORY_SEPARATOR . 'neutral-cert.pem',
+            ));
+            self::assertTrue(\copy(
+                $this->home . DIRECTORY_SEPARATOR . 'state/neutral-key.pem',
+                $neutralTls . DIRECTORY_SEPARATOR . 'neutral-key.pem',
+            ));
+            self::assertTrue(\chmod(
+                $neutralTls . DIRECTORY_SEPARATOR . 'neutral-cert.pem',
+                0644,
+            ));
+            self::assertTrue(\chmod(
+                $neutralTls . DIRECTORY_SEPARATOR . 'neutral-key.pem',
+                0600,
+            ));
             $configPath = $this->home . DIRECTORY_SEPARATOR
                 . 'runtime/conf/h3-neutral-nginx.conf';
             self::assertNotFalse(\file_put_contents($configPath, $config));
@@ -9824,6 +10291,16 @@ final class GatewayProtocolSecurityTest extends TestCase
      *     route_generation:int
      * }
      */
+    private function requireRootBrokerAuthority(string $scenario): void
+    {
+        if (!\function_exists('posix_geteuid') || \posix_geteuid() !== 0) {
+            self::markTestSkipped(
+                'The production-manifest ' . $scenario
+                    . ' fixture requires root-owned Native Broker fencing authority.',
+            );
+        }
+    }
+
     private function registerPendingCertificateLeaseForCheckpoint(
         string $projectUuid,
         string $instanceId,
@@ -9860,10 +10337,15 @@ final class GatewayProtocolSecurityTest extends TestCase
         $masterEpoch = 1;
         $launchId = \str_repeat('c', 32);
         $routeId = $this->canonicalRouteId($projectUuid, $domain);
-        // The closed loopback port deliberately exercises registration's
-        // retryable transport-outage path. A pending certificate still keeps
-        // HTTPS closed while the desired identity and lease closure are stored.
-        $backend = ['host' => '127.0.0.1', 'port' => 65530, 'weight' => 1];
+        // Hold an ephemeral loopback listener without accepting. The probe
+        // receives no response, so it is a deterministic retryable transport
+        // outage rather than an ambient-port identity failure.
+        $transportFixture = $this->openUnresponsiveLoopbackTransportFixture();
+        $backend = [
+            'host' => '127.0.0.1',
+            'port' => $transportFixture['port'],
+            'weight' => 1,
+        ];
         $routePayload = [
             'route_id' => $routeId,
             'domain' => $domain,
@@ -9942,18 +10424,22 @@ final class GatewayProtocolSecurityTest extends TestCase
         $deferPublication->setValue($this->controller, true);
         $requestOperation->setValue($this->controller, 'register');
         $requestPrincipal->setValue($this->controller, $projectUuid);
-        $registered = (new \ReflectionMethod($this->controller, 'register'))->invoke(
-            $this->controller,
-            $registerPayload + [
-                '_broker_peer' => [
-                    'channel' => 'project',
-                    'uid' => (int)\posix_geteuid(),
-                    'gid' => (int)\posix_getegid(),
-                    'pid' => \getmypid(),
+        try {
+            $registered = (new \ReflectionMethod($this->controller, 'register'))->invoke(
+                $this->controller,
+                $registerPayload + [
+                    '_broker_peer' => [
+                        'channel' => 'project',
+                        'uid' => (int)\posix_geteuid(),
+                        'gid' => (int)\posix_getegid(),
+                        'pid' => \getmypid(),
+                    ],
                 ],
-            ],
-            false,
-        );
+                false,
+            );
+        } finally {
+            \fclose($transportFixture['socket']);
+        }
         self::assertFalse($registered['idempotent']);
 
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
@@ -10017,6 +10503,32 @@ final class GatewayProtocolSecurityTest extends TestCase
             'register_payload' => $registerPayload,
             'route_generation' => (int)$state['routes'][$routeId]['route_generation'],
         ];
+    }
+
+    /** @return array{socket:resource,port:int} */
+    private function openUnresponsiveLoopbackTransportFixture(): array
+    {
+        $errorNumber = 0;
+        $errorMessage = '';
+        $socket = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errorNumber,
+            $errorMessage,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource(
+            $socket,
+            'Unable to allocate local transport-outage fixture: ' . $errorMessage,
+        );
+        $address = \stream_socket_get_name($socket, false);
+        self::assertIsString($address);
+        $separator = \strrpos($address, ':');
+        self::assertIsInt($separator);
+        $port = (int)\substr($address, $separator + 1);
+        self::assertGreaterThan(0, $port);
+        self::assertLessThanOrEqual(65535, $port);
+
+        return ['socket' => $socket, 'port' => $port];
     }
 
     private function createProject(): string

@@ -91,7 +91,7 @@ class Session implements SessionInterface
         $this->dirtyDeletedKeys = [];
         $this->replaceAllOnSave = false;
 
-        self::sessionLog('start', 'sid=' . ($this->sessionId !== '' ? substr($this->sessionId, 0, 8) . '...' : 'new'));
+        self::sessionLog('start', 'id_present=' . ($this->sessionId !== '' ? '1' : '0'));
 
         $requestState = SessionRequestState::current();
         $requestState->instancesForShutdown[$this->sessionId ?: spl_object_id($this)] = $this;
@@ -208,7 +208,7 @@ class Session implements SessionInterface
     public function destroy(): void
     {
         if ($this->sessionId !== '') {
-            self::sessionLog('destroy', 'sid=' . substr($this->sessionId, 0, 8) . '...');
+            self::sessionLog('destroy', 'id_present=1');
             $this->strategy->destroy($this->sessionId);
         }
 
@@ -235,7 +235,7 @@ class Session implements SessionInterface
             $deleteOldSession,
             $this->defaultTtl
         );
-        self::sessionLog('regenerate', 'delete_old=' . ($deleteOldSession ? '1' : '0') . ' sid=' . substr($this->sessionId, 0, 8) . '...');
+        self::sessionLog('regenerate', 'delete_old=' . ($deleteOldSession ? '1' : '0'));
         $this->dirty = false;
         $this->dirtySetKeys = [];
         $this->dirtyDeletedKeys = [];
@@ -358,7 +358,7 @@ class Session implements SessionInterface
         if ($this->dirty && $this->sessionId !== '') {
             $persistData = $this->buildPersistData();
             $ok = $this->strategy->persist($this->sessionId, $persistData, $this->defaultTtl);
-            self::sessionLog('save', 'sid=' . substr($this->sessionId, 0, 8) . '... dirty=1 ok=' . ($ok ? '1' : '0'));
+            self::sessionLog('save', 'dirty=1 ok=' . ($ok ? '1' : '0'));
             if ($ok) {
                 $this->data = $persistData;
                 $this->dirty = false;
@@ -366,7 +366,7 @@ class Session implements SessionInterface
                 $this->dirtyDeletedKeys = [];
                 $this->replaceAllOnSave = false;
             } else {
-                w_log_warning('[Session] 落库失败，sessionId=' . \substr($this->sessionId, 0, 8) . '...', [], 'session');
+                w_log_warning('[Session] 落库失败。', [], 'session');
             }
         }
     }

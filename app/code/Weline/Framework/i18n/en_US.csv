@@ -134,7 +134,6 @@
 "PostgreSQL 表 %{1} 的物理索引 %{2} 同时匹配多个逻辑索引声明","PostgreSQL 表 %{1} 的物理索引 %{2} 同时匹配多个逻辑索引声明"
 "PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致","PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致"
 "Schema DDL 审计写入失败（migration_id=0），已中止执行：module=%{1} table=%{2} kind=%{3}","Schema DDL 审计写入失败（migration_id=0），已中止执行：module=%{1} table=%{2} kind=%{3}"
-"Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}","Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}"
 "表 %{1} 的索引 %{2} 新增后未通过物理定义回读","表 %{1} 的索引 %{2} 新增后未通过物理定义回读"
 "PostgreSQL 表 %{1} 的索引 %{2} 删除后仍然存在","PostgreSQL 表 %{1} 的索引 %{2} 删除后仍然存在"
 "表 %{1} 的索引 %{2} 删除后仍然存在","表 %{1} 的索引 %{2} 删除后仍然存在"
@@ -405,6 +404,8 @@ ACL分发,"ACL distribution"
 注册安装器,"Registration Installer"
 在注册模块安装器时触发，允许其他模块自定义安装器路径。,"Triggered when registering a module installer, allowing other modules to customize the installer path."
 客户端IP头Keys收集,"Client IP Header Key Collection"
+"HTTP Cookie 作用域解析","HTTP Cookie 作用域解析"
+"在解析 Cookie 名/Path 作用域时触发。Framework 默认不做站点隔离；模块通过中立字段贡献 name_suffix、mount_path、expire_unscoped_aliases 等，禁止在 Framework 内硬编码 Website 业务语义。","在解析 Cookie 名/Path 作用域时触发。Framework 默认不做站点隔离；模块通过中立字段贡献 name_suffix、mount_path、expire_unscoped_aliases 等，禁止在 Framework 内硬编码 Website 业务语义。"
 处理区域,"Processing region"
 在处理HTTP请求区域时触发，允许其他模块自定义区域处理逻辑。,"Triggered when processing HTTP request areas, allowing other modules to customize area processing logic."
 响应无路由前,"Response has no route"
@@ -518,7 +519,7 @@ end,end
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","The exec() function needs to be unlocked: please find disable_function in php.ini and delete exec"
 "WelineFramework Admin","WelineFramework Admin"
 WelineFramework,WelineFramework
-璇峰厛鐧诲綍,"Please log in first"
+请先登录,请先登录
 未登录或登录已过期,"Not logged in or session expired"
 当前生产环境：确认切换实时翻译模式么？Y/n,"Current production environment: Confirm switch to real-time translation mode? Y/n"
 1、正在执行卸载脚本...,"1. Executing the uninstallation script..."
@@ -872,15 +873,13 @@ dev=true,dev=true
 系统升级完成！,"System upgrade complete!"
 正在启动后台优化任务...,"Starting background optimization task..."
 "✓ 后台优化任务已启动 (PID: %{1})","✓ The background optimization task has been started (PID: %{1})"
-"优化内容：类映射缓存、PSR-4 映射、反射编译","Optimization Content: Class Mapping Cache, PSR-4 Mapping, Reflection Compilation"
+"优化内容：类映射缓存、PSR-4 映射、framework:compile、反射编译","优化内容：类映射缓存、PSR-4 映射、framework:compile、反射编译"
 日志文件：var/log/setup_background_optimize.log,"Log file: var/log/setup_background_optimize.log"
 后台任务启动失败，改为同步执行...,"Background task failed to start, switching to synchronous execution..."
 "后台任务启动异常: %{1}，改为同步执行...","Background task startup exception: %{1}, switching to synchronous execution..."
 正在生成优化缓存...,"Generating optimization cache..."
 "- 已跳过类映射缓存（--skip-classmap）","- Class map cache has been skipped (--skip-classmap)"
 "✓ 优化缓存生成完成。","✓ Optimized cache generation completed."
-反射/工厂编译出现警告（exit=%{1}），不影响系统功能。,"Reflection/Factory Compilation Warning (exit=%{1}), does not affect system functionality."
-反射/工厂编译跳过：%{1},"Reflection/Factory Compilation Skipped: %{1}"
 "- classmap 无变化，跳过重新生成","- No change in classmap, skip regeneration"
 "- 类映射缓存已生成，共 %{1} 个类","- Class mapping cache generated, %{1} classes in total"
 "- 跳过 PSR-4 缓存生成：Composer autoload 未找到","- Skip PSR-4 cache generation: Composer autoload not found"
@@ -1003,6 +1002,7 @@ dev=true,dev=true
 "优先运行指定阶段；framework_db_bootstrap/eav_schema/schema_diff 在全量路径仍必执行。阶段 code：%{1}。幽灵阶段 module_manager_bootstrap 已移除。","优先运行指定阶段；framework_db_bootstrap/eav_schema/schema_diff 在全量路径仍必执行。阶段 code：%{1}。幽灵阶段 module_manager_bootstrap 已移除。"
 "热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS","Hot update mode: only notifies the WLS server to reload (no Schema/route operations). Applicable when only Controller/Template/CSS/JS have been changed."
 "跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）","Skip reflection metadata and compiled factories generation (run reflection:compile later if needed)"
+"跳过 framework:compile（modules provides / container 等运行时索引；可事后执行 framework:compile）","跳过 framework:compile（modules provides / container 等运行时索引；可事后执行 framework:compile）"
 显式在后台执行优化；主命令不会等待类映射与反射编译完成,显式在后台执行优化；主命令不会等待类映射与反射编译完成
 兼容选项：保持同步执行优化（现在已是默认行为）,兼容选项：保持同步执行优化（现在已是默认行为）
 "DEV 下显式重跑全模块 Install.php（默认关闭）","DEV 下显式重跑全模块 Install.php（默认关闭）"
@@ -1014,6 +1014,7 @@ dev=true,dev=true
 "跳过 classmap 生成（未新增/删除文件时）","Skipped classmap generation (when no files are added or deleted)"
 "跳过 composer dump-autoload","Skip composer dump-autoload"
 "跳过反射编译（加快 s:up）","Skip reflection compile (speed up s:up)"
+跳过框架运行时编译,跳过框架运行时编译
 显式在后台执行优化,显式在后台执行优化
 兼容旧脚本的同步参数,兼容旧脚本的同步参数
 "DEV 同版本 Schema 重绑","DEV 同版本 Schema 重绑"
@@ -1067,11 +1068,13 @@ dev=true,dev=true
 "- 类映射缓存: %{1} 个类","- Class map cache: %{1} classes"
 "- PSR-4 映射缓存: %{1} 个命名空间","- PSR-4 mapping cache: %{1} namespaces"
 "后台优化任务失败: %{1}","Background optimization task failed: %{1}"
-后台执行优化缓存生成（类映射、PSR-4、反射编译）,"Backend Execute Optimized Cache Generation (Class Mapping, PSR-4, Reflection Compilation)"
+后台执行优化缓存生成（类映射、PSR-4、framework:compile、反射编译）,后台执行优化缓存生成（类映射、PSR-4、framework:compile、反射编译）
 跳过类映射缓存生成,"Skip class map cache generation"
+"跳过 framework:compile","跳过 framework:compile"
 跳过反射元数据编译,"Skipped reflection metadata compilation"
 手动执行,"Manual execution"
 跳过类映射,"Skip class map"
+跳过框架编译,跳过框架编译
 跳过反射编译,"Skipped reflection compilation"
 无法动态代理final类:%{1},"Cannot dynamically proxy final class: %{1}"
 静态函数尚不支持代理：%{1},"Proxy not yet supported for static functions: %{1}"
@@ -1511,8 +1514,8 @@ SQL调试输出,"SQL debug output"
 未提供参数：%{1},"Parameter not provided: %{1}"
 请指定请求路径！,"Please specify the request path!"
 正确用法示例:,"Correct usage example:"
-"使用指定的 Session ID: %{1}...","Using specified Session ID: %{1}..."
-"找到有效的后台登录 Session: %{1}... (用户: %{2})","Found valid admin login session: %{1}... (User: %{2})"
+"使用指定的 Session ID（值已隐藏）","使用指定的 Session ID（值已隐藏）"
+"找到有效的后台登录 Session（值已隐藏，用户：%{1}）","找到有效的后台登录 Session（值已隐藏，用户：%{1}）"
 "未找到有效的后台登录 Session","No valid admin login session found"
 请先在浏览器中登录后台，然后重试。,"Please log in to the admin panel in your browser first, then retry."
 其他选项：,"Other options:"
@@ -1585,6 +1588,7 @@ HTTP响应时间:,"HTTP response time:"
 "w:form action 不允许使用危险协议","w:form action 不允许使用危险协议"
 KEY,KEY
 搜索商品...,"Search products..."
+停用,停用
 "<js> 标签路径不能为空，示例：%{1}","<js> The tag path cannot be empty, example: %{1}"
 "<js> 标签解析后 URL 无文件名，路径：%{1}，请检查模块与路径是否正确","<js> The URL after tag parsing has no file name, path: %{1}, please check whether the module and path are correct"
 "Tag close not found.","Tag close not found."
@@ -1828,6 +1832,7 @@ Transport,Transport
 未找到要更新的数据,"Data to update not found"
 未找到要删除的数据,"Data to delete not found"
 "缺少 operation 参数","Missing operation parameter"
+后台实时流证明无效，请刷新页面后重试。,后台实时流证明无效，请刷新页面后重试。
 后台实时流暂未启用，请使用普通后台请求。,后台实时流暂未启用，请使用普通后台请求。
 "商城 Scope 已过期，请刷新页面后重试","商城 Scope 已过期，请刷新页面后重试"
 后台页面凭证已失效，请刷新页面后重试。,后台页面凭证已失效，请刷新页面后重试。
@@ -2207,6 +2212,8 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 "Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}","Reflection Compile: Skip unprivileged directory %{1}, reason: %{2}"
 开始预编译反射元数据与编译型工厂...,"Starting precompilation of reflection metadata and compiled factories..."
 没有找到活跃的模块,"No active modules found"
+"[%{1}/%{2}] 验证模块 %{3}（%{4} 个候选类）...","[%{1}/%{2}] 验证模块 %{3}（%{4} 个候选类）..."
+"[%{1}/%{2}] %{3}：安全 %{4} / 候选 %{5}%{6}","[%{1}/%{2}] %{3}：安全 %{4} / 候选 %{5}%{6}"
 反射元数据与编译型工厂预编译完成！,"Reflection metadata and compiled factory precompilation completed!"
 "反射元数据类数: %{1}","Number of reflection metadata classes: %{1}"
 "热点类数（正则发现）: %{1}","Hotspot class count (regex discovery): %{1}"
@@ -2219,6 +2226,10 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 显示详细编译信息,"Show detailed compilation information"
 基本用法,"Basic Usage"
 详细模式,"Detailed mode"
+认证设备登记失败。,认证设备登记失败。
+认证登录状态保存失败。,认证登录状态保存失败。
+认证设备服务不可用。,认证设备服务不可用。
+"当前 Session 尚未建立。","当前 Session 尚未建立。"
 "FPC 命中响应装饰器返回了无效响应","FPC 命中响应装饰器返回了无效响应"
 "Storefront 缓存上下文尚未完成版本冻结","Storefront 缓存上下文尚未完成版本冻结"
 "FPC 缺少已冻结的 Storefront 命名空间指纹","FPC 缺少已冻结的 Storefront 命名空间指纹"
@@ -2237,6 +2248,14 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,"Route path"
 HTTP方法,"HTTP method"
 控制器,Controller
+"Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}","Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}"
+璇峰厛鐧诲綍,"Please log in first"
+"使用指定的 Session ID: %{1}...","Using specified Session ID: %{1}..."
+"找到有效的后台登录 Session: %{1}... (用户: %{2})","Found valid admin login session: %{1}... (User: %{2})"
+"优化内容：类映射缓存、PSR-4 映射、反射编译","Optimization Content: Class Mapping Cache, PSR-4 Mapping, Reflection Compilation"
+反射/工厂编译出现警告（exit=%{1}），不影响系统功能。,"Reflection/Factory Compilation Warning (exit=%{1}), does not affect system functionality."
+反射/工厂编译跳过：%{1},"Reflection/Factory Compilation Skipped: %{1}"
+后台执行优化缓存生成（类映射、PSR-4、反射编译）,"Backend Execute Optimized Cache Generation (Class Mapping, PSR-4, Reflection Compilation)"
 系统升级完成后触发，允许其他模块执行升级后的操作。,"Triggered after the system upgrade is complete, allowing other modules to perform post-upgrade operations."
 错误：%{1},"Error: %{1}"
 "模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本","模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本"
@@ -2481,3 +2500,6 @@ PHPUnit报告服务器已在后台启动,"PHPUnit reporting server has started i
 个方法,method
 个失败,"a failure"
 "📁 测试文件结构:","📁 Test file structure:"
+无法创建缓存目录：%{1},"Unable to create cache directory: %{1}"
+无法清理缓存路径：%{1},"Unable to clear cache path: %{1}"
+无法恢复缓存目录所有权：%{1},"Unable to restore cache directory ownership: %{1}"

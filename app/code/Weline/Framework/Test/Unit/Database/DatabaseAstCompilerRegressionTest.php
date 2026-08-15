@@ -397,6 +397,38 @@ final class DatabaseAstCompilerRegressionTest extends TestCase
     }
 
     /**
+     * @dataProvider nullComparisonOperatorProvider
+     */
+    public function testPgsqlCompilerNormalizesNullComparisonOperators(
+        string $operator,
+        string $expectedPredicate,
+    ): void {
+        $compiled = (new PgsqlCompiler())->compile([
+            'action' => 'select',
+            'from' => ['table' => 'backup_probe', 'alias' => 'main_table'],
+            'select' => ['fields' => '*'],
+            'where' => [['backup_value', $operator, null, 'AND']],
+        ]);
+
+        self::assertStringContainsString('"backup_value" ' . $expectedPredicate, $compiled->sql);
+        self::assertSame([], $compiled->bindings);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function nullComparisonOperatorProvider(): iterable
+    {
+        yield 'equals null' => ['=', 'IS NULL'];
+        yield 'explicit is null' => ['is null', 'IS NULL'];
+        yield 'spaced is null' => [' IS  NULL ', 'IS NULL'];
+        yield 'not equals null' => ['!=', 'IS NOT NULL'];
+        yield 'not equals angle null' => ['<>', 'IS NOT NULL'];
+        yield 'not keyword null' => ['not', 'IS NOT NULL'];
+        yield 'not equals keyword null' => ['not =', 'IS NOT NULL'];
+        yield 'explicit is not null' => ['IS NOT NULL', 'IS NOT NULL'];
+        yield 'spaced is not null' => [' is   not  null ', 'IS NOT NULL'];
+    }
+
+    /**
      * @dataProvider adapterQueryProvider
      */
     public function testAdapterPrepareSqlSupportsFromSubquery(string $queryClass): void

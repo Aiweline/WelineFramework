@@ -14,6 +14,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\RememberOptions;
+use Weline\Framework\Context;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -23,6 +24,8 @@ use Weline\Framework\Runtime\StateManager;
 
 class Parser
 {
+
+    private const TRANSLATION_RESOLUTION_DEPTH_CONTEXT_KEY = 'phrase.translation_resolution_depth';
 
     public static bool $loaded = false;
     public const PARSER_WORDS_CACHE_KEY = 'PARSER_WORDS_CACHE_KEY';
@@ -59,6 +62,7 @@ class Parser
      * @var bool
      */
     protected static bool $isLoadingWords = false;
+    private static int $translationResolutionDepth = 0;
     
     /**
      * 当前加载的语言（用于判断是否需要重新加载）
@@ -81,6 +85,7 @@ class Parser
         StateManager::registerResetCallback('Parser::reset', static function () {
             self::$usedWords = [];
             self::$isLoadingWords = false;
+            self::$translationResolutionDepth = 0;
             self::$currentRequestWordsId = null;
             self::$currentRequestWordsKey = null;
             self::$currentRequestLayeredWordsId = null;
@@ -212,6 +217,20 @@ class Parser
 
     public static function getWords()
     {
+        if (self::translationResolutionDepth() > 0 || self::$isLoadingWords) {
+            return self::$words;
+        }
+
+        self::enterTranslationResolution();
+        try {
+            return self::loadWords();
+        } finally {
+            self::leaveTranslationResolution();
+        }
+    }
+
+    private static function loadWords(): array
+    {
         if (Runtime::isPersistent()) {
             self::ensureStateRegistered();
             $layers = self::getCurrentLayeredWords();
@@ -239,9 +258,6 @@ class Parser
             return self::$words;
         }
 
-        if (self::$isLoadingWords) {
-            return self::$words ?? [];
-        }
         if (isset(self::$workerWordsCache[$requestCacheKey])) {
             self::$words = self::$workerWordsCache[$requestCacheKey];
             self::$loaded = true;
@@ -328,6 +344,45 @@ class Parser
         return self::$words ?? [];
     }
 
+    private static function translationResolutionDepth(): int
+    {
+        if (Context::hasCurrent()) {
+            return (int)Context::current()->get(self::TRANSLATION_RESOLUTION_DEPTH_CONTEXT_KEY, 0);
+        }
+
+        return self::$translationResolutionDepth;
+    }
+
+    private static function enterTranslationResolution(): void
+    {
+        if (Context::hasCurrent()) {
+            $context = Context::current();
+            $context->set(
+                self::TRANSLATION_RESOLUTION_DEPTH_CONTEXT_KEY,
+                (int)$context->get(self::TRANSLATION_RESOLUTION_DEPTH_CONTEXT_KEY, 0) + 1,
+            );
+            return;
+        }
+
+        ++self::$translationResolutionDepth;
+    }
+
+    private static function leaveTranslationResolution(): void
+    {
+        if (Context::hasCurrent()) {
+            $context = Context::current();
+            $depth = (int)$context->get(self::TRANSLATION_RESOLUTION_DEPTH_CONTEXT_KEY, 0);
+            if ($depth <= 1) {
+                $context->remove(self::TRANSLATION_RESOLUTION_DEPTH_CONTEXT_KEY);
+                return;
+            }
+            $context->set(self::TRANSLATION_RESOLUTION_DEPTH_CONTEXT_KEY, $depth - 1);
+            return;
+        }
+
+        self::$translationResolutionDepth = max(0, self::$translationResolutionDepth - 1);
+    }
+
     public static function preloadWorkerDictionaries(): void
     {
         self::ensureStateRegistered();
@@ -378,6 +433,7 @@ class Parser
         self::$loaded = false;
         self::$loadedLang = null;
         self::$isLoadingWords = false;
+        self::$translationResolutionDepth = 0;
     }
 
     private static function buildWordsFromWorkerCache(string $lang, array $modules, bool $includeGlobalDictionary = true): array

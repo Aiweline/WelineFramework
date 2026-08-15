@@ -411,7 +411,8 @@ class User extends \Weline\Framework\App\Controller\BackendController
     #[\Weline\Framework\Acl\Acl('Weline_Admin::system_assign_role', '管理员角色归配', '', '将管理员分配到角色')]
     function getAssignRole()
     {
-        $users = $this->backendUser->listWithRoles();
+        $search = trim((string)($this->request->getGet('search') ?? ''));
+        $users = $this->backendUser->search($search);
         $currentUser = $this->backendUser->find((int)$this->session->getLoginUserID());
         $this->assign('current_user', ($currentUser ?? BackendUserRecord::empty())->toArray());
         $this->assign('users', array_map(

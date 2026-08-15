@@ -4,7 +4,8 @@
 
 - `/Users/weline/Project/Official/框架` is the canonical macOS repository for WelineFramework core.
 - Durable changes under `app/code/Weline/**` belong here first. Site repositories receive them only through an explicitly requested update/release workflow.
-- If a site-repository task temporarily changes `app/code/Weline/**`, merge that task's verified delta back into this canonical repository. Never overwrite either side wholesale.
+- If a site-repository task changes `app/code/Weline/**` for any confirmed defect, feature, runtime, configuration, or core documentation work, merge that task's verified delta back into this canonical repository in the same task. Never overwrite either side wholesale.
+- Treat the canonical on-disk working copy, including its uncommitted hunks, as the merge base: record both path diffs, apply only the current task's semantic hunks, then prove all pre-existing canonical hunks remain. See `dev/ai/global-constraints.md` “Merge-back baseline”.
 
 ## Start here
 

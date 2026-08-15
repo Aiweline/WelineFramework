@@ -30,8 +30,13 @@ class FrontendController extends PcController
         if (!isset($this->session) || \Weline\Framework\Runtime\Runtime::isPersistent()) {
             $this->session = SessionFactory::getInstance()->createFrontendSession();
         }
-        
+
+        $this->getEventManager()->dispatch('Weline_Framework_FrontendController::init_before', $this);
         parent::__init();
+        $this->getEventManager()->dispatch('Weline_Framework_FrontendController::init_after', $this);
+        // A lifecycle observer may restore a remembered identity. Re-resolve the
+        // request-scoped wrapper so the controller always reads that latest state.
+        $this->session = SessionFactory::getInstance()->createFrontendSession();
     }
 
     /**

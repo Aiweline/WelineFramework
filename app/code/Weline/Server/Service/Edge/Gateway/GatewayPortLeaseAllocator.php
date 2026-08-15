@@ -2615,6 +2615,15 @@ final class GatewayPortLeaseAllocator
             : '';
         $workers = $lease['workers'] ?? null;
         $schemaVersion = $lease['schema_version'] ?? null;
+        // Schema 3/4 predate stable 32-hex launch identities. They are read
+        // only to reserve their numeric port or collect them; every serving,
+        // transfer and mutation authority below still requires schema 6.
+        $readableLaunchIdPattern = \is_int($schemaVersion) && $schemaVersion < 5
+            ? '/\A[a-z0-9_.:@-]{1,191}\z/D'
+            : '/\A[a-f0-9]{32}\z/D';
+        $readableInstancePattern = \is_int($schemaVersion) && $schemaVersion < 5
+            ? '/\A[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\z/D'
+            : '/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D';
         $bindHost = (string)($lease['bind_host'] ?? '127.0.0.1');
         $masterProcessName = \trim((string)($lease['master_process_name'] ?? ''));
         $rawMasterProcessBirth = $lease['master_process_birth'] ?? null;
@@ -2647,7 +2656,7 @@ final class GatewayPortLeaseAllocator
             ) !== 1
             || !\is_string($rawProjectUuid)
             || !\hash_equals($rawProjectUuid, $projectUuid)
-            || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instance) !== 1
+            || \preg_match($readableInstancePattern, $instance) !== 1
             || !\is_int($port)
             || $port < 1
             || $port > 65535
@@ -2663,7 +2672,8 @@ final class GatewayPortLeaseAllocator
             || $workerPid < 0
             || !\is_string($rawLaunchId)
             || !\hash_equals($rawLaunchId, $launchId)
-            || ($launchId !== '' && \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1)
+            || ($launchId !== ''
+                && \preg_match($readableLaunchIdPattern, $launchId) !== 1)
             || !\is_array($workers)
             || !\array_is_list($workers)
             || \count($workers) > self::MAX_WORKERS_PER_LEASE
@@ -2745,7 +2755,7 @@ final class GatewayPortLeaseAllocator
                     \strtolower(\trim($rawWorkerLaunchId)),
                 )
                 || \preg_match(
-                    '/\A[a-f0-9]{32}\z/D',
+                    $readableLaunchIdPattern,
                     $rawWorkerLaunchId,
                 ) !== 1
                 || ($schemaVersion >= 5

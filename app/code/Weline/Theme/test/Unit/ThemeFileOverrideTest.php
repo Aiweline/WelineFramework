@@ -63,6 +63,37 @@ class ThemeFileOverrideTest extends TestCore
         $this->assertSame($expectedPath, $theme->getPath());
     }
 
+    public function testGlobalRuntimeAssetsCannotBeOverriddenByADesignTheme(): void
+    {
+        foreach ([
+            APP_CODE_PATH . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'assets' . DS . 'css' . DS . 'theme.css',
+            APP_CODE_PATH . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'assets' . DS . 'js' . DS . 'theme.js',
+            APP_CODE_PATH . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'backend' . DS . 'assets' . DS . 'css' . DS . 'theme.css',
+            APP_CODE_PATH . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'backend' . DS . 'assets' . DS . 'js' . DS . 'theme.js',
+        ] as $coreAsset) {
+            $this->assertSame($coreAsset, $this->themePathResolver->resolveThemeFile($coreAsset, new WelineTheme()));
+        }
+    }
+
+    public function testCoreRuntimeReservationOnlyMatchesTheWelineThemeModule(): void
+    {
+        $reflection = new \ReflectionClass(\Weline\Theme\Helper\ThemePathResolver::class);
+        $resolver = $reflection->newInstanceWithoutConstructor();
+        $method = $reflection->getMethod('isCoreRuntimeAsset');
+        $method->setAccessible(true);
+        $base = dirname((string)$reflection->getFileName(), 2);
+
+        foreach ([
+            'frontend/assets/css/theme.css',
+            'frontend/assets/js/theme.js',
+            'backend/assets/css/theme.css',
+            'backend/assets/js/theme.js',
+        ] as $relativePath) {
+            self::assertTrue((bool)$method->invoke($resolver, $base . DS . 'view' . DS . 'theme' . DS . str_replace('/', DS, $relativePath)));
+            self::assertFalse((bool)$method->invoke($resolver, dirname($base) . DS . 'Other' . DS . 'Module' . DS . 'view' . DS . 'theme' . DS . str_replace('/', DS, $relativePath)));
+        }
+    }
+
     public function testJsModuleFileOverrideMechanism(): void
     {
         $activeTheme = $this->themeModel->getActiveTheme();

@@ -14,9 +14,22 @@ class WelineMedia extends FileManager
     {
         $params = $this->getParams();
         if ($this->request->isBackend()) {
-            $connector = $this->request->getUrlBuilder()->getBackendUrl('media/backend/manager/iframe', $params, true);
+            // Relative path keeps the picker iframe on the parent page origin.
+            // Absolute getBackendUrl() can flip to https while the workbench stays on
+            // http (or the reverse), which breaks session cookies / postMessage and
+            // surfaces as a blank modal or login page inside the iframe.
+            // Do not merge the parent workbench query (public_id, preview_page_type, …)
+            // into the iframe connector — those params confuse MediaManager routing.
+            $connector = $this->request->getUrlBuilder()->getBackendUrlPath(
+                'media/backend/manager/iframe',
+                $params,
+                false
+            );
         } else {
-            $connector = $this->request->getUrlBuilder()->getUrl('media/frontend/manager/iframe', $params, true);
+            $full = $this->request->getUrlBuilder()->getUrl('media/frontend/manager/iframe', $params, true);
+            $pathPart = \parse_url($full, PHP_URL_PATH);
+            $query = \parse_url($full, PHP_URL_QUERY);
+            $connector = ($pathPart ?? '') . ($query !== null && $query !== '' ? '?' . $query : '');
         }
         $this->assign('connector', $connector);
         return parent::render();

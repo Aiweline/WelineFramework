@@ -19,6 +19,8 @@ use PDOException;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Dialect\SqliteIdentifierFormatter;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\Compiler\Dialect\SqliteDialect;
 use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Connection\PdoConnection;
@@ -39,7 +41,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 
-final class Connector extends Query implements ConnectorInterface
+final class Connector extends Query implements ConnectorInterface, PhysicalTableMetadataInterface
 {
     use CreatesTableFromSchemaTrait;
 
@@ -109,12 +111,17 @@ final class Connector extends Query implements ConnectorInterface
         }
 
         $db_type = $this->configProvider->getDbType();
-        if (!in_array($db_type, PDO::getAvailableDrivers(), true)) {
-            $availableDrivers = implode(',', PDO::getAvailableDrivers());
+        $availableDrivers = PDO::getAvailableDrivers();
+        if (!in_array($db_type, $availableDrivers, true)) {
             $installHint = PHP_OS_FAMILY === 'Windows'
-                ? ' Windows: enable php_pdo_sqlite.dll and php_sqlite3.dll in php.ini.'
-                : ' Linux: install/enable the pdo_sqlite and sqlite3 PHP extensions, then restart PHP.';
-            throw new LinkException(__('SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}', [$db_type, $availableDrivers, $installHint]));
+                ? 'Windows: enable php_pdo_sqlite.dll and php_sqlite3.dll in php.ini.'
+                : 'Linux: install/enable the pdo_sqlite and sqlite3 PHP extensions, then restart PHP.';
+            throw new LinkException(sprintf(
+                'SQLite driver is not available: %s. Available drivers: %s. %s',
+                $db_type,
+                implode(',', $availableDrivers),
+                $installHint,
+            ));
         }
 
         $bootstrapBudget = null;
@@ -528,6 +535,17 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getCreateTableSql(string $table_name): string
     {
         $table_name = $this->resolveSqliteTable($table_name);
+        return $this->getPhysicalCreateTableSqlByName($table_name);
+    }
+
+    public function getPhysicalCreateTableSql(PhysicalTableIdentity $identity): string
+    {
+        $this->assertMainPhysicalNamespace($identity);
+        return $this->getPhysicalCreateTableSqlByName($identity->table());
+    }
+
+    private function getPhysicalCreateTableSqlByName(string $table_name): string
+    {
         // 鑾峰彇琛ㄧ殑鍏冩暟鎹?
         $tableMeta = $this->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='$table_name'")->fetch();
 
@@ -571,6 +589,27 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     {
         $quoted = $this->quoteTable($this->resolveSqliteTable($table));
         $this->query("DROP TABLE IF EXISTS {$quoted}")->fetch();
+    }
+
+    public function quotePhysicalTable(PhysicalTableIdentity $identity): string
+    {
+        $this->assertMainPhysicalNamespace($identity);
+        return $this->quoteIdentifier($identity->namespace()) . '.' . $this->quoteIdentifier($identity->table());
+    }
+
+    public function physicalTableExists(PhysicalTableIdentity $identity): bool
+    {
+        $this->assertMainPhysicalNamespace($identity);
+        $statement = $this->getWrappedConnection()->prepare(
+            "SELECT EXISTS (SELECT 1 FROM main.sqlite_master WHERE type = 'table' AND name = :table)",
+        );
+        $statement->execute([':table' => $identity->table()]);
+        return (bool)$statement->fetchColumn();
+    }
+
+    public function dropPhysicalTableIfExists(PhysicalTableIdentity $identity): void
+    {
+        $this->query('DROP TABLE IF EXISTS ' . $this->quotePhysicalTable($identity))->fetch();
     }
 
     public function tableExist(string $table_name): bool
@@ -660,6 +699,17 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getTableColumns(string $table): array
     {
         $table = $this->resolveSqliteTable($table);
+        return $this->getPhysicalTableColumnsByName($table);
+    }
+
+    public function getPhysicalTableColumns(PhysicalTableIdentity $identity): array
+    {
+        $this->assertMainPhysicalNamespace($identity);
+        return $this->getPhysicalTableColumnsByName($identity->table());
+    }
+
+    private function getPhysicalTableColumnsByName(string $table): array
+    {
         $rows = $this->query("PRAGMA table_info(" . $this->getLink()->quote($table) . ")")->fetchArray();
         if (!is_array($rows)) {
             return [];
@@ -720,6 +770,13 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         return $list;
     }
 
+    private function assertMainPhysicalNamespace(PhysicalTableIdentity $identity): void
+    {
+        if (strcasecmp($identity->namespace(), 'main') !== 0) {
+            throw new \InvalidArgumentException('SQLite physical table namespace must be main');
+        }
+    }
+
     /** @return array{type:string,length:int|string|null} */
     private function normalizeSqliteColumnType(string $rawType): array
     {
@@ -762,7 +819,14 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getTableIndexes(string $table): array
     {
         $table = $this->resolveSqliteTable($table);
-        $canonicalPrefix = Standar::getIndexName($this->formatTableName($table), '');
+        return $this->getPhysicalTableIndexesByName($table);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function getPhysicalTableIndexesByName(string $table): array
+    {
+        $table = $this->exactSqliteTable($table);
+        $canonicalPrefix = Standar::getIndexName($table, '');
         $indexList = $this->query("PRAGMA index_list(" . $this->getLink()->quote($table) . ")")->fetchArray();
         if (!is_array($indexList)) {
             return [];
@@ -956,8 +1020,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     {
         $d = $this->getDialect();
         $t = $d->quoteTable($table);
+        $physicalTable = $this->exactSqliteTable($table);
         $logicalName = (string)($idx['name'] ?? '');
-        $physicalName = Standar::getIndexName($this->formatTableName($table), $logicalName);
+        $physicalName = Standar::getIndexName($physicalTable, $logicalName);
         $name = $d->quoteIdentifier($physicalName);
         $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $idx['columns'] ?? []);
         $colList = implode(',', $cols);
@@ -972,8 +1037,8 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function buildDropIndexSql(string $table, string $indexName): string
     {
         if (str_starts_with(strtolower($indexName), IndexDefinitionContract::SQLITE_CONSTRAINT_INDEX_PREFIX)) {
-            $physicalTable = $this->resolveSqliteTable($table);
-            $canonical = Standar::getIndexName($this->formatTableName($physicalTable), $indexName);
+            $physicalTable = $this->exactSqliteTable($table);
+            $canonical = Standar::getIndexName($physicalTable, $indexName);
             $physicalIndexes = $this->query(
                 "PRAGMA index_list(" . $this->getLink()->quote($physicalTable) . ")"
             )->fetchArray();
@@ -984,7 +1049,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
                     return 'DROP INDEX IF EXISTS ' . $this->getDialect()->quoteIdentifier($physicalName);
                 }
             }
-            foreach ($this->getTableIndexes($table) as $index) {
+            foreach ($this->getPhysicalTableIndexesByName($physicalTable) as $index) {
                 if (strcasecmp((string)($index['name'] ?? ''), $indexName) === 0) {
                     return $this->sqliteBuildDropUniqueConstraintSql(
                         $table,
@@ -994,8 +1059,8 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             }
             return '';
         }
-        $physicalTable = $this->resolveSqliteTable($table);
-        $canonical = Standar::getIndexName($this->formatTableName($physicalTable), $indexName);
+        $physicalTable = $this->exactSqliteTable($table);
+        $canonical = Standar::getIndexName($physicalTable, $indexName);
         $statement = $this->getWrappedConnection()->prepare(
             "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=:table AND name IN (:raw, :canonical)"
         );
@@ -1062,7 +1127,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
         // 旧 SQLite 表可能没有保存约束名，DbSchemaReader 会以 fk_<id> 表示。
         if (!$removed && preg_match('/^fk_(\d+)$/', $fkName, $matches) === 1) {
-            $foreignKeys = $this->getTableForeignKeys($table);
+            $foreignKeys = $this->getPhysicalTableForeignKeysByName($this->exactSqliteTable($table));
             $target = null;
             foreach ($foreignKeys as $foreignKey) {
                 if (($foreignKey['name'] ?? '') === $fkName) {
@@ -1086,7 +1151,8 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @return array{0:list<string>,1:string} */
     private function sqliteTableDefinitions(string $table): array
     {
-        $createSql = $this->getCreateTableSql(self::processName($table));
+        $physicalTable = $this->exactSqliteTable($table);
+        $createSql = $this->getPhysicalCreateTableSqlByName($physicalTable);
         if (str_contains($createSql, self::DDL_STATEMENT_SEPARATOR)) {
             $createSql = explode(self::DDL_STATEMENT_SEPARATOR, $createSql, 2)[0];
         }
@@ -1313,7 +1379,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @param list<string> $definitions */
     private function sqliteBuildRecreateTableSql(string $table, array $definitions, string $suffix): string
     {
-        $rawTable = $this->resolveSqliteTable($table);
+        $rawTable = $this->exactSqliteTable($table);
         $quotedTable = $this->quoteIdentifier($rawTable);
         $temporary = $rawTable . '__weline_rebuild_' . bin2hex(random_bytes(6));
         $quotedTemporary = $this->quoteIdentifier($temporary);
@@ -1325,7 +1391,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             }
         }
         $columns = [];
-        foreach ($this->getTableColumns($rawTable) as $column) {
+        foreach ($this->getPhysicalTableColumnsByName($rawTable) as $column) {
             $name = trim((string)($column['name'] ?? $column['Field'] ?? ''));
             if ($name !== '' && isset($definedColumns[strtolower($name)])) {
                 $columns[] = $name;
@@ -1520,6 +1586,13 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getTableForeignKeys(string $table): array
     {
         $table = $this->resolveSqliteTable($table);
+        return $this->getPhysicalTableForeignKeysByName($table);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function getPhysicalTableForeignKeysByName(string $table): array
+    {
+        $table = $this->exactSqliteTable($table);
         $rows = $this->query("PRAGMA foreign_key_list(" . $this->getLink()->quote($table) . ")")->fetchArray();
         if (!is_array($rows)) {
             return [];
@@ -1605,5 +1678,19 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             return trim((string)end($parts));
         }
         return trim($formatted);
+    }
+
+    private function exactSqliteTable(string $table): string
+    {
+        $table = self::processName(trim($table));
+        if (str_contains($table, '.')) {
+            $parts = explode('.', $table);
+            $table = trim((string)end($parts));
+        }
+        $table = trim($table, "`\"[] ");
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $table) !== 1) {
+            throw new \InvalidArgumentException('invalid SQLite exact physical table');
+        }
+        return $table;
     }
 }

@@ -2,6 +2,16 @@
 在用户无权限访问时，执行重定向操作前触发。允许其他模块在重定向前执行自定义操作，如记录日志、发送通知等。,"Triggered before performing a redirect operation when a user does not have permission to access. Allows other modules to execute custom operations before the redirect, such as logging, sending notifications, etc."
 角色检查,"Role check"
 在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。,"Triggered when checking user role permissions, allowing other modules to customize the role checking logic."
+"角色 ACL 条目加载后","角色 ACL 条目加载后"
+"角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。","角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。"
+"超管 ACL 旁路检查","超管 ACL 旁路检查"
+"role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。","role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。"
+角色权限保存前,角色权限保存前
+"角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。","角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。"
+角色列表过滤,角色列表过滤
+"角色列表/创建前触发；观察者可按 website_id 约束可管理角色集合。","角色列表/创建前触发；观察者可按 website_id 约束可管理角色集合。"
+"ACL 分配树行加载后","ACL 分配树行加载后"
+"权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。","权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。"
 所有标签,"All tags"
 搜索标签,"Search tags"
 id属性不能为空,"id attribute cannot be empty"
@@ -104,6 +114,7 @@ ACL标签管理,ACL标签管理
 删除成功！,"Deletion successful!"
 仅允许超管分配权限！,"Only admins are allowed to assign permissions!"
 角色ID不存在！,"Role ID does not exist!"
+权限分配被站级授权包拒绝,权限分配被站级授权包拒绝
 权限分配成功，权限缓存已清理。,"Permissions assigned successfully; permission cache cleared."
 权限分配失败！,"Permission assignment failed!"
 搜索成功,"Search Successful"
@@ -281,6 +292,8 @@ Acl角色添加,"Acl role addition"
 角色创建失败，请检查输入后重试,"Role creation failed. Please check your input and try again."
 权限分配成功！,"Permission assignment succeeded!"
 权限缓存清理成功！,"Permission cache cleared successfully!"
+权限分配成功，所有缓存已刷新！,"Permission assignment succeeded and all caches were refreshed!"
+权限已保存，但所有缓存刷新失败：%{1},"Permissions were saved, but refreshing all caches failed: %{1}"
 "标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。"
 元数据,元数据
 删元数据,删元数据
@@ -291,9 +304,3 @@ Acl角色添加,"Acl role addition"
 接口,API
 "对象 Scope 写入授权通过","Object Scope write authorization granted"
 "对象 Scope 授权拒绝","Object Scope authorization denied"
-"角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。","角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。"
-"超管 ACL 旁路检查","超管 ACL 旁路检查"
-角色权限保存前,角色权限保存前
-角色列表过滤,角色列表过滤
-"ACL 分配树行加载后","ACL 分配树行加载后"
-权限分配被站级授权包拒绝,权限分配被站级授权包拒绝

@@ -263,28 +263,36 @@ try {
     <w:hook>seo::head</w:hook>
     <style>
         :root {
-            --wf-bg: #f7f8fb;
-            --wf-surface: #ffffff;
-            --wf-surface-soft: #eef2f7;
-            --wf-text: #111827;
-            --wf-muted: #4b5563;
-            --wf-border: #d9e1ec;
-            --wf-blue: #2563eb;
-            --wf-red: #c71d23;
-            --wf-green: #14804a;
-            --wf-ink: #101828;
-            --wf-brand-bg: #101828;
-            --wf-brand-text: #ffffff;
-            --wf-primary-bg: #101828;
-            --wf-primary-bg-hover: #243044;
-            --wf-primary-text: #ffffff;
-            --wf-secondary-bg: #ffffff;
-            --wf-secondary-bg-hover: #eff6ff;
-            --wf-secondary-text: #101828;
-            --wf-secondary-text-hover: #1d4ed8;
-            --wf-code-bg: #111827;
-            --wf-code-text: #e5e7eb;
-            --wf-shadow: 0 18px 48px rgba(15, 23, 42, 0.10);
+            --wf-bg: var(--weline-theme-surface-canvas);
+            --wf-surface: var(--weline-theme-surface);
+            --wf-surface-soft: var(--weline-theme-surface-subtle);
+            --wf-text: var(--weline-theme-text);
+            --wf-muted: var(--weline-theme-text-secondary);
+            --wf-border: var(--weline-theme-border-color);
+            --wf-blue: var(--weline-theme-primary);
+            --wf-red: var(--weline-theme-danger);
+            --wf-green: var(--weline-theme-success);
+            --wf-ink: var(--weline-theme-text);
+            --wf-brand-bg: var(--weline-theme-primary);
+            --wf-brand-text: var(--weline-theme-on-primary);
+            --wf-primary-bg: var(--weline-theme-primary);
+            --wf-primary-bg-hover: var(--weline-theme-primary-hover);
+            --wf-primary-text: var(--weline-theme-on-primary);
+            --wf-secondary-bg: var(--weline-theme-surface);
+            --wf-secondary-bg-hover: var(--weline-theme-primary-subtle);
+            --wf-secondary-text: var(--weline-theme-text);
+            --wf-secondary-text-hover: var(--weline-theme-primary-text-emphasis);
+            --wf-code-bg: var(--weline-theme-surface-muted);
+            --wf-code-text: var(--weline-theme-text);
+            --wf-shadow: var(--weline-theme-shadow-lg);
+            --wf-shadow-hover: var(--weline-theme-shadow-md);
+            --wf-shadow-control: var(--weline-theme-shadow-sm);
+            --wf-focus-outline: var(--weline-theme-focus-outline);
+            --wf-primary-wash: var(--weline-theme-primary-subtle);
+            --wf-danger-wash: var(--weline-theme-danger-subtle);
+            --wf-success-wash: var(--weline-theme-success-subtle);
+            --wf-hover-border: var(--weline-theme-primary-border-subtle);
+            --wf-danger-border: var(--weline-theme-danger-border-subtle);
             --wf-radius: 8px;
             --wf-radius-sm: 6px;
         }
@@ -301,7 +309,7 @@ try {
             margin: 0;
             min-width: 320px;
             background:
-                linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0) 32rem),
+                linear-gradient(180deg, var(--wf-primary-wash), transparent 32rem),
                 var(--wf-bg);
             color: var(--wf-text);
             font-family: "IBM Plex Sans", "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
@@ -315,7 +323,7 @@ try {
 
         a:focus-visible,
         button:focus-visible {
-            outline: 3px solid rgba(37, 99, 235, 0.34);
+            outline: 3px solid var(--wf-focus-outline);
             outline-offset: 3px;
         }
 
@@ -392,7 +400,7 @@ try {
 
         .wf-nav__links > a:hover {
             color: var(--wf-blue);
-            background: rgba(37, 99, 235, 0.08);
+            background: var(--wf-primary-wash);
         }
 
         .wf-nav__lang {
@@ -422,7 +430,7 @@ try {
         .wf-nav__lang .weline-choice-switcher.weline-choice-open {
             border-color: var(--wf-blue);
             color: var(--wf-blue);
-            background: rgba(37, 99, 235, 0.08);
+            background: var(--wf-primary-wash);
         }
 
         .wf-nav__lang .action-line-1 {
@@ -439,7 +447,7 @@ try {
         .wf-btn {
             background: var(--wf-primary-bg);
             color: var(--wf-primary-text);
-            box-shadow: 0 10px 24px rgba(16, 24, 40, 0.18);
+            box-shadow: var(--wf-shadow-control);
         }
 
         .wf-btn:hover {
@@ -454,7 +462,7 @@ try {
         }
 
         .wf-btn--secondary:hover {
-            border-color: rgba(37, 99, 235, 0.42);
+            border-color: var(--wf-hover-border);
             background: var(--wf-secondary-bg-hover);
             color: var(--wf-secondary-text-hover);
         }
@@ -475,10 +483,10 @@ try {
             gap: 8px;
             margin: 0 0 18px;
             padding: 6px 10px;
-            border: 1px solid rgba(199, 29, 35, 0.22);
+            border: 1px solid var(--wf-danger-border);
             border-radius: 999px;
             color: var(--wf-red);
-            background: rgba(199, 29, 35, 0.06);
+            background: var(--wf-danger-wash);
             font-size: 0.88rem;
             font-weight: 800;
         }
@@ -523,7 +531,7 @@ try {
         .wf-status {
             border: 1px solid var(--wf-border);
             border-radius: var(--wf-radius);
-            background: rgba(255, 255, 255, 0.84);
+            background: var(--wf-surface);
             box-shadow: var(--wf-shadow);
             padding: 20px;
         }
@@ -540,7 +548,7 @@ try {
             overflow: hidden;
             border: 1px solid var(--wf-border);
             border-radius: var(--wf-radius-sm);
-            background: #ffffff;
+            background: var(--wf-surface);
         }
 
         .wf-status__figure img {
@@ -562,7 +570,7 @@ try {
             padding: 12px;
             border: 1px solid var(--wf-border);
             border-radius: var(--wf-radius-sm);
-            background: #ffffff;
+            background: var(--wf-surface);
         }
 
         .wf-status__label {
@@ -634,8 +642,8 @@ try {
         }
 
         .wf-link-card:hover {
-            border-color: rgba(37, 99, 235, 0.42);
-            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
+            border-color: var(--wf-hover-border);
+            box-shadow: var(--wf-shadow-hover);
             transform: translateY(-2px);
         }
 
@@ -747,7 +755,7 @@ try {
             align-items: center;
             gap: 18px;
             padding: 20px;
-            background: linear-gradient(135deg, rgba(20, 128, 74, 0.10), rgba(37, 99, 235, 0.08)), #ffffff;
+            background: linear-gradient(135deg, var(--wf-success-wash), var(--wf-primary-wash)), var(--wf-surface);
         }
 
         .wf-account__actions {
@@ -781,15 +789,15 @@ try {
             padding: 6px 12px 6px 6px;
             border: 1px solid var(--wf-border);
             border-radius: var(--wf-radius-sm);
-            background: #ffffff;
+            background: var(--wf-surface);
             color: var(--wf-ink);
             font-weight: 800;
             transition: border-color 180ms ease, box-shadow 180ms ease;
         }
 
         .wf-repo-link:hover {
-            border-color: rgba(37, 99, 235, 0.42);
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+            border-color: var(--wf-hover-border);
+            box-shadow: var(--wf-shadow-control);
         }
 
         .wf-repo-logo {
@@ -868,55 +876,6 @@ try {
             }
         }
 
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --wf-bg: #0f172a;
-                --wf-surface: #111827;
-                --wf-surface-soft: #1f2937;
-                --wf-text: #e5e7eb;
-                --wf-muted: #cbd5e1;
-                --wf-border: #334155;
-                --wf-blue: #60a5fa;
-                --wf-red: #f87171;
-                --wf-green: #34d399;
-                --wf-ink: #f8fafc;
-                --wf-brand-bg: #2563eb;
-                --wf-brand-text: #ffffff;
-                --wf-primary-bg: #2563eb;
-                --wf-primary-bg-hover: #1d4ed8;
-                --wf-primary-text: #ffffff;
-                --wf-secondary-bg: #1f2937;
-                --wf-secondary-bg-hover: #273244;
-                --wf-secondary-text: #e5e7eb;
-                --wf-secondary-text-hover: #ffffff;
-                --wf-code-bg: #020617;
-                --wf-code-text: #f8fafc;
-                --wf-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
-            }
-
-            body {
-                background:
-                    linear-gradient(180deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0) 30rem),
-                    var(--wf-bg);
-            }
-
-            .wf-status,
-            .wf-status__item,
-            .wf-link-card,
-            .wf-feature-card,
-            .wf-step,
-            .wf-repo-link {
-                background: var(--wf-surface);
-            }
-
-            .wf-account {
-                background: linear-gradient(135deg, rgba(20, 128, 74, 0.18), rgba(37, 99, 235, 0.16)), var(--wf-surface);
-            }
-
-            .wf-btn {
-                box-shadow: 0 14px 30px rgba(37, 99, 235, 0.24);
-            }
-        }
     </style>
 </head>
 <body class="seo-home">

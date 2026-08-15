@@ -63,6 +63,11 @@
 - 跨模块渲染 OffCanvas 必须使用 `Weline\Component\Api\OffCanvasRendererInterface`。
   `Service/OffCanvasRenderer` 是无状态薄适配器，内部仍以单个命名参数 `data` 创建原 Block，
   并严格执行 `__init()` 后 `render()`；调用模块不得引用 `Component\Block\OffCanvas`。
+- 通用 `form/search.phtml` 的 Enter 提交必须限定在当前搜索表单，并优先调用
+  `HTMLFormElement::requestSubmit()`；禁止对全局输入框调用 jQuery `.submit()`。GET 搜索组件
+  必须最终输出原生 `<form>`，并把 Block 的 action 值渲染到 `action` 属性，禁止把 `{{action}}`
+  原样输出到浏览器。使用方控制器必须读取该表单提交的 GET 关键词并执行真实服务端筛选，
+  不能只在前端改变输入框显示。
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
 - 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。

@@ -512,14 +512,25 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                 'extra' => [],
             ];
             
+            $windowStart = date('Y-m-d', strtotime('-28 days'));
+            $windowEnd = date('Y-m-d', strtotime('-1 day'));
+            $statsData['search_window'] = ['start' => $windowStart, 'end' => $windowEnd];
+            $statsData['search_queries'] = [];
+            $statsData['extra']['search_window'] = $statsData['search_window'];
+
             // 1. 获取搜索分析数据（最近 28 天）
-            $searchAnalyticsResult = $this->fetchSearchAnalytics($encodedSiteUrl, $accessToken, $proxyConfig);
+            $searchAnalyticsResult = $this->fetchSearchAnalytics($encodedSiteUrl, $accessToken, $proxyConfig, $windowStart, $windowEnd);
             if ($searchAnalyticsResult['success'] && !empty($searchAnalyticsResult['data'])) {
                 $analyticsData = $searchAnalyticsResult['data'];
                 $statsData['clicks'] = (int)($analyticsData['clicks'] ?? 0);
                 $statsData['impressions'] = (int)($analyticsData['impressions'] ?? 0);
                 $statsData['ctr'] = round(($analyticsData['ctr'] ?? 0) * 100, 2); // 转为百分比
                 $statsData['average_position'] = round($analyticsData['position'] ?? 0, 2);
+            }
+            $queryAnalyticsResult = $this->fetchSearchQueryAnalytics($encodedSiteUrl, $accessToken, $proxyConfig, $windowStart, $windowEnd);
+            if ($queryAnalyticsResult['success'] && !empty($queryAnalyticsResult['rows'])) {
+                $statsData['search_queries'] = $queryAnalyticsResult['rows'];
+                $statsData['extra']['search_queries'] = $queryAnalyticsResult['rows'];
             }
             
             // 2. 获取 Sitemap 信息
@@ -566,21 +577,98 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
     /**
      * 获取搜索分析数据
      */
-    protected function fetchSearchAnalytics(string $encodedSiteUrl, string $accessToken, array $proxyConfig): array
-    {
-        $url = sprintf(self::SEARCH_ANALYTICS_URL, $encodedSiteUrl);
-        
-        // 请求最近 28 天的汇总数据
-        $startDate = date('Y-m-d', strtotime('-28 days'));
-        $endDate = date('Y-m-d', strtotime('-1 day'));
-        
-        $requestBody = json_encode([
+    protected function fetchSearchAnalytics(
+        string $encodedSiteUrl,
+        string $accessToken,
+        array $proxyConfig,
+        ?string $startDate = null,
+        ?string $endDate = null,
+    ): array {
+        $startDate = $startDate ?: date('Y-m-d', strtotime('-28 days'));
+        $endDate = $endDate ?: date('Y-m-d', strtotime('-1 day'));
+        $payload = $this->requestSearchAnalytics($encodedSiteUrl, $accessToken, $proxyConfig, [
             'startDate' => $startDate,
             'endDate' => $endDate,
-            'dimensions' => [], // 空维度表示汇总数据
+            'dimensions' => [],
             'rowLimit' => 1,
         ]);
-        
+        if (!$payload['success']) {
+            return ['success' => false, 'data' => [], 'error' => $payload['error'] ?? ''];
+        }
+        $data = \is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        if (!empty($data['rows'][0]) && \is_array($data['rows'][0])) {
+            return ['success' => true, 'data' => $data['rows'][0]];
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'clicks' => 0,
+                'impressions' => 0,
+                'ctr' => 0,
+                'position' => 0,
+            ],
+        ];
+    }
+
+    /**
+     * Query-dimension GSC rows for site word-cloud heat.
+     *
+     * @return array{success:bool,rows:list<array<string,mixed>>,error?:string}
+     */
+    protected function fetchSearchQueryAnalytics(
+        string $encodedSiteUrl,
+        string $accessToken,
+        array $proxyConfig,
+        ?string $startDate = null,
+        ?string $endDate = null,
+        int $rowLimit = 250,
+    ): array {
+        $startDate = $startDate ?: date('Y-m-d', strtotime('-28 days'));
+        $endDate = $endDate ?: date('Y-m-d', strtotime('-1 day'));
+        $payload = $this->requestSearchAnalytics($encodedSiteUrl, $accessToken, $proxyConfig, [
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'dimensions' => ['query'],
+            'rowLimit' => \max(1, \min(1000, $rowLimit)),
+        ]);
+        if (!$payload['success']) {
+            return ['success' => false, 'rows' => [], 'error' => $payload['error'] ?? ''];
+        }
+        $rows = [];
+        $rawRows = \is_array($payload['data']['rows'] ?? null) ? $payload['data']['rows'] : [];
+        foreach ($rawRows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $query = \trim((string)($row['keys'][0] ?? $row['query'] ?? ''));
+            if ($query === '') {
+                continue;
+            }
+            $rows[] = [
+                'query' => $query,
+                'clicks' => \max(0, (int)($row['clicks'] ?? 0)),
+                'impressions' => \max(0, (int)($row['impressions'] ?? 0)),
+                'ctr' => (float)($row['ctr'] ?? 0),
+                'position' => (float)($row['position'] ?? 0),
+            ];
+        }
+
+        return ['success' => true, 'rows' => $rows];
+    }
+
+    /**
+     * @param array<string,mixed> $body
+     * @return array{success:bool,data?:array<string,mixed>,error?:string}
+     */
+    protected function requestSearchAnalytics(
+        string $encodedSiteUrl,
+        string $accessToken,
+        array $proxyConfig,
+        array $body,
+    ): array {
+        $url = sprintf(self::SEARCH_ANALYTICS_URL, $encodedSiteUrl);
+        $requestBody = json_encode($body);
         $ch = curl_init();
         $curlOptions = [
             CURLOPT_URL => $url,
@@ -595,41 +683,25 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
         ];
-        
         if (!empty($proxyConfig['proxy'])) {
             $curlOptions[CURLOPT_PROXY] = $proxyConfig['proxy'];
             if (($proxyConfig['proxy_type'] ?? 'http') === 'socks5') {
                 $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5_HOSTNAME;
             }
         }
-        
         curl_setopt_array($ch, $curlOptions);
-        
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
-        
         if ($error || $httpCode !== 200) {
-            return ['success' => false, 'data' => [], 'error' => $error ?: "HTTP $httpCode"];
+            return ['success' => false, 'error' => $error ?: "HTTP $httpCode"];
         }
-        
-        $data = json_decode($response, true);
-        
-        // 汇总数据在 rows[0] 中
-        if (!empty($data['rows'][0])) {
-            return ['success' => true, 'data' => $data['rows'][0]];
-        }
-        
-        // 如果没有行数据，但响应成功，返回默认值
+        $data = json_decode((string)$response, true);
+
         return [
             'success' => true,
-            'data' => [
-                'clicks' => 0,
-                'impressions' => 0,
-                'ctr' => 0,
-                'position' => 0,
-            ],
+            'data' => \is_array($data) ? $data : [],
         ];
     }
 

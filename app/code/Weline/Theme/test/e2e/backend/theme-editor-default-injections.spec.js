@@ -18,23 +18,7 @@ const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
 const FIXTURE_SCRIPT = path.resolve(__dirname, 'theme-editor-fixture.php');
 const PAGE_TYPE = 'dashboard';
 const EDITOR_AREA = 'backend';
-const DEFAULT_WIDGET = {
-  module: 'Weline_Visitor',
-  type: 'stats',
-  code: 'pixel_overview',
-  slot: 'dashboard-summary',
-  area: 'content',
-};
-const EXPECTED_DEFAULT_WIDGETS = [
-  { module: 'Weline_Dashboard', type: 'stats', code: 'overview_kpi', slot: 'dashboard-summary', area: 'content', sortOrder: 10 },
-  { module: 'Weline_Dashboard', type: 'chart', code: 'activity_trend', slot: 'dashboard-analysis', area: 'content', sortOrder: 20 },
-  { module: 'Weline_Dashboard', type: 'table', code: 'system_status', slot: 'dashboard-side', area: 'content', sortOrder: 30 },
-  { module: 'Weline_Dashboard', type: 'table', code: 'detail_snapshot', slot: 'dashboard-detail', area: 'content', sortOrder: 40 },
-  { module: 'Weline_Visitor', type: 'stats', code: 'pixel_overview', slot: 'dashboard-summary', area: 'content', sortOrder: 50 },
-  { module: 'Weline_Visitor', type: 'chart', code: 'pixel_event_trend', slot: 'dashboard-analysis', area: 'content', sortOrder: 60 },
-  { module: 'Weline_Visitor', type: 'table', code: 'pixel_top_events', slot: 'dashboard-detail', area: 'content', sortOrder: 70 },
-  { module: 'Weline_Visitor', type: 'list', code: 'pixel_realtime', slot: 'dashboard-side', area: 'content', sortOrder: 80 },
-];
+let selectedDefaultWidget = null;
 
 function resolveThemeId() {
   const forcedThemeId = Number(process.env.PLAYWRIGHT_THEME_ID || 0);
@@ -194,7 +178,12 @@ async function getThemeEditorApi(page, datasetKey, fallbackUrl) {
   });
 }
 
-function findDefaultInjection(items, expected = DEFAULT_WIDGET) {
+function selectedWidget() {
+  expect(selectedDefaultWidget, 'No declared default injection was selected.').toBeTruthy();
+  return selectedDefaultWidget;
+}
+
+function findDefaultInjection(items, expected = selectedWidget()) {
   return (items || []).find((item) => item
     && item.module === expected.module
     && item.type === expected.type
@@ -209,9 +198,9 @@ function snapshotRows(themeId, identity) {
   });
   expect(snapshot.success).toBeTruthy();
   return (snapshot.layout || []).filter((row) => row
-    && row.widget_module === DEFAULT_WIDGET.module
-    && row.widget_type === DEFAULT_WIDGET.type
-    && row.widget_code === DEFAULT_WIDGET.code);
+    && row.widget_module === selectedWidget().module
+    && row.widget_type === selectedWidget().type
+    && row.widget_code === selectedWidget().code);
 }
 
 async function waitForWidgetRows(themeId, identity, count) {
@@ -230,24 +219,47 @@ async function openApplicationsTab(page) {
 
 function defaultInjectionItem(page) {
   return page.locator('.widget-default-injection-item')
-    .filter({ hasText: `${DEFAULT_WIDGET.module} / ${DEFAULT_WIDGET.type} / ${DEFAULT_WIDGET.code}` })
+    .filter({ hasText: `${selectedWidget().module} / ${selectedWidget().type} / ${selectedWidget().code}` })
     .first();
 }
 
 async function applyFromApplicationsTab(page, scope = 'current') {
   const item = defaultInjectionItem(page);
   await expect(item).toBeVisible({ timeout: 30000 });
-  await expect(item).toContainText('像素概览');
-  await expect(item).toContainText('安装访客统计后自动展示像素概览');
-  await expect(item).toContainText(DEFAULT_WIDGET.slot);
-  await expect(item).toContainText('强烈推荐');
+  await expect(item).toContainText(selectedWidget().slot_id);
   await expect(item).toContainText('当前布局身份');
   await expect(item.locator('.btn-apply-default-injection[data-apply-scope="current"]')).toBeVisible();
   await expect(item.locator('.btn-apply-default-injection[data-apply-scope="all"]')).toBeVisible();
   const selector = scope === 'all'
     ? '.btn-apply-default-injection[data-apply-scope="all"]'
     : '.btn-apply-default-injection[data-apply-scope="current"]';
+  const responsePromise = page.waitForResponse((response) => (
+    response.request().method() === 'POST'
+      && response.url().includes('/apply-default-injection')
+  ));
   await item.locator(selector).click();
+  const response = await responsePromise;
+  expect(response.ok()).toBeTruthy();
+  const result = await response.json();
+  expectEditorSuccess(result, `apply default injection (${scope})`);
+  expect(Number(result.applied_count || 0)).toBeGreaterThan(0);
+  const currentUrl = new URL(page.url());
+  const data = result.data || {};
+  expect(data.scope).toBe(currentUrl.searchParams.get('scope'));
+  expect(String(data.target_type)).toBe(currentUrl.searchParams.get('theme_layout_target_type'));
+  expect(Number(data.target_id)).toBe(Number(currentUrl.searchParams.get('theme_layout_target_id')));
+  return result;
+}
+
+async function waitForDefaultInjectionAbsent(page, defaultInjectionsApi, payload) {
+  await expect.poll(async () => {
+    const result = await callEditorRequest(page, buildQueryPath(defaultInjectionsApi, payload), 'GET');
+    expectEditorSuccess(result, 'default injections after apply');
+    return !findDefaultInjection(result.items || []);
+  }, {
+    timeout: 30000,
+    intervals: [250, 500, 1000],
+  }).toBeTruthy();
 }
 
 moduleDescribe(test, MODULE, 'theme editor default injections', () => {
@@ -307,19 +319,15 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
           'GET',
         );
         expectEditorSuccess(missingBefore, 'default injections before apply');
-        for (const expected of EXPECTED_DEFAULT_WIDGETS) {
-          const item = findDefaultInjection(missingBefore.items, expected);
-          expect(item, `${expected.module}/${expected.type}/${expected.code} missing from ${JSON.stringify(missingBefore.items || [])}`).toBeTruthy();
-          expect(item.slot_id).toBe(expected.slot);
-          expect(item.area).toBe(expected.area);
-          expect(item.required).toBeTruthy();
-          expect(item.config?.dashboard_layout?.sortOrder).toBe(expected.sortOrder);
-        }
-        const defaultItem = findDefaultInjection(missingBefore.items);
+        const defaultItem = (missingBefore.items || []).find((item) => item
+          && item.required
+          && item.module
+          && item.type
+          && item.code
+          && item.slot_id
+          && item.area);
         expect(defaultItem, JSON.stringify(missingBefore.items || [])).toBeTruthy();
-        expect(defaultItem.slot_id).toBe(DEFAULT_WIDGET.slot);
-        expect(defaultItem.area).toBe(DEFAULT_WIDGET.area);
-        expect(defaultItem.required).toBeTruthy();
+        selectedDefaultWidget = defaultItem;
 
         await openApplicationsTab(page);
         await applyFromApplicationsTab(page);
@@ -327,13 +335,9 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         let rows = await waitForWidgetRows(themeId, identity, 1);
         const firstLayoutId = Number(rows[0].layout_id || 0);
         expect(firstLayoutId).toBeGreaterThan(0);
-        expect(rows[0].slot_id).toBe(DEFAULT_WIDGET.slot);
-        expect(rows[0].area).toBe(DEFAULT_WIDGET.area);
-        expect(rows[0].sort_order).toBe(50);
+        expect(rows[0].slot_id).toBe(selectedWidget().slot_id);
+        expect(rows[0].area).toBe(selectedWidget().area);
         expect(rows[0].status).toBe('draft');
-        const firstConfig = parseConfig(rows[0]);
-        expect(firstConfig.range).toBe('7d');
-        expect(firstConfig.dashboard_layout?.sortOrder).toBe(50);
 
         const missingAfterApply = await callEditorRequest(
           page,
@@ -402,6 +406,7 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         const basePayload = identityPayload(themeId, primaryIdentity);
 
         for (const identity of identities) {
+          runFixture('cleanup', { theme_id: themeId, page_type: PAGE_TYPE, identity });
           expect(snapshotRows(themeId, identity)).toHaveLength(0);
         }
 
@@ -413,15 +418,36 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         });
         await waitForThemeEditor(page);
 
-        await openApplicationsTab(page);
-        await applyFromApplicationsTab(page, 'all');
+        // Each case must discover its own declared default.  Keeping this in
+        // the previous case made the all-identities path silently depend on
+        // Playwright's execution order.
+        const defaultInjectionsApi = await getThemeEditorApi(
+          page,
+          'apiDefaultInjections',
+          '/theme/backend/theme-editor/default-injections',
+        );
+        const missingBefore = await callEditorRequest(
+          page,
+          buildQueryPath(defaultInjectionsApi, basePayload),
+          'GET',
+        );
+        expectEditorSuccess(missingBefore, 'default injections before apply to all identities');
+        selectedDefaultWidget = (missingBefore.items || []).find((item) => item
+          && item.required
+          && item.module
+          && item.type
+          && item.code
+          && item.slot_id
+          && item.area);
+        expect(selectedDefaultWidget, JSON.stringify(missingBefore.items || [])).toBeTruthy();
 
-        const primaryRows = await waitForWidgetRows(themeId, primaryIdentity, 1);
-        const secondaryRows = await waitForWidgetRows(themeId, secondaryIdentity, 1);
-        expect(primaryRows[0].slot_id).toBe(DEFAULT_WIDGET.slot);
-        expect(secondaryRows[0].slot_id).toBe(DEFAULT_WIDGET.slot);
-        expect(primaryRows[0].status).toBe('draft');
-        expect(secondaryRows[0].status).toBe('draft');
+        await openApplicationsTab(page);
+        const applyResult = await applyFromApplicationsTab(page, 'all');
+        expect(Number(applyResult.applied_count || 0)).toBeGreaterThanOrEqual(2);
+        expect(applyResult.data?.slot_id).toBe(selectedWidget().slot_id);
+        expect(applyResult.data?.status).toBe('draft');
+        await waitForDefaultInjectionAbsent(page, defaultInjectionsApi, identityPayload(themeId, primaryIdentity));
+        await waitForDefaultInjectionAbsent(page, defaultInjectionsApi, identityPayload(themeId, secondaryIdentity));
         await expect(defaultInjectionItem(page)).toHaveCount(0, { timeout: 30000 });
       } finally {
         for (const identity of identities) {

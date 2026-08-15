@@ -157,6 +157,19 @@ final class GatewayProjectStateFilesystemLockTest extends TestCase
         self::assertFileDoesNotExist($this->lockFile);
     }
 
+    public function testWindowsAtomicCapabilityDeclaresWideCharacterTypeInItsFfiScope(): void
+    {
+        $sourceFile = (new \ReflectionClass(GatewayProjectStateFilesystem::class))->getFileName();
+        self::assertIsString($sourceFile);
+
+        $source = \file_get_contents($sourceFile);
+        self::assertIsString($source);
+        self::assertStringContainsString(
+            "'typedef unsigned long DWORD; typedef unsigned short WCHAR; DWORD GetLastError(void);'",
+            $source,
+        );
+    }
+
     public function testConcurrentTrustedOpenersKeepOneStableLockIdentity(): void
     {
         if (PHP_OS_FAMILY === 'Windows'

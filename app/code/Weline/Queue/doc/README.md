@@ -4,6 +4,10 @@
 
 Queue 的后台运行控制依赖 Backend 用户数据与 Cron 进程契约，二者均为必需依赖；跨模块业务仍只通过下述 Queue 公共契约接入。
 
+后台菜单的信息架构固定归属“系统管理 → 系统服务 → 消息队列”。队列运行、消费者、重试与
+Inbox/Outbox 都是系统运行能力，禁止把 `Weline_Queue::message_service` 挂到业务运营或
+“运营工具”父级；菜单位置变更后通过路由同步重新采集 ACL/Menu 关系。
+
 Queue 内部也不能越界调用这两个模块的非公共实现类：
 
 - 后台表单暂存数据使用 `Weline\Backend\Api\UserData\BackendCurrentUserDataInterface`，只传递当前登录用户下指定 scope 的数组。

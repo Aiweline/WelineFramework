@@ -79,7 +79,7 @@ class SetupUpgradeGrantSuperAdmin implements ObserverInterface
                 if (defined('DEV') && DEV) {
                     $this->printing->note(__('超级管理员已拥有全部 ACL 权限，无需追加。'));
                 }
-                w_cache('acl')->clear();
+                \Weline\Acl\Service\AclCacheInvalidator::flushAfterRoleAccessChange(self::SUPER_ADMIN_ROLE_ID);
                 return;
             }
 
@@ -94,7 +94,7 @@ class SetupUpgradeGrantSuperAdmin implements ObserverInterface
                 $this->roleAccess->rollBack();
                 throw $e;
             }
-            w_cache('acl')->clear();
+            \Weline\Acl\Service\AclCacheInvalidator::flushAfterRoleAccessChange(self::SUPER_ADMIN_ROLE_ID);
             $this->printing->success(__('已为超级管理员（role_id=1）授予 %{1} 条新权限。', [count($toInsert)]));
         } catch (\Throwable $e) {
             if (defined('DEV') && DEV) {

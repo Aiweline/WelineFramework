@@ -3823,7 +3823,14 @@ HTML : '';
 
     private function injectBackendStructuralSlots(string $html): string
     {
-        if ($html === '' || (stripos($html, 'data-theme="backend"') === false && stripos($html, "data-theme='backend'") === false)) {
+        if ($html === ''
+            || (stripos($html, 'data-theme-area="backend"') === false
+                && stripos($html, "data-theme-area='backend'") === false
+                // Old custom layouts remain discoverable during the transition,
+                // but no canonical Weline output uses data-theme as an area flag.
+                && stripos($html, 'data-theme="backend"') === false
+                && stripos($html, "data-theme='backend'") === false)
+        ) {
             return $html;
         }
         if ($this->isDashboardPreviewLayout((string)$this->request->getParam('layout_type', ''))
@@ -3888,36 +3895,53 @@ HTML : '';
             return '';
         }
 
+        $themeAssetBaseUrl = defined('DEV') && DEV
+            ? '/Weline/Theme/view/theme/'
+            : '/static/Weline/Theme/theme/';
+        $themeAssetVersion = '20260810-color-mode';
+        $themePreference = $this->resolveBackendPreviewThemePreference();
+        $resolvedThemeMode = $themePreference === 'dark' ? 'dark' : 'light';
+
         return <<<HTML
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="backend">
+<html lang="zh-CN" data-theme="{$resolvedThemeMode}" data-bs-theme="{$resolvedThemeMode}" data-theme-preference="{$themePreference}" data-theme-mode="{$resolvedThemeMode}" data-layout-mode="{$resolvedThemeMode}" data-theme-area="backend">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Preview</title>
+    <script>(function(root){var preference=root.getAttribute('data-theme-preference')||'system';var media=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var mode=preference==='dark'||(preference==='system'&&media&&media.matches)?'dark':'light';root.setAttribute('data-theme',mode);root.setAttribute('data-bs-theme',mode);root.setAttribute('data-theme-mode',mode);root.setAttribute('data-layout-mode',mode);root.style.colorScheme=mode;})(document.documentElement);</script>
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_colors.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_typography.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_spacing.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_borders.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_shadows.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_light.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_dark.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/assets/css/theme.css?v={$themeAssetVersion}">
+    <script defer src="{$themeAssetBaseUrl}backend/assets/js/theme.js?v={$themeAssetVersion}"></script>
     <style>
-        body { margin: 0; background: #f5f7fb; color: #1f2937; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        body { margin: 0; background: var(--backend-theme-surface-canvas); color: var(--backend-theme-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
         .dashboard-layout-wrapper { padding: 18px; box-sizing: border-box; min-height: 100vh; }
         .w-dashboard-layout-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; align-items: start; }
-        .w-dashboard-region { min-width: 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; padding: 14px; }
+        .w-dashboard-region { min-width: 0; border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); background: var(--backend-theme-surface); padding: 14px; }
         .w-dashboard-region-summary { grid-column: 1 / span 4; }
         .w-dashboard-region-analysis { grid-column: 5 / span 5; }
         .w-dashboard-region-side { grid-column: 10 / span 3; grid-row: 1 / span 2; }
         .w-dashboard-region-detail { grid-column: 1 / span 9; }
         .w-dashboard-region-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
         .w-dashboard-region-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
-        .w-dashboard-region-head p, .w-dashboard-region-head span { margin: 3px 0 0; color: #64748b; font-size: 12px; line-height: 1.35; }
+        .w-dashboard-region-head p, .w-dashboard-region-head span { margin: 3px 0 0; color: var(--backend-theme-text-secondary); font-size: 12px; line-height: 1.35; }
         .w-dashboard-slot-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
         .w-dashboard-slot-summary > .w-dashboard-region-head, .w-dashboard-slot-summary > .widget-wrapper[data-widget-code="overview_kpi"] { grid-column: 1 / -1; }
         .w-dashboard-slot-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
         .widget-wrapper { min-width: 0; }
-        .dashboard-widget { height: 100%; min-width: 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; padding: 14px; box-sizing: border-box; overflow: hidden; }
+        .dashboard-widget { height: 100%; min-width: 0; border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); background: var(--backend-theme-surface); padding: 14px; box-sizing: border-box; overflow: hidden; }
         .dashboard-widget header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
         .dashboard-widget h3 { margin: 0; font-size: 16px; font-weight: 700; }
-        .dashboard-widget header span, .dashboard-widget small { color: #64748b; font-size: 12px; white-space: nowrap; }
-        .w-dashboard-empty { min-height: 96px; border: 1px dashed #cbd5e1; border-radius: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; color: #64748b; text-align: center; }
+        .dashboard-widget header span, .dashboard-widget small { color: var(--backend-theme-text-secondary); font-size: 12px; white-space: nowrap; }
+        .w-dashboard-empty { min-height: 96px; border: var(--backend-theme-border-width) dashed var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; color: var(--backend-theme-text-secondary); text-align: center; }
         .dashboard-widget-detail-snapshot table { width: 100%; border-collapse: collapse; }
-        .dashboard-widget-detail-snapshot th, .dashboard-widget-detail-snapshot td { border-bottom: 1px solid #e5e7eb; padding: 10px 0; text-align: left; font-size: 13px; line-height: 1.35; vertical-align: top; }
+        .dashboard-widget-detail-snapshot th, .dashboard-widget-detail-snapshot td { border-bottom: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); padding: 10px 0; text-align: left; font-size: 13px; line-height: 1.35; vertical-align: top; }
         @media (max-width: 980px) {
             .w-dashboard-layout-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
             .w-dashboard-region-summary, .w-dashboard-region-analysis, .w-dashboard-region-detail { grid-column: 1 / span 5; }
@@ -3934,6 +3958,22 @@ HTML : '';
 </body>
 </html>
 HTML;
+    }
+
+    /** Resolve the same persisted three-state preference used by backend shells. */
+    private function resolveBackendPreviewThemePreference(): string
+    {
+        try {
+            $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
+            $preference = $themeConfig->getOriginThemeConfig('theme-mode-switch');
+            if (is_string($preference) && in_array($preference, ['system', 'light', 'dark'], true)) {
+                return $preference;
+            }
+        } catch (\Throwable) {
+            // The editor shell retains the safe system fallback during bootstrap failures.
+        }
+
+        return 'system';
     }
 
     private function injectSlotAttributesIntoFirstTag(
@@ -5277,13 +5317,30 @@ HTML;
      */
     private function renderLayoutNotFoundError(string $layoutType, string $layoutOption): string
     {
+        $themeAssetBaseUrl = defined('DEV') && DEV
+            ? '/Weline/Theme/view/theme/'
+            : '/static/Weline/Theme/theme/';
+        $themeAssetVersion = '20260810-color-mode';
+        $themePreference = $this->resolveBackendPreviewThemePreference();
+        $resolvedThemeMode = $themePreference === 'dark' ? 'dark' : 'light';
+        $safeLayoutType = htmlspecialchars($layoutType, ENT_QUOTES, 'UTF-8');
+        $safeLayoutOption = htmlspecialchars($layoutOption, ENT_QUOTES, 'UTF-8');
         $html = <<<HTML
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="{$resolvedThemeMode}" data-bs-theme="{$resolvedThemeMode}" data-theme-preference="{$themePreference}" data-theme-mode="{$resolvedThemeMode}" data-layout-mode="{$resolvedThemeMode}" data-theme-area="backend">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>布局不存在</title>
+    <script>(function(root){var preference=root.getAttribute('data-theme-preference')||'system';var media=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var mode=preference==='dark'||(preference==='system'&&media&&media.matches)?'dark':'light';root.setAttribute('data-theme',mode);root.setAttribute('data-bs-theme',mode);root.setAttribute('data-theme-mode',mode);root.setAttribute('data-layout-mode',mode);root.style.colorScheme=mode;})(document.documentElement);</script>
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_colors.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_typography.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_spacing.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_borders.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_shadows.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_light.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_dark.css?v={$themeAssetVersion}">
+    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/assets/css/theme.css?v={$themeAssetVersion}">
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -5292,42 +5349,44 @@ HTML;
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            background: #f5f5f5;
+            background: var(--backend-theme-surface-canvas);
+            color: var(--backend-theme-text);
         }
         .error-container {
             text-align: center;
             padding: 40px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: var(--backend-component-surface);
+            border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-component-border);
+            border-radius: var(--backend-theme-radius-lg);
+            box-shadow: var(--backend-component-shadow-lg);
             max-width: 500px;
         }
         .error-icon {
             font-size: 64px;
-            color: #dc3545;
+            color: var(--backend-theme-danger);
             margin-bottom: 20px;
         }
         h1 {
             margin: 0 0 10px;
-            color: #333;
+            color: var(--backend-theme-text);
             font-size: 24px;
         }
         p {
-            color: #666;
+            color: var(--backend-theme-text-secondary);
             margin: 0 0 20px;
             line-height: 1.6;
         }
         .layout-info {
-            background: #f8f9fa;
+            background: var(--backend-component-surface-subtle);
             padding: 10px 15px;
-            border-radius: 4px;
+            border-radius: var(--backend-theme-radius-md);
             font-family: monospace;
-            color: #495057;
+            color: var(--backend-theme-text);
             margin-bottom: 20px;
         }
         .hint {
             font-size: 14px;
-            color: #888;
+            color: var(--backend-theme-text-muted);
         }
     </style>
 </head>
@@ -5337,8 +5396,8 @@ HTML;
         <h1>布局文件不存在</h1>
         <p>请求的布局模板文件未找到，请选择其他布局类型。</p>
         <div class="layout-info">
-            布局类型: {$layoutType}<br>
-            布局选项: {$layoutOption}
+            布局类型: {$safeLayoutType}<br>
+            布局选项: {$safeLayoutOption}
         </div>
         <p class="hint">请在左侧面板选择一个有效的布局类型</p>
     </div>

@@ -110,6 +110,7 @@ final class GatewayHostManager implements GatewayStartupHostInterface
     private const START_COMPENSATION_INTENT_RESTORE_SECONDS = 15.0;
     private const START_COMPENSATION_PLATFORM_PROOF_SECONDS = 20.0;
     private const START_COMPENSATION_INTENT_PROOF_SECONDS = 10.0;
+    private const INITIAL_BOOTSTRAP_READY_TIMEOUT_SECONDS = 105.0;
     private const ADMIN_REQUEST_TIMEOUT_SECONDS = 180.0;
     private const MIN_BOUNDED_COMMAND_TIMEOUT_SECONDS = 0.1;
     private const UPGRADE_SHADOW_READY_SECONDS = 15.0;
@@ -632,6 +633,8 @@ final class GatewayHostManager implements GatewayStartupHostInterface
             $this->paths->legacySnapshotsDir(),
             $this->paths->sealedSnapshotsDir(),
             $this->paths->snapshotCandidatesDir(),
+            $this->paths->neutralTlsDir(),
+            $this->paths->nginxPidDir(),
             \dirname($this->paths->launcherFile()),
             $this->paths->systemdDefinitionDirectory(),
         ] as $directory) {
@@ -642,8 +645,18 @@ final class GatewayHostManager implements GatewayStartupHostInterface
         $log = self::normalizedHostPath($this->paths->logDir());
         $trust = self::normalizedHostPath($this->paths->trustDir());
         $allowedLocks = [
-            'package-bootstrap.lock' => true,
-            'package-install.lock' => true,
+            self::normalizedHostPath($this->paths->trustDir()
+                . DIRECTORY_SEPARATOR . 'package-bootstrap.lock') => true,
+            self::normalizedHostPath($this->paths->trustDir()
+                . DIRECTORY_SEPARATOR . 'package-install.lock') => true,
+            self::normalizedHostPath($this->paths->trustDir()
+                . DIRECTORY_SEPARATOR . 'package-stage-a.lock') => true,
+            self::normalizedHostPath($this->paths->trustDir()
+                . DIRECTORY_SEPARATOR . 'package-stage-b.lock') => true,
+            self::normalizedHostPath($this->paths->slotDir('A')
+                . '.install.lock') => true,
+            self::normalizedHostPath($this->paths->slotDir('B')
+                . '.install.lock') => true,
         ];
         foreach ($records as $record) {
             $this->remainingOperationDeadline($deadlineMonotonic);
@@ -683,10 +696,7 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                 }
                 continue;
             }
-            $parent = self::normalizedHostPath(\dirname($path));
-            $name = \basename($path);
-            if (!\hash_equals($trust, $parent)
-                || !isset($allowedLocks[$name])
+            if (!isset($allowedLocks[$normalized])
                 || (int)($status['size'] ?? -1) !== 0
                 || (int)($status['nlink'] ?? 0) !== 1
                 || (PHP_OS_FAMILY !== 'Windows'
@@ -847,10 +857,26 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                     $profile,
                 );
             }
-            $this->packages->assertNoActiveRebootstrap(
-                'Gateway installation',
-                $forwardDeadline,
-            );
+            if (!($hostStagedRecovery
+                && \hash_equals('ROLLING_BACK', (string)$journal['phase'])
+                && \hash_equals('', (string)$journal['slot'])
+            )) {
+                $this->packages->assertNoActiveRebootstrap(
+                    'Gateway installation',
+                    $forwardDeadline,
+                );
+            }
+            if (\hash_equals('PREPARING', (string)$journal['phase'])
+                && \hash_equals('', (string)$journal['host_id'])
+            ) {
+                $journal = $this->initialBootstrapJournal->advance(
+                    $journal,
+                    'PREPARING',
+                    ['host_id' => $this->packages->prepareInitialBootstrapHostId(
+                        $forwardDeadline,
+                    )],
+                );
+            }
         } catch (\Throwable $throwable) {
             return [
                 'ok' => false,
@@ -864,6 +890,59 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                     'Gateway initial bootstrap journal could not be established.',
                 ),
             ];
+        }
+
+        if ($hostStagedRecovery
+            && \hash_equals('ROLLING_BACK', (string)$journal['phase'])
+            && \hash_equals('', (string)$journal['slot'])
+        ) {
+            try {
+                return $this->packages->withExistingInitialBootstrapLock(
+                    function () use ($profile, $forwardDeadline): array {
+                        $lockedJournal = $this->initialBootstrapJournal
+                            ->resumeHostStaged($profile);
+                        if (!\hash_equals(
+                            'ROLLING_BACK',
+                            (string)$lockedJournal['phase'],
+                        ) || !\hash_equals('', (string)$lockedJournal['slot'])) {
+                            return [
+                                'ok' => false,
+                                'ready' => false,
+                                'state' => 'REPAIR_REQUIRED',
+                                'reason' => 'The Gateway bootstrap journal changed before empty rollback recovery.',
+                            ];
+                        }
+                        return $this->retireEmptyInitialBootstrapRollback(
+                            $lockedJournal,
+                            $forwardDeadline,
+                        );
+                    },
+                    $forwardDeadline,
+                );
+            } catch (\Throwable $throwable) {
+                if ($throwable instanceof GatewayInitialBootstrapCrashSimulation) {
+                    return [
+                        'ok' => false,
+                        'ready' => false,
+                        'state' => 'BOOTSTRAP_INTERRUPTED',
+                        'reason' => $throwable->getMessage(),
+                        'journal_phase' => (string)$journal['phase'],
+                    ];
+                }
+                return [
+                    'ok' => false,
+                    'ready' => false,
+                    'state' => \str_contains(
+                        $throwable->getMessage(),
+                        'REPAIR_REQUIRED',
+                    ) ? 'REPAIR_REQUIRED' : 'INSTALL_ROLLBACK_FAILED',
+                    'reason' => GatewayBoundedText::singleLine(
+                        $throwable->getMessage(),
+                        1024,
+                        'The empty Gateway bootstrap rollback could not acquire its recovery lock.',
+                    ),
+                ];
+            }
         }
 
         $staged = null;
@@ -915,6 +994,14 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                     );
                 }
                 self::assertInitialBootstrapStagedIdentity($journal, $staged);
+                if (\hash_equals('ROLLING_BACK', $phase)) {
+                    // resumeHostStaged() has just re-proven the host-bound
+                    // identity. Fall through the existing rollback catch so
+                    // cleanup remains idempotent for a staged partial host.
+                    throw new \RuntimeException(
+                        'Gateway initial bootstrap rollback is being resumed by an explicit administrator installation.',
+                    );
+                }
             }
 
             if (\hash_equals('STAGED', $phase)) {
@@ -971,6 +1058,10 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                         'REPAIR_REQUIRED: the active slot conflicts with the bootstrap journal.',
                     );
                 }
+                $this->packages->initializeFirstActivationGuardianGenerationHead(
+                    (string)$staged['slot'],
+                    $forwardDeadline,
+                );
                 $activated = true;
                 GatewayInitialBootstrapCrashSimulation::hit(
                     'after-activate',
@@ -1156,16 +1247,20 @@ final class GatewayHostManager implements GatewayStartupHostInterface
         // Initial publication includes a mandatory 15-second candidate probe.
         // Leave enough budget for platform startup, native Broker fencing and
         // that probe without weakening any readiness condition.
-        $deadline = \min(
+        $deadline = self::initialBootstrapReadinessDeadline(
             $forwardDeadline,
-            self::monotonicNow() + 45.0,
+            self::monotonicNow(),
         );
         $failureState = 'START_TIMEOUT';
         $status = [];
         try {
             do {
                 $this->waitForPublicationDelay(0.1, $deadline);
-                $status = $this->administratorStatus($forwardDeadline);
+                $status = self::initialBootstrapReadinessStatus(
+                    $forwardDeadline,
+                    $deadline,
+                    $this->administratorStatus(...),
+                );
                 if (self::hostStatusMatchesRuntimeIdentity(
                     $status,
                     (string)$staged['slot'],
@@ -1252,6 +1347,7 @@ final class GatewayHostManager implements GatewayStartupHostInterface
             'platform',
             'arch',
             'profile',
+            'host_id',
         ] as $field) {
             $expected = (string)($journal[$field] ?? '');
             $actual = (string)($staged[$field] ?? '');
@@ -1298,7 +1394,16 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                 (string)$staged['previous_active_slot'],
                 $deadlineMonotonic,
             );
-            $this->initialBootstrapJournal->remove($journal);
+            $journal = $this->initialBootstrapJournal->advance(
+                $journal,
+                'ROLLING_BACK',
+                [
+                    'slot' => '',
+                    'runtime_generation' => '',
+                    'previous_active_slot' => '',
+                    'service_kind' => '',
+                ],
+            );
         } catch (\Throwable $throwable) {
             $rollbackReason = ' Rollback requires attention: '
                 . GatewayBoundedText::singleLine(
@@ -1320,6 +1425,115 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                     . $rollbackReason,
             'slot' => (string)$staged['slot'],
             'owner' => $failureState === 'PORT_TAKEN' ? 'unknown' : '',
+        ];
+    }
+
+    /**
+     * A failed stage can publish a host-bound rollback journal before it has
+     * returned any slot facts. Explicit repair may retire only that exact
+     * empty form after proving no platform registration or runtime residue
+     * exists; automatic discovery continues to classify it as repair-needed.
+     *
+     * @param array<string,mixed> $journal
+     * @return array<string,mixed>
+     */
+    private function retireEmptyInitialBootstrapRollback(
+        array $journal,
+        float $deadlineMonotonic,
+    ): array {
+        foreach ([
+            'slot',
+            'runtime_generation',
+            'previous_active_slot',
+            'service_kind',
+        ] as $field) {
+            if (!\hash_equals('', (string)($journal[$field] ?? ''))) {
+                return [
+                    'ok' => false,
+                    'ready' => false,
+                    'state' => 'REPAIR_REQUIRED',
+                    'reason' => 'The empty-slot Gateway bootstrap rollback journal contains unexpected host runtime facts.',
+                ];
+            }
+        }
+        $hostId = (string)($journal['host_id'] ?? '');
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $hostId) !== 1) {
+            return [
+                'ok' => false,
+                'ready' => false,
+                'state' => 'REPAIR_REQUIRED',
+                'reason' => 'The empty-slot Gateway bootstrap rollback journal lacks its host identity binding.',
+            ];
+        }
+        $registration = $this->platform->initialServiceRegistrationStatus(
+            $deadlineMonotonic,
+        );
+        if (!\hash_equals('ABSENT', (string)($registration['state'] ?? ''))) {
+            return [
+                'ok' => false,
+                'ready' => false,
+                'state' => 'REPAIR_REQUIRED',
+                'reason' => 'The empty-slot Gateway bootstrap rollback cannot prove the platform registration absent.',
+            ];
+        }
+        foreach ([
+            $this->paths->activeSlotFile(),
+            $this->paths->previousSlotFile(),
+            $this->paths->launcherFile(),
+            $this->paths->caBundleBaselineFile(),
+            $this->paths->platformServiceMetadataFile(),
+            $this->paths->serviceDefinitionFile(),
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR
+                . 'stable-launcher.sha256',
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR
+                . 'failed-initial-cleanup.intent',
+            $this->paths->rebootstrapJournalFile(),
+            $this->paths->rebootstrapStartAuthorizationFile(),
+            $this->paths->upgradeIntentFile(),
+            $this->paths->adminStoppedIntentFile(),
+            $this->paths->slotDir('A'),
+            $this->paths->slotDir('B'),
+        ] as $path) {
+            if (\file_exists($path) || \is_link($path)) {
+                return [
+                    'ok' => false,
+                    'ready' => false,
+                    'state' => 'REPAIR_REQUIRED',
+                    'reason' => 'The empty-slot Gateway bootstrap rollback has residual host runtime state: '
+                        . $path,
+                ];
+            }
+        }
+        try {
+            $this->packages->retireEmptyInitialBootstrapScaffolding(
+                $hostId,
+                $deadlineMonotonic,
+            );
+            $this->initialBootstrapJournal->remove($journal);
+        } catch (\Throwable $throwable) {
+            if ($throwable instanceof GatewayInitialBootstrapCrashSimulation) {
+                throw $throwable;
+            }
+            $reason = GatewayBoundedText::singleLine(
+                $throwable->getMessage(),
+                512,
+                'journal retirement failed',
+            );
+            return [
+                'ok' => false,
+                'ready' => false,
+                'state' => \str_contains($reason, 'REPAIR_REQUIRED')
+                    ? 'REPAIR_REQUIRED'
+                    : 'INSTALL_ROLLBACK_FAILED',
+                'reason' => 'The empty-slot Gateway bootstrap rollback journal could not be retired: '
+                    . $reason,
+            ];
+        }
+        return [
+            'ok' => false,
+            'ready' => false,
+            'state' => 'INSTALL_FAILED',
+            'reason' => 'The explicit Gateway bootstrap repair retired an empty rollback journal; retry installation with the signed package.',
         ];
     }
 
@@ -1527,6 +1741,41 @@ final class GatewayHostManager implements GatewayStartupHostInterface
     private static function legacyPromotionReadinessTimeoutSeconds(): float
     {
         return self::EXPLICIT_START_READY_TIMEOUT_SECONDS;
+    }
+
+    /**
+     * Initial install may absorb one systemd RestartSec retry before its
+     * authenticated Broker is ready to answer status.  This remains bounded
+     * by install's forward deadline and leaves its compensation reserve intact.
+     */
+    private static function initialBootstrapReadinessTimeoutSeconds(): float
+    {
+        return self::INITIAL_BOOTSTRAP_READY_TIMEOUT_SECONDS;
+    }
+
+    private static function initialBootstrapReadinessDeadline(
+        float $forwardDeadline,
+        float $now,
+    ): float {
+        return \min(
+            $forwardDeadline,
+            $now + self::initialBootstrapReadinessTimeoutSeconds(),
+        );
+    }
+
+    /**
+     * The initial-install observation window is narrower than its forward
+     * operation deadline.  Keep each status exchange inside that window.
+     *
+     * @param \Closure(float):array<string,mixed> $reader
+     * @return array<string,mixed>
+     */
+    private static function initialBootstrapReadinessStatus(
+        float $forwardDeadline,
+        float $observationDeadline,
+        \Closure $reader,
+    ): array {
+        return $reader(\min($forwardDeadline, $observationDeadline));
     }
 
     /**
@@ -2615,6 +2864,7 @@ final class GatewayHostManager implements GatewayStartupHostInterface
             return $this->rebootstrapTerminalResult($prepared);
         }
 
+        $quiescedReplayIntegrityCheckActive = false;
         try {
             for ($step = 0; $step < 24; $step++) {
                 $transaction = $this->packages->rebootstrapStatus(
@@ -2712,6 +2962,11 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                     $payload = \is_array($response['payload'] ?? null)
                         ? $response['payload']
                         : [];
+                    if (($payload['accepted'] ?? false) !== true) {
+                        throw new \RuntimeException(
+                            'Gateway maintenance stop was not accepted by the Controller.'
+                        );
+                    }
                     $intent = $this->readVerifiedAdminStoppedIntent(
                         $forwardDeadline,
                     );
@@ -2741,14 +2996,11 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                         (string)$snapshot['kind'],
                         $forwardDeadline,
                     );
-                    if (($payload['accepted'] ?? false) !== true
-                        || ($payload['data_plane_stopped'] ?? false) !== true
-                        || ($payload['manual_cleanup_required'] ?? true) !== false
-                    ) {
-                        throw new \RuntimeException(
-                            'Gateway stop intent is persistent, but Controller did not prove complete data-plane retirement; the host remains stopped for whole-generation rollback.'
-                        );
-                    }
+                    // A graceful Controller stop can deliberately retain a
+                    // non-terminal native retirement receipt. The persisted
+                    // STOP_COMMITTED replay below re-stops the platform and
+                    // requires the exact signed intent plus the full
+                    // post-platform quiescence proof before advancing.
                     continue;
                 }
                 if (\hash_equals('STOP_COMMITTED', $phase)) {
@@ -2792,6 +3044,17 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                         $snapshot,
                         $forwardDeadline,
                     );
+                    $quiescedReplayIntegrityCheckActive = true;
+                    $transaction = $this->packages->advanceRebootstrapPhase(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                        'STOP_COMMITTED',
+                        'QUIESCED',
+                        [],
+                        $forwardDeadline,
+                    );
+                    $quiescedReplayIntegrityCheckActive = false;
                     $releaseReason = (string)(
                         $transaction['capacity_reserve_release_reason'] ?? ''
                     );
@@ -2981,6 +3244,9 @@ final class GatewayHostManager implements GatewayStartupHostInterface
             if ($throwable instanceof GatewayRebootstrapCrashSimulation) {
                 // Test-only power-loss boundary: preserve the authenticated
                 // journal exactly as a real process death would.
+                throw $throwable;
+            }
+            if ($quiescedReplayIntegrityCheckActive) {
                 throw $throwable;
             }
             try {
@@ -3288,6 +3554,19 @@ final class GatewayHostManager implements GatewayStartupHostInterface
             if ($probe === 0) {
                 $this->waitForPublicationDelay(0.05, $deadlineMonotonic);
             }
+        }
+
+        if (!$this->paths->isTestMode()
+            && \in_array(\PHP_OS_FAMILY, ['Linux', 'Darwin'], true)
+            && \in_array($phase, ['STOP_COMMITTED', 'QUIESCED'], true)
+        ) {
+            $this->packages->recoverStoppedNginxPidAfterPlatformProof(
+                (string)$transaction['nonce'],
+                (string)$transaction['package_digest'],
+                $profile,
+                $stopped,
+                $deadlineMonotonic,
+            );
         }
     }
 
@@ -5756,13 +6035,26 @@ final class GatewayHostManager implements GatewayStartupHostInterface
             $deadlineMonotonic,
             self::SERVICE_START_COMPENSATION_RESERVE_SECONDS,
         );
+        GatewayProjectStateFilesystem::assertAtomicWriteRuntimeCapability();
+        $intent = $this->readVerifiedAdminStoppedIntent($forwardDeadline);
+        $service = $intent === null
+            ? $this->platform->installedDefinition()
+            : $this->platform->recoverExplicitStartDefinition($forwardDeadline);
+        if ($intent !== null) {
+            $this->platform->recoverExplicitStartRunDirectory(
+                (string)$service['kind'],
+                $forwardDeadline,
+            );
+        }
         $this->packages->assertNoActiveRebootstrap(
             'Gateway explicit start',
             $forwardDeadline,
         );
-        GatewayProjectStateFilesystem::assertAtomicWriteRuntimeCapability();
-        $service = $this->platform->installedDefinition();
-        $intent = $this->clearAdminStoppedIntent($forwardDeadline);
+        $intent = $this->clearAdminStoppedIntent(
+            $forwardDeadline,
+            $intent,
+            true,
+        );
         try {
             $this->platform->start(
                 (string)$service['kind'],
@@ -5942,9 +6234,14 @@ final class GatewayHostManager implements GatewayStartupHostInterface
 
     private function clearAdminStoppedIntent(
         ?float $deadlineMonotonic = null,
+        ?string $expectedIntent = null,
+        bool $bindExpectedIntent = false,
     ): ?string
     {
-        return $this->withAdminStoppedIntentTransaction(function (): ?string {
+        return $this->withAdminStoppedIntentTransaction(function () use (
+            $expectedIntent,
+            $bindExpectedIntent,
+        ): ?string {
             $file = $this->paths->adminStoppedIntentFile();
             GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
                 $file,
@@ -5955,6 +6252,11 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                 },
             );
             if (!\file_exists($file) && !\is_link($file)) {
+                if ($bindExpectedIntent && $expectedIntent !== null) {
+                    throw new \RuntimeException(
+                        'ADMIN_STOPPED intent disappeared after explicit-start preflight.',
+                    );
+                }
                 return null;
             }
             $contents = $this->readStableRegularFile(
@@ -5963,6 +6265,14 @@ final class GatewayHostManager implements GatewayStartupHostInterface
                 'ADMIN_STOPPED intent',
             );
             $this->assertAdminStoppedIntent($contents);
+            if ($bindExpectedIntent
+                && ($expectedIntent === null
+                    || !\hash_equals($expectedIntent, $contents))
+            ) {
+                throw new \RuntimeException(
+                    'ADMIN_STOPPED intent changed after explicit-start preflight.',
+                );
+            }
             GatewayProjectStateFilesystem::removeRegular(
                 $file,
                 'verified ADMIN_STOPPED intent',

@@ -107,4 +107,28 @@ final class OptimizationEvidenceServiceTest extends TestCase
             ['search' => ['current' => ['impressions' => 999]]],
         ));
     }
+
+    public function testBlockEligibilityAcceptsMatchingQueryHeatWithoutVisitorSample(): void
+    {
+        $target = [
+            'target_type' => 'block',
+            'block_key' => 'hero',
+        ];
+        $evidence = $this->blockEvidence(false, false, 0, 0);
+        $evidence['search_queries'] = [
+            'top' => [
+                ['query' => 'teen patti', 'heat' => 88.2, 'impressions' => 900, 'clicks' => 40],
+            ],
+            'matching_owner' => [
+                ['query' => 'teen patti', 'heat' => 88.2, 'impressions' => 900, 'clicks' => 40],
+            ],
+        ];
+
+        self::assertTrue($this->service()->sampleEligible($target, $this->policy(), $evidence));
+        self::assertTrue($this->service()->isQueryHeatEligible($target, $this->policy(), $evidence));
+        $evidence['search_queries']['matching_owner'] = [
+            ['query' => 'teen patti', 'heat' => 4.0, 'impressions' => 10, 'clicks' => 0],
+        ];
+        self::assertFalse($this->service()->sampleEligible($target, $this->policy(), $evidence));
+    }
 }

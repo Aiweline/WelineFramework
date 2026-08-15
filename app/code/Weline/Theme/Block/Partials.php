@@ -75,6 +75,14 @@ class Partials extends Block
     }
 
     /**
+     * Compatibility entry point for explicit full cache invalidation.
+     */
+    public static function clearAllCaches(): void
+    {
+        self::clearMetaCache();
+    }
+
+    /**
      * 初始化 Block
      */
     public function __init()

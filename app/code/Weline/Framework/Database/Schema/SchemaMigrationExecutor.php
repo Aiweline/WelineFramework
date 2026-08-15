@@ -8,6 +8,11 @@ use Weline\Framework\Database\Connection\Adapter\Pgsql\PgsqlIndexName;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnector;
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Connector as SqliteConnector;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableSnapshotInterface;
 use Weline\Framework\Setup\Model\Migration;
 use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\DataObject\DataObject;
@@ -27,7 +32,7 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
     public function __construct(
         private readonly EventsManager $eventsManager,
         private readonly Migration $migrationModel,
-        private readonly ?BackupService $backupService = null,
+        private readonly BackupService $backupService,
     ) {
     }
 
@@ -69,6 +74,9 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
             : [];
         $operationId = trim((string)($context['operation_id'] ?? ''));
         $forceSchemaRebind = !empty($context['force_schema_rebind']);
+        $physicalTableFingerprints = is_array($context['physical_table_fingerprints'] ?? null)
+            ? array_map('strval', $context['physical_table_fingerprints'])
+            : [];
         $batchIds = [];
         $sequences = [];
         $checkpointState = $this->prepareSchemaCheckpoints(
@@ -108,6 +116,30 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
                 $this->dispatchBefore($op);
                 $this->dispatchAfter($op);
                 continue;
+            }
+
+            $destructive = in_array(
+                $op->kind,
+                [
+                    SchemaDiffOp::KIND_DROP_COLUMN,
+                    SchemaDiffOp::KIND_MODIFY_COLUMN,
+                    SchemaDiffOp::KIND_DROP_INDEX,
+                    SchemaDiffOp::KIND_DROP_FOREIGN_KEY,
+                ],
+                true,
+            );
+            $physicalIdentity = $connector instanceof PhysicalTableIdentityProviderInterface
+                ? $connector->resolvePhysicalTableIdentity($op->tableName)
+                : null;
+            $expectedPhysicalFingerprint = trim((string)($physicalTableFingerprints[$op->tableName] ?? ''));
+            if ($destructive) {
+                if (!$connector instanceof PhysicalTableSnapshotInterface
+                    || !$physicalIdentity instanceof PhysicalTableIdentity) {
+                    throw new \RuntimeException('physical table catalog fingerprint capability unavailable');
+                }
+                if (preg_match('/\A[a-f0-9]{64}\z/D', $expectedPhysicalFingerprint) !== 1) {
+                    throw new \RuntimeException('destructive SchemaDiff lacks before catalog fingerprint');
+                }
             }
 
             $moduleName = $this->moduleNameFromClass($op->modelClass);
@@ -168,82 +200,73 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
                 ));
             }
             try {
-                if (in_array($op->kind, [SchemaDiffOp::KIND_DROP_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
-                    && $this->backupService !== null) {
-                    /** @var ColumnDefinition $col */
-                    $col = $op->payload;
-                    $reason = $op->kind === SchemaDiffOp::KIND_DROP_COLUMN ? 'DROP' : 'MODIFY';
-                    $this->backupService->backupColumnData(
-                        $op->tableName,
-                        $col->name,
-                        $migrationId,
-                        $connector,
-                        $op->modelClass,
-                        $reason,
+                if ($destructive) {
+                    if (!$connector instanceof PhysicalTableMetadataInterface
+                        || !$connector instanceof PhysicalTableIdentityProviderInterface) {
+                        throw new \RuntimeException('exact physical table capability unavailable');
+                    }
+                    if (!$connector instanceof AtomicPhysicalTableChangeInterface) {
+                        throw new \RuntimeException('atomic physical table change capability unavailable');
+                    }
+                    $physicalIdentity ??= $connector->resolvePhysicalTableIdentity($op->tableName);
+                    $connector->atomicPhysicalTableChange(
+                        $physicalIdentity,
+                        function (ConnectorInterface $lockedConnector) use (
+                            $connector,
+                            $op,
+                            $forwardSql,
+                            $moduleName,
+                            $migrationId,
+                            $physicalIdentity,
+                            $expectedPhysicalFingerprint,
+                            $operationId,
+                            &$physicalTableFingerprints,
+                        ): void {
+                            if ($lockedConnector !== $connector) {
+                                throw new \RuntimeException(
+                                    'atomic physical table connector changed during SchemaDiff',
+                                );
+                            }
+                            if (!$lockedConnector instanceof PhysicalTableSnapshotInterface
+                                || !hash_equals(
+                                    $expectedPhysicalFingerprint,
+                                    $lockedConnector->physicalTableCatalogFingerprint($physicalIdentity),
+                                )) {
+                                throw new \RuntimeException(
+                                    'physical table catalog fingerprint changed before destructive SchemaDiff lock',
+                                );
+                            }
+                            $this->executeRecordedOperation(
+                                $lockedConnector,
+                                $op,
+                                $forwardSql,
+                                $moduleName,
+                                $migrationId,
+                                $physicalIdentity,
+                                $operationId,
+                            );
+                            $physicalTableFingerprints[$op->tableName]
+                                = $lockedConnector->physicalTableCatalogFingerprint($physicalIdentity);
+                        },
                     );
-                }
-
-                $this->dispatchBefore($op);
-
-                if ($op->kind === SchemaDiffOp::KIND_CREATE_TABLE && $op->payload instanceof TableSchema) {
-                    $this->createTableViaAdapter($connector, $op->tableName, $op->payload, true);
                 } else {
-                    $sqliteRebuild = str_contains($forwardSql, '/* WELINE_SQLITE_REBUILD */');
-                    $ddl = str_replace('/* WELINE_SQLITE_REBUILD */', '', $forwardSql);
-                    try {
-                        if ($sqliteRebuild) {
-                            $connector->query('PRAGMA foreign_keys=OFF')->fetch();
-                            $connector->beginTransaction();
-                        }
-                        foreach ($this->splitDdlStatements($ddl) as $sql) {
-                            if (trim($sql) === '') {
-                                continue;
-                            }
-                            try {
-                                $connector->query($sql)->fetch();
-                            } catch (\Throwable $e) {
-                                $colName = ($op->payload instanceof \Weline\Framework\Database\Schema\ColumnDefinition)
-                                    ? $op->payload->name : '';
-                                $ctx = "table={$op->tableName} kind={$op->kind}" . ($colName !== '' ? " col={$colName}" : '');
-                                throw new \RuntimeException("Schema DDL failed ({$ctx}): " . $e->getMessage(), 0, $e);
-                            }
-                        }
-                        if ($sqliteRebuild) {
-                            $connector->commit();
-                        }
-                    } catch (\Throwable $e) {
-                        if ($sqliteRebuild) {
-                            $connector->rollBack();
-                        }
-                        throw $e;
-                    } finally {
-                        if ($sqliteRebuild) {
-                            $connector->query('PRAGMA foreign_keys=ON')->fetch();
-                        }
+                    $this->executeRecordedOperation(
+                        $connector,
+                        $op,
+                        $forwardSql,
+                        $moduleName,
+                        $migrationId,
+                        $physicalIdentity,
+                        $operationId,
+                    );
+                    if ($physicalIdentity instanceof PhysicalTableIdentity
+                        && $connector instanceof PhysicalTableSnapshotInterface) {
+                        $physicalTableFingerprints[$op->tableName]
+                            = $connector->physicalTableCatalogFingerprint($physicalIdentity);
                     }
                 }
-
-                $this->assertIndexPostcondition($connector, $op);
-                $this->dispatchAfter($op);
-                if (in_array($op->kind, [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
-                    && $op->payload instanceof ColumnDefinition) {
-                    $this->restorePreviouslyRolledBackColumnData(
-                        $moduleName,
-                        $op->tableName,
-                        $op->payload,
-                        $migrationId,
-                        $connector,
-                        $op->modelClass,
-                    );
-                }
-                if (!$this->migrationModel->updateStatus(Migration::STATUS_INSTALLED)) {
-                    throw new \RuntimeException(__(
-                        'Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}',
-                        [$moduleName, $op->tableName, (string)$migrationId]
-                    ));
-                }
             } catch (\Throwable $e) {
-                $this->markMigrationFailed($migrationId);
+                $this->markMigrationFailed($migrationId, $operationId);
                 throw $e;
             }
         }
@@ -256,6 +279,113 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
                 $operationId,
             );
         }
+    }
+
+    private function executeRecordedOperation(
+        ConnectorInterface $connector,
+        SchemaDiffOp $op,
+        string $forwardSql,
+        string $moduleName,
+        int $migrationId,
+        ?PhysicalTableIdentity $physicalIdentity,
+        string $operationId,
+    ): void {
+        if (in_array(
+            $op->kind,
+            [SchemaDiffOp::KIND_DROP_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN],
+            true,
+        )) {
+            if (!$op->payload instanceof ColumnDefinition || $physicalIdentity === null) {
+                throw new \RuntimeException('destructive SchemaDiff lacks exact column identity');
+            }
+            $reason = $op->kind === SchemaDiffOp::KIND_DROP_COLUMN ? 'DROP' : 'MODIFY';
+            $this->backupService->backupPhysicalColumnData(
+                $physicalIdentity,
+                $op->payload->name,
+                $migrationId,
+                $op->modelClass,
+                $reason,
+                physicalConnector: $connector,
+            );
+        } elseif (in_array(
+            $op->kind,
+            [SchemaDiffOp::KIND_DROP_INDEX, SchemaDiffOp::KIND_DROP_FOREIGN_KEY],
+            true,
+        )) {
+            if ($physicalIdentity === null || !$this->backupService->backupPhysicalTableStructure(
+                $physicalIdentity,
+                $migrationId,
+                physicalConnector: $connector,
+            )) {
+                throw new \RuntimeException('destructive SchemaDiff structure backup failed');
+            }
+        }
+
+        // Event observers execute inside the adapter savepoint for destructive
+        // changes; direct commit/rollback therefore aborts the whole operation.
+        $this->dispatchBefore($op);
+        if ($op->kind === SchemaDiffOp::KIND_CREATE_TABLE && $op->payload instanceof TableSchema) {
+            $this->createTableViaAdapter($connector, $op->tableName, $op->payload, true);
+        } else {
+            $sqliteRebuild = str_contains($forwardSql, '/* WELINE_SQLITE_REBUILD */');
+            $ddl = str_replace('/* WELINE_SQLITE_REBUILD */', '', $forwardSql);
+            try {
+                if ($sqliteRebuild) {
+                    $connector->query('PRAGMA foreign_keys=OFF')->fetch();
+                    $connector->beginTransaction();
+                }
+                foreach ($this->splitDdlStatements($ddl) as $sql) {
+                    if (trim($sql) === '') {
+                        continue;
+                    }
+                    try {
+                        $connector->query($sql)->fetch();
+                    } catch (\Throwable $e) {
+                        $column = $op->payload instanceof ColumnDefinition ? $op->payload->name : '';
+                        $context = "table={$op->tableName} kind={$op->kind}"
+                            . ($column !== '' ? " col={$column}" : '');
+                        throw new \RuntimeException(
+                            "Schema DDL failed ({$context}): " . $e->getMessage(),
+                            0,
+                            $e,
+                        );
+                    }
+                }
+                if ($sqliteRebuild) {
+                    $connector->commit();
+                }
+            } catch (\Throwable $e) {
+                if ($sqliteRebuild) {
+                    $connector->rollBack();
+                }
+                throw $e;
+            } finally {
+                if ($sqliteRebuild) {
+                    $connector->query('PRAGMA foreign_keys=ON')->fetch();
+                }
+            }
+        }
+
+        $this->assertIndexPostcondition($connector, $op);
+        $this->dispatchAfter($op);
+        if (in_array($op->kind, [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
+            && $op->payload instanceof ColumnDefinition) {
+            $this->restorePreviouslyRolledBackColumnData(
+                $moduleName,
+                $op->tableName,
+                $op->payload,
+                $migrationId,
+                $connector,
+                $op->modelClass,
+                $physicalIdentity,
+            );
+        }
+        $this->migrationModel->compareAndSwapStatusFailClosed(
+            $migrationId,
+            Migration::STATUS_RUNNING,
+            Migration::STATUS_INSTALLED,
+            $operationId,
+        );
     }
 
     /**
@@ -434,20 +564,17 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
         }
     }
 
-    private function markMigrationFailed(int $migrationId): void
+    private function markMigrationFailed(int $migrationId, string $operationId): void
     {
         if ($migrationId <= 0) {
             return;
         }
-        try {
-            $migration = clone $this->migrationModel;
-            $migration->load($migrationId);
-            if ($migration->getId()) {
-                $migration->updateStatus(Migration::STATUS_FAILED);
-            }
-        } catch (\Throwable) {
-            // Preserve the original DDL/backup exception; the running row remains an audit signal.
-        }
+        $this->migrationModel->compareAndSwapStatusFailClosed(
+            $migrationId,
+            Migration::STATUS_RUNNING,
+            Migration::STATUS_FAILED,
+            $operationId,
+        );
     }
 
     private function normalizeOperationPayload(mixed $payload): array
@@ -475,11 +602,8 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
         int $currentMigrationId,
         ConnectorInterface $connector,
         ?string $modelClass,
+        ?PhysicalTableIdentity $physicalIdentity = null,
     ): void {
-        if ($this->backupService === null) {
-            return;
-        }
-
         $items = (clone $this->migrationModel)->reset()
             ->where(Migration::schema_fields_MODULE, $moduleName)
             ->where(Migration::schema_fields_FILE, 'schema_diff')
@@ -506,15 +630,23 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
             if (!is_array($payload) || (string)($payload['name'] ?? '') !== $column->name) {
                 continue;
             }
-            $result = $this->backupService->restoreColumnDataConflictSafe(
-                $tableName,
-                $column->name,
-                $migrationId,
-                $connector,
-                $modelClass,
-                $column->default,
-                MigrationBackup::SCOPE_ROLLBACK,
-            );
+            $result = $physicalIdentity !== null
+                ? $this->backupService->restorePhysicalColumnDataConflictSafe(
+                    $physicalIdentity,
+                    $column->name,
+                    $migrationId,
+                    $column->default,
+                    MigrationBackup::SCOPE_ROLLBACK,
+                )
+                : $this->backupService->restoreColumnDataConflictSafe(
+                    $tableName,
+                    $column->name,
+                    $migrationId,
+                    $connector,
+                    $modelClass,
+                    $column->default,
+                    MigrationBackup::SCOPE_ROLLBACK,
+                );
             if (($result['conflicts'] ?? 0) > 0) {
                 $this->eventsManager->dispatch('Weline_Framework_Schema::column_restore_conflict', new DataObject([
                     'module_name' => $moduleName,

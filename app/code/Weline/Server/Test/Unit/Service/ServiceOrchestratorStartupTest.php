@@ -24,6 +24,7 @@ use Weline\Server\Service\Edge\NativeServingManifestStartupRecovery;
 use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\RuntimeSelection;
+use Weline\Server\Service\Runtime\WindowsListenerHandoff;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\ServiceOrchestrator;
@@ -1467,9 +1468,12 @@ class ServiceOrchestratorStartupTest extends TestCase
     {
         $orchestrator = new class extends ServiceOrchestrator {
             public array $batchRegistrySnapshot = [];
+            /** @var list<string> */
+            public array $spawnAuthorizationOrder = [];
 
             protected function batchCreateProcesses(array $commands): array
             {
+                $this->spawnAuthorizationOrder[] = 'batch_create';
                 $dispatcher = $this->getRegistry()->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
                 $this->batchRegistrySnapshot = [
                     'command_keys' => \array_keys($commands),
@@ -1482,6 +1486,17 @@ class ServiceOrchestratorStartupTest extends TestCase
                 return [
                     ControlMessage::ROLE_DISPATCHER . '#1' => 5101,
                 ];
+            }
+
+            protected function refreshMasterLeaseAfterBlockingSpawn(): void
+            {
+                $this->spawnAuthorizationOrder[] = 'master_lease_refresh';
+            }
+
+            protected function authorizeSpawnedInstanceCredentials(array $instances, array $pids): void
+            {
+                unset($instances, $pids);
+                $this->spawnAuthorizationOrder[] = 'credential_authorization';
             }
         };
 
@@ -1527,6 +1542,11 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertStringContainsString('dispatcher#1', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertStringContainsString('--lease-id=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertStringContainsString('--slot-generation=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
+        self::assertSame([
+            'batch_create',
+            'master_lease_refresh',
+            'credential_authorization',
+        ], $orchestrator->spawnAuthorizationOrder);
         $dispatcher = $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
         self::assertInstanceOf(ServiceInstance::class, $dispatcher);
         self::assertSame(ControlMessage::ROLE_DISPATCHER, $dispatcher->role);
@@ -4278,6 +4298,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $provider = new WorkerProvider();
         $projectUuid = '9f7bbff7-271a-4bdf-bdf1-7c655d419700';
         $instanceLaunchId = \str_repeat('b', 32);
+        $listenerLeaseId = \str_repeat('e', 32);
         $context = new ServiceContext(
             instanceName: $instanceName,
             epoch: 1,
@@ -4306,6 +4327,22 @@ class ServiceOrchestratorStartupTest extends TestCase
                         'epoch' => '0123456789abcdef0123456789abcdef',
                         'instance_generation' => 17,
                         'launch_id' => $instanceLaunchId,
+                        'backend_lease' => [
+                            'schema_version' => 6,
+                            'bind_host' => '127.0.0.1',
+                            'port' => 9981,
+                            'lease_id' => $listenerLeaseId,
+                        ],
+                        'startup_listener_handoff' => [
+                            'schema_version' => 1,
+                            'transport' => 'posix_inherited_fd',
+                            'continuous_ownership' => true,
+                            'fd' => 3,
+                            'bind_host' => '127.0.0.1',
+                            'port' => 9981,
+                            'lease_id' => $listenerLeaseId,
+                            'launch_id' => $instanceLaunchId,
+                        ],
                         'backend_capability_launch' => self::gatewayCapabilityLaunch(
                             17,
                             $instanceLaunchId,
@@ -4337,10 +4374,117 @@ class ServiceOrchestratorStartupTest extends TestCase
                 '--gateway-instance-launch-id=' . $instanceLaunchId,
                 $command->arguments,
             );
+            self::assertSame('24314', $command->arguments[1] ?? null);
+            self::assertContains('--gateway-listener-host=127.0.0.1', $command->arguments);
+            self::assertContains('--gateway-listener-port=9981', $command->arguments);
+            self::assertContains(
+                '--gateway-host-lease-id=' . $listenerLeaseId,
+                $command->arguments,
+            );
             self::assertContains('--gateway-session-capability=isolated', $command->arguments);
             self::assertContains(
                 '--gateway-session-capability-evidence-digest=' . \str_repeat('0', 64),
                 $command->arguments,
+            );
+        } finally {
+            self::cleanupGatewayBackendTokenState($instanceName);
+        }
+    }
+
+    public function testDirectGatewayWorkerAttestsItsOwnExactSharedListener(): void
+    {
+        $instanceName = 'gateway-direct-worker-identity';
+        $projectUuid = 'c5359315-4e36-48d3-8ec5-9fa2d9e16b26';
+        $instanceLaunchId = \str_repeat('a', 32);
+        $listenerLeaseId = \str_repeat('f', 32);
+        $runtimeSelection = RuntimeSelection::fromArray([
+            'requested_topology' => 'direct',
+            'effective_topology' => 'direct',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'shared_fd',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test direct runtime selection',
+        ]);
+        $context = new ServiceContext(
+            instanceName: $instanceName,
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 9984,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: $runtimeSelection,
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'public_origin' => 'https://gateway-direct-worker-identity.weline.test',
+                    'edge' => [
+                        'adapter' => 'nginx',
+                        'mode' => 'gateway',
+                        'scope' => 'host_gateway',
+                    ],
+                    'gateway' => [
+                        'protocol' => 'wls-edge/2',
+                        'project_uuid' => $projectUuid,
+                        'epoch' => '0123456789abcdef0123456789abcdef',
+                        'instance_generation' => 18,
+                        'launch_id' => $instanceLaunchId,
+                        'backend_lease' => [
+                            'schema_version' => 6,
+                            'bind_host' => '127.0.0.1',
+                            'port' => 9984,
+                            'lease_id' => $listenerLeaseId,
+                        ],
+                        'startup_listener_handoff' => [
+                            'schema_version' => 1,
+                            'transport' => 'posix_inherited_fd',
+                            'continuous_ownership' => true,
+                            'fd' => 3,
+                            'bind_host' => '127.0.0.1',
+                            'port' => 9984,
+                            'lease_id' => $listenerLeaseId,
+                            'launch_id' => $instanceLaunchId,
+                        ],
+                        'backend_capability_launch' => self::gatewayCapabilityLaunch(
+                            18,
+                            $instanceLaunchId,
+                        ),
+                    ],
+                ],
+            ],
+            workerCount: 1,
+            workerBasePort: 24313,
+            workerPort: 9984,
+        );
+
+        try {
+            $command = (new WorkerProvider())->buildCommand(1, $context);
+
+            self::assertSame('9984', $command->arguments[1] ?? null);
+            self::assertContains('--listen-fd=3', $command->arguments);
+            self::assertContains('--gateway-listener-host=127.0.0.1', $command->arguments);
+            self::assertContains('--gateway-listener-port=9984', $command->arguments);
+            self::assertContains(
+                '--gateway-host-lease-id=' . $listenerLeaseId,
+                $command->arguments,
+            );
+            self::assertSame(
+                1,
+                \count(\array_filter(
+                    $command->arguments,
+                    static fn (string $argument): bool => \str_starts_with(
+                        $argument,
+                        '--gateway-host-lease-id=',
+                    ),
+                )),
             );
         } finally {
             self::cleanupGatewayBackendTokenState($instanceName);
@@ -5599,6 +5743,154 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame('dispatcher_alert_cooldown', $second['reason']);
     }
 
+    public function testWindowsDispatcherAcceptsOnlyItsRetainedStartupListenerHandoff(): void
+    {
+        $instanceName = 'ut-windows-startup-listener';
+        $port = 29522;
+        $leaseId = \str_repeat('2', 32);
+        $launchId = \str_repeat('a', 32);
+        $intentDigest = \str_repeat('d', 64);
+        $intent = [
+            'schema_version' => 1,
+            'transport' => WindowsListenerHandoff::TRANSPORT,
+            'continuous_ownership' => true,
+            'handoff_id' => \str_repeat('1', 32),
+            'lease_id' => $leaseId,
+            'instance' => $instanceName,
+            'wls_instance' => $instanceName,
+            'bind_host' => '127.0.0.1',
+            'port' => $port,
+            'launch_id' => $launchId,
+            'master_path' => 'C:\\wls-test\\master.json',
+            'intent_digest' => $intentDigest,
+        ];
+        $context = new ServiceContext(
+            instanceName: $instanceName,
+            epoch: 1,
+            controlPort: 29521,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: $port,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: self::runtimeSelection(),
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'gateway' => [
+                        'launch_id' => $launchId,
+                        'public_lease' => [
+                            'schema_version' => 6,
+                            'instance' => $instanceName,
+                            'port' => $port,
+                            'lease_id' => $leaseId,
+                            'bind_host' => '127.0.0.1',
+                        ],
+                        'startup_listener_handoff' => $intent,
+                    ],
+                ],
+            ],
+            workerCount: 1,
+            workerBasePort: $port,
+            workerPort: $port,
+        );
+        $socket = \socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        self::assertInstanceOf(\Socket::class, $socket);
+
+        $handoffReflection = new \ReflectionClass(WindowsListenerHandoff::class);
+        $sourcesProperty = $handoffReflection->getProperty('masterSources');
+        $primaryProperty = $handoffReflection->getProperty('primaryIntentDigest');
+        $originalSources = $sourcesProperty->getValue();
+        $originalPrimary = $primaryProperty->getValue();
+        $sourcesProperty->setValue(null, [
+            $intentDigest => [
+                'socket' => $socket,
+                'stream' => null,
+                'intent' => $intent,
+            ],
+        ]);
+        $primaryProperty->setValue(null, $intentDigest);
+
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'context', $context);
+
+        try {
+            $this->invokePrivateWithArgs(
+                $orchestrator,
+                'ensureDirectSharedListenerForRole',
+                [ControlMessage::ROLE_DISPATCHER, $context],
+            );
+            self::addToAssertionCount(1);
+            self::assertTrue($this->invokePrivateWithArgs(
+                $orchestrator,
+                'isMasterOwnedSharedListenerPort',
+                [ControlMessage::ROLE_DISPATCHER, $port],
+            ));
+
+            $dispatcherName = 'weline-wls-dispatcher-' . $instanceName . '-p39912e55';
+            $dispatcher = new ServiceInstance(
+                role: ControlMessage::ROLE_DISPATCHER,
+                instanceId: 1,
+                epoch: 1,
+                launchId: $launchId,
+                pid: 7372,
+                port: $port,
+                state: ServiceInstance::STATE_STARTING,
+            );
+            $dispatcher->setMeta('process_name', $dispatcherName);
+            $bootstrapOwnedInspect = [
+                'in_use' => true,
+                'pid' => 10256,
+                'pid_running' => true,
+                'is_weline' => false,
+                'state' => 'foreign',
+                'pname' => '--name=' . $dispatcherName,
+                'kernel_listener_pid' => 10256,
+                'kernel_listener_pname' => 'php.exe bin\\w server:start ' . $instanceName,
+                'port_index_advisory_pname' => '--name=' . $dispatcherName,
+            ];
+            self::assertTrue(
+                $this->invokePrivateWithArgs(
+                    $orchestrator,
+                    'isLaunchPortOwnedByInstance',
+                    [$dispatcher, $bootstrapOwnedInspect],
+                ),
+                'The exact retained listener handoff must outrank Windows bootstrap-PID attribution.',
+            );
+
+            $sourcesProperty->setValue(null, []);
+            self::assertFalse(
+                $this->invokePrivateWithArgs(
+                    $orchestrator,
+                    'isLaunchPortOwnedByInstance',
+                    [$dispatcher, $bootstrapOwnedInspect],
+                ),
+                'A bootstrap-attributed listener without the exact retained source must remain foreign.',
+            );
+            try {
+                $this->invokePrivateWithArgs(
+                    $orchestrator,
+                    'ensureDirectSharedListenerForRole',
+                    [ControlMessage::ROLE_DISPATCHER, $context],
+                );
+                self::fail('Windows startup must reject a listener handoff that the Master no longer owns.');
+            } catch (\RuntimeException $exception) {
+                self::assertSame(
+                    'Windows Dispatcher startup requires the Master-owned listener source copy.',
+                    $exception->getMessage(),
+                );
+            }
+        } finally {
+            $sourcesProperty->setValue(null, $originalSources);
+            $primaryProperty->setValue(null, $originalPrimary);
+            @\socket_close($socket);
+        }
+    }
+
     private static function runtimeSelection(): RuntimeSelection
     {
         return RuntimeSelection::fromArray([
@@ -5996,6 +6288,118 @@ class ServiceOrchestratorStartupTest extends TestCase
             'Deferred child startup configuration changed outside the serving manifest fence.',
         );
         $this->invokePrivateWithArgs($orchestrator, 'adoptDeferredChildStartupContext', [$after]);
+    }
+
+    public function testWindowsCredentialAuthorizationRecoversOnlyAnExactPublishedChildPid(): void
+    {
+        $startedAt = \time();
+        $dispatcher = new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: 7,
+            launchId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            startedAt: $startedAt,
+        );
+        $dispatcher->setMeta('process_name', 'weline-wls-dispatcher-pid-recovery');
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: 7,
+            launchId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            startedAt: $startedAt,
+        );
+        $worker->setMeta('process_name', 'weline-wls-worker-pid-recovery');
+        $maintenance = new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            epoch: 7,
+            launchId: 'cccccccccccccccccccccccccccccccc',
+            startedAt: $startedAt,
+        );
+        $maintenance->setMeta('process_name', 'weline-wls-maintenance-pid-recovery');
+
+        $orchestrator = new class($startedAt) extends ServiceOrchestrator {
+            /** @var list<string> */
+            public array $leaseReads = [];
+            /** @var list<int> */
+            public array $birthCaptures = [];
+
+            public function __construct(private readonly int $leaseTime)
+            {
+            }
+
+            /** @param array<string|int,ServiceInstance> $instances */
+            public function recover(array $instances, array $pids): array
+            {
+                return $this->recoverPublishedWindowsChildPids($instances, $pids);
+            }
+
+            protected function readPublishedWindowsChildLease(string $expectedPname): array
+            {
+                $this->leaseReads[] = $expectedPname;
+                $isDispatcher = \str_contains($expectedPname, 'dispatcher');
+
+                return [
+                    'pid' => $isDispatcher ? 4242 : 5252,
+                    'time' => $this->leaseTime,
+                    'pname' => $expectedPname,
+                    'pname_key' => $expectedPname,
+                    'process_name' => \substr($expectedPname, \strlen('--name=')),
+                    'launch_id' => $isDispatcher
+                        ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+                        : 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                    'epoch' => 7,
+                ];
+            }
+
+            protected function probePublishedWindowsChildPids(array $requests): array
+            {
+                $probes = [];
+                foreach ($requests as $key => $request) {
+                    $pid = (int)($request['pid'] ?? 0);
+                    $probes[$key] = [
+                        'pid' => $pid,
+                        'state' => Processer::PROCESS_STATE_UNKNOWN,
+                        'reason' => $pid === 4242
+                            ? 'live_identity_unavailable'
+                            : 'live_identity_mismatch',
+                    ];
+                }
+
+                return $probes;
+            }
+
+            protected function capturePublishedWindowsChildProcessIdentity(int $pid): array
+            {
+                $this->birthCaptures[] = $pid;
+
+                return $pid === 4242
+                    ? [
+                        'birth' => \str_repeat('d', 64),
+                        'pid_namespace_id' => '',
+                    ]
+                    : [];
+            }
+        };
+
+        self::assertSame([
+            'dispatcher#1' => 4242,
+            'worker#1' => 0,
+            'maintenance#1' => 6363,
+        ], $orchestrator->recover([
+            'dispatcher#1' => $dispatcher,
+            'worker#1' => $worker,
+            'maintenance#1' => $maintenance,
+        ], [
+            'dispatcher#1' => 0,
+            'worker#1' => 0,
+            'maintenance#1' => 6363,
+        ]));
+        self::assertSame([
+            '--name=weline-wls-dispatcher-pid-recovery',
+            '--name=weline-wls-worker-pid-recovery',
+        ], $orchestrator->leaseReads);
+        self::assertSame([4242], $orchestrator->birthCaptures);
     }
 
     private static function cleanupGatewayBackendTokenState(string $instanceName): void

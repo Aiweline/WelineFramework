@@ -33,6 +33,13 @@ use Weline\Framework\System\Process\Processer;
  */
 class WindowsProcessDriver extends AbstractProcessDriver
 {
+    // A parent-constrained Win32_Process query is just under five seconds on
+    // Windows 11 ARM64 running the supported x64 PHP compatibility layer even
+    // without launch load. Keep the probe bounded, but leave enough headroom
+    // for the six-child cold-start batch instead of timing out at its normal
+    // management-provider latency.
+    private const PROCESS_TOPOLOGY_COMMAND_TIMEOUT_SECONDS = 12.0;
+
     /** @var array<string, true> */
     private const DIRECT_BYPASS_SHELL_PROGRAMS = [
         'powershell' => true,
@@ -141,6 +148,64 @@ class WindowsProcessDriver extends AbstractProcessDriver
         }
 
         return parent::executeCommand($command, $output, $exitCode);
+    }
+
+    /**
+     * Execute one identity observation with a hard wall-clock deadline.
+     * PowerShell CIM can wait indefinitely for the Windows management service;
+     * it must never hold the WLS startup lock or listener handoff forever.
+     *
+     * @param list<string> $output
+     */
+    protected function executeCommandWithinDeadline(
+        string $command,
+        float $timeoutSeconds,
+        array &$output = [],
+        int &$exitCode = 0,
+    ): bool {
+        $output = [];
+        $exitCode = 1;
+        if (!\is_finite($timeoutSeconds) || $timeoutSeconds <= 0.0) {
+            return false;
+        }
+
+        $prepared = $this->prepareDirectBypassShellCommand($command);
+        if ($prepared === null || !\class_exists(\Symfony\Component\Process\Process::class)) {
+            return false;
+        }
+
+        $process = null;
+        try {
+            $process = new \Symfony\Component\Process\Process($prepared['argv']);
+            $process->setTimeout($timeoutSeconds);
+            $process->run();
+            $stdout = $process->getOutput();
+            $stderr = $process->getErrorOutput();
+            $exitCode = $process->getExitCode() ?? 1;
+        } catch (\Symfony\Component\Process\Exception\ProcessTimedOutException) {
+            if ($process instanceof \Symfony\Component\Process\Process && $process->isRunning()) {
+                $process->stop(0.0);
+            }
+            $exitCode = 124;
+            return false;
+        } catch (\Throwable) {
+            if ($process instanceof \Symfony\Component\Process\Process && $process->isRunning()) {
+                $process->stop(0.0);
+            }
+            return false;
+        }
+
+        if ($prepared['merge_stderr'] && $stderr !== '') {
+            if ($stdout !== '' && !\str_ends_with($stdout, "\n") && !\str_ends_with($stdout, "\r")) {
+                $stdout .= PHP_EOL;
+            }
+            $stdout .= $stderr;
+        }
+        $output = $stdout === ''
+            ? []
+            : (\preg_split('/\r\n|\r|\n/', \rtrim($stdout, "\r\n")) ?: []);
+
+        return true;
     }
     
     /**
@@ -1388,6 +1453,159 @@ class WindowsProcessDriver extends AbstractProcessDriver
         }
 
         return $ordered;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function findProcessTopologyByNames(array $processNames, array $rootPids = []): array
+    {
+        $names = [];
+        foreach ($processNames as $processName) {
+            $processName = \trim((string)$processName);
+            if ($processName === ''
+                || \strlen($processName) > 512
+                || \preg_match('/[\x00-\x1f\x7f]/', $processName) === 1
+            ) {
+                continue;
+            }
+            $names[$processName] = true;
+        }
+        $requestedRootPids = $rootPids;
+        $roots = [];
+        foreach ($rootPids as $rootPid) {
+            $rootPid = (int)$rootPid;
+            if ($this->isValidPid($rootPid)) {
+                $roots[$rootPid] = true;
+            }
+        }
+        if ($requestedRootPids !== [] && $roots === []) {
+            return [];
+        }
+        if ($names === [] || $this->resolveWindowsCommandPath('powershell') === null) {
+            return [];
+        }
+
+        $powershell = $this->buildProcessTopologyPowerShell(
+            \array_keys($names),
+            \array_keys($roots),
+        );
+        if ($powershell === '') {
+            return [];
+        }
+
+        $output = [];
+        $exitCode = 0;
+        $executed = $this->executeCommandWithinDeadline(
+            'powershell -NoProfile -NonInteractive -Command "' . $powershell . '" 2>NUL',
+            self::PROCESS_TOPOLOGY_COMMAND_TIMEOUT_SECONDS,
+            $output,
+            $exitCode,
+        );
+        if (!$executed || $exitCode !== 0 || $output === []) {
+            return [];
+        }
+        self::$powershellAvailable = true;
+
+        $decoded = \json_decode(\trim(\implode("\n", $output)), true);
+        if (!\is_array($decoded)) {
+            return [];
+        }
+        if (\array_key_exists('ProcessId', $decoded)) {
+            $decoded = [$decoded];
+        }
+
+        $snapshot = [];
+        foreach ($decoded as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $pid = (int)($row['ProcessId'] ?? 0);
+            $parentPid = (int)($row['ParentProcessId'] ?? 0);
+            $commandLine = \trim((string)($row['CommandLine'] ?? ''));
+            if (!$this->isValidPid($pid) || $parentPid < 0 || $commandLine === '') {
+                continue;
+            }
+
+            $this->rememberCommandLine($pid, $commandLine);
+            $snapshot[$pid] = [
+                'pid' => $pid,
+                'parent_pid' => $parentPid,
+                'command_line' => $commandLine,
+            ];
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * Build one bounded CIM observation. When launch roots are available the
+     * query never enumerates unrelated system processes; Processer still owns
+     * exact argv and topology selection over the returned rows.
+     *
+     * @param string[] $processNames
+     * @param int[] $rootPids
+     */
+    private function buildProcessTopologyPowerShell(array $processNames, array $rootPids = []): string
+    {
+        $names = [];
+        foreach ($processNames as $processName) {
+            $processName = \trim((string)$processName);
+            if ($processName !== ''
+                && \strlen($processName) <= 512
+                && \preg_match('/[\x00-\x1f\x7f]/', $processName) !== 1
+            ) {
+                $names[$processName] = true;
+            }
+        }
+        if ($names === []) {
+            return '';
+        }
+
+        $roots = [];
+        foreach ($rootPids as $rootPid) {
+            $rootPid = (int)$rootPid;
+            if ($this->isValidPid($rootPid)) {
+                $roots[$rootPid] = true;
+            }
+        }
+        if ($rootPids !== [] && $roots === []) {
+            return '';
+        }
+
+        if ($roots !== []) {
+            $clauses = [];
+            foreach (\array_keys($roots) as $rootPid) {
+                $clauses[] = 'ProcessId=' . $rootPid;
+                $clauses[] = 'ParentProcessId=' . $rootPid;
+            }
+            $filter = \implode(' OR ', $clauses);
+
+            return '$rows=@(Get-CimInstance Win32_Process -Filter \''
+                . $filter
+                . '\' -ErrorAction SilentlyContinue | Select-Object ProcessId,ParentProcessId,CommandLine);'
+                . '$rows|ConvertTo-Json -Compress';
+        }
+
+        $nameLiterals = \array_map(
+            static fn(string $name): string => "'" . \str_replace("'", "''", $name) . "'",
+            \array_keys($names),
+        );
+        $powershell = '$names=@(' . \implode(',', $nameLiterals) . ');'
+            . '$rows=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {'
+            . '$command=[string]$_.CommandLine;'
+            . 'if($command -eq \'\'){return $false};'
+            . 'foreach($name in $names){'
+            . '$needle=\'--name=\'+$name;'
+            . 'if($command.IndexOf($needle,[System.StringComparison]::OrdinalIgnoreCase) -ge 0){'
+            . 'return $true'
+            . '}'
+            . '};'
+            . 'return $false'
+            . '} | Select-Object ProcessId,ParentProcessId,CommandLine);'
+            . '$rows|ConvertTo-Json -Compress';
+
+        return $powershell;
     }
 
     private function expireCommandLineCacheIfStale(): void

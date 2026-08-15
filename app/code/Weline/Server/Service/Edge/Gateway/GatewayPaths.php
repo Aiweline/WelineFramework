@@ -383,6 +383,37 @@ final class GatewayPaths
         return $this->home() . DIRECTORY_SEPARATOR . 'snapshot-candidates-v2';
     }
 
+    /**
+     * Fixed neutral TLS namespace. Production creation belongs to the
+     * privileged installer, never to a generic status/setup call.
+     */
+    public function neutralTlsDir(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'neutral-tls';
+    }
+
+    /**
+     * Fixed broker-owned PID namespace. Runtime owners use nginxPidFile()
+     * and never import the legacy mutable runtime/run/nginx.pid artifact.
+     */
+    public function nginxPidDir(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'nginx-pid';
+    }
+
+    public function nginxPidFile(): string
+    {
+        return $this->nginxPidDir() . DIRECTORY_SEPARATOR . 'nginx.pid';
+    }
+
+    /** Root-only authorization to replay a retired platform generation's
+     * broker-private nginx-pid staging leaves. */
+    public function nginxPidResidueIntentFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'nginx-pid-residue.intent';
+    }
+
     public function slotDir(string $slot): string
     {
         $slot = \strtoupper(\trim($slot));
@@ -838,6 +869,8 @@ final class GatewayPaths
             // group and ACL profiles.
             $directories[] = $this->sealedSnapshotsDir();
             $directories[] = $this->snapshotCandidatesDir();
+            $directories[] = $this->neutralTlsDir();
+            $directories[] = $this->nginxPidDir();
         }
         $allowProductionBootstrap = !$testMode
             && $this->productionBootstrapAuthorityAllowed();
@@ -979,6 +1012,12 @@ final class GatewayPaths
                 $this->legacySnapshotsDir() => [
                     [$controllerUid, $dataPlaneGid, 0710],
                 ],
+                $this->neutralTlsDir() => [
+                    [0, $dataPlaneGid, 0710],
+                ],
+                $this->nginxPidDir() => [
+                    [0, $dataPlaneGid, 0711],
+                ],
                 \dirname($this->launcherFile()) => [
                     [0, $controllerGid, 0750],
                 ],
@@ -1057,9 +1096,19 @@ final class GatewayPaths
                 };
             }
             $ffi = $bindings[$platform];
-            $flags = $platform === 'Linux'
-                ? (0x10000 | 0x20000 | 0x80000)
-                : (0x100000 | 0x100 | 0x1000000);
+            $flags = match ($platform) {
+                'Linux' => match (\strtolower(\php_uname('m'))) {
+                    'x86_64', 'amd64' => (0x10000 | 0x20000 | 0x80000),
+                    'aarch64', 'arm64' => (0x4000 | 0x8000 | 0x80000),
+                    default => throw new \RuntimeException(
+                        'Unsupported WLS Gateway POSIX ACL architecture.',
+                    ),
+                },
+                'Darwin' => (0x100000 | 0x100 | 0x1000000),
+                default => throw new \RuntimeException(
+                    'Unsupported WLS Gateway POSIX ACL platform.',
+                ),
+            };
             $fd = (int)$ffi->open($directory, $flags);
             if ($fd < 0) {
                 throw new \RuntimeException(

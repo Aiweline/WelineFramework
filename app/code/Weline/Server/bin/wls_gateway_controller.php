@@ -49,6 +49,9 @@ final class WlsEdgeGatewayController
     private const BROKER_HANDSHAKE_TIMEOUT_SECONDS = 0.025;
     private const BROKER_ACTION_TIMEOUT_SECONDS = 3.0;
     private const PROCESS_TREE_RETIRE_TIMEOUT_SECONDS = 13.0;
+    /* Keep enough of the caller's deadline to receive and authenticate the
+     * Broker response after Nginx may have forked its detached master. */
+    private const NGINX_START_RESPONSE_RESERVE_SECONDS = 0.5;
     private const HEARTBEAT_TTL = 45;
     private const DRAIN_SECONDS = 300;
     private const STALE_RETENTION = 86400;
@@ -18612,6 +18615,26 @@ final class WlsEdgeGatewayController
         if ($this->adminStopFenceActive) {
             return;
         }
+        if ($this->startupDataPlaneRecoveryPending
+            && $this->brokerDrivenActionPending()
+        ) {
+            if (!\hash_equals(
+                'NONE',
+                (string)($this->state['recovery']['stage'] ?? ''),
+            )) {
+                return;
+            }
+            // A production Controller has no authenticated Native Broker
+            // action context until bootstrapRecovery(). Do not treat that
+            // absence as public TCP evidence or mutate the service tree.
+            $this->state['ready'] = false;
+            $this->state['health_state'] = 'CONTROL_DEGRADED';
+            $this->state['recovery']['stage'] = 'BROKER_ACTION_PENDING_STARTUP';
+            $this->state['recovery']['last_failure'] =
+                'Nginx startup is waiting for the Native Broker internal recovery callback.';
+            $this->persistState();
+            return;
+        }
         $recoveryProbeDeadline = $this->boundedOperationDeadline(
             $this->monotonicNow() + self::PUBLIC_ROUTE_PROBE_BUDGET_SECONDS,
         );
@@ -27854,8 +27877,10 @@ final class WlsEdgeGatewayController
         $httpsPort = (int)$this->state['public_https'];
         $pid = $this->quote($this->nginxPidFile());
         $errorLog = $this->quote($this->logDir() . DIRECTORY_SEPARATOR . 'error.log');
-        $neutralCert = $this->quote($this->stateDir() . DIRECTORY_SEPARATOR . 'neutral-cert.pem');
-        $neutralKey = $this->quote($this->stateDir() . DIRECTORY_SEPARATOR . 'neutral-key.pem');
+        $neutralCert = $this->quote($this->home . DIRECTORY_SEPARATOR
+            . 'neutral-tls' . DIRECTORY_SEPARATOR . 'neutral-cert.pem');
+        $neutralKey = $this->quote($this->home . DIRECTORY_SEPARATOR
+            . 'neutral-tls' . DIRECTORY_SEPARATOR . 'neutral-key.pem');
         $isolation = ($this->state['isolation_mode'] ?? false) === true
             || ($this->state['security_ledger_valid'] ?? true) !== true;
         $h3 = $allowH3
@@ -27875,6 +27900,26 @@ final class WlsEdgeGatewayController
             'http {',
             '  include ' . $this->quote($this->mimeTypesFile()) . ';',
             '  default_type application/octet-stream;',
+            '  client_body_temp_path ' . $this->quote(
+                $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
+                    . DIRECTORY_SEPARATOR . 'client_body_temp',
+            ) . ';',
+            '  proxy_temp_path ' . $this->quote(
+                $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
+                    . DIRECTORY_SEPARATOR . 'proxy_temp',
+            ) . ';',
+            '  fastcgi_temp_path ' . $this->quote(
+                $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
+                    . DIRECTORY_SEPARATOR . 'fastcgi_temp',
+            ) . ';',
+            '  uwsgi_temp_path ' . $this->quote(
+                $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
+                    . DIRECTORY_SEPARATOR . 'uwsgi_temp',
+            ) . ';',
+            '  scgi_temp_path ' . $this->quote(
+                $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
+                    . DIRECTORY_SEPARATOR . 'scgi_temp',
+            ) . ';',
             // Per-request host logs are unbounded and can take down the shared
             // edge by exhausting its filesystem. Control-plane audit and
             // warning/error logs remain enabled; request logging is opt-in at
@@ -29024,6 +29069,9 @@ final class WlsEdgeGatewayController
                 'message' => 'Native Broker Nginx lifecycle action is unavailable.',
             ];
         }
+        $actionDeadline = $this->resolveBrokerActionDeadline(
+            $deadlineMonotonic,
+        ) ?? ($this->monotonicNow() + self::BROKER_ACTION_TIMEOUT_SECONDS);
         $configDigest = $this->fileHash($this->configFile());
         $configPathDigest = \hash('sha256', $this->configFile());
         $runtimeGeneration = $this->activeRuntimeGeneration();
@@ -29032,11 +29080,19 @@ final class WlsEdgeGatewayController
             $configDigest,
             $deadlineMonotonic,
         );
-        $actionDeadline = $this->resolveBrokerActionDeadline(
-            $deadlineMonotonic,
-        ) ?? ($this->monotonicNow() + self::BROKER_ACTION_TIMEOUT_SECONDS);
         $remaining = $actionDeadline - $this->monotonicNow();
-        $budgetMilliseconds = (int)\floor(\min(12.0, $remaining) * 1000.0);
+        if ($opcode === 'NGINX_START'
+            && $remaining <= self::NGINX_START_RESPONSE_RESERVE_SECONDS + 0.001
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'Native Nginx START deadline lacks response reserve before spawn.',
+            ];
+        }
+        $brokerBudgetSeconds = $opcode === 'NGINX_START'
+            ? $remaining - self::NGINX_START_RESPONSE_RESERVE_SECONDS
+            : $remaining;
+        $budgetMilliseconds = (int)\floor(\min(12.0, $brokerBudgetSeconds) * 1000.0);
         if ($budgetMilliseconds < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $configDigest) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
@@ -29067,6 +29123,25 @@ final class WlsEdgeGatewayController
                 $actionDeadline,
                 self::PROCESS_TREE_RETIRE_TIMEOUT_SECONDS,
             ));
+        } catch (WlsNativeBrokerActionException $exception) {
+            if ($opcode === 'NGINX_START'
+                && \hash_equals(
+                    'NGINX_START_SERVICE_TREE_RESTART_REQUIRED',
+                    $exception->stableCode(),
+                )
+            ) {
+                $this->requestServiceTreeRestart($exception->getMessage());
+                return [
+                    'ok' => false,
+                    'message' => $opcode . ' requires platform service-tree restart: '
+                        . $exception->getMessage(),
+                    'service_tree_restart_required' => true,
+                ];
+            }
+            return [
+                'ok' => false,
+                'message' => $opcode . ' failed: ' . $exception->getMessage(),
+            ];
         } catch (\Throwable $throwable) {
             return [
                 'ok' => false,
@@ -29248,25 +29323,66 @@ final class WlsEdgeGatewayController
                     );
                 }
             }
+            $pidSource = ['ok' => false, 'prepared' => false];
+            $directStarted = false;
             try {
-                $startDeadline = \min(
-                    $deadlineMonotonic ?? PHP_FLOAT_MAX,
-                    $this->monotonicNow() + self::COMMAND_TIMEOUT_SECONDS,
-                );
-                $direct = $this->runNginx([], $startDeadline);
-                $start = ($direct['code'] ?? 1) === 0
-                    ? ['ok' => true, 'message' => 'started']
-                    : [
+                $pidSource = \PHP_OS_FAMILY === 'Windows'
+                    ? [
+                        'ok' => true,
+                        'message' => 'Windows direct lifecycle uses tracked process handles.',
+                        'prepared' => false,
+                    ]
+                    : $this->prepareDirectTestModeNginxPidSource();
+                if (($pidSource['ok'] ?? false) !== true) {
+                    $start = [
                         'ok' => false,
-                        'message' => 'Nginx start failed: ' . (string)$direct['output'],
+                        'message' => (string)($pidSource['message']
+                            ?? 'Unable to prepare the test-mode Nginx PID source.'),
                     ];
+                } else {
+                    $startDeadline = \min(
+                        $deadlineMonotonic ?? PHP_FLOAT_MAX,
+                        $this->monotonicNow() + self::COMMAND_TIMEOUT_SECONDS,
+                    );
+                    $direct = $this->runNginx([], $startDeadline);
+                    $directStarted = ($direct['code'] ?? 1) === 0;
+                    if (($direct['code'] ?? 1) !== 0
+                        && ($pidSource['prepared'] ?? false) === true
+                        && !$this->cleanupDirectTestModeNginxPidSource(
+                            (array)($pidSource['identity'] ?? []),
+                        )
+                    ) {
+                        $direct['output'] = (string)($direct['output'] ?? '')
+                            . ' Test-mode PID source cleanup was not proven; '
+                            . 'the exact evidence was retained.';
+                    }
+                    $start = ($direct['code'] ?? 1) === 0
+                        ? ['ok' => true, 'message' => 'started']
+                        : [
+                            'ok' => false,
+                            'message' => 'Nginx start failed: ' . (string)$direct['output'],
+                        ];
+                }
             } finally {
+                if (!$directStarted
+                    && ($pidSource['prepared'] ?? false) === true
+                ) {
+                    $this->cleanupDirectTestModeNginxPidSource(
+                        (array)($pidSource['identity'] ?? []),
+                    );
+                }
                 if ($reopenControl) {
                     $this->controlServer = $this->openControlServer();
                 }
             }
         }
         if (($start['ok'] ?? false) !== true) {
+            if (($start['service_tree_restart_required'] ?? false) === true) {
+                $this->requestServiceTreeRestart(
+                    (string)($start['message'] ?? 'Nginx start requires platform service-tree restart.'),
+                );
+                return $start;
+            }
             if (self::resultDefersPublicTcpStart($start)) {
                 if (self::resultIsPortTaken($start)) {
                     $this->deferForTakenPublicTcpPorts($start);
@@ -29884,7 +30000,13 @@ final class WlsEdgeGatewayController
                 ];
             }
             if ($currentPid === $pid) {
-                $this->removeVerifiedPidFile($this->nginxPidFile());
+                $message = 'Native retirement left Broker-owned Nginx PID evidence; platform shutdown cleanup is required.';
+                $this->requestServiceTreeRestart($message);
+                return [
+                    'ok' => false,
+                    'message' => $message,
+                    'service_tree_restart_required' => true,
+                ];
             }
             unset($this->state['nginx_process_attestation']);
             $this->verifiedNativeProcessAttestationDigest = '';
@@ -30176,11 +30298,13 @@ final class WlsEdgeGatewayController
                         // Keep the fresh PROCESS_ATTEST/3. The activation and
                         // public probes below complete the recovery proof.
                     } elseif ($this->pidRunningState($currentPid) === false) {
-                        // A replacement can die after it atomically publishes a
-                        // different pidfile but before Controller durability.
-                        // Removing a kernel-confirmed stale pidfile is safe;
-                        // any live or indeterminate identity remains blocked.
-                        $this->removeVerifiedPidFile($this->nginxPidFile());
+                        $message = 'Broker-owned Nginx PID evidence requires platform shutdown cleanup after retirement.';
+                        $this->requestServiceTreeRestart($message);
+                        return [
+                            'ok' => false,
+                            'message' => $message,
+                            'service_tree_restart_required' => true,
+                        ];
                     } else {
                         return [
                             'ok' => false,
@@ -30659,6 +30783,15 @@ final class WlsEdgeGatewayController
                     'service_tree_restart_required' => true,
                 ];
             }
+            if ($this->brokerActionsRequired()) {
+                $message = 'Broker-owned Nginx PID evidence requires platform shutdown cleanup.';
+                $this->requestServiceTreeRestart($message);
+                return [
+                    'ok' => false,
+                    'message' => $message,
+                    'service_tree_restart_required' => true,
+                ];
+            }
             $this->removeVerifiedPidFile($this->nginxPidFile());
             $this->releaseWindowsNginxProcess($this->configFile());
             return ['ok' => true, 'message' => 'not running'];
@@ -30763,7 +30896,13 @@ final class WlsEdgeGatewayController
         ?float $deadlineMonotonic = null,
     ): array
     {
-        if ($this->nestedControlProbeActive()) {
+        // Production nested probes must use the bounded Native receipt and
+        // never re-enter the Broker action channel. Explicit test mode has no
+        // Native listener lease, so it may continue through the existing
+        // local PID/argv/binary verifier without making a Broker request.
+        if ($this->nestedControlProbeActive()
+            && $this->brokerActionsRequired()
+        ) {
             $attestation = \is_array(
                 $this->state['nginx_process_attestation'] ?? null
             ) ? $this->state['nginx_process_attestation'] : [];
@@ -30848,8 +30987,14 @@ final class WlsEdgeGatewayController
             ];
         }
         $brokerChannel = (string)($this->activeBrokerPeer['channel'] ?? '');
+        // Linux PROCESS_ATTEST is bound to the listener lease created by
+        // Native NGINX_START. The explicit test-mode lifecycle starts Nginx
+        // directly, so it has no such lease and must stay on the existing
+        // local exact PID/argv/binary identity path. Production remains
+        // lease-backed because brokerActionsRequired() is true there.
         if ($refreshFromBroker
             && !$this->readOnlyRecoveryMode
+            && (\PHP_OS_FAMILY !== 'Linux' || $this->brokerActionsRequired())
             && \in_array($brokerChannel, ['admin', 'project'], true)
             && $this->brokerActionsAvailable($brokerChannel)
         ) {
@@ -35847,6 +35992,11 @@ final class WlsEdgeGatewayController
                 \sodium_memzero($binaryKey);
             }
         }
+        // Freshness is proven by the unpredictable per-connection nonce and
+        // the bounded monotonic request/response deadline above. Treat the
+        // backend wall timestamp as signed diagnostic data only: comparing it
+        // with this Controller's wall clock would withdraw every tenant route
+        // during an otherwise harmless host-clock correction.
         $issuedAt = (int)($attestation['issued_at'] ?? 0);
         if (!\hash_equals(
                 'wls-backend-attestation/1',
@@ -35896,7 +36046,7 @@ final class WlsEdgeGatewayController
                 ),
             )
             || $issuedAt <= 0
-            || \abs(\time() - $issuedAt) > 10
+            || $issuedAt > self::MAX_ACME_WALL_EXPIRY
         ) {
             return null;
         }
@@ -47301,7 +47451,7 @@ CDEF,
         ) {
             throw new \RuntimeException('Unable to export neutral gateway certificate.');
         }
-        $this->atomicWrite($certFile, $certPem, 0644);
+        $this->atomicWrite($certFile, $certPem, 0600);
         $this->atomicWrite($keyFile, $keyPem, 0600);
     }
 
@@ -49184,6 +49334,223 @@ CDEF,
         }
     }
 
+    /**
+     * Explicit test-mode starts do not use Native NGINX_START, but Nginx
+     * still needs the same pre-existing canonical PID leaf when its fixed
+     * namespace is not writable. Production never enters this path.
+     *
+     * @return array{ok:bool,message:string,prepared?:bool,identity?:array<string,int>}
+     */
+    private function prepareDirectTestModeNginxPidSource(): array
+    {
+        if ($this->brokerActionsRequired()
+            || \PHP_OS_FAMILY === 'Windows'
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'Direct Nginx PID preparation is restricted to POSIX test mode.',
+            ];
+        }
+        $file = $this->nginxPidFile();
+        $directory = \dirname($file);
+        $parent = @\lstat($directory);
+        $effectiveUid = \function_exists('posix_geteuid')
+            ? @\posix_geteuid()
+            : null;
+        \clearstatcache(true, $file);
+        $existing = @\lstat($file);
+        if (!\is_array($parent)
+            || \is_link($directory)
+            || ((((int)($parent['mode'] ?? 0)) & 0170000) !== 0040000)
+            || ((((int)($parent['mode'] ?? 0)) & 0777) !== 0700)
+            || ($effectiveUid !== null
+                && (int)($parent['uid'] ?? -1) !== $effectiveUid)
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'Test-mode Nginx PID namespace is not private.',
+            ];
+        }
+        if (\is_array($existing)) {
+            if (\is_link($file)
+                || ((((int)($existing['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($existing['nlink'] ?? 0) !== 1
+                || (int)($existing['size'] ?? -1) !== 0
+                || ($effectiveUid !== null
+                    && (int)($existing['uid'] ?? -1) !== $effectiveUid)
+            ) {
+                return [
+                    'ok' => false,
+                    'message' => 'Nginx config test left unsafe PID evidence.',
+                ];
+            }
+        } elseif (\file_exists($file) || \is_link($file)) {
+            return [
+                'ok' => false,
+                'message' => 'Nginx config-test PID evidence is indeterminate.',
+            ];
+        }
+        $handle = @\fopen($file, \is_array($existing) ? 'r+b' : 'x+b');
+        if (!\is_resource($handle)) {
+            return [
+                'ok' => false,
+                'message' => 'Unable to create the test-mode Nginx PID source.',
+            ];
+        }
+        $created = @\fstat($handle);
+        $failure = null;
+        try {
+            if (!\is_array($created)
+                || (\is_array($existing)
+                    && !$this->sameStableFileState($existing, $created))
+                || ((((int)($created['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($created['nlink'] ?? 0) !== 1
+                || (int)($created['size'] ?? -1) !== 0
+            ) {
+                throw new \RuntimeException(
+                    'Test-mode Nginx PID source identity is unsafe.',
+                );
+            }
+            $modeApplied = \function_exists('fchmod')
+                ? @\fchmod($handle, 0600)
+                : @\chmod($file, 0600);
+            if (!$modeApplied
+                || !@\fflush($handle)
+                || (\function_exists('fsync') && !@\fsync($handle))
+            ) {
+                throw new \RuntimeException(
+                    'Unable to seal the test-mode Nginx PID source.',
+                );
+            }
+            $sealed = @\fstat($handle);
+            \clearstatcache(true, $file);
+            $pathStatus = @\lstat($file);
+            if (!\is_array($sealed)
+                || !\is_array($pathStatus)
+                || !$this->sameStableFileState($sealed, $pathStatus)
+                || (int)($sealed['dev'] ?? -1) !== (int)($created['dev'] ?? -2)
+                || (int)($sealed['ino'] ?? -1) !== (int)($created['ino'] ?? -2)
+                || ((((int)($sealed['mode'] ?? 0)) & 0777) !== 0600)
+                || (int)($sealed['nlink'] ?? 0) !== 1
+                || (int)($sealed['size'] ?? -1) !== 0
+            ) {
+                throw new \RuntimeException(
+                    'Test-mode Nginx PID source identity changed before start.',
+                );
+            }
+            $this->syncDirectory($directory);
+            $after = @\fstat($handle);
+            \clearstatcache(true, $file);
+            $pathAfter = @\lstat($file);
+            if (!\is_array($after)
+                || !\is_array($pathAfter)
+                || !$this->sameStableFileState($sealed, $after)
+                || !$this->sameStableFileState($after, $pathAfter)
+            ) {
+                throw new \RuntimeException(
+                    'Test-mode Nginx PID source changed after persistence.',
+                );
+            }
+            return [
+                'ok' => true,
+                'message' => 'test-mode Nginx PID source prepared',
+                'prepared' => true,
+                'identity' => [
+                    'dev' => (int)$after['dev'],
+                    'ino' => (int)$after['ino'],
+                    'uid' => (int)($after['uid'] ?? -1),
+                    'gid' => (int)($after['gid'] ?? -1),
+                ],
+            ];
+        } catch (\Throwable $throwable) {
+            $failure = $throwable;
+        } finally {
+            if ($failure instanceof \Throwable) {
+                $held = @\fstat($handle);
+                \clearstatcache(true, $file);
+                $pathStatus = @\lstat($file);
+                if (\is_array($created)
+                    && \is_array($held)
+                    && \is_array($pathStatus)
+                    && (int)($held['dev'] ?? -1) === (int)($created['dev'] ?? -2)
+                    && (int)($held['ino'] ?? -1) === (int)($created['ino'] ?? -2)
+                    && (int)($pathStatus['dev'] ?? -1) === (int)($created['dev'] ?? -2)
+                    && (int)($pathStatus['ino'] ?? -1) === (int)($created['ino'] ?? -2)
+                    && ((((int)($held['mode'] ?? 0)) & 0170000) === 0100000)
+                    && (int)($held['nlink'] ?? 0) === 1
+                    && (int)($held['size'] ?? -1) === 0
+                    && @\unlink($file)
+                ) {
+                    try {
+                        $this->syncDirectory($directory);
+                    } catch (\Throwable) {
+                        // The operation already fails closed; retain its
+                        // original diagnostic while the test root is retired.
+                    }
+                }
+            }
+            @\fclose($handle);
+        }
+        return [
+            'ok' => false,
+            'message' => $failure instanceof \Throwable
+                ? $failure->getMessage()
+                : 'Unable to prepare the test-mode Nginx PID source.',
+        ];
+    }
+
+    /** @param array<string,int> $identity */
+    private function cleanupDirectTestModeNginxPidSource(array $identity): bool
+    {
+        if ($this->brokerActionsRequired()
+            || \PHP_OS_FAMILY === 'Windows'
+            || (int)($identity['dev'] ?? -1) < 0
+            || (int)($identity['ino'] ?? -1) < 1
+        ) {
+            return false;
+        }
+        $file = $this->nginxPidFile();
+        $handle = @\fopen($file, 'rb');
+        if (!\is_resource($handle)) {
+            return !\file_exists($file) && !\is_link($file);
+        }
+        $removed = false;
+        try {
+            $held = @\fstat($handle);
+            \clearstatcache(true, $file);
+            $pathStatus = @\lstat($file);
+            if (!\is_array($held)
+                || !\is_array($pathStatus)
+                || (int)($held['dev'] ?? -1) !== (int)$identity['dev']
+                || (int)($held['ino'] ?? -1) !== (int)$identity['ino']
+                || (int)($pathStatus['dev'] ?? -1) !== (int)$identity['dev']
+                || (int)($pathStatus['ino'] ?? -1) !== (int)$identity['ino']
+                || ((((int)($held['mode'] ?? 0)) & 0170000) !== 0100000)
+                || ((((int)($held['mode'] ?? 0)) & 0777) !== 0600)
+                || (int)($held['nlink'] ?? 0) !== 1
+                || (int)($held['size'] ?? -1) !== 0
+                || (int)($held['uid'] ?? -1) !== (int)($identity['uid'] ?? -2)
+                || (int)($held['gid'] ?? -1) !== (int)($identity['gid'] ?? -2)
+                || !@\unlink($file)
+            ) {
+                return false;
+            }
+            $removed = true;
+        } finally {
+            @\fclose($handle);
+        }
+        if (!$removed) {
+            return false;
+        }
+        try {
+            $this->syncDirectory(\dirname($file));
+        } catch (\Throwable) {
+            return false;
+        }
+        \clearstatcache(true, $file);
+        return !\file_exists($file) && !\is_link($file);
+    }
+
     private function removeVerifiedPidFile(string $file): bool
     {
         $status = @\lstat($file);
@@ -49450,26 +49817,29 @@ CDEF,
             throw new \RuntimeException('Gateway home directory is missing or unsafe.');
         }
         foreach ([
-            $this->runtimeDir(),
-            $this->runDir(),
-            $this->logDir(),
-            $this->stateDir(),
-            $this->configDir(),
-            $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp',
+            // The installer seals these roots to the fixed Controller/data-plane
+            // profiles. The Controller may verify their directory identity but
+            // must not collapse their group access back to its private 0700 mode.
+            $this->runtimeDir() => null,
+            $this->legacySnapshotRoot() => null,
+            $this->runDir() => 0700,
+            $this->logDir() => null,
+            $this->stateDir() => 0700,
+            $this->configDir() => 0700,
+            $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp' => 0700,
             $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
-                . DIRECTORY_SEPARATOR . 'client_body_temp',
+                . DIRECTORY_SEPARATOR . 'client_body_temp' => 0700,
             $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
-                . DIRECTORY_SEPARATOR . 'proxy_temp',
+                . DIRECTORY_SEPARATOR . 'proxy_temp' => 0700,
             $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
-                . DIRECTORY_SEPARATOR . 'fastcgi_temp',
+                . DIRECTORY_SEPARATOR . 'fastcgi_temp' => 0700,
             $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
-                . DIRECTORY_SEPARATOR . 'uwsgi_temp',
+                . DIRECTORY_SEPARATOR . 'uwsgi_temp' => 0700,
             $this->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
-                . DIRECTORY_SEPARATOR . 'scgi_temp',
-            $this->runtimeDir() . DIRECTORY_SEPARATOR . 'shadow',
-            $this->lkgDir(),
-            $this->home . DIRECTORY_SEPARATOR . 'snapshots',
-        ] as $directory) {
+                . DIRECTORY_SEPARATOR . 'scgi_temp' => 0700,
+            $this->runtimeDir() . DIRECTORY_SEPARATOR . 'shadow' => 0700,
+            $this->lkgDir() => 0700,
+        ] as $directory => $privateMode) {
             if ($readOnlyRecovery && !\is_dir($directory)) {
                 throw new \RuntimeException(
                     'Disk-pressure recovery cannot create a missing gateway directory: '
@@ -49486,12 +49856,15 @@ CDEF,
             ) {
                 throw new \RuntimeException('Gateway directory is unsafe: ' . $directory);
             }
-            if (\PHP_OS_FAMILY !== 'Windows' && !$readOnlyRecovery) {
-                $modeApplied = @\chmod($directory, 0700);
+            if (\PHP_OS_FAMILY !== 'Windows'
+                && !$readOnlyRecovery
+                && $privateMode !== null
+            ) {
+                $modeApplied = @\chmod($directory, $privateMode);
                 $verified = @\lstat($directory);
                 if (!$modeApplied
                     || !\is_array($verified)
-                    || ((((int)($verified['mode'] ?? 0)) & 0777) !== 0700)
+                    || ((((int)($verified['mode'] ?? 0)) & 0777) !== $privateMode)
                 ) {
                     throw new \RuntimeException(
                         'Gateway directory mode is unsafe: ' . $directory
@@ -49664,6 +50037,8 @@ CDEF,
                 . 'emergency-revocations-v1.tsv',
             $this->configFile(),
             $this->securityAnchorFile(),
+            $this->trustDir() . DIRECTORY_SEPARATOR . 'security-anchor.json',
+            $this->trustDir() . DIRECTORY_SEPARATOR . 'wls-edge-2.initialized.json',
             $this->journalDistrustMarkerFile(),
             $this->trustDir() . DIRECTORY_SEPARATOR . 'snapshot-receipt.key',
             $this->trustDir() . DIRECTORY_SEPARATOR . 'broker-enrollments.tsv',
@@ -49679,7 +50054,6 @@ CDEF,
             $this->configDir(),
             $this->lkgDir(),
             $this->legacySnapshotRoot(),
-            $this->sealedSnapshotRoot(),
             $this->snapshotCandidateRoot(),
             $this->trustDir() . DIRECTORY_SEPARATOR . 'snapshot-receipts',
         ] as $dir) {
@@ -49693,6 +50067,15 @@ CDEF,
             ) {
                 return true;
             }
+        }
+        $sealedSnapshotRoot = $this->sealedSnapshotRoot();
+        $sealedSnapshotStatus = @\lstat($sealedSnapshotRoot);
+        if (\is_array($sealedSnapshotStatus)
+            && (\is_link($sealedSnapshotRoot)
+                || ((((int)($sealedSnapshotStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+            )
+        ) {
+            return true;
         }
         try {
             foreach ($this->boundedDirectoryEntries(
@@ -49776,7 +50159,7 @@ CDEF,
 
     private function initializationMarkerFile(): string
     {
-        return $this->trustDir() . DIRECTORY_SEPARATOR . 'wls-edge-2.initialized.json';
+        return $this->stateDir() . DIRECTORY_SEPARATOR . 'wls-edge-2.initialized.json';
     }
 
     private function diskPressureMarkerActive(): bool
@@ -49870,7 +50253,8 @@ CDEF,
 
     private function nginxPidFile(): string
     {
-        return $this->runDir() . DIRECTORY_SEPARATOR . 'nginx.pid';
+        return $this->home . DIRECTORY_SEPARATOR . 'nginx-pid'
+            . DIRECTORY_SEPARATOR . 'nginx.pid';
     }
 
     private function controllerPidFile(): string
@@ -49984,7 +50368,7 @@ CDEF,
 
     private function securityAnchorFile(): string
     {
-        return $this->trustDir() . DIRECTORY_SEPARATOR . 'security-anchor.json';
+        return $this->stateDir() . DIRECTORY_SEPARATOR . 'security-anchor.json';
     }
 
     private function nonceWalFile(): string

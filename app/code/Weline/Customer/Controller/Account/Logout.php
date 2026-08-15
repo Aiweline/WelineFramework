@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace Weline\Customer\Controller\Account;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Customer\Model\CustomerToken;
+use Weline\Customer\Service\CustomerRememberDeviceService;
 
 /**
  * 用户登出控制器
@@ -27,22 +26,12 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
         // 登出
         $this->session->logout();
         
-        // 删除数据库中的token记录
-        if ($userId) {
-            /** @var CustomerToken $userToken */
-            $userToken = ObjectManager::getInstance(CustomerToken::class);
-            $userToken->reset()
-                ->where('user_id', $userId)
-                ->where('type', 'remember_me')
-                ->delete();
-        }
-        
-        // 清除记住我的cookie
-        Cookie::set('w_ut', '', -3600, ['path' => '/']);
-        Cookie::set('w_sandbox', '', -3600, ['path' => '/']);
+        ObjectManager::getInstance(CustomerRememberDeviceService::class)
+            ->clearAfterLogout((int)($userId ?? 0));
+        \Weline\Framework\Http\Cookie::set('w_sandbox', '', -3600, ['path' => '/']);
         $adminPath = Env::getAreaRoutePrefix('backend') ?? '';
         if (!empty($adminPath)) {
-            Cookie::set('w_sandbox', '', -3600, ['path' => '/' . ltrim($adminPath, '/')]);
+            \Weline\Framework\Http\Cookie::set('w_sandbox', '', -3600, ['path' => '/' . ltrim($adminPath, '/')]);
         }
     }
 
