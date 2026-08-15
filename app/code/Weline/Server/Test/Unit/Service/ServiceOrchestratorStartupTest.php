@@ -6402,6 +6402,98 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame([4242], $orchestrator->birthCaptures);
     }
 
+    public function testWindowsCredentialAuthorizationWaitsForALateExactManagedLease(): void
+    {
+        $startedAt = \time();
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: 7,
+            launchId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            startedAt: $startedAt,
+        );
+        $worker->setMeta('process_name', 'weline-wls-worker-late-pid-recovery');
+
+        $orchestrator = new class($startedAt) extends ServiceOrchestrator {
+            public int $leaseReads = 0;
+            public int $waits = 0;
+
+            public function __construct(private readonly int $leaseTime)
+            {
+            }
+
+            /** @param array<string|int,ServiceInstance> $instances */
+            public function recover(array $instances, array $pids): array
+            {
+                return $this->recoverPublishedWindowsChildPids($instances, $pids);
+            }
+
+            protected function publishedWindowsChildPidRecoveryDeadline(): float
+            {
+                return 10.0;
+            }
+
+            protected function publishedWindowsChildPidRecoveryNow(): float
+            {
+                return (float)$this->leaseReads;
+            }
+
+            protected function waitForPublishedWindowsChildPidRecovery(): void
+            {
+                ++$this->waits;
+            }
+
+            protected function readPublishedWindowsChildLease(string $expectedPname): array
+            {
+                ++$this->leaseReads;
+                if ($this->leaseReads < 3) {
+                    return [];
+                }
+
+                return [
+                    'pid' => 4242,
+                    'time' => $this->leaseTime,
+                    'pname' => $expectedPname,
+                    'pname_key' => $expectedPname,
+                    'process_name' => \substr($expectedPname, \strlen('--name=')),
+                    'launch_id' => 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                    'epoch' => 7,
+                ];
+            }
+
+            protected function probePublishedWindowsChildPids(array $requests): array
+            {
+                return [
+                    'worker#1' => [
+                        'pid' => 4242,
+                        'state' => Processer::PROCESS_STATE_UNKNOWN,
+                        'reason' => 'live_identity_unavailable',
+                    ],
+                ];
+            }
+
+            protected function capturePublishedWindowsChildProcessIdentity(int $pid): array
+            {
+                return $pid === 4242
+                    ? [
+                        'birth' => \str_repeat('d', 64),
+                        'pid_namespace_id' => '',
+                    ]
+                    : [];
+            }
+        };
+
+        self::assertSame([
+            'worker#1' => 4242,
+        ], $orchestrator->recover([
+            'worker#1' => $worker,
+        ], [
+            'worker#1' => 0,
+        ]));
+        self::assertSame(3, $orchestrator->leaseReads);
+        self::assertSame(2, $orchestrator->waits);
+    }
+
     private static function cleanupGatewayBackendTokenState(string $instanceName): void
     {
         $tokenFile = GatewayBackendIngressTokenStore::tokenFile($instanceName);
