@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Console\PhpCliRuntimePreflight;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 
@@ -25,6 +26,7 @@ class MasterLeaseManager
     private const LOCK_WAIT_SEC = 5.0;
     private const LOCK_RETRY_USEC = 10_000;
     private const CHILD_CREDENTIAL_WAIT_SEC = 7.0;
+    private const WINDOWS_EMULATED_CHILD_CREDENTIAL_WAIT_SEC = 45.0;
 
     /** @var list<string> */
     private const SCHEMA_FIELDS = [
@@ -574,7 +576,7 @@ class MasterLeaseManager
         // than that complete publication path, while remaining below the
         // 10-second Agent heartbeat cadence.
         $deadline = $this->identity()->monotonicNow()
-            + self::CHILD_CREDENTIAL_WAIT_SEC;
+            + self::childCredentialWaitSeconds();
         do {
             $resolved = $store->resolveForCurrentProcess(
                 $expectedPath,
@@ -615,6 +617,31 @@ class MasterLeaseManager
             }
             SchedulerSystem::usleep(10_000);
         } while (true);
+    }
+
+    /**
+     * Windows ARM64 may run x64 PHP through an emulation transition. The
+     * parent must retain the WMI broker and resolve the durable execution PID
+     * before publishing a credential, which can legally outlive the ordinary
+     * seven-second child bootstrap window. Keep that child unprivileged and
+     * fail closed, but give the authenticated emulation profile a bounded
+     * window covering the parent's result-row and PID-authority budgets.
+     *
+     * @param array{profile?:mixed,requires_jit_isolation?:mixed}|null $runtimeProfile
+     */
+    private static function childCredentialWaitSeconds(?array $runtimeProfile = null): float
+    {
+        $runtimeProfile ??= PhpCliRuntimePreflight::inspect();
+        if (!empty($runtimeProfile['requires_jit_isolation'])
+            && \hash_equals(
+                PhpCliRuntimePreflight::PROFILE,
+                \trim((string)($runtimeProfile['profile'] ?? '')),
+            )
+        ) {
+            return self::WINDOWS_EMULATED_CHILD_CREDENTIAL_WAIT_SEC;
+        }
+
+        return self::CHILD_CREDENTIAL_WAIT_SEC;
     }
 
     /** @return array{authorized:bool,reason:string} */
