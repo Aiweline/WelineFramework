@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 use Weline\Server\Service\Runtime\WindowsListenerHandoff;
 use Weline\Server\Service\Runtime\WindowsListenerHandoffMutexGuard;
@@ -436,6 +437,114 @@ final class WindowsListenerHandoffTest extends TestCase
         self::assertSame([], $targetReleases);
         self::assertSame(['protocol-token'], $sourceReleases);
         self::assertSame(1, $mutexReleases);
+        self::assertPendingRegistryEmpty();
+    }
+
+    public function testPublisherWaitsThroughTransientConsumerRegistryContention(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('pcntl_fork')
+            || !\function_exists('pcntl_waitpid')
+        ) {
+            self::markTestSkipped(
+                'POSIX pcntl is required for deterministic registry contention.',
+            );
+        }
+
+        [$listener, $host, $port] = $this->listener();
+        $path = $this->directory . DIRECTORY_SEPARATOR . 'handoff.json';
+        $readyPath = $this->directory . DIRECTORY_SEPARATOR . 'consumer-lock.ready';
+        $released = [];
+        $identity = $this->identity();
+        $sourceRuntime = $this->runtime(
+            identity: $identity,
+            exporter: static fn (\Socket $socket, int $pid): string => 'protocol-token',
+            releaser: static function (string $token) use (&$released): bool {
+                $released[] = $token;
+                return true;
+            },
+            monotonicClock: static fn (): float => \hrtime(true) / 1_000_000_000,
+            currentPid: 111,
+        );
+        $targetRuntime = $this->runtime(
+            identity: $identity,
+            importer: static fn (string $token): \Socket => $listener,
+            releaser: static fn (string $token): bool => false,
+            monotonicClock: static fn (): float => \hrtime(true) / 1_000_000_000,
+            currentPid: 222,
+        );
+        $intent = $this->intent($host, $port);
+        $this->publish($listener, $path, $intent, $sourceRuntime, 222);
+        $this->await(
+            $path,
+            $intent,
+            \str_repeat('b', 32),
+            $targetRuntime,
+            222,
+        );
+
+        $pid = \pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            try {
+                GatewayProjectStateFilesystem::withExclusiveLock(
+                    $this->pendingRegistryLockPath(),
+                    static function () use ($readyPath): void {
+                        if (@\file_put_contents($readyPath, 'ready', LOCK_EX) === false) {
+                            throw new \RuntimeException('Unable to publish the lock barrier.');
+                        }
+                        \usleep(400_000);
+                    },
+                    waitTimeoutSeconds: 1.0,
+                );
+                self::exitForkedChildWithoutRuntimeShutdown(0);
+            } catch (\Throwable) {
+                self::exitForkedChildWithoutRuntimeShutdown(2);
+            }
+        }
+
+        $readyDeadline = (\hrtime(true) / 1_000_000_000) + 1.0;
+        while (!\is_file($readyPath)
+            && (\hrtime(true) / 1_000_000_000) < $readyDeadline
+        ) {
+            \usleep(1_000);
+        }
+        self::assertFileExists($readyPath);
+
+        $failure = null;
+        $startedAt = \hrtime(true) / 1_000_000_000;
+        try {
+            $method = new \ReflectionMethod(
+                WindowsListenerHandoff::class,
+                'awaitSourceExportRelease',
+            );
+            $method->invoke(
+                null,
+                'protocol-token',
+                $path,
+                222,
+                $identity->captureProcessIdentity(222),
+                1,
+                $sourceRuntime,
+                $startedAt + 2.0,
+            );
+        } catch (\Throwable $throwable) {
+            $failure = $throwable;
+        }
+        $elapsed = (\hrtime(true) / 1_000_000_000) - $startedAt;
+
+        $status = 0;
+        self::assertSame($pid, \pcntl_waitpid($pid, $status));
+        self::assertTrue(\pcntl_wifexited($status));
+        self::assertSame(0, \pcntl_wexitstatus($status));
+        self::assertNull(
+            $failure,
+            'A transient consumer lock must not abort publication: '
+                . ($failure?->getMessage() ?? ''),
+        );
+        self::assertGreaterThanOrEqual(0.35, $elapsed);
+        self::assertLessThan(2.0, $elapsed);
+        self::assertSame(['protocol-token'], $released);
         self::assertPendingRegistryEmpty();
     }
 
@@ -910,6 +1019,12 @@ final class WindowsListenerHandoffTest extends TestCase
             . '.wls-listener-handoff-pending.json';
     }
 
+    private function pendingRegistryLockPath(): string
+    {
+        return $this->directory . DIRECTORY_SEPARATOR
+            . '.wls-listener-handoff-pending.lock';
+    }
+
     private function assertPendingRegistryEmpty(): void
     {
         $path = $this->pendingRegistryPath();
@@ -953,6 +1068,19 @@ final class WindowsListenerHandoffTest extends TestCase
         ] as $property => $value) {
             $reflection->getProperty($property)->setValue(null, $value);
         }
+    }
+
+    private static function exitForkedChildWithoutRuntimeShutdown(int $status): never
+    {
+        $status = \max(0, \min(255, $status));
+        if (\function_exists('pcntl_exec')) {
+            @\pcntl_exec(PHP_BINARY, [
+                '-n',
+                '-r',
+                'exit(' . $status . ');',
+            ]);
+        }
+        exit($status);
     }
 
     private function removeTree(string $root): void

@@ -6335,12 +6335,31 @@ PHP;
 
             $started[] = ['process' => $process, 'pid' => $pid, 'key' => $key];
             self::rememberWindowsMasterOwnedChild($process, $pid, $key);
-            $results[$key] = self::recordWindowsBatchCreatePid($item, $pid);
+            $results[$key] = $pid;
         }
 
         $timings['submit'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
-        $timings['result'] = 0.0;
-        $timings['pid_record'] = 0.0;
+        $phaseStartedAtNanoseconds = \hrtime(true);
+        try {
+            $results = self::resolveWindowsMasterOwnedEmulatedBatchPids(
+                $launchItems,
+                $results,
+            );
+        } catch (\Throwable $throwable) {
+            self::terminateWindowsMasterOwnedBatch($started);
+            throw $throwable;
+        }
+        $timings['result'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
+
+        $phaseStartedAtNanoseconds = \hrtime(true);
+        foreach ($launchItems as $item) {
+            $key = (string)($item['key'] ?? '');
+            $results[$key] = self::recordWindowsBatchCreatePid(
+                $item,
+                (int)($results[$key] ?? 0),
+            );
+        }
+        $timings['pid_record'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
         self::logWindowsBatchCreateTiming(
             'master_owned_proc_open',
             $timingStartedAtNanoseconds,
@@ -6350,6 +6369,91 @@ PHP;
         );
 
         return $results;
+    }
+
+    /**
+     * Rebind x64-on-ARM64 proc_open transition PIDs to their durable leaves.
+     *
+     * Native Windows keeps the proc_open PID. Under the emulated profile, the
+     * original PID is only a topology root: every committed child must be the
+     * unique exact argv/slot/lease leaf below that root before the credential
+     * store is allowed to capture its process-birth identity.
+     *
+     * @param array<int,array<string,mixed>> $launchItems
+     * @param array<string,int> $launcherPidMap
+     * @param null|\Closure(array<int,array<string,mixed>>,float,bool):array<string,int> $resolver
+     * @param null|\Closure(int):bool $pidIsRunning
+     * @return array<string,int>
+     */
+    private static function resolveWindowsMasterOwnedEmulatedBatchPids(
+        array $launchItems,
+        array $launcherPidMap,
+        ?bool $emulatedRuntimeProfile = null,
+        ?\Closure $resolver = null,
+        ?\Closure $pidIsRunning = null,
+    ): array {
+        $emulatedRuntimeProfile ??= self::windowsBatchEmulatedRuntimeProfileActive();
+        if (!$emulatedRuntimeProfile) {
+            return $launcherPidMap;
+        }
+
+        $topologyRootPidMap = [];
+        foreach ($launchItems as $item) {
+            $key = \trim((string)($item['key'] ?? ''));
+            $launcherPid = (int)($launcherPidMap[$key] ?? 0);
+            if ($key === '' || $launcherPid <= 0) {
+                throw new \RuntimeException(
+                    'Windows emulated Master-owned child has no observable transition PID.'
+                );
+            }
+            $topologyRootPidMap[$key] = $launcherPid;
+        }
+
+        $pending = self::collectLaunchItemsNeedingPidResolution(
+            $launchItems,
+            $launcherPidMap,
+            false,
+            true,
+            $topologyRootPidMap,
+        );
+        if (\count($pending) !== \count($launchItems)) {
+            throw new \RuntimeException(
+                'Windows emulated Master-owned child identity is not exact enough for PID rebinding.'
+            );
+        }
+
+        $timeout = \max(
+            self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(
+                \count($pending),
+                true,
+                true,
+            ),
+            self::resolveWindowsBatchCreateChildOwnedPidResolutionTimeout($pending),
+        );
+        $resolvedPidMap = $resolver !== null
+            ? $resolver($pending, $timeout, true)
+            : self::waitForManagedProcessLaunchBatch($pending, $timeout, true);
+        $pidIsRunning ??= static fn (int $pid): bool => self::isRunningByPid($pid);
+
+        $finalPidMap = $launcherPidMap;
+        foreach ($launchItems as $item) {
+            $key = (string)($item['key'] ?? '');
+            $resolvedPid = (int)($resolvedPidMap[$key] ?? 0);
+            $launcherPid = (int)($launcherPidMap[$key] ?? 0);
+            if ($resolvedPid > 0 && $pidIsRunning($resolvedPid)) {
+                $finalPidMap[$key] = $resolvedPid;
+                continue;
+            }
+            if ($launcherPid > 0 && $pidIsRunning($launcherPid)) {
+                $finalPidMap[$key] = $launcherPid;
+                continue;
+            }
+            throw new \RuntimeException(
+                'Windows emulated Master-owned child did not publish one durable process identity: ' . $key
+            );
+        }
+
+        return $finalPidMap;
     }
 
     /**
@@ -7579,7 +7683,8 @@ CDEF,
         // exact argv still carries a random launch identity and a unique
         // instance/name tuple, so it must participate in the same committed
         // WMI-broker topology resolution instead of trusting a late result row.
-        return self::windowsBatchExactMasterArgvIdentity($item) !== null;
+        return self::windowsBatchExactMasterArgvIdentity($item) !== null
+            || self::windowsBatchExactSharedSidecarArgvIdentity($item) !== null;
     }
 
     /**
@@ -7644,6 +7749,117 @@ CDEF,
             'name' => $name,
             'launch_id' => $launchId,
             'script' => $tokens[$startIndex - 1],
+        ];
+    }
+
+    /**
+     * Authenticate the exact argv used by the shared Session/Memory sidecars.
+     *
+     * These children predate the slot/lease Worker protocol. Windows ARM64
+     * can replace their short-lived x64 Start-Process PID with a durable leaf,
+     * so the broker-bound topology scan must be able to identify that leaf
+     * without weakening the match to a display name or a global PID search.
+     *
+     * @param array<string,mixed> $item
+     * @return array{php:string,arguments:list<string>,script_index:int}|null
+     */
+    private static function windowsBatchExactSharedSidecarArgvIdentity(array $item): ?array
+    {
+        $arguments = $item['argument_list'] ?? null;
+        $php = \trim((string)($item['php'] ?? ''));
+        if (!(bool)($item['child_owns_pid'] ?? false)
+            || !(bool)($item['exact_argv'] ?? false)
+            || !\is_array($arguments)
+            || !\array_is_list($arguments)
+            || $php === ''
+            || \str_contains($php, "\0")
+        ) {
+            return null;
+        }
+
+        $tokens = [];
+        foreach ($arguments as $argument) {
+            $argument = (string)$argument;
+            if ($argument === '' || \str_contains($argument, "\0")) {
+                return null;
+            }
+            $tokens[] = $argument;
+        }
+
+        $scriptIndexes = [];
+        foreach ($tokens as $index => $token) {
+            if (\strcasecmp(
+                \basename(\str_replace('\\', '/', $token)),
+                'session_server.php',
+            ) === 0) {
+                $scriptIndexes[] = $index;
+            }
+        }
+        if (\count($scriptIndexes) !== 1) {
+            return null;
+        }
+        $scriptIndex = (int)$scriptIndexes[0];
+        if (!isset($tokens[$scriptIndex + 3])
+            || \trim($tokens[$scriptIndex + 1]) === ''
+            || !\ctype_digit($tokens[$scriptIndex + 2])
+            || (int)$tokens[$scriptIndex + 2] < 1
+            || (int)$tokens[$scriptIndex + 2] > 65535
+            || \trim($tokens[$scriptIndex + 3]) === ''
+        ) {
+            return null;
+        }
+
+        $options = [];
+        foreach ($tokens as $token) {
+            if (!\str_starts_with($token, '--') || !\str_contains($token, '=')) {
+                continue;
+            }
+            [$key, $value] = \explode('=', \substr($token, 2), 2);
+            if ($key === '' || isset($options[$key])) {
+                return null;
+            }
+            $options[$key] = $value;
+        }
+
+        foreach ([
+            'instance-name',
+            'token-file-name',
+            'bootstrap-instance',
+            'log-instance-name',
+            'launch-id',
+            'name',
+        ] as $requiredOption) {
+            if (\trim((string)($options[$requiredOption] ?? '')) === '') {
+                return null;
+            }
+        }
+        if (!\hash_equals('1', (string)($options['shared-service'] ?? ''))
+            || \preg_match('/^[a-f0-9]{32}$/D', (string)$options['launch-id']) !== 1
+        ) {
+            return null;
+        }
+        $role = (string)($options['role'] ?? 'session_server');
+        if (!\in_array($role, ['session_server', 'memory_server'], true)) {
+            return null;
+        }
+
+        $expectedName = \trim((string)($item['process_name'] ?? ''));
+        $expectedLaunchId = \trim(self::extractCommandLineArg(
+            (string)($item['command'] ?? ''),
+            'launch-id',
+        ));
+        if ($expectedName === ''
+            || $expectedLaunchId === ''
+            || !\hash_equals($expectedName, (string)$options['name'])
+            || !\hash_equals($expectedLaunchId, (string)$options['launch-id'])
+        ) {
+            return null;
+        }
+
+        return [
+            'php' => $php,
+            'arguments' => $tokens,
+            'script_index' => $scriptIndex,
         ];
     }
 
@@ -8310,7 +8526,12 @@ CDEF,
         if (!\is_array($arguments) || !\array_is_list($arguments)) {
             return null;
         }
+        $php = \trim((string)($item['php'] ?? ''));
+        if ($php === '' || \str_contains($php, "\0")) {
+            return null;
+        }
         $pending['exact_argv'] = true;
+        $pending['php'] = $php;
         $pending['argument_list'] = \array_values(\array_map('strval', $arguments));
 
         return $pending;
@@ -8600,6 +8821,34 @@ CDEF,
                 $masterIdentity['launch_id'],
                 self::extractCommandLineArg($liveCommand, 'launch-id'),
             );
+        }
+
+        $sidecarIdentity = self::windowsBatchExactSharedSidecarArgvIdentity($item);
+        if ($sidecarIdentity !== null) {
+            $liveTokens = self::tokenizeCommandLineArguments($liveCommand);
+            $expectedTokens = [$sidecarIdentity['php'], ...$sidecarIdentity['arguments']];
+            if (\count($liveTokens) !== \count($expectedTokens)) {
+                return false;
+            }
+
+            $scriptTokenIndex = $sidecarIdentity['script_index'] + 1;
+            foreach ($expectedTokens as $index => $expectedToken) {
+                $actualToken = (string)($liveTokens[$index] ?? '');
+                if ($index === 0 || $index === $scriptTokenIndex) {
+                    if (\strcasecmp(
+                        \str_replace('/', '\\', $expectedToken),
+                        \str_replace('/', '\\', $actualToken),
+                    ) !== 0) {
+                        return false;
+                    }
+                    continue;
+                }
+                if (!\hash_equals($expectedToken, $actualToken)) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         $requiredArguments = [
