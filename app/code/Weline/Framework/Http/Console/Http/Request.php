@@ -95,15 +95,14 @@ class Request extends CommandAbstract
             
             // 如果提供了 session ID，直接使用
             if ($sessionId) {
-                $this->printer->note(__('使用指定的 Session ID: %{1}...', [substr($sessionId, 0, 16)]));
+                $this->printer->note(__('使用指定的 Session ID（值已隐藏）'));
                 $this->writeSessionToCookieFile($sessionId, $cookieFile);
             } else {
                 // 尝试从 session 文件中查找有效的后台登录态
                 $foundSession = $this->findValidBackendSession();
                 if ($foundSession) {
-                    $this->printer->success(__('找到有效的后台登录 Session: %{1}... (用户: %{2})', [
-                        substr($foundSession['session_id'], 0, 16),
-                        $foundSession['username']
+                    $this->printer->success(__('找到有效的后台登录 Session（值已隐藏，用户：%{1}）', [
+                        $foundSession['username'],
                     ]));
                     $this->writeSessionToCookieFile($foundSession['session_id'], $cookieFile);
                 } else {

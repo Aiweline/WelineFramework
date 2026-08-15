@@ -25,6 +25,7 @@ description: Select the official Weline Taglib for template controls, selectors,
 | File or rich-text editing | `w:file-manager` / `w:editor-manager` |
 | Theme controls | `w:theme:*` |
 | Data table or declarative form | `w:d-table`, `w:field`, `w:d-form` |
+| Published standalone inquiry form | `w:inquiry` (owned by `Weline_Inquiry`; no PageBuilder dependency) |
 | Layout, widget, hook, block, or partial | Existing layout protocol: `w:slot`, `w:widget`, `w:hook`, `w:block`, `w:template` |
 | SEO/meta or visitor pixel | `w:seo:*`, `w:meta*`, or `w:pixel` |
 

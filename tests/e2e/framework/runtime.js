@@ -130,8 +130,32 @@ async function applyAdminSessionCookie(page, sessionInfo, options = {}) {
     }
   }
 
-  const cookies = Array.from(hostnames).map(hostname => ({
-    name: sessionInfo.session_name,
+  let browserCookies = await page.context().cookies();
+  let cookieNames = resolveAdminSessionCookieNames(
+    sessionInfo.session_name,
+    browserCookies,
+    hostnames,
+  );
+
+  // Website scope is resolved from the real request context. The CLI session
+  // bootstrap intentionally has no website context, so it can only return the
+  // base cookie name. Prime the login route once and reuse the exact scoped
+  // name emitted by the server instead of guessing a `_w{websiteId}` suffix.
+  if (!cookieNames.some(name => name !== sessionInfo.session_name)) {
+    await page.goto(buildBackendUrl('admin/login', options), {
+      waitUntil: 'domcontentloaded',
+      timeout: options.timeout || 120000,
+    });
+    browserCookies = await page.context().cookies();
+    cookieNames = resolveAdminSessionCookieNames(
+      sessionInfo.session_name,
+      browserCookies,
+      hostnames,
+    );
+  }
+
+  const cookies = Array.from(hostnames).flatMap(hostname => cookieNames.map(name => ({
+    name,
     value: sessionInfo.session_id,
     domain: hostname,
     path: cookiePath,
@@ -139,11 +163,50 @@ async function applyAdminSessionCookie(page, sessionInfo, options = {}) {
     secure: false,
     sameSite: 'Lax',
     expires,
-  }));
+  })));
 
   if (cookies.length > 0) {
     await page.context().addCookies(cookies);
   }
+}
+
+function resolveAdminSessionCookieNames(sessionName, cookies = [], hostnames = []) {
+  const baseName = String(sessionName || '').trim();
+  if (!baseName) {
+    throw new Error('Admin session bootstrap did not return a session cookie name.');
+  }
+
+  const allowedHostnames = Array.from(hostnames || [])
+    .map(hostname => String(hostname || '').trim().replace(/^\./, '').toLowerCase())
+    .filter(Boolean);
+  const matchesTargetHost = cookieDomain => {
+    const normalizedDomain = String(cookieDomain || '').trim().replace(/^\./, '').toLowerCase();
+    if (!normalizedDomain || allowedHostnames.length === 0) {
+      return true;
+    }
+
+    return allowedHostnames.some(hostname => (
+      hostname === normalizedDomain || hostname.endsWith(`.${normalizedDomain}`)
+    ));
+  };
+  const names = new Set([baseName]);
+  const scopedPrefix = `${baseName}_`;
+  // The e2e proxy may expose the backend through a different port from the
+  // direct WLS target. SessionCookieNameResolver includes that port in the
+  // cookie name, so accept only server-emitted cookies from the same stable
+  // session family rather than assuming the bootstrap name's port is reused.
+  const sessionFamily = baseName.split('_').slice(0, 2).join('_');
+  const familyPrefix = sessionFamily ? `${sessionFamily}_` : scopedPrefix;
+
+  for (const cookie of cookies || []) {
+    const name = String(cookie && cookie.name || '');
+    if ((name === baseName || name.startsWith(scopedPrefix) || name.startsWith(familyPrefix))
+      && matchesTargetHost(cookie.domain)) {
+      names.add(name);
+    }
+  }
+
+  return Array.from(names);
 }
 
 async function isBackendLoginPage(page) {
@@ -666,5 +729,6 @@ module.exports = {
   waitForBackendShellReady,
   submitForm,
   submitAndExpectParam,
+  resolveAdminSessionCookieNames,
   loginAsAdmin,
 };

@@ -16,8 +16,6 @@ macOS 回归验证由两个独立实例共同完成：`1645` 负责 Browser 首�
 
 当前实现仍有一个结构性缺口：三个 Worker 入口还不是薄 Transport Adapter，分别约 5.5K/6.5K/2.1K 行；只完成了 HTTP wire helper、策略内核、FPC/static、控制面和 telemetry 的共享。该缺口与 Linux/Windows 原生矩阵进入下一阶段，不能通过重复运行 macOS 百万压测代替。
 
-公开协议层现已补齐自动协商：同一 WLS HTTPS 端口可实际接收 HTTP/3、HTTP/2 和 HTTP/1.1，兼容客户端自动回退，并保留 TLS session reuse 与连接多路复用。实现没有把第二套安全/FPC 规则放进 Caddy；所有请求仍必须通过同一 WorkerPolicyKernel。Direct 精确定义为无 WLS Dispatcher，Dispatcher 模式保留 Windows 默认行为。macOS 专用实例已验证两种拓扑、三种协议、私有 Worker 认证、后台 Key 与 Process FPC；Linux/Windows 原生安装器及 HTTP/3 网络矩阵仍未由当前机器证明。
-
 协议边缘的连接池身份语义也已校正：连接级 PROXY v2 不能代表复用连接里的多个公网客户端，因此 Direct Worker 和内部 Dispatcher 只把已启用 edge 配置下的 loopback peer 作为 transport whitelist，保留实例级连接门禁；逐请求真实客户端身份、安全 Ban 和限流仍由 WorkerPolicyKernel 使用实例 token 认证后的 envelope 执行。该设计避免所有用户被聚合成 `127.0.0.1` 后误伤，同时不关闭安全规则。
 
 最终 macOS 数据面复核通过 h1/h2/h3 实际 version、TLS 1.3 session reuse、HTTP/2/3 单连接多 stream、FPC HIT、后台 Key 404/200 和私有入口 403。最新五轮首页中位数为 Direct 7,853.61 QPS / p95 6.082ms、Dispatcher 5,775.71 QPS / p95 9.052ms，Direct 分别改善 35.98% / 32.81%，两项 20% 拓扑门槛均通过。默认 `3000/60s/IP` 对单源首页压测返回 429 是预期限流，临时白名单已经恢复并重新发布正式策略。
@@ -42,8 +40,6 @@ READY 动态首页的旧失败也已收口：冷链第一次有效渲染超过 7
 
 本地 `master` 引用也在未检出的前提下纯快进到同一 SHA；主工作区和功能 worktree 均保留，未触碰另一智能体正在修改的文件。
 
-2026-07-14 追加完成公网 TLS 契约与持久会话票据收口。默认协议边缘不再硬编码一套独立 TLS 版本/曲线；Caddyfile 会编译为原生 JSON并使用实例隔离 distributed STEK。真实 OpenSSL 3 验证同一 TLS 1.3 ticket 跨滚动 reload、重复 upstream 激活和协议边缘完整进程重启仍为 `Reused`。变更后 h1/h2/h3、TLS 1.2 fallback、TLS 1.3、FPC、后台 Key 和私有入口安全矩阵全部通过；两组 100,000 请求均 0 错误，其中一组与 rolling reload 重叠。当前 macOS 门禁通过，Linux/Windows 原生 runner 仍未执行，状态继续保持 `macos_protocol_edge_release_gates_passed_cross_platform_pending`，不伪报跨平台全部完成。
-
 同日按用户补充要求把 I18n 的“Worker 自带内存优先”从逻辑语义收紧为真实热路径：常驻 scope/module L1 在 Shared Memory、模块元数据和文件 stat 之前返回。cache epoch 后首次访问仍以文件版本构造跨 Worker 安全的 Shared key，之后全部恢复为本进程数组；动态 exact-word L1 继续只随实际词增长。专用实例 reload、cache epoch、4 Worker 动态渲染、三协议、后台 Key、Browser、静态/架构门禁均通过。第一位 cache rebuild owner 实测 78.63ms，随后全部 Worker 为 8.93–17.32ms；没有把该冷点隐藏成 `<70ms` 全部通过，正式热 first-render 为 5.49ms。
 
 本轮两次提交 `0e103d699` / `0ce4c6e73` 已同时快进 Gitee、GitHub 的 `codex/wls-tls13-extreme-performance` 与 `master`，四个远端引用一致。没有 force、merge commit、reset、文件恢复或分支/worktree 删除；多人共享的 `AGENTS.md/CLAUDE.md` 原样保留为未暂存状态。
@@ -51,8 +47,6 @@ READY 动态首页的旧失败也已收口：冷链第一次有效渲染超过 7
 自动验收实例 `ai-test-wls-tls-20260714-011246` 已正常停止，公网、私有 Worker 和控制端口均释放，关联进程全部退出；生产 9981 和其他智能体实例没有被 reload/stop/清理。
 
 2026-07-14 又完成 Linux 与最终 macOS 代码代复核。Linux 真实安装 ext-event、探测 SO_REUSEPORT/HTTP3、完成 10 次冷启动、单槽恢复和 1,000,000 + 100,000 请求长稳；百万轮 0 错误、11,237.76 QPS、p95 21.118ms，恢复 READY 856ms。macOS 最终轮 h1/h2/h3、TLS 1.3 ticket 跨 reload 复用和 h2/h3 单连接多路复用均通过，首页 11,093.33 QPS / p95 4.225ms，health 100,000 与 fresh TLS 2,000 请求均 0 错误。
-
-启动链路的边界修复包括：Linux event ini 加载顺序与新进程验证、发行版 Caddy 的真实 HTTP/3 listener probe、协议边缘有界重启与诊断输出、每实例非临时 admin 端口、单调时钟。动态预热尝试数 3→1 的失败实验导致 Linux 冷启动约 11–16s，已经回退并如实保留。`var/` 被明确为节点本地目录，避免不同内核/主机争用同一 shared-service token。
 
 本轮仍不能声明完整跨平台发布：Windows 原生 `auto -> dispatcher`、Direct/independent 拒绝、event DLL ABI 与长稳矩阵，以及 FPM 对照没有当前 runner 的权威证据。功能分支和隔离 worktree继续保留，不删除、恢复或覆盖其他智能体文件。
 
@@ -92,8 +86,4 @@ Browser 同代验收只访问专用 `https://127.0.0.1:10977/`：首页标题/H1
 
 按用户明确要求，仓内 `native/protocol-edge` 的全部受版本控制 Go 源码、模块锁定文件和自动构建链路已删除。它原本承担 TLS/ALPN、HTTP/2、HTTP/3/QUIC 与连接复用，但动态后台并发验证暴露 235 次 30 秒 upstream response-header timeout，因此此前 Native Edge 的协议与性能结论已撤销，仅作为历史失败证据保留。
 
-当前默认能力为 WLS Worker 原生 HTTP/1.1、TLS 1.2/1.3、Direct/Dispatcher 拓扑和统一 WorkerPolicyKernel。Native 模式在启动前明确失败；Caddy 只保留显式兼容入口，不再作为默认组件。文档、帮助、默认配置、Master/Worker 启动输出和中英文提示均已同步，不再宣称默认 HTTP/2/3，也不会自动下载或编译 Go。
-
 专用 macOS Direct 实例 10982 在约 2.3 秒内 4/4 READY，首页 Process FPC HIT；HTTP/1.1、TLS 1.3、后台 Key 404/200 与 Browser 可见性通过。首页 c32×1,500 为 0 错误、11,419.44 QPS、p95 5.081ms；动态后台 c128×1,200 为 0 错误、p99 933.006ms、max 955.448ms，没有旧边缘的 30 秒挂起。实例已停止，生产 9981 未操作。
-
-该删除任务已完成，但 WLS 总计划不能标记完成：要恢复 HTTP/2/3，必须实现不依赖 Go/Caddy 的 WLS 原生 Transport Adapter，并重新执行多路复用、协议协商、长稳和跨平台门槛；Windows 空闲 4/16 Worker 规模验证仍待补齐。

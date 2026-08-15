@@ -98,6 +98,12 @@
 |---|---|---|---|
 | `<w:geo>` | `Weline\Geo\Taglib\Geo` | slot | 地理信息插槽 |
 
+### Weline_Inquiry
+
+| 标签 | 类 | 主要属性 | 场景/说明 |
+|---|---|---|---|
+| `<w:inquiry>` | `Weline\Inquiry\Taglib\Inquiry` | code*, mode, id, trigger-selector, custom-css, custom-js | 渲染已发布的独立询盘表单；支持 inline/modal/trigger |
+
 ### Weline_I18n
 
 | 标签 | 类 | 主要属性 | 场景/说明 |

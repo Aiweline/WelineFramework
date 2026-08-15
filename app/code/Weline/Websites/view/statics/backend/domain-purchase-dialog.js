@@ -309,7 +309,10 @@
                 cdnProvider.innerHTML = buildOptionsHtml([], labels.cdnProviderPlaceholder);
                 var u = url.indexOf('?') >= 0 ? url + '&' : url + '?';
                 u += 'active_only=1';
-                bqAdmin['websites'](u).then(function (r) { return r.json(); }).then(function (data) {
+                var bridge = (String(u).indexOf('/pagebuilder/') >= 0 && typeof bqAdmin['page_builder'] === 'function')
+                    ? bqAdmin['page_builder']
+                    : bqAdmin['websites'];
+                bridge(u).then(function (r) { return r.json(); }).then(function (data) {
                     var inner = (data && data.data) ? data.data : data;
                     var accounts = (inner && inner.accounts) ? inner.accounts : (Array.isArray(inner) ? inner : []);
                     accounts.forEach(function (acc) {

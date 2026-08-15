@@ -10,6 +10,7 @@ use Weline\Backend\Api\Auth\BackendRememberToken;
 use Weline\Backend\Model\Backend\Acl\UserRole;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\BackendUserToken;
+use Weline\Framework\Session\Auth\Device\AuthenticatedLoginContext;
 
 final class BackendInteractiveAuth implements BackendInteractiveAuthInterface
 {
@@ -139,26 +140,21 @@ final class BackendInteractiveAuth implements BackendInteractiveAuthInterface
         return $this->clearRememberToken($rememberToken);
     }
 
-    public function restoreRememberedSession(object $session, BackendLoginAccount $account, int $expireAt): void
-    {
+    public function restoreRememberedSession(
+        object $session,
+        BackendLoginAccount $account,
+        int $expireAt,
+        ?AuthenticatedLoginContext $context = null,
+    ): void {
         $user = $this->loadRequiredUser($account->getId());
-        if (method_exists($session, 'getAreaConfig') && method_exists($session, 'getSession')) {
-            $areaConfig = $session->getAreaConfig();
-            $rawSession = $session->getSession();
-            $rawSession->set($areaConfig->getLoginKey(), $user->getAuthUsername());
-            $rawSession->set($areaConfig->getLoginIdKey(), $user->getAuthIdentifier());
-            $rawSession->set($areaConfig->getUserModelKey(), $user::getAuthModelClass());
-            $rawSession->set('remember_expire_time', $expireAt);
-            $this->installAclContext($rawSession, $account);
-            $rawSession->save();
-            $this->refreshSessionCookie($session, $rawSession, $expireAt);
-            return;
-        }
-
         if (!method_exists($session, 'login')) {
             throw new \RuntimeException('Backend session does not support login.');
         }
-        $session->login($user);
+        if ($context === null) {
+            $session->login($user);
+        } else {
+            $session->login($user, $context);
+        }
         $session->set('remember_expire_time', $expireAt);
         if (method_exists($session, 'getSession')) {
             $rawSession = $session->getSession();

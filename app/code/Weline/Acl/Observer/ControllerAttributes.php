@@ -983,12 +983,11 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         // 如果权限名包含下划线，尝试推断父级
         if (strpos($permission, '_') !== false) {
             $parts = explode('_', $permission);
-            // 只有当权限名至少有3部分时，才推断父级（避免 ai_market -> ai_market 的情况）
-            // 例如：ai_market (2部分) -> 不推断，返回空字符串
+            // 至少 3 段才推断，避免 ai_market → Module::ai。
+            // 剥最后一段：ai_site_agent_index → ai_site_agent（旧启发式只取前两段会错挂到 ::ai_site）
             if (count($parts) >= 3) {
-                $parentPermission = $parts[0] . '_' . $parts[1];
-                $inferredParent = $module . '::' . $parentPermission;
-                // 确保推断的父级与当前权限ID不同
+                array_pop($parts);
+                $inferredParent = $module . '::' . implode('_', $parts);
                 if ($inferredParent !== $sourceId) {
                     return $inferredParent;
                 }

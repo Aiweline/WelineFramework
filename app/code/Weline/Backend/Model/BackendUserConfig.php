@@ -16,6 +16,9 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolution;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Session\Auth\Device\AuthenticatedDeviceRegistryInterface;
 #[Table(comment: '后台用户配置表')]
 #[Index(name: 'idx_user_key', columns: ['user_id', 'key'], type: 'UNIQUE', comment: '管理员配置唯一索引')]
 #[Index(name: 'idx_module', columns: ['module'], comment: '模组索引')]
@@ -57,6 +60,13 @@ class BackendUserConfig extends Model
                 }
             }
 
+            // sess_id is a pre-device-registry compatibility lookup. When the
+            // registry is configured, a missing authenticated identity may
+            // mean that this exact device was revoked and must stay anonymous.
+            if (!$this->legacySessionLookupAllowed()) {
+                return 0;
+            }
+
             $sessionId = \trim((string)$userSession->getId());
             if ($sessionId === '') {
                 $sessionId = $this->resolveSessionIdFromCookie();
@@ -74,6 +84,17 @@ class BackendUserConfig extends Model
             return (int)($row[BackendUser::schema_fields_ID] ?? 0);
         } catch (\Throwable) {
             return 0;
+        }
+    }
+
+    private function legacySessionLookupAllowed(): bool
+    {
+        try {
+            $resolution = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolveDetailed(AuthenticatedDeviceRegistryInterface::class);
+            return $resolution->status === RuntimeProviderResolution::NOT_CONFIGURED;
+        } catch (\Throwable) {
+            return false;
         }
     }
 

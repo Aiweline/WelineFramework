@@ -568,6 +568,181 @@ final class MasterChildCredentialStoreTest extends TestCase
         return [$instance, $token, $manager, $store, $lease];
     }
 
+    public function testWindowsCredentialResolutionKeepsAnExactChildPendingWhileMasterOwnerIsUnobservable(): void
+    {
+        $instance = 'windows-birth-only-' . \bin2hex(\random_bytes(4));
+        $this->instances[] = $instance;
+        $runtimeDirectory = \dirname(MasterLeaseManager::pathForInstance($instance));
+        self::assertTrue(\is_dir($runtimeDirectory) || @\mkdir($runtimeDirectory, 0700, true));
+        self::assertTrue(@\chmod($runtimeDirectory, 0700));
+        $lease = ['instance' => $instance, 'master_pid' => 4242, 'master_epoch' => 7];
+        $manager = new class($lease) extends MasterLeaseManager {
+            /** @var list<bool> */
+            public array $managedNameRequirements = [];
+
+            /** @param array<string,mixed> $lease */
+            public function __construct(private readonly array $lease)
+            {
+            }
+
+            public function validateRunningLease(
+                string $path,
+                string $expectedInstance = '',
+                int $expectedMasterPid = 0,
+                int $expectedEpoch = 0,
+                string $expectedToken = '',
+                int $expectedControlPort = 0,
+                bool $requireManagedName = false,
+            ): array {
+                $this->managedNameRequirements[] = $requireManagedName;
+                $authorized = !$requireManagedName;
+
+                return [
+                    'authorized' => $authorized,
+                    'identity_authorized' => $authorized,
+                    'veto' => true,
+                    'fresh' => true,
+                    'same_boot' => true,
+                    'foreign_pid_namespace' => false,
+                    'owner_status' => $authorized
+                        ? MasterLeaseRuntimeIdentity::OWNER_MATCH
+                        : MasterLeaseRuntimeIdentity::OWNER_UNKNOWN,
+                    'reason' => $authorized ? '' : 'Master owner evidence is not observable.',
+                    'lease' => $this->lease,
+                ];
+            }
+        };
+        $store = new MasterChildCredentialStore(
+            leaseManager: $manager,
+            allowUnknownMasterOwnerForChildResolution: true,
+        );
+        $resolved = $store->resolveForCurrentProcess(
+            MasterLeaseManager::pathForInstance($instance),
+            $instance,
+            4242,
+            7,
+            ControlMessage::ROLE_DISPATCHER,
+            ControlMessage::ROLE_DISPATCHER . '#1',
+            \bin2hex(\random_bytes(16)),
+            \bin2hex(\random_bytes(16)),
+            1,
+        );
+
+        self::assertFalse($resolved['authorized']);
+        self::assertTrue($resolved['pending'], $resolved['reason']);
+        self::assertSame(
+            'Managed-child credential ledger has not been published yet.',
+            $resolved['reason'],
+        );
+        self::assertSame([true], $manager->managedNameRequirements);
+    }
+
+    public function testWindowsCredentialResolutionWaitsForAnExactLiveMasterHeartbeatRefresh(): void
+    {
+        $instance = 'windows-stale-live-master-' . \bin2hex(\random_bytes(4));
+        $this->instances[] = $instance;
+        $lease = [
+            'instance' => $instance,
+            'master_pid' => 4243,
+            'master_epoch' => 8,
+        ];
+        $manager = new class($lease) extends MasterLeaseManager {
+            /** @param array<string,mixed> $lease */
+            public function __construct(private readonly array $lease)
+            {
+            }
+
+            public function validateRunningLease(
+                string $path,
+                string $expectedInstance = '',
+                int $expectedMasterPid = 0,
+                int $expectedEpoch = 0,
+                string $expectedToken = '',
+                int $expectedControlPort = 0,
+                bool $requireManagedName = false,
+            ): array {
+                return [
+                    'authorized' => false,
+                    'identity_authorized' => true,
+                    'veto' => false,
+                    'fresh' => false,
+                    'same_boot' => true,
+                    'foreign_pid_namespace' => false,
+                    'owner_status' => MasterLeaseRuntimeIdentity::OWNER_MATCH,
+                    'reason' => 'Master lease heartbeat is stale.',
+                    'lease' => $this->lease,
+                ];
+            }
+        };
+        $store = new MasterChildCredentialStore(
+            leaseManager: $manager,
+            allowUnknownMasterOwnerForChildResolution: true,
+        );
+
+        $launchId = \bin2hex(\random_bytes(16));
+        $leaseId = \bin2hex(\random_bytes(16));
+        $resolve = static fn (): array => $store->resolveForCurrentProcess(
+            MasterLeaseManager::pathForInstance($instance), $instance, 4243, 8,
+            ControlMessage::ROLE_DISPATCHER, ControlMessage::ROLE_DISPATCHER . '#1',
+            $launchId, $leaseId, 1,
+        );
+
+        $resolved = $resolve();
+        self::assertFalse($resolved['authorized']);
+        self::assertTrue($resolved['pending'], $resolved['reason']);
+        self::assertSame(
+            'Exact live Master is waiting to refresh its startup heartbeat.',
+            $resolved['reason'],
+        );
+    }
+
+    public function testChildResolutionWaitsWhenTheCredentialLedgerWinsTheHeartbeatRace(): void
+    {
+        [$instance, $token, $manager, $store, $lease] = $this->fixture('child-ledger-race');
+        unset($manager);
+        $masterPid = (int)\getmypid();
+        $role = ControlMessage::ROLE_DISPATCHER;
+        $slot = $role . '#1';
+        $launchId = 'dispatcher-race-launch';
+        $leaseId = 'dispatcher-race-lease';
+        $store->authorizeServices($lease, $instance, $masterPid, 3, $token, [[
+            'role' => $role,
+            'slot_id' => $slot,
+            'launch_id' => $launchId,
+            'lease_id' => $leaseId,
+            'generation' => 1,
+            'pid' => $masterPid,
+        ]]);
+
+        $state = $this->ledger($instance);
+        $state['master_lease_sequence_floor']++;
+        $state['state_sequence']++;
+        GatewayProjectStateFilesystem::atomicWrite(
+            MasterChildCredentialStore::pathForInstance($instance),
+            (string)\json_encode($state, JSON_THROW_ON_ERROR),
+            0600,
+        );
+
+        $resolved = $store->resolveForCurrentProcess(
+            $lease,
+            $instance,
+            $masterPid,
+            3,
+            $role,
+            $slot,
+            $launchId,
+            $leaseId,
+            1,
+        );
+
+        self::assertFalse($resolved['authorized']);
+        self::assertTrue($resolved['pending'], $resolved['reason']);
+        self::assertSame(
+            'Managed-child credential ledger is waiting for the Master lease sequence.',
+            $resolved['reason'],
+        );
+    }
+
     private function registerProcess(int $pid, string $start): void
     {
         $this->processAlive[$pid] = true;

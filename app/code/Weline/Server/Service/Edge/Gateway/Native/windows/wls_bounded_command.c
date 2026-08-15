@@ -23,6 +23,7 @@
 #define WLS_MAX_PATH_HANDLES 128
 #define WLS_MAX_TIMEOUT_MS ((ULONGLONG)3600000U)
 #define WLS_TERMINATION_GRACE_MS ((DWORD)2000U)
+#define WLS_RESULT_PUBLICATION_GRACE_MS ((ULONGLONG)2000U)
 #define WLS_EXIT_USAGE 64
 #define WLS_EXIT_INTERNAL 70
 #define WLS_EXIT_FILESYSTEM 71
@@ -901,7 +902,7 @@ static int wls_pipe_reap_orphan(int argc, wchar_t **argv)
     directory = CreateFileW(
         transaction_dir,
         FILE_READ_ATTRIBUTES | READ_CONTROL | DELETE,
-        0U,
+        FILE_SHARE_READ,
         NULL,
         OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
@@ -2344,9 +2345,12 @@ int wmain(int argc, wchar_t **argv)
     BYTE *stderr_buffer = NULL;
     HANDLE inherited_handles[3];
     ULONGLONG deadline;
+    ULONGLONG publication_deadline = 0U;
     DWORD exit_code = WLS_EXIT_INTERNAL;
     BOOL timed_out = FALSE;
     BOOL publication_deadline_expired = FALSE;
+    BOOL result_paths_ready = FALSE;
+    BOOL result_published = FALSE;
     BOOL capture_initialized = FALSE;
     BOOL process_created = FALSE;
     BOOL attribute_list_initialized = FALSE;
@@ -2412,6 +2416,7 @@ int wmain(int argc, wchar_t **argv)
         return_code = WLS_EXIT_FILESYSTEM;
         goto cleanup;
     }
+    result_paths_ready = TRUE;
     stdout_file = wls_create_result_file(stdout_path);
     stderr_file = wls_create_result_file(stderr_path);
     result_temp_file = wls_create_result_file(result_temp_path);
@@ -2675,6 +2680,7 @@ int wmain(int argc, wchar_t **argv)
         wls_print_error(L"child output capture failed", ERROR_READ_FAULT);
         goto cleanup;
     }
+    publication_deadline = GetTickCount64() + WLS_RESULT_PUBLICATION_GRACE_MS;
     if (!wls_publish_results(
         stdout_file,
         stderr_file,
@@ -2686,7 +2692,7 @@ int wmain(int argc, wchar_t **argv)
         exit_code,
         timed_out,
         capture_shared.truncated,
-        deadline,
+        publication_deadline,
         &publication_deadline_expired
     )) {
         if (publication_deadline_expired) {
@@ -2696,6 +2702,7 @@ int wmain(int argc, wchar_t **argv)
         wls_print_error(L"durable result publication failed", GetLastError());
         goto cleanup;
     }
+    result_published = TRUE;
     return_code = 0;
 
 cleanup:
@@ -2748,6 +2755,10 @@ cleanup:
     }
     wls_close_handle(&executable_lock);
     wls_close_handle(&result_temp_file);
+    if (result_paths_ready && !result_published) {
+        (void)DeleteFileW(result_temp_path);
+        (void)DeleteFileW(result_path);
+    }
     wls_close_handle(&stdout_file);
     wls_close_handle(&stderr_file);
     wls_guard_close(&executable_guard);

@@ -22,7 +22,10 @@ final class SeoOptimizationControlQueryProvider implements QueryProviderInterfac
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
-            'optimizationControlCenterSnapshot' => $this->service->snapshot($this->nullableWebsiteId($params)),
+            'optimizationControlCenterSnapshot' => $this->service->snapshot(
+                $this->nullableWebsiteId($params),
+                ['sites_only' => $this->truthy($params['sites_only'] ?? $params['directory_only'] ?? false)]
+            ),
             'optimizationTaskList' => $this->service->taskList($params),
             'optimizationTaskDetail' => $this->service->taskDetail($params),
             'optimizationActivityList' => $this->service->activityList($params),
@@ -42,7 +45,10 @@ final class SeoOptimizationControlQueryProvider implements QueryProviderInterfac
             'description' => (string)__('只读查看站点检测、证据、发布与实验实时状态。'),
             'module' => 'Weline_Seo',
             'operations' => [
-                $this->operation('optimizationControlCenterSnapshot', 'read', $scope),
+                $this->operation('optimizationControlCenterSnapshot', 'read', \array_merge($scope, [
+                    ['name' => 'sites_only', 'type' => 'bool', 'required' => false],
+                    ['name' => 'directory_only', 'type' => 'bool', 'required' => false],
+                ])),
                 $this->operation('optimizationTaskList', 'read', \array_merge($scope, [
                     ['name' => 'phase', 'type' => 'string', 'required' => false, 'max_length' => 24],
                     ['name' => 'outcome', 'type' => 'string', 'required' => false, 'max_length' => 32],
@@ -108,5 +114,18 @@ final class SeoOptimizationControlQueryProvider implements QueryProviderInterfac
             throw new \InvalidArgumentException('website_id must be null or a non-negative integer.');
         }
         return (int)\trim($raw);
+    }
+
+    private function truthy(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value !== 0;
+        }
+        $raw = \strtolower(\trim((string)$value));
+
+        return $raw !== '' && !\in_array($raw, ['0', 'false', 'no', 'off', 'null'], true);
     }
 }

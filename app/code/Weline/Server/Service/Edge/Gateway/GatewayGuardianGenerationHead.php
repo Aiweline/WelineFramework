@@ -124,6 +124,71 @@ final class GatewayGuardianGenerationHead
         );
     }
 
+    /**
+     * Retire only the first-install stable head that is bound to the exact
+     * generation being removed. A missing head is an idempotent completed
+     * cleanup state; every other head remains fail-closed for repair.
+     */
+    public function retireInitialStable(
+        string $hostId,
+        string $launcherSha256,
+        string $caSha256,
+        string $runtimeGeneration,
+    ): void {
+        GatewayProjectStateFilesystem::withExclusiveLock(
+            $this->paths->guardianGenerationHeadLockFile(),
+            function () use (
+                $hostId,
+                $launcherSha256,
+                $caSha256,
+                $runtimeGeneration,
+            ): void {
+                $this->recoverAtomicArtifactsUnlocked();
+                $current = $this->readUnlocked();
+                if ($current === null) {
+                    return;
+                }
+                $activeGenerationId = self::generationId(
+                    $launcherSha256,
+                    $caSha256,
+                    $runtimeGeneration,
+                );
+                foreach ([
+                    'host_id' => self::normalizeHex($hostId, 32, 'host identity'),
+                    'phase' => 'STABLE',
+                    'active_generation_id' => $activeGenerationId,
+                    'active_launcher_sha256' => self::normalizeHex(
+                        $launcherSha256,
+                        64,
+                        'launcher digest',
+                    ),
+                    'active_ca_sha256' => self::normalizeHex(
+                        $caSha256,
+                        64,
+                        'CA digest',
+                    ),
+                    'active_runtime_generation' => self::normalizeHex(
+                        $runtimeGeneration,
+                        64,
+                        'runtime generation',
+                    ),
+                ] as $field => $expected) {
+                    if (!\hash_equals($expected, (string)$current[$field])) {
+                        throw new \RuntimeException(
+                            'Guardian generation head does not belong to the failed initial activation.',
+                        );
+                    }
+                }
+                for ($slot = 0; $slot <= 1; ++$slot) {
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $this->paths->guardianGenerationHeadFile($slot),
+                        'failed initial Guardian generation head ' . $slot,
+                    );
+                }
+            },
+        );
+    }
+
     /** @return array<string,mixed>|null */
     public function read(): ?array
     {

@@ -256,6 +256,10 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
             'tag_path_leaves',
             \Weline\Acl\Service\Resource\AclResourcePresentation::buildTagPathLeaves($allRows)
         );
+        $this->assign(
+            'source_descendants',
+            \Weline\Acl\Service\Resource\AclResourcePresentation::buildSourceDescendants($allRows)
+        );
 
         /** @var \Weline\Acl\Model\RoleTagGrant $grantModel */
         $grantModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleTagGrant::class);
@@ -386,10 +390,44 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
                 continue;
             }
             $normalizedTagPaths[$tagPath] = true;
-            foreach (\array_keys($byTagPath[$tagPath] ?? []) as $sourceId) {
-                $leafSet[$sourceId] = true;
+        }
+
+        /** @var RoleAccess $roleAccessModel */
+        $roleAccessModel = ObjectManager::getInstance(RoleAccess::class);
+        $previousGranted = [];
+        foreach ($roleAccessModel->reset()
+            ->where(RoleAccess::schema_fields_ROLE_ID, $role_id)
+            ->fields(RoleAccess::schema_fields_SOURCE_ID)
+            ->select()
+            ->fetchArray() as $previousRow
+        ) {
+            $previousId = \trim((string)($previousRow[RoleAccess::schema_fields_SOURCE_ID] ?? ''));
+            if ($previousId !== '') {
+                $previousGranted[] = $previousId;
             }
         }
+
+        $reconciled = \Weline\Acl\Service\Resource\AclResourcePresentation::reconcileTagGrantsForSave(
+            \array_keys($leafSet),
+            \array_keys($normalizedTagPaths),
+            $byTagPath,
+            $previousGranted,
+        );
+        $normalizedTagPaths = [];
+        foreach ($reconciled['tag_paths'] as $tagPath) {
+            $normalizedTagPaths[$tagPath] = true;
+        }
+        foreach ($reconciled['extra_ids'] as $extraId) {
+            $leafSet[$extraId] = true;
+        }
+        $leafSet = \array_fill_keys(
+            \Weline\Acl\Service\Resource\AclResourcePresentation::revokeUncheckedMenuSubtrees(
+                \array_keys($leafSet),
+                $previousGranted,
+                $allRows,
+            ),
+            true,
+        );
         $finalIds = \Weline\Acl\Service\Resource\AclResourcePresentation::expandMenusAncestors(
             \array_keys($leafSet),
             $allRows,
@@ -408,6 +446,7 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         if (!(bool)$saveBefore->getData('allowed')) {
             $this->getMessageManager()->addError((string)($saveBefore->getData('message') ?: __('权限分配被站级授权包拒绝')));
             $this->redirect('*/backend/acl/role/assign', ['id' => $role_id]);
+            return;
         }
 
         $acls = [];
@@ -417,8 +456,6 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
                 RoleAccess::schema_fields_SOURCE_ID => $acl_id,
             ];
         }
-        /**@var RoleAccess $roleAccessModel */
-        $roleAccessModel = ObjectManager::getInstance(RoleAccess::class);
         /** @var \Weline\Acl\Model\RoleTagGrant $grantModel */
         $grantModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleTagGrant::class);
         $roleAccessModel->beginTransaction();
@@ -442,14 +479,24 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
                 ])->fetch();
             }
             $roleAccessModel->commit();
-            w_cache('acl')->clear();
-            $this->getMessageManager()->addSuccess(__('权限分配成功，权限缓存已清理。'));
         } catch (\Exception $exception) {
             $roleAccessModel->rollBack();
             if (DEV) {
                 $this->getMessageManager()->addException($exception);
             }
             $this->getMessageManager()->addError(__('权限分配失败！'));
+            $this->redirect('*/backend/acl/role/assign', ['id' => $role_id]);
+            return;
+        }
+
+        try {
+            \Weline\Acl\Service\AclCacheInvalidator::flushAfterRoleAccessChange((int)$role_id);
+            $this->getMessageManager()->addSuccess(__('权限分配成功，所有缓存已刷新！'));
+        } catch (\Throwable $exception) {
+            if (DEV) {
+                $this->getMessageManager()->addException($exception);
+            }
+            $this->getMessageManager()->addError(__('权限已保存，但所有缓存刷新失败：%{1}', [$exception->getMessage()]));
         }
         $this->redirect('*/backend/acl/role/assign', ['id' => $role_id]);
     }

@@ -1579,8 +1579,8 @@ class Taglib
                                 if ($has_else) {
                                     return $hook_comment
                                         . self::PHP_OPEN_TAG
-                                        . 'php $__w_hr=$this->getHookResult(\'' . $hook_name . '\', false, true);'
-                                        . ' if($__w_hr->shouldUseFallback()): '
+                                        . 'php $__w_hr=method_exists($this,\'getHookResult\')?$this->getHookResult(\'' . $hook_name . '\', false, true):null;'
+                                        . ' if(!$__w_hr instanceof \\Weline\\Framework\\Hook\\HookRenderResult || $__w_hr->shouldUseFallback()): '
                                         . self::PHP_CLOSE_TAG
                                         . $else_content
                                         . self::PHP_OPEN_TAG

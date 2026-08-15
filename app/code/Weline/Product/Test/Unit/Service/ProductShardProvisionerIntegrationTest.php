@@ -71,6 +71,7 @@ final class ProductShardProvisionerIntegrationTest extends TestCase
             new SchemaMigrationExecutor(
                 $this->createMock(EventsManager::class),
                 $migration,
+                $this->createMock(\Weline\Framework\Database\Service\BackupService::class),
             ),
         );
         $provisioner = new ProductShardProvisioner($registry, $genericProvisioner, $catalog);

@@ -27,7 +27,11 @@
 #include <sys/time.h>
 #endif
 #if defined(__linux__)
+#include <linux/capability.h>
+#include <linux/posix_acl.h>
+#include <linux/posix_acl_xattr.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #include <sys/xattr.h>
 #endif
 
@@ -99,6 +103,7 @@
  * both are fail-closed to PHP. */
 #define WLS_CAPACITY_INSPECT_CONFLICT_EXIT 78
 #define WLS_CAPACITY_INSPECT_UNSAFE_EXIT 77
+#define WLS_RECOVERY_PROCESS_COMMAND_MAX_BYTES 65536U
 
 struct wls_upgrade {
     int present;
@@ -138,6 +143,9 @@ static volatile sig_atomic_t wls_platform_shutdown_self_test_signal = 0;
 static pid_t wls_guardian_parent_pid = 0;
 static unsigned long long wls_guardian_parent_start_id = 0ULL;
 static long long wls_guardian_parent_last_check_ms = 0LL;
+#if defined(__linux__)
+static int wls_recovery_self_test_add_acl_after_redigest = 0;
+#endif
 
 struct wls_platform_retirement_receipt {
     char status[16];
@@ -157,6 +165,29 @@ struct wls_platform_retirement_receipt {
     char completed_launcher_generation[65];
     char completed_host_boot_id[65];
     char completed_runtime_generation[65];
+};
+
+#define WLS_NGINX_PID_RESIDUE_MAX 3U
+#define WLS_NGINX_PID_RESIDUE_NAME_MAX 127U
+#define WLS_NGINX_PID_RESIDUE_PID_MAX_BYTES 32U
+#define WLS_NGINX_PID_RESIDUE_CONFIG_MAX_BYTES (16U * 1024U * 1024U)
+#define WLS_PID_RESIDUE_EVIDENCE_CLEAN 0
+#define WLS_PID_RESIDUE_EVIDENCE_PENDING 1
+#define WLS_PID_RESIDUE_EVIDENCE_UNSAFE 2
+
+struct wls_nginx_pid_residue_entry {
+    char name[WLS_NGINX_PID_RESIDUE_NAME_MAX + 1U];
+    unsigned long long device;
+    unsigned long long inode;
+};
+
+struct wls_nginx_pid_residue_intent {
+    char platform[16];
+    char service_id[65];
+    char requested_launcher_generation[65];
+    char runtime_generation[65];
+    unsigned int count;
+    struct wls_nginx_pid_residue_entry entries[WLS_NGINX_PID_RESIDUE_MAX];
 };
 
 struct wls_process_attestation_receipt {
@@ -361,7 +392,21 @@ static int wls_parse_process_attestation(
     struct wls_process_attestation_receipt *receipt
 );
 static int wls_recovery_attested_process_live(
-    const struct wls_process_attestation_receipt *receipt
+    const struct wls_process_attestation_receipt *receipt,
+    const char *home,
+    char active_slot
+);
+static int wls_recovery_attestation_ready(
+    const char *home,
+    uid_t expected_owner,
+    const char *runtime_generation,
+    char active_slot
+);
+static int wls_recovery_observe_health(
+    const char *home,
+    const char *runtime_generation,
+    struct wls_posix_recovery_context *context,
+    unsigned long long *observation_started
 );
 static int wls_guardian_regular_state(
     const char *path,
@@ -715,47 +760,112 @@ static int wls_public_key(unsigned char key[crypto_sign_PUBLICKEYBYTES])
     return 0;
 }
 
+static int wls_release_public_key_self_test(void)
+{
+    unsigned char key[crypto_sign_PUBLICKEYBYTES];
+    char hex[crypto_sign_PUBLICKEYBYTES * 2U + 1U];
+    int result = -1;
+    if (wls_public_key(key) == 0) {
+        sodium_bin2hex(hex, sizeof(hex), key, sizeof(key));
+        result = puts(hex) < 0 ? -1 : 0;
+    }
+    sodium_memzero(key, sizeof(key));
+    return result;
+}
+
+static int wls_launcher_verify_release_signature(
+    const unsigned char *manifest,
+    size_t manifest_length,
+    const unsigned char *signature_text,
+    size_t signature_length
+);
+
+static int wls_release_signature_self_test(
+    const char *nonce_hex,
+    const char *signature_text
+)
+{
+    unsigned char nonce[32];
+    unsigned char signature[crypto_sign_BYTES];
+    char canonical[((crypto_sign_BYTES + 2U) / 3U) * 4U + 1U];
+    size_t decoded = 0U;
+    size_t nonce_length;
+    int result = -1;
+    if (nonce_hex == NULL || signature_text == NULL
+        || strlen(nonce_hex) != sizeof(nonce) * 2U
+        || sodium_hex2bin(
+            nonce,
+            sizeof(nonce),
+            nonce_hex,
+            strlen(nonce_hex),
+            NULL,
+            &nonce_length,
+            NULL
+        ) != 0
+        || nonce_length != sizeof(nonce)
+        || strlen(signature_text) != sizeof(canonical) - 1U
+        || sodium_base642bin(
+            signature,
+            sizeof(signature),
+            signature_text,
+            strlen(signature_text),
+            NULL,
+            &decoded,
+            NULL,
+            sodium_base64_VARIANT_ORIGINAL
+        ) != 0
+        || decoded != sizeof(signature)) {
+        goto cleanup;
+    }
+    sodium_bin2base64(
+        canonical,
+        sizeof(canonical),
+        signature,
+        sizeof(signature),
+        sodium_base64_VARIANT_ORIGINAL
+    );
+    if (sodium_memcmp(canonical, signature_text, sizeof(canonical) - 1U) != 0
+        || wls_launcher_verify_release_signature(
+            nonce,
+            sizeof(nonce),
+            (const unsigned char *)signature_text,
+            strlen(signature_text)
+        ) != 0) {
+        goto cleanup;
+    }
+    result = 0;
+cleanup:
+    sodium_memzero(nonce, sizeof(nonce));
+    sodium_memzero(signature, sizeof(signature));
+    return result;
+}
+
 static int wls_verify_release(
     const char *manifest_path,
     const char *signature_path,
     unsigned char **manifest,
     size_t *manifest_length
 ) {
-    unsigned char public_key[crypto_sign_PUBLICKEYBYTES];
-    unsigned char signature[crypto_sign_BYTES];
     unsigned char *signature_text = NULL;
     size_t signature_length = 0U;
-    size_t decoded = 0U;
     int result = -1;
-    if (wls_public_key(public_key) != 0
-        || wls_read_file(
+    if (wls_read_file(
             signature_path,
             WLS_SIGNATURE_TEXT,
             &signature_text,
             &signature_length
         ) != 0
-        || sodium_base642bin(
-            signature,
-            sizeof(signature),
-            (const char *)signature_text,
-            signature_length,
-            "\r\n\t ",
-            &decoded,
-            NULL,
-            sodium_base64_VARIANT_ORIGINAL
-        ) != 0
-        || decoded != crypto_sign_BYTES
         || wls_read_file(
             manifest_path,
             WLS_MAX_MANIFEST,
             manifest,
             manifest_length
         ) != 0
-        || crypto_sign_verify_detached(
-            signature,
+        || wls_launcher_verify_release_signature(
             *manifest,
-            (unsigned long long)*manifest_length,
-            public_key
+            *manifest_length,
+            signature_text,
+            signature_length
         ) != 0) {
         goto cleanup;
     }
@@ -767,8 +877,6 @@ cleanup:
         *manifest = NULL;
         *manifest_length = 0U;
     }
-    sodium_memzero(public_key, sizeof(public_key));
-    sodium_memzero(signature, sizeof(signature));
     return result;
 }
 
@@ -2050,6 +2158,107 @@ cleanup:
     return result;
 }
 
+/* The caller validates owner, group and mode for its own authority domain.
+ * This helper only binds a no-follow descriptor's immutable file identity to
+ * a stable content digest, so controller-owned runtime config need not be
+ * incorrectly treated as a root-owned slot component. */
+static int __attribute__((unused)) wls_recovery_digest_regular_fd(
+    int fd,
+    char digest[65],
+    unsigned long long *size,
+    unsigned long long *mode
+) {
+    struct stat before;
+    struct stat after;
+    crypto_hash_sha256_state state;
+    unsigned char hash[crypto_hash_sha256_BYTES];
+    unsigned char buffer[65536];
+    ssize_t amount;
+    int result = -1;
+    if (fd < 0 || digest == NULL || size == NULL || mode == NULL
+        || fstat(fd, &before) != 0 || !S_ISREG(before.st_mode)
+        || before.st_nlink != 1 || (before.st_mode & 0022) != 0
+        || before.st_size < 0 || lseek(fd, 0, SEEK_SET) < 0
+        || crypto_hash_sha256_init(&state) != 0) return -1;
+    for (;;) {
+        amount = read(fd, buffer, sizeof(buffer));
+        if (amount < 0 && errno == EINTR) continue;
+        if (amount < 0) goto cleanup;
+        if (amount == 0) break;
+        if (crypto_hash_sha256_update(
+                &state, buffer, (unsigned long long)amount
+            ) != 0) goto cleanup;
+    }
+    if (fstat(fd, &after) != 0
+        || !wls_launcher_same_file_state(&before, &after)
+        || crypto_hash_sha256_final(&state, hash) != 0) goto cleanup;
+    sodium_bin2hex(digest, 65U, hash, sizeof(hash));
+    *size = (unsigned long long)after.st_size;
+    *mode = (unsigned long long)(after.st_mode & 0777);
+    result = wls_is_hex_text(digest, 64U) ? 0 : -1;
+cleanup:
+    sodium_memzero(&state, sizeof(state));
+    sodium_memzero(hash, sizeof(hash));
+    sodium_memzero(buffer, sizeof(buffer));
+    return result;
+}
+
+#if defined(__linux__)
+static int wls_recovery_self_test_add_named_config_acl(int fd)
+{
+    struct {
+        struct posix_acl_xattr_header header;
+        struct posix_acl_xattr_entry entries[5];
+    } acl;
+    if (fd < 0) return -1;
+    memset(&acl, 0, sizeof(acl));
+    acl.header.a_version = htole32(POSIX_ACL_XATTR_VERSION);
+    acl.entries[0].e_tag = htole16(ACL_USER_OBJ);
+    acl.entries[0].e_perm = htole16(6U);
+    acl.entries[0].e_id = htole32(ACL_UNDEFINED_ID);
+    acl.entries[1].e_tag = htole16(ACL_USER);
+    acl.entries[1].e_perm = htole16(4U);
+    acl.entries[1].e_id = htole32((uint32_t)geteuid());
+    acl.entries[2].e_tag = htole16(ACL_GROUP_OBJ);
+    acl.entries[2].e_perm = htole16(4U);
+    acl.entries[2].e_id = htole32(ACL_UNDEFINED_ID);
+    acl.entries[3].e_tag = htole16(ACL_MASK);
+    acl.entries[3].e_perm = htole16(4U);
+    acl.entries[3].e_id = htole32(ACL_UNDEFINED_ID);
+    acl.entries[4].e_tag = htole16(ACL_OTHER);
+    acl.entries[4].e_perm = htole16(0U);
+    acl.entries[4].e_id = htole32(ACL_UNDEFINED_ID);
+    return fsetxattr(
+        fd, "system.posix_acl_access", &acl, sizeof(acl), 0
+    ) == 0 ? 0 : -1;
+}
+
+static int wls_recovery_self_test_remove_named_config_acl(
+    const char *path,
+    const struct stat *expected
+) {
+    struct stat observed;
+    int fd = -1;
+    int result = -1;
+    if (path == NULL || expected == NULL) return -1;
+    fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0 || fremovexattr(fd, "system.posix_acl_access") != 0
+        || fstat(fd, &observed) != 0
+        || observed.st_dev != expected->st_dev
+        || observed.st_ino != expected->st_ino
+        || observed.st_size != expected->st_size
+        || observed.st_mode != expected->st_mode
+        || observed.st_uid != expected->st_uid
+        || observed.st_gid != expected->st_gid
+        || observed.st_nlink != expected->st_nlink
+        || wls_guardian_acl_free_fd(fd, 0) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    return result;
+}
+#endif
+
 static int wls_launcher_expected_component_modes(
     const char *relative,
     unsigned long long *release_mode,
@@ -3226,6 +3435,39 @@ static int wls_platform_service_identity(
         return 0;
     }
 #endif
+#if defined(__APPLE__)
+    /* A Guardian can replace its child without launchd replacing the job.
+     * Bind recovery authority to the Guardian birth identity, not a child-local
+     * random value, so only a real launchd service restart changes it. */
+    if (strcmp(platform, "launchd") == 0 && guardian_child) {
+        if (wls_guardian_parent_pid <= 0
+            || wls_guardian_parent_start_id == 0ULL) return -1;
+        written = snprintf(
+            canonical,
+            sizeof(canonical),
+            "wls-launchd-guardian/1%c%ld%c%llu%c%s%c%s",
+            '\0',
+            (long)wls_guardian_parent_pid,
+            '\0',
+            wls_guardian_parent_start_id,
+            '\0',
+            boot_id,
+            '\0',
+            service_id
+        );
+        if (written <= 0 || written >= (int)sizeof(canonical)
+            || wls_sha256_text(
+                (const unsigned char *)canonical,
+                (size_t)written,
+                launcher_generation
+            ) != 0) {
+            sodium_memzero(canonical, sizeof(canonical));
+            return -1;
+        }
+        sodium_memzero(canonical, sizeof(canonical));
+        return 0;
+    }
+#endif
     randombytes_buf(random_generation, sizeof(random_generation));
     if (sodium_bin2hex(
             launcher_generation,
@@ -4215,6 +4457,121 @@ static int wls_parse_process_attestation(
     }
     return 0;
 }
+
+/* Linux recovery observes only start identity and argv.  It deliberately
+ * never dereferences /proc/<pid>/exe: a root launcher without CAP_SYS_PTRACE
+ * cannot read that magic link for a distinct-UID nginx master. */
+#if defined(__linux__)
+static int wls_recovery_process_start_id(
+    pid_t pid,
+    unsigned long long *start_id
+) {
+    char path[64];
+    char contents[4096];
+    char *cursor;
+    char *end;
+    int fd;
+    ssize_t amount;
+    unsigned int field = 3U;
+    if (pid <= 0 || start_id == NULL || snprintf(
+            path, sizeof(path), "/proc/%ld/stat", (long)pid
+        ) >= (int)sizeof(path)) return -1;
+    fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) return -1;
+    do {
+        amount = read(fd, contents, sizeof(contents) - 1U);
+    } while (amount < 0 && errno == EINTR);
+    close(fd);
+    if (amount <= 0 || amount >= (ssize_t)sizeof(contents)) return -1;
+    contents[amount] = '\0';
+    cursor = strrchr(contents, ')');
+    if (cursor == NULL || cursor[1] != ' ') return -1;
+    cursor += 2U;
+    while (field <= 22U) {
+        char *space = strchr(cursor, ' ');
+        if (field == 22U) {
+            errno = 0;
+            *start_id = strtoull(cursor, &end, 10);
+            return errno == 0 && end != cursor
+                && (*end == ' ' || *end == '\0') && *start_id != 0ULL ? 0 : -1;
+        }
+        if (space == NULL) return -1;
+        cursor = space + 1U;
+        field++;
+    }
+    return -1;
+}
+
+static int wls_recovery_process_command_matches(
+    pid_t pid,
+    const char *binary,
+    const char *prefix,
+    const char *config
+) {
+    char path[64];
+    char title[PATH_MAX * 3U + 64U];
+    char *buffer = NULL;
+    char *arguments[5];
+    size_t count = 0U;
+    size_t used = 0U;
+    int fd = -1;
+    int result = -1;
+    int written;
+    if (pid <= 0 || binary == NULL || prefix == NULL || config == NULL
+        || snprintf(path, sizeof(path), "/proc/%ld/cmdline", (long)pid)
+            >= (int)sizeof(path)) return -1;
+    buffer = calloc(WLS_RECOVERY_PROCESS_COMMAND_MAX_BYTES + 1U, 1U);
+    fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (buffer == NULL || fd < 0) goto cleanup;
+    while (used < WLS_RECOVERY_PROCESS_COMMAND_MAX_BYTES) {
+        ssize_t amount;
+        do {
+            amount = read(
+                fd,
+                buffer + used,
+                WLS_RECOVERY_PROCESS_COMMAND_MAX_BYTES - used
+            );
+        } while (amount < 0 && errno == EINTR);
+        if (amount < 0) goto cleanup;
+        if (amount == 0) break;
+        used += (size_t)amount;
+    }
+    if (used == 0U || used == WLS_RECOVERY_PROCESS_COMMAND_MAX_BYTES
+        || buffer[used - 1U] != '\0') goto cleanup;
+    written = snprintf(
+        title, sizeof(title), "nginx: master process %s -p %s -c %s",
+        binary, prefix, config
+    );
+    if (written > 0 && written < (int)sizeof(title)
+        && strcmp(buffer, title) == 0) {
+        result = 0;
+        goto cleanup;
+    }
+    {
+        size_t offset = 0U;
+        while (offset < used) {
+            size_t length = strnlen(buffer + offset, used - offset);
+            if (length == 0U || length >= used - offset || count >= 5U) {
+                goto cleanup;
+            }
+            arguments[count++] = buffer + offset;
+            offset += length + 1U;
+        }
+    }
+    result = count == 5U && strcmp(arguments[0], binary) == 0
+        && strcmp(arguments[1], "-p") == 0 && strcmp(arguments[2], prefix) == 0
+        && strcmp(arguments[3], "-c") == 0 && strcmp(arguments[4], config) == 0
+        ? 0 : -1;
+cleanup:
+    if (fd >= 0) close(fd);
+    if (buffer != NULL) {
+        sodium_memzero(buffer, WLS_RECOVERY_PROCESS_COMMAND_MAX_BYTES + 1U);
+        free(buffer);
+    }
+    sodium_memzero(title, sizeof(title));
+    return result;
+}
+#endif
 
 /* Resolve the live process birth identity and executable without trusting the
  * receipt's PID as ownership. The caller never signals this process. */
@@ -9680,7 +10037,11 @@ static int wls_guardian_data_plane_live(
         ) != 0
         || (unsigned long long)receipt.publication_generation
             != health->public_data_plane_generation
-        || wls_recovery_attested_process_live(&receipt) != 1) goto cleanup;
+        || wls_recovery_attested_process_live(
+            &receipt,
+            home,
+            health->active_slot[0]
+        ) != 1) goto cleanup;
     memcpy(attested, &receipt, sizeof(receipt));
     result = 0;
 cleanup:
@@ -11810,7 +12171,7 @@ static int wls_guardian_restore_previous_slot(
 ) {
     char stored[PATH_MAX];
     char target[PATH_MAX];
-    char text[4];
+    char text[sizeof(request->recovery_previous_slot) + 1U];
     char digest[65];
     unsigned long long size = 0ULL;
     struct stat status;
@@ -11825,7 +12186,12 @@ static int wls_guardian_restore_previous_slot(
         if (lstat(target, &status) == 0 || errno != ENOENT) return -1;
         return 0;
     }
-    snprintf(text, sizeof(text), "%s\n", request->recovery_previous_slot);
+    if (snprintf(
+            text,
+            sizeof(text),
+            "%s\n",
+            request->recovery_previous_slot
+        ) < 0) return -1;
     if (wls_guardian_text_digest(text, digest, &size) != 0) return -1;
     stored_state = wls_guardian_regular_state(stored, digest, size, 0640);
     target_state = wls_guardian_regular_state(target, digest, size, 0640);
@@ -13714,8 +14080,181 @@ cleanup:
 /* 1=receipt still names the exact live executable, 0=process exited,
  * -1=PID reuse, digest mismatch or an indeterminate observation. */
 static int wls_recovery_attested_process_live(
-    const struct wls_process_attestation_receipt *receipt
+    const struct wls_process_attestation_receipt *receipt,
+    const char *home,
+    char active_slot
 ) {
+#if defined(__linux__)
+    char expected_binary[PATH_MAX];
+    char expected_prefix[PATH_MAX];
+    char expected_config[PATH_MAX];
+    char expected_config_path_digest[65];
+    char binary_digest[65];
+    char config_digest[65];
+    unsigned long long binary_size = 0ULL;
+    unsigned long long binary_mode = 0ULL;
+    unsigned long long config_size = 0ULL;
+    unsigned long long config_mode = 0ULL;
+    uid_t controller_uid = 0;
+    gid_t controller_gid = 0;
+    gid_t data_plane_gid = 0;
+    struct stat binary_before;
+    struct stat binary_after;
+    struct stat config_before;
+    struct stat config_after;
+    struct stat config_reopened;
+    unsigned long long start_before = 0ULL;
+    unsigned long long start_after = 0ULL;
+    pid_t pid;
+    int binary_fd = -1;
+    int config_fd = -1;
+    int config_reopened_fd = -1;
+    int result = -1;
+    if (receipt == NULL || home == NULL || home[0] != '/'
+        || (active_slot != 'A' && active_slot != 'B')
+        || receipt->pid == 0U || receipt->pid > (unsigned long)INT_MAX
+        || receipt->start_id == 0ULL
+        || !wls_is_hex_text(receipt->binary_digest, 64U)
+        || !wls_is_hex_text(receipt->config_digest, 64U)
+        || !wls_is_hex_text(receipt->config_path_digest, 64U)
+        || wls_guardian_service_identity_values(
+            &controller_uid, &controller_gid, &data_plane_gid
+        ) != 0
+        || snprintf(
+            expected_binary,
+            sizeof(expected_binary),
+            "%s/slots/%c/bin/nginx",
+            home,
+            active_slot
+        ) >= (int)sizeof(expected_binary)
+        || snprintf(
+            expected_prefix,
+            sizeof(expected_prefix),
+            "%s/runtime/",
+            home
+        ) >= (int)sizeof(expected_prefix)
+        || snprintf(
+            expected_config,
+            sizeof(expected_config),
+            "%s/runtime/conf/nginx.conf",
+            home
+        ) >= (int)sizeof(expected_config)
+        || wls_sha256_text(
+            (const unsigned char *)expected_config,
+            strlen(expected_config),
+            expected_config_path_digest
+        ) != 0
+        || sodium_memcmp(
+            expected_config_path_digest,
+            receipt->config_path_digest,
+            64U
+        ) != 0) {
+        return -1;
+    }
+    (void)controller_gid;
+    pid = (pid_t)receipt->pid;
+    errno = 0;
+    if (kill(pid, 0) != 0 && errno == ESRCH) return 0;
+    if (wls_recovery_process_start_id(pid, &start_before) != 0
+        || start_before != receipt->start_id
+        || wls_recovery_process_command_matches(
+            pid,
+            expected_binary,
+            expected_prefix,
+            expected_config
+        ) != 0) goto cleanup;
+    binary_fd = open(expected_binary, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    config_fd = open(expected_config, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (binary_fd < 0 || fstat(binary_fd, &binary_before) != 0
+        || !S_ISREG(binary_before.st_mode) || binary_before.st_uid != 0
+        || binary_before.st_nlink != 1
+        || (binary_before.st_mode & 0777) != 0555
+        || wls_guardian_acl_free_fd(binary_fd, 0) != 0
+        || wls_launcher_digest_component_fd(
+            binary_fd,
+            binary_digest,
+            &binary_size,
+            &binary_mode
+        ) != 0
+        || sodium_memcmp(binary_digest, receipt->binary_digest, 64U) != 0
+        || fstat(binary_fd, &binary_after) != 0
+        || binary_after.st_dev != binary_before.st_dev
+        || binary_after.st_ino != binary_before.st_ino
+        || binary_after.st_size != binary_before.st_size
+        || binary_after.st_mode != binary_before.st_mode
+        || binary_after.st_uid != binary_before.st_uid
+        || binary_after.st_gid != binary_before.st_gid
+        || binary_after.st_nlink != binary_before.st_nlink
+        || binary_size != (unsigned long long)binary_before.st_size
+        || binary_mode != (unsigned long long)(binary_before.st_mode & 0777)
+        || config_fd < 0 || fstat(config_fd, &config_before) != 0
+        || !S_ISREG(config_before.st_mode)
+        || config_before.st_uid != controller_uid
+        || config_before.st_gid != data_plane_gid
+        || (config_before.st_mode & 0777) != 0640
+        || config_before.st_nlink != 1
+        || wls_guardian_acl_free_fd(config_fd, 0) != 0
+        || wls_recovery_digest_regular_fd(
+            config_fd,
+            config_digest,
+            &config_size,
+            &config_mode
+        ) != 0
+        || sodium_memcmp(config_digest, receipt->config_digest, 64U) != 0
+        || fstat(config_fd, &config_after) != 0
+        || config_after.st_dev != config_before.st_dev
+        || config_after.st_ino != config_before.st_ino
+        || config_after.st_size != config_before.st_size
+        || config_after.st_mode != config_before.st_mode
+        || config_after.st_uid != config_before.st_uid
+        || config_after.st_gid != config_before.st_gid
+        || config_after.st_nlink != config_before.st_nlink
+        || config_size != (unsigned long long)config_before.st_size
+        || config_mode != (unsigned long long)(config_before.st_mode & 0777)
+        || (config_reopened_fd = open(
+            expected_config, O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0
+        || fstat(config_reopened_fd, &config_reopened) != 0
+        || config_reopened.st_dev != config_before.st_dev
+        || config_reopened.st_ino != config_before.st_ino
+        || config_reopened.st_size != config_before.st_size
+        || config_reopened.st_mode != config_before.st_mode
+        || config_reopened.st_uid != config_before.st_uid
+        || config_reopened.st_gid != config_before.st_gid
+        || config_reopened.st_nlink != config_before.st_nlink
+        || wls_recovery_digest_regular_fd(
+            config_reopened_fd,
+            config_digest,
+            &config_size,
+            &config_mode
+        ) != 0
+        || sodium_memcmp(config_digest, receipt->config_digest, 64U) != 0
+#if defined(__linux__)
+        || (wls_recovery_self_test_add_acl_after_redigest
+            && wls_recovery_self_test_add_named_config_acl(config_reopened_fd) != 0)
+#endif
+        || wls_guardian_acl_free_fd(config_reopened_fd, 0) != 0
+        || wls_recovery_process_start_id(pid, &start_after) != 0
+        || start_after != start_before
+        || wls_recovery_process_command_matches(
+            pid,
+            expected_binary,
+            expected_prefix,
+            expected_config
+        ) != 0) goto cleanup;
+    result = 1;
+cleanup:
+    if (binary_fd >= 0) close(binary_fd);
+    if (config_fd >= 0) close(config_fd);
+    if (config_reopened_fd >= 0) close(config_reopened_fd);
+    sodium_memzero(expected_binary, sizeof(expected_binary));
+    sodium_memzero(expected_prefix, sizeof(expected_prefix));
+    sodium_memzero(expected_config, sizeof(expected_config));
+    sodium_memzero(expected_config_path_digest, sizeof(expected_config_path_digest));
+    sodium_memzero(binary_digest, sizeof(binary_digest));
+    sodium_memzero(config_digest, sizeof(config_digest));
+    return result;
+#else
     char executable_before[PATH_MAX];
     char executable_after[PATH_MAX];
     char binary_digest[65];
@@ -13723,6 +14262,8 @@ static int wls_recovery_attested_process_live(
     unsigned long long start_after = 0ULL;
     pid_t pid;
     int result = -1;
+    (void)home;
+    (void)active_slot;
     if (receipt == NULL || receipt->pid == 0U
         || receipt->pid > (unsigned long)INT_MAX
         || receipt->start_id == 0ULL
@@ -13755,11 +14296,12 @@ cleanup:
     sodium_memzero(executable_after, sizeof(executable_after));
     sodium_memzero(binary_digest, sizeof(binary_digest));
     return result;
+#endif
 }
 
 static int wls_recovery_attested_process_self_test(void)
 {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__APPLE__)
     struct wls_process_attestation_receipt receipt;
     char executable[PATH_MAX];
     unsigned long long start_id = 0ULL;
@@ -13773,12 +14315,12 @@ static int wls_recovery_attested_process_self_test(void)
     }
     receipt.pid = (unsigned long)getpid();
     receipt.start_id = start_id;
-    if (wls_recovery_attested_process_live(&receipt) != 1) goto cleanup;
+    if (wls_recovery_attested_process_live(&receipt, NULL, '\0') != 1) goto cleanup;
     receipt.start_id++;
-    if (wls_recovery_attested_process_live(&receipt) != -1) goto cleanup;
+    if (wls_recovery_attested_process_live(&receipt, NULL, '\0') != -1) goto cleanup;
     receipt.start_id = start_id;
     receipt.binary_digest[0] = receipt.binary_digest[0] == '0' ? '1' : '0';
-    if (wls_recovery_attested_process_live(&receipt) != -1) goto cleanup;
+    if (wls_recovery_attested_process_live(&receipt, NULL, '\0') != -1) goto cleanup;
     result = 0;
 cleanup:
     sodium_memzero(&receipt, sizeof(receipt));
@@ -13789,11 +14331,398 @@ cleanup:
 #endif
 }
 
+static int __attribute__((unused)) wls_recovery_attestation_self_test_write(
+    const char *path,
+    const char *contents,
+    mode_t mode
+) {
+    int fd;
+    size_t length;
+    if (path == NULL || contents == NULL) return -1;
+    length = strlen(contents);
+    fd = open(
+        path,
+        O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+        mode
+    );
+    if (fd < 0 || wls_write_all(fd, contents, length) != 0
+        || fsync(fd) != 0) goto cleanup;
+    if (close(fd) != 0) {
+        fd = -1;
+        return -1;
+    }
+    fd = -1;
+    return 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    return -1;
+}
+
+static int __attribute__((unused)) wls_recovery_attestation_self_test_receipt(
+    const char *path,
+    pid_t pid,
+    unsigned long long start_id,
+    const char *binary_digest,
+    const char *runtime_generation,
+    const char *config_digest,
+    const char *config_path_digest
+) {
+    char contents[2048];
+    int written;
+    if (path == NULL || pid <= 0 || start_id == 0ULL
+        || binary_digest == NULL || runtime_generation == NULL
+        || config_digest == NULL || config_path_digest == NULL) return -1;
+    written = snprintf(
+        contents,
+        sizeof(contents),
+        "WLS-PROCESS-ATTEST/3\npid=%ld\nstart_id=%llu\n"
+        "binary_digest=%s\nruntime_generation=%s\n"
+        "config_digest=%s\nconfig_path_digest=%s\n"
+        "publication_generation=1\nfence_kind=ACTIVE\n"
+        "candidate_transaction_id=-\ncandidate_phase=ACTIVE\n"
+        "candidate_fence_digest=%064d\n",
+        (long)pid,
+        start_id,
+        binary_digest,
+        runtime_generation,
+        config_digest,
+        config_path_digest,
+        0
+    );
+    if (written <= 0 || written >= (int)sizeof(contents)) return -1;
+    if (unlink(path) != 0 && errno != ENOENT) return -1;
+    return wls_recovery_attestation_self_test_write(path, contents, 0600);
+}
+
+static int __attribute__((unused)) wls_recovery_attestation_drop_ptrace_self_test(void)
+{
+#if defined(__linux__)
+    struct __user_cap_header_struct header;
+    struct __user_cap_data_struct data[2];
+    unsigned int index = CAP_SYS_PTRACE / 32U;
+    unsigned int bit = 1U << (CAP_SYS_PTRACE % 32U);
+    memset(&header, 0, sizeof(header));
+    memset(data, 0, sizeof(data));
+    header.version = _LINUX_CAPABILITY_VERSION_3;
+    if (syscall(SYS_capget, &header, data) != 0) return -1;
+    data[index].effective &= ~bit;
+    data[index].permitted &= ~bit;
+    data[index].inheritable &= ~bit;
+    if (syscall(SYS_capset, &header, data) != 0) return -1;
+    memset(data, 0, sizeof(data));
+    return syscall(SYS_capget, &header, data) == 0
+        && (data[index].effective & bit) == 0U
+        && (data[index].permitted & bit) == 0U ? 0 : -1;
+#else
+    errno = ENOTSUP;
+    return -1;
+#endif
+}
+
+static pid_t __attribute__((unused)) wls_recovery_attestation_self_test_master(
+    const char *binary,
+    const char *prefix,
+    const char *config,
+    const struct passwd *identity,
+    int ready_fd
+) {
+    pid_t child = fork();
+    if (child != 0) return child;
+    if (identity == NULL || ready_fd < 3
+        || setgid(identity->pw_gid) != 0 || setuid(identity->pw_uid) != 0
+        || setenv("WLS_RECOVERY_ATTEST_READY_FD", "3", 1) != 0
+        || dup2(ready_fd, 3) < 0) _exit(126);
+    if (ready_fd != 3) close(ready_fd);
+    execl(binary, binary, "-p", prefix, "-c", config, (char *)NULL);
+    _exit(127);
+}
+
+static int wls_recovery_attested_process_capdrop_self_test(void)
+{
+#if defined(__linux__)
+    const struct passwd *identity;
+    uid_t controller_uid = 0;
+    gid_t controller_gid = 0;
+    gid_t data_plane_gid = 0;
+    struct wls_posix_recovery_context context;
+    pid_t master = -1;
+    pid_t mismatched_master = -1;
+    pid_t verifier = -1;
+    int ready[2] = {-1, -1};
+    int mismatched_ready[2] = {-1, -1};
+    int status = 0;
+    int source_fd = -1;
+    int binary_fd = -1;
+    char home[] = "/tmp/wls-recovery-attest-XXXXXX";
+    char self[PATH_MAX] = {0};
+    char binary[PATH_MAX] = {0};
+    char prefix[PATH_MAX] = {0};
+    char config[PATH_MAX] = {0};
+    char wrong_config[PATH_MAX] = {0};
+    char receipt_path[PATH_MAX] = {0};
+    char ledger_path[PATH_MAX] = {0};
+    char status_path[PATH_MAX] = {0};
+    char binary_digest[65];
+    char config_digest[65];
+    char config_path_digest[65];
+    char runtime_generation[65];
+    char bad_digest[65];
+    char byte = '\0';
+    unsigned long long master_start = 0ULL;
+    unsigned long long mismatched_start = 0ULL;
+    ssize_t self_length;
+    int home_created = 0;
+    int stage = 1;
+    int result = 1;
+    memset(&context, 0, sizeof(context));
+    sodium_memzero(binary_digest, sizeof(binary_digest));
+    sodium_memzero(config_digest, sizeof(config_digest));
+    sodium_memzero(config_path_digest, sizeof(config_path_digest));
+    sodium_memzero(runtime_generation, sizeof(runtime_generation));
+    sodium_memzero(bad_digest, sizeof(bad_digest));
+    if (geteuid() != 0
+        || (identity = getpwnam("weline-gateway-nginx")) == NULL
+        || identity->pw_uid == 0U
+        || identity->pw_gid == 0U
+        || wls_guardian_service_identity_values(
+            &controller_uid, &controller_gid, &data_plane_gid
+        ) != 0
+        || (self_length = readlink("/proc/self/exe", self, sizeof(self) - 1U)) <= 0
+        || (size_t)self_length >= sizeof(self) - 1U
+        || mkdtemp(home) == NULL) goto cleanup;
+    home_created = 1;
+    self[self_length] = '\0';
+    (void)controller_gid;
+    if (chmod(home, 0755) != 0
+        || snprintf(binary, sizeof(binary), "%s/slots/A/bin/nginx", home)
+            >= (int)sizeof(binary)
+        || snprintf(prefix, sizeof(prefix), "%s/runtime/", home)
+            >= (int)sizeof(prefix)
+        || snprintf(config, sizeof(config), "%s/runtime/conf/nginx.conf", home)
+            >= (int)sizeof(config)
+        || snprintf(wrong_config, sizeof(wrong_config), "%s/runtime/conf/wrong.conf", home)
+            >= (int)sizeof(wrong_config)
+        || snprintf(receipt_path, sizeof(receipt_path), "%s/trust/process-attestation.receipt", home)
+            >= (int)sizeof(receipt_path)
+        || snprintf(ledger_path, sizeof(ledger_path), "%s/state/launcher-recovery.ledger", home)
+            >= (int)sizeof(ledger_path)
+        || snprintf(status_path, sizeof(status_path), "%s/state/launcher-recovery.status", home)
+            >= (int)sizeof(status_path)) goto cleanup;
+    {
+        char slots[PATH_MAX];
+        char slot_a[PATH_MAX];
+        char slot_bin[PATH_MAX];
+        char runtime[PATH_MAX];
+        char conf[PATH_MAX];
+        char trust[PATH_MAX];
+        char state[PATH_MAX];
+        if (snprintf(slots, sizeof(slots), "%s/slots", home) >= (int)sizeof(slots)
+            || snprintf(slot_a, sizeof(slot_a), "%s/slots/A", home) >= (int)sizeof(slot_a)
+            || snprintf(slot_bin, sizeof(slot_bin), "%s/slots/A/bin", home) >= (int)sizeof(slot_bin)
+            || snprintf(runtime, sizeof(runtime), "%s/runtime", home) >= (int)sizeof(runtime)
+            || snprintf(conf, sizeof(conf), "%s/runtime/conf", home) >= (int)sizeof(conf)
+            || snprintf(trust, sizeof(trust), "%s/trust", home) >= (int)sizeof(trust)
+            || snprintf(state, sizeof(state), "%s/state", home) >= (int)sizeof(state)
+            || mkdir(slots, 0755) != 0 || mkdir(slot_a, 0755) != 0
+            || mkdir(slot_bin, 0755) != 0 || mkdir(runtime, 0755) != 0
+            || mkdir(conf, 0755) != 0 || mkdir(trust, 0750) != 0
+            || mkdir(state, 0750) != 0) goto cleanup;
+    }
+    stage = 2;
+    source_fd = open(self, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    binary_fd = open(binary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0755);
+    if (source_fd < 0 || binary_fd < 0 || fchown(binary_fd, 0, 0) != 0
+        || fchmod(binary_fd, 0555) != 0) goto cleanup;
+    for (;;) {
+        char copy_buffer[8192];
+        ssize_t amount;
+        do {
+            amount = read(source_fd, copy_buffer, sizeof(copy_buffer));
+        } while (amount < 0 && errno == EINTR);
+        if (amount < 0 || (amount > 0 && wls_write_all(
+                binary_fd, copy_buffer, (size_t)amount
+            ) != 0)) goto cleanup;
+        if (amount == 0) break;
+    }
+    if (fsync(binary_fd) != 0 || close(binary_fd) != 0
+        || close(source_fd) != 0) goto cleanup;
+    binary_fd = -1;
+    source_fd = -1;
+    if (wls_recovery_attestation_self_test_write(
+            config, "worker_processes 1;\n", 0640
+        ) != 0 || wls_recovery_attestation_self_test_write(
+            wrong_config, "worker_processes 2;\n", 0640
+        ) != 0 || wls_recovery_attestation_self_test_write(
+            ledger_path, "seed\n", 0600
+        ) != 0 || wls_recovery_attestation_self_test_write(
+            status_path, "seed\n", 0444
+        ) != 0 || chown(config, controller_uid, data_plane_gid) != 0
+        || chown(wrong_config, controller_uid, data_plane_gid) != 0
+        || wls_file_digest(binary, binary_digest) != 0
+        || wls_file_digest(config, config_digest) != 0
+        || wls_sha256_text(
+            (const unsigned char *)config,
+            strlen(config),
+            config_path_digest
+        ) != 0) goto cleanup;
+    memset(runtime_generation, 'a', 64U);
+    runtime_generation[64] = '\0';
+    memset(bad_digest, 'b', 64U);
+    bad_digest[64] = '\0';
+    if (pipe(ready) != 0 || pipe(mismatched_ready) != 0) goto cleanup;
+    stage = 3;
+    master = wls_recovery_attestation_self_test_master(
+        binary, prefix, config, identity, ready[1]
+    );
+    mismatched_master = wls_recovery_attestation_self_test_master(
+        binary, prefix, wrong_config, identity, mismatched_ready[1]
+    );
+    if (master < 0 || mismatched_master < 0) goto cleanup;
+    close(ready[1]); ready[1] = -1;
+    close(mismatched_ready[1]); mismatched_ready[1] = -1;
+    if (read(ready[0], &byte, 1U) != 1 || byte != 'R'
+        || read(mismatched_ready[0], &byte, 1U) != 1 || byte != 'R'
+        || wls_recovery_process_start_id(master, &master_start) != 0 || master_start == 0ULL
+        || wls_recovery_process_start_id(mismatched_master, &mismatched_start) != 0
+        || mismatched_start == 0ULL
+        || wls_recovery_attestation_self_test_receipt(
+            receipt_path, master, master_start, binary_digest,
+            runtime_generation, config_digest, config_path_digest
+        ) != 0) goto cleanup;
+    memset(&context, 0, sizeof(context));
+    context.owner_uid = 0;
+    if (snprintf(context.ledger_path, sizeof(context.ledger_path), "%s", ledger_path)
+            >= (int)sizeof(context.ledger_path)
+        || snprintf(context.status_path, sizeof(context.status_path), "%s", status_path)
+            >= (int)sizeof(context.status_path)) goto cleanup;
+    wls_recovery_initialize(
+        &context.state,
+        "1111111111111111111111111111111111111111111111111111111111111111",
+        "2222222222222222222222222222222222222222222222222222222222222222",
+        "3333333333333333333333333333333333333333333333333333333333333333",
+        runtime_generation,
+        'A',
+        (unsigned long long)wls_monotonic_milliseconds(),
+        (long long)time(NULL),
+        "NONE"
+    );
+    stage = 4;
+    verifier = fork();
+    if (verifier < 0) goto cleanup;
+    if (verifier == 0) {
+        unsigned long long observation_started = 0ULL;
+        struct stat config_identity;
+        int config_identity_fd = -1;
+        if (wls_recovery_attestation_drop_ptrace_self_test() != 0
+            || wls_recovery_observe_health(
+                home, runtime_generation, &context, &observation_started
+            ) != 0 || observation_started == 0ULL
+            || (config_identity_fd = open(
+                config, O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+            )) < 0 || fstat(config_identity_fd, &config_identity) != 0
+            || close(config_identity_fd) != 0) _exit(1);
+        config_identity_fd = -1;
+        wls_recovery_self_test_add_acl_after_redigest = 1;
+        if (wls_recovery_attestation_ready(
+                home, 0, runtime_generation, 'A'
+            ) != -1) _exit(1);
+        wls_recovery_self_test_add_acl_after_redigest = 0;
+        if (wls_recovery_self_test_remove_named_config_acl(
+                config, &config_identity
+            ) != 0
+            || wls_recovery_attestation_self_test_receipt(
+                receipt_path, master, master_start, binary_digest,
+                runtime_generation, config_digest, config_path_digest
+            ) != 0 || wls_recovery_attestation_ready(
+                home, 0, runtime_generation, 'A'
+            ) != 1
+            || wls_recovery_attestation_self_test_receipt(
+                receipt_path, master, master_start + 1ULL, binary_digest,
+                runtime_generation, config_digest, config_path_digest
+            ) != 0 || wls_recovery_attestation_ready(
+                home, 0, runtime_generation, 'A'
+            ) != -1
+            || wls_recovery_attestation_self_test_receipt(
+                receipt_path, master, master_start, binary_digest,
+                runtime_generation, config_digest, config_path_digest
+            ) != 0 || wls_recovery_attestation_ready(
+                home, 0, runtime_generation, 'A'
+            ) != 1
+            || wls_recovery_attestation_self_test_receipt(
+                receipt_path, master, master_start, bad_digest,
+                runtime_generation, config_digest, config_path_digest
+            ) != 0 || wls_recovery_attestation_ready(
+                home, 0, runtime_generation, 'A'
+            ) != -1
+            || wls_recovery_attestation_self_test_receipt(
+                receipt_path, master, master_start, binary_digest,
+                runtime_generation, config_digest, config_path_digest
+            ) != 0 || wls_recovery_attestation_ready(
+                home, 0, runtime_generation, 'A'
+            ) != 1
+            || wls_recovery_attestation_self_test_receipt(
+                receipt_path, mismatched_master, mismatched_start, binary_digest,
+                runtime_generation, config_digest, config_path_digest
+            ) != 0 || wls_recovery_attestation_ready(
+                home, 0, runtime_generation, 'A'
+            ) != -1) _exit(1);
+        _exit(0);
+    }
+    if (wls_wait_child_exit_for(verifier, &status, 5000LL) != 0
+        || !WIFEXITED(status) || WEXITSTATUS(status) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (master > 0) (void)kill(master, SIGKILL);
+    if (mismatched_master > 0) (void)kill(mismatched_master, SIGKILL);
+    if (master > 0) (void)wls_wait_child_exit_for(master, &status, 1000LL);
+    if (mismatched_master > 0) (void)wls_wait_child_exit_for(mismatched_master, &status, 1000LL);
+    if (source_fd >= 0) close(source_fd);
+    if (binary_fd >= 0) close(binary_fd);
+    if (ready[0] >= 0) close(ready[0]);
+    if (ready[1] >= 0) close(ready[1]);
+    if (mismatched_ready[0] >= 0) close(mismatched_ready[0]);
+    if (mismatched_ready[1] >= 0) close(mismatched_ready[1]);
+    if (home_created) {
+        (void)unlink(receipt_path);
+        (void)unlink(ledger_path);
+        (void)unlink(status_path);
+        (void)unlink(config);
+        (void)unlink(wrong_config);
+        (void)unlink(binary);
+        {
+            char path[PATH_MAX];
+            if (snprintf(path, sizeof(path), "%s/slots/A/bin", home) < (int)sizeof(path)) (void)rmdir(path);
+            if (snprintf(path, sizeof(path), "%s/slots/A", home) < (int)sizeof(path)) (void)rmdir(path);
+            if (snprintf(path, sizeof(path), "%s/slots", home) < (int)sizeof(path)) (void)rmdir(path);
+            if (snprintf(path, sizeof(path), "%s/runtime/conf", home) < (int)sizeof(path)) (void)rmdir(path);
+            if (snprintf(path, sizeof(path), "%s/runtime", home) < (int)sizeof(path)) (void)rmdir(path);
+            if (snprintf(path, sizeof(path), "%s/trust", home) < (int)sizeof(path)) (void)rmdir(path);
+            if (snprintf(path, sizeof(path), "%s/state", home) < (int)sizeof(path)) (void)rmdir(path);
+        }
+        (void)rmdir(home);
+    }
+    sodium_memzero(&context, sizeof(context));
+    sodium_memzero(binary_digest, sizeof(binary_digest));
+    sodium_memzero(config_digest, sizeof(config_digest));
+    sodium_memzero(config_path_digest, sizeof(config_path_digest));
+    sodium_memzero(runtime_generation, sizeof(runtime_generation));
+    sodium_memzero(bad_digest, sizeof(bad_digest));
+    sodium_memzero(self, sizeof(self));
+    if (result != 0) {
+        fprintf(stderr, "recovery attestation capdrop self-test stage %d: %s\n", stage, strerror(errno));
+    }
+    return result;
+#else
+    return 0;
+#endif
+}
+
 /* 1=exact live data-plane attestation, 0=not ready, -1=unsafe evidence. */
 static int wls_recovery_attestation_ready(
     const char *home,
     uid_t expected_owner,
-    const char *runtime_generation
+    const char *runtime_generation,
+    char active_slot
 ) {
     char path[PATH_MAX];
     char contents[2048];
@@ -13815,7 +14744,11 @@ static int wls_recovery_attestation_ready(
     if (strcmp(receipt.runtime_generation, runtime_generation) != 0) {
         read_status = -1;
     } else {
-        read_status = wls_recovery_attested_process_live(&receipt);
+        read_status = wls_recovery_attested_process_live(
+            &receipt,
+            home,
+            active_slot
+        );
     }
     sodium_memzero(&receipt, sizeof(receipt));
     sodium_memzero(contents, sizeof(contents));
@@ -13837,7 +14770,10 @@ static int wls_recovery_observe_health(
     if (context == NULL || observation_started == NULL
         || context->healthy_committed) return 0;
     ready = wls_recovery_attestation_ready(
-        home, context->owner_uid, runtime_generation
+        home,
+        context->owner_uid,
+        runtime_generation,
+        context->state.active_slot
     );
     if (ready < 0) return -1;
     if (ready == 0) {
@@ -14204,6 +15140,634 @@ static int wls_promote_platform_retirement(
     sodium_memzero(&receipt, sizeof(receipt));
     sodium_memzero(boot_id, sizeof(boot_id));
     return read_result;
+}
+
+/* These names are created only by the root-owned Broker below the immutable
+ * nginx-pid parent.  A new Launcher must still treat them as hostile until the
+ * old platform generation records their exact inode identities. */
+static int wls_nginx_pid_residue_kind(const char *name)
+{
+    char token[65];
+    int consumed = 0;
+    int kind = 0;
+    if (name != NULL && sscanf(
+            name, ".nginx.pid.test.%64[0-9a-f].pid%n", token, &consumed
+        ) == 1 && wls_is_hex_text(token, 64U)
+        && consumed == (int)strlen(name)) kind = 1;
+    else if (name != NULL && sscanf(
+            name, ".nginx.pid.test.%64[0-9a-f].conf%n", token, &consumed
+        ) == 1 && wls_is_hex_text(token, 64U)
+        && consumed == (int)strlen(name)) kind = 2;
+    else if (name != NULL && sscanf(
+            name, ".nginx.pid.seal.%64[0-9a-f]%n", token, &consumed
+        ) == 1 && wls_is_hex_text(token, 64U)
+        && consumed == (int)strlen(name)) kind = 3;
+    sodium_memzero(token, sizeof(token));
+    return kind;
+}
+
+static int wls_nginx_pid_residue_directory(const char *home, int *directory_fd)
+{
+    struct stat parent;
+    struct stat opened;
+    const struct passwd *data;
+    int home_fd = -1;
+    int result = -1;
+    data = getpwnam(
+#if defined(__APPLE__)
+        "_welinegateway_nginx"
+#else
+        "weline-gateway-nginx"
+#endif
+    );
+    if (home == NULL || directory_fd == NULL || data == NULL || geteuid() != 0) {
+        return -1;
+    }
+    *directory_fd = -1;
+    home_fd = open(home, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    if (home_fd < 0 || fstatat(home_fd, "nginx-pid", &parent,
+            AT_SYMLINK_NOFOLLOW) != 0
+        || !S_ISDIR(parent.st_mode) || parent.st_uid != 0
+        || parent.st_gid != data->pw_gid
+        || (parent.st_mode & 0777) != 0711) goto cleanup;
+    *directory_fd = openat(
+        home_fd, "nginx-pid", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+    );
+    if (*directory_fd < 0 || fstat(*directory_fd, &opened) != 0
+        || !S_ISDIR(opened.st_mode) || opened.st_dev != parent.st_dev
+        || opened.st_ino != parent.st_ino || opened.st_uid != 0
+        || opened.st_gid != data->pw_gid
+        || (opened.st_mode & 0777) != 0711
+        || wls_guardian_acl_free_fd(*directory_fd, 0) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    if (home_fd >= 0) close(home_fd);
+    if (result != 0 && *directory_fd >= 0) {
+        close(*directory_fd);
+        *directory_fd = -1;
+    }
+    return result;
+}
+
+static int wls_nginx_pid_residue_entry_read(
+    int directory_fd,
+    const char *name,
+    struct wls_nginx_pid_residue_entry *entry
+)
+{
+    struct stat before;
+    struct stat after;
+    struct stat path_status;
+    const struct passwd *identity;
+    uid_t data_uid;
+    gid_t data_gid;
+    gid_t controller_gid;
+    int kind;
+    uint64_t maximum_size;
+    int fd = -1;
+    int result = -1;
+    const char *data_user =
+#if defined(__APPLE__)
+        "_welinegateway_nginx";
+#else
+        "weline-gateway-nginx";
+#endif
+    const char *controller_user =
+#if defined(__APPLE__)
+        "_welinegateway";
+#else
+        "weline-gateway";
+#endif
+    if (directory_fd < 0 || name == NULL || entry == NULL
+        || (kind = wls_nginx_pid_residue_kind(name)) == 0) return -1;
+    maximum_size = kind == 2
+        ? WLS_NGINX_PID_RESIDUE_CONFIG_MAX_BYTES
+        : WLS_NGINX_PID_RESIDUE_PID_MAX_BYTES;
+    identity = getpwnam(data_user);
+    if (identity == NULL) return -1;
+    data_uid = identity->pw_uid;
+    data_gid = identity->pw_gid;
+    identity = getpwnam(controller_user);
+    if (identity == NULL) return -1;
+    controller_gid = identity->pw_gid;
+    fd = openat(directory_fd, name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0 || fstat(fd, &before) != 0
+        || fstatat(directory_fd, name, &path_status, AT_SYMLINK_NOFOLLOW) != 0
+        || !S_ISREG(before.st_mode) || before.st_nlink != 1
+        || before.st_size < 0
+        || (uint64_t)before.st_size > maximum_size
+        || before.st_dev != path_status.st_dev || before.st_ino != path_status.st_ino
+        || wls_guardian_acl_free_fd(fd, 0) != 0) goto cleanup;
+    if ((kind == 1 && (before.st_uid != data_uid
+                || before.st_gid != data_gid
+                || (before.st_mode & 0777) != 0600))
+        || (kind == 2 && (before.st_uid != 0
+                || before.st_gid != controller_gid
+                || (before.st_mode & 0777) != 0444 || before.st_size == 0))
+        || (kind == 3 && !((before.st_uid == 0
+                    && (before.st_gid == 0 || before.st_gid == controller_gid)
+                    && (before.st_mode & 0777) == 0600)
+                || (before.st_uid == 0 && before.st_gid == controller_gid
+                    && (before.st_mode & 0777) == 0444)))) goto cleanup;
+    if (fstat(fd, &after) != 0 || after.st_dev != before.st_dev
+        || after.st_ino != before.st_ino || after.st_mode != before.st_mode
+        || after.st_uid != before.st_uid || after.st_gid != before.st_gid
+        || after.st_size != before.st_size || after.st_nlink != before.st_nlink) {
+        goto cleanup;
+    }
+    if (snprintf(entry->name, sizeof(entry->name), "%s", name)
+        >= (int)sizeof(entry->name)) goto cleanup;
+    entry->device = (unsigned long long)before.st_dev;
+    entry->inode = (unsigned long long)before.st_ino;
+    result = 0;
+cleanup:
+    if (fd >= 0) close(fd);
+    return result;
+}
+
+static int wls_nginx_pid_residue_entry_compare(const void *left, const void *right)
+{
+    const struct wls_nginx_pid_residue_entry *left_entry = left;
+    const struct wls_nginx_pid_residue_entry *right_entry = right;
+    return strcmp(left_entry->name, right_entry->name);
+}
+
+static int wls_nginx_pid_residue_scan(
+    const char *home,
+    struct wls_nginx_pid_residue_entry entries[WLS_NGINX_PID_RESIDUE_MAX],
+    unsigned int *count
+)
+{
+    DIR *stream = NULL;
+    struct dirent *item;
+    int directory_fd = -1;
+    int scan_fd = -1;
+    int result = -1;
+    if (entries == NULL || count == NULL
+        || wls_nginx_pid_residue_directory(home, &directory_fd) != 0) return -1;
+    memset(entries, 0, sizeof(*entries) * WLS_NGINX_PID_RESIDUE_MAX);
+    *count = 0U;
+    scan_fd = dup(directory_fd);
+    if (scan_fd < 0 || (stream = fdopendir(scan_fd)) == NULL) goto cleanup;
+    scan_fd = -1;
+    while ((item = readdir(stream)) != NULL) {
+        if (strcmp(item->d_name, ".") == 0 || strcmp(item->d_name, "..") == 0
+            || strcmp(item->d_name, "nginx.pid") == 0) continue;
+        if (wls_nginx_pid_residue_kind(item->d_name) == 0
+            || *count >= WLS_NGINX_PID_RESIDUE_MAX
+            || wls_nginx_pid_residue_entry_read(
+                directory_fd, item->d_name, &entries[*count]
+            ) != 0) goto cleanup;
+        (*count)++;
+    }
+    if (closedir(stream) != 0) {
+        stream = NULL;
+        goto cleanup;
+    }
+    stream = NULL;
+    qsort(entries, *count, sizeof(*entries), wls_nginx_pid_residue_entry_compare);
+    for (unsigned int index = 1U; index < *count; index++) {
+        if (strcmp(entries[index - 1U].name, entries[index].name) == 0) {
+            goto cleanup;
+        }
+    }
+    result = 0;
+cleanup:
+    if (stream != NULL) closedir(stream);
+    if (scan_fd >= 0) close(scan_fd);
+    if (directory_fd >= 0) close(directory_fd);
+    if (result != 0) {
+        sodium_memzero(entries, sizeof(*entries) * WLS_NGINX_PID_RESIDUE_MAX);
+        *count = 0U;
+    }
+    return result;
+}
+
+static int wls_write_nginx_pid_residue_intent(
+    const char *home,
+    const struct wls_nginx_pid_residue_intent *intent
+)
+{
+    char path[PATH_MAX];
+    char payload[2048];
+    char existing[2048];
+    size_t existing_length = 0U;
+    int existing_result;
+    int written;
+    if (home == NULL || intent == NULL || intent->count == 0U
+        || intent->count > WLS_NGINX_PID_RESIDUE_MAX
+        || wls_join(path, sizeof(path), home,
+            "trust/nginx-pid-residue.intent") != 0) return -1;
+    written = snprintf(payload, sizeof(payload),
+        "WLS-NGINX-PID-RESIDUE/1\nplatform=%s\nservice_id=%s\n"
+        "requested_launcher_generation=%s\nruntime_generation=%s\ncount=%u\n"
+        "name1=%s\ndev1=%llu\nino1=%llu\nname2=%s\ndev2=%llu\nino2=%llu\n"
+        "name3=%s\ndev3=%llu\nino3=%llu\n",
+        intent->platform, intent->service_id, intent->requested_launcher_generation,
+        intent->runtime_generation, intent->count,
+        intent->entries[0].name, intent->entries[0].device, intent->entries[0].inode,
+        intent->entries[1].name, intent->entries[1].device, intent->entries[1].inode,
+        intent->entries[2].name, intent->entries[2].device, intent->entries[2].inode);
+    if (written <= 0 || written >= (int)sizeof(payload)) written = -1;
+    if (written > 0) {
+        existing_result = wls_read_root_receipt(
+            path, existing, sizeof(existing), &existing_length
+        );
+        if (existing_result == 0) {
+            /* Re-sealing after a crash is idempotent only for byte-identical
+             * authority. Never let a later generation overwrite a conflict. */
+            written = existing_length == (size_t)written
+                && sodium_memcmp(existing, payload, existing_length) == 0 ? 1 : -1;
+        } else if (existing_result != 1
+            || wls_atomic_text(path, payload, 0600) != 0) {
+            written = -1;
+        }
+    }
+    sodium_memzero(existing, sizeof(existing));
+    sodium_memzero(payload, sizeof(payload));
+    return written < 0 ? -1 : 0;
+}
+
+static int wls_seal_nginx_pid_residue_pending(
+    const char *home, const char *platform, const char *service_id,
+    const char *launcher_generation, const char *runtime_generation
+)
+{
+    struct wls_nginx_pid_residue_intent intent;
+    if (home == NULL || platform == NULL || service_id == NULL
+        || launcher_generation == NULL || runtime_generation == NULL
+        || strcmp(platform, "standalone") == 0 || geteuid() != 0) return -1;
+    memset(&intent, 0, sizeof(intent));
+    if (wls_nginx_pid_residue_scan(home, intent.entries, &intent.count) != 0) {
+        return -1;
+    }
+    if (intent.count == 0U) return 0;
+    for (unsigned int index = intent.count;
+         index < WLS_NGINX_PID_RESIDUE_MAX;
+         index++) {
+        memcpy(intent.entries[index].name, "-", 2U);
+    }
+    snprintf(intent.platform, sizeof(intent.platform), "%s", platform);
+    memcpy(intent.service_id, service_id, 65U);
+    memcpy(intent.requested_launcher_generation, launcher_generation, 65U);
+    memcpy(intent.runtime_generation, runtime_generation, 65U);
+    return wls_write_nginx_pid_residue_intent(home, &intent);
+}
+
+/* Read-only classifier for direct launchers.  It never repairs or promotes:
+ * any unreadable/unknown artifact is unsafe, while only the exact pending
+ * receipt+intent namespace is eligible for an authenticated replay. */
+static int wls_pid_residue_recovery_evidence_state(const char *home)
+{
+    char retirement_path[PATH_MAX];
+    char intent_path[PATH_MAX];
+    char retirement[2048];
+    char intent[2048];
+    size_t retirement_length = 0U;
+    size_t intent_length = 0U;
+    struct wls_platform_retirement_receipt receipt;
+    struct wls_nginx_pid_residue_entry entries[WLS_NGINX_PID_RESIDUE_MAX];
+    char names[WLS_NGINX_PID_RESIDUE_MAX][WLS_NGINX_PID_RESIDUE_NAME_MAX + 1U];
+    unsigned long long devices[WLS_NGINX_PID_RESIDUE_MAX];
+    unsigned long long inodes[WLS_NGINX_PID_RESIDUE_MAX];
+    unsigned int residue_count = 0U;
+    int retirement_pending = 0;
+    int intent_pending = 0;
+    int read_result;
+    unsigned int index;
+    int result = WLS_PID_RESIDUE_EVIDENCE_UNSAFE;
+    memset(&receipt, 0, sizeof(receipt));
+    memset(entries, 0, sizeof(entries));
+    if (home == NULL
+        || wls_join(retirement_path, sizeof(retirement_path), home,
+            "trust/process-tree-retirement.receipt") != 0
+        || wls_join(intent_path, sizeof(intent_path), home,
+            "trust/nginx-pid-residue.intent") != 0
+        || wls_nginx_pid_residue_scan(home, entries, &residue_count) != 0) {
+        goto cleanup;
+    }
+    read_result = wls_read_root_receipt(
+        retirement_path, retirement, sizeof(retirement), &retirement_length
+    );
+    if (read_result != 1) {
+        if (read_result != 0
+            || strncmp(retirement, "WLS-PROCESS-TREE-RETIRE/2\n", 26U) != 0
+            || wls_parse_platform_retirement_v2(
+                retirement, retirement_length, &receipt
+            ) != 0) goto cleanup;
+        if (strcmp(receipt.status, "INDETERMINATE") == 0) {
+            retirement_pending = 1;
+        } else if (strcmp(receipt.status, "COMPLETE") != 0) {
+            goto cleanup;
+        }
+    }
+    read_result = wls_read_root_receipt(
+        intent_path, intent, sizeof(intent), &intent_length
+    );
+    if (read_result != 1) {
+        unsigned int count = 0U;
+        int consumed = 0;
+        if (read_result != 0
+            || sscanf(intent,
+                "WLS-NGINX-PID-RESIDUE/1\nplatform=%15[a-z-]\n"
+                "service_id=%64[0-9a-f]\nrequested_launcher_generation=%64[0-9a-f]\n"
+                "runtime_generation=%64[0-9a-f]\ncount=%u\n"
+                "name1=%127[-.a-z0-9]\ndev1=%llu\nino1=%llu\n"
+                "name2=%127[-.a-z0-9]\ndev2=%llu\nino2=%llu\n"
+                "name3=%127[-.a-z0-9]\ndev3=%llu\nino3=%llu\n%n",
+                (char[16]){0}, (char[65]){0}, (char[65]){0}, (char[65]){0},
+                &count, names[0], &devices[0], &inodes[0], names[1], &devices[1],
+                &inodes[1], names[2], &devices[2], &inodes[2], &consumed) != 14
+            || consumed != (int)intent_length || count == 0U
+            || count > WLS_NGINX_PID_RESIDUE_MAX) {
+            goto cleanup;
+        }
+        for (index = 0U; index < count; index++) {
+            unsigned int prior;
+            if (wls_nginx_pid_residue_kind(names[index]) == 0
+                || devices[index] == 0ULL || inodes[index] == 0ULL) goto cleanup;
+            for (prior = 0U; prior < index; prior++) {
+                if (strcmp(names[index], names[prior]) == 0) goto cleanup;
+            }
+        }
+        for (index = count; index < WLS_NGINX_PID_RESIDUE_MAX; index++) {
+            if (strcmp(names[index], "-") != 0 || devices[index] != 0ULL
+                || inodes[index] != 0ULL) goto cleanup;
+        }
+        intent_pending = 1;
+    }
+    if (!retirement_pending && !intent_pending && residue_count == 0U) {
+        result = WLS_PID_RESIDUE_EVIDENCE_CLEAN;
+    } else if (retirement_pending && !intent_pending && residue_count == 0U) {
+        /* Receipt-only replay still needs an authenticated platform to
+         * promote its V2 INDETERMINATE state. */
+        result = WLS_PID_RESIDUE_EVIDENCE_PENDING;
+    } else if (retirement_pending && intent_pending) {
+        result = WLS_PID_RESIDUE_EVIDENCE_PENDING;
+    }
+cleanup:
+    sodium_memzero(retirement_path, sizeof(retirement_path));
+    sodium_memzero(intent_path, sizeof(intent_path));
+    sodium_memzero(retirement, sizeof(retirement));
+    sodium_memzero(intent, sizeof(intent));
+    sodium_memzero(&receipt, sizeof(receipt));
+    sodium_memzero(entries, sizeof(entries));
+    sodium_memzero(names, sizeof(names));
+    sodium_memzero(devices, sizeof(devices));
+    sodium_memzero(inodes, sizeof(inodes));
+    return result;
+}
+
+static int wls_pid_residue_classifier_self_test(void)
+{
+    char home[] = "/tmp/wls-pid-residue-classifier-XXXXXX";
+    char pid_directory[PATH_MAX] = {0};
+    const char *residue_name =
+        ".nginx.pid.test.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pid";
+    const struct passwd *data;
+    uid_t data_uid = 0;
+    gid_t data_gid = 0;
+    struct wls_nginx_pid_residue_entry entries[WLS_NGINX_PID_RESIDUE_MAX];
+    unsigned int count = 0U;
+    int directory_fd = -1;
+    int residue_fd = -1;
+    int stage = 1;
+    int result = 1;
+    const char *data_user =
+#if defined(__APPLE__)
+        "_welinegateway_nginx";
+#else
+        "weline-gateway-nginx";
+#endif
+    if (geteuid() != 0 || (data = getpwnam(data_user)) == NULL) goto cleanup;
+    data_uid = data->pw_uid;
+    data_gid = data->pw_gid;
+    if (mkdtemp(home) == NULL
+        || chmod(home, 0755) != 0
+        || wls_join(pid_directory, sizeof(pid_directory), home, "nginx-pid") != 0
+        || mkdir(pid_directory, 0711) != 0
+        || chown(pid_directory, 0, data_gid) != 0
+        || chmod(pid_directory, 0711) != 0) goto cleanup;
+    stage = 2;
+    if (wls_nginx_pid_residue_scan(home, entries, &count) != 0
+        || count != 0U) goto cleanup;
+    stage = 3;
+    if (wls_pid_residue_recovery_evidence_state(home)
+        != WLS_PID_RESIDUE_EVIDENCE_CLEAN) goto cleanup;
+    stage = 4;
+    directory_fd = open(
+        pid_directory, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+    );
+    residue_fd = directory_fd < 0 ? -1 : openat(
+        directory_fd,
+        residue_name,
+        O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+        0600
+    );
+    if (residue_fd < 0
+        || fchown(residue_fd, data_uid, data_gid) != 0
+        || fchmod(residue_fd, 0600) != 0
+        || fsync(residue_fd) != 0) goto cleanup;
+    if (close(residue_fd) != 0) goto cleanup;
+    residue_fd = -1;
+    stage = 5;
+    if (fsync(directory_fd) != 0
+        || wls_nginx_pid_residue_scan(home, entries, &count) != 0
+        || count != 1U
+        || strcmp(entries[0].name, residue_name) != 0) goto cleanup;
+    stage = 6;
+    if (wls_pid_residue_recovery_evidence_state(home)
+        != WLS_PID_RESIDUE_EVIDENCE_UNSAFE) goto cleanup;
+    result = 0;
+cleanup:
+    if (result != 0) {
+        fprintf(
+            stderr,
+            "pid residue classifier self-test failed at stage %d (errno=%d)\n",
+            stage,
+            errno
+        );
+    }
+    if (residue_fd >= 0) close(residue_fd);
+    if (directory_fd >= 0) {
+        (void)unlinkat(directory_fd, residue_name, 0);
+        close(directory_fd);
+    }
+    if (pid_directory[0] != '\0') (void)rmdir(pid_directory);
+    (void)rmdir(home);
+    sodium_memzero(entries, sizeof(entries));
+    sodium_memzero(pid_directory, sizeof(pid_directory));
+    return result;
+}
+
+/* The separate pid-residue seal is not an alternate platform identity.  It is
+ * consumable only while it names the same V2 INDETERMINATE retirement record.
+ * COMPLETE is written only after consume has durably emptied nginx-pid. */
+static int wls_validate_pending_retirement_for_pid_residue(
+    const char *home,
+    const char *platform,
+    const char *service_id,
+    const char *launcher_generation,
+    const struct wls_nginx_pid_residue_intent *intent
+)
+{
+    char path[PATH_MAX];
+    char contents[2048];
+    size_t length = 0U;
+    struct wls_platform_retirement_receipt receipt;
+    int read_result;
+    int result = -1;
+    memset(&receipt, 0, sizeof(receipt));
+    if (home == NULL || platform == NULL || service_id == NULL
+        || launcher_generation == NULL || intent == NULL
+        || strcmp(platform, "standalone") == 0
+        || geteuid() != 0
+        || strcmp(intent->platform, platform) != 0
+        || strcmp(intent->service_id, service_id) != 0
+        || sodium_memcmp(intent->requested_launcher_generation,
+            launcher_generation, 64U) == 0
+        || wls_join(path, sizeof(path), home,
+            "trust/process-tree-retirement.receipt") != 0) goto cleanup;
+    read_result = wls_read_root_receipt(path, contents, sizeof(contents), &length);
+    if (read_result != 0
+        || strncmp(contents, "WLS-PROCESS-TREE-RETIRE/2\n", 26U) != 0
+        || wls_parse_platform_retirement_v2(contents, length, &receipt) != 0
+        || strcmp(receipt.status, "INDETERMINATE") != 0
+        || strcmp(receipt.platform, intent->platform) != 0
+        || strcmp(receipt.service_id, intent->service_id) != 0
+        || sodium_memcmp(receipt.requested_launcher_generation,
+            intent->requested_launcher_generation, 64U) != 0
+        || sodium_memcmp(receipt.runtime_generation,
+            intent->runtime_generation, 64U) != 0) goto cleanup;
+    result = 0;
+cleanup:
+    sodium_memzero(path, sizeof(path));
+    sodium_memzero(contents, sizeof(contents));
+    sodium_memzero(&receipt, sizeof(receipt));
+    return result;
+}
+
+static int wls_consume_nginx_pid_residue_pending(
+    const char *home, const char *platform, const char *service_id,
+    const char *launcher_generation
+)
+{
+    char path[PATH_MAX];
+    char contents[2048];
+    char names[3][WLS_NGINX_PID_RESIDUE_NAME_MAX + 1U];
+    unsigned long long devices[3];
+    unsigned long long inodes[3];
+    unsigned int count = 0U;
+    unsigned int actual_count = 0U;
+    int consumed = 0;
+    int read_result;
+    unsigned int index;
+    struct wls_nginx_pid_residue_intent actual;
+    if (home == NULL || platform == NULL || service_id == NULL
+        || launcher_generation == NULL || geteuid() != 0
+        || wls_join(path, sizeof(path), home,
+            "trust/nginx-pid-residue.intent") != 0) return -1;
+    read_result = wls_read_root_receipt(path, contents, sizeof(contents),
+        &(size_t){0});
+    if (read_result == 1) {
+        return wls_nginx_pid_residue_scan(home, actual.entries, &actual_count) == 0
+            && actual_count == 0U ? 0 : -1;
+    }
+    if (read_result != 0 || sscanf(contents,
+            "WLS-NGINX-PID-RESIDUE/1\nplatform=%15[a-z-]\nservice_id=%64[0-9a-f]\n"
+            "requested_launcher_generation=%64[0-9a-f]\nruntime_generation=%64[0-9a-f]\ncount=%u\n"
+            "name1=%127[-.a-z0-9]\ndev1=%llu\nino1=%llu\nname2=%127[-.a-z0-9]\ndev2=%llu\nino2=%llu\n"
+            "name3=%127[-.a-z0-9]\ndev3=%llu\nino3=%llu\n%n",
+            actual.platform, actual.service_id, actual.requested_launcher_generation,
+            actual.runtime_generation, &count, names[0], &devices[0], &inodes[0],
+            names[1], &devices[1], &inodes[1], names[2], &devices[2], &inodes[2],
+            &consumed) != 14 || consumed <= 0 || contents[consumed] != '\0'
+        || count == 0U || count > WLS_NGINX_PID_RESIDUE_MAX
+        || strcmp(platform, "standalone") == 0
+        || strcmp(actual.platform, platform) != 0
+        || strcmp(actual.service_id, service_id) != 0
+        || !wls_is_hex_text(actual.requested_launcher_generation, 64U)
+        || !wls_is_hex_text(actual.runtime_generation, 64U)
+        || sodium_memcmp(actual.requested_launcher_generation, launcher_generation, 64U) == 0) {
+        sodium_memzero(contents, sizeof(contents));
+        return -1;
+    }
+    for (index = count; index < WLS_NGINX_PID_RESIDUE_MAX; index++) {
+        if (strcmp(names[index], "-") != 0 || devices[index] != 0ULL
+            || inodes[index] != 0ULL) {
+            sodium_memzero(contents, sizeof(contents));
+            return -1;
+        }
+    }
+    sodium_memzero(contents, sizeof(contents));
+    actual.count = count;
+    if (wls_validate_pending_retirement_for_pid_residue(
+            home, platform, service_id, launcher_generation, &actual
+        ) != 0) return -1;
+    if (wls_nginx_pid_residue_scan(home, actual.entries, &actual_count) != 0) return -1;
+    for (index = 0U; index < count; index++) {
+        unsigned int found = 0U;
+        unsigned int candidate;
+        if (wls_nginx_pid_residue_kind(names[index]) == 0
+            || devices[index] == 0ULL || inodes[index] == 0ULL) return -1;
+        for (candidate = 0U; candidate < index; candidate++) {
+            if (strcmp(names[index], names[candidate]) == 0) return -1;
+        }
+        for (candidate = 0U; candidate < actual_count; candidate++) {
+            if (strcmp(names[index], actual.entries[candidate].name) == 0) {
+                if (actual.entries[candidate].device != devices[index]
+                    || actual.entries[candidate].inode != inodes[index]) return -1;
+                found = 1U;
+                break;
+            }
+        }
+        /* Absence is an allowed replay state; any present leaf was checked. */
+        (void)found;
+    }
+    for (index = 0U; index < actual_count; index++) {
+        unsigned int recorded = 0U;
+        unsigned int candidate;
+        for (candidate = 0U; candidate < count; candidate++) {
+            if (strcmp(actual.entries[index].name, names[candidate]) == 0
+                && actual.entries[index].device == devices[candidate]
+                && actual.entries[index].inode == inodes[candidate]) recorded = 1U;
+        }
+        if (!recorded) return -1;
+    }
+    if (actual_count > 0U) {
+        int directory_fd = -1;
+        if (wls_nginx_pid_residue_directory(home, &directory_fd) != 0) return -1;
+        for (index = 0U; index < actual_count; index++) {
+            struct wls_nginx_pid_residue_entry verified;
+            if (wls_nginx_pid_residue_entry_read(directory_fd,
+                    actual.entries[index].name, &verified) != 0
+                || verified.device != actual.entries[index].device
+                || verified.inode != actual.entries[index].inode
+                || unlinkat(directory_fd, verified.name, 0) != 0
+                || fsync(directory_fd) != 0) {
+                close(directory_fd);
+                return -1;
+            }
+        }
+        close(directory_fd);
+    }
+    if (wls_nginx_pid_residue_scan(home, actual.entries, &actual_count) != 0
+        || actual_count != 0U) return -1;
+    if (unlink(path) != 0) return -1;
+    {
+        char trust[PATH_MAX];
+        int trust_fd = -1;
+        if (wls_join(trust, sizeof(trust), home, "trust") != 0
+            || (trust_fd = open(
+                trust, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+            )) < 0 || fsync(trust_fd) != 0) {
+            if (trust_fd >= 0) close(trust_fd);
+            return -1;
+        }
+        close(trust_fd);
+    }
+    return 0;
 }
 
 /* 0=acquired, 1=busy, -1=invalid/error. */
@@ -15368,6 +16932,7 @@ static int wls_launch(
     int pending_signal;
     int reconcile_result;
     int recovery_prepare;
+    int pid_evidence_state;
     if (!wls_guardian_parent_alive()) {
         return 0;
     }
@@ -15461,6 +17026,28 @@ static int wls_launch(
     if (recovery_prepare == 1) return 0;
     if (recovery_prepare == 2) return WLS_CONTROL_TREE_RELOAD;
     if (recovery_prepare != 0) return 1;
+    pid_evidence_state = wls_pid_residue_recovery_evidence_state(home);
+    if (pid_evidence_state == WLS_PID_RESIDUE_EVIDENCE_UNSAFE) {
+        (void)wls_recovery_finish_attempt(&recovery, 0, "SPAWN_FAILED");
+        return 1;
+    }
+    /* Direct standalone launch remains usable only with no recovery evidence.
+     * Pending evidence must be replayed exclusively by an authenticated
+     * platform generation, before it can promote COMPLETE. */
+    if (strcmp(platform, "standalone") == 0) {
+        if (pid_evidence_state != WLS_PID_RESIDUE_EVIDENCE_CLEAN) {
+            (void)wls_recovery_finish_attempt(&recovery, 0, "SPAWN_FAILED");
+            return 1;
+        }
+        goto pid_residue_recovery_ready;
+    }
+    if (wls_consume_nginx_pid_residue_pending(
+            home, platform, service_id, launcher_generation
+        ) != 0) {
+        fprintf(stderr, "platform generation could not prove nginx pid staging recovery\n");
+        (void)wls_recovery_finish_attempt(&recovery, 0, "SPAWN_FAILED");
+        return 1;
+    }
     if (wls_promote_platform_retirement(
             home,
             platform,
@@ -15477,6 +17064,7 @@ static int wls_launch(
         );
         return 1;
     }
+pid_residue_recovery_ready:
     pending_signal = wls_take_shutdown_signal();
     if (pending_signal == SIGTERM || pending_signal == SIGINT) {
         (void)wls_recovery_finish_attempt(&recovery, 1, NULL);
@@ -15543,18 +17131,32 @@ static int wls_launch(
         runtime_generation,
         &recovery
     );
-    if (supervise_result == WLS_SERVICE_TREE_RESTART
-        && wls_seal_platform_retirement_pending(
-            home,
-            platform,
-            service_id,
-            launcher_generation,
-            runtime_generation
-        ) != 0) {
-        fprintf(
-            stderr,
-            "platform service restart could not seal the pending process-tree retirement\n"
-        );
+    if (supervise_result == WLS_SERVICE_TREE_RESTART) {
+        if (wls_seal_platform_retirement_pending(
+                home,
+                platform,
+                service_id,
+                launcher_generation,
+                runtime_generation
+            ) != 0) {
+            /* A residue intent is valid only beside a durable V2
+             * INDETERMINATE platform-retirement receipt. */
+            fprintf(
+                stderr,
+                "platform service restart could not seal the pending process-tree retirement\n"
+            );
+        } else if (wls_seal_nginx_pid_residue_pending(
+                home,
+                platform,
+                service_id,
+                launcher_generation,
+                runtime_generation
+            ) != 0) {
+            fprintf(
+                stderr,
+                "platform service restart could not seal nginx pid staging recovery\n"
+            );
+        }
     }
     if (wls_recovery_finish_attempt(
             &recovery,
@@ -17314,11 +18916,14 @@ static int wls_capacity_hash_anchor(
     length = snprintf(
         record,
         sizeof(record),
-        "%s\n%llu\n%llu\n%u\n",
+        "%s\n%llu\n%llu\n%u\n%llu\n%llu\n%u\n",
         label,
         (unsigned long long)status->st_dev,
         (unsigned long long)status->st_ino,
-        (unsigned int)(status->st_mode & 0170000)
+        (unsigned int)(status->st_mode & 0170000),
+        (unsigned long long)status->st_uid,
+        (unsigned long long)status->st_gid,
+        (unsigned int)(status->st_mode & 0777)
     );
     if (length <= 0 || (size_t)length >= sizeof(record)) return -1;
     return crypto_hash_sha256_update(
@@ -17326,6 +18931,339 @@ static int wls_capacity_hash_anchor(
         (const unsigned char *)record,
         (unsigned long long)length
     ) == 0 ? 0 : -1;
+}
+
+enum wls_capacity_anchor_principal {
+    WLS_CAPACITY_ANCHOR_ROOT = 0,
+    WLS_CAPACITY_ANCHOR_CONTROLLER = 1,
+    WLS_CAPACITY_ANCHOR_DATA_PLANE = 2
+};
+
+struct wls_capacity_anchor_profile {
+    const char *relative;
+    enum wls_capacity_anchor_principal owner;
+    enum wls_capacity_anchor_principal group;
+    mode_t mode;
+};
+
+static const struct wls_capacity_anchor_profile wls_capacity_anchor_profiles[] = {
+    {NULL, WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_CONTROLLER, 0751},
+    {"bin", WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_CONTROLLER, 0750},
+    {"runtime", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0750},
+    {"runtime/conf", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0750},
+    {"runtime/temp", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0770},
+    {"runtime/shadow", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_CONTROLLER, 0700},
+    {"runtime/run", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0750},
+    {"trust", WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_CONTROLLER, 0750},
+    {"state", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_CONTROLLER, 0700},
+    {"snapshots", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0710},
+    {"snapshots-v2", WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0710},
+    {"snapshot-candidates-v2", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_CONTROLLER, 0700},
+    {"slots", WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_CONTROLLER, 0755},
+    {"rebootstrap", WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_ROOT, 0700},
+    {"rebootstrap/candidates", WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_ROOT, 0700},
+    {"rebootstrap/backups", WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_ROOT, 0700},
+    {"rebootstrap/capacity", WLS_CAPACITY_ANCHOR_ROOT, WLS_CAPACITY_ANCHOR_ROOT, 0700}
+};
+
+static int wls_capacity_anchor_expected_identity(
+    const struct wls_capacity_anchor_profile *profile,
+    int test_mode,
+    uid_t controller_uid,
+    gid_t controller_gid,
+    gid_t data_plane_gid,
+    uid_t *owner,
+    gid_t *group,
+    mode_t *mode
+)
+{
+    if (profile == NULL || owner == NULL || group == NULL || mode == NULL) {
+        return -1;
+    }
+    if (test_mode) {
+        *owner = geteuid();
+        *group = getegid();
+        *mode = 0700;
+        return 0;
+    }
+    if (profile->owner == WLS_CAPACITY_ANCHOR_ROOT) {
+        *owner = 0U;
+    } else if (profile->owner == WLS_CAPACITY_ANCHOR_CONTROLLER) {
+        *owner = controller_uid;
+    } else {
+        return -1;
+    }
+    if (profile->group == WLS_CAPACITY_ANCHOR_ROOT) {
+        *group = 0U;
+    } else if (profile->group == WLS_CAPACITY_ANCHOR_CONTROLLER) {
+        *group = controller_gid;
+    } else if (profile->group == WLS_CAPACITY_ANCHOR_DATA_PLANE) {
+        *group = data_plane_gid;
+    } else {
+        return -1;
+    }
+    *mode = profile->mode;
+    return 0;
+}
+
+static int wls_capacity_anchor_profile_matches(
+    const struct wls_capacity_anchor_profile *profile,
+    const struct stat *status,
+    dev_t expected_device,
+    int test_mode,
+    uid_t controller_uid,
+    gid_t controller_gid,
+    gid_t data_plane_gid
+)
+{
+    uid_t expected_owner;
+    gid_t expected_group;
+    mode_t expected_mode;
+    return profile != NULL && status != NULL
+        && wls_capacity_anchor_expected_identity(
+            profile,
+            test_mode,
+            controller_uid,
+            controller_gid,
+            data_plane_gid,
+            &expected_owner,
+            &expected_group,
+            &expected_mode
+        ) == 0
+        && S_ISDIR(status->st_mode)
+        && !S_ISLNK(status->st_mode)
+        && status->st_nlink >= 1
+        && status->st_dev == expected_device
+        && status->st_uid == expected_owner
+        && status->st_gid == expected_group
+        && (status->st_mode & 0777) == expected_mode;
+}
+
+static int wls_capacity_same_directory_identity(
+    const struct stat *left,
+    const struct stat *right
+)
+{
+    return left != NULL && right != NULL
+        && S_ISDIR(left->st_mode) && S_ISDIR(right->st_mode)
+        && left->st_dev == right->st_dev
+        && left->st_ino == right->st_ino
+        && left->st_mode == right->st_mode
+        && left->st_uid == right->st_uid
+        && left->st_gid == right->st_gid
+        && left->st_nlink == right->st_nlink;
+}
+
+static const struct wls_capacity_anchor_profile *
+wls_capacity_anchor_profile_for_relative(const char *relative)
+{
+    size_t index;
+    if (relative == NULL || relative[0] == '\0') return NULL;
+    for (index = 1U;
+         index < sizeof(wls_capacity_anchor_profiles)
+            / sizeof(wls_capacity_anchor_profiles[0]);
+         index++) {
+        if (strcmp(
+                wls_capacity_anchor_profiles[index].relative,
+                relative
+            ) == 0) return &wls_capacity_anchor_profiles[index];
+    }
+    return NULL;
+}
+
+static int wls_capacity_open_relative_anchor(
+    int home_fd,
+    const char *relative,
+    dev_t expected_device,
+    int test_mode,
+    uid_t controller_uid,
+    gid_t controller_gid,
+    gid_t data_plane_gid,
+    int *anchor_fd,
+    struct stat *anchor_status
+)
+{
+    const char *cursor = relative;
+    char traversed[PATH_MAX];
+    size_t traversed_length = 0U;
+    int current_fd = -1;
+    int next_fd = -1;
+    struct stat before;
+    struct stat opened;
+    struct stat after;
+    if (home_fd < 0 || relative == NULL || relative[0] == '\0'
+        || anchor_fd == NULL || anchor_status == NULL) return -1;
+    memset(traversed, 0, sizeof(traversed));
+    *anchor_fd = -1;
+    current_fd = fcntl(home_fd, F_DUPFD_CLOEXEC, 3);
+    if (current_fd < 0) return -1;
+    while (*cursor != '\0') {
+        const char *slash = strchr(cursor, '/');
+        size_t length = slash == NULL
+            ? strlen(cursor) : (size_t)(slash - cursor);
+        char segment[256];
+        if (length == 0U || length >= sizeof(segment)
+            || (length == 1U && cursor[0] == '.')
+            || (length == 2U && cursor[0] == '.' && cursor[1] == '.')) {
+            goto cleanup;
+        }
+        memcpy(segment, cursor, length);
+        segment[length] = '\0';
+        if (traversed_length > 0U) {
+            if (traversed_length + 1U >= sizeof(traversed)) goto cleanup;
+            traversed[traversed_length++] = '/';
+        }
+        if (traversed_length + length >= sizeof(traversed)) goto cleanup;
+        memcpy(traversed + traversed_length, segment, length);
+        traversed_length += length;
+        traversed[traversed_length] = '\0';
+        if (fstatat(
+                current_fd,
+                segment,
+                &before,
+                AT_SYMLINK_NOFOLLOW
+            ) != 0
+            || !S_ISDIR(before.st_mode)
+            || S_ISLNK(before.st_mode)) goto cleanup;
+        next_fd = openat(
+            current_fd,
+            segment,
+            O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+        );
+        if (next_fd < 0
+            || fstat(next_fd, &opened) != 0
+            || fstatat(
+                current_fd,
+                segment,
+                &after,
+                AT_SYMLINK_NOFOLLOW
+            ) != 0
+            || !wls_capacity_same_directory_identity(&before, &opened)
+            || !wls_capacity_same_directory_identity(&opened, &after)
+            || wls_guardian_acl_free_fd(next_fd, 0) != 0
+            || !wls_capacity_anchor_profile_matches(
+                wls_capacity_anchor_profile_for_relative(traversed),
+                &opened,
+                expected_device,
+                test_mode,
+                controller_uid,
+                controller_gid,
+                data_plane_gid
+            )) goto cleanup;
+        if (close(current_fd) != 0) {
+            current_fd = -1;
+            goto cleanup;
+        }
+        current_fd = next_fd;
+        next_fd = -1;
+        if (slash == NULL) break;
+        cursor = slash + 1U;
+    }
+    *anchor_status = opened;
+    *anchor_fd = current_fd;
+    return 0;
+cleanup:
+    if (next_fd >= 0) close(next_fd);
+    if (current_fd >= 0) close(current_fd);
+    return -1;
+}
+
+static int wls_capacity_anchor_profile_self_test(void)
+{
+    const uid_t controller_uid = (uid_t)1001;
+    const gid_t controller_gid = (gid_t)1002;
+    const gid_t data_plane_gid = (gid_t)1003;
+    const dev_t device = (dev_t)7;
+    const struct wls_capacity_anchor_profile *runtime_temp = NULL;
+    const struct wls_capacity_anchor_profile *runtime_conf = NULL;
+    struct stat status;
+    uid_t owner;
+    gid_t group;
+    mode_t mode;
+    size_t index;
+    for (index = 0U;
+         index < sizeof(wls_capacity_anchor_profiles)
+            / sizeof(wls_capacity_anchor_profiles[0]);
+         index++) {
+        const struct wls_capacity_anchor_profile *profile =
+            &wls_capacity_anchor_profiles[index];
+        if (wls_capacity_anchor_expected_identity(
+                profile,
+                0,
+                controller_uid,
+                controller_gid,
+                data_plane_gid,
+                &owner,
+                &group,
+                &mode
+            ) != 0) return 1;
+        memset(&status, 0, sizeof(status));
+        status.st_dev = device;
+        status.st_mode = S_IFDIR | mode;
+        status.st_uid = owner;
+        status.st_gid = group;
+        status.st_nlink = 1;
+        if (!wls_capacity_anchor_profile_matches(
+                profile,
+                &status,
+                device,
+                0,
+                controller_uid,
+                controller_gid,
+                data_plane_gid
+            )) return 1;
+        if (profile->relative != NULL
+            && strcmp(profile->relative, "runtime/temp") == 0) {
+            runtime_temp = profile;
+        }
+        if (profile->relative != NULL
+            && strcmp(profile->relative, "runtime/conf") == 0) {
+            runtime_conf = profile;
+        }
+    }
+    if (runtime_temp == NULL || runtime_conf == NULL) return 1;
+    memset(&status, 0, sizeof(status));
+    status.st_dev = device;
+    status.st_mode = S_IFDIR | 0770;
+    status.st_uid = controller_uid;
+    status.st_gid = data_plane_gid;
+    status.st_nlink = 1;
+    if (!wls_capacity_anchor_profile_matches(
+            runtime_temp,
+            &status,
+            device,
+            0,
+            controller_uid,
+            controller_gid,
+            data_plane_gid
+        )) return 1;
+    status.st_uid++;
+    if (wls_capacity_anchor_profile_matches(
+            runtime_temp, &status, device, 0,
+            controller_uid, controller_gid, data_plane_gid
+        )) return 1;
+    status.st_uid = controller_uid;
+    status.st_gid = controller_gid;
+    if (wls_capacity_anchor_profile_matches(
+            runtime_temp, &status, device, 0,
+            controller_uid, controller_gid, data_plane_gid
+        )) return 1;
+    status.st_gid = data_plane_gid;
+    status.st_mode = S_IFDIR | 0750;
+    if (wls_capacity_anchor_profile_matches(
+            runtime_temp, &status, device, 0,
+            controller_uid, controller_gid, data_plane_gid
+        )) return 1;
+    status.st_mode = S_IFDIR | 0770;
+    return wls_capacity_anchor_profile_matches(
+        runtime_conf,
+        &status,
+        device,
+        0,
+        controller_uid,
+        controller_gid,
+        data_plane_gid
+    ) ? 1 : 0;
 }
 
 static int wls_capacity_canonical_home(
@@ -17684,32 +19622,19 @@ static int wls_capacity_anchor_proof(
     struct wls_capacity_evidence *evidence
 )
 {
-    static const char *relative_anchors[] = {
-        "bin",
-        "runtime",
-        "runtime/conf",
-        "runtime/temp",
-        "runtime/shadow",
-        "runtime/run",
-        "trust",
-        "state",
-        "snapshots",
-        "snapshots-v2",
-        "snapshot-candidates-v2",
-        "slots",
-        "rebootstrap",
-        "rebootstrap/candidates",
-        "rebootstrap/backups",
-        "rebootstrap/capacity"
-    };
     crypto_hash_sha256_state anchor_hash;
     unsigned char anchor_digest[crypto_hash_sha256_BYTES];
     unsigned char volume_digest[crypto_hash_sha256_BYTES];
     char executable[PATH_MAX];
     char device_record[64];
     unsigned long long start_id = 0ULL;
+    uid_t controller_uid = 0U;
+    gid_t controller_gid = 0U;
+    gid_t data_plane_gid = 0U;
     mode_t definition_mode;
     size_t index;
+    int home_fd = -1;
+    int anchor_fd = -1;
     int definition_fd = -1;
     int parent_fd = -1;
     int length;
@@ -17720,32 +19645,81 @@ static int wls_capacity_anchor_proof(
     struct stat definition_after;
     struct stat parent_before;
     struct stat parent_opened;
+    struct stat home_before;
+    struct stat home_opened;
+    struct stat home_after;
     if (home == NULL || platform_definition == NULL || nonce == NULL
         || platform_anchor == NULL || evidence == NULL
         || (test_mode != 0 && test_mode != 1)
+        || (!test_mode && wls_guardian_service_identity_values(
+            &controller_uid,
+            &controller_gid,
+            &data_plane_gid
+        ) != 0)
         || crypto_hash_sha256_init(&anchor_hash) != 0) goto cleanup;
     memset(platform_anchor, 0, sizeof(*platform_anchor));
-    for (index = 0U;
-         index < sizeof(relative_anchors) / sizeof(relative_anchors[0]);
+    if (lstat(home, &home_before) != 0
+        || (home_fd = open(
+            home,
+            O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+        )) < 0
+        || fstat(home_fd, &home_opened) != 0
+        || lstat(home, &home_after) != 0
+        || !wls_capacity_same_directory_identity(
+            &home_before, &home_opened
+        )
+        || !wls_capacity_same_directory_identity(
+            &home_opened, &home_after
+        )
+        || wls_guardian_acl_free_fd(home_fd, 0) != 0
+        || !wls_capacity_anchor_profile_matches(
+            &wls_capacity_anchor_profiles[0],
+            &home_opened,
+            expected_device,
+            test_mode,
+            controller_uid,
+            controller_gid,
+            data_plane_gid
+        )
+        || wls_capacity_hash_anchor(
+            &anchor_hash, "home", &home_opened
+        ) != 0) goto cleanup;
+    for (index = 1U;
+         index < sizeof(wls_capacity_anchor_profiles)
+            / sizeof(wls_capacity_anchor_profiles[0]);
          index++) {
-        char path[PATH_MAX];
-        if (wls_join(
-                path,
-                sizeof(path),
-                home,
-                relative_anchors[index]
+        const struct wls_capacity_anchor_profile *profile =
+            &wls_capacity_anchor_profiles[index];
+        if (wls_capacity_open_relative_anchor(
+                home_fd,
+                profile->relative,
+                expected_device,
+                test_mode,
+                controller_uid,
+                controller_gid,
+                data_plane_gid,
+                &anchor_fd,
+                &status
             ) != 0
-            || lstat(path, &status) != 0
-            || !S_ISDIR(status.st_mode)
-            || S_ISLNK(status.st_mode)
-            || status.st_dev != expected_device
-            || status.st_uid != geteuid()
-            || (status.st_mode & 0022) != 0
+            || !wls_capacity_anchor_profile_matches(
+                profile,
+                &status,
+                expected_device,
+                test_mode,
+                controller_uid,
+                controller_gid,
+                data_plane_gid
+            )
             || wls_capacity_hash_anchor(
                 &anchor_hash,
-                relative_anchors[index],
+                profile->relative,
                 &status
             ) != 0) goto cleanup;
+        if (close(anchor_fd) != 0) {
+            anchor_fd = -1;
+            goto cleanup;
+        }
+        anchor_fd = -1;
     }
     definition_mode = test_mode ? 0600 : 0644;
     if (platform_definition[0] != '/'
@@ -17864,6 +19838,8 @@ static int wls_capacity_anchor_proof(
     );
     result = 0;
 cleanup:
+    if (anchor_fd >= 0) close(anchor_fd);
+    if (home_fd >= 0) close(home_fd);
     if (parent_fd >= 0) close(parent_fd);
     if (definition_fd >= 0) close(definition_fd);
     sodium_memzero(anchor_digest, sizeof(anchor_digest));
@@ -18321,6 +20297,7 @@ static int wls_capacity_contract_self_test(void)
         && wls_capacity_unsigned("8388608", ULLONG_MAX, &parsed) == 0
         && parsed == WLS_CAPACITY_TEST_BYTES
         && wls_capacity_platform_device_self_test() == 0
+        && wls_capacity_anchor_profile_self_test() == 0
         ? 0 : 1;
 }
 
@@ -18896,6 +20873,7 @@ int main(int argc, char **argv)
 {
     const char *home;
     const char *run_directory;
+    const char *ready_fd_text;
     char platform[16];
     char service_id[65];
     char launcher_generation[65];
@@ -18904,6 +20882,18 @@ int main(int argc, char **argv)
         return 1;
     }
     sodium_memzero(key, sizeof(key));
+    ready_fd_text = getenv("WLS_RECOVERY_ATTEST_READY_FD");
+    if (argc == 5 && ready_fd_text != NULL
+        && strcmp(argv[1], "-p") == 0 && strcmp(argv[3], "-c") == 0) {
+        char *end = NULL;
+        long ready_fd;
+        errno = 0;
+        ready_fd = strtol(ready_fd_text, &end, 10);
+        if (errno != 0 || end == ready_fd_text || *end != '\0'
+            || ready_fd < 0 || ready_fd > INT_MAX
+            || wls_write_all((int)ready_fd, "R", 1U) != 0) return 126;
+        for (;;) pause();
+    }
     if (argc == 2 && strcmp(argv[1], "--self-test") == 0) {
         return wls_wait_child_exit_deadline_self_test() == 0
             && wls_rebootstrap_reserved_recovery_name_self_test() == 0
@@ -18920,6 +20910,14 @@ int main(int argc, char **argv)
             : 1;
     }
     if (argc == 2
+        && strcmp(argv[1], "--release-public-key-self-test") == 0) {
+        return wls_release_public_key_self_test() == 0 ? 0 : 1;
+    }
+    if (argc == 4
+        && strcmp(argv[1], "--release-signature-self-test") == 0) {
+        return wls_release_signature_self_test(argv[2], argv[3]) == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && strcmp(argv[1], "--rollback-target-proof-self-test") == 0) {
         return wls_launcher_rollback_target_proof_self_test();
     }
@@ -18928,6 +20926,60 @@ int main(int argc, char **argv)
         return wls_recovery_state_self_test() == 0
             && wls_recovery_attested_process_self_test() == 0
             ? 0 : 1;
+    }
+    if (argc == 2
+        && strcmp(
+            argv[1], "--recovery-attested-process-capdrop-self-test"
+        ) == 0) {
+        int attestation_test =
+            wls_recovery_attested_process_capdrop_self_test();
+        if (attestation_test == 0) {
+            printf(
+                "{\"distinct_uid\":true,"
+                "\"cap_sys_ptrace_effective\":false,"
+                "\"cap_sys_ptrace_permitted\":false,"
+                "\"attested_process_live\":true,"
+                "\"reopened_acl_rejected\":true,"
+                "\"final_redigest_acl_rejected\":true,"
+                "\"isolated_negative_receipts\":true,"
+                "\"start_id_mismatch_rejected\":true,"
+                "\"binary_digest_mismatch_rejected\":true,"
+                "\"argv_mismatch_rejected\":true}\n"
+            );
+        }
+        return attestation_test;
+    }
+    if (argc == 2
+        && strcmp(argv[1], "--pid-residue-classifier-self-test") == 0) {
+        int classifier_test = wls_pid_residue_classifier_self_test();
+        if (classifier_test == 0) {
+            printf(
+                "{\"fresh_root\":\"clean\","
+                "\"valid_residue_entries\":1}\n"
+            );
+        }
+        return classifier_test;
+    }
+    if (argc == 2
+        && strcmp(
+            argv[1],
+            "--capacity-anchor-profile-self-test"
+        ) == 0) {
+        int profile_test = wls_capacity_anchor_profile_self_test();
+        if (profile_test == 0) {
+            printf(
+                "{\"production_profile_anchors\":%zu,"
+                "\"runtime_temp_mode\":\"0770\","
+                "\"runtime_temp_group\":\"data-plane\","
+                "\"wrong_owner_rejected\":true,"
+                "\"wrong_group_rejected\":true,"
+                "\"wrong_mode_rejected\":true,"
+                "\"non_temp_group_write_rejected\":true}\n",
+                sizeof(wls_capacity_anchor_profiles)
+                    / sizeof(wls_capacity_anchor_profiles[0])
+            );
+        }
+        return profile_test;
     }
     if (argc == 2
         && strcmp(

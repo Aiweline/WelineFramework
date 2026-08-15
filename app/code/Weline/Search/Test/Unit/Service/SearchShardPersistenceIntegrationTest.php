@@ -86,6 +86,7 @@ final class SearchShardPersistenceIntegrationTest extends TestCase
                 new SchemaMigrationExecutor(
                     $this->createMock(EventsManager::class),
                     $migration,
+                    $this->createMock(\Weline\Framework\Database\Service\BackupService::class),
                 ),
             );
             $provisioner = new SearchShardProvisioner($registry, $genericProvisioner);

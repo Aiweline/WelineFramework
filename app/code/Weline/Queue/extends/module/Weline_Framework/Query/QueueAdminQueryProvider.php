@@ -6,7 +6,7 @@ namespace Weline\Queue\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Queue\Service\QueueAdminService;
-use Weline\Queue\View\Backend\QueueAdminListingView;
+use Weline\Queue\Service\QueueAdminListingView;
 
 /**
  * Narrow, backend-authenticated browser surface for Queue administration.

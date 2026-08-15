@@ -178,6 +178,7 @@ jobs:
           -B build/wls-gateway-native
           -DCMAKE_BUILD_TYPE=Release
           -DWLS_BUILD_HTTP3_TRANSPORT=ON
+          -DWLS_LINK_STATIC_SODIUM=ON
           -DWLS_RELEASE_PUBLIC_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000
       - name: Build
         run: cmake --build build/wls-gateway-native --config Release --parallel
@@ -415,6 +416,18 @@ jobs:
           php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php
           bounded-command-test
           "--helper=build/wls-gateway-native/Release/wls-bounded-command.exe"
+      - name: Windows SCM recovery integration from current build
+        shell: pwsh
+        env:
+          WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION: "1"
+        run: >-
+          php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php
+          service-test
+          "--key-file=$env:WLS_TEST_KEY_FILE"
+          "--guardian=build/wls-gateway-native/Release/wls-gateway-guardian.exe"
+          "--launcher=build/wls-gateway-native/Release/wls-gateway-launcher.exe"
+          "--test-broker=build/wls-gateway-native/Release/wls-gateway-test-broker.exe"
+          "--bounded-command=build/wls-gateway-native/Release/wls-bounded-command.exe"
       - name: Controller self-test
         shell: pwsh
         run: php app/code/Weline/Server/bin/wls_gateway_controller.php --self-test

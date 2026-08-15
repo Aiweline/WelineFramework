@@ -52,6 +52,12 @@
 - 业务模块 `view/theme` 主要用于贡献新 layout/partial/component/widget，不应该被当成覆盖默认主题的首选位置。
 - 同一逻辑 key 命中后，后面的层不会再覆盖它。
 
+### 全局资产与 Token overlay
+
+`assets/css/theme.css`、`assets/js/theme.js` 是 Weline_Theme 的全局组件和运行时入口。活动设计主题不得以同逻辑 key 覆盖它们来复制 Card、Bootstrap adapter 或主题切换；同路径文件会使默认层完全失效。
+
+设计主题若需要品牌化，只能提供颜色 palette overlay（例如 `colors/_light.css`、`colors/_dark.css`）并让组件继续引用 Weline 语义 Token。旧 `--theme-*` 和 `--admin-*` 可以作为兼容 alias，但不能成为第二套全局组件系统。
+
 ## 普通模板覆盖规则
 
 普通模块模板指 `view/templates`，例如：

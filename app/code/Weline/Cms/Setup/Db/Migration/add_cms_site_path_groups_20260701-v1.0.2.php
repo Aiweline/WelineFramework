@@ -36,6 +36,16 @@ class AddCmsSitePathGroups20260701V102 extends AbstractMigration
         return [Page::schema_table, PathGroup::schema_table];
     }
 
+    public function requiresBackup(): bool
+    {
+        return true;
+    }
+
+    public function getBackupStrategy(): array
+    {
+        return ['strategy' => 'table', 'tables' => [Page::schema_table], 'columns' => []];
+    }
+
     public function install(): bool
     {
         $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
@@ -46,12 +56,18 @@ class AddCmsSitePathGroups20260701V102 extends AbstractMigration
 
         foreach ($this->pageColumns() as $column) {
             if (!$this->columnExists($connection, $pageTable, (string)$column['name'])) {
-                $connection->query($connection->buildAlterAddColumnSql($pageTable, $column))->fetch();
+                $connection->query($connection->buildAlterAddColumnSql(
+                    $connection->formatTableName($pageTable),
+                    $column,
+                ))->fetch();
             }
         }
 
         if ($connection->hasIndex($pageTable, 'uk_cms_page_identifier_scope')) {
-            $connection->query($connection->buildDropIndexSql($pageTable, 'uk_cms_page_identifier_scope'))->fetch();
+            $connection->query($connection->buildDropIndexSql(
+                $connection->formatTableName($pageTable),
+                'uk_cms_page_identifier_scope',
+            ))->fetch();
         }
 
         $pageIndexes = [
@@ -66,7 +82,7 @@ class AddCmsSitePathGroups20260701V102 extends AbstractMigration
         ];
         foreach ($pageIndexes as $name => $index) {
             if (!$connection->hasIndex($pageTable, $name)) {
-                $connection->query($connection->buildAddIndexSql($pageTable, [
+                $connection->query($connection->buildAddIndexSql($connection->formatTableName($pageTable), [
                     'name' => $name,
                     'type' => $index['type'],
                     'columns' => $index['columns'],

@@ -14,6 +14,7 @@ require_once \dirname(__DIR__, 9) . DIRECTORY_SEPARATOR . 'dev'
 final class WlsGatewayPackageBuilderTest extends TestCase
 {
     private string $root = '';
+    private string $releasePublicKeyHex = '';
     /** @var array<string,string> */
     private array $inputs = [];
 
@@ -27,6 +28,7 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         $this->root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
             . 'wls-package-builder-' . \bin2hex(\random_bytes(8));
         self::assertTrue(\mkdir($this->root, 0700, true));
+        $this->releasePublicKeyHex = \bin2hex(\random_bytes(32));
         $controller = $this->root . DIRECTORY_SEPARATOR . 'controller.php';
         self::assertNotFalse(\file_put_contents(
             $controller,
@@ -144,6 +146,323 @@ final class WlsGatewayPackageBuilderTest extends TestCase
             );
         }
         self::assertDirectoryDoesNotExist($output);
+    }
+
+    public function testProductionCandidateRejectsZeroOrMismatchedEmbeddedLauncherKey(): void
+    {
+        $zeroKey = \str_repeat('0', 64);
+        $candidates = [
+            'zero' => $zeroKey,
+            'mismatched' => \str_repeat('1', 64),
+        ];
+        foreach ($candidates as $name => $reportedKey) {
+            $this->inputs['wls-gateway-launcher'] = $this->executable(
+                'wls-gateway-launcher',
+                '--self-test',
+                $reportedKey,
+            );
+            $provenance = $this->productionProvenance(
+                'embedded-launcher-key-' . $name,
+            );
+            $output = $this->root . DIRECTORY_SEPARATOR
+                . 'embedded-launcher-key-' . $name;
+            $rejected = false;
+            try {
+                (new \WlsGatewayPackageBuilder())->build(
+                    $this->options($output, 'production') + [
+                        'provenance' => $provenance,
+                        'approved-provenance-sha256' => \hash_file('sha256', $provenance),
+                    ],
+                );
+            } catch (\RuntimeException $exception) {
+                $rejected = true;
+                self::assertStringContainsString(
+                    'embedded release public key',
+                    $exception->getMessage(),
+                );
+            }
+            self::assertTrue(
+                $rejected,
+                'A production candidate with a ' . $name
+                    . ' embedded Launcher public key must be rejected.',
+            );
+            self::assertDirectoryDoesNotExist($output);
+        }
+
+        $this->inputs['wls-gateway-launcher'] = $this->executable(
+            'wls-gateway-launcher',
+            '--self-test',
+            $this->releasePublicKeyHex,
+        );
+        $output = $this->root . DIRECTORY_SEPARATOR . 'declared-zero-launcher-key';
+        $rejected = false;
+        $rejected = false;
+        try {
+            (new \WlsGatewayPackageBuilder())->build(\array_replace(
+                $this->options($output, 'production'),
+                [
+                    'provenance' => $provenance = $this->productionProvenance(
+                        'declared-zero-launcher-key',
+                    ),
+                    'approved-provenance-sha256' => \hash_file('sha256', $provenance),
+                    'release-public-key-hex' => $zeroKey,
+                ],
+            ));
+        } catch (\RuntimeException $exception) {
+            $rejected = true;
+            self::assertStringContainsString(
+                'embedded release public key',
+                $exception->getMessage(),
+            );
+        }
+        self::assertTrue(
+            $rejected,
+            'A production assembly must not declare an all-zero Launcher public key.',
+        );
+        self::assertDirectoryDoesNotExist($output);
+    }
+
+    public function testProductionAuthorityRejectsAnUnapprovedProvenanceAndAuditSignDigestMismatches(): void
+    {
+        $approved = $this->productionProvenance('approved-provenance');
+        $alternate = $this->json($approved);
+        $alternate['components']['nginx']['source_url'] .= '?alternate=1';
+        $unapproved = $this->root . DIRECTORY_SEPARATOR . 'unapproved-provenance.json';
+        self::assertNotFalse(\file_put_contents(
+            $unapproved,
+            \json_encode(
+                $alternate,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . PHP_EOL,
+        ));
+        $output = $this->root . DIRECTORY_SEPARATOR . 'unapproved-provenance-candidate';
+        $rejected = false;
+        try {
+            (new \WlsGatewayPackageBuilder())->build(\array_replace(
+                $this->options($output, 'production'),
+                [
+                    'provenance' => $unapproved,
+                    'approved-provenance-sha256' => \hash_file('sha256', $approved),
+                ],
+            ));
+        } catch (\RuntimeException $exception) {
+            $rejected = true;
+            self::assertStringContainsString('approved provenance', $exception->getMessage());
+        }
+        self::assertTrue($rejected, 'Assembly must reject P\' when only P was approved.');
+
+        $fixture = $this->productionSigningFixture('expected-provenance-mismatch');
+        $mismatch = \str_repeat('0', 64);
+        $receipt = $this->root . DIRECTORY_SEPARATOR
+            . 'expected-provenance-mismatch-second.audit.json';
+        $auditRejected = false;
+        try {
+            $fixture['signer']->audit([
+                'package' => $fixture['package'],
+                'receipt-output' => $receipt,
+                'expected-provenance-sha256' => $mismatch,
+            ]);
+        } catch (\RuntimeException $exception) {
+            $auditRejected = true;
+            self::assertStringContainsString('provenance', $exception->getMessage());
+        }
+        if (!$auditRejected) {
+            self::fail('Audit accepted a mismatched provenance authority.');
+        }
+        self::assertTrue($auditRejected, 'Audit must bind the caller-approved provenance digest.');
+
+        $audit = $fixture['signer']->audit([
+            'package' => $fixture['package'],
+            'receipt-output' => $receipt,
+            'expected-provenance-sha256' => \hash_file(
+                'sha256',
+                $fixture['package'] . DIRECTORY_SEPARATOR . 'provenance.json',
+            ),
+        ]);
+        $signRejected = false;
+        try {
+            $fixture['signer']->sign(\array_replace(
+                $fixture['sign_options'],
+                [
+                    'audit-receipt' => $receipt,
+                    'expected-audit-environment-sha256'
+                        => (string)$audit['audit_environment_sha256'],
+                    'expected-provenance-sha256' => $mismatch,
+                ],
+            ));
+        } catch (\RuntimeException $exception) {
+            $signRejected = true;
+        }
+        self::assertTrue($signRejected, 'Signing must bind the caller-approved provenance digest.');
+    }
+
+    public function testProductionAssemblyRejectsNoncanonicalApprovedProvenanceBytes(): void
+    {
+        $provenance = $this->productionProvenance('noncanonical-approved-provenance');
+        self::assertNotFalse(\file_put_contents(
+            $provenance,
+            (string)\file_get_contents($provenance) . " \n",
+        ));
+        $output = $this->root . DIRECTORY_SEPARATOR . 'noncanonical-approved-provenance';
+
+        try {
+            (new \WlsGatewayPackageBuilder())->build(\array_replace(
+                $this->options($output, 'production'),
+                [
+                    'provenance' => $provenance,
+                    'approved-provenance-sha256' => \hash_file('sha256', $provenance),
+                ],
+            ));
+            self::fail('Production assembly must reject noncanonical bytes even when their digest is approved.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('canonical', $exception->getMessage());
+        }
+        self::assertDirectoryDoesNotExist($output);
+    }
+
+    public function testProductionAssemblyUsesOneStableProvenanceReadForApprovalAndPackaging(): void
+    {
+        $source = $this->productionProvenance('single-read-provenance-p1');
+        $p1 = (string)\file_get_contents($source);
+        $p2Document = $this->json($source);
+        $p2Document['components']['nginx']['source_url'] .= '?replacement=2';
+        $p2 = \json_encode(
+            $p2Document,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ) . PHP_EOL;
+        $output = $this->root . DIRECTORY_SEPARATOR . 'single-read-provenance';
+        $firstReadPath = '';
+        $firstReadBytes = '';
+        $builder = new \WlsGatewayPackageBuilder(static function (
+            string $readPath,
+            string $readBytes,
+        ) use (&$firstReadPath, &$firstReadBytes, $source, $p2): void {
+            $firstReadPath = $readPath;
+            $firstReadBytes = $readBytes;
+            self::assertNotFalse(\file_put_contents($source, $p2));
+        });
+        $rejected = false;
+        try {
+            $builder->build(\array_replace(
+                $this->options($output, 'production'),
+                [
+                    'provenance' => $source,
+                    'approved-provenance-sha256' => \hash('sha256', $p2),
+                ],
+            ));
+        } catch (\RuntimeException $exception) {
+            $rejected = true;
+            self::assertStringContainsString('approved provenance', $exception->getMessage());
+        }
+        self::assertSame((string)\realpath($source), $firstReadPath);
+        self::assertSame($p1, $firstReadBytes);
+        self::assertTrue(
+            $rejected,
+            'A provenance replacement after its first read must not authorize assembly.',
+        );
+        self::assertDirectoryDoesNotExist($output);
+    }
+
+    public function testProductionAssemblyRejectsUnknownOrUppercaseSchemaTwoProvenanceFields(): void
+    {
+        foreach (['root', 'component', 'uppercase-launcher-key'] as $mutation) {
+            $provenance = $this->productionProvenance('strict-provenance-' . $mutation);
+            $decoded = $this->json($provenance);
+            if ($mutation === 'root') {
+                $decoded['unapproved'] = true;
+            } elseif ($mutation === 'component') {
+                $decoded['components']['nginx']['unapproved'] = true;
+            } else {
+                $decoded['components']['wls-gateway-launcher']
+                    ['embedded_release_public_key_hex'] = \strtoupper(
+                        (string)$decoded['components']['wls-gateway-launcher']
+                            ['embedded_release_public_key_hex'],
+                    );
+            }
+            self::assertNotFalse(\file_put_contents(
+                $provenance,
+                \json_encode(
+                    $decoded,
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                ) . PHP_EOL,
+            ));
+            $output = $this->root . DIRECTORY_SEPARATOR . 'strict-provenance-' . $mutation;
+            try {
+                (new \WlsGatewayPackageBuilder())->build(\array_replace(
+                    $this->options($output, 'production'),
+                    [
+                        'provenance' => $provenance,
+                        'approved-provenance-sha256' => \hash_file('sha256', $provenance),
+                    ],
+                ));
+                self::fail('Production assembly must reject the ' . $mutation . ' provenance mutation.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString('provenance', \strtolower($exception->getMessage()));
+            }
+            self::assertDirectoryDoesNotExist($output);
+        }
+    }
+
+    public function testUnsignedCandidateRejectsProvenanceLauncherKeyThatDiffersFromManifest(): void
+    {
+        $fixture = $this->productionSigningFixture('provenance-manifest-launcher-key-split');
+        $provenanceFile = $fixture['package'] . DIRECTORY_SEPARATOR . 'provenance.json';
+        $provenance = $this->json($provenanceFile);
+        $provenance['components']['wls-gateway-launcher']['embedded_release_public_key_hex']
+            = \str_repeat('1', 64);
+        if ($provenance['components']['wls-gateway-launcher']['embedded_release_public_key_hex']
+            === (string)$this->json($fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.json')
+                ['launcher_embedded_release_public_key_hex']) {
+            $provenance['components']['wls-gateway-launcher']['embedded_release_public_key_hex']
+                = \str_repeat('2', 64);
+        }
+        $provenanceBytes = \json_encode(
+            $provenance,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ) . PHP_EOL;
+        self::assertNotFalse(\file_put_contents($provenanceFile, $provenanceBytes));
+        $manifestFile = $fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.json';
+        $manifest = $this->json($manifestFile);
+        $manifest['components']['provenance.json']['sha256'] = \hash('sha256', $provenanceBytes);
+        $manifest['components']['provenance.json']['size'] = \strlen($provenanceBytes);
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode(
+                $manifest,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . PHP_EOL,
+        ));
+        self::assertTrue(\unlink($fixture['audit_receipt']));
+        $rejected = false;
+        try {
+            $fixture['signer']->audit([
+                'package' => $fixture['package'],
+                'receipt-output' => $fixture['audit_receipt'],
+                'expected-provenance-sha256' => \hash_file('sha256', $provenanceFile),
+            ]);
+        } catch (\RuntimeException $exception) {
+            $rejected = true;
+            self::assertStringContainsString('provenance', \strtolower($exception->getMessage()));
+        }
+        self::assertTrue($rejected, 'A K1 provenance/manifest split must not reach audit or signing.');
+    }
+
+    public function testTestProfileKeepsZeroEmbeddedLauncherKeySelfTestsCompatible(): void
+    {
+        $this->inputs['wls-gateway-launcher'] = $this->executable(
+            'wls-gateway-launcher',
+            '--self-test',
+            \str_repeat('0', 64),
+        );
+        $output = $this->root . DIRECTORY_SEPARATOR . 'zero-key-test-profile';
+
+        $result = (new \WlsGatewayPackageBuilder())->build($this->options(
+            $output,
+            'test',
+        ));
+
+        self::assertTrue($result['ok']);
+        self::assertDirectoryExists($output);
     }
 
     public function testManifestSchemaLocksStableLauncherProofCapability(): void
@@ -329,6 +648,11 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         $keyPair = \sodium_crypto_sign_keypair();
         $secret = \sodium_crypto_sign_secretkey($keyPair);
         $public = \sodium_crypto_sign_publickey($keyPair);
+        $this->releasePublicKeyHex = \bin2hex($public);
+        $this->inputs['wls-gateway-launcher'] = $this->executable(
+            'wls-gateway-launcher',
+            '--self-test',
+        );
         $secretFile = $this->root . DIRECTORY_SEPARATOR . 'release.secret';
         self::assertNotFalse(\file_put_contents(
             $secretFile,
@@ -339,14 +663,14 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         self::assertNotFalse(\file_put_contents(
             $trustedKeys,
             \json_encode([
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'keys' => [[
                     'id' => 'fixture-release-key',
                     'algorithm' => 'ed25519',
                     'enabled' => true,
                     'public_key_base64' => \base64_encode($public),
                 ]],
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL,
         ));
         $provenance = $this->root . DIRECTORY_SEPARATOR . 'provenance.json';
         $definitions = [];
@@ -367,26 +691,40 @@ final class WlsGatewayPackageBuilderTest extends TestCase
                 'license' => 'test-only',
                 'self_contained' => $name !== 'controller',
             ];
+            if ($name === 'wls-gateway-launcher') {
+                $definitions[$name]['embedded_release_public_key_hex']
+                    = $this->releasePublicKeyHex;
+            }
         }
         self::assertNotFalse(\file_put_contents(
             $provenance,
             \json_encode([
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'target' => [
                     'platform' => \PHP_OS_FAMILY,
                     'arch' => $this->normalizedArch(),
                 ],
                 'components' => $definitions,
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL,
         ));
 
         $output = $this->root . DIRECTORY_SEPARATOR . 'production-package';
         $options = $this->options($output, 'production') + [
             'provenance' => $provenance,
+            'approved-provenance-sha256' => \hash_file('sha256', $provenance),
         ];
         $result = (new \WlsGatewayPackageBuilder())->build($options);
         self::assertFalse($result['release_ready']);
         self::assertTrue($result['production_candidate']);
+        self::assertSame(
+            (string)\file_get_contents($provenance),
+            (string)\file_get_contents($output . DIRECTORY_SEPARATOR . 'provenance.json'),
+            'Production assembly must package the exact approved provenance bytes.',
+        );
+        self::assertSame(
+            \hash_file('sha256', $provenance),
+            \hash_file('sha256', $output . DIRECTORY_SEPARATOR . 'provenance.json'),
+        );
         self::assertFileDoesNotExist($output . DIRECTORY_SEPARATOR . 'manifest.sig');
         $executionMarker = $this->inputs['wls-gateway-launcher'] . '.executed';
         self::assertFileExists($executionMarker);
@@ -405,6 +743,10 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         $audit = $signer->audit([
             'package' => $output,
             'receipt-output' => $auditReceipt,
+            'expected-provenance-sha256' => \hash_file(
+                'sha256',
+                $output . DIRECTORY_SEPARATOR . 'provenance.json',
+            ),
         ]);
         self::assertTrue($audit['ok']);
         $auditEnvironment = (string)$audit['audit_environment_sha256'];
@@ -433,6 +775,14 @@ final class WlsGatewayPackageBuilderTest extends TestCase
                 'package' => $output,
                 'audit-receipt' => $auditReceipt,
                 'expected-audit-environment-sha256' => $auditEnvironment,
+                'expected-provenance-sha256' => \hash_file(
+                    'sha256',
+                    $output . DIRECTORY_SEPARATOR . 'provenance.json',
+                ),
+                'expected-provenance-sha256' => \hash_file(
+                    'sha256',
+                    $output . DIRECTORY_SEPARATOR . 'provenance.json',
+                ),
                 'signing-key-id' => 'fixture-release-key',
                 'signing-key-file' => $secretFile,
                 'trusted-keys' => $trustedKeys,
@@ -485,6 +835,10 @@ final class WlsGatewayPackageBuilderTest extends TestCase
             'package' => $output,
             'audit-receipt' => $auditReceipt,
             'expected-audit-environment-sha256' => $auditEnvironment,
+            'expected-provenance-sha256' => \hash_file(
+                'sha256',
+                $output . DIRECTORY_SEPARATOR . 'provenance.json',
+            ),
             'signing-key-id' => 'fixture-release-key',
             'signing-key-file' => $secretFile,
             'trusted-keys' => $trustedKeys,
@@ -540,6 +894,7 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         (new \WlsGatewayPackageBuilder())->build(
             $this->options($sbomMismatchOutput, 'production') + [
                 'provenance' => $provenance,
+                'approved-provenance-sha256' => \hash_file('sha256', $provenance),
             ],
         );
         $sbomFile = $sbomMismatchOutput . DIRECTORY_SEPARATOR . 'sbom.cdx.json';
@@ -589,19 +944,20 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         self::assertNotFalse(\file_put_contents(
             $provenance,
             \json_encode([
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'target' => [
                     'platform' => \PHP_OS_FAMILY,
                     'arch' => $this->normalizedArch(),
                 ],
                 'components' => $definitions,
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL,
         ));
         $rejectedOutput = $this->root . DIRECTORY_SEPARATOR . 'rejected-package';
         try {
             (new \WlsGatewayPackageBuilder())->build(
                 $this->options($rejectedOutput, 'production') + [
                     'provenance' => $provenance,
+                    'approved-provenance-sha256' => \hash_file('sha256', $provenance),
                 ],
             );
             self::fail('A non-self-contained production runtime must be rejected.');
@@ -612,6 +968,108 @@ final class WlsGatewayPackageBuilderTest extends TestCase
             );
         }
         self::assertDirectoryDoesNotExist($rejectedOutput);
+    }
+
+    public function testSignerRejectsCandidateWhoseEmbeddedLauncherKeyDiffersFromSigningKey(): void
+    {
+        $embeddedKey = \bin2hex(\sodium_crypto_sign_publickey(
+            \sodium_crypto_sign_keypair(),
+        ));
+        $fixture = $this->productionSigningFixture(
+            'embedded-launcher-signing-key-mismatch',
+            $embeddedKey,
+        );
+
+        try {
+            $fixture['signer']->sign($fixture['sign_options']);
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'embedded release public key',
+                $exception->getMessage(),
+            );
+            return;
+        }
+        self::fail(
+            'A production candidate whose Launcher embeds K1 must not be signed with a trusted K2.',
+        );
+    }
+
+    public function testLauncherVerifierChallengeIsDiagnosticRatherThanSigningAuthority(): void
+    {
+        $fixture = $this->productionSigningFixture(
+            'launcher-self-report-challenge-mismatch',
+            null,
+            \str_repeat('1', 64),
+        );
+
+        $signed = $fixture['signer']->sign($fixture['sign_options']);
+        self::assertTrue($signed['release_ready']);
+    }
+
+    public function testProductionEmbeddedLauncherKeyClaimFailsClosedWhenInvalidOrTampered(): void
+    {
+        foreach (['absent', 'malformed', 'tampered'] as $case) {
+            $fixture = $this->productionSigningFixture(
+                'embedded-launcher-key-claim-' . $case,
+            );
+            $manifestFile = $fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.json';
+            $manifest = $this->json($manifestFile);
+            if ($case === 'absent') {
+                unset($manifest['launcher_embedded_release_public_key_hex']);
+            } elseif ($case === 'malformed') {
+                $manifest['launcher_embedded_release_public_key_hex'] = 'not-a-key';
+            } else {
+                $claim = (string)$manifest['launcher_embedded_release_public_key_hex'];
+                $manifest['launcher_embedded_release_public_key_hex']
+                    = ($claim[0] === '1' ? '2' : '1') . \substr($claim, 1);
+            }
+            self::assertNotFalse(\file_put_contents(
+                $manifestFile,
+                \json_encode(
+                    $manifest,
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                ) . PHP_EOL,
+            ));
+
+            try {
+                $fixture['signer']->audit([
+                    'package' => $fixture['package'],
+                    'receipt-output' => $this->root . DIRECTORY_SEPARATOR
+                        . 'embedded-launcher-key-claim-' . $case . '.audit.json',
+                ]);
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString(
+                    $case === 'tampered'
+                        ? 'Production provenance changed or is incomplete: wls-gateway-launcher'
+                        : 'unsigned production candidate',
+                    $exception->getMessage(),
+                );
+                continue;
+            }
+            self::fail('An invalid or tampered Launcher key claim must not be auditable.');
+        }
+    }
+
+    public function testWindowsProductionManifestRequiresANonzeroLauncherKeyClaim(): void
+    {
+        $validator = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'launcherEmbeddedReleaseKeyClaimValid',
+        );
+        $signer = new \WlsGatewayPackageSigner();
+
+        self::assertTrue($validator->invoke($signer, [
+            'platform' => 'Windows',
+            'launcher_embedded_release_public_key_hex' => \str_repeat('1', 64),
+        ]));
+        self::assertFalse($validator->invoke($signer, [
+            'platform' => 'Windows',
+            'launcher_embedded_release_public_key_hex' => '',
+        ]));
+        self::assertFalse($validator->invoke($signer, [
+            'platform' => 'Windows',
+            'launcher_embedded_release_public_key_hex' => \str_repeat('0', 64),
+        ]));
     }
 
     public function testLinuxDependencyAuditRejectsDynamicCryptoDespiteProvenanceClaim(): void
@@ -696,6 +1154,56 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         self::assertSame($fixture['unsigned_manifest'], (string)\file_get_contents($manifestFile));
         self::assertFileDoesNotExist($signatureFile);
         self::assertDirectoryDoesNotExist($active);
+    }
+
+    public function testActiveSigningRecoveryRejectsAProofBoundDifferentLauncherKey(): void
+    {
+        $fixture = $this->productionSigningFixture('active-proof-launcher-key-mismatch');
+        $signer = $fixture['signer'];
+        $package = $fixture['package'];
+        $complete = $package . '.signing-complete';
+        $active = $package . '.signing-transaction';
+
+        $signer->sign($fixture['sign_options']);
+        self::assertTrue(\rename($complete, $active));
+        $recordFile = $active . DIRECTORY_SEPARATOR . 'record.json';
+        $record = $this->json($recordFile);
+        $record['launcher_embedded_release_public_key_hex'] = \str_repeat('1', 64);
+        if ($record['launcher_embedded_release_public_key_hex']
+            === (string)$this->json($package . DIRECTORY_SEPARATOR . 'manifest.json')
+                ['launcher_embedded_release_public_key_hex']) {
+            $record['launcher_embedded_release_public_key_hex'] = \str_repeat('2', 64);
+        }
+        $payload = $record;
+        unset($payload['proof_signature_base64']);
+        $secret = \base64_decode(
+            \trim((string)\file_get_contents(
+                $fixture['sign_options']['signing-key-file'],
+            )),
+            true,
+        );
+        self::assertIsString($secret);
+        $transactionJson = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'signingTransactionJson',
+        );
+        $record['proof_signature_base64'] = \base64_encode(
+            \sodium_crypto_sign_detached(
+                $transactionJson->invoke($signer, $payload),
+                $secret,
+            ),
+        );
+        $recordBytes = $transactionJson->invoke($signer, $record);
+        \sodium_memzero($secret);
+        self::assertNotFalse(\file_put_contents($recordFile, $recordBytes));
+
+        try {
+            $signer->sign($fixture['sign_options']);
+            self::fail('Active recovery must reject a K2-signed proof whose K1 differs from its candidate.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('provenance proof', $exception->getMessage());
+        }
+        self::assertDirectoryExists($active);
     }
 
     public function testSignerFailsClosedForUnprovedReservedTransactionState(): void
@@ -1189,16 +1697,70 @@ CONFIG
             'version' => '2.0.0-fixture',
             'platform' => \PHP_OS_FAMILY,
             'arch' => $this->normalizedArch(),
+            'release-public-key-hex' => $this->releasePublicKeyHex,
         ];
     }
 
-    private function executable(string $name, string $expectedArgument): string
+    private function productionProvenance(string $name): string
+    {
+        $definitions = [];
+        foreach ([
+            'controller',
+            'ca-bundle',
+            'php',
+            'nginx',
+            'wls-gateway-broker',
+            'wls-gateway-launcher',
+        ] as $component) {
+            $path = $this->inputs[$component];
+            $definitions[$component] = [
+                'version' => 'fixture-1',
+                'source_url' => 'https://example.invalid/' . $component,
+                'source_sha256' => \hash_file('sha256', $path),
+                'binary_sha256' => \hash_file('sha256', $path),
+                'license' => 'test-only',
+                'self_contained' => $component !== 'controller',
+            ];
+            if ($component === 'wls-gateway-launcher') {
+                $definitions[$component]['embedded_release_public_key_hex']
+                    = $this->releasePublicKeyHex;
+            }
+        }
+        $provenance = $this->root . DIRECTORY_SEPARATOR . $name . '.provenance.json';
+        self::assertNotFalse(\file_put_contents(
+            $provenance,
+            \json_encode([
+                'schema_version' => 2,
+                'target' => [
+                    'platform' => \PHP_OS_FAMILY,
+                    'arch' => $this->normalizedArch(),
+                ],
+                'components' => $definitions,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL,
+        ));
+        return $provenance;
+    }
+
+    private function executable(
+        string $name,
+        string $expectedArgument,
+        ?string $releasePublicKeyHex = null,
+        ?string $releaseVerifierKeyHex = null,
+    ): string
     {
         $path = $this->root . DIRECTORY_SEPARATOR . $name;
         $source = $path . '.c';
         $nameLiteral = \json_encode($name, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         $expectedLiteral = \json_encode(
             $expectedArgument,
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+        $releasePublicKeyLiteral = \json_encode(
+            $releasePublicKeyHex ?? $this->releasePublicKeyHex,
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+        $releaseVerifierKeyLiteral = \json_encode(
+            $releaseVerifierKeyHex ?? $releasePublicKeyHex ?? $this->releasePublicKeyHex,
             JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
         );
         $markerLiteral = \json_encode(
@@ -1209,11 +1771,14 @@ CONFIG
             $source,
             <<<C
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int main(int argc, char **argv) {
     const char *name = {$nameLiteral};
     const char *expected = {$expectedLiteral};
+    const char *release_public_key = {$releasePublicKeyLiteral};
+    const char *release_verifier_key = {$releaseVerifierKeyLiteral};
     if (strcmp(name, "php") == 0) {
         if (argc >= 2
             && (strcmp(argv[1], "-l") == 0 || strcmp(argv[1], "--version") == 0)) {
@@ -1221,8 +1786,19 @@ int main(int argc, char **argv) {
         }
         return argc == 3 && strcmp(argv[2], "--self-test") == 0 ? 0 : 1;
     }
+    if (strcmp(name, "wls-gateway-launcher") == 0
+        && strcmp(argv[1], "--release-signature-self-test") == 0) {
+        const char *actual = getenv("WLS_FIXTURE_LAUNCHER_VERIFIER_KEY");
+        if (argc != 4) return 1;
+        if (actual == NULL || actual[0] == '\\0') actual = release_verifier_key;
+        return strcmp(actual, release_public_key) == 0 ? 0 : 1;
+    }
     if (argc != 2) {
         return 1;
+    }
+    if (strcmp(name, "wls-gateway-launcher") == 0
+        && strcmp(argv[1], "--release-public-key-self-test") == 0) {
+        return puts(release_public_key) < 0 ? 1 : 0;
     }
         if (strcmp(argv[1], expected) != 0
             && !(strcmp(name, "wls-gateway-launcher") == 0
@@ -1278,11 +1854,22 @@ C,
      *   audit_receipt_bytes:string
      * }
      */
-    private function productionSigningFixture(string $name): array
+    private function productionSigningFixture(
+        string $name,
+        ?string $embeddedLauncherKeyHex = null,
+        ?string $releaseVerifierKeyHex = null,
+    ): array
     {
         $keyPair = \sodium_crypto_sign_keypair();
         $secret = \sodium_crypto_sign_secretkey($keyPair);
         $public = \sodium_crypto_sign_publickey($keyPair);
+        $this->releasePublicKeyHex = $embeddedLauncherKeyHex ?? \bin2hex($public);
+        $this->inputs['wls-gateway-launcher'] = $this->executable(
+            'wls-gateway-launcher',
+            '--self-test',
+            null,
+            $releaseVerifierKeyHex,
+        );
         $secretFile = $this->root . DIRECTORY_SEPARATOR . $name . '.secret';
         self::assertNotFalse(\file_put_contents(
             $secretFile,
@@ -1300,7 +1887,7 @@ C,
                     'enabled' => true,
                     'public_key_base64' => \base64_encode($public),
                 ]],
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL,
         ));
         $definitions = [];
         foreach ([
@@ -1324,22 +1911,29 @@ C,
                     true,
                 ),
             ];
+            if ($component === 'wls-gateway-launcher') {
+                $definitions[$component]['embedded_release_public_key_hex']
+                    = $this->releasePublicKeyHex;
+            }
         }
         $provenance = $this->root . DIRECTORY_SEPARATOR . $name . '.provenance.json';
         self::assertNotFalse(\file_put_contents(
             $provenance,
             \json_encode([
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'target' => [
                     'platform' => \PHP_OS_FAMILY,
                     'arch' => $this->normalizedArch(),
                 ],
                 'components' => $definitions,
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL,
         ));
         $package = $this->root . DIRECTORY_SEPARATOR . $name;
         (new \WlsGatewayPackageBuilder())->build(
-            $this->options($package, 'production') + ['provenance' => $provenance],
+            $this->options($package, 'production') + [
+                'provenance' => $provenance,
+                'approved-provenance-sha256' => \hash_file('sha256', $provenance),
+            ],
         );
         $manifestFile = $package . DIRECTORY_SEPARATOR . 'manifest.json';
         $unsignedManifest = (string)\file_get_contents($manifestFile);
@@ -1348,11 +1942,19 @@ C,
         $audit = $signer->audit([
             'package' => $package,
             'receipt-output' => $auditReceipt,
+            'expected-provenance-sha256' => \hash_file(
+                'sha256',
+                $package . DIRECTORY_SEPARATOR . 'provenance.json',
+            ),
         ]);
         $signOptions = [
             'package' => $package,
             'audit-receipt' => $auditReceipt,
             'expected-audit-environment-sha256' => (string)$audit['audit_environment_sha256'],
+            'expected-provenance-sha256' => \hash_file(
+                'sha256',
+                $package . DIRECTORY_SEPARATOR . 'provenance.json',
+            ),
             'signing-key-id' => 'fixture-release-key',
             'signing-key-file' => $secretFile,
             'trusted-keys' => $trustedKeys,

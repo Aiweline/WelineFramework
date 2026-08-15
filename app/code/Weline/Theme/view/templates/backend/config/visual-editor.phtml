@@ -7,6 +7,7 @@
 
 $area = $area ?: 'frontend';
 $scope = $scope ?: 'default';
+$backendThemeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
 
 // API URLs
 $optionsUrl = $this->getUrl('theme/backend/config/themeConfig/options');
@@ -15,6 +16,7 @@ $fileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/fileParams');
 $saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFileParams');
 $publishPreviewScopeUrl = $this->getUrl('theme/backend/config/themeConfig/publishPreviewScope');
 $discardPreviewScopeUrl = $this->getUrl('theme/backend/config/themeConfig/discardPreviewScope');
+$syncThemeModeUrl = $this->getUrl('theme/backend/config/themeConfig/syncThemeMode');
 
 $themeIdValue = 0;
 $themeNameValue = __('未选择主题');
@@ -48,7 +50,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 <!DOCTYPE html>
-<html lang="<?= \Weline\Framework\App\Env::getInstance()->getLocale() ?>">
+<html lang="<?= \Weline\Framework\App\Env::getInstance()->getLocale() ?>" data-theme-area="backend" <?= $backendThemeConfig->getThemeHtmlAttributes() ?>>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -79,7 +81,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             z-index: 9999 !important;
             display: flex !important;
             flex-direction: column !important;
-            background: var(--ve-bg-color, #f0f2f5);
+            background: var(--ve-bg-color);
         }
         
         /* Make main content area full width */
@@ -157,9 +159,16 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             </div>
             
             <div class="theme-mode-switcher ms-3">
-                 <button type="button" class="btn btn-sm btn-outline-secondary" id="theme-mode-toggle" title="<?= __('Toggle light/dark mode') ?>">
+                <!-- Legacy editor runtime still resolves this button; the visible select is the three-state control. -->
+                <button type="button" class="d-none" id="theme-mode-toggle" tabindex="-1" aria-hidden="true">
                     <i class="mdi mdi-weather-sunny"></i>
                 </button>
+                <label class="visually-hidden" for="theme-mode-preference"><?= __('主题模式') ?></label>
+                <select class="form-select form-select-sm" id="theme-mode-preference" data-weline-theme-mode aria-label="<?= __('主题模式') ?>">
+                    <option value="system"><?= __('跟随系统') ?></option>
+                    <option value="light"><?= __('明亮模式') ?></option>
+                    <option value="dark"><?= __('暗黑模式') ?></option>
+                </select>
             </div>
             
             <?php 
@@ -371,8 +380,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             saveFileParams: <?= json_encode($saveFileParamsUrl, $jsonForScriptFlags) ?>,
             publishPreviewScope: <?= json_encode($publishPreviewScopeUrl, $jsonForScriptFlags) ?>,
             discardPreviewScope: <?= json_encode($discardPreviewScopeUrl, $jsonForScriptFlags) ?>,
-            upload: <?= json_encode($this->getUrl('theme/backend/config/layout/upload'), $jsonForScriptFlags) ?>,
-            syncThemeMode: <?= json_encode($this->getUrl('theme/backend/config/themeConfig/syncThemeMode'), $jsonForScriptFlags) ?>
+            syncThemeMode: <?= json_encode($syncThemeModeUrl, $jsonForScriptFlags) ?>,
+            upload: <?= json_encode($this->getUrl('theme/backend/config/layout/upload'), $jsonForScriptFlags) ?>
         },
         translations: {
             loading: <?= json_encode((string)__('Loading...'), $jsonForScriptFlags) ?>,
@@ -396,6 +405,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             copyColorValue: <?= json_encode((string)__('Copy color value'), $jsonForScriptFlags) ?>,
             noColorSettings: <?= json_encode((string)__('No color settings available'), $jsonForScriptFlags) ?>,
             switchingLocale: <?= json_encode((string)__('Switching language...'), $jsonForScriptFlags) ?>,
+            themeModeSaveFailed: <?= json_encode((string)__('主题模式切换失败'), $jsonForScriptFlags) ?>,
             initFailed: <?= json_encode((string)__('Initialization failed'), $jsonForScriptFlags) ?>
         },
         themeMode: <?= json_encode((string)($themeMode ?? 'light'), $jsonForScriptFlags) ?>
@@ -413,5 +423,6 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </script>
 
 <script src="@static(Weline_Theme::js/visual-editor.js)"></script>
+<script src="@static(Weline_Theme::js/visual-editor-theme-mode.js)"></script>
 </body>
 </html>

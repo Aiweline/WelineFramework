@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Gateway;
 
-use Weline\Framework\App\Env;
 
 /**
  * Project-owned WLS identity and monotonic desired/certificate generations.
@@ -53,8 +52,9 @@ final class ProjectIdentityStore
             : $this->normalizeAbsolutePath($hostStateRoot, 'WLS edge host state root');
         $this->legacyDesiredStateFile = $this->normalizeAbsolutePath(
             $legacyDesiredStateFile
-                ?? Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'gateway-v2'
-                    . DIRECTORY_SEPARATOR . 'desired-generation.json',
+                ?? $this->projectRoot . DIRECTORY_SEPARATOR . 'var'
+                    . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR
+                    . 'gateway-v2' . DIRECTORY_SEPARATOR . 'desired-generation.json',
             'WLS legacy desired-state file',
         );
     }

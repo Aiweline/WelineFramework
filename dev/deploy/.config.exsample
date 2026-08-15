@@ -64,7 +64,7 @@ LOCK_FILE=''
 # 部署日志路径。留空时使用 <DEPLOY_ROOT>/var/log/deploy-webhook.log。
 LOG_FILE=''
 
-# Webhook 监听地址。默认只监听本机，建议由 Nginx/Caddy 反代到公网 HTTPS。
+# Webhook 监听地址。默认只监听本机，建议由 Nginx 反代到公网 HTTPS。
 # 如果直接公网监听，必须设置强密钥并做好防火墙限制。
 WEBHOOK_HOST='127.0.0.1'
 

@@ -96,6 +96,7 @@ Stage 2 has a working project registry and Gateway runtime-apply slice:
 - `WlsPanelProject` stores managed project metadata, including domain, admin URL, child panel URL, path, PHP profile, database profile, status, and gateway backend target.
 - `WlsPanelProjectRegistryService` saves/deletes project records from the WLS Panel and synchronizes a linked ReverseProxy rule when gateway is enabled.
 - The project section now renders a native panel form plus cards for current project, registered child WLS projects, and orphan ReverseProxy rules.
+- The project section now exposes ACL-protected lifecycle controls for the current local project: IPC status, rolling code reload, and confirmation-gated force restart. Server-side resolution binds the project card to the persisted local WLS instance and rejects arbitrary instance/path input; remote child projects link to their own panel. UI completion follows the Worker generation/revision rather than the Master epoch and requires all Worker/services to return Ready.
 - Panel project save/delete and ReverseProxy manual apply now share `IpcControlGateway::proxyApply()`.
 - Gateway-role E2E apply is proven with an AI test Master using `WLS_GATEWAY_ENABLED=1` and `WLS_GATEWAY_LISTEN=127.0.0.1:9672`.
 - The Gateway process registers as role `gateway`, reaches `ready`, receives `TYPE_PROXY_RELOAD`, and routes a real TLS SNI request to a child HTTPS WLS backend without a full restart.

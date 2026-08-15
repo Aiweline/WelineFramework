@@ -50,6 +50,8 @@ $gatewayBackendTokenFile = '';
 $gatewayProjectUuid = '';
 $gatewayInstanceGeneration = 0;
 $gatewayInstanceLaunchId = '';
+$gatewayListenerHost = '';
+$gatewayListenerPort = 0;
 $gatewayHostLeaseId = '';
 $gatewaySessionCapability = '';
 $gatewaySessionCapabilityEvidenceDigest = '';
@@ -123,6 +125,25 @@ foreach ($argv as $arg) {
             $arg,
             \strlen('--gateway-instance-launch-id='),
         )));
+    } elseif (\str_starts_with($arg, '--gateway-listener-host=')) {
+        $candidate = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--gateway-listener-host='),
+        )));
+        if ($gatewayListenerHost !== '' && !\hash_equals($gatewayListenerHost, $candidate)) {
+            throw new \RuntimeException(
+                'Worker received conflicting gateway listener host arguments.',
+            );
+        }
+        $gatewayListenerHost = $candidate;
+    } elseif (\str_starts_with($arg, '--gateway-listener-port=')) {
+        $candidate = (int)\substr($arg, \strlen('--gateway-listener-port='));
+        if ($gatewayListenerPort !== 0 && $gatewayListenerPort !== $candidate) {
+            throw new \RuntimeException(
+                'Worker received conflicting gateway listener port arguments.',
+            );
+        }
+        $gatewayListenerPort = $candidate;
     } elseif (\str_starts_with($arg, '--gateway-host-lease-id=')) {
         $gatewayHostLeaseId = \strtolower(\trim((string)\substr(
             $arg,
@@ -234,6 +255,12 @@ if (!\in_array($normalizedListenerHost, ['127.0.0.1', '::1'], true)) {
     \fwrite(\STDERR, "Nginx-only Worker backend must bind to loopback.\n");
     exit(1);
 }
+$normalizedGatewayListenerHost = $gatewayListenerHost !== ''
+    ? \strtolower(\trim($gatewayListenerHost))
+    : $normalizedListenerHost;
+$normalizedGatewayListenerPort = $gatewayListenerPort > 0
+    ? $gatewayListenerPort
+    : $port;
 $controlPort = (int)($controlPort ?? 0);
 $masterPid = (int)($masterPid ?? 0);
 if ($controlPort <= 0
@@ -253,6 +280,14 @@ if ($gatewayBackendTokenFile !== ''
         ) !== 1
         || $gatewayInstanceGeneration < 1
         || \preg_match('/^[a-f0-9]{32}$/D', $gatewayInstanceLaunchId) !== 1
+        || !\in_array($normalizedGatewayListenerHost, ['127.0.0.1', '::1'], true)
+        || $normalizedGatewayListenerPort < 1
+        || $normalizedGatewayListenerPort > 65535
+        || (!$isMaintenanceWorker
+            && \preg_match('/^[a-f0-9]{32}$/D', $gatewayHostLeaseId) !== 1)
+        || (!$isMaintenanceWorker
+            && $wlsRuntimeTopology === 'dispatcher'
+            && ($gatewayListenerHost === '' || $gatewayListenerPort < 1))
         || !\in_array(
             $gatewaySessionCapability,
             ['isolated', 'stateless', 'shared_session'],
@@ -403,6 +438,15 @@ if ($windowsListenerHandoffPresent
     exit(1);
 }
 
+// Publish the child-owned PHP PID before the protected credential wait. On
+// Windows ARM64 x64 emulation the launcher PID is not the durable Worker PID;
+// the parent needs this redacted lease before it can authorize the credential.
+\Weline\Server\Service\Runtime\WorkerProcessLease::register(
+    $processName,
+    $orchestratorLaunchId,
+    $orchestratorEpoch
+);
+
 $masterLeaseManager = new \Weline\Server\Service\MasterLeaseManager();
 $masterToken = $masterLeaseManager->resolveProtectedCredentialFromArguments(
         $argv,
@@ -435,11 +479,6 @@ $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
     $orchestratorEpoch
 );
 $childMasterGuard->assertAliveOrExit('启动前 Master 自治检查');
-\Weline\Server\Service\Runtime\WorkerProcessLease::register(
-    $processName,
-    $orchestratorLaunchId,
-    $orchestratorEpoch
-);
 
 // IPC control port. Prefer the explicit Master-provided argument; the endpoint
 // file is only a bootstrap pointer when the argument is absent.
@@ -500,7 +539,10 @@ if (!\defined('WLS_WORKER_GATEWAY_INSTANCE_LAUNCH_ID')) {
     \define('WLS_WORKER_GATEWAY_INSTANCE_LAUNCH_ID', $gatewayInstanceLaunchId);
 }
 if (!\defined('WLS_WORKER_GATEWAY_LISTENER_HOST')) {
-    \define('WLS_WORKER_GATEWAY_LISTENER_HOST', $normalizedListenerHost);
+    \define('WLS_WORKER_GATEWAY_LISTENER_HOST', $normalizedGatewayListenerHost);
+}
+if (!\defined('WLS_WORKER_GATEWAY_LISTENER_PORT')) {
+    \define('WLS_WORKER_GATEWAY_LISTENER_PORT', $normalizedGatewayListenerPort);
 }
 if (!\defined('WLS_WORKER_GATEWAY_HOST_LEASE_ID')) {
     \define('WLS_WORKER_GATEWAY_HOST_LEASE_ID', $gatewayHostLeaseId);
@@ -5500,6 +5542,7 @@ function handleRequest(
                         : WLS_WORKER_LAUNCH_ID
                 )));
                 $listenerHost = \strtolower(\trim((string)WLS_WORKER_GATEWAY_LISTENER_HOST));
+                $listenerPort = (int)WLS_WORKER_GATEWAY_LISTENER_PORT;
                 if (\preg_match('/\A[a-f0-9]{32}\z/D', $nonce) !== 1
                     || !\in_array($sessionMode, ['isolated', 'stateless', 'shared_session'], true)
                     || \preg_match('/\A[a-f0-9]{64}\z/D', $evidenceDigest) !== 1
@@ -5512,8 +5555,8 @@ function handleRequest(
                     || (int)WLS_WORKER_MASTER_EPOCH < 1
                     || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
                     || !\in_array($listenerHost, ['127.0.0.1', '::1'], true)
-                    || $port < 1
-                    || $port > 65535
+                    || $listenerPort < 1
+                    || $listenerPort > 65535
                 ) {
                     return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 }
@@ -5527,7 +5570,7 @@ function handleRequest(
                     'launch_id' => $launchId,
                     'edge_capability_digest' => \hash('sha256', $edgeSecret),
                     'backend_host' => $listenerHost,
-                    'backend_port' => $port,
+                    'backend_port' => $listenerPort,
                     'listener_lease_id' => \strtolower(\trim((string)(
                         WLS_WORKER_GATEWAY_HOST_LEASE_ID
                     ))),

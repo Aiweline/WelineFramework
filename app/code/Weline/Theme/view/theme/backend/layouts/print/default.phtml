@@ -13,8 +13,9 @@
 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
 -->
+<?php $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class); ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="backend">
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme-area="backend" <?= $themeConfig->getThemeHtmlAttributes() ?>>
 <head>
     <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
@@ -58,8 +59,8 @@
 body {
     margin: 0;
     padding: 0;
-    background-color: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-primary, #212529);
+    background-color: var(--backend-theme-surface-subtle);
+    color: var(--backend-theme-text);
 }
 
 @media print {
@@ -78,9 +79,9 @@ body {
         max-width: 800px;
         margin: var(--backend-spacing-lg, 20px) auto;
         padding: var(--backend-spacing-lg, 20px);
-        background: var(--backend-color-card-bg, #fff);
-        border-radius: var(--backend-border-radius-md, 8px);
-        box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+        background: var(--backend-component-surface);
+        border-radius: var(--backend-theme-radius-md);
+        box-shadow: var(--backend-theme-shadow-sm);
     }
 }
 
@@ -91,14 +92,14 @@ body {
     padding: var(--backend-spacing-sm, 10px) var(--backend-spacing-lg, 20px);
     border: none;
     border-radius: var(--backend-border-radius, 6px);
-    background: var(--backend-color-primary, #556ee6);
-    color: var(--backend-color-text-inverse, #fff);
+    background: var(--backend-theme-primary);
+    color: var(--backend-theme-on-primary);
     font-size: 0.9375rem;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .backend-print-btn:hover {
-    background: var(--backend-color-primary-hover, #4857d4);
+    background: var(--backend-theme-primary-hover);
 }
 </style>

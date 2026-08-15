@@ -20,6 +20,7 @@ final class GatewayPlatformServiceInstaller
     public const DERIVED_AUTHORITY_SNAPSHOTS_V1 = 'controller-data-plane-search-v2';
     public const DERIVED_AUTHORITY_SNAPSHOTS_V2 = 'root-data-plane-search-v2';
     public const DERIVED_AUTHORITY_SNAPSHOT_CANDIDATES_V2 = 'controller-snapshot-candidates-private-v2';
+    public const DERIVED_AUTHORITY_NEUTRAL_TLS = 'root-data-plane-traverse-neutral-tls-v2';
     public const DERIVED_AUTHORITY_RUNTIME = 'controller-data-plane-runtime-v2';
     public const DERIVED_AUTHORITY_RUNTIME_CHILD = 'controller-runtime-child-v2';
     private const WINDOWS_CONTROLLER_SERVICE_SID =
@@ -2094,6 +2095,90 @@ final class GatewayPlatformServiceInstaller
     }
 
     /**
+     * Restore the volatile POSIX run namespace only after proving that the
+     * installed platform supervisor is persistently stopped. The durable
+     * ADMIN_STOPPED signature remains owned by GatewayHostManager and is not
+     * cleared until all package/rebootstrap preflight checks have succeeded.
+     */
+    /**
+     * @return array{kind:string,path:string,test_mode:bool}
+     */
+    public function recoverExplicitStartDefinition(
+        ?float $deadlineMonotonic = null,
+    ): array {
+        return $this->withOperationDeadline(
+            $deadlineMonotonic,
+            self::SERVICE_OPERATION_TIMEOUT_SECONDS,
+            function (): array {
+                if ($this->paths->isTestMode()
+                    || \PHP_OS_FAMILY !== 'Linux'
+                ) {
+                    return $this->installedDefinition();
+                }
+                $this->assertAdministrator();
+
+                // systemctl disable --now intentionally removes the canonical
+                // linked unit.  Read and bind metadata to the immutable
+                // dedicated target without weakening ordinary status reads.
+                $installed = $this->installedDefinitionFromMetadata(false);
+                if (!\hash_equals('systemd-system', (string)$installed['kind'])
+                    || !\hash_equals(
+                        $this->paths->serviceDefinitionFile(),
+                        (string)$installed['path'],
+                    )
+                ) {
+                    throw new \RuntimeException(
+                        'Explicit start cannot recover a legacy or foreign systemd definition.',
+                    );
+                }
+
+                // This proof must precede the only namespace mutation.
+                $this->assertPlatformServiceStopped('systemd-system');
+                $definition = $this->readStableRegularFile(
+                    (string)$installed['path'],
+                    1_048_576,
+                    'Installed WLS Gateway systemd target during explicit-start recovery',
+                );
+                $this->linuxSystemdLayout()
+                    ->restoreDisabledCurrentDefinitionAndFixedLink($definition);
+
+                $bound = $this->installedDefinition();
+                if (!\hash_equals((string)$installed['kind'], (string)$bound['kind'])
+                    || !\hash_equals((string)$installed['path'], (string)$bound['path'])
+                ) {
+                    throw new \RuntimeException(
+                        'Recovered WLS Gateway systemd definition changed before activation.',
+                    );
+                }
+                return $bound;
+            },
+        );
+    }
+
+    public function recoverExplicitStartRunDirectory(
+        string $kind,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $this->withOperationDeadline(
+            $deadlineMonotonic,
+            self::SERVICE_OPERATION_TIMEOUT_SECONDS,
+            function () use ($kind): void {
+                if ($this->paths->isTestMode()
+                    || \PHP_OS_FAMILY === 'Windows'
+                ) {
+                    return;
+                }
+                $this->assertAdministrator();
+                $this->persistentStoppedProofWithinDeadline($kind);
+                $this->recoverReplayablePosixRunDirectory('explicit start');
+                // Reuse the read-only fixed-profile and ACL verifier before
+                // any package state is inspected or the stop fence is cleared.
+                $this->paths->ensureDirectories();
+            },
+        );
+    }
+
+    /**
      * Re-prove the persistent supervisor stop after any crash/re-entry.
      *
      * @return array{kind:string,stopped:true,test_mode:bool,definition_sha256:string,metadata_sha256:string}
@@ -2116,10 +2201,24 @@ final class GatewayPlatformServiceInstaller
         if (!$this->paths->isTestMode()) {
             $this->assertAdministrator();
         }
-        $installed = $this->installedDefinition();
+        $disabledSystemd = !$this->paths->isTestMode()
+            && \hash_equals('systemd-system', $kind);
+        $installed = $disabledSystemd
+            ? $this->installedDefinitionFromMetadata(false)
+            : $this->installedDefinition();
         if (!\hash_equals((string)$installed['kind'], $kind)) {
             throw new \RuntimeException(
                 'Gateway persistent-stop proof kind does not match installed metadata.'
+            );
+        }
+        if ($disabledSystemd
+            && !\hash_equals(
+                $this->paths->serviceDefinitionFile(),
+                (string)$installed['path'],
+            )
+        ) {
+            throw new \RuntimeException(
+                'Gateway persistent-stop proof does not own the dedicated systemd target.'
             );
         }
         $this->assertPlatformServiceStopped($kind);
@@ -2133,6 +2232,10 @@ final class GatewayPlatformServiceInstaller
             1_048_576,
             'Gateway platform definition during persistent-stop proof',
         );
+        if ($disabledSystemd) {
+            $this->linuxSystemdLayout()
+                ->assertDisabledCurrentDefinition($definition);
+        }
         return [
             'kind' => $kind,
             'stopped' => true,
@@ -2472,6 +2575,114 @@ final class GatewayPlatformServiceInstaller
         );
     }
 
+    /**
+     * Prove the fixed broker-owned PID root without creating, repairing, or
+     * inspecting any runtime-owned PID leaf. Rebootstrap calls this before it
+     * decides whether an empty namespace may proceed.
+     */
+    public function assertNginxPidNamespaceAuthority(): void
+    {
+        $root = $this->paths->nginxPidDir();
+        $status = @\lstat($root);
+        if (!\is_array($status)
+            || \is_link($root)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'Gateway Nginx PID namespace is missing, linked, or special.',
+            );
+        }
+        $identity = GatewayBoundedTreeWalker::identity($root);
+        if ($this->paths->isTestMode()) {
+            if (\PHP_OS_FAMILY === 'Windows') {
+                return;
+            }
+            $home = @\lstat($this->paths->home());
+            if (!\is_array($home)
+                || (int)($status['uid'] ?? -1) !== (int)($home['uid'] ?? -2)
+                || (int)($status['gid'] ?? -1) !== (int)($home['gid'] ?? -2)
+                || (((int)($status['mode'] ?? 0)) & 0777) !== 0700
+            ) {
+                throw new \RuntimeException(
+                    'Test Gateway Nginx PID namespace authority is unsafe.',
+                );
+            }
+            $this->assertRebootstrapDerivedRootPosixAclFree(
+                $root,
+                (string)$identity['device'],
+                (string)$identity['inode'],
+                0040000,
+                (int)($status['nlink'] ?? 0),
+            );
+            return;
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $expected = GatewayWindowsHostRootAuthority::canonicalizeSddl(
+                'O:S-1-5-18D:P'
+                    . '(A;;FA;;;S-1-5-18)'
+                    . '(A;;FA;;;S-1-5-32-544)'
+                    . '(A;;0x20;;;' . self::WINDOWS_CONTROLLER_SERVICE_SID . ')'
+                    . '(A;;0x20;;;' . self::WINDOWS_DATA_PLANE_SERVICE_SID . ')',
+            );
+            $actual = GatewayWindowsHostRootAuthority::captureExactPathSddl(
+                $root,
+                true,
+                $identity,
+            );
+            if (!\hash_equals($expected, $actual)) {
+                throw new \RuntimeException(
+                    'Gateway Nginx PID namespace Windows authority differs from its fixed profile.',
+                );
+            }
+            return;
+        }
+        [$controllerAccount, $dataPlaneAccount] = self::posixServiceAccountNames(
+            \PHP_OS_FAMILY,
+        );
+        $controller = \function_exists('posix_getpwnam')
+            ? @\posix_getpwnam($controllerAccount)
+            : false;
+        $controllerGroup = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($controllerAccount)
+            : false;
+        $dataPlane = \function_exists('posix_getpwnam')
+            ? @\posix_getpwnam($dataPlaneAccount)
+            : false;
+        $dataPlaneGroup = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($dataPlaneAccount)
+            : false;
+        if (!\is_array($controller)
+            || !\is_array($controllerGroup)
+            || !self::posixServiceIdentityIsValid(
+                $controller,
+                $controllerGroup,
+                \PHP_OS_FAMILY,
+            )
+            || !\is_array($dataPlane)
+            || !\is_array($dataPlaneGroup)
+            || !self::posixServiceIdentityIsValid(
+                $dataPlane,
+                $dataPlaneGroup,
+                \PHP_OS_FAMILY,
+                'data-plane',
+            )
+            || (int)($status['uid'] ?? -1) !== 0
+            || (int)($status['gid'] ?? -1) !== (int)($dataPlane['gid'] ?? -2)
+            || (((int)($status['mode'] ?? 0)) & 0777) !== 0711
+        ) {
+            throw new \RuntimeException(
+                'Gateway Nginx PID namespace POSIX authority differs from its fixed profile.',
+            );
+        }
+        $this->assertRebootstrapDerivedRootPosixAclFree(
+            $root,
+            (string)$identity['device'],
+            (string)$identity['inode'],
+            0040000,
+            (int)($status['nlink'] ?? 0),
+        );
+    }
+
     /** @return array{sha256:string,sddl_b64:string} */
     public function captureRebootstrapDerivedRootAuthority(
         string $root,
@@ -2492,16 +2703,13 @@ final class GatewayPlatformServiceInstaller
                 'Windows derived-root authority capture is unavailable on this platform.',
             );
         }
-        $contract = $this->rebootstrapDerivedRootWindowsContract($root);
-        $expected = $this->windowsDerivedCanonicalAuthorityContracts([
-            $contract,
-        ])[0];
+        $expected = $this->rebootstrapDerivedRootWindowsExpectedSddl($root);
         $sddl = GatewayWindowsHostRootAuthority::captureExactPathSddl(
             $root,
             true,
             $expectedIdentity,
         );
-        if (!\hash_equals($expected['sddl'], $sddl)) {
+        if (!\hash_equals($expected, $sddl)) {
             throw new \RuntimeException(
                 'Windows derived-root authority differs from its exact canonical profile.',
             );
@@ -2547,10 +2755,7 @@ final class GatewayPlatformServiceInstaller
                 'Windows derived-root authority restore proof is invalid.',
             );
         }
-        $contract = $this->rebootstrapDerivedRootWindowsContract($root);
-        $expected = $this->windowsDerivedCanonicalAuthorityContracts([
-            $contract,
-        ])[0]['sddl'];
+        $expected = $this->rebootstrapDerivedRootWindowsExpectedSddl($root);
         $canonical = GatewayWindowsHostRootAuthority::canonicalizeSddl($sddl);
         if (!\hash_equals($sddl, $canonical)
             || !\hash_equals($expected, $canonical)
@@ -2752,6 +2957,8 @@ final class GatewayPlatformServiceInstaller
                 => [$this->paths->sealedSnapshotsDir()],
             self::DERIVED_AUTHORITY_SNAPSHOT_CANDIDATES_V2
                 => [$this->paths->snapshotCandidatesDir()],
+            self::DERIVED_AUTHORITY_NEUTRAL_TLS
+                => [$this->paths->neutralTlsDir()],
             self::DERIVED_AUTHORITY_RUNTIME => [$this->paths->runtimeDir()],
             self::DERIVED_AUTHORITY_RUNTIME_CHILD => [
                 $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'conf',
@@ -2892,6 +3099,14 @@ final class GatewayPlatformServiceInstaller
                     'S-1-5-18',
                     $dataPlane,
                     $directory ? 'GRGX' : 'GR',
+                    '',
+                ),
+            ],
+            self::DERIVED_AUTHORITY_NEUTRAL_TLS => [
+                $contract(
+                    'S-1-5-18',
+                    $dataPlane,
+                    $directory ? 'GX' : 'R',
                     '',
                 ),
             ],
@@ -3213,9 +3428,7 @@ final class GatewayPlatformServiceInstaller
                 };
             }
             $ffi = $bindings[$platform];
-            $flags = $platform === 'Linux'
-                ? (0x20000 | 0x80000 | ($directory ? 0x10000 : 0))
-                : (0x100 | 0x1000000 | ($directory ? 0x100000 : 0));
+            $flags = self::posixNoFollowAclOpenFlags($directory);
             $fd = (int)$ffi->open($path, $flags);
             if ($fd < 0) {
                 throw new \RuntimeException(
@@ -3388,6 +3601,7 @@ final class GatewayPlatformServiceInstaller
             $this->paths->legacySnapshotsDir(),
             $this->paths->sealedSnapshotsDir(),
             $this->paths->snapshotCandidatesDir(),
+            $this->paths->neutralTlsDir(),
             $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'conf',
             $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'temp',
             $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'shadow',
@@ -3431,6 +3645,8 @@ final class GatewayPlatformServiceInstaller
                 => self::DERIVED_AUTHORITY_SNAPSHOTS_V2,
             $this->paths->snapshotCandidatesDir()
                 => self::DERIVED_AUTHORITY_SNAPSHOT_CANDIDATES_V2,
+            $this->paths->neutralTlsDir()
+                => self::DERIVED_AUTHORITY_NEUTRAL_TLS,
             $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'conf'
                 => self::DERIVED_AUTHORITY_RUNTIME_CHILD,
             $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'temp'
@@ -3562,10 +3778,36 @@ final class GatewayPlatformServiceInstaller
                 => [$controllerUid, [$dataPlaneGid], [0710]],
             self::DERIVED_AUTHORITY_SNAPSHOTS_V2
                 => [0, [$dataPlaneGid], [0710]],
+            self::DERIVED_AUTHORITY_NEUTRAL_TLS
+                => [0, [$dataPlaneGid], [0710]],
             self::DERIVED_AUTHORITY_RUNTIME
                 => [$controllerUid, [$dataPlaneGid], [0750]],
             self::DERIVED_AUTHORITY_RUNTIME_CHILD
-                => [$controllerUid, [$controllerGid, $dataPlaneGid], [0700, 0750]],
+                => match (true) {
+                    \hash_equals(
+                        $this->paths->runtimeDir()
+                            . DIRECTORY_SEPARATOR . 'conf',
+                        $root,
+                    ) => [$controllerUid, [$dataPlaneGid], [0750]],
+                    \hash_equals(
+                        $this->paths->runtimeDir()
+                            . DIRECTORY_SEPARATOR . 'temp',
+                        $root,
+                    ) => [$controllerUid, [$dataPlaneGid], [0770]],
+                    \hash_equals(
+                        $this->paths->runtimeDir()
+                            . DIRECTORY_SEPARATOR . 'shadow',
+                        $root,
+                    ) => [$controllerUid, [$controllerGid], [0700]],
+                    \hash_equals(
+                        $this->paths->runtimeDir()
+                            . DIRECTORY_SEPARATOR . 'run',
+                        $root,
+                    ) => [$controllerUid, [$dataPlaneGid], [0750]],
+                    default => throw new \RuntimeException(
+                        'Gateway runtime child authority path is unsupported.',
+                    ),
+                },
             default => throw new \RuntimeException(
                 'Gateway derived-root POSIX authority profile is unsupported.',
             ),
@@ -3666,9 +3908,7 @@ final class GatewayPlatformServiceInstaller
                 };
             }
             $ffi = $bindings[$platform];
-            $flags = $platform === 'Linux'
-                ? (0x10000 | 0x20000 | 0x80000)
-                : (0x100000 | 0x100 | 0x1000000);
+            $flags = self::posixNoFollowAclOpenFlags(true);
             $fd = (int)$ffi->open($root, $flags);
             if ($fd < 0) {
                 throw new \RuntimeException(
@@ -3823,6 +4063,7 @@ final class GatewayPlatformServiceInstaller
             self::DERIVED_AUTHORITY_HOME,
             self::DERIVED_AUTHORITY_TRUST => 'RX',
             self::DERIVED_AUTHORITY_SNAPSHOTS_V2 => 'GX',
+            self::DERIVED_AUTHORITY_NEUTRAL_TLS => 'GX',
             self::DERIVED_AUTHORITY_SNAPSHOT_CANDIDATES_V2 => 'GA',
             default => 'M',
         };
@@ -3867,6 +4108,25 @@ final class GatewayPlatformServiceInstaller
             'sddl_rights' => self::windowsDerivedAuthoritySddlRights($rights),
             'inheritance' => 'OICI',
         ];
+    }
+
+    private function rebootstrapDerivedRootWindowsExpectedSddl(
+        string $root,
+    ): string {
+        if ($this->rebootstrapDerivedRootAuthorityProfile($root)
+            === self::DERIVED_AUTHORITY_NEUTRAL_TLS
+        ) {
+            return GatewayWindowsHostRootAuthority::canonicalizeSddl(
+                'O:S-1-5-18D:P'
+                    . '(A;;FA;;;S-1-5-18)'
+                    . '(A;;FA;;;S-1-5-32-544)'
+                    . '(A;;0x20;;;' . self::WINDOWS_DATA_PLANE_SERVICE_SID . ')',
+            );
+        }
+        $contract = $this->rebootstrapDerivedRootWindowsContract($root);
+        return $this->windowsDerivedCanonicalAuthorityContracts([
+            $contract,
+        ])[0]['sddl'];
     }
 
     private static function windowsDerivedAuthoritySddlRights(
@@ -4204,40 +4464,38 @@ final class GatewayPlatformServiceInstaller
                 $throwable,
             );
         }
-        if ($requireBoundDefinition) {
-            $legacySystemdLayout = $this->metadataUsesLegacyLinuxSystemdLayout(
-                $decoded,
+        $legacySystemdLayout = $this->metadataUsesLegacyLinuxSystemdLayout(
+            $decoded,
+        );
+        $definitionPath = $legacySystemdLayout
+            ? $this->paths->legacySystemdServiceDefinitionFile()
+            : $this->paths->serviceDefinitionFile();
+        $expectedDefinition = $legacySystemdLayout
+            ? $this->renderLegacyLinuxSystemdDefinition(
+                (string)$decoded['profile'],
+            )
+            : $this->renderDefinition((string)$decoded['profile']);
+        $definition = $this->readStableRegularFile(
+            $definitionPath,
+            1_048_576,
+            'WLS Gateway platform service definition',
+        );
+        if (!\hash_equals(
+            $expectedDefinition,
+            $definition,
+        )) {
+            throw new \RuntimeException(
+                'WLS Gateway platform service definition is not bound to installed metadata.'
             );
-            $definitionPath = $legacySystemdLayout
-                ? $this->paths->legacySystemdServiceDefinitionFile()
-                : $this->paths->serviceDefinitionFile();
-            $expectedDefinition = $legacySystemdLayout
-                ? $this->renderLegacyLinuxSystemdDefinition(
-                    (string)$decoded['profile'],
-                )
-                : $this->renderDefinition((string)$decoded['profile']);
-            $definition = $this->readStableRegularFile(
-                $definitionPath,
-                1_048_576,
-                'WLS Gateway platform service definition',
-            );
-            if (!\hash_equals(
-                $expectedDefinition,
-                $definition,
-            )) {
-                throw new \RuntimeException(
-                    'WLS Gateway platform service definition is not bound to installed metadata.'
+        }
+        if ($requireBoundDefinition && $this->managesLinuxSystemdLayout()) {
+            if ($legacySystemdLayout) {
+                $this->linuxSystemdLayout()->assertExactLegacyDefinition(
+                    $expectedDefinition,
                 );
-            }
-            if ($this->managesLinuxSystemdLayout()) {
-                if ($legacySystemdLayout) {
-                    $this->linuxSystemdLayout()->assertExactLegacyDefinition(
-                        $expectedDefinition,
-                    );
-                } else {
-                    $this->linuxSystemdLayout()
-                        ->assertCurrentDefinitionAndFixedLink($expectedDefinition);
-                }
+            } else {
+                $this->linuxSystemdLayout()
+                    ->assertCurrentDefinitionAndFixedLink($expectedDefinition);
             }
         }
         return [
@@ -4283,12 +4541,27 @@ final class GatewayPlatformServiceInstaller
             return;
         }
         if ($kind === 'systemd-system') {
-            $this->mustRun([
+            $result = $this->runCommand([
                 '/bin/systemctl',
                 'disable',
                 '--now',
                 self::SERVICE_NAME . '.service',
-            ], 'systemd persistent stop');
+            ], true);
+            if ($result['code'] !== 0
+                && \preg_match(
+                    '/(?:unit[^\r\n]*(?:could not be found|not found|does not exist)|not-found)/i',
+                    $result['output'],
+                ) !== 1
+            ) {
+                throw new \RuntimeException(
+                    'systemd persistent stop failed: '
+                        . GatewayBoundedText::singleLine(
+                            $result['output'],
+                            512,
+                            'systemctl disable failed',
+                        )
+                );
+            }
             $this->assertPlatformServiceStopped($kind);
             return;
         }
@@ -4558,6 +4831,9 @@ final class GatewayPlatformServiceInstaller
     {
         if (!$this->paths->isTestMode()) {
             $this->assertAdministrator();
+        }
+        if ($kind === 'systemd-system') {
+            $this->recoverAuthenticatedInitialRollbackRunDirectory();
         }
         $this->withPackageInstallLock(function (?array $recovered) use ($kind): void {
         $pending = $this->platformRemovalPendingFile();
@@ -4900,6 +5176,310 @@ final class GatewayPlatformServiceInstaller
             'completed gateway platform removal fence',
         );
         });
+    }
+
+    /**
+     * systemd removes RuntimeDirectory when the Guardian stops.  A readiness
+     * rollback can therefore re-enter with its durable journal and platform
+     * definition still present but without the fixed run namespace.  This is
+     * deliberately not a generic GatewayPaths exception: only the exact
+     * signed initial rollback may recreate, or resume sealing, a root-owned
+     * empty bootstrap directory.
+     */
+    private function recoverAuthenticatedInitialRollbackRunDirectory(): void
+    {
+        if (!$this->managesLinuxSystemdLayout()) {
+            return;
+        }
+        $journal = (new GatewayInitialBootstrapJournal($this->paths))->load();
+        if ($journal === null
+            || !\hash_equals('ROLLING_BACK', (string)$journal['phase'])
+            || !\hash_equals('systemd-system', (string)$journal['service_kind'])
+        ) {
+            return;
+        }
+        $installed = $this->installedDefinition();
+        if (!\hash_equals('systemd-system', (string)$installed['kind'])
+            || ($installed['test_mode'] ?? true) === true
+            || !\hash_equals(
+                $this->paths->serviceDefinitionFile(),
+                (string)$installed['path'],
+            )
+        ) {
+            throw new \RuntimeException(
+                'Gateway rollback run-directory recovery lacks the current authenticated systemd definition.',
+            );
+        }
+        $this->recoverReplayablePosixRunDirectory('initial rollback');
+    }
+
+    /**
+     * Recreate or seal only an absent/exact root:root 0700 empty run
+     * directory beneath a root-owned non-writable parent.
+     */
+    private function recoverReplayablePosixRunDirectory(string $context): void
+    {
+        $controller = $this->ensurePosixServiceIdentity('controller');
+        $controllerGid = (int)($controller['gid'] ?? -1);
+        if ($controllerGid < 1) {
+            throw new \RuntimeException(
+                'Gateway rollback controller group is unavailable.',
+            );
+        }
+        $configuredRunDir = $this->paths->runDir();
+        if (\is_link($configuredRunDir)) {
+            throw new \RuntimeException(
+                'Gateway ' . $context . ' run-directory path is linked.',
+            );
+        }
+        $parent = \realpath(\dirname($configuredRunDir));
+        $leaf = \basename($configuredRunDir);
+        if (!\is_string($parent)
+            || $parent === ''
+            || $leaf === ''
+            || $leaf === '.'
+            || $leaf === '..'
+            || \str_contains($leaf, "\0")
+        ) {
+            throw new \RuntimeException(
+                'Gateway ' . $context . ' run-directory parent is unavailable.',
+            );
+        }
+        $runDir = \rtrim($parent, '/\\') . DIRECTORY_SEPARATOR . $leaf;
+        $parentStatus = @\lstat($parent);
+        if (!\is_array($parentStatus)
+            || \is_link($parent)
+            || ((((int)($parentStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+            || (int)($parentStatus['uid'] ?? -1) !== 0
+            || (((int)($parentStatus['mode'] ?? 0)) & 0022) !== 0
+        ) {
+            throw new \RuntimeException(
+                'Gateway ' . $context . ' run-directory parent is unsafe.',
+            );
+        }
+        $bootstrapProfile = [0, 0, 0700];
+        $fixedProfile = [0, $controllerGid, 0771];
+        $status = @\lstat($runDir);
+        if (!\is_array($status)) {
+            if (\file_exists($runDir) || \is_link($runDir)
+                || !@\mkdir($runDir, 0700)
+            ) {
+                throw new \RuntimeException(
+                    'Unable to create the authenticated Gateway rollback run directory.',
+                );
+            }
+            $status = @\lstat($runDir);
+        }
+        $actual = \is_array($status) ? [
+            (int)($status['uid'] ?? -1),
+            (int)($status['gid'] ?? -1),
+            ((int)($status['mode'] ?? 0)) & 0777,
+        ] : [];
+        if (!\is_array($status)
+            || \is_link($runDir)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+            || !\in_array($actual, [$bootstrapProfile, $fixedProfile], true)
+        ) {
+            throw new \RuntimeException(
+                'Gateway rollback run-directory authority is not an exact replayable profile.',
+            );
+        }
+        if ($actual === $fixedProfile) {
+            return;
+        }
+        $entries = GatewayBoundedTreeWalker::collect($runDir, true);
+        if (\count($entries) !== 1) {
+            throw new \RuntimeException(
+                'Gateway rollback bootstrap run directory is not empty.',
+            );
+        }
+        $runRecord = $entries[0];
+        $pathBefore = @\lstat($runDir);
+        if (!\is_array($pathBefore)
+            || \is_link($runDir)
+            || (string)($pathBefore['dev'] ?? '') !== $runRecord['device']
+            || (string)($pathBefore['ino'] ?? '') !== $runRecord['inode']
+            || [
+                (int)($pathBefore['uid'] ?? -1),
+                (int)($pathBefore['gid'] ?? -1),
+                ((int)($pathBefore['mode'] ?? 0)) & 0777,
+            ] !== $bootstrapProfile
+        ) {
+            throw new \RuntimeException(
+                'Gateway rollback bootstrap run directory changed before sealing.',
+            );
+        }
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $this->mustRun(
+                ['/bin/chmod', '-RN', $runDir],
+                'macOS stopped Gateway run-directory ACL reset',
+            );
+            $aclFree = @\lstat($runDir);
+            if (!\is_array($aclFree)
+                || \is_link($runDir)
+                || (string)($aclFree['dev'] ?? '') !== $runRecord['device']
+                || (string)($aclFree['ino'] ?? '') !== $runRecord['inode']
+                || [
+                    (int)($aclFree['uid'] ?? -1),
+                    (int)($aclFree['gid'] ?? -1),
+                    ((int)($aclFree['mode'] ?? 0)) & 0777,
+                ] !== $bootstrapProfile
+                || !@\chown($runDir, 0)
+                || !@\chgrp($runDir, $controllerGid)
+                || !@\chmod($runDir, 0771)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway ' . $context . ' macOS run-directory seal failed.',
+                );
+            }
+            GatewayProjectStateFilesystem::syncDirectory($parent);
+            $sealed = @\lstat($runDir);
+            if (!\is_array($sealed)
+                || \is_link($runDir)
+                || (string)($sealed['dev'] ?? '') !== $runRecord['device']
+                || (string)($sealed['ino'] ?? '') !== $runRecord['inode']
+                || [
+                    (int)($sealed['uid'] ?? -1),
+                    (int)($sealed['gid'] ?? -1),
+                    ((int)($sealed['mode'] ?? 0)) & 0777,
+                ] !== $fixedProfile
+            ) {
+                throw new \RuntimeException(
+                    'Gateway ' . $context . ' macOS run-directory seal did not persist.',
+                );
+            }
+            return;
+        }
+        if (\PHP_OS_FAMILY !== 'Linux') {
+            throw new \RuntimeException(
+                'Unsupported Gateway stopped run-directory recovery platform.',
+            );
+        }
+        if (!\class_exists(\FFI::class)) {
+            throw new \RuntimeException(
+                'Gateway ' . $context . ' run-directory recovery requires FFI.',
+            );
+        }
+        static $ffi = null;
+        try {
+            $ffi ??= \FFI::cdef(
+                'int open(const char *path, int flags, ...);'
+                    . ' long fgetxattr(int fd, const char *name, void *value, unsigned long size);'
+                    . ' int fremovexattr(int fd, const char *name);'
+                    . ' int fchown(int fd, unsigned int owner, unsigned int group);'
+                    . ' int fchmod(int fd, unsigned int mode);'
+                    . ' int fsync(int fd); int close(int fd);'
+                    . ' int *__errno_location(void);',
+            );
+            $fd = (int)$ffi->open(
+                $runDir,
+                self::posixNoFollowAclOpenFlags(true),
+            );
+            if ($fd < 0) {
+                throw new \RuntimeException(
+                    'Gateway rollback run-directory cannot be opened no-follow.',
+                );
+            }
+            $closed = false;
+            try {
+                $fdPath = '/proc/self/fd/' . $fd;
+                $descriptor = self::posixAclDescriptorStatus(
+                    $ffi,
+                    $fd,
+                    'Linux',
+                    $fdPath,
+                );
+                if (!\is_array($descriptor)
+                    || (string)($descriptor['dev'] ?? '') !== $runRecord['device']
+                    || (string)($descriptor['ino'] ?? '') !== $runRecord['inode']
+                    || ((((int)($descriptor['mode'] ?? 0)) & 0170000) !== 0040000)
+                    || (int)($descriptor['nlink'] ?? 0) < 1
+                ) {
+                    throw new \RuntimeException(
+                        'Gateway rollback run-directory descriptor identity is inconsistent.',
+                    );
+                }
+                foreach ([
+                    'system.posix_acl_access',
+                    'system.posix_acl_default',
+                ] as $name) {
+                    $ffi->__errno_location()[0] = 0;
+                    $removed = (int)$ffi->fremovexattr($fd, $name);
+                    $error = (int)$ffi->__errno_location()[0];
+                    if ($removed !== 0 && !\in_array($error, [61, 95], true)) {
+                        throw new \RuntimeException(
+                            'Gateway rollback run-directory ACL cannot be cleared.',
+                        );
+                    }
+                    $ffi->__errno_location()[0] = 0;
+                    $present = (int)$ffi->fgetxattr($fd, $name, null, 0);
+                    $error = (int)$ffi->__errno_location()[0];
+                    if ($present >= 0 || !\in_array($error, [61, 95], true)) {
+                        throw new \RuntimeException(
+                            'Gateway rollback run-directory ACL read-back is unsafe.',
+                        );
+                    }
+                }
+                if ((int)$ffi->fchown($fd, 0, $controllerGid) !== 0
+                    || (int)$ffi->fchmod($fd, 0771) !== 0
+                    || (int)$ffi->fsync($fd) !== 0
+                ) {
+                    throw new \RuntimeException(
+                        'Gateway rollback run-directory fixed authority seal failed.',
+                    );
+                }
+                $sealed = self::posixAclDescriptorStatus(
+                    $ffi,
+                    $fd,
+                    'Linux',
+                    $fdPath,
+                );
+                if (!\is_array($sealed)
+                    || (string)($sealed['dev'] ?? '') !== $runRecord['device']
+                    || (string)($sealed['ino'] ?? '') !== $runRecord['inode']
+                    || ((((int)($sealed['mode'] ?? 0)) & 0170000) !== 0040000)
+                    || [
+                        (int)($sealed['uid'] ?? -1),
+                        (int)($sealed['gid'] ?? -1),
+                        ((int)($sealed['mode'] ?? 0)) & 0777,
+                    ] !== $fixedProfile
+                ) {
+                    throw new \RuntimeException(
+                        'Gateway rollback run-directory descriptor seal did not persist.',
+                    );
+                }
+            } finally {
+                $closed = (int)$ffi->close($fd) === 0;
+            }
+            if (!$closed) {
+                throw new \RuntimeException(
+                    'Gateway rollback run-directory descriptor did not close cleanly.',
+                );
+            }
+        } catch (\RuntimeException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException(
+                'Gateway rollback run-directory recovery failed closed.',
+                0,
+                $exception,
+            );
+        }
+        $after = @\lstat($runDir);
+        if (!\is_array($after)
+            || \is_link($runDir)
+            || (string)($after['dev'] ?? '') !== $runRecord['device']
+            || (string)($after['ino'] ?? '') !== $runRecord['inode']
+            || [
+                (int)($after['uid'] ?? -1),
+                (int)($after['gid'] ?? -1),
+                ((int)($after['mode'] ?? 0)) & 0777,
+            ] !== $fixedProfile
+        ) {
+            throw new \RuntimeException(
+                'Gateway rollback run-directory path changed after sealing.',
+            );
+        }
     }
 
     public function renderDefinition(string $profile): string
@@ -5593,6 +6173,8 @@ POWERSHELL;
             GatewayWindowsHostRootAuthority::ensureBootstrapDirectories([
                 $this->paths->sealedSnapshotsDir(),
                 $this->paths->snapshotCandidatesDir(),
+                $this->paths->neutralTlsDir(),
+                $this->paths->nginxPidDir(),
             ], true);
             $serviceIdentity = 'NT SERVICE\\' . self::SERVICE_NAME;
             $readOnlyTrees = [
@@ -5614,14 +6196,16 @@ POWERSHELL;
                 $this->paths->stateDir(),
                 $this->paths->legacySnapshotsDir(),
             ];
-            $snapshotNamespaceTrees = [
+            $fixedNamespaceTrees = [
                 $this->paths->sealedSnapshotsDir(),
                 $this->paths->snapshotCandidatesDir(),
+                $this->paths->neutralTlsDir(),
+                $this->paths->nginxPidDir(),
             ];
             foreach (\array_unique([
                 ...$readOnlyTrees,
                 ...$mutable,
-                ...$snapshotNamespaceTrees,
+                ...$fixedNamespaceTrees,
             ]) as $directory) {
                 if (!\is_dir($directory) || \is_link($directory)) {
                     throw new \RuntimeException(
@@ -5738,6 +6322,12 @@ POWERSHELL;
                 self::WINDOWS_CONTROLLER_SERVICE_SID,
                 'GA',
             );
+            $this->applyWindowsNeutralTlsServingRootAcl(
+                $this->paths->neutralTlsDir(),
+            );
+            $this->applyWindowsNginxPidRootAcl(
+                $this->paths->nginxPidDir(),
+            );
             if (\file_exists($launcherRecoveryStatus)
                 || \is_link($launcherRecoveryStatus)
             ) {
@@ -5757,6 +6347,8 @@ POWERSHELL;
         foreach ([
             $this->paths->sealedSnapshotsDir(),
             $this->paths->snapshotCandidatesDir(),
+            $this->paths->neutralTlsDir(),
+            $this->paths->nginxPidDir(),
         ] as $fixedNamespaceRoot) {
             $status = @\lstat($fixedNamespaceRoot);
             if (!\is_array($status)) {
@@ -5823,6 +6415,12 @@ POWERSHELL;
             // Candidate material remains controller-private until the native
             // broker seals and atomically promotes one exact generation.
             $this->paths->snapshotCandidatesDir() => [$uid, $gid, 0700],
+            // Neutral TLS material remains root-owned. The data plane can
+            // traverse this fixed root but cannot enumerate or mutate it.
+            $this->paths->neutralTlsDir() => [0, $dataPlaneGid, 0710],
+            // The PID root remains broker-owned: both service identities may
+            // search it, but neither gets persistent namespace write access.
+            $this->paths->nginxPidDir() => [0, $dataPlaneGid, 0711],
         ] as $directory => [$owner, $directoryGroup, $mode]) {
             if (!\is_dir($directory)
                 || \is_link($directory)
@@ -5877,6 +6475,25 @@ POWERSHELL;
         GatewayBoundedTreeWalker::collect($root);
     }
 
+    private static function posixNoFollowAclOpenFlags(bool $directory): int
+    {
+        return match (\PHP_OS_FAMILY) {
+            'Linux' => match (\strtolower(\php_uname('m'))) {
+                'x86_64', 'amd64'
+                    => (($directory ? 0x10000 : 0) | 0x20000 | 0x80000),
+                'aarch64', 'arm64'
+                    => (($directory ? 0x4000 : 0) | 0x8000 | 0x80000),
+                default => throw new \RuntimeException(
+                    'Unsupported WLS Gateway POSIX ACL architecture.',
+                ),
+            },
+            'Darwin' => (($directory ? 0x100000 : 0) | 0x100 | 0x1000000),
+            default => throw new \RuntimeException(
+                'Unsupported WLS Gateway POSIX ACL platform.',
+            ),
+        };
+    }
+
     private function removeLinuxPosixDirectoryAcl(string $directory): bool
     {
         if (\PHP_OS_FAMILY !== 'Linux' || !\class_exists(\FFI::class)) {
@@ -5893,7 +6510,7 @@ POWERSHELL;
             );
             $fd = (int)$ffi->open(
                 $directory,
-                0x10000 | 0x20000 | 0x80000,
+                self::posixNoFollowAclOpenFlags(true),
             );
             if ($fd < 0) {
                 return false;
@@ -6007,6 +6624,7 @@ POWERSHELL;
             'guardian-recovery.transaction',
             'ca-bundle.sha256',
             'failed-initial-cleanup.intent',
+            'nginx-pid-residue.intent',
         ];
     }
 
@@ -7782,6 +8400,94 @@ POWERSHELL;
         ) {
             throw new \RuntimeException(
                 'Windows data-plane traversal identity changed during ACL sealing.',
+            );
+        }
+    }
+
+    /**
+     * The broker owns the neutral-TLS serving root. The controller owns only
+     * its private state sources, so it must not receive an ACE here.
+     */
+    private function applyWindowsNeutralTlsServingRootAcl(string $path): void
+    {
+        $status = @\lstat($path);
+        if (!\is_array($status)
+            || \is_link($path)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'Windows neutral TLS serving root is linked or special: ' . $path,
+            );
+        }
+        $before = GatewayBoundedTreeWalker::identity($path);
+        $expected = GatewayWindowsHostRootAuthority::canonicalizeSddl(
+            'O:S-1-5-18D:P'
+                . '(A;;FA;;;S-1-5-18)'
+                . '(A;;FA;;;S-1-5-32-544)'
+                . '(A;;0x20;;;' . self::WINDOWS_DATA_PLANE_SERVICE_SID . ')',
+        );
+        $actual = GatewayWindowsHostRootAuthority::applyExactPathSddl(
+            $path,
+            true,
+            $expected,
+            $before,
+        );
+        if (!\hash_equals($expected, $actual)) {
+            throw new \RuntimeException(
+                'Windows neutral TLS serving-root ACL verification failed.',
+            );
+        }
+        $after = GatewayBoundedTreeWalker::identity($path);
+        if (!\hash_equals((string)$before['device'], (string)$after['device'])
+            || !\hash_equals((string)$before['inode'], (string)$after['inode'])
+        ) {
+            throw new \RuntimeException(
+                'Windows neutral TLS serving-root identity changed during ACL sealing.',
+            );
+        }
+    }
+
+    /**
+     * The PID namespace is a permanent SYSTEM-owned broker boundary. Neither
+     * service receives persistent write authority at its root; the runtime
+     * owner is responsible for its separately bounded leaf protocol.
+     */
+    private function applyWindowsNginxPidRootAcl(string $path): void
+    {
+        $status = @\lstat($path);
+        if (!\is_array($status)
+            || \is_link($path)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'Windows Nginx PID root is linked or special: ' . $path,
+            );
+        }
+        $before = GatewayBoundedTreeWalker::identity($path);
+        $expected = GatewayWindowsHostRootAuthority::canonicalizeSddl(
+            'O:S-1-5-18D:P'
+                . '(A;;FA;;;S-1-5-18)'
+                . '(A;;FA;;;S-1-5-32-544)'
+                . '(A;;0x20;;;' . self::WINDOWS_CONTROLLER_SERVICE_SID . ')'
+                . '(A;;0x20;;;' . self::WINDOWS_DATA_PLANE_SERVICE_SID . ')',
+        );
+        $actual = GatewayWindowsHostRootAuthority::applyExactPathSddl(
+            $path,
+            true,
+            $expected,
+            $before,
+        );
+        if (!\hash_equals($expected, $actual)) {
+            throw new \RuntimeException(
+                'Windows Nginx PID root ACL verification failed.',
+            );
+        }
+        $after = GatewayBoundedTreeWalker::identity($path);
+        if (!\hash_equals((string)$before['device'], (string)$after['device'])
+            || !\hash_equals((string)$before['inode'], (string)$after['inode'])
+        ) {
+            throw new \RuntimeException(
+                'Windows Nginx PID root identity changed during ACL sealing.',
             );
         }
     }

@@ -30,4 +30,30 @@ final class ControllerAttributesTest extends TestCase
         self::assertSame(0, $normalized[Acl::schema_fields_IS_BACKEND]);
         self::assertSame(0, $normalized[Acl::schema_fields_API_EXPOSABLE]);
     }
+
+    public function testInferParentSourceStripsTheLastUnderscoreSegment(): void
+    {
+        $observer = new ControllerAttributes($this->createMock(Acl::class));
+        $method = new ReflectionMethod($observer, 'inferParentSource');
+        $method->setAccessible(true);
+
+        self::assertSame(
+            'Demo_Module::ai_site_agent',
+            $method->invoke($observer, 'Demo_Module::ai_site_agent_index')
+        );
+        self::assertSame(
+            'Demo_Module::ai_site_agent_domain_purchase',
+            $method->invoke($observer, 'Demo_Module::ai_site_agent_domain_purchase_stream')
+        );
+        self::assertSame(
+            'Demo_Module::seo_management',
+            $method->invoke($observer, 'Demo_Module::seo_management_index')
+        );
+        self::assertSame(
+            'Demo_Module::page_builder_edit',
+            $method->invoke($observer, 'Demo_Module::page_builder_edit_post')
+        );
+        self::assertSame('', $method->invoke($observer, 'Demo_Module::ai_market'));
+        self::assertSame('', $method->invoke($observer, 'Demo_Module::config'));
+    }
 }

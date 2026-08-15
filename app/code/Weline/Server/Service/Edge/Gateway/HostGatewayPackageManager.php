@@ -37,6 +37,7 @@ final class HostGatewayPackageManager
     private const MAX_ATOMIC_RECOVERY_TEMPORARIES_PER_TARGET = 8;
     private const MAX_STABLE_LAUNCHER_CANDIDATES = 8;
     private const MAX_ATOMIC_RECOVERY_DIRECTORY_ENTRIES = 16_384;
+    private const LAUNCHER_RECOVERY_LEDGER_MAX_BYTES = 4096;
     private const UPGRADE_TOTAL_TIMEOUT_MILLISECONDS = 900_000;
     private const REBOOTSTRAP_JOURNAL_SCHEMA = 4;
     private const REBOOTSTRAP_JOURNAL_MAX_BYTES = 131_072;
@@ -382,6 +383,930 @@ final class HostGatewayPackageManager
         );
     }
 
+    /**
+     * Serialize a journaled terminal bootstrap recovery without recreating
+     * directories whose verified absence is itself the recovery after-image.
+     * The caller must already have loaded a valid bootstrap journal.
+     *
+     * @template T
+     * @param \Closure():T $callback
+     * @return T
+     */
+    public function withExistingInitialBootstrapLock(
+        \Closure $callback,
+        ?float $deadlineMonotonic = null,
+    ): mixed {
+        return $this->withOperationDeadline(
+            $deadlineMonotonic,
+            fn (): mixed => $this->withHostPackageLock(
+                'package-bootstrap.lock',
+                'initial bootstrap terminal recovery',
+                $callback,
+                self::PACKAGE_OPERATION_TIMEOUT_SECONDS,
+                false,
+            ),
+        );
+    }
+
+    public function prepareInitialBootstrapHostId(
+        ?float $deadlineMonotonic = null,
+    ): string {
+        return $this->withOperationDeadline(
+            $deadlineMonotonic,
+            function (): string {
+                return $this->withStagingLocks(['A', 'B'], function (): string {
+                    return $this->withInstallLock(
+                        fn (): string => $this->ensureHostIdLocked(),
+                    );
+                });
+            },
+        );
+    }
+
+    /**
+     * Retire only the non-runtime scaffolding left when first-stage failure
+     * committed no slot facts. The caller must hold package-bootstrap.lock
+     * and have separately proven every semantic gateway artifact absent.
+     */
+    public function retireEmptyInitialBootstrapScaffolding(
+        string $expectedHostId,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        if ($this->emptyInitialBootstrapScaffoldingIsFullyRetired()) {
+            return;
+        }
+        $this->withOperationDeadline(
+            $deadlineMonotonic,
+            function () use ($expectedHostId): void {
+                $this->withStagingLocks(['A', 'B'], function () use ($expectedHostId): void {
+                    $this->withInstallLock(function () use ($expectedHostId): void {
+                        $this->assertNoRebootstrapTransactionLocked(
+                            'Empty Gateway bootstrap rollback cleanup',
+                        );
+                        if ($this->activeSlotOrEmpty() !== '') {
+                            throw new \RuntimeException(
+                                'Empty Gateway bootstrap rollback has an active runtime slot.',
+                            );
+                        }
+                        foreach ([
+                            $this->paths->previousSlotFile(),
+                            $this->paths->launcherFile(),
+                            $this->paths->caBundleBaselineFile(),
+                            $this->paths->trustDir() . DIRECTORY_SEPARATOR
+                                . 'stable-launcher.sha256',
+                            $this->paths->guardianGenerationHeadFile(0),
+                            $this->paths->guardianGenerationHeadFile(1),
+                            $this->paths->guardianTransitionRequestFile(),
+                            $this->paths->guardianTransitionAcknowledgementFile(),
+                            $this->paths->guardianTransitionRetirementFile(),
+                            $this->paths->guardianRecoveryTransactionFile(),
+                            $this->paths->nginxPidResidueIntentFile(),
+                            $this->failedInitialCleanupIntentFile(),
+                            $this->paths->slotDir('A'),
+                            $this->paths->slotDir('B'),
+                        ] as $path) {
+                            if (\file_exists($path) || \is_link($path)) {
+                                throw new \RuntimeException(
+                                    'Empty Gateway bootstrap rollback has residual runtime state.',
+                                );
+                            }
+                        }
+                        $directories = $this->emptyInitialBootstrapScaffoldingDirectories();
+                        if (!$this->assertEmptyInitialBootstrapScaffoldingHostId(
+                            $expectedHostId,
+                        )) {
+                            $residualPaths = $this
+                                ->emptyInitialBootstrapRecoveryArtifactPaths();
+                            foreach ($directories as [$path]) {
+                                $residualPaths[] = $path;
+                            }
+                            foreach ($residualPaths as $path) {
+                                if (\file_exists($path) || \is_link($path)) {
+                                    throw new \RuntimeException(
+                                        'REPAIR_REQUIRED: a controlled Gateway bootstrap scaffold remains after its host identity was retired.',
+                                    );
+                                }
+                            }
+                            return;
+                        }
+                        $preflightedDirectories = [];
+                        foreach ($directories as [
+                            $path,
+                            $authority,
+                            $label,
+                        ]) {
+                            $this->assertEmptyInitialBootstrapScaffoldingDirectoryRetirable(
+                                $path,
+                                $authority,
+                                $label,
+                                $preflightedDirectories,
+                            );
+                            $preflightedDirectories[] = $path;
+                        }
+                        $this->retireEmptyInitialBootstrapRecoveryArtifacts();
+                        foreach ($directories as [
+                            $path,
+                            $authority,
+                            $label,
+                        ]) {
+                            $this->retireEmptyInitialBootstrapScaffoldingDirectory(
+                                $path,
+                                $authority,
+                                $label,
+                            );
+                        }
+                        $this->retireEmptyInitialBootstrapScaffoldingFile(
+                            $this->paths->hostIdFile(),
+                            'Gateway empty bootstrap host identity',
+                        );
+                        GatewayInitialBootstrapCrashSimulation::hit(
+                            'empty-rollback-after-host-id-retired',
+                            $this->paths,
+                        );
+                    });
+                });
+            },
+        );
+    }
+
+    private function emptyInitialBootstrapScaffoldingIsFullyRetired(): bool
+    {
+        if (\file_exists($this->paths->hostIdFile()) || \is_link($this->paths->hostIdFile())
+            || \file_exists($this->paths->nginxPidResidueIntentFile())
+            || \is_link($this->paths->nginxPidResidueIntentFile())) {
+            return false;
+        }
+        foreach ($this->emptyInitialBootstrapRecoveryArtifactPaths() as $path) {
+            if (\file_exists($path) || \is_link($path)) {
+                return false;
+            }
+        }
+        foreach ($this->emptyInitialBootstrapScaffoldingDirectories() as [$path]) {
+            if (\file_exists($path) || \is_link($path)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** @return list<string> */
+    private function emptyInitialBootstrapRecoveryArtifactPaths(): array
+    {
+        return [
+            $this->paths->guardianFile(),
+            $this->paths->guardianDigestFile(),
+            $this->paths->adminTokenFile(),
+            $this->paths->launcherRecoveryLedgerFile(),
+            $this->paths->guardianGenerationHeadLockFile(),
+        ];
+    }
+
+    /**
+     * Retire only the exact recovery artifacts published by the failed first
+     * activation. Stable launcher, CA, slot and platform facts are rejected by
+     * the caller and never enter this bounded cleanup path.
+     */
+    private function retireEmptyInitialBootstrapRecoveryArtifacts(): void
+    {
+        $authority = $this->emptyInitialBootstrapScaffoldingAuthority();
+        $guardianPath = $this->paths->guardianFile();
+        $digestPath = $this->paths->guardianDigestFile();
+        $guardian = $this->inspectEmptyInitialBootstrapGuardian(
+            $guardianPath,
+            $authority['guardian'],
+        );
+        $digest = $this->inspectEmptyInitialBootstrapRecoveryFile(
+            $digestPath,
+            65,
+            $authority['guardian-digest'],
+            'Gateway empty bootstrap Guardian identity',
+        );
+        if ($guardian !== null && $digest === null) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap Guardian lacks its trusted identity.',
+            );
+        }
+        if ($digest !== null) {
+            if (\preg_match('/\A[a-f0-9]{64}\n\z/D', $digest['bytes']) !== 1) {
+                throw new \RuntimeException(
+                    'REPAIR_REQUIRED: the empty Gateway bootstrap Guardian identity is malformed.',
+                );
+            }
+            if ($guardian !== null
+                && !\hash_equals(\trim($digest['bytes']), $guardian['sha256'])
+            ) {
+                throw new \RuntimeException(
+                    'REPAIR_REQUIRED: the empty Gateway bootstrap Guardian identity does not match its immutable binary.',
+                );
+            }
+        }
+        $adminToken = $this->inspectEmptyInitialBootstrapRecoveryFile(
+            $this->paths->adminTokenFile(),
+            65,
+            $authority['admin-token'],
+            'Gateway empty bootstrap administrator credential',
+        );
+        if ($adminToken !== null) {
+            if (\preg_match('/\A[a-f0-9]{64}\n\z/D', $adminToken['bytes']) !== 1) {
+                throw new \RuntimeException(
+                    'REPAIR_REQUIRED: the empty Gateway bootstrap administrator credential is malformed.',
+                );
+            }
+        }
+
+        $ledger = $this->inspectEmptyInitialBootstrapRecoveryFile(
+            $this->paths->launcherRecoveryLedgerFile(),
+            self::LAUNCHER_RECOVERY_LEDGER_MAX_BYTES,
+            $authority['launcher-recovery-ledger'],
+            'Gateway empty bootstrap Launcher recovery ledger',
+        );
+        if ($ledger !== null) {
+            $this->assertEmptyInitialBootstrapLauncherRecoveryLedger(
+                $ledger['bytes'],
+            );
+        }
+
+        $headLock = $this->inspectEmptyInitialBootstrapRecoveryFile(
+            $this->paths->guardianGenerationHeadLockFile(),
+            1,
+            $authority['guardian-head-lock'],
+            'Gateway empty bootstrap Guardian generation-head lock',
+        );
+        if ($headLock !== null) {
+            if ($headLock['bytes'] !== '') {
+                throw new \RuntimeException(
+                    'REPAIR_REQUIRED: the empty Gateway bootstrap Guardian generation-head lock is not empty.',
+                );
+            }
+        }
+
+        // All artifacts have now passed one complete bounded preflight.  From
+        // this point every missing earlier leaf is an idempotent cleanup
+        // after-image, while every later leaf remains independently bound to
+        // its exact inode and content contract.
+        if ($guardian !== null) {
+            $this->removeEmptyInitialBootstrapRecoveryFile(
+                $guardianPath,
+                $guardian['identity'],
+                'Gateway empty bootstrap Guardian',
+            );
+            GatewayInitialBootstrapCrashSimulation::hit(
+                'empty-rollback-after-guardian-retired',
+                $this->paths,
+            );
+        }
+        if ($digest !== null) {
+            $this->removeEmptyInitialBootstrapRecoveryFile(
+                $digestPath,
+                $digest['identity'],
+                'Gateway empty bootstrap Guardian identity',
+            );
+        }
+        if ($adminToken !== null) {
+            $this->removeEmptyInitialBootstrapRecoveryFile(
+                $this->paths->adminTokenFile(),
+                $adminToken['identity'],
+                'Gateway empty bootstrap administrator credential',
+            );
+        }
+        if ($ledger !== null) {
+            $this->removeEmptyInitialBootstrapRecoveryFile(
+                $this->paths->launcherRecoveryLedgerFile(),
+                $ledger['identity'],
+                'Gateway empty bootstrap Launcher recovery ledger',
+            );
+        }
+        if ($headLock !== null) {
+            $this->removeEmptyInitialBootstrapRecoveryFile(
+                $this->paths->guardianGenerationHeadLockFile(),
+                $headLock['identity'],
+                'Gateway empty bootstrap Guardian generation-head lock',
+            );
+        }
+    }
+
+    /**
+     * @param array{0:int,1:int,2:int} $authority
+     * @return array{identity:array<string|int,mixed>,sha256:string}|null
+     */
+    private function inspectEmptyInitialBootstrapGuardian(
+        string $path,
+        array $authority,
+    ): ?array {
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException(
+                    'REPAIR_REQUIRED: the empty Gateway bootstrap Guardian path is indeterminate.',
+                );
+            }
+            return null;
+        }
+        if (\is_link($path)
+            || !$this->isRegularFileStatus($status)
+            || (int)($status['nlink'] ?? 0) !== 1
+            || (int)($status['size'] ?? 0) < 1
+            || (int)($status['size'] ?? -1) > self::MAX_PACKAGE_BYTES
+        ) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap Guardian is unsafe.',
+            );
+        }
+        $this->assertEmptyInitialBootstrapRecoveryFileAuthority(
+            $path,
+            $status,
+            $authority,
+            'Gateway empty bootstrap Guardian',
+        );
+        $digest = $this->digestStableRegularFile(
+            $path,
+            self::MAX_PACKAGE_BYTES,
+            'Gateway empty bootstrap Guardian',
+        );
+        $identity = GatewayBoundedTreeWalker::identity($path);
+        $verified = GatewayBoundedTreeWalker::revalidate($identity);
+        if (!$this->sameFileState($status, $verified)) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap Guardian changed during verification.',
+            );
+        }
+        $this->assertEmptyInitialBootstrapRecoveryFileAuthority(
+            $path,
+            $verified,
+            $authority,
+            'Gateway empty bootstrap Guardian',
+        );
+        return ['identity' => $verified, 'sha256' => $digest['sha256']];
+    }
+
+    /**
+     * @param array{0:int,1:int,2:int} $authority
+     * @return array{identity:array<string|int,mixed>,bytes:string}|null
+     */
+    private function inspectEmptyInitialBootstrapRecoveryFile(
+        string $path,
+        int $maximumBytes,
+        array $authority,
+        string $label,
+    ): ?array {
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException(
+                    'REPAIR_REQUIRED: ' . $label . ' path is indeterminate.',
+                );
+            }
+            return null;
+        }
+        if (\is_link($path)
+            || !$this->isRegularFileStatus($status)
+            || (int)($status['nlink'] ?? 0) !== 1
+            || (int)($status['size'] ?? -1) < 0
+            || (int)($status['size'] ?? -1) > $maximumBytes
+        ) {
+            throw new \RuntimeException('REPAIR_REQUIRED: ' . $label . ' is unsafe.');
+        }
+        $this->assertEmptyInitialBootstrapRecoveryFileAuthority(
+            $path,
+            $status,
+            $authority,
+            $label,
+        );
+        $identity = GatewayBoundedTreeWalker::identity($path);
+        $bytes = $this->readStableRegularFile($path, $maximumBytes, $label);
+        $verified = GatewayBoundedTreeWalker::revalidate($identity);
+        if (!$this->sameFileState($status, $verified)) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: ' . $label . ' changed during verification.',
+            );
+        }
+        $this->assertEmptyInitialBootstrapRecoveryFileAuthority(
+            $path,
+            $verified,
+            $authority,
+            $label,
+        );
+        return ['identity' => $verified, 'bytes' => $bytes];
+    }
+
+    /** @param array{0:int,1:int,2:int} $authority */
+    private function assertEmptyInitialBootstrapRecoveryFileAuthority(
+        string $path,
+        array $status,
+        array $authority,
+        string $label,
+    ): void {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->assertWindowsEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                false,
+                $status,
+                $label,
+            );
+            return;
+        }
+        $this->assertEmptyInitialBootstrapScaffoldingAuthority(
+            $path,
+            $status,
+            $authority,
+            $label,
+        );
+    }
+
+    /** @param array<string|int,mixed> $identity */
+    private function removeEmptyInitialBootstrapRecoveryFile(
+        string $path,
+        array $identity,
+        string $label,
+    ): void {
+        if (!GatewayProjectStateFilesystem::removeRegular(
+            $path,
+            $label,
+            $identity,
+        )) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: ' . $label . ' could not be retired.',
+            );
+        }
+    }
+
+    private function assertEmptyInitialBootstrapLauncherRecoveryLedger(
+        string $contents,
+    ): void {
+        $numeric = '[0-9]{1,20}';
+        $pattern = '/\AWLS-LAUNCHER-RECOVERY\/1\n'
+            . 'host_boot_id=[a-f0-9]{64}\n'
+            . 'launcher_generation=[a-f0-9]{64}\n'
+            . 'launcher_identity=[a-f0-9]{64}\n'
+            . 'runtime_generation=[a-f0-9]{64}\n'
+            . 'active_slot=[AB]\n'
+            . 'phase=(?:IDLE|BACKOFF|ATTEMPTING|OBSERVING)\n'
+            . 'reason=(?:NONE|IDENTITY_REBOUND|BOOT_REANCHORED|LEDGER_INVALID|INCOMPLETE_ATTEMPT|STARTING|HEALTH_OBSERVATION|BROKER_EXIT|SPAWN_FAILED|SUPERVISION_FAILED|CONTROLLED_STOP)\n'
+            . 'attempt_id=[a-f0-9]{32}\n'
+            . 'failure_count=(?:[0-9]|10)\n'
+            . 'maintenance_attempt=[0-9]{1,10}\n';
+        for ($index = 1; $index <= 10; ++$index) {
+            $pattern .= \sprintf(
+                'failure_%02d_monotonic_ms=%s\\n',
+                $index,
+                $numeric,
+            );
+        }
+        $pattern .= 'next_retry_monotonic_ms=' . $numeric . '\n'
+            . 'next_retry_wall=' . $numeric . '\n'
+            . 'updated_monotonic_ms=' . $numeric . '\n'
+            . 'updated_wall=' . $numeric . '\n\z/D';
+        if (\preg_match($pattern, $contents) !== 1) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap Launcher recovery ledger is malformed.',
+            );
+        }
+    }
+
+    private function retireEmptyInitialBootstrapScaffoldingFile(
+        string $path,
+        string $label,
+    ): void {
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException($label . ' path is indeterminate.');
+            }
+            return;
+        }
+        if (\is_link($path)
+            || !$this->isRegularFileStatus($status)
+            || (int)($status['nlink'] ?? 0) !== 1
+            || (int)($status['size'] ?? -1) !== 33
+        ) {
+            throw new \RuntimeException($label . ' is unsafe.');
+        }
+        $identity = GatewayBoundedTreeWalker::identity($path);
+        $contents = $this->readStableRegularFile(
+            $path,
+            33,
+            $label,
+        );
+        if (\preg_match('/\\A[a-f0-9]{32}\\n\\z/D', $contents) !== 1) {
+            throw new \RuntimeException($label . ' contents are unsafe.');
+        }
+        $verified = GatewayBoundedTreeWalker::revalidate($identity);
+        if (!$this->sameFileState($status, $verified)) {
+            throw new \RuntimeException($label . ' changed before retirement.');
+        }
+        if (!GatewayProjectStateFilesystem::removeRegular(
+            $path,
+            $label,
+            $verified,
+        )) {
+            throw new \RuntimeException($label . ' could not be retired.');
+        }
+    }
+
+    private function assertEmptyInitialBootstrapScaffoldingHostId(
+        string $expectedHostId,
+    ): bool
+    {
+        $expectedHostId = \strtolower(\trim($expectedHostId));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $expectedHostId) !== 1) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap journal host identity is invalid.',
+            );
+        }
+        $path = $this->paths->hostIdFile();
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (!\file_exists($path) && !\is_link($path)) {
+                return false;
+            }
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap host identity is indeterminate.',
+            );
+        }
+        if (\is_link($path)
+            || !$this->isRegularFileStatus($status)
+            || (int)($status['nlink'] ?? 0) !== 1
+            || (int)($status['size'] ?? -1) !== 33
+        ) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap host identity is missing or unsafe.',
+            );
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->assertWindowsEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                false,
+                $status,
+                'Gateway empty bootstrap host identity',
+            );
+        } else {
+            $authority = $this->emptyInitialBootstrapScaffoldingAuthority();
+            $this->assertEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                $status,
+                $authority['host-id'],
+                'Gateway empty bootstrap host identity',
+            );
+        }
+        $contents = $this->readStableRegularFile(
+            $path,
+            33,
+            'Gateway empty bootstrap host identity',
+        );
+        if (\preg_match('/\\A[a-f0-9]{32}\\n\\z/D', $contents) !== 1) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap host identity contents are unsafe.',
+            );
+        }
+        if (!\hash_equals($expectedHostId, \strtolower(\trim($contents)))) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: the empty Gateway bootstrap host identity does not match its journal.',
+            );
+        }
+        return true;
+    }
+
+    /**
+     * @return list<array{0:string,1:array{0:int,1:int,2:int},2:string}>
+     */
+    private function emptyInitialBootstrapScaffoldingDirectories(): array
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $windowsAuthority = [0, 0, 0];
+            return [
+                [$this->paths->logDir(), $windowsAuthority, 'Gateway empty bootstrap log directory'],
+                [$this->paths->runDir(), $windowsAuthority, 'Gateway empty bootstrap run directory'],
+                [$this->paths->runtimeDir(), $windowsAuthority, 'Gateway empty bootstrap runtime directory'],
+                [$this->paths->stateDir(), $windowsAuthority, 'Gateway empty bootstrap state directory'],
+                [$this->paths->legacySnapshotsDir(), $windowsAuthority, 'Gateway empty bootstrap legacy snapshots directory'],
+                [$this->paths->sealedSnapshotsDir(), $windowsAuthority, 'Gateway empty bootstrap sealed snapshots directory'],
+                [$this->paths->snapshotCandidatesDir(), $windowsAuthority, 'Gateway empty bootstrap snapshot candidates directory'],
+                [$this->paths->neutralTlsDir(), $windowsAuthority, 'Gateway empty bootstrap neutral TLS directory'],
+                [$this->paths->nginxPidDir(), $windowsAuthority, 'Gateway empty bootstrap Nginx PID directory'],
+            ];
+        }
+        $authority = $this->emptyInitialBootstrapScaffoldingAuthority();
+        return [
+            [$this->paths->logDir(), $authority['log'], 'Gateway empty bootstrap log directory'],
+            [$this->paths->runDir(), $authority['run'], 'Gateway empty bootstrap run directory'],
+            [$this->paths->runtimeDir(), $authority['runtime'], 'Gateway empty bootstrap runtime directory'],
+            [$this->paths->stateDir(), $authority['state'], 'Gateway empty bootstrap state directory'],
+            [$this->paths->legacySnapshotsDir(), $authority['legacy-snapshots'], 'Gateway empty bootstrap legacy snapshots directory'],
+            [$this->paths->sealedSnapshotsDir(), $authority['sealed-snapshots'], 'Gateway empty bootstrap sealed snapshots directory'],
+            [$this->paths->snapshotCandidatesDir(), $authority['snapshot-candidates'], 'Gateway empty bootstrap snapshot candidates directory'],
+            [$this->paths->neutralTlsDir(), $authority['neutral-tls'], 'Gateway empty bootstrap neutral TLS directory'],
+            [$this->paths->nginxPidDir(), $authority['nginx-pid'], 'Gateway empty bootstrap Nginx PID directory'],
+        ];
+    }
+
+    /**
+     * @return array<string,array{0:int,1:int,2:int}>
+     */
+    private function emptyInitialBootstrapScaffoldingAuthority(): array
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $native = [0, 0, 0];
+            return [
+                'host-id' => $native,
+                'guardian' => $native,
+                'guardian-digest' => $native,
+                'admin-token' => $native,
+                'launcher-recovery-ledger' => $native,
+                'guardian-head-lock' => $native,
+                'runtime' => $native,
+                'run' => $native,
+                'log' => $native,
+                'state' => $native,
+                'legacy-snapshots' => $native,
+                'sealed-snapshots' => $native,
+                'snapshot-candidates' => $native,
+                'neutral-tls' => $native,
+                'nginx-pid' => $native,
+            ];
+        }
+        if ($this->paths->isTestMode()) {
+            $uid = \function_exists('posix_geteuid') ? \posix_geteuid() : 0;
+            $gid = \function_exists('posix_getegid') ? \posix_getegid() : 0;
+            $private = [$uid, $gid, 0700];
+            return [
+                'host-id' => [$uid, $gid, 0600],
+                'guardian' => [$uid, $gid, 0755],
+                'guardian-digest' => [$uid, $gid, 0600],
+                'admin-token' => [$uid, $gid, 0600],
+                'launcher-recovery-ledger' => [$uid, $gid, 0600],
+                'guardian-head-lock' => [$uid, $gid, 0600],
+                'runtime' => $private,
+                'run' => $private,
+                'log' => $private,
+                'state' => $private,
+                'legacy-snapshots' => $private,
+                'sealed-snapshots' => $private,
+                'snapshot-candidates' => $private,
+                'neutral-tls' => $private,
+                'nginx-pid' => $private,
+            ];
+        }
+        $controllerName = PHP_OS_FAMILY === 'Darwin'
+            ? '_welinegateway'
+            : 'weline-gateway';
+        $dataPlaneName = PHP_OS_FAMILY === 'Darwin'
+            ? '_welinegateway_nginx'
+            : 'weline-gateway-nginx';
+        $controller = \function_exists('posix_getpwnam')
+            ? @\posix_getpwnam($controllerName)
+            : false;
+        $controllerGroup = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($controllerName)
+            : false;
+        $dataPlane = \function_exists('posix_getpwnam')
+            ? @\posix_getpwnam($dataPlaneName)
+            : false;
+        $dataPlaneGroup = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($dataPlaneName)
+            : false;
+        if (!\is_array($controller)
+            || !\is_array($controllerGroup)
+            || !\is_array($dataPlane)
+            || !\is_array($dataPlaneGroup)
+            || (int)($controller['gid'] ?? -1) !== (int)($controllerGroup['gid'] ?? -2)
+            || (int)($dataPlane['gid'] ?? -1) !== (int)($dataPlaneGroup['gid'] ?? -2)
+        ) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: Gateway service identities cannot prove empty bootstrap scaffolding ownership.',
+            );
+        }
+        $controllerUid = (int)$controller['uid'];
+        $controllerGid = (int)$controller['gid'];
+        $dataPlaneGid = (int)$dataPlane['gid'];
+        return [
+            'host-id' => [0, $controllerGid, 0440],
+            'guardian' => [0, 0, 0550],
+            'guardian-digest' => [0, $controllerGid, 0600],
+            'admin-token' => [0, $controllerGid, 0440],
+            'launcher-recovery-ledger' => [0, $controllerGid, 0600],
+            'guardian-head-lock' => [0, 0, 0600],
+            'runtime' => [$controllerUid, $dataPlaneGid, 0750],
+            'run' => [0, $controllerGid, 0771],
+            'log' => [$controllerUid, $dataPlaneGid, 0770],
+            'state' => [$controllerUid, $controllerGid, 0700],
+            'legacy-snapshots' => [$controllerUid, $dataPlaneGid, 0710],
+            'sealed-snapshots' => [0, $dataPlaneGid, 0710],
+            'snapshot-candidates' => [$controllerUid, $controllerGid, 0700],
+            'neutral-tls' => [0, $dataPlaneGid, 0710],
+            'nginx-pid' => [0, $dataPlaneGid, 0711],
+        ];
+    }
+
+    /**
+     * @param array{0:int,1:int,2:int} $authority
+     */
+    private function retireEmptyInitialBootstrapScaffoldingDirectory(
+        string $path,
+        array $authority,
+        string $label,
+    ): void {
+        $this->assertEmptyInitialBootstrapScaffoldingDirectoryRetirable(
+            $path,
+            $authority,
+            $label,
+        );
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException('REPAIR_REQUIRED: ' . $label . ' is indeterminate.');
+            }
+            return;
+        }
+        if (\is_link($path) || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)) {
+            throw new \RuntimeException('REPAIR_REQUIRED: ' . $label . ' is unsafe.');
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->assertWindowsEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                true,
+                $status,
+                $label,
+            );
+        } else {
+            $this->assertEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                $status,
+                $authority,
+                $label,
+            );
+        }
+        $records = GatewayBoundedTreeWalker::collect($path, true, false, 8, 1);
+        if (\count($records) !== 1) {
+            throw new \RuntimeException('REPAIR_REQUIRED: ' . $label . ' is not empty.');
+        }
+        GatewayBoundedTreeWalker::revalidate($records[0]);
+        $verified = @\lstat($path);
+        if (!\is_array($verified)) {
+            throw new \RuntimeException('REPAIR_REQUIRED: ' . $label . ' disappeared during retirement.');
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->assertWindowsEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                true,
+                $verified,
+                $label,
+            );
+        } else {
+            $this->assertEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                $verified,
+                $authority,
+                $label,
+            );
+        }
+        if (!@\rmdir($path)) {
+            throw new \RuntimeException('REPAIR_REQUIRED: ' . $label . ' changed before retirement.');
+        }
+        $this->syncParentDirectory(\dirname($path), $label . ' retirement');
+    }
+
+    /**
+     * @param array{0:int,1:int,2:int} $authority
+     * @param list<string> $retirableDescendants
+     */
+    private function assertEmptyInitialBootstrapScaffoldingDirectoryRetirable(
+        string $path,
+        array $authority,
+        string $label,
+        array $retirableDescendants = [],
+    ): void {
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException(
+                    'REPAIR_REQUIRED: ' . $label . ' is indeterminate.',
+                );
+            }
+            return;
+        }
+        if (\is_link($path)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: ' . $label . ' is unsafe.',
+            );
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->assertWindowsEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                true,
+                $status,
+                $label,
+            );
+        } else {
+            $this->assertEmptyInitialBootstrapScaffoldingAuthority(
+                $path,
+                $status,
+                $authority,
+                $label,
+            );
+        }
+        $records = GatewayBoundedTreeWalker::collect($path, true, false, 16, 2);
+        $normalize = static function (string $candidate): string {
+            $normalized = \rtrim(\str_replace('\\', '/', $candidate), '/');
+            return \PHP_OS_FAMILY === 'Windows'
+                ? \strtolower($normalized)
+                : $normalized;
+        };
+        $normalizedRoot = $normalize($path);
+        $allowed = [];
+        foreach ($retirableDescendants as $descendant) {
+            $normalizedDescendant = $normalize($descendant);
+            if (!\hash_equals($normalizedRoot, $normalizedDescendant)
+                && \str_starts_with(
+                    $normalizedDescendant . '/',
+                    $normalizedRoot . '/',
+                )
+            ) {
+                $allowed[$normalizedDescendant] = true;
+            }
+        }
+        foreach ($records as $index => $record) {
+            if ($index === 0) {
+                continue;
+            }
+            $recordPath = (string)($record['path'] ?? '');
+            if (($record['directory'] ?? false) !== true
+                || !isset($allowed[$normalize($recordPath)])
+            ) {
+                throw new \RuntimeException(
+                    'REPAIR_REQUIRED: ' . $label . ' is not empty.',
+                );
+            }
+        }
+        foreach ($records as $record) {
+            GatewayBoundedTreeWalker::revalidate($record);
+        }
+        $verified = @\lstat($path);
+        if (!\is_array($verified)) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: ' . $label . ' disappeared during preflight.',
+            );
+        }
+        if (!$this->sameFileState($status, $verified)) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: ' . $label . ' changed during preflight.',
+            );
+        }
+    }
+
+    /**
+     * @param array<string|int,mixed> $status
+     */
+    private function assertWindowsEmptyInitialBootstrapScaffoldingAuthority(
+        string $path,
+        bool $directory,
+        array $status,
+        string $label,
+    ): void {
+        try {
+            $identity = GatewayBoundedTreeWalker::identity($path);
+            GatewayWindowsHostRootAuthority::assertInitialBootstrapScaffoldingAuthority(
+                $path,
+                $directory,
+                $identity,
+            );
+            $verified = GatewayBoundedTreeWalker::revalidate($identity);
+            if (!$this->sameFileState($status, $verified)) {
+                throw new \RuntimeException(
+                    'Windows bootstrap scaffold identity changed during authority verification.',
+                );
+            }
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: ' . $label
+                    . ' has unexpected Windows authority: ' . $path,
+                0,
+                $exception,
+            );
+        }
+    }
+
+    /**
+     * @param array<string|int,mixed> $status
+     * @param array{0:int,1:int,2:int} $authority
+     */
+    private function assertEmptyInitialBootstrapScaffoldingAuthority(
+        string $path,
+        array $status,
+        array $authority,
+        string $label,
+    ): void {
+        if ((int)($status['uid'] ?? -1) !== $authority[0]
+            || (int)($status['gid'] ?? -1) !== $authority[1]
+            || (((int)($status['mode'] ?? 0)) & 0777) !== $authority[2]
+        ) {
+            throw new \RuntimeException(
+                'REPAIR_REQUIRED: ' . $label . ' has unexpected owner, group, or mode: ' . $path,
+            );
+        }
+    }
+
     /** @return array<string,mixed> */
     private function stageWithinDeadline(
         string $packageDirectory,
@@ -633,6 +1558,7 @@ final class HostGatewayPackageManager
                 'signature_digest' => $verified['signature_digest'],
                 'platform' => (string)$verified['manifest']['platform'],
                 'arch' => \strtolower(\trim((string)$verified['manifest']['arch'])),
+                'host_id' => $hostId,
                 'release_ready' => (bool)$verified['manifest']['release_ready'],
                 'test_mode' => $this->paths->isTestMode(),
                 'profile' => $profile,
@@ -660,7 +1586,7 @@ final class HostGatewayPackageManager
                 $packageDigest = \strtolower(\trim($packageDigest));
                 $profile = \strtolower(\trim($profile));
                 if (\preg_match('/\A[a-f0-9]{64}\z/D', $packageDigest) !== 1
-                    || !\hash_equals('default', $profile)
+                    || !\in_array($profile, ['default', 'ipv4-only'], true)
                 ) {
                     throw new \RuntimeException(
                         'Gateway initial staged-package recovery fingerprint is invalid.',
@@ -732,6 +1658,7 @@ final class HostGatewayPackageManager
                     'arch' => \strtolower(\trim((string)(
                         $releaseManifest['arch'] ?? ''
                     ))),
+                    'host_id' => $this->hostId(),
                     'release_ready' => (bool)($manifest['release_ready'] ?? false),
                     'test_mode' => $this->paths->isTestMode(),
                     'profile' => $profile,
@@ -814,12 +1741,18 @@ final class HostGatewayPackageManager
                 'Gateway rebootstrap candidate launcher declaration is invalid.'
             );
         }
-        $candidateLauncherMode = $this->stableLauncherPosixMode();
+        $candidateLauncherMode = $candidateSlotLauncherMode;
         $candidateCaBundleDigest = $this->releaseTrustBundleDigest(
             $verified['manifest'],
             'Gateway rebootstrap candidate CA trust bundle',
         );
         $this->paths->ensureDirectories();
+        // The old gateway is still serving while its replacement is prepared.
+        // Its live PID is legitimate here; prove only the fixed root authority
+        // and reject the obsolete runtime/run contract without reading leaves.
+        ($this->platform ?? new GatewayPlatformServiceInstaller($this->paths))
+            ->assertNginxPidNamespaceAuthority();
+        $this->assertLegacyNginxPidAbsentForRebootstrap();
 
         return $this->withStagingLocks(['A', 'B'], function () use (
             $verified,
@@ -829,6 +1762,7 @@ final class HostGatewayPackageManager
             $launcherComponent,
             $candidateLauncherDigest,
             $candidateLauncherSize,
+            $candidateSlotLauncherMode,
             $candidateLauncherMode,
             $candidateCaBundleDigest,
         ): array {
@@ -839,6 +1773,7 @@ final class HostGatewayPackageManager
                 $packageDigest,
                 $candidateLauncherDigest,
                 $candidateLauncherSize,
+                $candidateSlotLauncherMode,
                 $candidateLauncherMode,
                 $candidateCaBundleDigest,
             ): array {
@@ -850,7 +1785,10 @@ final class HostGatewayPackageManager
                         $packageDigest,
                         $profile,
                     );
-                    return $existing;
+                    return $this->repairLegacyRebootstrapCandidateLauncherModeLocked(
+                        $existing,
+                        $candidateSlotLauncherMode,
+                    );
                 }
                 $this->collectExpiredRebootstrapBackupsLocked();
                 $receipt = $this->readRebootstrapReceiptLocked($nonce);
@@ -3540,6 +4478,76 @@ final class HostGatewayPackageManager
         );
     }
 
+    /**
+     * Establish the native Guardian's stable generation head for the first
+     * active slot. GatewayHostManager invokes this after the durable first
+     * activation and before it asks the platform to start the service.
+     */
+    public function initializeFirstActivationGuardianGenerationHead(
+        string $slot,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $this->withOperationDeadline(
+            $deadlineMonotonic,
+            function () use ($slot): void {
+                $this->initializeFirstActivationGuardianGenerationHeadWithinDeadline(
+                    $slot,
+                );
+            },
+        );
+    }
+
+    private function initializeFirstActivationGuardianGenerationHeadWithinDeadline(
+        string $slot,
+    ): void {
+        $slot = \strtoupper(\trim($slot));
+        if (!\in_array($slot, ['A', 'B'], true)) {
+            throw new \InvalidArgumentException(
+                'Gateway first activation slot is invalid.',
+            );
+        }
+        $this->withStagingLock($slot, function () use ($slot): void {
+            $this->withInstallLock(function () use ($slot): void {
+                $this->assertNoRebootstrapTransactionLocked(
+                    'Gateway first activation Guardian head initialization',
+                );
+                $this->assertNoFailedInitialBootstrapCleanup();
+                if (!\hash_equals($slot, $this->activeSlotOrEmpty())
+                    || \file_exists($this->paths->previousSlotFile())
+                    || \is_link($this->paths->previousSlotFile())
+                    || \file_exists($this->paths->upgradeIntentFile())
+                    || \is_link($this->paths->upgradeIntentFile())
+                ) {
+                    throw new \RuntimeException(
+                        'Gateway Guardian head initialization is not fenced to a first activation.',
+                    );
+                }
+                $proof = $this->verifiedStableLauncherSlotProof(
+                    $slot,
+                    'Gateway first activation Guardian head',
+                );
+                $baseline = $this->trustBundleBaselineProof(
+                    'Gateway first activation Guardian head CA trust baseline',
+                );
+                if (!\hash_equals(
+                    (string)$proof['ca_bundle_sha256'],
+                    (string)$baseline['sha256'],
+                )) {
+                    throw new \RuntimeException(
+                        'Gateway first activation Guardian head CA trust baseline changed.',
+                    );
+                }
+                (new GatewayGuardianGenerationHead($this->paths))->initializeStable(
+                    $this->hostId(),
+                    (string)$proof['launcher_sha256'],
+                    (string)$proof['ca_bundle_sha256'],
+                    (string)$proof['runtime_generation'],
+                    $this->hostBootIdentityNow(),
+                );
+            });
+        });
+    }
+
     private function activateWithinDeadline(string $slot): void
     {
         $slot = \strtoupper(\trim($slot));
@@ -4802,6 +5810,27 @@ final class HostGatewayPackageManager
                     'failed initial gateway activation',
                 );
             }
+            $proof = $this->verifiedStableLauncherSlotProof(
+                $failedSlot,
+                'Failed initial Guardian generation head cleanup',
+            );
+            if (!\hash_equals(
+                $launcherDigest,
+                (string)$proof['launcher_sha256'],
+            ) || !\hash_equals(
+                $caBundleDigest,
+                (string)$proof['ca_bundle_sha256'],
+            )) {
+                throw new \RuntimeException(
+                    'Failed initial Guardian generation head cleanup changed its runtime generation.',
+                );
+            }
+            (new GatewayGuardianGenerationHead($this->paths))->retireInitialStable(
+                $this->hostId(),
+                (string)$proof['launcher_sha256'],
+                (string)$proof['ca_bundle_sha256'],
+                (string)$proof['runtime_generation'],
+            );
             $this->isolateAndRemoveFailedInitialFile(
                 $launcher,
                 $launcher . '.failed-initial.' . $nonce,
@@ -4879,6 +5908,10 @@ final class HostGatewayPackageManager
                 || \is_link($this->paths->slotDir($failedSlot))
                 || \file_exists($this->paths->caBundleBaselineFile())
                 || \is_link($this->paths->caBundleBaselineFile())
+                || \file_exists($this->paths->guardianGenerationHeadFile(0))
+                || \is_link($this->paths->guardianGenerationHeadFile(0))
+                || \file_exists($this->paths->guardianGenerationHeadFile(1))
+                || \is_link($this->paths->guardianGenerationHeadFile(1))
             ) {
                 throw new \RuntimeException(
                     'Failed initial gateway cleanup cannot commit while runtime state remains.'
@@ -5827,17 +6860,26 @@ final class HostGatewayPackageManager
 
         $signatureFile = $realPackage . DIRECTORY_SEPARATOR . 'manifest.sig';
         $signatureBytes = '';
+        $trustedReleasePublicKey = '';
         if (!$this->paths->isTestMode()) {
             $signatureBytes = $this->readStableRegularFile(
                 $signatureFile,
                 16_384,
                 'Gateway release signature',
             );
-            $this->verifyReleaseSignature(
+            $trustedReleasePublicKey = $this->verifyReleaseSignature(
                 $manifestBytes,
                 $signatureBytes,
                 (string)($manifest['signing_key_id'] ?? ''),
             );
+            if (!\hash_equals(
+                \bin2hex($trustedReleasePublicKey),
+                (string)($manifest['launcher_embedded_release_public_key_hex'] ?? ''),
+            )) {
+                throw new \RuntimeException(
+                    'Gateway signed release Launcher key does not match its trusted signing key.'
+                );
+            }
         } elseif (\is_link($signatureFile)) {
             throw new \RuntimeException('Test package signature path cannot be a symbolic link.');
         } elseif (\is_file($signatureFile)) {
@@ -6352,7 +7394,7 @@ PHP;
         $this->atomicWrite($file, \bin2hex(\random_bytes(32)) . "\n", 0600);
     }
 
-    private function verifyReleaseSignature(string $manifest, string $signatureBytes, string $keyId): void
+    private function verifyReleaseSignature(string $manifest, string $signatureBytes, string $keyId): string
     {
         if (!\function_exists('sodium_crypto_sign_verify_detached')
             || $keyId === ''
@@ -6387,6 +7429,7 @@ PHP;
         ) {
             throw new \RuntimeException('Gateway release signature is not trusted.');
         }
+        return $key;
     }
 
     private function readStableRegularFile(string $path, int $maximumBytes, string $label): string
@@ -7276,8 +8319,15 @@ PHP;
         array $manifest,
     ): array {
         $decoded = \json_decode($bytes, true);
+        $rootKeys = \is_array($decoded) ? \array_keys($decoded) : [];
+        \sort($rootKeys, SORT_STRING);
+        $targetKeys = \is_array($decoded['target'] ?? null)
+            ? \array_keys($decoded['target']) : [];
+        \sort($targetKeys, SORT_STRING);
         if (!\is_array($decoded)
-            || (int)($decoded['schema_version'] ?? 0) !== 1
+            || (int)($decoded['schema_version'] ?? 0) !== 2
+            || $rootKeys !== ['components', 'schema_version', 'target']
+            || $targetKeys !== ['arch', 'platform']
             || !\hash_equals(
                 (string)$manifest['platform'],
                 (string)($decoded['target']['platform'] ?? ''),
@@ -7326,28 +8376,58 @@ PHP;
             $componentDigest = \strtolower((string)(
                 $manifest['components'][$relative]['sha256'] ?? ''
             ));
+            $definitionKeys = \is_array($definition) ? \array_keys($definition) : [];
+            \sort($definitionKeys, SORT_STRING);
+            $expectedDefinitionKeys = [
+                'binary_sha256', 'license', 'self_contained', 'source_sha256',
+                'source_url', 'version',
+            ];
+            if ($name === 'wls-gateway-launcher') {
+                $expectedDefinitionKeys[] = 'embedded_release_public_key_hex';
+                \sort($expectedDefinitionKeys, SORT_STRING);
+            }
             if (!\is_array($definition)
+                || $definitionKeys !== $expectedDefinitionKeys
                 || \trim((string)($definition['version'] ?? '')) === ''
                 || \trim((string)($definition['source_url'] ?? '')) === ''
                 || \preg_match(
                     '/\A[a-f0-9]{64}\z/D',
-                    \strtolower((string)($definition['source_sha256'] ?? '')),
+                    (string)($definition['source_sha256'] ?? ''),
                 ) !== 1
                 || \trim((string)($definition['license'] ?? '')) === ''
                 || !\hash_equals(
-                    \strtolower((string)($definition['binary_sha256'] ?? '')),
+                    (string)($definition['binary_sha256'] ?? ''),
                     $componentDigest,
                 )
                 || (!\in_array($name, ['controller', 'ca-bundle'], true)
                     && ($definition['self_contained'] ?? false) !== true)
+                || ($name === 'wls-gateway-launcher'
+                    && (\preg_match(
+                        '/\A[a-f0-9]{64}\z/D',
+                        (string)(
+                            $definition['embedded_release_public_key_hex'] ?? ''
+                        ),
+                    ) !== 1
+                    || \hash_equals(
+                        (string)(
+                            $definition['embedded_release_public_key_hex'] ?? ''
+                        ),
+                        \str_repeat('0', 64),
+                    )))
             ) {
                 throw new \RuntimeException(
                     'Gateway production provenance does not match component: ' . $name
                 );
             }
-            $definition['binary_sha256'] = \strtolower(
-                (string)$definition['binary_sha256'],
-            );
+            if ($name === 'wls-gateway-launcher'
+                && !\hash_equals(
+                    (string)($manifest['launcher_embedded_release_public_key_hex'] ?? ''),
+                    (string)$definition['embedded_release_public_key_hex'],
+                )) {
+                throw new \RuntimeException(
+                    'Gateway production provenance Launcher key does not match the signed manifest.'
+                );
+            }
             $verified[$name] = $definition;
         }
         return $verified;
@@ -7784,6 +8864,53 @@ PHP;
                 'A different gateway rebootstrap nonce, package, or profile already owns this host.'
             );
         }
+    }
+
+    /**
+     * Repair only the pre-STOP journal state written by the implementation
+     * that confused the 0555 immutable candidate with the later 0550 stable
+     * launcher. The candidate inode, digest, size and actual mode are proved
+     * before the authenticated journal is rewritten.
+     *
+     * @param array<string,mixed> $journal
+     * @return array<string,mixed>
+     */
+    private function repairLegacyRebootstrapCandidateLauncherModeLocked(
+        array $journal,
+        int $candidateSlotLauncherMode,
+    ): array {
+        if ($this->paths->isTestMode()
+            || \PHP_OS_FAMILY === 'Windows'
+            || $candidateSlotLauncherMode !== 0555
+            || (int)$journal['candidate_launcher_mode']
+                !== $this->stableLauncherPosixMode()
+            || !\hash_equals('PREPARED', (string)$journal['phase'])
+            || !\in_array(
+                (string)$journal['capacity_reserve_state'],
+                ['NONE', 'ALLOCATING'],
+                true,
+            )
+        ) {
+            return $journal;
+        }
+        $candidate = $this->paths->rebootstrapCandidateDir(
+            (string)$journal['nonce'],
+        );
+        $launcher = $candidate . DIRECTORY_SEPARATOR
+            . \str_replace(
+                '/',
+                DIRECTORY_SEPARATOR,
+                $this->componentPath('wls-gateway-launcher'),
+            );
+        $this->assertStableFileDigest(
+            $launcher,
+            (string)$journal['candidate_launcher_sha256'],
+            (int)$journal['candidate_launcher_size'],
+            $candidateSlotLauncherMode,
+            'Gateway legacy rebootstrap candidate launcher',
+        );
+        $journal['candidate_launcher_mode'] = $candidateSlotLauncherMode;
+        return $this->writeRebootstrapJournalLocked($journal);
     }
 
     /** @return array<string,mixed> */
@@ -9133,6 +10260,15 @@ PHP;
             ) {
                 $this->verifyRebootstrapCapacityReserveHeldLocked($journal);
             }
+            if (\hash_equals('STOP_COMMITTED', $expectedPhase)
+                && \hash_equals('QUIESCED', $nextPhase)
+            ) {
+                // ADMIN_STOPPED is already bound in the durable journal and
+                // the service-tree stop is proven by the caller protocol. The
+                // lock-held handoff or replay at QUIESCED is the point at
+                // which a residual runtime PID is forbidden.
+                $this->assertNginxPidNamespaceEmptyForRebootstrap();
+            }
             if (\in_array($nextPhase, [
                 'OLD_GENERATION_STASHED',
                 'NEW_GENERATION_PUBLISHED',
@@ -9440,6 +10576,14 @@ PHP;
                 'authority_profile'
                     => GatewayPlatformServiceInstaller::DERIVED_AUTHORITY_SNAPSHOT_CANDIDATES_V2,
             ],
+            'neutral-tls' => [
+                'root' => $this->paths->neutralTlsDir(),
+                'root_id' => 'host/neutral-tls',
+                'preserved' => [],
+                'policy' => 'restore',
+                'authority_profile'
+                    => GatewayPlatformServiceInstaller::DERIVED_AUTHORITY_NEUTRAL_TLS,
+            ],
             'runtime-conf' => [
                 'root' => $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'conf',
                 'root_id' => 'host/runtime/conf',
@@ -9473,6 +10617,281 @@ PHP;
                     => GatewayPlatformServiceInstaller::DERIVED_AUTHORITY_RUNTIME_CHILD,
             ],
         ];
+    }
+
+    /**
+     * Recover only the exact sealed PID after the persistent platform stop,
+     * the signed STOP_COMMITTED transaction, the old immutable generation,
+     * every runtime process, and both public-port probes have been proved by
+     * the caller. The existing empty-namespace transition remains the final
+     * independent gate.
+     *
+     * @param array<string,mixed> $stoppedProof
+     */
+    public function recoverStoppedNginxPidAfterPlatformProof(
+        string $nonce,
+        string $packageDigest,
+        string $profile,
+        array $stoppedProof,
+        ?float $deadlineMonotonic = null,
+    ): void {
+        $this->withOperationDeadline(
+            $deadlineMonotonic,
+            function () use (
+                $nonce,
+                $packageDigest,
+                $profile,
+                $stoppedProof,
+            ): void {
+                if (!\in_array(\PHP_OS_FAMILY, ['Linux', 'Darwin'], true)
+                    || $this->paths->isTestMode()
+                ) {
+                    throw new \RuntimeException(
+                        'Stopped Nginx PID recovery requires a production POSIX gateway.',
+                    );
+                }
+                $nonce = $this->normalizeRebootstrapNonce($nonce);
+                $packageDigest = \strtolower(\trim($packageDigest));
+                $profile = \strtolower(\trim($profile));
+                if (\preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    $packageDigest,
+                ) !== 1 || !\in_array(
+                    $profile,
+                    ['default', 'ipv4-only'],
+                    true,
+                )) {
+                    throw new \InvalidArgumentException(
+                        'Stopped Nginx PID recovery request is invalid.',
+                    );
+                }
+                $this->withInstallLock(function () use (
+                    $nonce,
+                    $packageDigest,
+                    $profile,
+                    $stoppedProof,
+                ): void {
+                    $journal = $this->requiredRebootstrapJournalLocked(
+                        $nonce,
+                        $packageDigest,
+                        $profile,
+                    );
+                    if (!\in_array(
+                        (string)$journal['phase'],
+                        ['STOP_COMMITTED', 'QUIESCED'],
+                        true,
+                    ) || !\hash_equals(
+                        'HELD',
+                        (string)$journal['capacity_reserve_state'],
+                    ) || \preg_match(
+                        '/\A[a-f0-9]{64}\z/D',
+                        (string)$journal['admin_stopped_digest'],
+                    ) !== 1) {
+                        throw new \RuntimeException(
+                            'Stopped Nginx PID recovery lacks an authenticated stopped transaction.',
+                        );
+                    }
+                    $proofKeys = \array_keys($stoppedProof);
+                    \sort($proofKeys, SORT_STRING);
+                    $snapshot = $journal['platform_snapshot'] ?? null;
+                    if ($proofKeys !== [
+                            'definition_sha256',
+                            'kind',
+                            'metadata_sha256',
+                            'stopped',
+                            'test_mode',
+                        ]
+                        || ($stoppedProof['stopped'] ?? false) !== true
+                        || ($stoppedProof['test_mode'] ?? true) !== false
+                        || !$this->rebootstrapPlatformSnapshotValid($snapshot)
+                        || !\is_array($snapshot)
+                        || !\hash_equals(
+                            (string)$snapshot['kind'],
+                            (string)$stoppedProof['kind'],
+                        )
+                        || !\hash_equals(
+                            (string)$snapshot['profile'],
+                            $profile,
+                        )
+                        || !\hash_equals(
+                            (string)$snapshot['definition_sha256'],
+                            (string)$stoppedProof['definition_sha256'],
+                        )
+                        || !\hash_equals(
+                            (string)$snapshot['metadata_sha256'],
+                            (string)$stoppedProof['metadata_sha256'],
+                        )
+                    ) {
+                        throw new \RuntimeException(
+                            'Stopped Nginx PID recovery platform proof is not bound to the transaction.',
+                        );
+                    }
+                    $this->assertOldGenerationMatchesRebootstrapJournal(
+                        $journal,
+                        $this->verifiedRebootstrapOldGeneration(),
+                    );
+                    $this->recoverExactDeadSealedNginxPidLocked();
+                });
+            },
+        );
+    }
+
+    private function recoverExactDeadSealedNginxPidLocked(): void
+    {
+        $platform = $this->platform
+            ?? new GatewayPlatformServiceInstaller($this->paths);
+        $platform->assertNginxPidNamespaceAuthority();
+        $this->assertLegacyNginxPidAbsentForRebootstrap();
+        $pidFile = $this->paths->nginxPidFile();
+        \clearstatcache(true, $pidFile);
+        $before = @\lstat($pidFile);
+        if (!\is_array($before)) {
+            if (\file_exists($pidFile) || \is_link($pidFile)) {
+                throw new \RuntimeException(
+                    'Stopped Nginx PID path is indeterminate or unsafe.',
+                );
+            }
+            return;
+        }
+        $controllerName = \PHP_OS_FAMILY === 'Darwin'
+            ? '_welinegateway'
+            : 'weline-gateway';
+        $controller = \function_exists('posix_getpwnam')
+            ? @\posix_getpwnam($controllerName)
+            : false;
+        $controllerGroup = \function_exists('posix_getgrnam')
+            ? @\posix_getgrnam($controllerName)
+            : false;
+        if (!\is_array($controller)
+            || !\is_array($controllerGroup)
+            || (int)($controller['uid'] ?? 0) < 1
+            || (int)($controller['gid'] ?? 0) < 1
+            || (int)($controller['gid'] ?? -1)
+                !== (int)($controllerGroup['gid'] ?? -2)
+            || !\function_exists('posix_geteuid')
+            || \posix_geteuid() !== 0
+            || !\function_exists('posix_kill')
+            || !\function_exists('posix_get_last_error')
+        ) {
+            throw new \RuntimeException(
+                'Stopped Nginx PID recovery service identity is unavailable.',
+            );
+        }
+        $controllerGid = (int)$controller['gid'];
+        if (!$this->isRegularFileStatus($before)
+            || \is_link($pidFile)
+            || (int)($before['nlink'] ?? 0) !== 1
+            || (int)($before['uid'] ?? -1) !== 0
+            || (int)($before['gid'] ?? -1) !== $controllerGid
+            || (((int)$before['mode']) & 0777) !== 0444
+            || (int)($before['size'] ?? -1) < 2
+            || (int)($before['size'] ?? -1) > 31
+        ) {
+            throw new \RuntimeException(
+                'Stopped Nginx PID is not the exact sealed authority leaf.',
+            );
+        }
+        $platform->assertRebootstrapDerivedDescendantPosixAclFree(
+            $pidFile,
+            false,
+        );
+        $contents = $this->readStableRegularFile(
+            $pidFile,
+            31,
+            'Stopped sealed Nginx PID',
+        );
+        \clearstatcache(true, $pidFile);
+        $verified = @\lstat($pidFile);
+        if (!\is_array($verified)
+            || !$this->sameFileState($before, $verified)
+            || (int)($verified['uid'] ?? -1) !== 0
+            || (int)($verified['gid'] ?? -1) !== $controllerGid
+            || \preg_match('/\A([1-9][0-9]*)\n\z/D', $contents, $match) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Stopped sealed Nginx PID changed during verification.',
+            );
+        }
+        $pidText = (string)$match[1];
+        $maximumPid = (string)\PHP_INT_MAX;
+        if (\strlen($pidText) > \strlen($maximumPid)
+            || (\strlen($pidText) === \strlen($maximumPid)
+                && \strcmp($pidText, $maximumPid) > 0)
+        ) {
+            throw new \RuntimeException(
+                'Stopped sealed Nginx PID is outside the native PID range.',
+            );
+        }
+        $pid = (int)$pidText;
+        if (@\posix_kill($pid, 0)
+            || \posix_get_last_error() !== 3
+        ) {
+            throw new \RuntimeException(
+                'Stopped sealed Nginx PID is live or its death is indeterminate.',
+            );
+        }
+        \clearstatcache(true, $pidFile);
+        $terminal = @\lstat($pidFile);
+        if (!\is_array($terminal)
+            || !$this->sameFileState($verified, $terminal)
+            || (int)($terminal['uid'] ?? -1) !== 0
+            || (int)($terminal['gid'] ?? -1) !== $controllerGid
+        ) {
+            throw new \RuntimeException(
+                'Stopped sealed Nginx PID changed after its death proof.',
+            );
+        }
+        GatewayProjectStateFilesystem::removeRegular(
+            $pidFile,
+            'stopped sealed Nginx PID',
+            $terminal,
+        );
+        \clearstatcache(true, $pidFile);
+        if (@\lstat($pidFile) !== false
+            || \file_exists($pidFile)
+            || \is_link($pidFile)
+        ) {
+            throw new \RuntimeException(
+                'Stopped sealed Nginx PID removal is not durable.',
+            );
+        }
+    }
+
+    /**
+     * The PID namespace has no derived-state migration contract yet. A live
+     * leaf therefore blocks rebootstrap rather than being moved, deleted, or
+     * silently ignored during a crash replay.
+     */
+    private function assertNginxPidNamespaceEmptyForRebootstrap(): void
+    {
+        ($this->platform ?? new GatewayPlatformServiceInstaller($this->paths))
+            ->assertNginxPidNamespaceAuthority();
+        $root = $this->paths->nginxPidDir();
+        $entries = $this->rebootstrapRawTopLevelEntries(
+            $root,
+            [],
+            'Gateway rebootstrap Nginx PID namespace',
+        );
+        if ($entries !== []) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap is blocked while the Nginx PID namespace is nonempty.',
+            );
+        }
+        $this->assertLegacyNginxPidAbsentForRebootstrap();
+    }
+
+    private function assertLegacyNginxPidAbsentForRebootstrap(): void
+    {
+        $legacy = $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'run'
+            . DIRECTORY_SEPARATOR . 'nginx.pid';
+        if (@\lstat($legacy) !== false
+            || \file_exists($legacy)
+            || \is_link($legacy)
+        ) {
+            throw new \RuntimeException(
+                'Gateway rebootstrap is blocked while legacy runtime/run/nginx.pid exists.',
+            );
+        }
     }
 
     private function samePlatformPath(string $left, string $right): bool
@@ -9698,7 +11117,6 @@ PHP;
             : (int)($status['gid'] ?? -1);
         if (\PHP_OS_FAMILY !== 'Windows'
             && (($mode & 0700) !== 0700
-                || ($mode & 0022) !== 0
                 || $uid < 0
                 || $gid < 0)
         ) {
@@ -17052,6 +18470,7 @@ PHP;
             'guardian.sha256',
             'ca-bundle.sha256',
             'failed-initial-cleanup.intent',
+            'nginx-pid-residue.intent',
         ];
         if (!\in_array($leaf, $rootOnly, true)) {
             $modes[] = 0440;
@@ -17884,9 +19303,12 @@ PHP;
         string $label,
         callable $callback,
         float $maximumLockWaitSeconds = self::INSTALL_LOCK_TIMEOUT_SECONDS,
+        bool $initializeDirectories = true,
     ): mixed
     {
-        $this->paths->ensureDirectories();
+        if ($initializeDirectories) {
+            $this->paths->ensureDirectories();
+        }
         ($this->platform ?? new GatewayPlatformServiceInstaller($this->paths))
             ->securePackageTransactionTrust($this->activeOperationDeadline());
         // Package transactions belong to the host trust domain. Keeping this

@@ -364,7 +364,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             default:
                 // 格式化字段列表
                 $fields = $this->formatFieldsForMysql($this->ast['select']['fields'] ?? $this->fields);
-                return "SELECT {$fields} FROM {$table} {$alias} {$joins} {$wheres} {$groupBy} {$having} {$extra} {$order} {$this->limit}";
+                return "SELECT {$fields} FROM {$table} {$alias} {$joins} {$wheres} {$groupBy} {$having} {$order} {$this->limit} {$extra}";
         }
     }
 
@@ -1068,67 +1068,33 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function clear(string $type = ''): QueryInterface
     {
-        if ($type) {
-            $attr_var_name = $type;
-            if (DEV && !isset(self::init_vars[$attr_var_name])) {
-                $this->exceptionHandle(__('不支持的清理类型：%{1} 支持的初始化类型：%{2}', [$attr_var_name, var_export(self::init_vars, true)]));
-            }
-            $this->$attr_var_name = self::init_vars[$attr_var_name];
-        } else {
-            $this->reset();
-        }
-        $this->_unit_primary_keys = [];
-        return $this;
+        return parent::clear($type);
     }
 
 
     public function clearQuery(string $type = ''): QueryInterface
     {
-        if ($type) {
-            $attr_var_name = $type;
-            if (DEV && !isset(self::init_vars[$attr_var_name])) {
-                $this->exceptionHandle(__('不支持的清理类型：%{1} 支持的初始化类型：%{2}', [$attr_var_name, var_export(self::init_vars, true)]));
-            }
-            $this->$attr_var_name = self::init_vars[$attr_var_name];
-        } else {
-            foreach (self::query_vars as $query_field => $query_var) {
-                $this->$query_field = $query_var;
-            }
-        }
-        return $this;
+        return parent::clearQuery($type);
     }
 
     public function reset(): QueryInterface
     {
-        foreach (self::init_vars as $init_field => $init_var) {
-            $this->$init_field = $init_var;
-        }
-        $this->PDOStatement = null;
-        return $this;
+        return parent::reset();
     }
 
     public function beginTransaction(): void
     {
-        $link = $this->getLink();
-        if (!$link->inTransaction()) {
-            $link->beginTransaction();
-        }
+        parent::beginTransaction();
     }
 
     public function rollBack(): void
     {
-        $link = $this->getLink();
-        if ($link->inTransaction()) {
-            $link->rollBack();
-        }
+        parent::rollBack();
     }
 
     public function commit(): void
     {
-        $link = $this->getLink();
-        if ($link->inTransaction()) {
-            $link->commit();
-        }
+        parent::commit();
     }
 
     public function getPrepareSql(bool $format = true): string

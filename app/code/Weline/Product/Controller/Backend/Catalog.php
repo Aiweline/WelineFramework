@@ -9,6 +9,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Product\Service\ProductAdminMutationService;
 use Weline\Product\Service\ProductAdminViewService;
 use Weline\Product\Service\ProductSiteContentAdminService;
+use Weline\Product\Repository\ProductRepository;
 
 final class Catalog extends BackendController
 {
@@ -36,6 +37,7 @@ final class Catalog extends BackendController
         private readonly ProductAdminViewService $adminView,
         private readonly ProductAdminMutationService $mutations,
         private readonly ProductSiteContentAdminService $siteContent,
+        private readonly ProductRepository $products,
     ) {
     }
 
@@ -158,6 +160,58 @@ final class Catalog extends BackendController
         );
     }
 
+    #[Acl('Weline_Product::commerce:catalog:products', '编辑商品', 'mdi-pencil', '编辑商品')]
+    public function editProduct(): string
+    {
+        $websiteId = max(0, (int)$this->request->getGet('website_id', 0));
+        $productId = max(0, (int)$this->request->getGet('product_id', 0));
+        if ($productId <= 0) {
+            $this->getMessageManager()->addError(__('请选择要编辑的商品'));
+
+            return (string)$this->redirect('*/backend/catalog/products?website_id=' . $websiteId);
+        }
+
+        try {
+            $product = $this->products->findById($websiteId, $productId);
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('编辑商品失败：%{1}', [$exception->getMessage()]));
+            return (string)$this->redirect('*/backend/catalog/products?website_id=' . $websiteId);
+        }
+        if ($product === null) {
+            $this->getMessageManager()->addError(__('商品不存在：%{1}', [$productId]));
+
+            return (string)$this->redirect('*/backend/catalog/products?website_id=' . $websiteId);
+        }
+
+        $this->assign('website_id', $websiteId);
+        $this->assign('product_id', $productId);
+        $this->assign('product_sku', (string)$product->getData('sku'));
+
+        return (string)$this->fetch('edit');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:products', '保存商品', 'mdi-content-save-outline', '保存商品设置')]
+    public function postSaveProduct(): string
+    {
+        $websiteId = 0;
+        try {
+            $websiteId = $this->postNonNegativeInt('website_id', 0);
+            $productId = $this->postPositiveInt('product_id', 0);
+            $sku = trim((string)$this->request->getPost('sku', ''));
+            $this->mutations->updateProductSku($websiteId, $productId, $sku);
+            $this->getMessageManager()->addSuccess(__('商品已更新'));
+            return (string)$this->redirect(
+                '*/backend/catalog/edit-product?website_id=' . $websiteId . '&product_id=' . $productId,
+            );
+        } catch (\Throwable $exception) {
+            $productId = (int)$this->request->getPost('product_id', 0);
+            $this->getMessageManager()->addError(__('操作失败：%{1}', [$exception->getMessage()]));
+            return (string)$this->redirect(
+                '*/backend/catalog/edit-product?website_id=' . $websiteId . '&product_id=' . $productId,
+            );
+        }
+    }
+
     #[Acl('Weline_Product::commerce:catalog:site-content', '保存站点文案', 'mdi-content-save-outline', '保存商品站点与 Store View 文案')]
     public function postSaveSiteContent(): string
     {
@@ -210,12 +264,18 @@ final class Catalog extends BackendController
 
         $this->assign('title', __(self::TITLES[$section]));
         $this->assign('section', $section);
+        $this->assign('section_route', $this->resolveSectionRoute($section));
         $this->assign('website_id', $websiteId);
         $this->assign('store_id', $storeId);
         $this->assign('entity_id', $entityId);
         $this->assign('rows', $rows);
         $this->assign('columns', $columns);
         $this->assign('error', $error);
+
+        $websites = $this->loadWebsiteOptions();
+        $this->assign('websiteOptionsJson', json_encode($websites, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
+        $this->assign('productWebsiteSelectValue', (string)$websiteId);
+        $this->assign('productWebsiteSelectDisplay', (string)$websiteId);
 
         return (string)$this->fetch('index');
     }
@@ -254,5 +314,82 @@ final class Catalog extends BackendController
         }
 
         return (int)$raw;
+    }
+
+    private function postPositiveInt(string $key, int $default): int
+    {
+        $value = $this->postNonNegativeInt($key, $default);
+        if ($value <= 0) {
+            throw new \InvalidArgumentException(__('%{1} 必须是正整数', [$key]));
+        }
+
+        return $value;
+    }
+
+    private function resolveSectionRoute(string $section): string
+    {
+        return self::ROUTES[$section] ?? $section;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadWebsiteOptions(): array
+    {
+        try {
+            $rows = w_query('websites', 'getWebsiteList', []);
+        } catch (\Throwable) {
+            $rows = [];
+        }
+        if (!is_array($rows)) {
+            $rows = [];
+        }
+
+        $options = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $websiteId = (int)($row['website_id'] ?? $row['id'] ?? 0);
+            $code = trim((string)($row['code'] ?? $row['website_code'] ?? ''));
+            if ($websiteId <= 0 && $code === '') {
+                continue;
+            }
+            $name = trim((string)($row['name'] ?? $code));
+            $url = trim((string)($row['url'] ?? ''));
+            $options[] = [
+                'website_id' => $websiteId,
+                'code' => $code !== '' ? $code : 'default',
+                'name' => $name !== '' ? $name : ($code !== '' ? $code : 'default'),
+                'url' => $url,
+                'label' => ($name !== '' ? $name : ($code !== '' ? $code : 'default')) . ' / ' . ($code !== '' ? $code : 'default'),
+            ];
+        }
+
+        $hasGlobal = false;
+        foreach ($options as $option) {
+            if ((int)($option['website_id'] ?? -1) === 0) {
+                $hasGlobal = true;
+                break;
+            }
+        }
+
+        if (!$hasGlobal) {
+            array_unshift($options, [
+                'website_id' => 0,
+                'code' => 'default',
+                'name' => 'default',
+                'url' => '',
+                'label' => 'default / default',
+            ]);
+        }
+
+        return $options ?: [[
+            'website_id' => 0,
+            'code' => 'default',
+            'name' => 'default',
+            'url' => '',
+            'label' => 'default',
+        ]];
     }
 }

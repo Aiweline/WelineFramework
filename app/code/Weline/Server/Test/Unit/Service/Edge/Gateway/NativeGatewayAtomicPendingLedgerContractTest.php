@@ -35,6 +35,16 @@ final class NativeGatewayAtomicPendingLedgerContractTest extends TestCase
             $posixTargets,
             '{"state/security-ledger.json.untrusted", WLS_MAX_ATOMIC_SECURITY_DISTRUST}',
         ));
+        self::assertSame(1, \substr_count(
+            $posixTargets,
+            '{"state/security-anchor.json", WLS_MAX_REQUEST}',
+        ));
+        self::assertSame(1, \substr_count(
+            $posixTargets,
+            '{"state/wls-edge-2.initialized.json", WLS_MAX_REQUEST}',
+        ));
+        self::assertStringNotContainsString('{"trust/security-anchor.json",', $posixTargets);
+        self::assertStringNotContainsString('{"trust/wls-edge-2.initialized.json",', $posixTargets);
 
         $windowsTargets = $this->targetTable(
             $windows,
@@ -53,6 +63,16 @@ final class NativeGatewayAtomicPendingLedgerContractTest extends TestCase
             $windowsTargets,
             '{L"state\\\\security-ledger.json.untrusted", WLS_MAX_ATOMIC_SECURITY_DISTRUST}',
         ));
+        self::assertSame(1, \substr_count(
+            $windowsTargets,
+            '{L"state\\\\security-anchor.json", WLS_MAX_REQUEST}',
+        ));
+        self::assertSame(1, \substr_count(
+            $windowsTargets,
+            '{L"state\\\\wls-edge-2.initialized.json", WLS_MAX_REQUEST}',
+        ));
+        self::assertStringNotContainsString('{L"trust\\\\security-anchor.json",', $windowsTargets);
+        self::assertStringNotContainsString('{L"trust\\\\wls-edge-2.initialized.json",', $windowsTargets);
 
         foreach ([$posixTargets, $windowsTargets] as $targets) {
             self::assertStringNotContainsString('*', $targets);

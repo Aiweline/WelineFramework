@@ -9,6 +9,15 @@ use Weline\Framework\Authorization\Resource\SourceIdParser;
 
 final class AclResourcePresentation
 {
+    /**
+     * jstree three_state will check every child if a parent starts selected.
+     * Only preselect leaves; parents become checked/undetermined from children.
+     */
+    public static function assignmentNodePreselected(bool $granted, bool $hasChildren): bool
+    {
+        return $granted && !$hasChildren;
+    }
+
     public static function typeLabel(string $storageType): string
     {
         return match ($storageType) {
@@ -259,6 +268,194 @@ final class AclResourcePresentation
         }
         unset($node);
         return $list;
+    }
+
+    /**
+     * Drop tag grants that would restore sources the operator just unchecked.
+     *
+     * @param list<string> $postedIds
+     * @param list<string> $tagPaths
+     * @param array<string, array<string, true>> $byTagPath
+     * @param list<string> $previouslyGrantedIds
+     * @return array{tag_paths: list<string>, extra_ids: list<string>}
+     */
+    public static function reconcileTagGrantsForSave(
+        array $postedIds,
+        array $tagPaths,
+        array $byTagPath,
+        array $previouslyGrantedIds,
+    ): array {
+        $posted = [];
+        foreach ($postedIds as $id) {
+            $id = \trim((string)$id);
+            if ($id !== '') {
+                $posted[$id] = true;
+            }
+        }
+        $previous = [];
+        foreach ($previouslyGrantedIds as $id) {
+            $id = \trim((string)$id);
+            if ($id !== '') {
+                $previous[$id] = true;
+            }
+        }
+
+        $keptPaths = [];
+        $extraIds = [];
+        foreach ($tagPaths as $path) {
+            $path = \trim((string)$path);
+            if ($path === '' || !isset($byTagPath[$path])) {
+                continue;
+            }
+            $tagSources = \array_keys($byTagPath[$path]);
+            $previouslyGrantedUnderTag = 0;
+            $stillPostedUnderTag = 0;
+            foreach ($tagSources as $sourceId) {
+                if (isset($previous[$sourceId])) {
+                    ++$previouslyGrantedUnderTag;
+                }
+                if (isset($posted[$sourceId])) {
+                    ++$stillPostedUnderTag;
+                }
+            }
+            if ($previouslyGrantedUnderTag > 0 && $stillPostedUnderTag < $previouslyGrantedUnderTag) {
+                continue;
+            }
+            $keptPaths[] = $path;
+            foreach ($tagSources as $sourceId) {
+                if (!isset($posted[$sourceId])) {
+                    $extraIds[] = $sourceId;
+                }
+            }
+        }
+
+        return [
+            'tag_paths' => $keptPaths,
+            'extra_ids' => $extraIds,
+        ];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $rows
+     * @return array<string, list<string>>
+     */
+    public static function buildSourceDescendants(array $rows): array
+    {
+        $children = [];
+        foreach ($rows as $row) {
+            $id = \trim((string)($row['source_id'] ?? ''));
+            $parent = \trim((string)($row['parent_source'] ?? ''));
+            if ($id === '' || $parent === '') {
+                continue;
+            }
+            $children[$parent][] = $id;
+        }
+
+        $memo = [];
+        $walk = static function (string $id) use (&$walk, &$memo, $children): array {
+            if (isset($memo[$id])) {
+                return $memo[$id];
+            }
+            $out = [];
+            foreach ($children[$id] ?? [] as $child) {
+                $out[$child] = true;
+                foreach ($walk($child) as $descendant) {
+                    $out[$descendant] = true;
+                }
+            }
+
+            return $memo[$id] = \array_keys($out);
+        };
+
+        $map = [];
+        foreach (\array_keys($children) as $id) {
+            $descendants = $walk($id);
+            if ($descendants !== []) {
+                $map[$id] = $descendants;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * If a previously granted menu root is absent from POST and no menu descendant
+     * remains posted, drop every descendant (pc/api/query included) so a stale
+     * shared/tag-tree selection cannot resurrect the unchecked subtree.
+     *
+     * @param list<string> $postedIds
+     * @param list<string> $previouslyGrantedIds
+     * @param list<array<string,mixed>> $allRows
+     * @return list<string>
+     */
+    public static function revokeUncheckedMenuSubtrees(
+        array $postedIds,
+        array $previouslyGrantedIds,
+        array $allRows,
+    ): array {
+        $posted = [];
+        foreach ($postedIds as $id) {
+            $id = \trim((string)$id);
+            if ($id !== '') {
+                $posted[$id] = true;
+            }
+        }
+        $previous = [];
+        foreach ($previouslyGrantedIds as $id) {
+            $id = \trim((string)$id);
+            if ($id !== '') {
+                $previous[$id] = true;
+            }
+        }
+
+        $byId = [];
+        foreach ($allRows as $row) {
+            $id = \trim((string)($row['source_id'] ?? ''));
+            if ($id !== '') {
+                $byId[$id] = $row;
+            }
+        }
+        $descendants = self::buildSourceDescendants($allRows);
+
+        $drop = [];
+        foreach ($previous as $sourceId => $_) {
+            if (isset($posted[$sourceId])) {
+                continue;
+            }
+            if (!self::isMenusType((string)($byId[$sourceId]['type'] ?? ''))) {
+                continue;
+            }
+            $hasPostedMenuDescendant = false;
+            foreach ($descendants[$sourceId] ?? [] as $descendant) {
+                if (isset($posted[$descendant]) && self::isMenusType((string)($byId[$descendant]['type'] ?? ''))) {
+                    $hasPostedMenuDescendant = true;
+                    break;
+                }
+            }
+            if ($hasPostedMenuDescendant) {
+                continue;
+            }
+            $drop[$sourceId] = true;
+            foreach ($descendants[$sourceId] ?? [] as $descendant) {
+                $drop[$descendant] = true;
+            }
+        }
+
+        $kept = [];
+        foreach ($postedIds as $id) {
+            $id = \trim((string)$id);
+            if ($id === '' || isset($drop[$id])) {
+                continue;
+            }
+            $kept[] = $id;
+        }
+
+        return \array_values(\array_unique($kept));
+    }
+
+    private static function isMenusType(string $type): bool
+    {
+        return $type === 'menus';
     }
 
     /**

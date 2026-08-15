@@ -50,6 +50,21 @@ final class ParserReentrancyGuardTest extends TestCase
         self::assertSame(1, $this->cliGuardDepth());
     }
 
+    public function testWordsLoaderChecksTheReentrancyFenceBeforeResolvingLanguage(): void
+    {
+        $source = file_get_contents((new \ReflectionClass(Parser::class))->getFileName());
+        self::assertIsString($source);
+        $methodStart = strpos($source, 'public static function getWords()');
+        $loaderStart = strpos($source, 'private static function loadWords()', $methodStart ?: 0);
+        self::assertIsInt($methodStart);
+        self::assertIsInt($loaderStart);
+
+        $entry = substr($source, $methodStart, $loaderStart - $methodStart);
+        self::assertStringContainsString('self::translationResolutionDepth() > 0', $entry);
+        self::assertStringNotContainsString('State::getLangLocal()', $entry);
+        self::assertStringNotContainsString('self::resolveRequestModules()', $entry);
+    }
+
     private function setCliGuardDepth(int $depth): void
     {
         $property = new ReflectionProperty(Parser::class, 'translationResolutionDepth');

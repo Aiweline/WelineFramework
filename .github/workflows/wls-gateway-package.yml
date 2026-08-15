@@ -348,10 +348,6 @@ on:
           - darwin-x86_64
           - darwin-arm64
           - windows-x86_64
-      provenance_sha256:
-        description: Approved SHA-256 of provenance.json in the component store
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -680,7 +676,7 @@ jobs:
       WLS_RELEASE_VERSION: ${{ inputs.version }}
       WLS_TARGET_PLATFORM: ${{ startsWith(inputs.target_profile, 'linux-') && 'Linux' || startsWith(inputs.target_profile, 'darwin-') && 'Darwin' || startsWith(inputs.target_profile, 'windows-') && 'Windows' || '' }}
       WLS_TARGET_ARCH: ${{ endsWith(inputs.target_profile, '-arm64') && 'arm64' || 'x86_64' }}
-      WLS_PROVENANCE_SHA256: ${{ inputs.provenance_sha256 }}
+      WLS_PROVENANCE_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_WINDOWS_X86_64 || '' }}
       WLS_GATEWAY_RELEASE_KEY_ID: ${{ vars.WLS_GATEWAY_RELEASE_KEY_ID }}
       WLS_GATEWAY_RELEASE_PUBLIC_KEY_BASE64: ${{ vars.WLS_GATEWAY_RELEASE_PUBLIC_KEY_BASE64 }}
     steps:
@@ -708,6 +704,22 @@ jobs:
           if ($env:WLS_PROVENANCE_SHA256 -cnotmatch '\A[a-f0-9]{64}\z') {
             throw "An approved lowercase provenance SHA-256 is required."
           }
+          try {
+            $releasePublicKey = [Convert]::FromBase64String(
+              $env:WLS_GATEWAY_RELEASE_PUBLIC_KEY_BASE64
+            )
+          } catch {
+            throw "An exact enabled Ed25519 release verification key is required."
+          }
+          if ($releasePublicKey.Length -ne 32) {
+            throw "An exact enabled Ed25519 release verification key is required."
+          }
+          $releasePublicKeyHex = [Convert]::ToHexString($releasePublicKey).ToLowerInvariant()
+          if ($releasePublicKeyHex -notmatch '\A[a-f0-9]{64}\z' -or
+              $releasePublicKeyHex -eq ('0' * 64)) {
+            throw "An exact nonzero Ed25519 release verification key is required."
+          }
+          "RELEASE_PUBLIC_KEY_HEX=$releasePublicKeyHex" >> $env:GITHUB_ENV
           if ($env:WLS_TARGET_PLATFORM -notin @('Linux', 'Darwin', 'Windows') -or
               $env:WLS_TARGET_ARCH -notin @('x86_64', 'arm64') -or
               '${{ inputs.target_profile }}' -notin @(
@@ -800,7 +812,9 @@ jobs:
             "--wls-gateway-launcher=$(Join-Path $componentDir "bin/wls-gateway-launcher$suffix")",
             "--ca-bundle=$(Join-Path $componentDir 'ca-bundle.pem')",
             "--licenses=$(Join-Path $componentDir 'LICENSES.txt')",
-            "--provenance=$(Join-Path $componentDir 'provenance.json')"
+            "--provenance=$(Join-Path $componentDir 'provenance.json')",
+            "--approved-provenance-sha256=$env:WLS_PROVENANCE_SHA256",
+            "--release-public-key-hex=$env:RELEASE_PUBLIC_KEY_HEX"
           )
           if ($env:WLS_TARGET_PLATFORM -eq 'Windows') {
             $arguments += "--wls-bounded-command=$(Join-Path $componentDir 'bin/wls-bounded-command.exe')"
@@ -893,6 +907,7 @@ jobs:
     timeout-minutes: 20
     env:
       AUDITOR_IMAGE_REFERENCE: ${{ needs.verify-release-container-images.outputs.auditor_image }}
+      WLS_PROVENANCE_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_WINDOWS_X86_64 || '' }}
       EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
       EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS_X86_64 || '' }}
     steps:
@@ -959,6 +974,7 @@ jobs:
               --mode=audit \
               --package=/package \
               --receipt-output=/out/wls-gateway-dependency-audit.json \
+              "--expected-provenance-sha256=$WLS_PROVENANCE_SHA256" \
               "--expected-audit-environment-sha256=$EXPECTED_AUDIT_ENVIRONMENT_SHA256"
       - name: Upload candidate-bound dependency audit receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -981,6 +997,7 @@ jobs:
     environment: wls-gateway-release
     env:
       RELEASE_KEY_ID: ${{ vars.WLS_GATEWAY_RELEASE_KEY_ID }}
+      WLS_PROVENANCE_SHA256: ${{ inputs.target_profile == 'linux-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_LINUX_X86_64 || inputs.target_profile == 'linux-arm64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_LINUX_ARM64 || inputs.target_profile == 'darwin-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_DARWIN_X86_64 || inputs.target_profile == 'darwin-arm64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_DARWIN_ARM64 || inputs.target_profile == 'windows-x86_64' && vars.WLS_GATEWAY_PROVENANCE_SHA256_WINDOWS_X86_64 || '' }}
       WLS_TARGET_PLATFORM: ${{ startsWith(inputs.target_profile, 'linux-') && 'Linux' || startsWith(inputs.target_profile, 'darwin-') && 'Darwin' || startsWith(inputs.target_profile, 'windows-') && 'Windows' || '' }}
       SIGNER_IMAGE_REFERENCE: ${{ needs.verify-release-container-images.outputs.signer_image }}
       EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
@@ -1062,6 +1079,7 @@ jobs:
             -e RELEASE_KEY_ID
             -e WLS_TARGET_PLATFORM
             -e EXPECTED_AUDIT_ENVIRONMENT_SHA256
+            -e WLS_PROVENANCE_SHA256
             -e PROTECTED_REF
             -v "$RUNNER_TEMP/wls-gateway-package:/package"
             -v "$RUNNER_TEMP/wls-gateway-audit:/audit:ro"
@@ -1074,6 +1092,7 @@ jobs:
             --mode=sign
             --package=/package
             --audit-receipt=/audit/wls-gateway-dependency-audit.json
+            "--expected-provenance-sha256=$WLS_PROVENANCE_SHA256"
             "--expected-audit-environment-sha256=$EXPECTED_AUDIT_ENVIRONMENT_SHA256"
             "--signing-key-id=$RELEASE_KEY_ID"
             --signing-key-environment=WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64

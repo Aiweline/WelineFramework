@@ -7,7 +7,7 @@ This is the only repository-wide rule body. Entry files route here; skills and m
 1. Follow `AI-ENTRY.md`.
 2. Read this file and `dev/ai/skills/_index.md`.
 3. Select the smallest useful skill set; there is no arbitrary numeric cap when independent domains are genuinely involved.
-4. For module work, read the owning `doc/AI-INDEX.md`, then inspect the targeted source, configuration, existing tests, and verification surface. Source evidence is not a last resort.
+4. For module work, read the owning `doc/AI-INDEX.md`, **doc/需求.md**, and **doc/开发日志.md**, then inspect the targeted source, configuration, existing tests, and verification surface. If either fixed module document is missing, establish the honest baseline required by §6 before any code work. Source evidence is not a last resort.
 5. Do not load task records, archives, migration reports, or historical plans unless the task is resuming or investigating them.
 
 Use the project-intelligence contract supplied by the active runtime. If it is unavailable, fall back to bounded exact-path inspection. GitNexus and other repository-wide indexes are optional unless the user explicitly requests them or the primary path cannot satisfy a code task.
@@ -29,6 +29,7 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 - When a record is warranted, initialize it with `php dev/ai/codex/scripts/init-task.php`, keep the plan/progress/result current, and preserve it on completion.
 - Use the `planning` skill when the user requests an implementation plan, task cards, acceptance design, or Plan-mode deliverable. The plan must be evidence-based, executable, and independently verifiable; do not duplicate its detailed schema here.
 - A planned task becomes complete only after its own acceptance evidence passes. Preserve the original requirement/plan and write terminal status and deviations back to the same record.
+- A task record captures execution evidence for one task; it never replaces the owning module's **doc/需求.md** or versioned **doc/开发日志.md**. Link the task record from the module development-log entry when one exists instead of copying raw command/chat history into durable module docs.
 
 ## 4. Framework-wide engineering guardrails
 
@@ -76,7 +77,7 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 | **整体功能 / 产品能力**（页面、交互、工作台、后台操作、重建/发布、多语言、SSE、用户可见结果） | **WebUI** 在真实 WLS + 内置 Browser 按操作路径测通；单测可作前置，**不能**单独作为整体完成依据 |
 | 文档 / 纯规则 / 元数据 | 按下方表面表做针对性校验；不得假装成产品功能已 WebUI 验收 |
 
-- **每次改完就测**：改一块测一块，不攒到最后；同一任务内多次修改，每次改动后都要补测受影响面。
+- **每轮改完先审再测**：新增功能必须遵循下方串行质量门禁；测试中发现问题并修改代码后，必须退回代码审查门禁，复审通过后才可重测。非新增功能仍须按变更表面及时验证，不得把验证攒到最后。
 - 若尚未测完：只能写「代码已改，测试未完成」或「代码已改，WebUI 验收未完成」，**禁止**写成已完成。
 
 | Change surface | Required evidence |
@@ -101,25 +102,19 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 3. CLI/API/DB may be used only for **diagnosis, scaffolding, or non-UI infrastructure** (start WLS, clear stuck worker, read env). They must never substitute for WebUI acceptance, and delivery must still show WebUI steps + screenshots.
 4. Multi-locale / language-switcher / blog list-detail / workbench rebuild: accept only after WebUI shows the switcher and locale-correct page content (screenshot required when the user asks for visual acceptance).
 
-### Feature closed-loop development (hard · 顺藤摸瓜)
+### Feature closed-loop quality gate (hard · review before test · 顺藤摸瓜)
 
-**Develop → WebUI-test each branch → note blockers → fix → retest → resume main path.** Do not declare a feature done after code-only or bulk happy-path checks.
+**Implement → code review → fix → re-review pass → layered tests → real-path E2E acceptance → E2E regression hardening.** This serial gate applies whenever a task adds or expands executable product behavior (UI, API, command, service, persistence, or runtime capability). Documentation/rule-only changes continue to use the proportional evidence table above. Stages may not be skipped, substituted, or crossed in parallel.
 
-1. **One feature at a time.** After implementing or changing a product capability, exercise it in WebUI immediately along the operator path for that capability.
-2. **Main path + every branch.** For the owning requirement, walk the primary flow **and** each branch (e.g. list / detail / category; en / zh / ja switch; rebuild / retry / publish; empty / error / success). Every branch must be transparent (通透) or explicitly parked.
-3. **顺藤摸瓜.** When a branch fails, **pause the main flow**, record the blocker (where, symptom, last WebUI step), fix that branch, WebUI-retest until it passes, **then** continue the main flow. Do not skip ahead and leave broken branches silent.
-4. **Temporary notes, not silent debt.** Keep an explicit open list of unpassed branches while working; clear each item only after WebUI pass (screenshot when visual/locale/layout matters).
-5. **Closure.** Requirement complete only when all listed main+branch WebUI checks for that feature pass (or user explicitly defers a named item). After a closed loop, **suggest** the user harden coverage with E2E cases; do not invent a large E2E suite unless asked.
+1. **Implementation gate.** Complete the bounded implementation and identify the changed call chain, public behavior, primary path, branches, and expected test surface. Tests and E2E cases may be designed or authored with the implementation, but **must not be executed before the code-review gate passes**.
+2. **Code-review gate — before testing.** Review the complete task diff and affected call chain from all three perspectives: (a) **framework architecture** — core/module ownership, abstraction and Event/Interface/Hook boundaries, dependency direction, DI/lifecycle/runtime compatibility; (b) **defects** — logic, state, boundary/error paths, concurrency/idempotency/transaction behavior, compatibility, rollback, and hidden fallback risk; (c) **security** — authentication/authorization/ACL, trust boundaries and input validation, injection/XSS/CSRF/SSRF/path risks, session/sensitive-data handling, and unsafe external side effects as applicable.
+3. **Fix and re-review gate.** Record findings with severity and evidence, fix every in-scope finding, then re-review the complete resulting diff. A review is not “passed” merely because it was performed: every in-scope finding must be closed; a named deferral is allowed only with explicit user approval and otherwise remains a blocker. **No test execution may start until re-review concludes that the gate passed.**
+4. **Layered-test gate.** Only after review passes, run the lowest-cost deterministic checks first, followed by the relevant unit, integration, API/command/runtime, and WebUI layers. A test-discovered defect that changes code returns the task to step 2; re-review must pass before the affected tests are rerun.
+5. **Real-path E2E gate.** For product/UI capability, use a unique real WLS plus the built-in Browser and exercise the operator-equivalent primary path **and every owned branch** (success, empty, error, retry, locale/permission variants as applicable). CLI/API/DB/log evidence cannot replace this WebUI gate. For an executable capability with no UI path, use its closest real external entry through the full stack and state why Browser E2E is not applicable.
+6. **顺藤摸瓜.** When a path or branch fails, pause the main flow, record the blocker and last passing step, fix it, return through code review, and retest it to green before resuming. Keep an explicit open list; do not skip ahead or leave broken branches silent.
+7. **E2E hardening and closure.** After the real path passes, add or update a **repeatable E2E regression case** for the accepted primary path and the highest-risk branches, then execute that case successfully. A new feature is not complete without the review verdict, layered-test evidence, real-path acceptance evidence, and the passing E2E asset; if any gate is unavailable, report the exact blocker and do not claim completion.
 
 ### WLS and live URLs
-
-- Never test on the default/production WLS port `9501`.
-- Use a unique `ai-test-*` instance and an available integer port `>=9502`. Use the WLS skill for exact lifecycle commands.
-- Stop a dedicated instance after automated validation. If user acceptance needs it live, report URL, instance name, port, status, and exact stop command; stop it after acceptance.
-- Deliver only real, complete URLs. For local backend routes, obtain the runtime `backendKey`; do not guess `/admin` or `/backend`.
-- Probe a live acceptance URL and confirm its owning instance/status immediately before handoff. Do not present a stopped, borrowed, placeholder, or source-file-shaped URL as accessible.
-
-## 6. Documentation and knowledge
 
 - Never test on the default/production WLS port `9501`.
 - Use a unique `ai-test-*` instance and an available integer port `>=9502`. Use the WLS skill for exact lifecycle commands.
@@ -133,6 +128,17 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 - Keep durable behavior and usage guidance outcome-focused. Put task evidence in the task record and historical material in `dev/ai/archive/**`; do not create root-level fix diaries.
 - Promote a lesson only when it is confirmed, reusable, and belongs to a clear owner. Merge with the narrowest existing rule/skill instead of adding another mirror.
 - Entry files, indexes, adapters, and compatibility maps stay short. Skill trigger conditions belong in frontmatter `description`; detailed examples belong in one-level `references/`.
+
+### Module requirements, version progress, and handoff (hard)
+
+1. **Two fixed documents per module.** Every module owns exactly `app/code/{Vendor}/{Module}/doc/需求.md` and `app/code/{Vendor}/{Module}/doc/开发日志.md`, linked from its `doc/AI-INDEX.md`. Create both with a new module. For an existing module missing either file, create an evidence-backed baseline before the next module code change; never fabricate historical versions, decisions, progress, or acceptance. Put unverifiable legacy behavior under「待确认」.
+2. **Requirement source of truth.** **需求.md** contains the current confirmed requirements and business logic, stable requirement IDs, scope/non-goals, acceptance criteria, security/data/permission implications, introduced/changed versions, decision rationale, and a version change ledger. It is not a raw chat transcript or implementation diary. Code behavior is evidence to reconcile, not permission to silently rewrite the requirement.
+3. **User-request reconciliation gate.** Before planning implementation or dispatching a code-edit subagent, compare the semantic meaning of the current request with **需求.md**. If it adds, removes, contradicts, or changes any requirement, business rule, acceptance condition, priority, target version, data/security boundary, or operator behavior—or the document is silent—show the user the exact difference and impact and ask whether to supplement/change the requirement. Equivalent wording is not a change. **Do not start code work until the user explicitly decides.**
+4. **Write requirement before code.** After confirmation, update **需求.md** first with the approved requirement, logic, rationale, target version, acceptance/E2E paths, and affected requirement IDs. Then open or update the matching target-version entry in **开发日志.md**. A chat-only decision, task plan, or code diff does not satisfy this gate.
+5. **Versioned development ledger.** **开发日志.md** is the durable locator for development progress and adjustments, organized by target module version and linked requirement IDs. Record only evidence-backed stage transitions: requirement confirmed, implementation, architecture/defect/security review and fixes, review pass, layered tests, real-path E2E, repeatable E2E asset, documentation/operations handoff, acceptance, release/defer/block. Keep dated adjustment/decision entries and blockers; never claim unexecuted checks. A documentation target version does not by itself authorize or substitute for the module-version rules in §4 or a release action.
+6. **Keep the ledger current at gates.** Update the version entry when a gate changes state, scope changes, a review/test finding causes rework, the user approves a deviation, or work blocks/resumes. Do not turn it into terminal output: link concise evidence, task records, paths, cases, URLs, and screenshots. Redact evidence and never store credentials, tokens, cookies, private URLs with secrets, personal/customer/payment data, or reusable session material. Every code change caused by a finding returns through the documented implementation-owner/model choice and review-before-test rules in §5/§8 before the log may advance.
+7. **Functional and operations documentation before closure.** After the implementation has passed its technical/real-path acceptance and before final user/product acceptance, locate and update the current owning README, architecture/API/usage document, and operator-facing document for the feature. If an operator/support workflow has no owner, create `app/code/{Vendor}/{Module}/doc/运营/{功能名}.md` and link it from `doc/AI-INDEX.md`; include version, purpose, prerequisites/permissions, operator path, states, errors/recovery, limitations, and rollback/support notes. If a change truly has no operator impact, record `N/A` with evidence in **开发日志.md** rather than creating filler.
+8. **Definition of done.** A module feature is incomplete until **需求.md** reflects the accepted behavior, the target-version **开发日志.md** records every applicable gate with real evidence, the functional/operator docs match the accepted result, and open deviations are either resolved or explicitly deferred by the user. Follow `通用工程师-开发规范与代码质量` for the detailed document contract and closure checklist.
 
 ## 7. Git, external systems, and release
 
@@ -161,7 +167,7 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 
 #### Prompt merge on every core change (hard)
 
-Whenever a task **creates or modifies** `app/code/Weline/**` in either repository (including `etc/module.php` version bumps, Model schema, Framework, Websites, etc.):
+Whenever a task **creates or modifies** `app/code/Weline/**` in either repository (including defects, features, runtime behavior, configuration, core documentation, `etc/module.php` version bumps, Model schema, Framework, Websites, etc.):
 
 1. **Must prompt the user to merge/align** before claiming the task done — do not silently finish with only one side updated.
 2. The prompt **must** include a **decision table**: file → suggested decision code → **reason** (why that direction; what each side currently has).
@@ -169,28 +175,42 @@ Whenever a task **creates or modifies** `app/code/Weline/**` in either repositor
 4. After confirmation, apply only the confirmed decisions; if the user declines, record `SKIP` with their reason.
 5. Delivery that touched `Weline/**` without this merge prompt + reasons is incomplete.
 
+#### Session-scoped merge only (hard · current task files)
+
+Each core↔site merge covers **only files created or modified in the current conversation / task session**.
+
+1. **Candidate set = this session's change set** intersecting `app/code/Weline/**` (plus AI rule/docs files only when this session actually edited them). Build the list from the session transcript + on-disk edits of this task — not from a full-tree `Weline/` diff, not from historical commits, not from “while we're here” sibling drift.
+2. **Prohibit** merging, deciding, or even proposing files **outside** that session set. Pre-existing repo drift (hundreds of unrelated `Weline/**` diffs, compiled `view/tpl`, other modules' WIP) must be marked `SKIP` with reason「会话外 / 非本任务」— or omitted from the decision table entirely.
+3. Expanding scope (full `Weline/` align, whole module tree, older commits) requires an **explicit new user request**; never infer it from「合并到框架」alone.
+4. Delivery must state the session candidate list (or “no `Weline/**` edits this session → nothing to merge”).
+
 #### Merge-back baseline (hard · do not lose live edits)
 
 When merging site/release `app/code/Weline/**` changes into the canonical framework repo (or mutual align):
 
 1. **Merge peer = both sides' working-tree files on disk** (including every uncommitted dirty edit). That live file is the only merge peer — **not** `git show` / `git show origin/dev:<path>` / HEAD / any clean committed blob.
-2. **Mandatory decision workflow (compare → propose → user confirm → act):** for every candidate file, run a real `diff` of site/release on-disk file ↔ framework working-tree on-disk file, then **list the dirty deltas and a recommended decision with reason** before writing anything. Do not merge until the user confirms the recommendations (or gives alternate decisions). Decision codes:
+2. **Mandatory decision workflow (compare → propose → user confirm → act):** for every **session candidate** file only, run a real `diff` of site/release on-disk file ↔ framework working-tree on-disk file, then **list the dirty deltas and a recommended decision with reason** before writing anything. Do not merge until the user confirms the recommendations (or gives alternate decisions). Decision codes:
    - `SAME` — already aligned; no write.
    - `KEEP_FW` — framework dirty side already has the task fix and/or leads; do not overwrite with site.
    - `KEEP_SITE→FW` — site has the verified task delta missing from framework dirty; merge that delta only into the framework working tree.
    - `KEEP_FW→SITE` — framework dirty leads; merge that delta into the site working tree (only when mutual align is in scope).
    - `MERGE_HUNKS` — both sides lead on different hunks; hand-merge without wholesale replace.
-   - `SKIP` — out of scope with reason.
+   - `SKIP` — out of scope with reason (including session-outside files).
 3. **Never** skip the dirty-file diff and “assume already synced.” Marker greps alone are not a substitute for the per-file decision table when the files still differ. The delivery must show the decision table **with reasons** **and** wait for user confirmation before applying writes.
 4. **Never** treat a clean committed tree as the sole framework-side compare/overwrite source and then write back over the working tree — that drops in-progress dirty edits.
 5. **Git is forbidden as a merge/overwrite tool for this sync.** Do **not** use `git checkout`, `git restore`, `git reset`, `git clean`, `git checkout -- <path>`, or `git show … > file` to “apply” peer content — those wipe or replace the live dirty working tree. `git status` / `git diff` may be used only as a **path inventory** aid; the merge itself must be hand edits or targeted file copies of **already-diffed dirty disk content**, never a clean-tree blob.
 6. **Never** wholesale `cp` / rsync a site file over a framework working-tree file that already has **unrelated** live dirty hunks without a `MERGE_HUNKS` / confirmed decision. **Never** rsync/copy the entire `Weline/` tree.
 7. After merge, re-check that unrelated dirty edits that were present in either working tree before the merge still exist (spot-check via disk `diff` / content markers — not by discarding and re-checking out).
 8. `origin/dev` may be used only as optional **read-only context**. Delivery must include the decision table (file → decision → reason), merge direction, and any skipped path.
+9. Obey **Session-scoped merge only** above: non-session files are never merge candidates unless the user explicitly expands scope.
+10. Preserve a before/after `git diff -- <path>` evidence pair for every dirty merge target. The after diff must contain both the current task's semantic hunk and every unrelated hunk present in the before diff; path-level “modified” status alone is not proof of preservation.
 
 ## 8. Multi-agent work
 
-- Delegate only independent, bounded subtasks when parallelism materially improves speed or confidence, and obey the runtime's available slots.
+- **Implementation ownership and model choice (hard).** For executable source, templates/styles, executable configuration or migration logic, generators, tests, and E2E code, the current task owner must explicitly choose the execution arrangement that fits the task's scope, complexity, and risk. The owner may make a bounded change directly or delegate it to a bounded subagent. **Any delegated code edit must use `gpt-5.6-terra`.** An unavailable legacy or user-copied model name must never block authorized work by itself.
+- **Delegated edit requirements.** Before launching a code-edit subagent, confirm that the active interface supports explicit `gpt-5.6-terra` selection, record that model in the launch receipt, and give the agent concrete requirements, allowed paths/symbols, forbidden scope, acceptance evidence, and stop/escalation conditions. If Terra is unavailable, do not silently substitute another subagent model; keep the bounded edit with the current owner or report a genuine non-model blocker.
+- **Repair ownership.** Code repair required by review or failed tests returns to the owner or to a newly selected bounded implementation agent. The owner re-reviews the resulting diff before tests resume, following §5.
+- For non-code work, delegate only independent, bounded subtasks when parallelism materially improves speed or confidence, and obey the runtime's available slots.
 - The owner supplies boundaries, integrates findings, protects overlapping files, and performs final acceptance.
 - Subagents provide evidence; they do not broaden authorization, replace owner judgment, or silently fix adjacent scope.
 
@@ -199,7 +219,11 @@ When merging site/release `app/code/Weline/**` changes into the canonical framew
 The final report should state:
 
 - what changed and where;
+- for every code-editing task, the implementation owner, selected model when delegated, owned paths/symbols, and returned implementation evidence;
+- for every new feature, the architecture/defect/security review findings, fixes, re-review verdict, and any explicitly approved deferral;
 - what was actually validated and the decisive evidence（单测用例名/结果，和/或 WebUI 步骤与可见结果）；未测不得写成完成;
+- the hardened E2E case/path and its actual execution result when the new-feature gate applies;
+- for module work, the requirement IDs and target version, **需求.md** reconciliation decision, **开发日志.md** final gate status, and updated/created functional or operator documents;
 - the relevant full URL, endpoint, command, or document path for each changed surface;
 - any unverified item, blocker, live WLS handoff, or residual risk;
 - any commit, push, PR, release, or deployment address only after that action really succeeded.
@@ -220,8 +244,35 @@ Authority for Cursor mirrors: `.cursor/rules/real-device-acceptance.mdc` and `.c
 6. HTTP entry URLs follow §11 / `local-browser-urls.mdc`.
 7. SSE/progress: click the same UI controls; watching queue PID or API status alone is not acceptance.
 8. **WebUI-first for product flows** (restates §5): do not drive intake/rebuild/publish/language/blog acceptance via CLI orchestrators; use the workbench and visitor UI.
-9. **Feature closed-loop** (restates §5 Feature closed-loop): walk main path + every branch in WebUI; on failure pause, note, fix, retest that branch, then resume; after full pass, suggest E2E solidification to the user.
+9. **New-feature serial gate** (restates §5 Feature closed-loop quality gate): implementation → architecture/defect/security code review → fix and re-review pass → layered tests → real-path WebUI E2E → passing repeatable E2E regression. Walk the main path plus every owned branch; any code change made after a test failure returns to review before retest. E2E hardening is mandatory, not a post-completion suggestion.
 
 ## 11. Local Browser acceptance URLs
 
 See `.cursor/rules/local-browser-urls.mdc`. Prefer `http://127.0.0.1:{port}/...` for clickable handoff when Host is not required; multi-tenant Host sites may use the live Host URL that the Browser can open. Probe the exact handoff URL before delivery. Do not double-encode `?`/`=`/`&`.
+
+## 12. SAAS remote ops and deploy target (hard)
+
+Authority for Cursor mirrors: `.cursor/rules/ssh-mcp-deploy.mdc`. If they conflict with this file, **this file wins**. Connection parameters: `dev/ai/config/ssh-mcp-weline-saas.json`.
+
+### 12.1 SSH MCP only
+
+1. SAAS host `43.205.103.113` operations **must** go through Cursor **SSH MCP** (`ssh-mcp`), reusing persistent connection **`weline-saas`**.
+2. **Prohibit** Shell loops of `ssh` / `scp` / `rsync-over-ssh` for routine remote ops; use MCP `exec` / `sudo-exec` (and file upload tools when available).
+3. Connect once when missing/disconnected per `ssh-mcp-weline-saas.json`; do not paste private key material into the repo or chat.
+
+### 12.2 Deploy default = pre（硬）
+
+When the user says **「部署」** / **deploy** / **提交推送部署** (or equivalent) **without** naming production:
+
+1. **Default target = pre（预发）**：`/home/weline-test` on the SAAS host（`preDeployDir`）.
+2. **Do not** deploy to production `/home/weline`（`prodDeployDir`） unless the user **explicitly** says so, e.g. 「部署生产」「部署正式」「deploy prod」「生产环境」.
+3. Ambiguous 「两边都部署 / 全量发布」 still needs a one-line confirm before touching production.
+4. Delivery must state which target was deployed（`pre` and/or `prod`）and the path used.
+5. Pre is often on a dirty working tree / different branch than local `dev`; prefer **session commit file checkout** from the pushed ref over wholesale `git reset --hard`, unless the user authorizes a hard reset.
+
+### 12.3 Paths
+
+| 环境 | 目录 | 触发用语（示例） |
+|------|------|------------------|
+| pre（默认） | `/home/weline-test` | 部署、deploy、推送部署 |
+| prod（须明示） | `/home/weline` | 部署生产、部署正式、deploy prod |

@@ -39,6 +39,8 @@ final class SeoOptimizationQueueSchedulerAdmissionContractTest extends TestCase
             \dirname(__DIR__, 3) . '/Cron/SeoOptimizationSchedule.php'
         );
         self::assertStringContainsString('$this->policyService->persistedPolicies()', $source);
+        self::assertStringContainsString('listWebsiteIds', $source);
+        self::assertStringContainsString("'trigger_source' => 'scheduler'", $source);
         self::assertStringNotContainsString("w_query('websites', 'getWebsiteList'", $source);
     }
 

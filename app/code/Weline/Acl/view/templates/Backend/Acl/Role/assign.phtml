@@ -415,8 +415,11 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 
 /* 顶级节点标题 - 渐变背景 */
 #acl > .jstree-container-ul > .jstree-node > .jstree-anchor, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-anchor {
-    display: flex;
+    display: inline-flex;
     align-items: center;
+    width: calc(100% - 32px);
+    box-sizing: border-box;
+    vertical-align: middle;
     padding: var(--backend-spacing-md, 12px) var(--backend-spacing-lg, 16px);
     background: linear-gradient(135deg, var(--backend-color-bg-secondary, #f8f9fa) 0%, var(--backend-color-bg-tertiary, #e9ecef) 100%);
     border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
@@ -440,36 +443,78 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 /* 顶级节点的子节点容器 */
 #acl > .jstree-container-ul > .jstree-node > .jstree-children, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-children {
     padding: var(--backend-spacing-sm, 8px);
-    background: var(--backend-color-bg-primary, #fff);
+    background: transparent;
 }
 
-/* 子节点样式 */
+/* 子节点样式：必须保持 block+relative。
+   display:flex 会打乱 jstree-wholerow 的绝对定位（static position），
+   父行高亮条会盖到子行，看起来像重叠。 */
 #acl .jstree-node, #acl-tag .jstree-node {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
+    display: block;
+    position: relative;
     margin-bottom: 2px;
     min-width: 0;
+    background-image: none !important;
+    background-color: transparent;
 }
 
 #acl .jstree-node > .jstree-ocl, #acl-tag .jstree-node > .jstree-ocl {
-    flex: 0 0 auto;
+    display: inline-block;
+    width: 18px;
+    height: 24px;
+    margin: 0 4px 0 2px;
+    vertical-align: middle;
+    background: none !important;
+    background-image: none !important;
+    position: relative;
+    cursor: pointer;
+}
+
+#acl .jstree-closed > .jstree-ocl::before,
+#acl-tag .jstree-closed > .jstree-ocl::before,
+#acl .jstree-open > .jstree-ocl::before,
+#acl-tag .jstree-open > .jstree-ocl::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    border-right: 1.5px solid var(--backend-color-text-secondary, #8b95a7);
+    border-bottom: 1.5px solid var(--backend-color-text-secondary, #8b95a7);
+    box-sizing: border-box;
+}
+
+#acl .jstree-closed > .jstree-ocl::before,
+#acl-tag .jstree-closed > .jstree-ocl::before {
+    transform: translate(-35%, -55%) rotate(-45deg);
+}
+
+#acl .jstree-open > .jstree-ocl::before,
+#acl-tag .jstree-open > .jstree-ocl::before {
+    transform: translate(-55%, -70%) rotate(45deg);
+}
+
+#acl .jstree-leaf > .jstree-ocl::before,
+#acl-tag .jstree-leaf > .jstree-ocl::before {
+    content: none;
 }
 
 #acl .jstree-node > .jstree-anchor, #acl-tag .jstree-node > .jstree-anchor {
-    flex: 1 1 auto;
+    display: inline-flex;
+    vertical-align: middle;
     min-width: 0;
 }
 
 #acl .jstree-node > .jstree-children, #acl-tag .jstree-node > .jstree-children {
-    flex: 0 0 100%;
-    min-width: 0;
+    display: block;
 }
 
 #acl .jstree-anchor, #acl-tag .jstree-anchor {
     padding: 8px 12px;
     border-radius: var(--backend-border-radius, 6px);
     color: var(--backend-color-text-primary, #212529);
+    text-shadow: none !important;
     transition: all 0.15s ease;
     display: flex;
     align-items: center;
@@ -485,28 +530,40 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     flex-shrink: 0;
 }
 
+#acl .jstree-anchor:hover, #acl-tag .jstree-anchor:hover,
+#acl .jstree-hovered, #acl-tag .jstree-hovered,
+#acl .jstree-context, #acl-tag .jstree-context {
+    background: var(--backend-color-bg-secondary, rgba(148, 163, 184, 0.12)) !important;
+    box-shadow: none !important;
+    color: var(--backend-color-text-primary, inherit) !important;
+    transform: none;
+}
+
 #acl .jstree-anchor:hover, #acl-tag .jstree-anchor:hover {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
     transform: translateX(2px);
 }
 
-/* 选中节点样式 - 左侧强调边 */
+/* 选中节点样式 - 左侧强调边；暗色不要用高饱和主色当字色，否则像发光 */
 #acl .jstree-clicked, #acl-tag .jstree-clicked {
     background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.12)) !important;
-    color: var(--backend-color-primary, #556ee6) !important;
+    color: var(--backend-color-text-primary, #212529) !important;
     font-weight: 500;
     box-shadow: inset 3px 0 0 var(--backend-color-primary, #556ee6);
+    text-shadow: none !important;
 }
 
 /* wholerow 行样式 */
 #acl .jstree-wholerow, #acl-tag .jstree-wholerow {
     border-radius: var(--backend-border-radius, 6px);
     transition: all 0.15s ease;
+    background: transparent;
+    box-shadow: none !important;
 }
 
 #acl .jstree-wholerow-clicked, #acl-tag .jstree-wholerow-clicked {
     background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
     border-radius: var(--backend-border-radius, 6px);
+    box-shadow: none !important;
 }
 
 #acl .jstree-wholerow-hovered, #acl-tag .jstree-wholerow-hovered {
@@ -554,12 +611,12 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 }
 
 /* 部分选中状态 */
-#acl .jstree-undetermined > .jstree-checkbox, #acl-tag .jstree-undetermined > .jstree-checkbox {
+#acl .jstree-checkbox.jstree-undetermined, #acl-tag .jstree-checkbox.jstree-undetermined {
     background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15));
     border-color: var(--backend-color-primary, #556ee6);
 }
 
-#acl .jstree-undetermined > .jstree-checkbox::after, #acl-tag .jstree-undetermined > .jstree-checkbox::after {
+#acl .jstree-checkbox.jstree-undetermined::after, #acl-tag .jstree-checkbox.jstree-undetermined::after {
     content: '';
     opacity: 1;
     left: 3px;
@@ -656,10 +713,75 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 
 /* 搜索匹配高亮 */
 #acl .jstree-search, #acl-tag .jstree-search {
-    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.2));
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.2)) !important;
+    color: var(--backend-color-text-primary, inherit) !important;
     border-radius: var(--backend-border-radius-sm, 4px);
     padding: 2px 4px;
     font-weight: 500;
+    font-style: normal;
+}
+
+[data-theme="dark"] #acl .jstree-closed > .jstree-ocl::before,
+[data-theme-mode="dark"] #acl .jstree-closed > .jstree-ocl::before,
+[data-bs-theme="dark"] #acl .jstree-closed > .jstree-ocl::before,
+[data-layout-mode="dark"] #acl .jstree-closed > .jstree-ocl::before,
+[data-theme="dark"] #acl .jstree-open > .jstree-ocl::before,
+[data-theme-mode="dark"] #acl .jstree-open > .jstree-ocl::before,
+[data-bs-theme="dark"] #acl .jstree-open > .jstree-ocl::before,
+[data-layout-mode="dark"] #acl .jstree-open > .jstree-ocl::before,
+[data-theme="dark"] #acl-tag .jstree-closed > .jstree-ocl::before,
+[data-theme-mode="dark"] #acl-tag .jstree-closed > .jstree-ocl::before,
+[data-bs-theme="dark"] #acl-tag .jstree-closed > .jstree-ocl::before,
+[data-layout-mode="dark"] #acl-tag .jstree-closed > .jstree-ocl::before,
+[data-theme="dark"] #acl-tag .jstree-open > .jstree-ocl::before,
+[data-theme-mode="dark"] #acl-tag .jstree-open > .jstree-ocl::before,
+[data-bs-theme="dark"] #acl-tag .jstree-open > .jstree-ocl::before,
+[data-layout-mode="dark"] #acl-tag .jstree-open > .jstree-ocl::before {
+    border-color: var(--backend-color-text-secondary, #94a3b8);
+}
+
+[data-theme="dark"] #acl > .jstree-container-ul > .jstree-node,
+[data-theme-mode="dark"] #acl > .jstree-container-ul > .jstree-node,
+[data-bs-theme="dark"] #acl > .jstree-container-ul > .jstree-node,
+[data-layout-mode="dark"] #acl > .jstree-container-ul > .jstree-node,
+[data-theme="dark"] #acl-tag > .jstree-container-ul > .jstree-node,
+[data-theme-mode="dark"] #acl-tag > .jstree-container-ul > .jstree-node,
+[data-bs-theme="dark"] #acl-tag > .jstree-container-ul > .jstree-node,
+[data-layout-mode="dark"] #acl-tag > .jstree-container-ul > .jstree-node {
+    background: var(--backend-color-card-bg, #172033);
+    border-color: var(--backend-color-border-light, rgba(148, 163, 184, 0.18));
+}
+
+[data-theme="dark"] #acl .jstree-anchor,
+[data-theme-mode="dark"] #acl .jstree-anchor,
+[data-bs-theme="dark"] #acl .jstree-anchor,
+[data-layout-mode="dark"] #acl .jstree-anchor,
+[data-theme="dark"] #acl-tag .jstree-anchor,
+[data-theme-mode="dark"] #acl-tag .jstree-anchor,
+[data-bs-theme="dark"] #acl-tag .jstree-anchor,
+[data-layout-mode="dark"] #acl-tag .jstree-anchor,
+[data-theme="dark"] #acl .jstree-clicked,
+[data-theme-mode="dark"] #acl .jstree-clicked,
+[data-bs-theme="dark"] #acl .jstree-clicked,
+[data-layout-mode="dark"] #acl .jstree-clicked,
+[data-theme="dark"] #acl-tag .jstree-clicked,
+[data-theme-mode="dark"] #acl-tag .jstree-clicked,
+[data-bs-theme="dark"] #acl-tag .jstree-clicked,
+[data-layout-mode="dark"] #acl-tag .jstree-clicked {
+    color: var(--backend-color-text-primary, #e6eef8) !important;
+    text-shadow: none !important;
+}
+
+[data-theme="dark"] #acl .jstree-checkbox,
+[data-theme-mode="dark"] #acl .jstree-checkbox,
+[data-bs-theme="dark"] #acl .jstree-checkbox,
+[data-layout-mode="dark"] #acl .jstree-checkbox,
+[data-theme="dark"] #acl-tag .jstree-checkbox,
+[data-theme-mode="dark"] #acl-tag .jstree-checkbox,
+[data-bs-theme="dark"] #acl-tag .jstree-checkbox,
+[data-layout-mode="dark"] #acl-tag .jstree-checkbox {
+    background: var(--backend-color-input-bg, #0f172a);
+    border-color: var(--backend-color-border-emphasis, rgba(148, 163, 184, 0.45));
 }
 
 /* 动画效果 */
@@ -998,7 +1120,10 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 }
                 $sourceId = htmlspecialchars($acl->getSourceId(), ENT_QUOTES);
                 $desc .= " ({$sourceId})";
-                $access = $acl->getData('role_id') ? 'true' : 'false';
+                $access = \Weline\Acl\Service\Resource\AclResourcePresentation::assignmentNodePreselected(
+                    (bool)$acl->getData('role_id'),
+                    !empty($acl->getSub()),
+                ) ? 'true' : 'false';
                 return " class='show_tooltip' title='{$desc}' data-jstree='{\"disabled\":false,\"opened\":false,\"selected\":{$access},\"icon\":\"$icon\"}' ";
             };
 
@@ -1094,6 +1219,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     window.__aclSharedSourceIds = new Set(<?php echo json_encode(array_values($this->getData('selected_source_ids') ?: []), JSON_UNESCAPED_UNICODE); ?>);
     window.__aclTagGrants = new Set(<?php echo json_encode(array_values($this->getData('tag_grants') ?: []), JSON_UNESCAPED_UNICODE); ?>);
     window.__aclTagPathLeaves = <?php echo json_encode($this->getData('tag_path_leaves') ?: [], JSON_UNESCAPED_UNICODE); ?>;
+    window.__aclSourceDescendants = <?php echo json_encode($this->getData('source_descendants') ?: new \stdClass(), JSON_UNESCAPED_UNICODE); ?>;
     window.__aclSyncing = false;
     window.__aclActiveView = 'menu';
 
@@ -1104,11 +1230,14 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 
     var jstreeCommon = {
         core: {
-            themes: { variant: 'large', responsive: true },
+            themes: { responsive: true },
             animation: 150
         },
         checkbox: {
             keep_selected_style: false,
+            // jstree forces cascade to up+down+undetermined when three_state is true.
+            // Do not programmatically select_node() parents: that re-checks whole subtrees
+            // (e.g. 应用商城) even when only the ancestor is stored via expandMenusAncestors.
             three_state: true,
             cascade: 'up'
         },
@@ -1197,20 +1326,30 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         grants.forEach(function(path) { addLeavesToShared(path); });
     }
 
+    function isTreeLeaf(tree, id) {
+        var node = tree && tree.get_node(id);
+        return Boolean(node && (!node.children || node.children.length === 0));
+    }
+
     function syncMenuTreeFromShared() {
         var tree = $('#acl').jstree(true);
         if (!tree) return;
         window.__aclSyncing = true;
         try {
-            var selected = tree.get_selected();
-            selected.forEach(function(id) {
-                if (!window.__aclSharedSourceIds.has(id)) {
-                    tree.deselect_node(id, true);
-                }
-            });
             window.__aclSharedSourceIds.forEach(function(id) {
+                if (!isTreeLeaf(tree, id)) {
+                    return;
+                }
                 if (tree.get_node(id) && !tree.is_selected(id)) {
                     tree.select_node(id, true, true);
+                }
+            });
+            tree.get_selected().forEach(function(id) {
+                if (!isTreeLeaf(tree, id)) {
+                    return;
+                }
+                if (!window.__aclSharedSourceIds.has(id)) {
+                    tree.deselect_node(id, true);
                 }
             });
         } finally {
@@ -1258,10 +1397,62 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         }
     }
 
+    function grantMenuSubtree(tree, node) {
+        var seen = {};
+        var ids = [];
+        [node.id].concat(node.children_d || [], (window.__aclSourceDescendants && window.__aclSourceDescendants[node.id]) || []).forEach(function(id) {
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            ids.push(id);
+        });
+        window.__aclSyncing = true;
+        try {
+            ids.forEach(function(id) {
+                if (!isTagNodeId(id) && (!tree.get_node(id) || isTreeLeaf(tree, id))) {
+                    window.__aclSharedSourceIds.add(id);
+                }
+                if (tree.get_node(id) && !tree.is_selected(id)) {
+                    tree.select_node(id, true, true);
+                }
+            });
+        } finally {
+            window.__aclSyncing = false;
+        }
+    }
+
+    function revokeMenuSubtree(tree, node) {
+        var seen = {};
+        var ids = [];
+        [node.id].concat(node.children_d || [], (window.__aclSourceDescendants && window.__aclSourceDescendants[node.id]) || []).forEach(function(id) {
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            ids.push(id);
+        });
+        window.__aclSyncing = true;
+        try {
+            var tagTree = $('#acl-tag').jstree(true);
+            ids.forEach(function(id) {
+                if (!isTagNodeId(id)) {
+                    window.__aclSharedSourceIds.delete(id);
+                    removeTagGrantsCoveringLeaf(id);
+                }
+                if (tree.get_node(id) && tree.is_selected(id)) {
+                    tree.deselect_node(id, true);
+                }
+                if (tagTree && tagTree.get_node(id) && tagTree.is_selected(id)) {
+                    tagTree.deselect_node(id, true);
+                }
+            });
+        } finally {
+            window.__aclSyncing = false;
+        }
+    }
+
     $('#acl').jstree(jstreeCommon);
     $('#acl-tag').jstree(jstreeCommon);
 
     $('#acl').on('ready.jstree', function() {
+        syncMenuTreeFromShared();
         updateStatistics();
     });
 
@@ -1272,26 +1463,14 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 
     $('#acl').on('select_node.jstree', function(e, data) {
         if (window.__aclSyncing) return;
-        if (!isTagNodeId(data.node.id)) {
-            window.__aclSharedSourceIds.add(data.node.id);
-        }
+        grantMenuSubtree($('#acl').jstree(true), data.node);
         updateStatistics();
     });
 
     $('#acl').on('deselect_node.jstree', function(e, data) {
         if (window.__aclSyncing) return;
         var tree = $('#acl').jstree(true);
-        var node = data.node;
-        applyMenuDeselectCascade(tree, node);
-        if (!isTagNodeId(node.id)) {
-            window.__aclSharedSourceIds.delete(node.id);
-        }
-        // also drop any still-deselected children from shared
-        (node.children_d || []).forEach(function(id) {
-            if (!isTagNodeId(id) && tree && !tree.is_selected(id)) {
-                window.__aclSharedSourceIds.delete(id);
-            }
-        });
+        revokeMenuSubtree(tree, data.node);
         updateStatistics();
     });
 
@@ -1380,18 +1559,28 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 
         if (menuTree) {
             menuTree.get_selected().forEach(function(id) {
-                if (!isTagNodeId(id)) shared.add(id);
+                if (!isTagNodeId(id) && isTreeLeaf(menuTree, id)) {
+                    shared.add(id);
+                }
             });
-            var menuVisible = {};
-            $('#acl li').each(function() { menuVisible[this.id] = true; });
-            shared.forEach(function(id) {
-                if (menuVisible[id] && !menuTree.is_selected(id)) {
+            var menuVisibleLeaves = {};
+            $('#acl li').each(function() {
+                if (isTreeLeaf(menuTree, this.id)) {
+                    menuVisibleLeaves[this.id] = true;
+                }
+            });
+            Array.from(shared).forEach(function(id) {
+                if (menuTree.get_node(id) && !isTreeLeaf(menuTree, id)) {
+                    shared.delete(id);
+                    return;
+                }
+                if (menuVisibleLeaves[id] && !menuTree.is_selected(id)) {
                     shared.delete(id);
                 }
             });
         }
 
-        if (tagTree) {
+        if (tagTree && window.__aclActiveView === 'tag') {
             tagTree.get_selected().forEach(function(id) {
                 if (!isTagNodeId(id)) shared.add(id);
             });
@@ -1403,11 +1592,29 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 }
             });
             rebuildTagGrantsFromTree();
+            var keptTagGrants = new Set();
             window.__aclTagGrants.forEach(function(path) {
-                ((window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || []).forEach(function(id) {
-                    shared.add(id);
-                });
+                var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
+                var stillGranted = leaves.some(function(id) { return shared.has(id); });
+                if (!stillGranted) {
+                    return;
+                }
+                keptTagGrants.add(path);
+                leaves.forEach(function(id) { shared.add(id); });
             });
+            window.__aclTagGrants = keptTagGrants;
+        } else if (window.__aclTagGrants && window.__aclTagGrants.size) {
+            var keptTagGrants = new Set();
+            window.__aclTagGrants.forEach(function(path) {
+                var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
+                var stillGranted = leaves.some(function(id) { return shared.has(id); });
+                if (!stillGranted) {
+                    return;
+                }
+                keptTagGrants.add(path);
+                leaves.forEach(function(id) { shared.add(id); });
+            });
+            window.__aclTagGrants = keptTagGrants;
         }
 
         window.__aclSharedSourceIds = shared;

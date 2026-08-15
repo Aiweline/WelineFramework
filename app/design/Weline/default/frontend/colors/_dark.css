@@ -1,0 +1,28 @@
+/** Weline Default frontend brand overlay (dark). */
+[data-theme="dark"],
+[data-bs-theme="dark"] {
+    --color-primary: #60a5fa;
+    --color-primary-rgb: 96, 165, 250;
+    --color-primary-hover: #93c5fd;
+    --color-primary-active: #3b82f6;
+    --color-primary-dark: #3b82f6;
+    --color-primary-bg-subtle: rgba(96, 165, 250, 0.18);
+    --color-primary-border-subtle: rgba(147, 197, 253, 0.42);
+    --color-primary-text-emphasis: #bfdbfe;
+    --color-on-primary: #0f172a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme-preference]),
+    :root[data-theme-preference="system"] {
+        --color-primary: #60a5fa;
+        --color-primary-rgb: 96, 165, 250;
+        --color-primary-hover: #93c5fd;
+        --color-primary-active: #3b82f6;
+        --color-primary-dark: #3b82f6;
+        --color-primary-bg-subtle: rgba(96, 165, 250, 0.18);
+        --color-primary-border-subtle: rgba(147, 197, 253, 0.42);
+        --color-primary-text-emphasis: #bfdbfe;
+        --color-on-primary: #0f172a;
+    }
+}

@@ -189,7 +189,8 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
         $startPage = $this->startPageService()->configure(
             (int)$request->getData(AiSiteProvisioningRequest::schema_fields_WEBSITE_ID),
             $normalized['target_domain'],
-            $pageId
+            $pageId,
+            (string)($normalized['sub_path'] ?? '')
         );
 
         return \array_replace($status, [

@@ -1,0 +1,29 @@
+<?php
+
+/**
+ * @hook-priority 170
+ * @hook-sort-order 30
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+use Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+
+$projectionProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+    ->resolve(AccountSidebarProjectionProviderInterface::class);
+if (!$projectionProvider instanceof AccountSidebarProjectionProviderInterface) {
+    throw new \LogicException('Required Customer account sidebar projection provider is unavailable.');
+}
+if ($projectionProvider->forSections('devices') === null) {
+    return;
+}
+$this->assign('device_manager_area', 'frontend');
+?>
+<section class="account-hook-section account-index__section d-none motor-account-section"
+         id="devices-section"
+         data-account-section="devices"
+         hidden
+         weline-code="session_manager.account.device_management">
+    <?= $this->fetch('Weline_SessionManager::templates/device/manager.phtml') ?>
+</section>

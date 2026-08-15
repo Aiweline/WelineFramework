@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Framework\Session\Test;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Session\Auth\AreaConfig;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSession;
@@ -24,6 +26,8 @@ class AuthenticatedSessionTest extends TestCase
     private AuthenticatedSession $authSession;
     private SessionInterface $session;
     private string $testSessionId;
+    private RuntimeProviderResolver $runtimeProviders;
+    private string $providerRegistryFile;
 
     protected function setUp(): void
     {
@@ -38,14 +42,29 @@ class AuthenticatedSessionTest extends TestCase
         
         $this->session = new Session($storage, $strategy, 3600);
         $this->testSessionId = 'test_auth_session_' . \bin2hex(\random_bytes(8));
+        $this->providerRegistryFile = \sys_get_temp_dir()
+            . '/weline-auth-session-providers-'
+            . \bin2hex(\random_bytes(8))
+            . '.php';
+        \file_put_contents($this->providerRegistryFile, '<?php return ' . \var_export([
+            'format' => 1,
+            'order' => ['Weline_Test'],
+            'modules' => ['Weline_Test' => ['provides' => []]],
+        ], true) . ';');
+        $this->runtimeProviders = new RuntimeProviderResolver(
+            new ServiceProviderRegistry($this->providerRegistryFile),
+        );
         
         $areaConfig = AreaConfig::backend();
-        $this->authSession = new AuthenticatedSession($this->session, $areaConfig);
+        $this->authSession = new AuthenticatedSession($this->session, $areaConfig, $this->runtimeProviders);
     }
 
     protected function tearDown(): void
     {
         $this->session->destroy();
+        if (\is_file($this->providerRegistryFile)) {
+            \unlink($this->providerRegistryFile);
+        }
     }
 
     public function testImplementsInterface(): void
@@ -132,7 +151,11 @@ class AuthenticatedSessionTest extends TestCase
     public function testFrontendAreaConfig(): void
     {
         $frontendConfig = AreaConfig::frontend();
-        $frontendSession = new AuthenticatedSession($this->session, $frontendConfig);
+        $frontendSession = new AuthenticatedSession(
+            $this->session,
+            $frontendConfig,
+            $this->runtimeProviders,
+        );
         
         $this->assertEquals('frontend', $frontendSession->getArea());
         $this->assertTrue($frontendSession->isFrontend());

@@ -48,6 +48,9 @@ class ThemePathResolver implements ThemePathResolverInterface
      */
     public function resolveThemeFile(string $modulePath, WelineTheme $theme): string
     {
+        if ($this->isCoreRuntimeAsset($modulePath)) {
+            return $modulePath;
+        }
         try {
             /** @var \Weline\Theme\Service\ThemeDirectoryResolver $directoryResolver */
             $directoryResolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemeDirectoryResolver::class);
@@ -122,6 +125,28 @@ class ThemePathResolver implements ThemePathResolverInterface
 
         // 4. 如果继承链与顶层都没有找到，返回基础模块文件
         return $modulePath;
+    }
+
+    /** The shared component/runtime layer is never a design-theme override. */
+    private function isCoreRuntimeAsset(string $modulePath): bool
+    {
+        $path = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS);
+        // A suffix-only check would accidentally reserve a theme.css/theme.js
+        // owned by another module.  The canonical Weline_Theme base is the only
+        // authority for these four shared runtime assets.
+        $moduleBase = rtrim(str_replace(['/', '\\'], DS, dirname(__DIR__)), DS);
+        foreach ([
+            'frontend' . DS . 'assets' . DS . 'css' . DS . 'theme.css',
+            'frontend' . DS . 'assets' . DS . 'js' . DS . 'theme.js',
+            'backend' . DS . 'assets' . DS . 'css' . DS . 'theme.css',
+            'backend' . DS . 'assets' . DS . 'js' . DS . 'theme.js',
+        ] as $reservedPath) {
+            if ($path === $moduleBase . DS . 'view' . DS . 'theme' . DS . $reservedPath) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -169,6 +169,64 @@ final class GatewayLinuxSystemdLayoutTest extends TestCase
         );
     }
 
+    public function testDisabledCanonicalLinkIsRestoredAgainstTheExactDedicatedTarget(): void
+    {
+        if (!\function_exists('symlink')) {
+            self::markTestSkipped('Symlink creation is unavailable.');
+        }
+        $definition = "[Unit]\nDescription=WLS dedicated target\n";
+        $layout = new GatewayLinuxSystemdLayout($this->paths);
+        $layout->publishNewDefinitionAndFixedLink($definition);
+        $link = $this->paths->systemdServiceLinkFile();
+        self::assertTrue(@\unlink($link));
+
+        $layout->restoreDisabledCurrentDefinitionAndFixedLink($definition);
+
+        $layout->assertCurrentDefinitionAndFixedLink($definition);
+        self::assertTrue(\is_link($link));
+        self::assertSame(
+            $this->paths->systemdServiceDefinitionFile(),
+            \readlink($link),
+        );
+    }
+
+    public function testDisabledCanonicalLinkRecoveryRejectsForeignOccupants(): void
+    {
+        if (!\function_exists('symlink')) {
+            self::markTestSkipped('Symlink creation is unavailable.');
+        }
+        $definition = "[Unit]\nDescription=WLS dedicated target\n";
+        $layout = new GatewayLinuxSystemdLayout($this->paths);
+        $layout->publishNewDefinitionAndFixedLink($definition);
+        $link = $this->paths->systemdServiceLinkFile();
+        self::assertTrue(@\unlink($link));
+
+        $outside = $this->root . DIRECTORY_SEPARATOR . 'foreign-unit';
+        self::assertNotFalse(\file_put_contents($outside, "foreign\n"));
+        self::assertTrue(@\symlink($outside, $link));
+        $wrongLink = $this->captureRuntimeException(
+            fn (): mixed => $layout
+                ->restoreDisabledCurrentDefinitionAndFixedLink($definition),
+        );
+        self::assertStringContainsString(
+            'cannot be restored safely',
+            $wrongLink->getMessage(),
+        );
+        self::assertSame($outside, \readlink($link));
+
+        self::assertTrue(@\unlink($link));
+        self::assertNotFalse(\file_put_contents($link, "foreign leaf\n"));
+        $foreignLeaf = $this->captureRuntimeException(
+            fn (): mixed => $layout
+                ->restoreDisabledCurrentDefinitionAndFixedLink($definition),
+        );
+        self::assertStringContainsString(
+            'cannot be restored safely',
+            $foreignLeaf->getMessage(),
+        );
+        self::assertSame("foreign leaf\n", \file_get_contents($link));
+    }
+
     public function testRemovalDeletesExactLinkBeforeDedicatedTarget(): void
     {
         $legacy = $this->paths->legacySystemdServiceDefinitionFile();

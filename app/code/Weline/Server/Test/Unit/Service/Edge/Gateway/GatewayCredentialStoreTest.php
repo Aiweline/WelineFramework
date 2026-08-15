@@ -81,13 +81,16 @@ final class GatewayCredentialStoreTest extends TestCase
             );
         }
 
+        $otherHostId = \bin2hex(\random_bytes(16));
         self::assertNotFalse(\file_put_contents(
             $this->home . DIRECTORY_SEPARATOR . 'trust' . DIRECTORY_SEPARATOR . 'host-id',
-            \bin2hex(\random_bytes(16)),
+            $otherHostId,
         ));
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('not enrolled');
-        $store->load($projectUuid);
+        // Project requests bind to their private credential. The Controller
+        // rejects that old host id after a move; the root trust file remains
+        // a separate administrator authority.
+        self::assertSame($hostId, $store->load($projectUuid)['host_id']);
+        self::assertSame($otherHostId, $store->hostId());
     }
 
     public function testCredentialRejectsProjectMismatchAndLinkedTarget(): void
@@ -290,7 +293,11 @@ final class GatewayCredentialStoreTest extends TestCase
             $this->root . DIRECTORY_SEPARATOR . 'pending-identity-host-state',
             $this->root . DIRECTORY_SEPARATOR . 'missing-pending-legacy.json',
         );
-        $identity->projectUuid();
+        $oldProjectUuid = $identity->projectUuid();
+        $store->install(
+            $this->credential($hostId, $oldProjectUuid, 'backup-active-authority'),
+            $oldProjectUuid,
+        );
         $rotation = $identity->prepareRotation();
         $rotationId = (string)$rotation['rotation_id'];
         $newProjectUuid = (string)$rotation['new_project_uuid'];
@@ -458,6 +465,17 @@ final class GatewayCredentialStoreTest extends TestCase
         self::assertCount(64, $this->semanticCredentialFiles());
         self::assertFileDoesNotExist($this->activeCredentialPath($hostId));
 
+        self::assertTrue(\unlink(
+            $this->pendingCredentialPath($hostId, $this->rotationId(64)),
+        ));
+        $activeAuthority = $this->credential(
+            $hostId,
+            $projectUuid,
+            'pending-capacity-authority',
+        );
+        $store->install($activeAuthority, $projectUuid);
+        self::assertCount(64, $this->semanticCredentialFiles());
+
         $pending = $this->credential($hostId, $projectUuid, 'pending-overflow');
         $rotationId = $this->rotationId(65);
         try {
@@ -469,22 +487,26 @@ final class GatewayCredentialStoreTest extends TestCase
             self::assertStringNotContainsString($pending['credential_id'], $exception->getMessage());
         }
         self::assertCount(64, $this->semanticCredentialFiles());
+        self::assertFileExists($this->activeCredentialPath($hostId));
         self::assertFileDoesNotExist($this->pendingCredentialPath($hostId, $rotationId));
     }
 
-    public function testFullCapacityCommitWithoutActivePathRetainsPendingAndNeverPublishesFileSixtyFive(): void
+    public function testCommitWithoutActiveAuthorityRejectsAndRetainsPendingState(): void
     {
         [$store, $hostId] = $this->credentialStore();
         $projectUuid = '123e4567-e89b-42d3-a456-426614174042';
         $this->fillPendingCredentials($store, $hostId, $projectUuid, 64);
         $rotationId = $this->rotationId(1);
-        $pending = $store->loadPending($rotationId, $projectUuid);
+        $pending = $this->credential($hostId, $projectUuid, 'pending-1');
 
         try {
             $store->commitPending($rotationId, $projectUuid);
-            self::fail('Commit published a new active path as credential file 65.');
+            self::fail('Commit accepted pending state without an active authority.');
         } catch (\RuntimeException $exception) {
-            self::assertStringContainsString('capacity', \strtolower($exception->getMessage()));
+            self::assertStringContainsString(
+                'missing or ambiguous',
+                \strtolower($exception->getMessage()),
+            );
             self::assertStringNotContainsString($pending['secret'], $exception->getMessage());
             self::assertStringNotContainsString($pending['credential_id'], $exception->getMessage());
         }
@@ -603,6 +625,15 @@ final class GatewayCredentialStoreTest extends TestCase
         self::assertTrue($store->remove());
         self::assertCount(64, $this->semanticCredentialFiles());
 
+        self::assertTrue(\unlink(
+            $this->pendingCredentialPath($hostId, $this->rotationId(64)),
+        ));
+        $store->install(
+            $this->credential($hostId, $projectUuid, 'overflow-active-authority'),
+            $projectUuid,
+        );
+        self::assertCount(64, $this->semanticCredentialFiles());
+
         $rotationId = $this->rotationId(65);
         $persisted = $this->credential($hostId, $projectUuid, 'persisted-overflow');
         $submitted = $this->credential($hostId, $projectUuid, 'different-overflow');
@@ -649,7 +680,7 @@ final class GatewayCredentialStoreTest extends TestCase
         self::assertCount(65, $this->semanticCredentialFiles());
     }
 
-    public function testPostPublicationCleanupFailureCannotReportTheActiveCredentialAsUncommitted(): void
+    public function testUnsafeStaleActiveResidueFailsClosedWithoutRemovingCommittedCredential(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
             self::markTestSkipped('The unsafe cleanup-race fixture uses a POSIX symbolic link.');
@@ -665,10 +696,14 @@ final class GatewayCredentialStoreTest extends TestCase
         $cleanup = new \ReflectionMethod($store, 'cleanupPublishedCredentialFiles');
         $cleanup->invoke($store, [$unsafeStale], $activePath);
 
-        self::assertSame(
-            $active['credential_id'],
-            $store->load($projectUuid)['credential_id'],
-        );
+        $rejected = false;
+        try {
+            $store->load($projectUuid);
+        } catch (\RuntimeException) {
+            $rejected = true;
+        }
+        self::assertTrue($rejected, 'Unsafe stale active residue must fail closed.');
+        self::assertFileExists($activePath);
         self::assertTrue(\is_link($unsafeStale));
     }
 
@@ -719,6 +754,66 @@ final class GatewayCredentialStoreTest extends TestCase
         ));
     }
 
+    public function testProjectOperationsUseThePrivateActiveCredentialWithoutHostTrustRead(): void
+    {
+        [$store, $hostId] = $this->credentialStore();
+        $oldUuid = '123e4567-e89b-42d3-a456-426614174090';
+        $newUuid = '123e4567-e89b-42d3-a456-426614174091';
+        $rotationId = $this->rotationId(63);
+        $store->install(
+            $this->credential($hostId, $oldUuid, 'project-active-private'),
+            $oldUuid,
+        );
+        self::assertTrue(\unlink(
+            $this->home . DIRECTORY_SEPARATOR . 'trust'
+                . DIRECTORY_SEPARATOR . 'host-id',
+        ));
+
+        self::assertSame($hostId, $store->load($oldUuid)['host_id']);
+        $store->installPending(
+            $this->credential($hostId, $newUuid, 'project-pending-private'),
+            $newUuid,
+            $rotationId,
+        );
+        self::assertSame(
+            $newUuid,
+            $store->loadPending($rotationId, $newUuid)['project_uuid'],
+        );
+        self::assertSame(
+            $newUuid,
+            $store->commitPending($rotationId, $newUuid)['project_uuid'],
+        );
+        self::assertSame($newUuid, $store->load($newUuid)['project_uuid']);
+        self::assertTrue($store->remove());
+    }
+
+    public function testProjectOperationsRejectAmbiguousActiveCredentialBindings(): void
+    {
+        [$store, $hostId] = $this->credentialStore();
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174092';
+        $store->install(
+            $this->credential($hostId, $projectUuid, 'project-active-primary'),
+            $projectUuid,
+        );
+        $otherHostId = \str_repeat('c', 32);
+        $this->writeCredentialFile(
+            $this->activeCredentialPath($otherHostId),
+            $this->credential(
+                $otherHostId,
+                $projectUuid,
+                'project-active-ambiguous',
+            ),
+        );
+        self::assertTrue(\unlink(
+            $this->home . DIRECTORY_SEPARATOR . 'trust'
+                . DIRECTORY_SEPARATOR . 'host-id',
+        ));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('missing or ambiguous');
+        $store->load($projectUuid);
+    }
+
     /** @return array{GatewayCredentialStore,string} */
     private function credentialStore(): array
     {
@@ -755,13 +850,14 @@ final class GatewayCredentialStoreTest extends TestCase
         int $count,
     ): void {
         self::assertGreaterThan(0, $count);
-        $firstRotation = $this->rotationId(1);
-        $store->installPending(
-            $this->credential($hostId, $projectUuid, 'pending-1'),
-            $projectUuid,
-            $firstRotation,
-        );
-        for ($index = 2; $index <= $count; ++$index) {
+        if (!\is_dir($this->credentialDirectory())) {
+            $store->install(
+                $this->credential($hostId, $projectUuid, 'pending-fixture-authority'),
+                $projectUuid,
+            );
+            self::assertTrue($store->remove());
+        }
+        for ($index = 1; $index <= $count; ++$index) {
             $this->writeCredentialFile(
                 $this->pendingCredentialPath($hostId, $this->rotationId($index)),
                 $this->credential($hostId, $projectUuid, 'pending-' . $index),

@@ -65,7 +65,7 @@ final class GatewayProjectStateFilesystem
         }
         try {
             $ffi = \FFI::cdef(
-                'typedef unsigned long DWORD; DWORD GetLastError(void);',
+                'typedef unsigned long DWORD; typedef unsigned short WCHAR; DWORD GetLastError(void);',
                 'kernel32.dll',
             );
             $ffi->GetLastError();
@@ -2607,9 +2607,21 @@ final class GatewayProjectStateFilesystem
     {
         foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
             if (!\array_key_exists($field, $before)
-                || !\array_key_exists($field, $after)
-                || (int)$before[$field] !== (int)$after[$field]
-            ) {
+                || !\array_key_exists($field, $after)) {
+                return false;
+            }
+            $beforeValue = (int)$before[$field];
+            $afterValue = (int)$after[$field];
+            if ($field === 'mode' && \PHP_OS_FAMILY === 'Windows') {
+                // PHP synthesizes executable permission bits from a Windows
+                // pathname extension for lstat(), while fstat() on the same
+                // open file handle reports 0666. Windows authority is carried
+                // by the existing ACL checks; retain only the file-type bits
+                // here so one unchanged .exe remains the same object.
+                $beforeValue &= 0170000;
+                $afterValue &= 0170000;
+            }
+            if ($beforeValue !== $afterValue) {
                 return false;
             }
         }

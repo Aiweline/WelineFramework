@@ -6,7 +6,7 @@
  *
  * @var \Weline\Framework\View\Template $this
  */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
 $meta = $this->getData('meta') ?? [];
 
 $isEditorMode = !empty($editor_mode ?? false) || !empty($this->getData('editor_mode'));
@@ -17,7 +17,7 @@ $showRightSidebar = $meta['showRightSidebar'] ?? true;
 $extraClass = $meta['class'] ?? '';
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="backend"<?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme-area="backend" <?= $themeConfig->getThemeHtmlAttributes() ?><?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
 <head>
     <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
     <w:template>Weline_Admin::common/head.phtml</w:template>
@@ -44,23 +44,12 @@ $extraClass = $meta['class'] ?? '';
         }
 
         .dashboard-layout-wrapper {
-            --w-dashboard-surface: var(--bs-card-bg, var(--backend-color-bg-primary, #fff));
-            --w-dashboard-surface-soft: var(--bs-tertiary-bg, #f8fafc);
-            --w-dashboard-text: var(--bs-body-color, var(--backend-color-text-primary, #1f2937));
-            --w-dashboard-heading: var(--bs-heading-color, var(--w-dashboard-text));
-            --w-dashboard-muted: var(--bs-secondary-color, var(--backend-color-text-secondary, #6b7280));
-            --w-dashboard-border: var(--bs-border-color, var(--backend-color-border, #e5e7eb));
-        }
-
-        body[data-theme-mode="dark"] .dashboard-layout-wrapper,
-        body[data-layout-mode="dark"] .dashboard-layout-wrapper,
-        html[data-bs-theme="dark"] .dashboard-layout-wrapper {
-            --w-dashboard-surface: rgba(15, 23, 42, 0.92);
-            --w-dashboard-surface-soft: rgba(30, 41, 59, 0.78);
-            --w-dashboard-text: #d8e1f2;
-            --w-dashboard-heading: #f8fafc;
-            --w-dashboard-muted: #9aa7bd;
-            --w-dashboard-border: rgba(148, 163, 184, 0.34);
+            --w-dashboard-surface: var(--backend-component-surface);
+            --w-dashboard-surface-soft: var(--backend-component-surface-subtle);
+            --w-dashboard-text: var(--backend-theme-text);
+            --w-dashboard-heading: var(--backend-theme-text);
+            --w-dashboard-muted: var(--backend-theme-text-secondary);
+            --w-dashboard-border: var(--backend-component-border);
         }
 
         .dashboard-layout-wrapper .w-dashboard-canvas-wrap {
@@ -80,7 +69,7 @@ $extraClass = $meta['class'] ?? '';
             min-width: 0;
             border: 1px solid var(--w-dashboard-border);
             border-radius: 8px;
-            background: rgba(255, 255, 255, 0.02);
+            background: var(--w-dashboard-surface);
             padding: 14px;
         }
 

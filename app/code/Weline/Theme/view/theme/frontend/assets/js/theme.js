@@ -1591,28 +1591,28 @@
             style.textContent = `
                 .weline-notice-region {
                     position: fixed;
-                    z-index: var(--z-index-toast, 100000);
+                    z-index: var(--weline-layout-z-index-toast);
                     display: grid;
-                    gap: var(--spacing-sm, 0.75rem);
+                    gap: var(--weline-layout-spacing-sm);
                     width: min(26rem, calc(100vw - 2rem));
                     pointer-events: none;
                 }
                 .weline-notice-region--top-right {
-                    top: var(--spacing-lg, 1.5rem);
-                    right: var(--spacing-lg, 1.5rem);
+                    top: var(--weline-layout-spacing-lg);
+                    right: var(--weline-layout-spacing-lg);
                 }
                 .weline-notice-toast {
                     display: grid;
                     grid-template-columns: auto 1fr auto;
-                    gap: var(--spacing-sm, 0.75rem);
+                    gap: var(--weline-layout-spacing-sm);
                     align-items: flex-start;
-                    padding: var(--spacing-md, 1rem);
-                    border: var(--border-card, 1px solid var(--color-border-default));
-                    border-left: var(--border-width-thick, 3px) var(--border-style-solid, solid) var(--notice-accent);
-                    border-radius: var(--border-radius-xl, 12px);
-                    background: var(--color-bg-primary);
-                    color: var(--color-text-primary);
-                    box-shadow: var(--shadow-dropdown, var(--shadow-lg));
+                    padding: var(--weline-layout-spacing-md);
+                    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-component-notice-border);
+                    border-left: var(--weline-theme-border-width-2) var(--weline-theme-border-style) var(--notice-accent);
+                    border-radius: var(--weline-theme-radius-xl);
+                    background: var(--weline-component-notice-surface);
+                    color: var(--weline-theme-text);
+                    box-shadow: var(--weline-component-shadow-lg);
                     pointer-events: auto;
                     transform: translateY(-0.5rem);
                     opacity: 0;
@@ -1622,65 +1622,65 @@
                     transform: translateY(0);
                     opacity: 1;
                 }
-                .weline-notice-toast--success { --notice-accent: var(--color-success); }
-                .weline-notice-toast--error { --notice-accent: var(--color-error); }
-                .weline-notice-toast--warning { --notice-accent: var(--color-warning); }
-                .weline-notice-toast--info { --notice-accent: var(--color-info); }
+                .weline-notice-toast--success { --notice-accent: var(--weline-theme-success); }
+                .weline-notice-toast--error { --notice-accent: var(--weline-theme-danger); }
+                .weline-notice-toast--warning { --notice-accent: var(--weline-theme-warning); }
+                .weline-notice-toast--info { --notice-accent: var(--weline-theme-info); }
                 .weline-notice-toast__mark {
                     width: 0.8rem;
                     height: 0.8rem;
                     margin-top: 0.25rem;
-                    border-radius: var(--border-radius-full, 9999px);
+                    border-radius: var(--weline-theme-radius-full);
                     background: var(--notice-accent);
-                    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--notice-accent) 16%, transparent);
+                    box-shadow: var(--weline-component-notice-mark-shadow);
                 }
                 .weline-notice-toast__content {
                     display: grid;
-                    gap: var(--spacing-xs, 0.35rem);
+                    gap: var(--weline-layout-spacing-xs);
                     min-width: 0;
                 }
                 .weline-notice-toast__title {
                     margin: 0;
-                    font-size: var(--font-size-sm, 0.95rem);
-                    font-weight: var(--font-weight-semibold, 600);
-                    color: var(--color-text-primary);
+                    font-size: var(--weline-layout-font-size-sm);
+                    font-weight: var(--weline-layout-font-weight-semibold);
+                    color: var(--weline-theme-text);
                 }
                 .weline-notice-toast__message {
                     margin: 0;
-                    font-size: var(--font-size-sm, 0.9rem);
-                    line-height: var(--line-height-normal, 1.5);
-                    color: var(--color-text-secondary);
+                    font-size: var(--weline-layout-font-size-sm);
+                    line-height: var(--weline-layout-line-height-normal);
+                    color: var(--weline-theme-text-secondary);
                 }
                 .weline-notice-toast__close,
                 .weline-notice-dialog__close {
                     border: 0;
                     background: transparent;
-                    color: var(--color-text-tertiary);
+                    color: var(--weline-theme-text-muted);
                     font: inherit;
                     line-height: 1;
                     cursor: pointer;
                 }
                 .weline-notice-toast__close:hover,
                 .weline-notice-dialog__close:hover {
-                    color: var(--color-text-primary);
+                    color: var(--weline-theme-text);
                 }
                 .weline-notice-overlay {
                     position: fixed;
                     inset: 0;
-                    z-index: var(--z-index-modal, 100001);
+                    z-index: var(--weline-layout-z-index-modal);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    padding: var(--spacing-lg, 1.5rem);
-                    background: color-mix(in srgb, var(--color-text-primary) 42%, transparent);
+                    padding: var(--weline-layout-spacing-lg);
+                    background: var(--weline-component-notice-overlay);
                 }
                 .weline-notice-dialog {
                     width: min(28rem, 100%);
-                    border: var(--border-card, 1px solid var(--color-border-default));
-                    border-radius: var(--border-radius-2xl, 16px);
-                    background: var(--color-bg-primary);
-                    color: var(--color-text-primary);
-                    box-shadow: var(--shadow-modal, var(--shadow-xl));
+                    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-component-notice-border);
+                    border-radius: var(--weline-theme-radius-xl);
+                    background: var(--weline-component-notice-surface);
+                    color: var(--weline-theme-text);
+                    box-shadow: var(--weline-component-shadow-lg);
                     overflow: hidden;
                     transform: translateY(0.5rem) scale(0.98);
                     opacity: 0;
@@ -1692,60 +1692,60 @@
                 }
                 .weline-notice-dialog__header {
                     display: flex;
-                    gap: var(--spacing-md, 1rem);
+                    gap: var(--weline-layout-spacing-md);
                     justify-content: space-between;
                     align-items: flex-start;
-                    padding: var(--spacing-lg, 1.5rem) var(--spacing-lg, 1.5rem) var(--spacing-sm, 0.75rem);
+                    padding: var(--weline-layout-spacing-lg) var(--weline-layout-spacing-lg) var(--weline-layout-spacing-sm);
                 }
                 .weline-notice-dialog__title {
                     margin: 0;
-                    color: var(--color-text-primary);
-                    font-size: var(--font-size-lg, 1.2rem);
-                    font-weight: var(--font-weight-bold, 700);
+                    color: var(--weline-theme-text);
+                    font-size: var(--weline-layout-font-size-lg);
+                    font-weight: var(--weline-layout-font-weight-bold);
                 }
                 .weline-notice-dialog__body {
-                    padding: 0 var(--spacing-lg, 1.5rem) var(--spacing-lg, 1.5rem);
-                    color: var(--color-text-secondary);
-                    line-height: var(--line-height-relaxed, 1.7);
+                    padding: 0 var(--weline-layout-spacing-lg) var(--weline-layout-spacing-lg);
+                    color: var(--weline-theme-text-secondary);
+                    line-height: var(--weline-layout-line-height-relaxed);
                 }
                 .weline-notice-dialog__actions {
                     display: flex;
                     flex-wrap: wrap;
-                    gap: var(--spacing-sm, 0.75rem);
+                    gap: var(--weline-layout-spacing-sm);
                     justify-content: flex-end;
-                    padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
-                    border-top: var(--border-width-thin, 1px) var(--border-style-solid, solid) var(--color-border-light);
-                    background: var(--color-bg-secondary);
+                    padding: var(--weline-layout-spacing-md) var(--weline-layout-spacing-lg);
+                    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+                    background: var(--weline-theme-surface-subtle);
                 }
                 .weline-notice-dialog__button {
                     min-height: 2.6rem;
-                    padding: 0 var(--spacing-lg, 1.5rem);
-                    border-radius: var(--border-radius-lg, 8px);
-                    border: var(--border-button, 1px solid var(--color-primary-border));
-                    background: var(--color-bg-primary);
-                    color: var(--color-text-primary);
+                    padding: 0 var(--weline-layout-spacing-lg);
+                    border-radius: var(--weline-theme-radius-lg);
+                    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-primary-border-subtle);
+                    background: var(--weline-theme-surface);
+                    color: var(--weline-theme-text);
                     font: inherit;
-                    font-weight: var(--font-weight-semibold, 600);
+                    font-weight: var(--weline-layout-font-weight-semibold);
                     cursor: pointer;
                 }
                 .weline-notice-dialog__button--primary {
-                    background: var(--color-primary);
-                    border-color: var(--color-primary-border);
-                    color: var(--color-text-dark);
+                    background: var(--weline-theme-primary);
+                    border-color: var(--weline-theme-primary);
+                    color: var(--weline-theme-on-primary);
                 }
                 .weline-notice-dialog__button--danger {
-                    background: var(--color-error);
-                    border-color: var(--color-error);
-                    color: var(--color-text-light);
+                    background: var(--weline-theme-danger);
+                    border-color: var(--weline-theme-danger);
+                    color: var(--weline-theme-on-danger);
                 }
                 .weline-notice-dialog__button:hover {
-                    box-shadow: var(--shadow-button, var(--shadow-sm));
+                    box-shadow: var(--weline-component-shadow-sm);
                 }
                 @media (max-width: 640px) {
                     .weline-notice-region {
-                        top: var(--spacing-md, 1rem);
-                        right: var(--spacing-md, 1rem);
-                        left: var(--spacing-md, 1rem);
+                        top: var(--weline-layout-spacing-md);
+                        right: var(--weline-layout-spacing-md);
+                        left: var(--weline-layout-spacing-md);
                         width: auto;
                     }
                     .weline-notice-dialog__actions {
@@ -1780,8 +1780,24 @@
             return ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info';
         }
 
-        function show(options) {
-            options = mergeOptions(typeof options === 'string' ? { message: options } : options);
+        function show(options, legacyType, durationOrOptions) {
+            if (typeof options === 'string') {
+                const legacyOptions = { message: options };
+                if (typeof legacyType === 'string') {
+                    legacyOptions.type = legacyType;
+                } else if (typeof legacyType === 'number') {
+                    legacyOptions.duration = legacyType;
+                } else if (legacyType && typeof legacyType === 'object') {
+                    Object.assign(legacyOptions, legacyType);
+                }
+                if (typeof durationOrOptions === 'number') {
+                    legacyOptions.duration = durationOrOptions;
+                } else if (durationOrOptions && typeof durationOrOptions === 'object') {
+                    Object.assign(legacyOptions, durationOrOptions);
+                }
+                options = legacyOptions;
+            }
+            options = mergeOptions(options);
             const type = normalizeType(options.type);
             const region = ensureToastRegion(options);
             const toast = document.createElement('div');
@@ -1795,8 +1811,13 @@
                 options.title ? '<strong class="weline-notice-toast__title"></strong>' : '',
                 '<p class="weline-notice-toast__message"></p>',
                 '</div>',
-                '<button type="button" class="weline-notice-toast__close" aria-label="' + closeText + '">&times;</button>'
+                '<button type="button" class="weline-notice-toast__close">&times;</button>'
             ].join('');
+
+            const closeButton = toast.querySelector('.weline-notice-toast__close');
+            if (closeButton) {
+                closeButton.setAttribute('aria-label', closeText);
+            }
 
             if (options.title) {
                 const titleNode = toast.querySelector('.weline-notice-toast__title');
@@ -1871,7 +1892,7 @@
                     '<section class="weline-notice-dialog" role="dialog" aria-modal="true" aria-labelledby="weline-notice-dialog-title">',
                     '<header class="weline-notice-dialog__header">',
                     '<h2 class="weline-notice-dialog__title" id="weline-notice-dialog-title"></h2>',
-                    '<button type="button" class="weline-notice-dialog__close" data-notice-cancel aria-label="' + (options.closeText || defaults.closeText) + '">&times;</button>',
+                    '<button type="button" class="weline-notice-dialog__close" data-notice-cancel>&times;</button>',
                     '</header>',
                     '<div class="weline-notice-dialog__body"></div>',
                     '<footer class="weline-notice-dialog__actions">',
@@ -1880,6 +1901,10 @@
                     '</footer>',
                     '</section>'
                 ].join('');
+                const closeButton = overlay.querySelector('.weline-notice-dialog__close');
+                if (closeButton) {
+                    closeButton.setAttribute('aria-label', options.closeText || defaults.closeText);
+                }
 
                 overlay.querySelector('.weline-notice-dialog__title').textContent = options.title || '';
                 overlay.querySelector('.weline-notice-dialog__body').textContent = options.message || '';
@@ -1916,17 +1941,17 @@
 
         return {
             show: show,
-            success: function (message, options) {
-                return show(Object.assign({}, options || {}, { type: 'success', message: message }));
+            success: function (message, durationOrOptions) {
+                return show(message, 'success', durationOrOptions);
             },
-            error: function (message, options) {
-                return show(Object.assign({}, options || {}, { type: 'error', message: message }));
+            error: function (message, durationOrOptions) {
+                return show(message, 'error', durationOrOptions);
             },
-            warning: function (message, options) {
-                return show(Object.assign({}, options || {}, { type: 'warning', message: message }));
+            warning: function (message, durationOrOptions) {
+                return show(message, 'warning', durationOrOptions);
             },
-            info: function (message, options) {
-                return show(Object.assign({}, options || {}, { type: 'info', message: message }));
+            info: function (message, durationOrOptions) {
+                return show(message, 'info', durationOrOptions);
             },
             confirm: confirm,
             close: closeDialog
@@ -1936,6 +1961,21 @@
     /**
      * Weline 主对象（轻量级，只包含基础功能）
      */
+    function readPrepaintThemeState() {
+        const root = document.documentElement;
+        const preference = root.getAttribute('data-theme-preference');
+        const current = root.getAttribute('data-theme');
+
+        return {
+            preference: preference === 'system' || preference === 'light' || preference === 'dark'
+                ? preference
+                : 'system',
+            current: current === 'dark' ? 'dark' : 'light'
+        };
+    }
+
+    const prepaintThemeState = readPrepaintThemeState();
+
     const Weline = {
         __initialized: true,
         __version: '1.0.0',
@@ -2375,66 +2415,165 @@
          * 主题管理器（前端专用）
          */
         Theme: {
-            current: 'light',
-            themes: runtimeConfig.theme?.available || ['light'], // 从配置中获取可用主题列表
+            // Head prepaint writes these attributes before this runtime.  Read
+            // them now so synchronous head integrations never see a stale
+            // light/system default before DOMContentLoaded calls init().
+            current: prepaintThemeState.current,
+            preference: prepaintThemeState.preference,
+            // Public contract is always three-state.  Theme overlays only own
+            // tokens and must not remove a mode from the shared runtime API.
+            themes: ['system', 'light', 'dark'],
+            storageKey: 'weline-theme',
+            _mediaQuery: null,
+            _systemChangeHandler: null,
+            _controlsBound: false,
+            _initialized: false,
+
+            isBackendDocument: function () {
+                const root = document.documentElement;
+                return root.getAttribute('data-theme-area') === 'backend'
+                    || (runtimeConfig && runtimeConfig.area === 'backend');
+            },
+
+            isSupportedPreference: function (theme) {
+                return theme === 'system' || theme === 'light' || theme === 'dark';
+            },
+
+            resolve: function (preference) {
+                if (preference === 'dark') {
+                    return 'dark';
+                }
+                if (preference === 'light') {
+                    return 'light';
+                }
+                return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+                    ? 'dark'
+                    : 'light';
+            },
+
+            readPreference: function () {
+                try {
+                    const stored = localStorage.getItem(this.storageKey);
+                    return this.isSupportedPreference(stored) ? stored : 'system';
+                } catch (_error) {
+                    return 'system';
+                }
+            },
+
+            persistPreference: function (preference) {
+                try {
+                    localStorage.setItem(this.storageKey, preference);
+                } catch (_error) {
+                    // Privacy mode or storage policy must not prevent theme rendering.
+                }
+            },
+
+            syncControls: function (preference) {
+                document.querySelectorAll('[data-weline-theme-mode]').forEach((control) => {
+                    const controlMode = control.getAttribute('data-weline-theme-mode');
+                    if (control instanceof HTMLSelectElement) {
+                        control.value = preference;
+                        return;
+                    }
+                    const active = controlMode === preference;
+                    control.classList.toggle('active', active);
+                    control.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    control.setAttribute('aria-current', active ? 'true' : 'false');
+                });
+            },
+
+            apply: function (preference, persist) {
+                if (this.isBackendDocument()) {
+                    this.preference = document.documentElement.getAttribute('data-theme-preference') || 'system';
+                    this.current = document.documentElement.getAttribute('data-theme') || 'light';
+                    return this.current;
+                }
+                const resolved = this.resolve(preference);
+                const root = document.documentElement;
+
+                root.setAttribute('data-theme-preference', preference);
+                root.setAttribute('data-theme', resolved);
+                root.setAttribute('data-bs-theme', resolved);
+                root.style.colorScheme = resolved;
+
+                this.preference = preference;
+                this.current = resolved;
+                this.syncControls(preference);
+                if (persist) {
+                    this.persistPreference(preference);
+                }
+
+                document.dispatchEvent(new CustomEvent('themechange', {
+                    detail: { theme: resolved, preference: preference }
+                }));
+                return resolved;
+            },
 
             switch: function (theme) {
-                // 初始化时从配置中更新主题列表
-                if (!this.themes || this.themes.length === 0 || this.themes.length === 1 && this.themes[0] === 'light') {
-                    this.themes = runtimeConfig.theme?.available || ['light'];
-                }
-
-                if (!this.themes.includes(theme)) {
+                const preference = typeof theme === 'string' ? theme.trim().toLowerCase() : '';
+                if (!this.isSupportedPreference(preference)) {
                     if (isDev) {
-                        console.warn(`[Theme] 未知主题: ${theme}，可用主题: ${this.themes.join(', ')}`);
+                        console.warn('[Theme] 仅支持 system、light 或 dark。');
                     }
-                    return;
+                    return this.current;
                 }
-
-                document.documentElement.setAttribute('data-theme', theme);
-                localStorage.setItem('weline-theme', theme);
-                this.current = theme;
-
-                const event = new CustomEvent('themechange', {
-                    detail: { theme: theme }
-                });
-                document.dispatchEvent(event);
+                return this.apply(preference, true);
             },
 
             init: function () {
-                // 确保主题列表已初始化
-                if (!this.themes || this.themes.length === 0) {
-                    this.themes = runtimeConfig.theme?.available || ['light'];
+                if (this._initialized) {
+                    return this.current;
+                }
+                this._initialized = true;
+                if (this.isBackendDocument()) {
+                    this.preference = document.documentElement.getAttribute('data-theme-preference') || 'system';
+                    this.current = document.documentElement.getAttribute('data-theme') || 'light';
+                    return this.current;
+                }
+                this.apply(this.readPreference(), false);
+
+                if (window.matchMedia && !this._mediaQuery) {
+                    this._mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+                    this._systemChangeHandler = () => {
+                        if (this.preference === 'system') {
+                            this.apply('system', false);
+                        }
+                    };
+                    if (typeof this._mediaQuery.addEventListener === 'function') {
+                        this._mediaQuery.addEventListener('change', this._systemChangeHandler);
+                    } else if (typeof this._mediaQuery.addListener === 'function') {
+                        this._mediaQuery.addListener(this._systemChangeHandler);
+                    }
                 }
 
-                const savedTheme = localStorage.getItem('weline-theme');
-                let systemTheme = 'light';
-                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    systemTheme = 'dark';
-                }
-
-                // 检查保存的主题是否在可用列表中
-                let theme = savedTheme;
-                if (theme && !this.themes.includes(theme)) {
-                    // 如果保存的主题不可用，清除它并使用系统主题
-                    localStorage.removeItem('weline-theme');
-                    theme = null;
-                }
-
-                // 如果没有保存的主题，使用系统主题，但要确保系统主题在可用列表中
-                if (!theme) {
-                    theme = this.themes.includes(systemTheme) ? systemTheme : (this.themes[0] || 'light');
-                }
-
-                this.switch(theme);
-
-                if (window.matchMedia) {
-                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-                        if (!localStorage.getItem('weline-theme')) {
-                            // 只有在没有手动保存主题时才跟随系统主题，但要确保系统主题在可用列表中
-                            const newSystemTheme = e.matches ? 'dark' : 'light';
-                            const validTheme = this.themes.includes(newSystemTheme) ? newSystemTheme : (this.themes[0] || 'light');
-                            this.switch(validTheme);
+                if (!this._controlsBound) {
+                    this._controlsBound = true;
+                    document.addEventListener('change', (event) => {
+                        const target = event.target instanceof Element ? event.target : null;
+                        const modeControl = target && target.closest('[data-weline-theme-mode]');
+                        if (!modeControl) {
+                            return;
+                        }
+                        const mode = modeControl.value || modeControl.getAttribute('data-weline-theme-mode');
+                        if (this.isSupportedPreference(mode)) {
+                            this.switch(mode);
+                        }
+                    });
+                    document.addEventListener('click', (event) => {
+                        const target = event.target instanceof Element ? event.target : null;
+                        const modeControl = target && target.closest('[data-weline-theme-mode]');
+                        if (modeControl) {
+                            const mode = modeControl.getAttribute('data-weline-theme-mode');
+                            if (this.isSupportedPreference(mode)) {
+                                event.preventDefault();
+                                this.switch(mode);
+                            }
+                            return;
+                        }
+                        const toggle = target && target.closest('[data-theme-toggle]');
+                        if (toggle) {
+                            event.preventDefault();
+                            this.switch(this.current === 'dark' ? 'light' : 'dark');
                         }
                     });
                 }
@@ -2442,6 +2581,10 @@
 
             getCurrent: function () {
                 return this.current;
+            },
+
+            getPreference: function () {
+                return this.preference;
             },
 
             isDark: function () {
@@ -2659,6 +2802,9 @@
         window.Weline.Api = window.WelineApiModule;
     }
     window.Theme = Weline.Theme;
+    if (!window.Toast || typeof window.Toast.success !== 'function') {
+        window.Toast = ThemeNotice;
+    }
     window.w_query = function (provider, operation, params = {}, options = {}) {
         if (operation == null || operation === '') {
             return Weline.Query.help(provider, params, options);
@@ -2712,17 +2858,21 @@
      */
     (function initThemeColorMessageListener() {
         window.addEventListener('message', function (event) {
-            // 安全检查：只接受来自同源的消息（在预览场景中，父窗口和iframe是同源的）
+            // Preview frames are same-origin. Do not make this a cross-origin
+            // theme-control surface by accepting arbitrary postMessage input.
+            if (event.origin !== window.location.origin) {
+                return;
+            }
             if (event.data && event.data.type === 'switchThemeColor') {
                 const themeColor = event.data.themeColor;
-                if (themeColor && Weline.Theme && typeof Weline.Theme.switch === 'function') {
-                    Weline.Theme.switch(themeColor);
+                if (Weline.Theme && Weline.Theme.isSupportedPreference(themeColor) && typeof Weline.Theme.apply === 'function') {
+                    Weline.Theme.apply(themeColor, false);
                     // 发送确认消息回父窗口
                     if (event.source && event.source !== window) {
                         event.source.postMessage({
                             type: 'themeColorSwitched',
                             themeColor: themeColor
-                        }, '*');
+                        }, window.location.origin);
                     }
                 }
             }
@@ -3815,16 +3965,16 @@
             overlay.id = 'weline-error-overlay';
             overlay.style.cssText = `
                 position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(0, 0, 0, 0.75); display: flex; align-items: center;
+                background: var(--weline-component-notice-overlay); display: flex; align-items: center;
                 justify-content: center; z-index: 99999;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             `;
 
             const content = document.createElement('div');
             content.style.cssText = `
-                background: var(--color-card-bg, #fff); border-radius: 12px; padding: 32px;
+                background: var(--weline-component-notice-surface); border-radius: var(--weline-theme-radius-xl); padding: 32px;
                 max-width: 480px; width: 90%; text-align: center;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                box-shadow: var(--weline-component-shadow-lg);
             `;
 
             const iconEl = document.createElement('div');
@@ -3833,21 +3983,21 @@
 
             const titleEl = document.createElement('h2');
             titleEl.style.cssText = `
-                font-size: 22px; font-weight: 600; color: var(--color-text-primary, #1f2937);
+                font-size: 22px; font-weight: 600; color: var(--weline-theme-text);
                 margin: 0 0 12px 0;
             `;
             titleEl.textContent = title;
 
             const messageEl = document.createElement('p');
             messageEl.style.cssText = `
-                font-size: 15px; color: var(--color-text-secondary, #6b7280);
+                font-size: 15px; color: var(--weline-theme-text-secondary);
                 margin: 0 0 8px 0; line-height: 1.6;
             `;
             messageEl.textContent = message;
 
             const statusEl = document.createElement('p');
             statusEl.style.cssText = `
-                font-size: 13px; color: var(--color-text-tertiary, #9ca3af);
+                font-size: 13px; color: var(--weline-theme-text-muted);
                 margin: 0 0 24px 0;
             `;
             statusEl.textContent = statusCode > 0 ? `HTTP ${statusCode}` : '';
@@ -3855,7 +4005,7 @@
             const countdownEl = document.createElement('div');
             countdownEl.id = 'weline-error-countdown';
             countdownEl.style.cssText = `
-                font-size: 13px; color: var(--color-text-tertiary, #9ca3af);
+                font-size: 13px; color: var(--weline-theme-text-muted);
                 margin-bottom: 20px;
             `;
 
@@ -3864,8 +4014,8 @@
 
             const retryBtn = document.createElement('button');
             retryBtn.style.cssText = `
-                background: var(--color-primary, #3b82f6); border: none; border-radius: 8px;
-                padding: 10px 20px; font-size: 14px; color: #fff; cursor: pointer; transition: all 0.2s;
+                background: var(--weline-component-primary); border: none; border-radius: var(--weline-theme-radius-lg);
+                padding: 10px 20px; font-size: 14px; color: var(--weline-component-primary-text); cursor: pointer; transition: all 0.2s;
             `;
             retryBtn.textContent = retryBtnText;
             retryBtn.onclick = () => {
@@ -3875,8 +4025,8 @@
 
             const closeBtn = document.createElement('button');
             closeBtn.style.cssText = `
-                background: var(--color-card-bg-hover, #f3f4f6); border: none; border-radius: 8px;
-                padding: 10px 20px; font-size: 14px; color: var(--color-text-secondary, #6b7280);
+                background: var(--weline-theme-surface-subtle); border: none; border-radius: var(--weline-theme-radius-lg);
+                padding: 10px 20px; font-size: 14px; color: var(--weline-theme-text-secondary);
                 cursor: pointer; transition: all 0.2s;
             `;
             closeBtn.textContent = closeBtnText;

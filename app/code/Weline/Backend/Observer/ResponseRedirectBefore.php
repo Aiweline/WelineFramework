@@ -148,8 +148,11 @@ class ResponseRedirectBefore implements ObserverInterface
             if (!$backendSession->isLoggedIn()) {
                 // 诊断：是否带 Session Cookie（便于排查 WLS 下登录后仍跳回登录页）
                 $sessId = (string) (\w_env_cookie(WlsStrategy::SESSION_NAME) ?? '');
-                $hint = $sessId !== '' ? \substr($sessId, 0, 8) . '...' : 'none';
-                w_log_warning('[Backend] Redirect to login: cookie_sid=' . $hint . ' (session empty or not logged in)', [], 'session');
+                w_log_warning(
+                    '[Backend] Redirect to login: session empty or not logged in.',
+                    ['cookie_present' => $sessId !== ''],
+                    'session',
+                );
                 // 未登录用户重定向到登录页（同源 URL，避免 admin ↔ login 循环重定向）
                 $loginUrl = $this->withBackendLoginReturnUrl($this->getBackendLoginUrlSameOrigin());
                 $data->setData('url', $loginUrl);

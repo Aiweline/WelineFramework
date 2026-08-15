@@ -255,9 +255,23 @@
         if (!CONFIG.initialValue && (options.initialValue || '').trim() !== '') {
             CONFIG.initialValue = String(options.initialValue).trim();
         }
-        if (options.themeMode && document.documentElement) {
-            document.documentElement.setAttribute('data-theme', 'backend');
-            document.documentElement.setAttribute('data-theme-mode', options.themeMode === 'dark' ? 'dark' : 'light');
+        if (document.documentElement) {
+            var themePreference = typeof options.themePreference === 'string' ? options.themePreference : options.themeMode;
+            if (themePreference !== 'system' && themePreference !== 'light' && themePreference !== 'dark') themePreference = 'system';
+            var backendThemeRuntime = window.__WelineBackendThemeRuntime;
+            if (backendThemeRuntime && typeof backendThemeRuntime.apply === 'function') {
+                backendThemeRuntime.apply(themePreference);
+            } else {
+                var media = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+                var resolvedTheme = themePreference === 'dark' || (themePreference === 'system' && media && media.matches) ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme-area', 'backend');
+                document.documentElement.setAttribute('data-theme-preference', themePreference);
+                document.documentElement.setAttribute('data-theme', resolvedTheme);
+                document.documentElement.setAttribute('data-bs-theme', resolvedTheme);
+                document.documentElement.setAttribute('data-theme-mode', resolvedTheme);
+                document.documentElement.setAttribute('data-layout-mode', resolvedTheme);
+                document.documentElement.style.colorScheme = resolvedTheme;
+            }
         }
         CONNECTOR = (typeof connectorUrl === 'string' ? connectorUrl : '').trim();
         if (!CONNECTOR) {

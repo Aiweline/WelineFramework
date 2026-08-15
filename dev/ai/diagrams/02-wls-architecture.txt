@@ -39,8 +39,10 @@ Windows Auto Direct + Project-managed Nginx:
      ├─▶ SessionServer (PID 2101)
      └─▶ MemoryServer (PID 2102)
 
-WLS TLS, worker_ssl, ProtocolEdge, Caddy and Native transports are retired
-and unreachable; they are not configuration choices or fallback paths.
+WLS 2.0 edge choices are host Gateway Nginx and project-owned pure WLS TLS.
+Pure WLS uses worker_ssl on a project-owned high port. The host gateway keeps
+its native Launcher/Broker transport for platform recovery, peer identity and
+privilege separation.
 
 Managed Nginx ingress invariants:
   • H2/H1 runtime readiness requires separate fresh requests through Nginx to
@@ -188,7 +190,9 @@ Session boundary:
     not_applicable only when the effective Nginx worker count is one
   • HTTP/3/QUIC session resumption remains unverified
 
-WLS Workers never load certificates and never terminate TLS.
+Nginx-backed Workers never load certificates and never terminate public TLS.
+In explicit/fallback pure WLS mode, worker_ssl loads the same project-owned
+certificate generation and terminates TLS/H2/H1 on the project high port.
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Service Providers                                                             │
@@ -203,7 +207,8 @@ MemoryServerProvider    → Memory cache service
 MaintenanceWorkerProvider → Cron tasks (cleanup, stats)
 
 Managed Nginx is owned by ManagedNginxService, not a WLS child Provider.
-ProtocolEdgeProvider, HttpRedirectProvider, worker_ssl and Native transports are retired.
+worker_ssl is the pure WLS edge process. The host-level native Launcher/Broker
+is part of the WLS 2.0 shared-gateway control and recovery boundary.
 
 Each Provider implements:
   • start()           → Start service

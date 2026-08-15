@@ -14,6 +14,7 @@ Routing only. Trigger conditions live in each skill's frontmatter `description`;
 |---|---|
 | Detailed engineering plan, task cards, acceptance matrix, Plan mode | `planning` |
 | Cross-cutting change boundary, validation evidence, repository hygiene | `通用工程师-开发规范与代码质量` |
+| Module feature/requirement change, **doc/需求.md**, version progress in **doc/开发日志.md**, development closure, or operator handoff | `通用工程师-开发规范与代码质量` plus the owning domain skill |
 | Framework internals, shared abstractions, DI/base behavior | `框架核心工程师-框架核心开发` |
 | ORM, schema annotations, model persistence and query execution | `框架核心工程师-ORM与数据模型` |
 | `w_query`, cross-module reads, provider discovery, `query:help`, QueryProvider descriptors | `unified-query-provider` |

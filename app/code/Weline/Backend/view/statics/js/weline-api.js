@@ -474,14 +474,30 @@
         return code !== null && isHttpFailureCode(code);
     }
 
+    function readableFailureText(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        var text = value.trim();
+        if (!text) {
+            return '';
+        }
+        if (/^<!doctype\s+html\b/i.test(text)
+            || /<(?:html|head|body|title|style)(?:\s|>)/i.test(text)
+        ) {
+            return '';
+        }
+        return text;
+    }
+
     function failureMessage(data, statusText) {
+        var message = data;
         if (data && typeof data === 'object') {
-            return data.message || data.msg || (data.error && data.error.message) || statusText || 'Backend request failed.';
+            message = data.message || data.msg || (data.error && data.error.message);
         }
-        if (typeof data === 'string' && data.trim()) {
-            return data;
-        }
-        return statusText || 'Backend request failed.';
+        return readableFailureText(message)
+            || readableFailureText(statusText)
+            || 'Backend request failed.';
     }
 
     function looksLikeJson(text) {

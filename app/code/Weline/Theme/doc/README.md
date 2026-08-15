@@ -5,10 +5,12 @@
 如果你现在要开发主题、页面、布局、slot、widget、Theme.js 或主题覆盖，先读：
 
 1. [`AI-INDEX.md`](./AI-INDEX.md)
-2. [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md)
-3. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
-4. [`../view/theme/README.md`](../view/theme/README.md)
-5. 按任务继续读：
+2. [`需求.md`](./需求.md)
+3. [`开发日志.md`](./开发日志.md)
+4. [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md)
+5. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
+6. [`../view/theme/README.md`](../view/theme/README.md)
+7. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
@@ -31,6 +33,12 @@
 - `Theme.js` 前端运行时
 
 ## 当前开发要点
+
+### 全局颜色模式（`REQ-THEME-0001`）
+
+Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”三层。`data-theme-preference` 保存 `system|light|dark`，而 `data-theme`、`data-bs-theme` 与 `color-scheme` 始终是已解析的 `light|dark`。设计主题只能覆盖 palette Token；不能用同路径 `assets/css/theme.css` 或 `assets/js/theme.js` 重新实现组件和主题运行时，否则会遮蔽 Weline_Theme 的全局 adapter。
+
+通知能力的正式入口是 `Weline.Toast` 与 `Weline.BackendToast`。为兼容历史主题，运行时只会在全局名称尚未提供可用 `success()` 方法时，分别补充 `window.Toast` 与 `window.AdminToast` 别名；业务新代码不得依赖这两个旧名称。
 
 ### 1. 源文件位置
 
@@ -143,6 +151,14 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 `Weline_Theme/view/theme/backend/assets/images/theme/logo.png`（W 字母黄色丝带标识）；小 Logo 不再回退到站点 favicon。
 前台未配置 `logo_light` / `logo_dark` 时同样回退到
 `Weline_Theme/view/theme/frontend/assets/images/theme/logo.png`（同一套 W 字母黄色丝带标识），不走错误的 `view/statics` 静态映射。
+
+### 生产静态资源兜底
+
+`Weline_Theme/view/theme` 是核心默认主题源码目录，不是生产静态资源的公开命名空间。
+无论它来自自动安装写入的绝对 `app/code` 路径，还是运行时模块默认主题，`ThemeStaticNamespaceService`
+都必须把它归一化到框架默认设计主题 `Weline/default`。因此核心主题资源 URL 应为
+`/static/Weline/default/Weline/Theme/view/theme/...`；禁止生成不存在的 `/static/Weline/Theme/view/theme/...`，
+否则颜色变量、暗色调色板和其他主题资源会返回 404。自定义 `app/design` 主题的命名空间保持不变。
 
 ## 常用文档地图
 

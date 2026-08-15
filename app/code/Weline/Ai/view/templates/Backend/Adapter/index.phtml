@@ -497,18 +497,25 @@ foreach ($adapters as $a) {
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small mb-3"><lang>为适配器分别绑定文本推理、文生图、文生视频模型；留空表示该能力不启用。</lang></p>
-                <div class="mb-3">
-                    <label for="batchTextModelSelect" class="form-label"><lang>文本推理模型</lang> text2text</label>
-                    <select class="form-select js-modality-model-select" id="batchTextModelSelect" data-modality="text2text"><option value=""><lang>不启用</lang></option></select>
+                <p class="text-muted small mb-3"><lang>为适配器分别绑定文本推理、文生图、文生视频模型；请先选供应商再搜索模型。留空表示该能力不启用。</lang></p>
+                <p class="text-muted small mb-3"><lang>未关联可用供应商账户的模型会标注「未关联账户」，请优先选择已关联账户的供应商与模型。</lang></p>
+                <div class="mb-3 js-modality-binding" data-modality="text2text">
+                    <label class="form-label"><lang>文本推理模型</lang> text2text</label>
+                    <select class="form-select form-select-sm mb-2 js-modality-supplier-filter" aria-label="<?= htmlspecialchars((string)__('供应商筛选')) ?>"></select>
+                    <input type="search" class="form-control form-control-sm mb-2 js-modality-model-search" placeholder="<?= htmlspecialchars((string)__('搜索模型名称或代码…')) ?>" autocomplete="off">
+                    <select class="form-select js-modality-model-select" id="batchTextModelSelect" data-modality="text2text" size="7"><option value=""><lang>不启用</lang></option></select>
                 </div>
-                <div class="mb-3">
-                    <label for="batchImageModelSelect" class="form-label"><lang>文生图模型</lang> text2image</label>
-                    <select class="form-select js-modality-model-select" id="batchImageModelSelect" data-modality="text2image"><option value=""><lang>不启用</lang></option></select>
+                <div class="mb-3 js-modality-binding" data-modality="text2image">
+                    <label class="form-label"><lang>文生图模型</lang> text2image</label>
+                    <select class="form-select form-select-sm mb-2 js-modality-supplier-filter" aria-label="<?= htmlspecialchars((string)__('供应商筛选')) ?>"></select>
+                    <input type="search" class="form-control form-control-sm mb-2 js-modality-model-search" placeholder="<?= htmlspecialchars((string)__('搜索模型名称或代码…')) ?>" autocomplete="off">
+                    <select class="form-select js-modality-model-select" id="batchImageModelSelect" data-modality="text2image" size="7"><option value=""><lang>不启用</lang></option></select>
                 </div>
-                <div>
-                    <label for="batchVideoModelSelect" class="form-label"><lang>文生视频模型</lang> text2video</label>
-                    <select class="form-select js-modality-model-select" id="batchVideoModelSelect" data-modality="text2video"><option value=""><lang>不启用</lang></option></select>
+                <div class="js-modality-binding" data-modality="text2video">
+                    <label class="form-label"><lang>文生视频模型</lang> text2video</label>
+                    <select class="form-select form-select-sm mb-2 js-modality-supplier-filter" aria-label="<?= htmlspecialchars((string)__('供应商筛选')) ?>"></select>
+                    <input type="search" class="form-control form-control-sm mb-2 js-modality-model-search" placeholder="<?= htmlspecialchars((string)__('搜索模型名称或代码…')) ?>" autocomplete="off">
+                    <select class="form-select js-modality-model-select" id="batchVideoModelSelect" data-modality="text2video" size="7"><option value=""><lang>不启用</lang></option></select>
                 </div>
             </div>
             <div class="modal-footer">
@@ -773,40 +780,120 @@ foreach ($adapters as $a) {
             }
             this.activeBindingIds = ids;
             var modal = document.getElementById('batchModelBindingModal');
-            var selects = Array.prototype.slice.call(document.querySelectorAll('.js-modality-model-select'));
-            if (!modal || !selects.length) return;
+            var blocks = Array.prototype.slice.call(document.querySelectorAll('.js-modality-binding'));
+            if (!modal || !blocks.length) return;
             var saveBtn = document.getElementById('batchModelBindingSaveBtn');
             if (saveBtn) saveBtn.disabled = true;
-            selects.forEach(function(select) {
-                var modality = select.getAttribute('data-modality') || '';
-                select.innerHTML = '';
-                var emptyOption = document.createElement('option');
-                emptyOption.value = '';
-                emptyOption.textContent = '<?= __('不启用') ?>';
-                select.appendChild(emptyOption);
-                var items = WelineAdapterManager.modelOptionsByModality[modality] || [];
-                items.forEach(function(item) {
-                    var opt = document.createElement('option');
-                    opt.value = item.model_code || '';
-                    opt.textContent = ((item.name || item.model_code || '').trim() || item.model_code) + ' (' + modality + ')';
-                    select.appendChild(opt);
-                });
-                if (presetBindings[modality]) {
-                    select.value = presetBindings[modality];
-                    if (select.value !== presetBindings[modality]) {
-                        var presetOption = document.createElement('option');
-                        presetOption.value = presetBindings[modality];
-                        presetOption.textContent = presetBindings[modality] + ' (' + modality + ')';
-                        presetOption.dataset.missingModel = '1';
-                        select.appendChild(presetOption);
-                        select.value = presetBindings[modality];
-                    }
-                }
-                select.disabled = false;
+            blocks.forEach(function(block) {
+                WelineAdapterManager.initModalityBindingBlock(block, presetBindings);
             });
             if (saveBtn) saveBtn.disabled = false;
             var bsModal = typeof bootstrap !== 'undefined' && bootstrap.Modal ? new bootstrap.Modal(modal) : null;
             if (bsModal) bsModal.show();
+        },
+
+        initModalityBindingBlock: function(block, presetBindings) {
+            var modality = block.getAttribute('data-modality') || '';
+            var supplierSelect = block.querySelector('.js-modality-supplier-filter');
+            var searchInput = block.querySelector('.js-modality-model-search');
+            var modelSelect = block.querySelector('.js-modality-model-select');
+            if (!supplierSelect || !searchInput || !modelSelect) return;
+            var items = (WelineAdapterManager.modelOptionsByModality[modality] || []).slice();
+            var presetCode = presetBindings[modality] || '';
+            var presetItem = items.find(function(item) { return (item.model_code || '') === presetCode; }) || null;
+            var suppliers = [];
+            items.forEach(function(item) {
+                var supplier = String(item.supplier || '').trim();
+                if (supplier && suppliers.indexOf(supplier) === -1) suppliers.push(supplier);
+            });
+            suppliers.sort();
+            supplierSelect.innerHTML = '';
+            var allOpt = document.createElement('option');
+            allOpt.value = '';
+            allOpt.textContent = '<?= __('全部供应商') ?>';
+            supplierSelect.appendChild(allOpt);
+            suppliers.forEach(function(supplier) {
+                var hasReady = items.some(function(item) {
+                    return String(item.supplier || '') === supplier && !!item.account_ready;
+                });
+                var opt = document.createElement('option');
+                opt.value = supplier;
+                opt.textContent = hasReady
+                    ? supplier
+                    : (supplier + ' <?= __('（未关联账户）') ?>');
+                supplierSelect.appendChild(opt);
+            });
+            var preferredSupplier = '';
+            if (presetItem && presetItem.supplier) {
+                preferredSupplier = String(presetItem.supplier);
+            } else {
+                var readySupplier = suppliers.find(function(supplier) {
+                    return items.some(function(item) {
+                        return String(item.supplier || '') === supplier && !!item.account_ready;
+                    });
+                });
+                preferredSupplier = readySupplier || '';
+            }
+            supplierSelect.value = preferredSupplier;
+            searchInput.value = '';
+            var firstPaint = true;
+            var render = function() {
+                var keep = firstPaint ? presetCode : (modelSelect.value || '');
+                firstPaint = false;
+                WelineAdapterManager.renderModalityModelOptions(block, keep);
+            };
+            supplierSelect.onchange = render;
+            searchInput.oninput = render;
+            modelSelect.disabled = false;
+            render();
+        },
+
+        renderModalityModelOptions: function(block, preferredCode) {
+            var modality = block.getAttribute('data-modality') || '';
+            var supplierSelect = block.querySelector('.js-modality-supplier-filter');
+            var searchInput = block.querySelector('.js-modality-model-search');
+            var modelSelect = block.querySelector('.js-modality-model-select');
+            if (!modelSelect) return;
+            var supplierFilter = supplierSelect ? String(supplierSelect.value || '').trim().toLowerCase() : '';
+            var keyword = searchInput ? String(searchInput.value || '').trim().toLowerCase() : '';
+            var items = (WelineAdapterManager.modelOptionsByModality[modality] || []).filter(function(item) {
+                var supplier = String(item.supplier || '').trim().toLowerCase();
+                if (supplierFilter && supplier !== supplierFilter) return false;
+                if (!keyword) return true;
+                var hay = ((item.name || '') + ' ' + (item.model_code || '') + ' ' + (item.supplier || '')).toLowerCase();
+                return hay.indexOf(keyword) !== -1;
+            });
+            var currentValue = preferredCode || modelSelect.value || '';
+            modelSelect.innerHTML = '';
+            var emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = '<?= __('不启用') ?>';
+            modelSelect.appendChild(emptyOption);
+            items.forEach(function(item) {
+                var code = item.model_code || '';
+                if (!code) return;
+                var opt = document.createElement('option');
+                opt.value = code;
+                opt.dataset.supplier = item.supplier || '';
+                opt.dataset.accountReady = item.account_ready ? '1' : '0';
+                var label = ((item.name || code).trim() || code) + ' · ' + (item.supplier || '<?= __('未知供应商') ?>');
+                if (!item.account_ready) {
+                    label += ' <?= __('· 未关联账户') ?>';
+                }
+                opt.textContent = label;
+                modelSelect.appendChild(opt);
+            });
+            if (currentValue) {
+                modelSelect.value = currentValue;
+                if (modelSelect.value !== currentValue) {
+                    var presetOption = document.createElement('option');
+                    presetOption.value = currentValue;
+                    presetOption.textContent = currentValue + ' <?= __('（当前绑定，不在筛选结果中）') ?>';
+                    presetOption.dataset.missingModel = '1';
+                    modelSelect.appendChild(presetOption);
+                    modelSelect.value = currentValue;
+                }
+            }
         },
 
         normalizeModelBindingPreset: function(presetBindings) {

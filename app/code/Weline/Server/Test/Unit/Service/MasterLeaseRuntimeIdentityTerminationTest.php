@@ -120,9 +120,37 @@ final class MasterLeaseRuntimeIdentityTerminationTest extends TestCase
         self::assertStringContainsString('pidfd_open', $source);
         self::assertStringContainsString('pidfd_send_signal', $source);
         self::assertStringContainsString("\$ffi->cast('void *', 0)", $source);
-        self::assertStringContainsString("\$ffi->cast('char *', \$buffer)", $source);
+        self::assertStringContainsString('windowsWideCharacterBufferToUtf8(', $source);
+        self::assertStringNotContainsString("\$ffi->cast('char *', \$buffer)", $source);
         self::assertStringContainsString('TerminateProcess', $source);
         self::assertStringContainsString('stable_process_handle_unavailable_on_darwin', $source);
+    }
+
+    public function testPlatformHandleDispatchRunsOnlyAfterReleasedOwnerPreflight(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 7)
+            . '/app/code/Weline/Server/Service/MasterLeaseRuntimeIdentity.php',
+        );
+        $start = \strpos($source, 'public function terminateExactProcessIdentity(');
+        $end = \strpos($source, 'private function releasedOwnerOutcome(', (int)$start);
+
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+        $method = \substr($source, $start, $end - $start);
+        $observation = \strpos($method, '$this->observeProcessIdentity(');
+        $releasedOwner = \strpos($method, '$this->releasedOwnerOutcome(');
+        $platformDispatch = \strpos($method, 'return match (PHP_OS_FAMILY)');
+
+        self::assertIsInt($observation);
+        self::assertIsInt($releasedOwner);
+        self::assertIsInt($platformDispatch);
+        self::assertLessThan($platformDispatch, $observation);
+        self::assertLessThan($platformDispatch, $releasedOwner);
+        self::assertStringContainsString(
+            'Windows ARM64/x64 isolation can safely retire an already-exited',
+            $method,
+        );
     }
 
     public function testManagedNginxFallbackNeverSignalsARevalidatedNumericPid(): void

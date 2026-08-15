@@ -24,6 +24,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_business_action', columns: ['business_module', 'business_action'], comment: '业务动作索引')]
 class BackendActivityLog extends Model
 {
+    public const schema_table = 'backend_activity_log';
     public const schema_primary_key = 'backend_activity_log_id';
 
     const fields_ID = 'backend_activity_log_id';

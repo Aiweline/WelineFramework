@@ -32,7 +32,7 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
     }
 
     #page-topbar #vertical-menu-btn,
-    #page-topbar #theme-mode-toggle,
+    #page-topbar [data-weline-backend-theme-trigger],
     #page-topbar .navbar-header .noti-icon,
     #page-topbar .navbar-header .weline-notif-btn {
         width: 44px !important;
@@ -127,14 +127,18 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
 
             <!-- 语言切换 -->
             <w:i18n:language:switcher />
-            <!-- 主题色系切换 -->
-            <button type="button"
-                    class="btn header-item noti-icon waves-effect ms-1"
-                    id="theme-mode-toggle"
-                    title="<?= __('主题色系切换') ?>"
-                    aria-label="<?= __('主题色系切换') ?>">
-                <i class="ri-sun-line"></i>
-            </button>
+            <div class="dropdown d-inline-block ms-1">
+                <button type="button" id="topbar-theme-mode" class="btn header-item noti-icon waves-effect"
+                        data-bs-toggle="dropdown" data-weline-backend-theme-trigger
+                        aria-haspopup="true" aria-expanded="false" aria-label="<?= __('主题模式') ?>">
+                    <i class="mdi mdi-laptop"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="topbar-theme-mode">
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="system" data-weline-theme-mode="system"><?= __('跟随系统') ?></button>
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="light" data-weline-theme-mode="light"><?= __('明亮模式') ?></button>
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="dark" data-weline-theme-mode="dark"><?= __('暗黑模式') ?></button>
+                </div>
+            </div>
 
             <div class="dropdown d-none d-lg-inline-block ms-1">
                 <button type="button" class="btn header-item noti-icon waves-effect"
@@ -326,7 +330,7 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
         }
 
         #page-topbar #vertical-menu-btn,
-        #page-topbar #theme-mode-toggle,
+        #page-topbar [data-weline-backend-theme-trigger],
         #page-topbar .navbar-header .noti-icon,
         #page-topbar .navbar-header .weline-notif-btn {
             width: 38px !important;
@@ -407,7 +411,7 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
         #page-topbar .navbar-header .dropdown .header-item,
         #page-topbar .navbar-header .dropdown .show.header-item,
         #page-topbar #vertical-menu-btn,
-        #page-topbar #theme-mode-toggle,
+        #page-topbar [data-weline-backend-theme-trigger],
         #page-topbar .navbar-header .noti-icon,
         #page-topbar .navbar-header .weline-notif-btn,
         #page-topbar .user-dropdown .header-item {

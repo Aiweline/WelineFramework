@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\Session;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
+use Weline\Framework\Http\CookieScope;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Session\SessionCookieNameResolver;
 
@@ -13,6 +14,7 @@ final class SessionCookieNameResolverTest extends TestCase
 {
     protected function tearDown(): void
     {
+        CookieScope::setPolicyResolverOverride(null);
         RequestContext::cleanup();
         if (Context::hasCurrent()) {
             Context::leave();
@@ -58,5 +60,23 @@ final class SessionCookieNameResolverTest extends TestCase
 
         self::assertSame('shop.test:9503', SessionCookieNameResolver::currentHost());
         self::assertSame('WELINE_SESSID_9503', SessionCookieNameResolver::resolve());
+    }
+
+    public function testUnscopedNameRemainsAvailableWhenWebsitePolicyQualifiesActiveCookie(): void
+    {
+        CookieScope::setPolicyResolverOverride(static fn(): array => [
+            'active' => true,
+            'name_suffix' => '_w0',
+            'name_suffix_pattern' => '/_w\d+$/',
+            'mount_path' => '/',
+            'expire_unscoped_aliases' => true,
+            'revision' => 'test',
+        ]);
+
+        self::assertSame('WELINE_SESSID_9502_w0', SessionCookieNameResolver::resolve('shop.test:9502'));
+        self::assertSame(
+            'WELINE_SESSID_9502',
+            SessionCookieNameResolver::resolveUnscopedFor(SessionCookieNameResolver::LEGACY_NAME, 'shop.test:9502'),
+        );
     }
 }

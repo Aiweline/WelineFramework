@@ -44,6 +44,7 @@ final class ScenarioImageGenerationGateway implements ScenarioImageGenerationInt
         'approved_abbreviations' => true,
         'allowed_logo_text' => true,
         'brand_text' => true,
+        'image' => true,
         'disable_skill_prompt_injection' => true,
         'disable_style_prompt_injection' => true,
     ];

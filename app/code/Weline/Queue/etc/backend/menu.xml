@@ -3,9 +3,9 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- 队列运行面归入运营工具；菜单仅暴露列表与只读诊断入口。 -->
+    <!-- 队列属于框架系统服务；菜单仅暴露列表与只读诊断入口。 -->
     <menu source="Weline_Queue::message_service" name="message_service" title="消息队列" action="" 
-         parent="Weline_Backend::commerce:operations:group"
+         parent="Weline_Backend::system_service_group"
          icon="mdi mdi-message-processing-outline" order="20">
         
         <menu source="Weline_Queue::listing_manager" name="queue_listing" title="队列列表"

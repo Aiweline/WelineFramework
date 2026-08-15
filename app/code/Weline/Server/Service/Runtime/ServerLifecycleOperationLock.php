@@ -60,16 +60,21 @@ final class ServerLifecycleOperationLock
             return true;
         }
 
+        // Capture the immutable process birth before acquiring any file lock.
+        // x64 PHP running through Windows ARM64 emulation can fault inside
+        // kernel32 FFI when the same thread already owns an flock-backed lock.
+        // The payload callback must therefore only publish pre-captured data.
+        $identity = [];
+        try {
+            $identity = (new MasterLeaseRuntimeIdentity())->captureProcessIdentity($pid);
+        } catch (\Throwable) {
+            // Diagnostic identity is optional; flock remains authority.
+        }
+
         $handle = VerifiedPersistentFileLock::acquire(
             $path,
             $timeout,
-            static function () use ($instanceName, $purpose, $pid): array {
-                $identity = [];
-                try {
-                    $identity = (new MasterLeaseRuntimeIdentity())->captureProcessIdentity($pid);
-                } catch (\Throwable) {
-                    // Diagnostic identity is optional; flock remains authority.
-                }
+            static function () use ($instanceName, $purpose, $pid, $identity): array {
                 return [
                     'pid' => $pid,
                     'process_birth' => (string)($identity['birth'] ?? ''),

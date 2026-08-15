@@ -22,6 +22,7 @@ use Weline\Theme\Model\WelineTheme;
  */
 class CssVariableInjector
 {
+    private const GENERATED_VARIABLES_VERSION = 'Weline Theme variables v2';
     private const MAX_CSS_VARIABLE_VALUE_LENGTH = 1024;
     private const CSS_VARIABLE_NAME_PATTERN = '/^--[A-Za-z0-9_-]+$/';
     private const CSS_VARIABLE_FORBIDDEN_VALUE_PATTERN = '/\/\*|\*\/|@import\b|url\s*\(|expression\s*\(|javascript\s*:|data\s*:/i';
@@ -39,10 +40,13 @@ class CssVariableInjector
         $cssVariables = $this->sanitizeVariables($this->collectVariables($area, $theme, $scope));
         
         if (empty($cssVariables)) {
-            return '';
+            return "/* " . self::GENERATED_VARIABLES_VERSION . ": explicit non-palette tokens only */\n";
         }
         
-        $css = ":root {\n";
+        // Generated layout CSS is linked after palettes on older installations.
+        // It must never replay baseline color defaults and turn a resolved dark
+        // surface back to light; palettes remain the sole color authority.
+        $css = "/* " . self::GENERATED_VARIABLES_VERSION . ": explicit non-palette tokens only */\n:root {\n";
         
         // 按变量文件分组
         $grouped = [];
@@ -155,15 +159,36 @@ class CssVariableInjector
             $variables[$varName] = $varValue;
         }
         
-        // 3. 从variables文件读取默认值（仅当Meta中不存在时）
-        $defaultVariables = $this->getVariablesFromFiles($area, $theme);
-        foreach ($defaultVariables as $varName => $varValue) {
-            if (!isset($variables[$varName])) {
-                $variables[$varName] = $varValue;
+        // Core variable files are loaded by Head before the mode palettes.
+        // Do not serialize them again into a late :root block.
+        return array_filter(
+            $variables,
+            fn(mixed $value, string $name): bool => $this->isLateSafeExplicitToken($name),
+            ARRAY_FILTER_USE_BOTH,
+        );
+    }
+
+    /**
+     * Layout CSS is injected after the mode palettes.  Brand/status tokens can
+     * legitimately come from an explicit ThemeData configuration, but canvas,
+     * surface, text and border defaults must stay owned by light/dark palettes.
+     */
+    private function isLateSafeExplicitToken(string $name): bool
+    {
+        if (!str_starts_with($name, '--color-') && !str_starts_with($name, '--backend-color-')) {
+            return true;
+        }
+
+        foreach ([
+            '--color-primary', '--color-secondary', '--color-success', '--color-warning', '--color-danger', '--color-error', '--color-info', '--color-link', '--color-accent', '--color-on-',
+            '--backend-color-primary', '--backend-color-secondary', '--backend-color-success', '--backend-color-warning', '--backend-color-danger', '--backend-color-error', '--backend-color-info', '--backend-color-link', '--backend-color-accent', '--backend-color-on-', '--backend-color-gradient-', '--backend-color-btn-',
+        ] as $allowedPrefix) {
+            if (str_starts_with($name, $allowedPrefix)) {
+                return true;
             }
         }
-        
-        return $variables;
+
+        return false;
     }
     
     /**
@@ -369,4 +394,3 @@ class CssVariableInjector
         return $nameMap[$file] ?? ucfirst($file);
     }
 }
-
