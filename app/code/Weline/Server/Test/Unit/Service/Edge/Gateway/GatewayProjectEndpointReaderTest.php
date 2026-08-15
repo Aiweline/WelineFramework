@@ -45,6 +45,37 @@ final class GatewayProjectEndpointReaderTest extends TestCase
         self::assertSame($instance, $endpoints[$instance]['instance_id']);
     }
 
+    public function testWindowsListenerHandoffStateIsNotParsedAsAProjectEndpoint(): void
+    {
+        $instance = 'windows-handoff-project';
+        self::assertNotFalse(\file_put_contents(
+            $this->directory . DIRECTORY_SEPARATOR . $instance . '.json',
+            '{"instance_id":"' . $instance . '"}',
+        ));
+        self::assertNotFalse(\file_put_contents(
+            $this->directory . DIRECTORY_SEPARATOR
+                . '.wls-listener-handoff-pending.json',
+            "{\"schema_version\":2,\"exports\":[]}\n",
+        ));
+        self::assertNotFalse(\file_put_contents(
+            $this->directory . DIRECTORY_SEPARATOR
+                . '.wls-listener-handoff-' . \str_repeat('a', 32) . '-master.json',
+            "{\"schema_version\":1}\n",
+        ));
+
+        $manager = $this->manager();
+        $endpoints = (new GatewayProjectEndpointReader($manager))->all();
+
+        self::assertSame([$instance], \array_keys($endpoints));
+        self::assertSame($instance, $endpoints[$instance]['instance_id']);
+
+        $manager->saveInstance('windows-handoff-second', [
+            'port' => 28089,
+            'gateway' => ['requested_mode' => 'wls'],
+        ]);
+        self::assertFileExists($manager->getInstanceFile('windows-handoff-second'));
+    }
+
     public function testCompleteReaderAndAllEndpointMutationsShareNamespaceLock(): void
     {
         $reader = new \ReflectionMethod(GatewayProjectEndpointReader::class, 'all');

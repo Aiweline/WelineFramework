@@ -4,7 +4,7 @@ Read `AI-ENTRY.md`, then follow `dev/ai/global-constraints.md` as the single sou
 
 Cursor-specific always-on summaries live in `.cursor/rules/*.mdc` and mirror selected rules from `dev/ai/global-constraints.md`; if they conflict, `dev/ai/global-constraints.md` wins.
 
-Always-on Cursor rules include **SSH MCP 远端操作**（`.cursor/rules/ssh-mcp-deploy.mdc`）：SAAS 部署与远端文件操作默认通过 `ssh-mcp` 持久连接 `weline-saas`，禁止 Shell 频繁 `ssh`/`scp`。
+Always-on Cursor rules include **SSH MCP 远端操作**（`.cursor/rules/ssh-mcp-deploy.mdc`）：SAAS 远端用 `ssh-mcp` 连接 `weline-saas`；用户说「部署」**默认只部署 pre**（`/home/weline-test`），**生产须明示**。详见 `dev/ai/global-constraints.md` §12。
 
 Always-on Cursor rules include **回撤禁止默认用 Git**（`.cursor/rules/no-git-rollback-unless-asked.mdc`）：用户要求回撤时须逐处手动还原，除非明确要求用 Git。
 
@@ -14,7 +14,7 @@ Always-on Cursor rules include **真机验收**（`.cursor/rules/real-device-acc
 
 Always-on Cursor rules include **Model 字段变更必须升模块版本**（`.cursor/rules/module-version-on-model-schema.mdc`）：改 `#[Col]`/`#[Table]`/索引等 Schema 声明时，必须同步上调该模块 `etc/module.php` 的 `"version"`，并执行/说明 `setup:upgrade`。详见 `dev/ai/global-constraints.md` §4。
 
-Always-on Cursor rules include **核心框架改动必须提示合并**（`.cursor/rules/core-project-sync.mdc`）：凡改 `app/code/Weline/**`，结案前须向用户给出决策表（文件→建议码→理由）并请确认后再合入对侧；详见 `dev/ai/global-constraints.md` §7。
+Always-on Cursor rules include **核心框架改动必须提示合并**（`.cursor/rules/core-project-sync.mdc`）：凡改 `app/code/Weline/**`，结案前须向用户给出决策表（文件→建议码→理由）并请确认后再合入对侧；**每次只合本会话改过的文件**，禁止会话外全树合并；详见 `dev/ai/global-constraints.md` §7。
 
 Always-on Cursor rules include **跨模块禁止硬类引用**（`.cursor/rules/cross-module-event-decoupling.mdc`）：模块之间禁止强制 `use`/注入/`new` 对方具体类；通知与副作用用 Event/Observer 解耦，读取用 Interface 或 `w_query()`。详见 `dev/ai/global-constraints.md` §4。
 

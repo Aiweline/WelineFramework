@@ -21,7 +21,7 @@ use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Queue\Service\QueueAdminService;
-use Weline\Queue\View\Backend\QueueAdminListingView;
+use Weline\Queue\Service\QueueAdminListingView;
 
 #[Acl('Weline_Queue::listing_manager', '队列管理', 'mdi-human-queue', '管理队列信息', 'Weline_Queue::message_service')]
 class Queue extends \Weline\Framework\App\Controller\BackendController

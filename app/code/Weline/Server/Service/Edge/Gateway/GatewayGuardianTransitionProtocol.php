@@ -57,6 +57,14 @@ final class GatewayGuardianTransitionProtocol
             'parent_authority_profile' => 'host-root-controller-search-v2',
             'parent_authority_policy' => 'host-root-controller-search-v2-fixed-parent',
         ],
+        'neutral-tls' => [
+            'policy' => 'restore',
+            'root_id' => 'host/neutral-tls',
+            'authority_profile' => 'root-data-plane-traverse-neutral-tls-v2',
+            'authority_policy' => 'root-data-plane-traverse-neutral-tls-v2-recreate-sealed',
+            'parent_authority_profile' => 'host-root-controller-search-v2',
+            'parent_authority_policy' => 'host-root-controller-search-v2-fixed-parent',
+        ],
         'runtime-conf' => [
             'policy' => 'restore',
             'root_id' => 'host/runtime/conf',

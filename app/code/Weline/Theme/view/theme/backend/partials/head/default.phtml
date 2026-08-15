@@ -26,9 +26,46 @@ $themeData = $this->getData('theme') ?? [];
 
 // 获取 backend 基础 URL 用于 base 标签（确保为字符串，避免 null 触发 htmlspecialchars Deprecated）
 $backendBaseUrl = (string)($this->request->getUrlBuilder()->getBackendUrl('/') ?? '');
+$isDev = defined('DEV') && DEV;
+$themeAssetBaseUrl = $isDev ? '/Weline/Theme/view/theme/' : '/static/Weline/Theme/theme/';
+$themeAssetVersion = '20260810-color-mode';
+$backendThemePreference = 'system';
+try {
+    $configuredPreference = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class)
+        ->getOriginThemeConfig('theme-mode-switch');
+    if (in_array($configuredPreference, ['system', 'light', 'dark'], true)) {
+        $backendThemePreference = $configuredPreference;
+    }
+} catch (\Throwable) {
+    // The prepaint path must remain available during a partial backend bootstrap.
+}
 ?>
 <!-- Base URL 设置：所有相对链接将基于此路径 -->
 <base href="<?= htmlspecialchars($backendBaseUrl, ENT_QUOTES, 'UTF-8') ?>">
+<script data-no-extract="true">
+    (function(root, preference) {
+        var media = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+        var apply = function () {
+            var current = preference === 'dark' || (preference === 'system' && media && media.matches) ? 'dark' : 'light';
+            [root, document.body].filter(Boolean).forEach(function (target) {
+                target.setAttribute('data-theme-preference', preference);
+                target.setAttribute('data-theme', current);
+                target.setAttribute('data-bs-theme', current);
+                target.setAttribute('data-theme-mode', current);
+                target.setAttribute('data-layout-mode', current);
+                target.style.colorScheme = current;
+                if (target === document.body) {
+                    target.setAttribute('data-topbar', current);
+                    target.setAttribute('data-sidebar', current);
+                }
+            });
+        };
+        apply();
+        // The canonical backend runtime owns the one durable media listener.
+        // Prepaint only resolves the first frame and deliberately captures no
+        // preference closure that could become stale after a preview switch.
+    })(document.documentElement, <?= json_encode($backendThemePreference, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+</script>
 <!-- 
     Theme Head Partial - 只负责加载 Theme 资源
     注意：
@@ -50,8 +87,16 @@ $theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
 // 注意：变量和色盘配置现在通过生成的布局CSS文件加载，不再单独引用
 // 布局CSS文件在编译时自动生成，包含所有CSS变量和色盘配置
 ?>
-<!-- 主题CSS（基础样式，不包含变量） -->
-<theme:css>Weline_Theme::theme/backend/assets/css/theme.css</theme:css>
+<!-- The base palette is canonical. Active themes are allowed to overlay semantic tokens only. -->
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_colors.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_typography.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_spacing.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_borders.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_shadows.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/colors/_light.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<theme:css>Weline_Theme::theme/backend/colors/_light.css</theme:css>
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/colors/_dark.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
 <?php
 // 加载生成的布局CSS文件（包含所有变量、色盘和布局特定的CSS）
 // 规则：所有主题相关数据（包括主题对象）由 ControllerFetchFileBefore Observer 设置
@@ -94,7 +139,6 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
 <!-- 注意：jQuery 等 Backend JS 由 Backend/Admin 模块的 head.phtml 负责加载 -->
 <?php
 // 获取基础URL和当前语言
-$isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
 
 // 根据环境设置模块配置URL和基础URL
@@ -265,27 +309,14 @@ $this->setData('envConfig', $envConfig);
 </script>
 <!-- 注意：内联JS已移除，配置初始化由theme.js处理 -->
 <!-- 注意：Token存储管理器、Switcher组件等 Backend 资源由 Backend/Admin 模块负责加载 -->
-<!-- 主题JS -->
-<theme:js>Weline_Theme::theme/backend/assets/js/theme.js</theme:js>
+<script src="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/js/theme.js?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
+<script src="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/js/backend-components.js?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 <!-- 注意：getHeader()->getHtml() 由 Backend/Admin 模块的 head.phtml 负责 -->
 
 <style>
 /* ========================================
    Backend Head初始化样式
    ======================================== */
-
-/* 确保HTML元素使用后端主题的基础设置 */
-html[data-theme="backend"] {
-    /* 后端主题配色变量 */
-    --backend-primary: #556ee6;
-    --backend-secondary: #6c757d;
-    --backend-success: #34c38f;
-    --backend-danger: #f46a6a;
-    --backend-warning: #f1b44c;
-    --backend-info: #50a5f1;
-    --backend-dark: #343a40;
-    --backend-light: #f8f9fa;
-}
 
 /* 基础字体优化 */
 html {
@@ -314,6 +345,8 @@ html {
     min-height: 80vh;
 }
 </style>
+<!-- Core adapter follows generated layout/token overlays and this partial's CSS. -->
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/css/theme.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
 
 <script>
 // Backend Head初始化脚本
@@ -322,14 +355,18 @@ html {
     
     // 后端主题配置增强
     if (window.__WelineThemeConfig) {
-        // 添加后端主题特定配置
+        var computedTokens = window.getComputedStyle ? window.getComputedStyle(document.documentElement) : null;
+        var token = function(name, fallback) {
+            var value = computedTokens ? computedTokens.getPropertyValue(name).trim() : '';
+            return value || fallback;
+        };
         window.__WelineThemeConfig.backend = {
-            primaryColor: '#556ee6',
-            secondaryColor: '#6c757d',
-            successColor: '#34c38f',
-            dangerColor: '#f46a6a',
-            warningColor: '#f1b44c',
-            infoColor: '#50a5f1'
+            primaryColor: token('--backend-color-primary', '#556ee6'),
+            secondaryColor: token('--backend-color-secondary', '#64748b'),
+            successColor: token('--backend-color-success', '#15803d'),
+            dangerColor: token('--backend-color-danger', '#b91c1c'),
+            warningColor: token('--backend-color-warning', '#a16207'),
+            infoColor: token('--backend-color-info', '#0369a1')
         };
     }
     
@@ -362,6 +399,9 @@ html {
 
     // 监听来自Visual Editor的postMessage (Live Preview支持)
     window.addEventListener('message', function(event) {
+        if (event.origin !== window.location.origin || !event.data || event.data.type !== 'WELINE_THEME_UPDATE') {
+            return;
+        }
         if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
             const cssVars = event.data.cssVars || {};
             const root = document.documentElement;

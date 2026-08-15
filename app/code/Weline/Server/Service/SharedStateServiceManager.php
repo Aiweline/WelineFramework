@@ -523,15 +523,15 @@ class SharedStateServiceManager
                 }
 
                 $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
-                $runtime['started_at'] = $startedAt;
+                if (!\array_key_exists('started_at', $runtime)) {
+                    $runtime['started_at'] = $startedAt;
+                }
                 $runtime['healthy_at'] = \date('c');
                 $runtime['created_now'] = true;
                 $runtime['shared_service'] = true;
-                $runtime = $this->selectLifecycleGeneration(
-                    $roleKey,
-                    $runtime,
-                    $this->createRegistry(),
-                );
+                // Readiness is an authenticated observation only. Finalization
+                // owns lifecycle selection and publication so an equal-generation
+                // registry/runtime conflict can reach its authenticated recovery.
                 $done[$roleKey] = $runtime;
                 unset($pending[$roleKey]);
             }
@@ -1036,6 +1036,7 @@ class SharedStateServiceManager
 
         if ($healthy) {
             $runtimePid = 0;
+            $registryRecord = [];
             $launchedPid = (int)($definition['_launched_pid'] ?? 0);
             if ($launchedPid > 0) {
                 $registryRecord = $this->createRegistry()->getRecord($role);
@@ -1065,10 +1066,32 @@ class SharedStateServiceManager
             if ($runtimePid <= 0) {
                 $runtimePid = $this->resolveValidatedLivePortOwnerPid($definition);
             }
+            $startedAt = \is_string($runtimeFile['started_at'] ?? null)
+                ? (string)$runtimeFile['started_at']
+                : null;
+            if ($registryRecord === []) {
+                $registryRecord = $this->createRegistry()->getRecord($role);
+            }
+            if ($runtimePid > 0
+                && SharedStateServiceRegistry::hasExactLifecycleBinding($role, $registryRecord)
+                && (int)($registryRecord['pid'] ?? 0) === $runtimePid
+                && (int)($registryRecord['port'] ?? 0) === (int)$definition['port']
+                && \hash_equals(
+                    \basename($configuredTokenFileName),
+                    \basename((string)($registryRecord['token_file_name'] ?? '')),
+                )
+                && \array_key_exists('started_at', $registryRecord)
+                && (\is_string($registryRecord['started_at']) || $registryRecord['started_at'] === null)
+            ) {
+                // A protocol-authenticated live owner plus this exact registry
+                // binding is stronger than a stale runtime file. Preserve the
+                // live sidecar's immutable birth identity for lifecycle CAS.
+                $startedAt = $registryRecord['started_at'];
+            }
             $runtime = $this->buildRuntimeMetadata(
                 $definition,
                 $runtimePid,
-                \is_string($runtimeFile['started_at'] ?? null) ? (string) $runtimeFile['started_at'] : null,
+                $startedAt,
                 \date('c')
             );
             // Internal one-hop proof: the authenticated protocol probe and

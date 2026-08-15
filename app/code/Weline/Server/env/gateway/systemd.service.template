@@ -1,7 +1,6 @@
 [Unit]
 Description=Weline WLS 2.0 Host Gateway
-After=network-online.target
-Wants=network-online.target
+After=network.target
 # The immutable Guardian owns the signed crash/recovery ledger and bounded
 # maintenance backoff. systemd must remain available to schedule the next
 # invocation instead of entering a permanent StartLimit lockout.
@@ -10,7 +9,7 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 User=root
-Group=root
+Group=weline-gateway
 ExecStart="{{GUARDIAN}}" --guardian --service --home="{{HOME}}" --run="{{RUN_DIR}}" --profile="{{PROFILE}}"
 Restart=on-failure
 RestartSec=5
@@ -21,7 +20,7 @@ TimeoutStopSec=330
 SendSIGKILL=yes
 LimitNOFILE=65536
 RuntimeDirectory=weline-gateway
-RuntimeDirectoryMode=0751
+RuntimeDirectoryMode=0771
 UMask=0077
 NoNewPrivileges=true
 # Enrollment authorizes project and certificate source paths in the host
@@ -35,8 +34,8 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_CHOWN
-AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_CHOWN
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_CHOWN CAP_KILL CAP_FOWNER
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_CHOWN CAP_KILL CAP_FOWNER
 ReadWritePaths="{{HOME}}" "{{RUN_DIR}}" "{{SYSTEMD_DEFINITION_DIR}}"
 Environment="WLS_GATEWAY_LISTEN_HTTP={{HTTP_PORT}}"
 Environment="WLS_GATEWAY_LISTEN_HTTPS={{HTTPS_PORT}}"

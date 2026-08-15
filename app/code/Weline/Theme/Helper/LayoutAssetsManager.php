@@ -110,17 +110,24 @@ class LayoutAssetsManager
             return false;
         }
 
+        $existingCss = null;
         if (is_file($cssPath)) {
-            return true;
+            $existingCss = file_get_contents($cssPath);
+            if (is_string($existingCss) && str_contains($existingCss, 'Weline Theme variables v2')) {
+                return true;
+            }
         }
 
         try {
             /** @var CssVariableInjector $injector */
             $injector = ObjectManager::getInstance(CssVariableInjector::class);
             $cssVariables = $injector->generateCssVariables($area, $theme, 'default');
+            if ($cssVariables === '') {
+                return is_string($existingCss);
+            }
             $cssContent = $cssVariables . "\n";
-            if ($cssContent === '') {
-                return false;
+            if (is_string($existingCss)) {
+                $cssContent = $this->replaceGeneratedVariablePreamble($existingCss, $cssContent);
             }
 
             $dir = dirname($cssPath);
@@ -144,6 +151,23 @@ class LayoutAssetsManager
         }
 
         return false;
+    }
+
+    /** Preserve extracted layout CSS when refreshing a stale variables preamble. */
+    private function replaceGeneratedVariablePreamble(string $existingCss, string $cssVariables): string
+    {
+        $body = preg_replace(
+            // v2 is self-identifying.  The legacy form is intentionally
+            // narrower than a generic leading :root: the injector always
+            // grouped variables under its "========== category =========="
+            // comments, while authored layout CSS need not be replaced.
+            '/\A\s*(?:\/\*\s*Weline Theme variables v2:[^*]*\*\/\s*(?::root\s*\{\s*(?:\/\*\s*==========[^*]*==========\s*\*\/\s*(?:--[A-Za-z0-9_-]+\s*:\s*[^;{}]+;\s*)+\s*)+\}\s*)?|:root\s*\{\s*(?:\/\*\s*==========[^*]*==========\s*\*\/\s*(?:--[A-Za-z0-9_-]+\s*:\s*[^;{}]+;\s*)+\s*)+\}\s*)/s',
+            '',
+            $existingCss,
+            1,
+        );
+
+        return $cssVariables . (is_string($body) ? $body : $existingCss);
     }
 
     public function copyToStatic(string $sourceFile, string $targetFile): bool

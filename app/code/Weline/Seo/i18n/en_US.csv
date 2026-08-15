@@ -126,7 +126,7 @@ AI建议生成成功,"AI suggestion generated successfully"
 查看主体详情,查看主体详情
 查看主体SEO详情,查看主体SEO详情
 刷新AI建议,刷新AI建议
-"AI 优化控制台","AI 优化控制台"
+"AI 优化控制台","AI Optimization Console"
 AI优化控制台,AI优化控制台
 查看AI优化控制台,查看AI优化控制台
 账户不存在,"Account does not exist"
@@ -334,6 +334,23 @@ URL,URL
 样本达标,样本达标
 样本积累中,样本积累中
 暂无,暂无
+"未绑定 GSC 或尚无查询词","GSC is not linked or no queries yet"
+"未绑定 GSC，请先在 SEO 账户绑定 Search Console","Link a GSC account in SEO settings first"
+"已绑定 GSC，暂无查询词，请点击同步词云","GSC is linked but has no queries yet. Sync the word cloud."
+暂无访客事件或搜索词热度,"No visitor events or search-query heat yet"
+"当前无访客事件，以下为 GSC 搜索词热度","No visitor events yet; showing GSC search-query heat"
+"真实访客 PV 需站点上线并写入访客事件；当前仅用 GSC 词热驱动进化。","Real visitor PV needs a live site writing visitor events; evolution currently uses GSC query heat."
+"小时调度默认跟随上方自动化模式：影子模式只分析不改稿；点「按热度进化」可立即入队改 block（自动草稿意图）。","Hourly schedule follows the automation mode above: shadow analyzes only; use Evolve by heat to enqueue block edits (auto-draft intent)."
+小时调度已关闭：不会自动分析。仍可用「按热度进化」手动入队（自动草稿意图）。,"Hourly schedule is off: no automatic analysis. Evolve by heat can still enqueue (auto-draft intent)."
+"当前为影子模式：小时调度只分析不改稿。点「按热度进化」可立即入队改 block（自动草稿意图）。","Shadow mode: hourly schedule analyzes only. Evolve by heat enqueues block edits (auto-draft intent)."
+当前为自动草稿：小时调度会在达标后改预览稿（不发布）。「按热度进化」同样以自动草稿意图入队。,"Auto-draft: hourly schedule edits preview drafts when thresholds pass (no publish). Evolve by heat also uses auto-draft intent."
+当前为自动发布：小时调度在授权与门槛通过后可改稿并发布。「按热度进化」仍以自动草稿意图入队，需人工确认后再发布。,"Auto-publish: hourly schedule may edit and publish when authorized and gated. Evolve by heat still enqueues auto-draft; publish needs confirmation."
+词云已同步,"Word cloud synced"
+词云同步失败，请稍后重试,"Word cloud sync failed. Try again later."
+热度进化已入队,"Heat evolution queued"
+"词云未命中可进化 block","No evolvable block matched the word cloud"
+"请先绑定 GSC 并同步词云","Link GSC and sync the word cloud first"
+热度进化入队失败，请稍后重试,"Heat evolution queue failed. Try again later."
 区块,区块
 允许修改字段,允许修改字段
 来源版本,来源版本
@@ -388,6 +405,13 @@ URL,URL
 达到提升与护栏要求,达到提升与护栏要求
 已回滚或介入,已回滚或介入
 保护人工内容与业务指标,保护人工内容与业务指标
+站点进化,"Site evolution"
+"GSC 词云与访客事件","GSC word cloud and visitor events"
+同步词云,"Sync word cloud"
+按热度进化,"Evolve from heat"
+"绑定 GSC 后同步查询词；热度驱动 AI 调整命中词所在 block","After GSC is linked"
+搜索词云,"Search word cloud"
+访客事件热度,"Visitor event heat"
 自动化治理,自动化治理
 策略与发布授权,策略与发布授权
 有未保存更改,有未保存更改
@@ -833,6 +857,7 @@ Canonical,Canonical
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","Please go to ""SEO Management > Sitemap Management"" or ""Site Management"" to bind the SEO account."
 SEO账户配置,"SEO Account Configuration"
 """SEO subject created""","SEO subject created"
+暂无访客事件,"No visitor events yet"
 "写入隔离的 SEO Search 验收证据。","Write isolated SEO Search acceptance evidence."
 "按回执精确清理 SEO Search 验收证据。","Clean up SEO Search acceptance evidence by receipt."
 "Sitemap 管理","Sitemap 管理"

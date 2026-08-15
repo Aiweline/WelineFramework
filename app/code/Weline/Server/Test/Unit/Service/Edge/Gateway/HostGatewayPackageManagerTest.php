@@ -92,6 +92,553 @@ final class HostGatewayPackageManagerTest extends TestCase
         }
     }
 
+    public function testVirginHostAllowsAnEmptyNeutralTlsRootButRejectsItsLeaves(): void
+    {
+        $this->paths->ensureDirectories();
+        $neutralTls = $this->paths->home() . DIRECTORY_SEPARATOR . 'neutral-tls';
+        if (!\is_dir($neutralTls)) {
+            self::assertTrue(\mkdir($neutralTls, 0700), 'neutral TLS root');
+        }
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $packages = new HostGatewayPackageManager(
+            $this->paths,
+            platform: $platform,
+        );
+        $host = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+        $classify = new \ReflectionMethod($host, 'classifyVirginHostReadOnly');
+
+        $empty = $classify->invoke(
+            $host,
+            (\hrtime(true) / 1_000_000_000) + 5.0,
+        );
+        self::assertSame('VIRGIN_HOST', $empty['state']);
+
+        $residual = $neutralTls . DIRECTORY_SEPARATOR . 'unexpected.pem';
+        self::assertNotFalse(\file_put_contents($residual, "residual\n"));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($residual, 0600));
+        }
+        $reclassified = $classify->invoke(
+            $host,
+            (\hrtime(true) / 1_000_000_000) + 5.0,
+        );
+        self::assertSame('REPAIR_REQUIRED', $reclassified['state']);
+        self::assertStringContainsString(
+            'Residual or unsafe Gateway host state exists',
+            $reclassified['reason'],
+        );
+    }
+
+    public function testVirginHostAllowsAnEmptyNginxPidRootButRejectsItsLeaf(): void
+    {
+        $this->paths->ensureDirectories();
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $packages = new HostGatewayPackageManager(
+            $this->paths,
+            platform: $platform,
+        );
+        $host = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+        $classify = new \ReflectionMethod($host, 'classifyVirginHostReadOnly');
+
+        $empty = $classify->invoke(
+            $host,
+            (\hrtime(true) / 1_000_000_000) + 5.0,
+        );
+        self::assertSame('VIRGIN_HOST', $empty['state']);
+
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->nginxPidFile(),
+            "123\n",
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($this->paths->nginxPidFile(), 0600));
+        }
+        $reclassified = $classify->invoke(
+            $host,
+            (\hrtime(true) / 1_000_000_000) + 5.0,
+        );
+        self::assertSame('REPAIR_REQUIRED', $reclassified['state']);
+        self::assertStringContainsString(
+            'Residual or unsafe Gateway host state exists',
+            $reclassified['reason'],
+        );
+    }
+
+    public function testRebootstrapFailsClosedOnANonemptyNginxPidNamespace(): void
+    {
+        $this->paths->ensureDirectories();
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->nginxPidFile(),
+            "123\n",
+        ));
+        $packages = new HostGatewayPackageManager($this->paths);
+
+        $guard = new \ReflectionMethod(
+            $packages,
+            'assertNginxPidNamespaceEmptyForRebootstrap',
+        );
+        try {
+            $guard->invoke($packages);
+            self::fail('A live Nginx PID leaf must block rebootstrap.');
+        } catch (\ReflectionException $exception) {
+            self::fail($exception->getMessage());
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'PID namespace is nonempty',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileExists($this->paths->nginxPidFile());
+    }
+
+    public function testRebootstrapFailsClosedOnLegacyRuntimeRunNginxPid(): void
+    {
+        $this->paths->ensureDirectories();
+        $legacy = $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'run'
+            . DIRECTORY_SEPARATOR . 'nginx.pid';
+        self::assertNotFalse(\file_put_contents($legacy, "123\n"));
+        $packages = new HostGatewayPackageManager($this->paths);
+        $guard = new \ReflectionMethod(
+            $packages,
+            'assertNginxPidNamespaceEmptyForRebootstrap',
+        );
+
+        try {
+            $guard->invoke($packages);
+            self::fail('The legacy Nginx PID artifact must block rebootstrap.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'legacy runtime/run/nginx.pid exists',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileExists($legacy);
+    }
+
+    public function testRebootstrapPrepareAllowsALiveNginxPidUntilTheOldGatewayStops(): void
+    {
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $packages = new HostGatewayPackageManager(
+            paths: $this->paths,
+            platform: $platform,
+        );
+        $initial = $packages->stage($this->createPackage('pid-prepare-old'), 'default');
+        $packages->activate((string)$initial['slot']);
+        $platform->installDefinition('default');
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->nginxPidFile(),
+            "123\n",
+        ));
+
+        $prepared = $packages->prepareRebootstrapCandidate(
+            $this->createPackage('pid-prepare-new', true),
+            'default',
+            \bin2hex(\random_bytes(16)),
+        );
+
+        self::assertSame('PREPARED', $prepared['phase']);
+        self::assertFileExists($this->paths->nginxPidFile());
+    }
+
+    public function testQuiescedTransitionRejectsResidualNginxPidUntilItIsEmpty(): void
+    {
+        $fixture = $this->createStoppedRebootstrapFixture('quiesced-pid');
+        /** @var HostGatewayPackageManager $packages */
+        $packages = $fixture['packages'];
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->nginxPidFile(),
+            "123\n",
+        ));
+
+        try {
+            $packages->advanceRebootstrapPhase(
+                $fixture['nonce'],
+                $fixture['package_digest'],
+                'default',
+                'STOP_COMMITTED',
+                'QUIESCED',
+            );
+            self::fail('QUIESCED must not commit while the Nginx PID remains.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'PID namespace is nonempty',
+                $exception->getMessage(),
+            );
+        }
+        self::assertSame(
+            'STOP_COMMITTED',
+            $packages->rebootstrapStatus($fixture['nonce'])['phase'],
+        );
+        self::assertFileExists($this->paths->nginxPidFile());
+
+        self::assertTrue(\unlink($this->paths->nginxPidFile()));
+        $quiesced = $packages->advanceRebootstrapPhase(
+            $fixture['nonce'],
+            $fixture['package_digest'],
+            'default',
+            'STOP_COMMITTED',
+            'QUIESCED',
+        );
+        self::assertSame('QUIESCED', $quiesced['phase']);
+    }
+
+    public function testQuiescedReplayRejectsAResidualNginxPidWithoutMutatingTheJournal(): void
+    {
+        $fixture = $this->createStoppedRebootstrapFixture('quiesced-pid-replay');
+        /** @var HostGatewayPackageManager $packages */
+        $packages = $fixture['packages'];
+        $packages->advanceRebootstrapPhase(
+            $fixture['nonce'],
+            $fixture['package_digest'],
+            'default',
+            'STOP_COMMITTED',
+            'QUIESCED',
+        );
+        $before = \file_get_contents($this->paths->rebootstrapJournalFile());
+        self::assertIsString($before);
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->nginxPidFile(),
+            "123\n",
+        ));
+
+        try {
+            $packages->advanceRebootstrapPhase(
+                $fixture['nonce'],
+                $fixture['package_digest'],
+                'default',
+                'STOP_COMMITTED',
+                'QUIESCED',
+            );
+            self::fail('A QUIESCED replay must freshly reject a residual PID.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'PID namespace is nonempty',
+                $exception->getMessage(),
+            );
+        }
+
+        self::assertSame('QUIESCED', $packages->rebootstrapStatus($fixture['nonce'])['phase']);
+        self::assertSame($before, \file_get_contents($this->paths->rebootstrapJournalFile()));
+    }
+
+    /** @dataProvider quiescedHostManagerResidualPidProvider */
+    public function testQuiescedHostManagerResumeRechecksThePidNamespaceBeforeCapacityRelease(
+        string $pidFile,
+    ): void
+    {
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $packages = new HostGatewayPackageManager(
+            paths: $this->paths,
+            platform: $platform,
+        );
+        $initial = $packages->stage(
+            $this->createPackage('quiesced-resume-pid-old'),
+            'default',
+        );
+        $packages->activate((string)$initial['slot']);
+        $platform->installDefinition('default');
+        $candidate = $this->createPackage('quiesced-resume-pid-new', true);
+        $nonce = \bin2hex(\random_bytes(16));
+        $prepared = $packages->prepareRebootstrapCandidate(
+            $candidate,
+            'default',
+            $nonce,
+        );
+        $snapshot = $platform->snapshotRebootstrapDefinition($nonce);
+        $packages->recordRebootstrapEvidence(
+            $nonce,
+            (string)$prepared['package_digest'],
+            'default',
+            'PREPARED',
+            ['platform_snapshot' => $snapshot],
+        );
+        $epoch = \substr(\hash('sha256', 'quiesced-resume-pid'), 0, 32);
+        $intent = $this->writeAdminStoppedIntent($epoch);
+        $packages->ensureRebootstrapCapacityReserve(
+            $nonce,
+            (string)$prepared['package_digest'],
+            'default',
+        );
+        $packages->advanceRebootstrapPhase(
+            $nonce,
+            (string)$prepared['package_digest'],
+            'default',
+            'PREPARED',
+            'STOP_COMMITTED',
+            [
+                'admin_stopped_contents' => $intent,
+                'gateway_epoch' => $epoch,
+            ],
+        );
+        $platform->stop((string)$snapshot['kind']);
+        $packages->advanceRebootstrapPhase(
+            $nonce,
+            (string)$prepared['package_digest'],
+            'default',
+            'STOP_COMMITTED',
+            'QUIESCED',
+        );
+        $before = \file_get_contents($this->paths->rebootstrapJournalFile());
+        self::assertIsString($before);
+        self::assertNotFalse(\file_put_contents(
+            $pidFile === 'canonical'
+                ? $this->paths->nginxPidFile()
+                : $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'run'
+                    . DIRECTORY_SEPARATOR . 'nginx.pid',
+            "123\n",
+        ));
+        $manager = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+
+        \putenv('WLS_GATEWAY_TEST_REBOOTSTRAP_FAULT=after:OLD_GENERATION_STASHED');
+        try {
+            $exception = $this->captureRuntimeException(
+                fn (): array => $manager->rebootstrap(
+                    $candidate,
+                    'default',
+                    $nonce,
+                ),
+            );
+        } finally {
+            \putenv('WLS_GATEWAY_TEST_REBOOTSTRAP_FAULT');
+        }
+
+        self::assertStringContainsString(
+            $pidFile === 'canonical'
+                ? 'PID namespace is nonempty'
+                : 'legacy runtime/run/nginx.pid exists',
+            $exception->getMessage(),
+        );
+        self::assertSame(
+            'QUIESCED',
+            $packages->rebootstrapStatus($nonce)['phase'],
+        );
+        self::assertSame($before, \file_get_contents(
+            $this->paths->rebootstrapJournalFile(),
+        ));
+
+        self::assertTrue(\unlink(
+            $pidFile === 'canonical'
+                ? $this->paths->nginxPidFile()
+                : $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'run'
+                    . DIRECTORY_SEPARATOR . 'nginx.pid',
+        ));
+        $this->assertRebootstrapCrash(
+            fn (): array => $manager->rebootstrap(
+                $candidate,
+                'default',
+                $nonce,
+            ),
+            'after:OLD_GENERATION_STASHED',
+        );
+        self::assertSame(
+            'OLD_GENERATION_STASHED',
+            $packages->rebootstrapStatus($nonce)['phase'],
+        );
+    }
+
+    /** @return iterable<string,array{string}> */
+    public static function quiescedHostManagerResidualPidProvider(): iterable
+    {
+        yield 'canonical PID root' => ['canonical'];
+        yield 'legacy PID path' => ['legacy'];
+    }
+
+    public function testQuiescedHostManagerResumeStillRollsBackAfterACompletedReplayIntegrityCheck(): void
+    {
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $packages = new HostGatewayPackageManager(
+            paths: $this->paths,
+            platform: $platform,
+        );
+        $initial = $packages->stage(
+            $this->createPackage('quiesced-resume-later-failure-old'),
+            'default',
+        );
+        $packages->activate((string)$initial['slot']);
+        $platform->installDefinition('default');
+        $candidate = $this->createPackage(
+            'quiesced-resume-later-failure-new',
+            true,
+        );
+        $nonce = \bin2hex(\random_bytes(16));
+        $prepared = $packages->prepareRebootstrapCandidate(
+            $candidate,
+            'default',
+            $nonce,
+        );
+        $snapshot = $platform->snapshotRebootstrapDefinition($nonce);
+        $packages->recordRebootstrapEvidence(
+            $nonce,
+            (string)$prepared['package_digest'],
+            'default',
+            'PREPARED',
+            ['platform_snapshot' => $snapshot],
+        );
+        $epoch = \substr(\hash('sha256', 'quiesced-resume-later-failure'), 0, 32);
+        $intent = $this->writeAdminStoppedIntent($epoch);
+        $packages->ensureRebootstrapCapacityReserve(
+            $nonce,
+            (string)$prepared['package_digest'],
+            'default',
+        );
+        $packages->advanceRebootstrapPhase(
+            $nonce,
+            (string)$prepared['package_digest'],
+            'default',
+            'PREPARED',
+            'STOP_COMMITTED',
+            [
+                'admin_stopped_contents' => $intent,
+                'gateway_epoch' => $epoch,
+            ],
+        );
+        $platform->stop((string)$snapshot['kind']);
+        $packages->advanceRebootstrapPhase(
+            $nonce,
+            (string)$prepared['package_digest'],
+            'default',
+            'STOP_COMMITTED',
+            'QUIESCED',
+        );
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->stateDir() . DIRECTORY_SEPARATOR
+                . 'disk-pressure.marker',
+            "latched\n",
+        ));
+        $manager = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+        $exception = $this->captureRuntimeException(
+            fn (): array => $manager->rebootstrap(
+                $candidate,
+                'default',
+                $nonce,
+            ),
+        );
+
+        self::assertStringContainsString('disk pressure is latched', $exception->getMessage());
+        self::assertSame(
+            'ROLLING_BACK',
+            $packages->rebootstrapStatus($nonce)['phase'],
+        );
+    }
+
+    public function testRebootstrapInventoryUsesTheFixedNeutralTlsRoot(): void
+    {
+        $this->paths->ensureDirectories();
+        $packages = new HostGatewayPackageManager($this->paths);
+        $definitions = (new \ReflectionMethod(
+            $packages,
+            'rebootstrapDerivedNamespaces',
+        ))->invoke($packages);
+
+        self::assertIsArray($definitions);
+        self::assertArrayHasKey('neutral-tls', $definitions);
+        self::assertSame(
+            $this->paths->home() . DIRECTORY_SEPARATOR . 'neutral-tls',
+            $definitions['neutral-tls']['root'],
+        );
+        self::assertSame('host/neutral-tls', $definitions['neutral-tls']['root_id']);
+        self::assertSame([], $definitions['neutral-tls']['preserved']);
+        self::assertSame('restore', $definitions['neutral-tls']['policy']);
+        self::assertSame(
+            GatewayPlatformServiceInstaller::DERIVED_AUTHORITY_NEUTRAL_TLS,
+            $definitions['neutral-tls']['authority_profile'],
+        );
+        self::assertArrayNotHasKey('nginx-pid', $definitions);
+        self::assertSame([], $definitions['runtime-run']['preserved']);
+    }
+
+    public function testWindowsEmptyBootstrapRetirementBindsHostIdAndNeutralTlsToExactAuthority(): void
+    {
+        $gateway = \dirname(__DIR__, 5) . '/Service/Edge/Gateway';
+        $packages = (string)\file_get_contents(
+            $gateway . '/HostGatewayPackageManager.php',
+        );
+        $authority = (string)\file_get_contents(
+            $gateway . '/GatewayWindowsHostRootAuthority.php',
+        );
+
+        $hostId = $this->sourceBetween(
+            $packages,
+            'private function assertEmptyInitialBootstrapScaffoldingHostId(',
+            'private function emptyInitialBootstrapScaffoldingDirectories(',
+        );
+        self::assertStringContainsString(
+            'assertWindowsEmptyInitialBootstrapScaffoldingAuthority(',
+            $hostId,
+        );
+        self::assertMatchesRegularExpression('/\$path,\s*false,/D', $hostId);
+
+        $directories = $this->sourceBetween(
+            $packages,
+            'private function retireEmptyInitialBootstrapScaffoldingDirectory(',
+            'private function assertEmptyInitialBootstrapScaffoldingAuthority(',
+        );
+        self::assertStringContainsString(
+            'assertWindowsEmptyInitialBootstrapScaffoldingAuthority(',
+            $directories,
+        );
+        self::assertMatchesRegularExpression('/\$path,\s*true,/D', $directories);
+        self::assertStringContainsString('REPAIR_REQUIRED:', $directories);
+
+        $validator = $this->sourceBetween(
+            $packages,
+            'private function assertWindowsEmptyInitialBootstrapScaffoldingAuthority(',
+            'private function assertEmptyInitialBootstrapScaffoldingAuthority(',
+        );
+        foreach ([
+            'GatewayBoundedTreeWalker::identity($path)',
+            'GatewayWindowsHostRootAuthority::assertInitialBootstrapScaffoldingAuthority(',
+            'GatewayBoundedTreeWalker::revalidate($identity)',
+            'REPAIR_REQUIRED:',
+        ] as $required) {
+            self::assertStringContainsString($required, $validator);
+        }
+
+        $authorityValidator = $this->sourceBetween(
+            $authority,
+            'public static function assertInitialBootstrapScaffoldingAuthority(',
+            'private static function bootstrapProfiles(): array',
+        );
+        foreach ([
+            'captureExactPathSddl(',
+            'Gateway Windows bootstrap authority differs from its exact profile.',
+            "'trust/host-id'",
+            'O:BAD:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)',
+            "'trust/admin.token'",
+            "'guardian/v1/wls-gateway-guardian.exe'",
+            "'trust/guardian.sha256'",
+            "'trust/launcher-recovery.ledger'",
+            "'trust/guardian-generation-head.lock'",
+            "'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)'",
+        ] as $required) {
+            self::assertStringContainsString($required, $authorityValidator);
+        }
+        self::assertStringContainsString(
+            "'(A;;0x1200a9;;;' . self::CONTROLLER_SERVICE_SID . ')'",
+            $authorityValidator,
+        );
+    }
+
     /**
      * @dataProvider initialBootstrapCrashPhases
      */
@@ -119,7 +666,11 @@ final class HostGatewayPackageManagerTest extends TestCase
             (\hrtime(true) / 1_000_000_000) + 20.0,
         );
 
-        self::assertSame('BOOTSTRAP_INTERRUPTED', $interrupted['state']);
+        self::assertSame(
+            'BOOTSTRAP_INTERRUPTED',
+            $interrupted['state'],
+            (string)$interrupted['reason'],
+        );
         $journal = \json_decode((string)\file_get_contents(
             $this->paths->initialBootstrapJournalFile(),
         ), true, flags: JSON_THROW_ON_ERROR);
@@ -150,6 +701,34 @@ final class HostGatewayPackageManagerTest extends TestCase
         )['state']);
     }
 
+    public function testInitialInstallPublishesAndRollbackRetiresGuardianGenerationHead(): void
+    {
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $packages = new HostGatewayPackageManager(
+            $this->paths,
+            platform: $platform,
+        );
+        $host = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+
+        $installed = $host->install($this->createPackage('initial-guardian-head'), 'default');
+
+        self::assertTrue($installed['ok']);
+        $head = (new GatewayGuardianGenerationHead($this->paths))->read();
+        self::assertIsArray($head);
+        self::assertSame('STABLE', $head['phase']);
+        self::assertSame($installed['runtime_generation'], $head['active_runtime_generation']);
+
+        $platform->removeDefinition((string)$installed['service']['kind']);
+        $packages->rollbackActivation((string)$installed['slot'], '');
+
+        self::assertNull((new GatewayGuardianGenerationHead($this->paths))->read());
+    }
+
     /** @return iterable<string,array{0:string,1:string}> */
     public static function initialBootstrapCrashPhases(): iterable
     {
@@ -159,6 +738,78 @@ final class HostGatewayPackageManagerTest extends TestCase
         yield 'definition journal committed' => ['after-definition', 'DEFINITION_INSTALLED'];
         yield 'activation committed before journal advance' => ['after-activate', 'DEFINITION_INSTALLED'];
         yield 'start returned before journal advance' => ['after-start', 'ACTIVATED'];
+    }
+
+    public function testIpv4OnlyInitialBootstrapCrashReplayRemainsProfileBound(): void
+    {
+        $package = $this->createPackage('initial-ipv4-only-profile-replay');
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $packages = new HostGatewayPackageManager(
+            $this->paths,
+            platform: $platform,
+        );
+        $manager = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT=after-stage');
+
+        $interrupted = $manager->install(
+            $package,
+            'ipv4-only',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        );
+
+        self::assertSame('BOOTSTRAP_INTERRUPTED', $interrupted['state']);
+        $journalBytes = (string)\file_get_contents(
+            $this->paths->initialBootstrapJournalFile(),
+        );
+        $journal = \json_decode(
+            $journalBytes,
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('PREPARING', $journal['phase'] ?? null);
+        self::assertSame('ipv4-only', $journal['profile'] ?? null);
+        self::assertFileDoesNotExist($this->paths->activeSlotFile());
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT');
+
+        $mismatched = $manager->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        );
+
+        self::assertSame('REPAIR_REQUIRED', $mismatched['state']);
+        self::assertSame(
+            $journalBytes,
+            (string)\file_get_contents($this->paths->initialBootstrapJournalFile()),
+        );
+        self::assertFileDoesNotExist($this->paths->activeSlotFile());
+
+        $replayed = $manager->install(
+            $package,
+            'ipv4-only',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        );
+
+        self::assertSame(
+            'TEST_PACKAGE_INSTALLED',
+            $replayed['state'],
+            (string)($replayed['reason'] ?? ''),
+        );
+        self::assertSame('B', $this->paths->activeSlot());
+        $committed = \json_decode((string)\file_get_contents(
+            $this->paths->initialBootstrapJournalFile(),
+        ), true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame('VERIFIED', $committed['phase'] ?? null);
+        self::assertSame('ipv4-only', $committed['profile'] ?? null);
+        $metadata = \json_decode((string)\file_get_contents(
+            $this->paths->platformServiceMetadataFile(),
+        ), true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame('ipv4-only', $metadata['profile'] ?? null);
     }
 
     public function testInitialBootstrapJournalRejectsDifferentPackageFingerprint(): void
@@ -316,6 +967,150 @@ final class HostGatewayPackageManagerTest extends TestCase
         );
     }
 
+    public function testProductionProvenanceSchemaTwoBindsTheLauncherEmbeddedReleaseKey(): void
+    {
+        $suffix = \PHP_OS_FAMILY === 'Windows' ? '.exe' : '';
+        $files = [
+            'controller' => 'app/controller.php',
+            'ca-bundle' => 'share/ca-bundle.pem',
+            'php' => 'bin/php' . $suffix,
+            'nginx' => 'bin/nginx' . $suffix,
+            'wls-gateway-broker' => 'bin/wls-gateway-broker' . $suffix,
+            'wls-gateway-launcher' => 'bin/wls-gateway-launcher' . $suffix,
+        ];
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $files['wls-gateway-guardian'] = 'bin/wls-gateway-guardian.exe';
+            $files['wls-bounded-command'] = 'bin/wls-bounded-command.exe';
+        }
+        $components = [];
+        $manifestComponents = [];
+        foreach ($files as $name => $relative) {
+            $digest = \hash('sha256', 'production-provenance-' . $name);
+            $components[$name] = [
+                'version' => '2.0.0',
+                'source_url' => 'https://example.invalid/' . $name,
+                'source_sha256' => \hash('sha256', 'source-' . $name),
+                'binary_sha256' => $digest,
+                'license' => 'Apache-2.0',
+                'self_contained' => !\in_array($name, ['controller', 'ca-bundle'], true),
+            ];
+            $manifestComponents[$relative] = ['sha256' => $digest];
+        }
+        $embeddedKey = \str_repeat('a', 64);
+        $components['wls-gateway-launcher']['embedded_release_public_key_hex'] = $embeddedKey;
+        $provenance = [
+            'schema_version' => 2,
+            'target' => [
+                'platform' => \PHP_OS_FAMILY,
+                'arch' => $this->normalizedArch(),
+            ],
+            'components' => $components,
+        ];
+        $manifest = [
+            'platform' => \PHP_OS_FAMILY,
+            'arch' => $this->normalizedArch(),
+            'launcher_embedded_release_public_key_hex' => $embeddedKey,
+            'components' => $manifestComponents,
+        ];
+        $method = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'verifyProductionProvenance',
+        );
+        $verified = $method->invoke(
+            new HostGatewayPackageManager($this->paths),
+            \json_encode($provenance, JSON_THROW_ON_ERROR),
+            $manifest,
+        );
+
+        self::assertSame(
+            $embeddedKey,
+            $verified['wls-gateway-launcher']['embedded_release_public_key_hex'],
+        );
+    }
+
+    public function testProductionProvenanceSchemaTwoRejectsUnknownFieldsAndUppercaseLauncherKey(): void
+    {
+        $suffix = \PHP_OS_FAMILY === 'Windows' ? '.exe' : '';
+        $files = [
+            'controller' => 'app/controller.php',
+            'ca-bundle' => 'share/ca-bundle.pem',
+            'php' => 'bin/php' . $suffix,
+            'nginx' => 'bin/nginx' . $suffix,
+            'wls-gateway-broker' => 'bin/wls-gateway-broker' . $suffix,
+            'wls-gateway-launcher' => 'bin/wls-gateway-launcher' . $suffix,
+        ];
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $files['wls-gateway-guardian'] = 'bin/wls-gateway-guardian.exe';
+            $files['wls-bounded-command'] = 'bin/wls-bounded-command.exe';
+        }
+        $components = [];
+        $manifestComponents = [];
+        foreach ($files as $name => $relative) {
+            $digest = \hash('sha256', 'strict-production-provenance-' . $name);
+            $components[$name] = [
+                'version' => '2.0.0',
+                'source_url' => 'https://example.invalid/' . $name,
+                'source_sha256' => \hash('sha256', 'source-' . $name),
+                'binary_sha256' => $digest,
+                'license' => 'Apache-2.0',
+                'self_contained' => !\in_array($name, ['controller', 'ca-bundle'], true),
+            ];
+            $manifestComponents[$relative] = ['sha256' => $digest];
+        }
+        $components['wls-gateway-launcher']['embedded_release_public_key_hex']
+            = \str_repeat('a', 64);
+        $valid = [
+            'schema_version' => 2,
+            'target' => [
+                'platform' => \PHP_OS_FAMILY,
+                'arch' => $this->normalizedArch(),
+            ],
+            'components' => $components,
+        ];
+        $manifest = [
+            'platform' => \PHP_OS_FAMILY,
+            'arch' => $this->normalizedArch(),
+            'launcher_embedded_release_public_key_hex' => \str_repeat('a', 64),
+            'components' => $manifestComponents,
+        ];
+        $method = new \ReflectionMethod(
+            HostGatewayPackageManager::class,
+            'verifyProductionProvenance',
+        );
+        $manager = new HostGatewayPackageManager($this->paths);
+        $method->invoke(
+            $manager,
+            \json_encode($valid, JSON_THROW_ON_ERROR),
+            $manifest,
+        );
+        foreach (['root', 'component', 'uppercase-key'] as $mutation) {
+            $provenance = $valid;
+            if ($mutation === 'root') {
+                $provenance['unapproved'] = true;
+            } elseif ($mutation === 'component') {
+                $provenance['components']['nginx']['unapproved'] = true;
+            } else {
+                $provenance['components']['wls-gateway-launcher']
+                    ['embedded_release_public_key_hex'] = \str_repeat('A', 64);
+            }
+            $rejected = false;
+            try {
+                $method->invoke(
+                    $manager,
+                    \json_encode($provenance, JSON_THROW_ON_ERROR),
+                    $manifest,
+                );
+            } catch (\RuntimeException $exception) {
+                $rejected = true;
+                self::assertStringContainsString('provenance', \strtolower($exception->getMessage()));
+            }
+            self::assertTrue(
+                $rejected,
+                'Production provenance must reject the ' . $mutation . ' mutation.',
+            );
+        }
+    }
+
     public function testInstalledGatewayNoLongerDependsOnBootstrapProjectPackage(): void
     {
         $package = $this->createPackage('bootstrap-project-source');
@@ -405,6 +1200,39 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringContainsString(
             '$mode = $this->stableLauncherPosixMode();',
             $methodSource('copyStableLauncher'),
+        );
+        $rebootstrapPrepare = $methodSource(
+            'prepareRebootstrapCandidateWithinDeadline',
+        );
+        self::assertStringContainsString(
+            '$candidateLauncherMode = $candidateSlotLauncherMode;',
+            $rebootstrapPrepare,
+            'The rebootstrap journal must record the immutable candidate slot mode.',
+        );
+        self::assertStringNotContainsString(
+            '$candidateLauncherMode = $this->stableLauncherPosixMode();',
+            $rebootstrapPrepare,
+            'The candidate remains data-plane-readable until it is promoted to the stable launcher.',
+        );
+        self::assertStringContainsString(
+            '$this->repairLegacyRebootstrapCandidateLauncherModeLocked(',
+            $rebootstrapPrepare,
+            'A journal written by the broken 0550 implementation must be recoverable before STOP.',
+        );
+        $legacyRepair = $methodSource(
+            'repairLegacyRebootstrapCandidateLauncherModeLocked',
+        );
+        self::assertStringContainsString(
+            "['NONE', 'ALLOCATING']",
+            $legacyRepair,
+        );
+        self::assertStringContainsString(
+            '$this->assertStableFileDigest(',
+            $legacyRepair,
+        );
+        self::assertStringContainsString(
+            '$this->writeRebootstrapJournalLocked($journal)',
+            $legacyRepair,
         );
         $globalProof = $methodSource('verifiedStableLauncherUpgradeProof');
         self::assertStringContainsString(
@@ -2145,6 +2973,9 @@ final class HostGatewayPackageManagerTest extends TestCase
             $packages->verifyPackage($package, 'default'),
             'default',
         );
+        $journal = $bootstrapJournal->advance($journal, 'PREPARING', [
+            'host_id' => $packages->prepareInitialBootstrapHostId(),
+        ]);
         $staged = $packages->stage(
             $package,
             'default',
@@ -2161,6 +2992,9 @@ final class HostGatewayPackageManagerTest extends TestCase
             ['service_kind' => (string)$service['kind']],
         );
         $packages->activate((string)$staged['slot']);
+        $packages->initializeFirstActivationGuardianGenerationHead(
+            (string)$staged['slot'],
+        );
         $journal = $bootstrapJournal->advance($journal, 'ACTIVATED');
         $journal = $bootstrapJournal->advance($journal, 'ROLLING_BACK');
         $host = new GatewayHostManager(
@@ -2199,6 +3033,295 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertDirectoryDoesNotExist(
             $this->paths->slotDir((string)$staged['slot']),
         );
+
+        $rollingBack = $bootstrapJournal->load();
+        self::assertIsArray($rollingBack);
+        self::assertSame('ROLLING_BACK', $rollingBack['phase']);
+        self::assertSame('', $rollingBack['slot']);
+        self::assertSame('', $rollingBack['runtime_generation']);
+        self::assertSame('', $rollingBack['previous_active_slot']);
+        self::assertSame('', $rollingBack['service_kind']);
+        self::assertFileExists($this->paths->guardianFile());
+        self::assertFileExists($this->paths->guardianDigestFile());
+        self::assertFileExists($this->paths->adminTokenFile());
+        self::assertFileExists(
+            $this->paths->guardianGenerationHeadLockFile(),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->launcherRecoveryLedgerFile(),
+            $this->validLauncherRecoveryLedger(),
+        ));
+        self::assertTrue(\chmod(
+            $this->paths->launcherRecoveryLedgerFile(),
+            0600,
+        ));
+
+        $guardianDigest = (string)\file_get_contents(
+            $this->paths->guardianDigestFile(),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->guardianDigestFile(),
+            \str_repeat('0', 64) . "\n",
+        ));
+        $rejected = $host->install($package, 'default');
+        self::assertSame(
+            'REPAIR_REQUIRED',
+            $rejected['state'],
+            (string)$rejected['reason'],
+        );
+        self::assertStringContainsString(
+            'Guardian identity does not match its immutable binary',
+            (string)$rejected['reason'],
+        );
+        self::assertFileExists($this->paths->guardianFile());
+        self::assertFileExists($this->paths->adminTokenFile());
+        self::assertFileExists(
+            $this->paths->launcherRecoveryLedgerFile(),
+        );
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->guardianDigestFile(),
+            $guardianDigest,
+        ));
+        self::assertTrue(\chmod($this->paths->guardianDigestFile(), 0600));
+
+        \putenv(
+            'WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT='
+                . 'empty-rollback-after-guardian-retired',
+        );
+        $interrupted = $host->install($package, 'default');
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT');
+        self::assertSame(
+            'BOOTSTRAP_INTERRUPTED',
+            $interrupted['state'],
+            (string)$interrupted['reason'],
+        );
+        self::assertFileDoesNotExist($this->paths->guardianFile());
+        self::assertFileExists($this->paths->guardianDigestFile());
+        self::assertFileExists($this->paths->adminTokenFile());
+        self::assertFileExists(
+            $this->paths->launcherRecoveryLedgerFile(),
+        );
+        self::assertFileExists(
+            $this->paths->guardianGenerationHeadLockFile(),
+        );
+        self::assertFileExists($this->paths->hostIdFile());
+        self::assertNotNull($bootstrapJournal->load());
+
+        $retired = $host->install($package, 'default');
+        self::assertSame('INSTALL_FAILED', $retired['state'], (string)$retired['reason']);
+        self::assertStringContainsString(
+            'retired an empty rollback journal',
+            $retired['reason'],
+        );
+        self::assertNull($bootstrapJournal->load());
+        self::assertFileDoesNotExist($this->paths->guardianFile());
+        self::assertFileDoesNotExist($this->paths->guardianDigestFile());
+        self::assertFileDoesNotExist($this->paths->adminTokenFile());
+        self::assertFileDoesNotExist(
+            $this->paths->launcherRecoveryLedgerFile(),
+        );
+        self::assertFileDoesNotExist(
+            $this->paths->guardianGenerationHeadLockFile(),
+        );
+
+        $reinstalled = $host->install($package, 'default');
+        self::assertSame('TEST_PACKAGE_INSTALLED', $reinstalled['state']);
+        self::assertTrue($reinstalled['ok']);
+    }
+
+    public function testExplicitInstallRetiresProvenEmptyRollingBackBootstrapJournal(): void
+    {
+        $package = $this->createPackage('resume-rolling-back-bootstrap');
+        $packages = new HostGatewayPackageManager($this->paths);
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $host = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT=stage-after-host-id');
+        self::assertSame('BOOTSTRAP_INTERRUPTED', $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        )['state']);
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT');
+        $bootstrapJournal = new GatewayInitialBootstrapJournal($this->paths);
+        $journal = $bootstrapJournal->load();
+        self::assertIsArray($journal);
+        $bootstrapJournal->advance($journal, 'ROLLING_BACK');
+        self::assertFileExists($this->paths->hostIdFile());
+        $slotInstallLock = $this->paths->slotDir('B') . '.install.lock';
+        self::assertNotFalse(\file_put_contents($slotInstallLock, ''));
+        self::assertTrue(\chmod($slotInstallLock, 0600));
+
+        self::assertSame('REPAIR_REQUIRED', $host->prepare(
+            ['ok' => false, 'ready' => false, 'state' => 'UNAVAILABLE'],
+            (\hrtime(true) / 1_000_000_000) + 10.0,
+        )['state']);
+
+        $result = $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        );
+
+        self::assertSame('INSTALL_FAILED', $result['state'], (string)$result['reason']);
+        self::assertFileDoesNotExist($this->paths->initialBootstrapJournalFile());
+        self::assertFileDoesNotExist($this->paths->activeSlotFile());
+        self::assertFileDoesNotExist($this->paths->serviceDefinitionFile());
+        self::assertFileDoesNotExist($this->paths->platformServiceMetadataFile());
+        self::assertDirectoryDoesNotExist($this->paths->slotDir('A'));
+        self::assertDirectoryDoesNotExist($this->paths->slotDir('B'));
+        self::assertFileDoesNotExist($this->paths->hostIdFile());
+        self::assertDirectoryDoesNotExist($this->paths->runtimeDir());
+        self::assertDirectoryDoesNotExist($this->paths->stateDir());
+        self::assertDirectoryDoesNotExist($this->paths->legacySnapshotsDir());
+        self::assertDirectoryDoesNotExist($this->paths->sealedSnapshotsDir());
+        self::assertDirectoryDoesNotExist($this->paths->snapshotCandidatesDir());
+        self::assertDirectoryDoesNotExist($this->paths->neutralTlsDir());
+        self::assertFileExists($slotInstallLock);
+        self::assertNotFalse(\file_put_contents($slotInstallLock, 'foreign'));
+        self::assertSame('REPAIR_REQUIRED', $host->prepare(
+            ['ok' => false, 'ready' => false, 'state' => 'UNAVAILABLE'],
+            (\hrtime(true) / 1_000_000_000) + 10.0,
+        )['state']);
+        self::assertNotFalse(\file_put_contents($slotInstallLock, ''));
+        self::assertSame('INSTALL_REQUIRED', $host->prepare(
+            ['ok' => false, 'ready' => false, 'state' => 'UNAVAILABLE'],
+            (\hrtime(true) / 1_000_000_000) + 10.0,
+        )['state']);
+        self::assertSame('TEST_PACKAGE_INSTALLED', $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        )['state']);
+    }
+
+    public function testExplicitInstallKeepsEmptyRollingBackJournalWhenStableLauncherExists(): void
+    {
+        $package = $this->createPackage('resume-rolling-back-launcher');
+        $packages = new HostGatewayPackageManager($this->paths);
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $this->paths->ensureDirectories();
+        $bootstrapJournal = new GatewayInitialBootstrapJournal($this->paths);
+        $journal = $bootstrapJournal->beginOrResume(
+            $packages->verifyPackage($package, 'default'),
+            'default',
+        );
+        $bootstrapJournal->advance($journal, 'ROLLING_BACK');
+        self::assertNotFalse(\file_put_contents(
+            $this->paths->launcherFile(),
+            'partial stable launcher',
+        ));
+        $host = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+
+        $result = $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        );
+
+        self::assertSame('REPAIR_REQUIRED', $result['state']);
+        self::assertFileExists($this->paths->initialBootstrapJournalFile());
+        self::assertFileExists($this->paths->launcherFile());
+    }
+
+    public function testExplicitInstallKeepsRollingBackJournalWhenEmptyScaffoldingContainsForeignContent(): void
+    {
+        $package = $this->createPackage('resume-rolling-back-foreign-scaffolding');
+        $packages = new HostGatewayPackageManager($this->paths);
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $host = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT=stage-after-host-id');
+        self::assertSame('BOOTSTRAP_INTERRUPTED', $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        )['state']);
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT');
+        $bootstrapJournal = new GatewayInitialBootstrapJournal($this->paths);
+        $journal = $bootstrapJournal->load();
+        self::assertIsArray($journal);
+        $bootstrapJournal->advance($journal, 'ROLLING_BACK');
+        $foreign = $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'foreign';
+        self::assertNotFalse(\file_put_contents($foreign, 'foreign'));
+
+        $result = $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        );
+
+        self::assertSame('REPAIR_REQUIRED', $result['state'], (string)$result['reason']);
+        self::assertFileExists($this->paths->initialBootstrapJournalFile());
+        self::assertFileExists($foreign);
+    }
+
+    public function testExplicitInstallReplaysTerminalEmptyScaffoldAfterHostIdentityRetirementCrash(): void
+    {
+        $package = $this->createPackage('resume-rolling-back-host-id-crash');
+        $packages = new HostGatewayPackageManager($this->paths);
+        $platform = new GatewayPlatformServiceInstaller($this->paths);
+        $host = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            $platform,
+        );
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT=stage-after-host-id');
+        self::assertSame('BOOTSTRAP_INTERRUPTED', $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        )['state']);
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT');
+        $bootstrapJournal = new GatewayInitialBootstrapJournal($this->paths);
+        $journal = $bootstrapJournal->load();
+        self::assertIsArray($journal);
+        self::assertMatchesRegularExpression('/\A[a-f0-9]{32}\z/D', (string)$journal['host_id']);
+        $bootstrapJournal->advance($journal, 'ROLLING_BACK');
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT=empty-rollback-after-host-id-retired');
+
+        self::assertSame('BOOTSTRAP_INTERRUPTED', $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        )['state']);
+        \putenv('WLS_GATEWAY_TEST_INITIAL_BOOTSTRAP_FAULT');
+        self::assertFileDoesNotExist($this->paths->hostIdFile());
+        self::assertDirectoryDoesNotExist($this->paths->runtimeDir());
+        self::assertDirectoryDoesNotExist($this->paths->stateDir());
+        self::assertDirectoryDoesNotExist($this->paths->runDir());
+        self::assertDirectoryDoesNotExist($this->paths->legacySnapshotsDir());
+        self::assertDirectoryDoesNotExist($this->paths->sealedSnapshotsDir());
+        self::assertDirectoryDoesNotExist($this->paths->snapshotCandidatesDir());
+        self::assertDirectoryDoesNotExist($this->paths->neutralTlsDir());
+        self::assertFileExists($this->paths->initialBootstrapJournalFile());
+
+        $replayed = $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        );
+        self::assertSame('INSTALL_FAILED', $replayed['state'], (string)$replayed['reason']);
+        self::assertFileDoesNotExist($this->paths->initialBootstrapJournalFile());
+        self::assertSame('TEST_PACKAGE_INSTALLED', $host->install(
+            $package,
+            'default',
+            (\hrtime(true) / 1_000_000_000) + 20.0,
+        )['state']);
     }
 
     public function testInitialInstallReconcilesActiveSlotCommittedBeforeDirectorySyncFailure(): void
@@ -2425,6 +3548,84 @@ final class HostGatewayPackageManagerTest extends TestCase
             $budget->invoke(null),
             'Production cold start performs shadow and public stability windows before ready.',
         );
+    }
+
+    public function testInitialBootstrapReadinessBudgetSurvivesSystemdRetryAndBrokerStartup(): void
+    {
+        self::assertTrue(
+            \method_exists(
+                GatewayHostManager::class,
+                'initialBootstrapReadinessTimeoutSeconds',
+            ),
+            'Initial installation must reserve systemd retry, Broker bootstrap, and reply time.',
+        );
+        $budget = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'initialBootstrapReadinessTimeoutSeconds',
+        );
+
+        self::assertGreaterThanOrEqual(
+            105.0,
+            $budget->invoke(null),
+            'A 90-second Broker bootstrap plus systemd RestartSec and reply reserve exceeds 45 seconds.',
+        );
+        self::assertLessThan(
+            480.0,
+            $budget->invoke(null),
+            'The initial readiness cap must remain inside install\'s 600-second budget after its 120-second compensation reserve.',
+        );
+        self::assertTrue(
+            \method_exists(
+                GatewayHostManager::class,
+                'initialBootstrapReadinessDeadline',
+            ),
+            'Initial installation must cap its observation at the preserved forward deadline.',
+        );
+        $deadline = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'initialBootstrapReadinessDeadline',
+        );
+        self::assertSame(
+            100_105.0,
+            $deadline->invoke(null, 100_480.0, 100_000.0),
+        );
+        self::assertSame(
+            100_090.0,
+            $deadline->invoke(null, 100_090.0, 100_000.0),
+        );
+    }
+
+    public function testInitialBootstrapReadinessStatusUsesItsLocalObservationDeadline(): void
+    {
+        self::assertTrue(
+            \method_exists(
+                GatewayHostManager::class,
+                'initialBootstrapReadinessStatus',
+            ),
+            'Initial installation must carry its local observation deadline into the status request.',
+        );
+        $status = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'initialBootstrapReadinessStatus',
+        );
+        $observed = [];
+        $reader = static function (float $deadline) use (&$observed): array {
+            $observed[] = $deadline;
+            return ['ok' => false, 'ready' => false];
+        };
+
+        self::assertSame(
+            ['ok' => false, 'ready' => false],
+            $status->invoke(null, 480.0, 105.0, $reader),
+        );
+        self::assertSame([105.0], $observed);
+
+        $observed = [];
+        self::assertSame(
+            ['ok' => false, 'ready' => false],
+            $status->invoke(null, 90.0, 90.0, $reader),
+        );
+        self::assertSame([90.0], $observed);
     }
 
     public function testPromotionInstanceLookupUsesProjectScopedControllerBuckets(): void
@@ -2681,6 +3882,84 @@ final class HostGatewayPackageManagerTest extends TestCase
         }
         self::assertFileExists($backup);
         self::assertFileDoesNotExist($target);
+    }
+
+    public function testExplicitStartRecoversVolatileRunAuthorityBeforePackageChecks(): void
+    {
+        $gateway = \dirname(__DIR__, 5) . '/Service/Edge/Gateway';
+        $host = (string)\file_get_contents(
+            $gateway . '/GatewayHostManager.php',
+        );
+        $platform = (string)\file_get_contents(
+            $gateway . '/GatewayPlatformServiceInstaller.php',
+        );
+        $start = $this->sourceBetween(
+            $host,
+            'public function startGateway(',
+            'private function compensateFailedGatewayStart(',
+        );
+
+        $read = \strpos($start, 'readVerifiedAdminStoppedIntent($forwardDeadline)');
+        $linkRecovery = \strpos($start, 'recoverExplicitStartDefinition(');
+        $runRecovery = \strpos($start, 'recoverExplicitStartRunDirectory(');
+        $packageCheck = \strpos($start, 'assertNoActiveRebootstrap(');
+        $clear = \strpos($start, 'clearAdminStoppedIntent(');
+        self::assertIsInt($read);
+        self::assertIsInt($linkRecovery);
+        self::assertIsInt($runRecovery);
+        self::assertIsInt($packageCheck);
+        self::assertIsInt($clear);
+        self::assertLessThan($linkRecovery, $read);
+        self::assertLessThan($runRecovery, $linkRecovery);
+        self::assertLessThan($packageCheck, $runRecovery);
+        self::assertLessThan($clear, $packageCheck);
+        self::assertStringContainsString(
+            '$intent,' . "\n            true,",
+            $start,
+            'Explicit start must clear only the same authenticated stop intent.',
+        );
+
+        $definitionRecovery = $this->sourceBetween(
+            $platform,
+            'public function recoverExplicitStartDefinition(',
+            'public function recoverExplicitStartRunDirectory(',
+        );
+        foreach ([
+            'installedDefinitionFromMetadata(false)',
+            "assertPlatformServiceStopped('systemd-system')",
+            'restoreDisabledCurrentDefinitionAndFixedLink($definition)',
+            '$bound = $this->installedDefinition();',
+        ] as $contract) {
+            self::assertStringContainsString($contract, $definitionRecovery);
+        }
+
+        $recovery = $this->sourceBetween(
+            $platform,
+            'public function recoverExplicitStartRunDirectory(',
+            'public function persistentStoppedProof(',
+        );
+        foreach ([
+            'persistentStoppedProofWithinDeadline($kind)',
+            "recoverReplayablePosixRunDirectory('explicit start')",
+            '$this->paths->ensureDirectories();',
+        ] as $contract) {
+            self::assertStringContainsString($contract, $recovery);
+        }
+        $sealer = $this->sourceBetween(
+            $platform,
+            'private function recoverReplayablePosixRunDirectory(',
+            'public function renderDefinition(',
+        );
+        foreach ([
+            '$bootstrapProfile = [0, 0, 0700];',
+            '$fixedProfile = [0, $controllerGid, 0771];',
+            'GatewayBoundedTreeWalker::collect($runDir, true)',
+            "'Gateway rollback bootstrap run directory is not empty.'",
+            "['/bin/chmod', '-RN', " . '$runDir]',
+            'self::posixNoFollowAclOpenFlags(true)',
+        ] as $contract) {
+            self::assertStringContainsString($contract, $sealer);
+        }
     }
 
     public function testHostUpgradeWritesSignedObservationBeforeSwitchingWholeSlot(): void
@@ -3208,6 +4487,18 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringContainsString('broker controller restart ready', $posixBroker);
         self::assertStringContainsString('broker controller restart exhausted', $posixBroker);
         self::assertStringContainsString('pthread_join(thread, NULL)', $posixBroker);
+        self::assertStringContainsString(
+            'syscall(SYS_capset, &header, data) != 0',
+            $posixBroker,
+        );
+        self::assertStringContainsString(
+            'data[0].effective != 0U || data[0].permitted != 0U',
+            $posixBroker,
+        );
+        self::assertStringContainsString(
+            'data[1].effective != 0U || data[1].permitted != 0U',
+            $posixBroker,
+        );
         self::assertStringContainsString('PR_SET_NO_NEW_PRIVS', $posixBroker);
         self::assertStringNotContainsString('CAP_NET_BIND_SERVICE', $posixBroker);
         self::assertStringContainsString(
@@ -3288,15 +4579,43 @@ final class HostGatewayPackageManagerTest extends TestCase
             '{"state/neutral-key.pem", WLS_MAX_REQUEST}',
             $posixBroker,
         );
+        self::assertStringNotContainsString(
+            '{"runtime/conf/neutral-cert.pem", WLS_MAX_REQUEST}',
+            $posixBroker,
+        );
+        self::assertStringNotContainsString(
+            '{"runtime/conf/neutral-key.pem", WLS_MAX_REQUEST}',
+            $posixBroker,
+        );
         self::assertStringContainsString('ATOMIC_REPLACE_CLEANUP', $posixBroker);
         self::assertStringContainsString('CLEANUP_PENDING', $posixBroker);
         self::assertStringContainsString(
             'replaced && backup_created && !committed',
             $posixBroker,
         );
+        $posixAtomicReplaceStart = \strpos(
+            $posixBroker,
+            'static int wls_atomic_replace_v2(',
+        );
+        $posixAtomicReplaceEnd = \strpos(
+            $posixBroker,
+            'static int wls_atomic_replace_cleanup_v2(',
+            $posixAtomicReplaceStart ?: 0,
+        );
+        self::assertIsInt($posixAtomicReplaceStart);
+        self::assertIsInt($posixAtomicReplaceEnd);
+        $posixAtomicReplace = \substr(
+            $posixBroker,
+            $posixAtomicReplaceStart,
+            $posixAtomicReplaceEnd - $posixAtomicReplaceStart,
+        );
         self::assertStringNotContainsString(
             'expected_size > WLS_MAX_REQUEST',
-            $posixBroker,
+            $posixAtomicReplace,
+        );
+        self::assertStringContainsString(
+            '(uint64_t)expected_size > target_maximum',
+            $posixAtomicReplace,
         );
         self::assertStringContainsString('PROCESS_ATTEST', $posixBroker);
         self::assertStringContainsString('WLS-UPGRADE-STATE/3', $posix);
@@ -3414,6 +4733,14 @@ final class HostGatewayPackageManagerTest extends TestCase
             '{L"state\\\\neutral-key.pem", WLS_MAX_REQUEST}',
             $broker,
         );
+        self::assertStringNotContainsString(
+            '{L"runtime\\\\conf\\\\neutral-cert.pem", WLS_MAX_REQUEST}',
+            $broker,
+        );
+        self::assertStringNotContainsString(
+            '{L"runtime\\\\conf\\\\neutral-key.pem", WLS_MAX_REQUEST}',
+            $broker,
+        );
         self::assertStringContainsString('wls_win_read_digest_bounded', $broker);
         self::assertStringContainsString('BCryptHashData(hash, buffer, amount, 0U)', $broker);
         self::assertStringContainsString('ATOMIC_REPLACE_CLEANUP', $broker);
@@ -3422,9 +4749,29 @@ final class HostGatewayPackageManagerTest extends TestCase
             'replaced && target_existed && !committed',
             $broker,
         );
+        $windowsAtomicReplaceStart = \strpos(
+            $broker,
+            'static int wls_win_atomic_replace_v2(',
+        );
+        $windowsAtomicReplaceEnd = \strpos(
+            $broker,
+            'static int wls_win_atomic_replace_cleanup_v2(',
+            $windowsAtomicReplaceStart ?: 0,
+        );
+        self::assertIsInt($windowsAtomicReplaceStart);
+        self::assertIsInt($windowsAtomicReplaceEnd);
+        $windowsAtomicReplace = \substr(
+            $broker,
+            $windowsAtomicReplaceStart,
+            $windowsAtomicReplaceEnd - $windowsAtomicReplaceStart,
+        );
         self::assertStringNotContainsString(
             'expected_size > WLS_MAX_REQUEST',
-            $broker,
+            $windowsAtomicReplace,
+        );
+        self::assertStringContainsString(
+            'expected_size > target_maximum',
+            $windowsAtomicReplace,
         );
         self::assertStringNotContainsString('(void)DeleteFileW(backup);', $broker);
         self::assertStringContainsString('PROCESS_ATTEST', $broker);
@@ -4396,6 +5743,17 @@ final class HostGatewayPackageManagerTest extends TestCase
         /** @var HostGatewayPackageManager $packages */
         $packages = $fixture['packages'];
         $derived = $this->seedRebootstrapDerivedGeneration('stash');
+        $neutralTlsDirectoryLeaf = 'old-neutral-tls-directory-stash';
+        $neutralTlsDirectory = $this->paths->neutralTlsDir()
+            . DIRECTORY_SEPARATOR . $neutralTlsDirectoryLeaf;
+        self::assertTrue(\mkdir($neutralTlsDirectory, 0700));
+        $neutralTlsDirectoryPayload = $neutralTlsDirectory
+            . DIRECTORY_SEPARATOR . 'payload.dat';
+        self::assertNotFalse(\file_put_contents(
+            $neutralTlsDirectoryPayload,
+            "old-neutral-tls-directory-stash\n",
+        ));
+        self::assertTrue(\chmod($neutralTlsDirectoryPayload, 0600));
         $recoveryReserve = $this->paths->stateDir() . DIRECTORY_SEPARATOR
             . 'recovery.reserve';
         $recoveryReserveContents = "reserved-recovery-capacity\n";
@@ -4554,6 +5912,16 @@ final class HostGatewayPackageManagerTest extends TestCase
                 }
             }
         }
+        $neutralTlsDirectoryClosure = $manifest['categories']['neutral-tls']
+            ['entries'][$neutralTlsDirectoryLeaf] ?? null;
+        self::assertIsArray($neutralTlsDirectoryClosure);
+        self::assertSame('directory', $neutralTlsDirectoryClosure['kind']);
+        $neutralTlsRootRecord = $neutralTlsDirectoryClosure['records'][0] ?? null;
+        self::assertIsArray($neutralTlsRootRecord);
+        self::assertSame('.', $neutralTlsRootRecord['path']);
+        self::assertSame('directory', $neutralTlsRootRecord['kind']);
+        self::assertArrayNotHasKey('size', $neutralTlsRootRecord);
+        self::assertArrayNotHasKey('sha256', $neutralTlsRootRecord);
         self::assertArrayNotHasKey(
             'recovery.reserve',
             $manifest['categories']['state']['entries'],
@@ -4613,6 +5981,17 @@ final class HostGatewayPackageManagerTest extends TestCase
             $derived,
             $fixture['nonce'],
         );
+        $storedNeutralTlsDirectory = $this->paths->rebootstrapDerivedBackupDir(
+            $fixture['nonce'],
+        ) . DIRECTORY_SEPARATOR . 'neutral-tls'
+            . DIRECTORY_SEPARATOR . $neutralTlsDirectoryLeaf;
+        self::assertDirectoryExists($storedNeutralTlsDirectory);
+        self::assertSame(
+            "old-neutral-tls-directory-stash\n",
+            \file_get_contents(
+                $storedNeutralTlsDirectory . DIRECTORY_SEPARATOR . 'payload.dat',
+            ),
+        );
         self::assertSame(
             $adminToken,
             \file_get_contents($this->paths->adminTokenFile()),
@@ -4626,6 +6005,66 @@ final class HostGatewayPackageManagerTest extends TestCase
             $recoveryReserveContents,
             \file_get_contents($recoveryReserve),
         );
+    }
+
+    public function testNeutralTlsDirectoryRootRecordRoundTripsDuringRebootstrapRollback(): void
+    {
+        $fixture = $this->createStoppedRebootstrapFixture(
+            'neutral-tls-root-record',
+            rotateTrust: true,
+        );
+        /** @var HostGatewayPackageManager $packages */
+        $packages = $fixture['packages'];
+        $leaf = 'old-neutral-tls-directory-root-record';
+        $directory = $this->paths->neutralTlsDir() . DIRECTORY_SEPARATOR . $leaf;
+        self::assertTrue(\mkdir($directory, 0700));
+        $payload = $directory . DIRECTORY_SEPARATOR . 'payload.dat';
+        $contents = "neutral-tls-root-record\n";
+        self::assertNotFalse(\file_put_contents($payload, $contents));
+        self::assertTrue(\chmod($payload, 0600));
+
+        $packages->advanceRebootstrapPhase(
+            $fixture['nonce'],
+            $fixture['package_digest'],
+            'default',
+            'STOP_COMMITTED',
+            'QUIESCED',
+        );
+        self::publishRebootstrapGenerationAfterCapacityRelease(
+            $packages,
+            $fixture['nonce'],
+            $fixture['package_digest'],
+            'default',
+        );
+        $manifest = \json_decode(
+            (string)\file_get_contents(
+                $this->paths->rebootstrapDerivedManifestFile($fixture['nonce']),
+            ),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($manifest);
+        $closure = $manifest['categories']['neutral-tls']['entries'][$leaf] ?? null;
+        self::assertIsArray($closure);
+        self::assertSame('directory', $closure['kind']);
+        self::assertSame('.', $closure['records'][0]['path'] ?? null);
+        self::assertSame('directory', $closure['records'][0]['kind'] ?? null);
+
+        $packages->beginRebootstrapRollback(
+            $fixture['nonce'],
+            $fixture['package_digest'],
+            'default',
+            'test neutral TLS root record rollback',
+        );
+        $rolledBack = $packages->rollbackRebootstrapGeneration(
+            $fixture['nonce'],
+            $fixture['package_digest'],
+            'default',
+            'test neutral TLS root record rollback',
+        );
+        self::assertSame('ROLLING_BACK', $rolledBack['phase']);
+        self::assertDirectoryExists($directory);
+        self::assertSame($contents, \file_get_contents($payload));
     }
 
     public function testCaRotationRecoversAPartialStashAndRollbackQuarantinesNewState(): void
@@ -5073,7 +6512,7 @@ final class HostGatewayPackageManagerTest extends TestCase
                 ),
             );
             self::assertStringContainsString(
-                'authority is unsafe',
+                'authority mode is unsafe',
                 $exception->getMessage(),
             );
         } finally {
@@ -7317,6 +8756,105 @@ final class HostGatewayPackageManagerTest extends TestCase
         );
     }
 
+    public function testRebootstrapProvesRetirementAfterThePersistentPlatformStop(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayHostManager.php',
+        );
+        $rebootstrap = $this->sourceBetween(
+            $source,
+            'public function rebootstrap(',
+            'private function rebootstrapTerminalResult(',
+        );
+        $prepared = $this->sourceBetween(
+            $rebootstrap,
+            "if (\\hash_equals('PREPARED', \$phase)) {",
+            "if (\\hash_equals('STOP_COMMITTED', \$phase)) {",
+        );
+        $accepted = \strpos(
+            $prepared,
+            "(\$payload['accepted'] ?? false) !== true",
+        );
+        $advance = \strpos(
+            $prepared,
+            '->advanceRebootstrapPhase(',
+            $accepted,
+        );
+        $platformStop = \strpos($prepared, '$this->platform->stop(');
+        self::assertIsInt($accepted);
+        self::assertIsInt($advance);
+        self::assertIsInt($platformStop);
+        self::assertTrue($accepted < $advance && $advance < $platformStop);
+        self::assertStringNotContainsString('data_plane_stopped', $prepared);
+        self::assertStringNotContainsString('manual_cleanup_required', $prepared);
+
+        $stopped = $this->sourceBetween(
+            $rebootstrap,
+            "if (\\hash_equals('STOP_COMMITTED', \$phase)) {",
+            "if (\\hash_equals('QUIESCED', \$phase)) {",
+        );
+        $replayedStop = \strpos($stopped, '$this->platform->stop(');
+        $quiescence = \strpos($stopped, '$this->assertRebootstrapQuiescent(');
+        $quiescedAdvance = \strpos($stopped, '->advanceRebootstrapPhase(');
+        self::assertIsInt($replayedStop);
+        self::assertIsInt($quiescence);
+        self::assertIsInt($quiescedAdvance);
+        self::assertTrue(
+            $replayedStop < $quiescence && $quiescence < $quiescedAdvance,
+        );
+
+        $quiescent = $this->sourceBetween(
+            $source,
+            'private function assertRebootstrapQuiescent(',
+            'private function startRebootstrapGeneration(',
+        );
+        $processProof = \strpos(
+            $quiescent,
+            'assertNoLiveProcessesForRuntimePaths(',
+        );
+        $portProof = \strrpos($quiescent, 'publicPortsAvailable($profile)');
+        $pidRecovery = \strpos(
+            $quiescent,
+            'recoverStoppedNginxPidAfterPlatformProof(',
+        );
+        self::assertIsInt($processProof);
+        self::assertIsInt($portProof);
+        self::assertIsInt($pidRecovery);
+        self::assertTrue(
+            $processProof < $portProof && $portProof < $pidRecovery,
+            'Exact PID recovery must follow the platform, process, and public-port stop proofs.',
+        );
+
+        $packages = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/HostGatewayPackageManager.php',
+        );
+        $recovery = $this->sourceBetween(
+            $packages,
+            'public function recoverStoppedNginxPidAfterPlatformProof(',
+            'private function assertNginxPidNamespaceEmptyForRebootstrap(',
+        );
+        foreach ([
+            'requiredRebootstrapJournalLocked(',
+            "['STOP_COMMITTED', 'QUIESCED']",
+            "'HELD'",
+            'verifiedRebootstrapOldGeneration()',
+            'assertNginxPidNamespaceAuthority()',
+            'assertRebootstrapDerivedDescendantPosixAclFree(',
+            '@\\posix_kill($pid, 0)',
+            '\\posix_get_last_error() !== 3',
+            'GatewayProjectStateFilesystem::removeRegular(',
+        ] as $required) {
+            self::assertStringContainsString($required, $recovery);
+        }
+        self::assertStringContainsString(
+            'assertNginxPidNamespaceEmptyForRebootstrap();',
+            $packages,
+            'The existing lock-held empty namespace gate must remain intact.',
+        );
+    }
+
     public function testAllocatingCancellationRejectsInspectSchemaDriftWithoutCleanup(): void
     {
         $fixture = $this->createPreparedRebootstrapFixture(
@@ -8748,6 +10286,7 @@ final class HostGatewayPackageManagerTest extends TestCase
                 $this->paths->snapshotCandidatesDir(),
                 false,
             ],
+            'neutral-tls' => [$this->paths->neutralTlsDir(), false],
             'runtime-conf' => [
                 $this->paths->runtimeDir() . DIRECTORY_SEPARATOR . 'conf',
                 false,
@@ -9706,9 +11245,53 @@ SH
         return $value;
     }
 
+    private function validLauncherRecoveryLedger(): string
+    {
+        $zero64 = \str_repeat('0', 64);
+        $zero32 = \str_repeat('0', 32);
+        $lines = [
+            'WLS-LAUNCHER-RECOVERY/1',
+            'host_boot_id=' . $zero64,
+            'launcher_generation=' . $zero64,
+            'launcher_identity=' . $zero64,
+            'runtime_generation=' . $zero64,
+            'active_slot=A',
+            'phase=BACKOFF',
+            'reason=SPAWN_FAILED',
+            'attempt_id=' . $zero32,
+            'failure_count=1',
+            'maintenance_attempt=1',
+        ];
+        for ($index = 1; $index <= 10; ++$index) {
+            $lines[] = \sprintf(
+                'failure_%02d_monotonic_ms=%d',
+                $index,
+                $index === 1 ? 1 : 0,
+            );
+        }
+        $lines[] = 'next_retry_monotonic_ms=2';
+        $lines[] = 'next_retry_wall=2';
+        $lines[] = 'updated_monotonic_ms=1';
+        $lines[] = 'updated_wall=1';
+        return \implode("\n", $lines) . "\n";
+    }
+
     private function binaryName(string $name): string
     {
         return $name . (\PHP_OS_FAMILY === 'Windows' ? '.exe' : '');
+    }
+
+    private function sourceBetween(
+        string $source,
+        string $startNeedle,
+        string $endNeedle,
+    ): string {
+        $start = \strpos($source, $startNeedle);
+        self::assertIsInt($start, 'Missing source marker: ' . $startNeedle);
+        $offset = $start + \strlen($startNeedle);
+        $end = \strpos($source, $endNeedle, $offset);
+        self::assertIsInt($end, 'Missing source marker: ' . $endNeedle);
+        return \substr($source, $start, $end - $start);
     }
 
     /**

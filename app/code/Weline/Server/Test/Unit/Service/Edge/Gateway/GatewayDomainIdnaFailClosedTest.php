@@ -40,6 +40,44 @@ final class GatewayDomainIdnaFailClosedTest extends TestCase
         ProjectServingManifestStore::normalizeHost($invalid);
     }
 
+    public function testPublicRegistrationFiltersLocalCertificateFacts(): void
+    {
+        $builder = new GatewayRegistrationBuilder();
+        $normalizer = new \ReflectionMethod($builder, 'normalizeGatewayDomain');
+        self::assertSame('localhost', $normalizer->invoke($builder, 'localhost'));
+        self::assertSame('127.0.0.1', $normalizer->invoke($builder, '127.0.0.1'));
+        self::assertSame('::1', $normalizer->invoke($builder, '::1'));
+
+        $exact = ['domain' => 'million-a.wls.test', 'marker' => 'exact'];
+        $wildcard = ['domain' => '*.example.test', 'marker' => 'wildcard'];
+        $filter = new \ReflectionMethod(
+            $builder,
+            'publicRegistrationCertificateRoutes',
+        );
+        self::assertSame([$exact, $wildcard], $filter->invoke($builder, [
+            ['domain' => '127.0.0.1', 'marker' => 'ipv4-loopback'],
+            ['domain' => '192.0.2.1', 'marker' => 'ipv4-literal'],
+            ['domain' => '::1', 'marker' => 'ipv6-loopback'],
+            ['domain' => 'localhost', 'marker' => 'localhost'],
+            ['domain' => '*.localhost', 'marker' => 'wildcard-localhost'],
+            $exact,
+            $wildcard,
+        ]));
+
+        $build = new \ReflectionMethod($builder, 'buildLocked');
+        $lines = \file((string)$build->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $build->getStartLine() - 1,
+            $build->getEndLine() - $build->getStartLine() + 1,
+        ));
+        self::assertStringContainsString(
+            '$this->publicRegistrationCertificateRoutes(',
+            $source,
+        );
+    }
+
     public function testInvalidAsciiAlabelIsRejectedByCertificateStore(): void
     {
         if (!\function_exists('idn_to_ascii')) {

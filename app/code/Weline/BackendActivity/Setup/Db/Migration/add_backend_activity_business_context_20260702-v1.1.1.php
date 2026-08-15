@@ -42,13 +42,16 @@ class AddBackendActivityBusinessContext20260702V111 extends AbstractMigration
 
         foreach ($this->columns() as $column) {
             if (!$this->columnExists($connection, $table, (string)$column['name'])) {
-                $connection->query($connection->buildAlterAddColumnSql($table, $column))->fetch();
+                $connection->query($connection->buildAlterAddColumnSql(
+                    $connection->formatTableName($table),
+                    $column,
+                ))->fetch();
             }
         }
 
         foreach ($this->indexes() as $name => $columns) {
             if (!$connection->hasIndex($table, $name)) {
-                $connection->query($connection->buildAddIndexSql($table, [
+                $connection->query($connection->buildAddIndexSql($connection->formatTableName($table), [
                     'name' => $name,
                     'columns' => $columns,
                     'type' => TableInterface::index_type_KEY,

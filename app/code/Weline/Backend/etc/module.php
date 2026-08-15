@@ -2,10 +2,10 @@
 
 return [
     "name" => 'Weline_Backend',
-    "version" => '1.4.0',
+    "version" => '1.4.2',
     "requires" => [
         'Weline_Acl' => '*',
-        'Weline_Framework' => '*',
+        'Weline_Framework' => '^2.4',
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [
@@ -31,5 +31,6 @@ return [
         \Weline\Framework\Runtime\StartPageRouteProviderInterface::class => \Weline\Backend\Api\Runtime\StartPageRouteProvider::class,
         \Weline\Framework\Session\Auth\BackendSessionUserProviderInterface::class => \Weline\Backend\Api\Auth\BackendSessionUserProvider::class,
         'request_resetter.Weline_Backend' => \Weline\Backend\Api\Runtime\RequestResetter::class,
+        'process_cache_resetter.Weline_Backend' => \Weline\Backend\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

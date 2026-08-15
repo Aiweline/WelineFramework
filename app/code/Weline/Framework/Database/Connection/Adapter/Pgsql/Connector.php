@@ -20,7 +20,17 @@ use Weline\Framework\Database\Connection\Adapter\Pgsql\Dialect\PgsqlIdentifierFo
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Dialect\PgsqlTableNameStrategy;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Table\Alter;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Table\Create;
+use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
+use Weline\Framework\Database\Connection\Api\AtomicPhysicalViewChangeInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableKeysetReaderInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableSnapshotInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalViewIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalViewMetadataInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalViewSnapshotInterface;
 use Weline\Framework\Database\Compiler\Dialect\PgsqlDialect;
 use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Connection\PdoConnection;
@@ -29,12 +39,24 @@ use Weline\Framework\Database\Connection\Api\Sql\CreatesTableFromSchemaTrait;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionLease;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
+use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\LinkException;
+use Weline\Framework\Database\Transaction\TransactionCoordinator;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Database\TransactionContext;
 
-final class Connector extends Query implements ConnectorInterface
+final class Connector extends Query implements
+    ConnectorInterface,
+    PhysicalTableMetadataInterface,
+    AtomicPhysicalTableChangeInterface,
+    PhysicalTableKeysetReaderInterface,
+    PhysicalTableIdentityProviderInterface,
+    PhysicalTableSnapshotInterface,
+    PhysicalViewMetadataInterface,
+    AtomicPhysicalViewChangeInterface,
+    PhysicalViewSnapshotInterface
 {
     use CreatesTableFromSchemaTrait;
 
@@ -101,15 +123,17 @@ final class Connector extends Query implements ConnectorInterface
         }
 
         $db_type = $this->configProvider->getDbType();
-        if (!in_array($db_type, PDO::getAvailableDrivers())) {
-            $availableDrivers = implode(',', PDO::getAvailableDrivers());
-            $installHint = '';
-            if (PHP_OS_FAMILY === 'Windows') {
-                $installHint = ' ' . __('Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini.');
-            } elseif (PHP_OS_FAMILY === 'Linux') {
-                $installHint = ' ' . __('Linux: Run "php bin/w env:install" (will prompt for sudo), or manually: "apt-get install php-pgsql" / "yum install php-pgsql". Then restart WLS/PHP-FPM/Apache.');
-            }
-            throw new LinkException(__('PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。', [$db_type, $availableDrivers, $installHint]));
+        $availableDrivers = PDO::getAvailableDrivers();
+        if (!in_array($db_type, $availableDrivers, true)) {
+            $installHint = PHP_OS_FAMILY === 'Windows'
+                ? 'Windows: enable php_pdo_pgsql.dll and php_pgsql.dll in php.ini.'
+                : 'Linux: run "php bin/w env:install", or install/enable the pdo_pgsql PHP extension, then restart PHP.';
+            throw new LinkException(sprintf(
+                'PostgreSQL driver is not available: %s. Available drivers: %s. %s',
+                $db_type,
+                implode(',', $availableDrivers),
+                $installHint,
+            ));
         }
 
         // 从连接池获取连接
@@ -331,6 +355,16 @@ SQL;
     public function getCreateTableSql(string $table_name): string
     {
         [$schema, $table] = $this->parseSchemaTable($this->formatTableName($table_name));
+        return $this->buildPhysicalCreateTableSql($schema, $table);
+    }
+
+    public function getPhysicalCreateTableSql(PhysicalTableIdentity $identity): string
+    {
+        return $this->buildPhysicalCreateTableSql($identity->namespace(), $identity->table());
+    }
+
+    private function buildPhysicalCreateTableSql(string $schema, string $table): string
+    {
         $connection = $this->getWrappedConnection();
         $columnStatement = $connection->prepare(<<<'SQL'
 SELECT
@@ -490,60 +524,895 @@ SQL);
         $this->query("DROP TABLE IF EXISTS {$formattedTable} CASCADE")->fetch();
     }
 
+    public function quotePhysicalTable(PhysicalTableIdentity $identity): string
+    {
+        return $this->quoteTable($identity->canonical());
+    }
+
+    public function resolvePhysicalTableIdentity(string $logicalName): PhysicalTableIdentity
+    {
+        [$schema, $table] = $this->parseSchemaTable($this->formatTableName($logicalName));
+        return new PhysicalTableIdentity($schema, $table);
+    }
+
+    public function physicalTableExists(PhysicalTableIdentity $identity): bool
+    {
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT EXISTS ('
+            . 'SELECT 1 FROM information_schema.tables '
+            . 'WHERE table_schema = :schema AND table_name = :table'
+            . ')',
+        );
+        $statement->execute([
+            ':schema' => $identity->namespace(),
+            ':table' => $identity->table(),
+        ]);
+        return (bool)$statement->fetchColumn();
+    }
+
+    public function dropPhysicalTableIfExists(PhysicalTableIdentity $identity): void
+    {
+        $this->query('DROP TABLE IF EXISTS ' . $this->quotePhysicalTable($identity) . ' CASCADE')->fetch();
+    }
+
+    public function capturePhysicalTableSnapshot(PhysicalTableIdentity $identity): array
+    {
+        if (!$this->physicalTableExists($identity)) {
+            return [
+                'format' => 'weline.pg.table_snapshot.v1',
+                'existed' => false,
+                'ddl' => '',
+                'columns' => [],
+                'sequences' => [],
+            ];
+        }
+        $statement = $this->getWrappedConnection()->prepare(<<<'SQL'
+SELECT
+    a.attname,
+    a.attidentity,
+    a.attgenerated,
+    pg_catalog.pg_get_serial_sequence(
+        pg_catalog.format('%I.%I', n.nspname, c.relname),
+        a.attname
+    ) AS sequence_name
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid
+WHERE n.nspname = :schema
+  AND c.relname = :table
+  AND c.relkind IN ('r', 'p')
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+ORDER BY a.attnum
+SQL);
+        $statement->execute([
+            ':schema' => $identity->namespace(),
+            ':table' => $identity->table(),
+        ]);
+        $columns = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $sequences = [];
+        foreach ($columns as $column) {
+            $sequenceName = trim((string)($column['sequence_name'] ?? ''));
+            if ($sequenceName === '') {
+                continue;
+            }
+            $catalog = $this->getWrappedConnection()->prepare(<<<'SQL'
+SELECT
+    s.seqstart,
+    s.seqincrement,
+    s.seqmin,
+    s.seqmax,
+    s.seqcache,
+    s.seqcycle
+FROM pg_catalog.pg_sequence s
+WHERE s.seqrelid = pg_catalog.to_regclass(:sequence)
+SQL);
+            $catalog->execute([':sequence' => $sequenceName]);
+            $options = $catalog->fetch(PDO::FETCH_ASSOC);
+            if (!is_array($options)) {
+                throw new \RuntimeException('physical identity sequence catalog unavailable');
+            }
+            $state = $this->getWrappedConnection()->getPdo()->query(
+                'SELECT last_value, is_called FROM ' . $this->quoteTable($sequenceName),
+            )->fetch(PDO::FETCH_ASSOC);
+            if (!is_array($state)) {
+                throw new \RuntimeException('physical identity sequence state unavailable');
+            }
+            $sequences[] = [
+                'column' => (string)$column['attname'],
+                'name' => $sequenceName,
+                'start' => (int)$options['seqstart'],
+                'increment' => (int)$options['seqincrement'],
+                'min' => (int)$options['seqmin'],
+                'max' => (int)$options['seqmax'],
+                'cache' => (int)$options['seqcache'],
+                'cycle' => $this->pgsqlBoolean($options['seqcycle']),
+                'last_value' => (int)$state['last_value'],
+                'is_called' => $this->pgsqlBoolean($state['is_called']),
+            ];
+        }
+        return [
+            'format' => 'weline.pg.table_snapshot.v1',
+            'existed' => true,
+            'ddl' => $this->getPhysicalCreateTableSql($identity),
+            'columns' => array_map(
+                static fn(array $column): array => [
+                    'name' => (string)$column['attname'],
+                    'identity' => (string)($column['attidentity'] ?? ''),
+                    'generated' => (string)($column['attgenerated'] ?? ''),
+                ],
+                $columns,
+            ),
+            'sequences' => $sequences,
+        ];
+    }
+
+    public function restorePhysicalTableSnapshot(
+        PhysicalTableIdentity $identity,
+        array $snapshot,
+    ): void {
+        if (($snapshot['format'] ?? null) !== 'weline.pg.table_snapshot.v1'
+            || ($snapshot['existed'] ?? null) !== true
+            || trim((string)($snapshot['ddl'] ?? '')) === '') {
+            throw new \RuntimeException('physical table snapshot payload is invalid');
+        }
+        if ($this->physicalTableExists($identity)) {
+            throw new \RuntimeException('physical table snapshot target already exists');
+        }
+        foreach ($this->splitPhysicalSnapshotDdl((string)$snapshot['ddl']) as $statement) {
+            $this->query($statement)->fetch();
+        }
+        if (!$this->physicalTableExists($identity)) {
+            throw new \RuntimeException('physical table snapshot restore did not create target');
+        }
+        foreach ((array)($snapshot['sequences'] ?? []) as $sequence) {
+            if (!is_array($sequence)) {
+                throw new \RuntimeException('physical identity sequence snapshot is invalid');
+            }
+            $current = $this->physicalIdentitySequenceName(
+                $identity,
+                (string)($sequence['column'] ?? ''),
+            );
+            $this->query(
+                'ALTER SEQUENCE ' . $this->quoteTable($current)
+                . ' RESTART WITH ' . (int)($sequence['start'] ?? 0),
+            )->fetch();
+            $cycle = !empty($sequence['cycle']) ? ' CYCLE' : ' NO CYCLE';
+            $this->query(
+                'ALTER SEQUENCE ' . $this->quoteTable($current)
+                . ' START WITH ' . (int)($sequence['start'] ?? 0)
+                . ' INCREMENT BY ' . (int)($sequence['increment'] ?? 0)
+                . ' MINVALUE ' . (int)($sequence['min'] ?? 0)
+                . ' MAXVALUE ' . (int)($sequence['max'] ?? 0)
+                . ' CACHE ' . (int)($sequence['cache'] ?? 0)
+                . $cycle,
+            )->fetch();
+        }
+    }
+
+    public function insertPhysicalTableSnapshotRows(
+        PhysicalTableIdentity $identity,
+        array $rows,
+        array $snapshot,
+    ): void {
+        if (($snapshot['format'] ?? null) !== 'weline.pg.table_snapshot.v1') {
+            throw new \RuntimeException('physical table snapshot payload is invalid');
+        }
+        $generated = [];
+        $alwaysIdentity = [];
+        foreach ((array)($snapshot['columns'] ?? []) as $column) {
+            if (!is_array($column)) {
+                continue;
+            }
+            $name = (string)($column['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            if ((string)($column['generated'] ?? '') !== '') {
+                $generated[$name] = true;
+            }
+            if ((string)($column['identity'] ?? '') === 'a') {
+                $alwaysIdentity[$name] = true;
+            }
+        }
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                throw new \RuntimeException('physical table snapshot row is invalid');
+            }
+            $row = array_diff_key($row, $generated);
+            if ($row === []) {
+                $this->query('INSERT INTO ' . $this->quotePhysicalTable($identity) . ' DEFAULT VALUES')->fetch();
+                continue;
+            }
+            $columns = array_keys($row);
+            $placeholders = [];
+            $parameters = [];
+            foreach (array_values($columns) as $index => $column) {
+                $placeholder = ':snapshot_value_' . $index;
+                $placeholders[] = $placeholder;
+                $parameters[$placeholder] = $row[$column];
+            }
+            $override = array_intersect_key($row, $alwaysIdentity) !== []
+                ? ' OVERRIDING SYSTEM VALUE'
+                : '';
+            $sql = 'INSERT INTO ' . $this->quotePhysicalTable($identity)
+                . ' (' . implode(', ', array_map($this->quoteIdentifier(...), $columns)) . ')'
+                . $override . ' VALUES (' . implode(', ', $placeholders) . ')';
+            $statement = $this->getWrappedConnection()->prepare($sql);
+            if (!$statement->execute($parameters)) {
+                throw new \RuntimeException('physical table snapshot row restore failed');
+            }
+        }
+    }
+
+    public function finalizePhysicalTableSnapshotRestore(
+        PhysicalTableIdentity $identity,
+        array $snapshot,
+    ): void {
+        foreach ((array)($snapshot['sequences'] ?? []) as $sequence) {
+            if (!is_array($sequence)) {
+                throw new \RuntimeException('physical identity sequence snapshot is invalid');
+            }
+            $current = $this->physicalIdentitySequenceName(
+                $identity,
+                (string)($sequence['column'] ?? ''),
+            );
+            $statement = $this->getWrappedConnection()->prepare(
+                'SELECT pg_catalog.setval(pg_catalog.to_regclass(:sequence), :value, :called)',
+            );
+            $statement->bindValue(':sequence', $current, PDO::PARAM_STR);
+            $statement->bindValue(':value', (int)($sequence['last_value'] ?? 0), PDO::PARAM_INT);
+            $statement->bindValue(':called', !empty($sequence['is_called']), PDO::PARAM_BOOL);
+            if (!$statement->execute()) {
+                throw new \RuntimeException('physical identity sequence state restore failed');
+            }
+        }
+    }
+
+    public function physicalTableCatalogFingerprint(PhysicalTableIdentity $identity): string
+    {
+        $snapshot = $this->capturePhysicalTableSnapshot($identity);
+        foreach ((array)($snapshot['sequences'] ?? []) as $index => $sequence) {
+            if (is_array($sequence)) {
+                unset($sequence['last_value'], $sequence['is_called']);
+                $snapshot['sequences'][$index] = $sequence;
+            }
+        }
+        return hash('sha256', $this->canonicalSnapshotJson($snapshot));
+    }
+
+    public function atomicPhysicalTableChange(
+        PhysicalTableIdentity $identity,
+        callable $callback,
+    ): mixed {
+        $entryState = TransactionContext::transactionState($this);
+        $transaction = $entryState?->ownerQuery() ?? $this->getQuery();
+        $transaction->clearQuery();
+        $entryDepth = $entryState?->depth() ?? 0;
+        $transaction->beginTransaction();
+        try {
+            $timeoutStatement = $this->getWrappedConnection()->prepare('SHOW lock_timeout');
+            $timeoutStatement->execute();
+            $previousLockTimeout = (string)$timeoutStatement->fetchColumn();
+            $this->query("SET LOCAL lock_timeout = '5000ms'")->fetch();
+            $advisory = $this->getWrappedConnection()->prepare(
+                'SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(:identity, 0))',
+            );
+            $advisory->execute([':identity' => 'weline:table:' . $identity->canonical()]);
+            if ($this->physicalTableExists($identity)) {
+                $this->query(
+                    'LOCK TABLE ' . $this->quotePhysicalTable($identity) . ' IN ACCESS EXCLUSIVE MODE',
+                )->fetch();
+            }
+
+            $transactions = ObjectManager::getInstance(TransactionCoordinator::class);
+            $result = $transactions->withSavepoint(
+                ConnectionFactory::getInstance($this->configProvider),
+                'atomic_physical_table_change_' . $identity->canonical(),
+                fn(): mixed => $callback($this),
+            );
+
+            $verification = TransactionContext::transactionState($this);
+            if ($verification === null
+                || $verification->ownerQuery() !== $transaction
+                || $verification->depth() !== $entryDepth + 1
+                || $verification->isRollbackOnly()
+                || $verification->pdoObjectId() !== spl_object_id($this->getWrappedConnection()->getPdo())) {
+                throw new \RuntimeException('atomic physical table callback changed transaction ownership');
+            }
+            $this->query(
+                'SET LOCAL lock_timeout = ' . $this->getWrappedConnection()->getPdo()->quote($previousLockTimeout),
+            )->fetch();
+            $transaction->commit();
+            return $result;
+        } catch (\Throwable $failure) {
+            try {
+                $this->rollbackAtomicTransactionLayers($transaction, $entryDepth);
+            } catch (\Throwable $rollbackFailure) {
+                throw new \RuntimeException(
+                    'atomic physical table change rollback failed',
+                    0,
+                    $rollbackFailure,
+                );
+            }
+            throw $failure;
+        } finally {
+            $transaction->clearQuery();
+        }
+    }
+
+    public function quotePhysicalView(PhysicalViewIdentity $identity): string
+    {
+        return $this->quoteTable($identity->canonical());
+    }
+
+    public function physicalViewExists(PhysicalViewIdentity $identity): bool
+    {
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT EXISTS ('
+            . 'SELECT 1 FROM pg_catalog.pg_class c '
+            . 'JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace '
+            . "WHERE n.nspname = :schema AND c.relname = :view AND c.relkind = 'v'"
+            . ')',
+        );
+        $statement->execute([
+            ':schema' => $identity->namespace(),
+            ':view' => $identity->view(),
+        ]);
+        return (bool)$statement->fetchColumn();
+    }
+
+    public function getPhysicalViewDefinition(PhysicalViewIdentity $identity): string
+    {
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT pg_catalog.pg_get_viewdef(c.oid, true) '
+            . 'FROM pg_catalog.pg_class c '
+            . 'JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace '
+            . "WHERE n.nspname = :schema AND c.relname = :view AND c.relkind = 'v'",
+        );
+        $statement->execute([
+            ':schema' => $identity->namespace(),
+            ':view' => $identity->view(),
+        ]);
+        $definition = trim((string)$statement->fetchColumn());
+        if ($definition === '') {
+            throw new \RuntimeException('exact physical view definition unavailable');
+        }
+        return rtrim($definition, "; \t\n\r\0\x0B");
+    }
+
+    public function createOrReplacePhysicalView(
+        PhysicalViewIdentity $identity,
+        string $selectSql,
+        bool $replace,
+    ): void {
+        $selectSql = rtrim(trim($selectSql), "; \t\n\r\0\x0B");
+        if (preg_match('/^(?:SELECT|WITH)\b/is', $selectSql) !== 1) {
+            throw new \InvalidArgumentException('physical view definition must be SELECT or WITH');
+        }
+        $sql = 'CREATE ' . ($replace ? 'OR REPLACE ' : '') . 'VIEW '
+            . $this->quotePhysicalView($identity) . ' AS ' . $selectSql;
+        $result = $this->query($sql)->fetch();
+        if ($result === false) {
+            throw new \RuntimeException('exact physical view mutation failed');
+        }
+    }
+
+    public function dropPhysicalViewIfExists(PhysicalViewIdentity $identity): void
+    {
+        $result = $this->query('DROP VIEW IF EXISTS ' . $this->quotePhysicalView($identity))->fetch();
+        if ($result === false) {
+            throw new \RuntimeException('exact physical view drop failed');
+        }
+    }
+
+    public function capturePhysicalViewSnapshot(PhysicalViewIdentity $identity): array
+    {
+        if (!$this->physicalViewExists($identity)) {
+            return [
+                'format' => 'weline.pg.view_snapshot.v1',
+                'existed' => false,
+            ];
+        }
+        $statement = $this->getWrappedConnection()->prepare(<<<'SQL'
+SELECT
+    pg_catalog.pg_get_viewdef(c.oid, true) AS definition,
+    pg_catalog.pg_get_userbyid(c.relowner) AS owner,
+    COALESCE(pg_catalog.array_to_json(c.reloptions)::text, '[]') AS options,
+    pg_catalog.obj_description(c.oid, 'pg_class') AS view_comment
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = :schema AND c.relname = :view AND c.relkind = 'v'
+SQL);
+        $statement->execute([
+            ':schema' => $identity->namespace(),
+            ':view' => $identity->view(),
+        ]);
+        $view = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($view)) {
+            throw new \RuntimeException('physical view snapshot catalog unavailable');
+        }
+        $columnsStatement = $this->getWrappedConnection()->prepare(<<<'SQL'
+SELECT a.attname, pg_catalog.col_description(c.oid, a.attnum) AS comment
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid
+WHERE n.nspname = :schema
+  AND c.relname = :view
+  AND c.relkind = 'v'
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+ORDER BY a.attnum
+SQL);
+        $columnsStatement->execute([
+            ':schema' => $identity->namespace(),
+            ':view' => $identity->view(),
+        ]);
+        $columns = $columnsStatement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $aclStatement = $this->getWrappedConnection()->prepare(<<<'SQL'
+SELECT
+    CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE grantee.rolname END AS grantee,
+    acl.privilege_type,
+    acl.is_grantable
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+CROSS JOIN LATERAL pg_catalog.aclexplode(
+    COALESCE(c.relacl, pg_catalog.acldefault('r', c.relowner))
+) acl
+LEFT JOIN pg_catalog.pg_roles grantee ON grantee.oid = acl.grantee
+WHERE n.nspname = :schema AND c.relname = :view AND c.relkind = 'v'
+ORDER BY grantee, acl.privilege_type
+SQL);
+        $aclStatement->execute([
+            ':schema' => $identity->namespace(),
+            ':view' => $identity->view(),
+        ]);
+        $options = json_decode((string)$view['options'], true, flags: JSON_THROW_ON_ERROR);
+        return [
+            'format' => 'weline.pg.view_snapshot.v1',
+            'existed' => true,
+            'definition' => rtrim(trim((string)$view['definition']), "; \t\n\r\0\x0B"),
+            'columns' => array_map(
+                static fn(array $column): array => [
+                    'name' => (string)$column['attname'],
+                    'comment' => $column['comment'] === null ? null : (string)$column['comment'],
+                ],
+                $columns,
+            ),
+            'options' => is_array($options) ? array_values(array_map('strval', $options)) : [],
+            'owner' => (string)$view['owner'],
+            'acl' => array_map(
+                fn(array $grant): array => [
+                    'grantee' => (string)$grant['grantee'],
+                    'privilege' => strtoupper((string)$grant['privilege_type']),
+                    'grantable' => $this->pgsqlBoolean($grant['is_grantable']),
+                ],
+                $aclStatement->fetchAll(PDO::FETCH_ASSOC) ?: [],
+            ),
+            'comment' => $view['view_comment'] === null ? null : (string)$view['view_comment'],
+        ];
+    }
+
+    public function restorePhysicalViewSnapshot(
+        PhysicalViewIdentity $identity,
+        array $snapshot,
+        bool $currentlyExists,
+    ): void {
+        if (($snapshot['format'] ?? null) !== 'weline.pg.view_snapshot.v1'
+            || !array_key_exists('existed', $snapshot)) {
+            throw new \RuntimeException('physical view snapshot payload is invalid');
+        }
+        if (($snapshot['existed'] ?? null) !== true) {
+            if ($currentlyExists) {
+                $this->dropPhysicalViewIfExists($identity);
+            }
+            return;
+        }
+        $definition = rtrim(trim((string)($snapshot['definition'] ?? '')), "; \t\n\r\0\x0B");
+        if (preg_match('/^(?:SELECT|WITH)\b/is', $definition) !== 1) {
+            throw new \RuntimeException('physical view snapshot definition is invalid');
+        }
+        $columns = [];
+        foreach ((array)($snapshot['columns'] ?? []) as $column) {
+            if (!is_array($column) || trim((string)($column['name'] ?? '')) === '') {
+                throw new \RuntimeException('physical view snapshot column is invalid');
+            }
+            $columns[] = (string)$column['name'];
+        }
+        if ($columns === []) {
+            throw new \RuntimeException('physical view snapshot columns are missing');
+        }
+        $options = $this->validatedPhysicalViewOptions((array)($snapshot['options'] ?? []));
+        $sql = 'CREATE ' . ($currentlyExists ? 'OR REPLACE ' : '') . 'VIEW '
+            . $this->quotePhysicalView($identity)
+            . ' (' . implode(', ', array_map($this->quoteIdentifier(...), $columns)) . ')'
+            . ($options === [] ? '' : ' WITH (' . implode(', ', $options) . ')')
+            . ' AS ' . $definition;
+        $this->query($sql)->fetch();
+
+        $currentOptions = $this->physicalViewReloptions($identity);
+        $snapshotOptionNames = [];
+        foreach ($options as $option) {
+            $snapshotOptionNames[strtolower((string)strtok($option, '='))] = true;
+        }
+        $reset = [];
+        foreach ($currentOptions as $option) {
+            $name = strtolower((string)strtok($option, '='));
+            if ($name !== '' && !isset($snapshotOptionNames[$name])) {
+                $reset[$name] = $name;
+            }
+        }
+        if ($reset !== []) {
+            $this->query(
+                'ALTER VIEW ' . $this->quotePhysicalView($identity)
+                . ' RESET (' . implode(', ', array_map($this->quoteIdentifier(...), array_values($reset))) . ')',
+            )->fetch();
+        }
+
+        $owner = trim((string)($snapshot['owner'] ?? ''));
+        if ($owner === '') {
+            throw new \RuntimeException('physical view snapshot owner is missing');
+        }
+        $this->query(
+            'ALTER VIEW ' . $this->quotePhysicalView($identity)
+            . ' OWNER TO ' . $this->quoteIdentifier($owner),
+        )->fetch();
+        foreach ($this->physicalViewAclGrantees($identity) as $grantee) {
+            $this->query(
+                'REVOKE ALL PRIVILEGES ON ' . $this->quotePhysicalView($identity)
+                . ' FROM ' . ($grantee === 'PUBLIC' ? 'PUBLIC' : $this->quoteIdentifier($grantee)),
+            )->fetch();
+        }
+        foreach ((array)($snapshot['acl'] ?? []) as $grant) {
+            if (!is_array($grant)) {
+                throw new \RuntimeException('physical view snapshot ACL is invalid');
+            }
+            $grantee = (string)($grant['grantee'] ?? '');
+            $privilege = strtoupper((string)($grant['privilege'] ?? ''));
+            if ($grantee === ''
+                || !in_array($privilege, ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'], true)) {
+                throw new \RuntimeException('physical view snapshot ACL entry is invalid');
+            }
+            if ($grantee === $owner) {
+                continue;
+            }
+            $this->query(
+                'GRANT ' . $privilege . ' ON ' . $this->quotePhysicalView($identity)
+                . ' TO ' . ($grantee === 'PUBLIC' ? 'PUBLIC' : $this->quoteIdentifier($grantee))
+                . (!empty($grant['grantable']) ? ' WITH GRANT OPTION' : ''),
+            )->fetch();
+        }
+        $pdo = $this->getWrappedConnection()->getPdo();
+        $comment = $snapshot['comment'] ?? null;
+        $this->query(
+            'COMMENT ON VIEW ' . $this->quotePhysicalView($identity)
+            . ' IS ' . ($comment === null ? 'NULL' : $pdo->quote((string)$comment)),
+        )->fetch();
+        foreach ((array)$snapshot['columns'] as $column) {
+            $comment = $column['comment'] ?? null;
+            $this->query(
+                'COMMENT ON COLUMN ' . $this->quotePhysicalView($identity) . '.'
+                . $this->quoteIdentifier((string)$column['name'])
+                . ' IS ' . ($comment === null ? 'NULL' : $pdo->quote((string)$comment)),
+            )->fetch();
+        }
+    }
+
+    public function atomicPhysicalViewChange(
+        PhysicalViewIdentity $identity,
+        callable $callback,
+    ): mixed {
+        $entryState = TransactionContext::transactionState($this);
+        $transaction = $entryState?->ownerQuery() ?? $this->getQuery();
+        $transaction->clearQuery();
+        $entryDepth = $entryState?->depth() ?? 0;
+        $transaction->beginTransaction();
+        try {
+            $timeoutStatement = $this->getWrappedConnection()->prepare('SHOW lock_timeout');
+            $timeoutStatement->execute();
+            $previousLockTimeout = (string)$timeoutStatement->fetchColumn();
+            $this->query("SET LOCAL lock_timeout = '5000ms'")->fetch();
+
+            $advisory = $this->getWrappedConnection()->prepare(
+                'SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(:identity, 0))',
+            );
+            $advisory->execute([':identity' => 'weline:view:' . $identity->canonical()]);
+            $existed = $this->physicalViewExists($identity);
+            if ($existed) {
+                $this->query(
+                    'LOCK TABLE ' . $this->quotePhysicalView($identity) . ' IN ACCESS EXCLUSIVE MODE',
+                )->fetch();
+            }
+
+            $transactions = ObjectManager::getInstance(TransactionCoordinator::class);
+            $result = $transactions->withSavepoint(
+                ConnectionFactory::getInstance($this->configProvider),
+                'atomic_physical_view_change_' . $identity->canonical(),
+                fn(): mixed => $callback($this, $existed),
+            );
+
+            $verification = TransactionContext::transactionState($this);
+            if ($verification === null
+                || $verification->ownerQuery() !== $transaction
+                || $verification->depth() !== $entryDepth + 1
+                || $verification->isRollbackOnly()
+                || $verification->pdoObjectId() !== spl_object_id($this->getWrappedConnection()->getPdo())) {
+                throw new \RuntimeException('atomic physical view callback changed transaction ownership');
+            }
+            $this->query(
+                'SET LOCAL lock_timeout = ' . $this->getWrappedConnection()->getPdo()->quote($previousLockTimeout),
+            )->fetch();
+            $transaction->commit();
+            return $result;
+        } catch (\Throwable $failure) {
+            try {
+                $this->rollbackAtomicTransactionLayers($transaction, $entryDepth);
+            } catch (\Throwable $rollbackFailure) {
+                throw new \RuntimeException(
+                    'atomic physical view change rollback failed',
+                    0,
+                    $rollbackFailure,
+                );
+            }
+            throw $failure;
+        } finally {
+            $transaction->clearQuery();
+        }
+    }
+
+    /** @return list<string> */
+    private function splitPhysicalSnapshotDdl(string $ddl): array
+    {
+        $parts = str_contains($ddl, "\n-- WELINE_DDL_STATEMENT\n")
+            ? explode("\n-- WELINE_DDL_STATEMENT\n", $ddl)
+            : [$ddl];
+        return array_values(array_filter(
+            array_map('trim', $parts),
+            static fn(string $statement): bool => $statement !== '',
+        ));
+    }
+
+    private function physicalIdentitySequenceName(
+        PhysicalTableIdentity $identity,
+        string $column,
+    ): string {
+        if ($column === '') {
+            throw new \RuntimeException('physical identity sequence column is missing');
+        }
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT pg_catalog.pg_get_serial_sequence(:table, :column)',
+        );
+        $statement->execute([
+            ':table' => $identity->canonical(),
+            ':column' => $column,
+        ]);
+        $sequence = trim((string)$statement->fetchColumn());
+        if ($sequence === '') {
+            throw new \RuntimeException('physical identity sequence is missing after restore');
+        }
+        return $sequence;
+    }
+
+    private function canonicalSnapshotJson(array $value): string
+    {
+        $normalize = function (mixed $item) use (&$normalize): mixed {
+            if (!is_array($item)) {
+                return $item;
+            }
+            if (!array_is_list($item)) {
+                ksort($item, SORT_STRING);
+            }
+            foreach ($item as $key => $child) {
+                $item[$key] = $normalize($child);
+            }
+            return $item;
+        };
+        return (string)json_encode(
+            $normalize($value),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+    }
+
+    /** @param list<mixed> $options @return list<string> */
+    private function validatedPhysicalViewOptions(array $options): array
+    {
+        $validated = [];
+        foreach ($options as $option) {
+            $option = strtolower(trim((string)$option));
+            if (preg_match(
+                '/\A(?:security_barrier|security_invoker)=(?:true|false)\z|\Acheck_option=(?:local|cascaded)\z/D',
+                $option,
+            ) !== 1) {
+                throw new \RuntimeException('physical view snapshot option is invalid');
+            }
+            $validated[$option] = $option;
+        }
+        ksort($validated, SORT_STRING);
+        return array_values($validated);
+    }
+
+    /** @return list<string> */
+    private function physicalViewReloptions(PhysicalViewIdentity $identity): array
+    {
+        $statement = $this->getWrappedConnection()->prepare(<<<'SQL'
+SELECT COALESCE(pg_catalog.array_to_json(c.reloptions)::text, '[]')
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = :schema AND c.relname = :view AND c.relkind = 'v'
+SQL);
+        $statement->execute([
+            ':schema' => $identity->namespace(),
+            ':view' => $identity->view(),
+        ]);
+        $options = json_decode((string)$statement->fetchColumn(), true, flags: JSON_THROW_ON_ERROR);
+        return is_array($options) ? array_values(array_map('strval', $options)) : [];
+    }
+
+    /** @return list<string> */
+    private function physicalViewAclGrantees(PhysicalViewIdentity $identity): array
+    {
+        $statement = $this->getWrappedConnection()->prepare(<<<'SQL'
+SELECT DISTINCT CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE grantee.rolname END AS grantee
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+CROSS JOIN LATERAL pg_catalog.aclexplode(
+    COALESCE(c.relacl, pg_catalog.acldefault('r', c.relowner))
+) acl
+LEFT JOIN pg_catalog.pg_roles grantee ON grantee.oid = acl.grantee
+WHERE n.nspname = :schema AND c.relname = :view AND c.relkind = 'v'
+SQL);
+        $statement->execute([
+            ':schema' => $identity->namespace(),
+            ':view' => $identity->view(),
+        ]);
+        return array_values(array_filter(
+            array_map('strval', $statement->fetchAll(PDO::FETCH_COLUMN) ?: []),
+            static fn(string $grantee): bool => $grantee !== '',
+        ));
+    }
+
+    private function rollbackAtomicTransactionLayers(QueryInterface $transaction, int $entryDepth): void
+    {
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $state = TransactionContext::transactionState($this);
+            if ($state === null) {
+                if ($entryDepth > 0) {
+                    throw new \RuntimeException('atomic physical table transaction ownership lost');
+                }
+                return;
+            }
+            if ($state->ownerQuery() !== $transaction) {
+                throw new \RuntimeException('atomic physical table transaction owner changed');
+            }
+            if ($state->depth() <= $entryDepth) {
+                return;
+            }
+            $transaction->rollBack();
+        }
+        throw new \RuntimeException('atomic physical table transaction depth did not unwind');
+    }
+
+    public function readPhysicalTableKeysetChunk(
+        PhysicalTableIdentity $identity,
+        array $primaryKeyColumns,
+        ?array $afterPrimaryKey,
+        int $limit,
+    ): array {
+        if ($primaryKeyColumns === [] || $limit <= 0) {
+            throw new \InvalidArgumentException('invalid physical table keyset request');
+        }
+        $metadata = $this->getPhysicalTableColumns($identity);
+        $declaredPrimaryKeys = [];
+        foreach ($metadata as $column) {
+            if (!empty($column['primary_key'])) {
+                $declaredPrimaryKeys[] = (string)($column['name'] ?? '');
+            }
+        }
+        if ($declaredPrimaryKeys !== array_values($primaryKeyColumns)) {
+            throw new \RuntimeException('physical table keyset does not match complete primary key');
+        }
+        if ($afterPrimaryKey !== null && array_keys($afterPrimaryKey) !== $primaryKeyColumns) {
+            throw new \InvalidArgumentException('physical table keyset cursor mismatch');
+        }
+        if ($afterPrimaryKey !== null && in_array(null, $afterPrimaryKey, true)) {
+            throw new \RuntimeException('physical table primary key cursor contains null');
+        }
+
+        $quotedKeys = array_map(
+            fn(string $column): string => $this->quoteIdentifier($column),
+            $primaryKeyColumns,
+        );
+        $sql = 'SELECT * FROM ' . $this->quotePhysicalTable($identity);
+        $parameters = [];
+        if ($afterPrimaryKey !== null) {
+            $placeholders = [];
+            foreach ($primaryKeyColumns as $index => $column) {
+                $placeholder = ':physical_key_' . $index;
+                $placeholders[] = $placeholder;
+                $parameters[$placeholder] = $afterPrimaryKey[$column];
+            }
+            $sql .= ' WHERE (' . implode(', ', $quotedKeys) . ') > ('
+                . implode(', ', $placeholders) . ')';
+        }
+        $sql .= ' ORDER BY ' . implode(', ', $quotedKeys) . ' ASC LIMIT ' . $limit;
+        $statement = $this->getWrappedConnection()->prepare($sql);
+        $statement->execute($parameters);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+        return is_array($rows) ? $rows : [];
+    }
+
     public function tableExist(string $table_name): bool
     {
-        try {
-            // 使用 formatTableName 来处理表名（会自动添加前缀和 schema）
-            $formattedTableName = $this->formatTableName($table_name);
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            try {
+                // 使用 formatTableName 来处理表名（会自动添加前缀和 schema）
+                $formattedTableName = $this->formatTableName($table_name);
 
-            // 从格式化后的表名中提取 schema 和 table
-            // 格式: "schema"."table"
-            $formattedTableName = str_replace(['"'], '', $formattedTableName);
+                // 从格式化后的表名中提取 schema 和 table
+                // 格式: "schema"."table"
+                $formattedTableName = str_replace(['"'], '', $formattedTableName);
 
-            $schema = SchemaConfig::getCurrentSchema();
-            $table = $table_name;
+                $schema = SchemaConfig::getCurrentSchema();
+                $table = $table_name;
 
-            if (str_contains($formattedTableName, '.')) {
-                $parts = explode('.', $formattedTableName, 2);
-                $schema = $parts[0];
-                $table = $parts[1] ?? $parts[0];
-            } else {
-                $table = $formattedTableName;
-                // 如果没有 schema，使用 current_schema()
-                try {
-                    $currentSchema = $this->getLink()->query('SELECT current_schema()')->fetchColumn();
-                    $schema = $currentSchema ?: 'public';
-                } catch (\Throwable $e) {
-                    $schema = SchemaConfig::getCurrentSchema();
+                if (str_contains($formattedTableName, '.')) {
+                    $parts = explode('.', $formattedTableName, 2);
+                    $schema = $parts[0];
+                    $table = $parts[1] ?? $parts[0];
+                } else {
+                    $table = $formattedTableName;
+                    // 如果没有 schema，使用 current_schema()
+                    try {
+                        $currentSchema = $this->getLink()->query('SELECT current_schema()')->fetchColumn();
+                        $schema = $currentSchema ?: 'public';
+                    } catch (\Throwable $e) {
+                        $schema = SchemaConfig::getCurrentSchema();
+                    }
                 }
-            }
 
-            // 使用 prepared statement 避免 SQL 注入，并确保不会报错
-            $sql = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = :schema AND table_name = :table)";
-            $stmt = $this->getLink()->prepare($sql);
-            if ($stmt === false) {
+                // 使用 prepared statement 避免 SQL 注入，并确保不会报错
+                $sql = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = :schema AND table_name = :table)";
+                $stmt = $this->getLink()->prepare($sql);
+                if ($stmt === false) {
+                    return false;
+                }
+
+                // 使用 @ 抑制可能的警告，然后检查执行结果
+                $executed = @$stmt->execute([
+                    ':schema' => $schema,
+                    ':table' => $table
+                ]);
+
+                if (!$executed) {
+                    return false;
+                }
+
+                $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+                return (bool)($result['exists'] ?? false);
+            } catch (\Throwable $throwable) {
+                // A process-scoped owner can retain one PDO across many WLS
+                // requests. If that physical connection dies while idle, the
+                // pool cannot validate it through the idle queue. This probe
+                // is read-only and has not executed any DDL, so outside a
+                // coordinated transaction it may discard the dead lease and
+                // retry once on a fresh PostgreSQL connection.
+                if ($attempt === 0
+                    && $throwable instanceof PDOException
+                    && TransactionContext::transactionState($this) === null
+                    && ConnectionPool::isDisconnectException($throwable)
+                    && $this->reconnectAfterDisconnect($throwable)
+                ) {
+                    continue;
+                }
+
+                // tableExist remains a compatibility boolean probe. Every
+                // non-disconnect error and every transaction-bound disconnect
+                // continues to fail closed as "not proven to exist".
                 return false;
             }
-
-            // 使用 @ 抑制可能的警告，然后检查执行结果
-            $executed = @$stmt->execute([
-                ':schema' => $schema,
-                ':table' => $table
-            ]);
-
-            if (!$executed) {
-                return false;
-            }
-
-            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
-            return (bool)($result['exists'] ?? false);
-        } catch (\Exception $exception) {
-            // 任何异常都返回 false，不报错
-            return false;
-        } catch (\Throwable $throwable) {
-            // 捕获所有可抛出对象，确保不会报错
-            return false;
         }
+
+        return false;
     }
 
     /** @inheritDoc */
@@ -885,7 +1754,8 @@ SQL);
     /** @inheritDoc */
     public function buildAddIndexSql(string $table, array $idx): string
     {
-        $formattedTable = $this->formatTableName($table);
+        [$schema, $physicalTable] = $this->parseSchemaTable($table);
+        $exactTable = $schema . '.' . $physicalTable;
         $requestedName = (string)($idx['name'] ?? '');
         // Existing historical raw names are normalized by SchemaDiffStage and
         // therefore never enter ADD.  Every new index is published under the
@@ -894,7 +1764,7 @@ SQL);
         return $this->pgsqlBuildCreateIndexSql(
             $table,
             $idx,
-            PgsqlIndexName::canonicalPhysical($formattedTable, $requestedName),
+            PgsqlIndexName::canonicalPhysical($exactTable, $requestedName),
         );
     }
 
@@ -944,9 +1814,9 @@ SQL);
      */
     public function buildDropIndexSql(string $table, string $indexName): string
     {
-        $formattedTable = $this->formatTableName($table);
-        [$schema, $physicalTable] = $this->parseSchemaTable($formattedTable);
-        $candidates = PgsqlIndexName::candidates($formattedTable, $indexName);
+        [$schema, $physicalTable] = $this->parseSchemaTable($table);
+        $exactTable = $schema . '.' . $physicalTable;
+        $candidates = PgsqlIndexName::candidates($exactTable, $indexName);
         $candidatePlaceholders = [];
         $params = [':schema' => $schema, ':table' => $physicalTable];
         foreach ($candidates as $position => $candidate) {
@@ -977,7 +1847,7 @@ SQL);
             // The canonical name includes the target table identity, so this
             // future rollback cannot resolve to another table's raw index.
             $dialect = $this->getDialect();
-            $canonical = PgsqlIndexName::canonicalPhysical($formattedTable, $indexName);
+            $canonical = PgsqlIndexName::canonicalPhysical($exactTable, $indexName);
             return 'DROP INDEX IF EXISTS ' . $dialect->quoteIdentifier($schema)
                 . '.' . $dialect->quoteIdentifier($canonical);
         }
@@ -1126,6 +1996,16 @@ SQL);
         // 先将逻辑表名转换为物理表名（添加前缀和 schema）
         $formattedTable = $this->formatTableName($table);
         [$schema, $tableName] = $this->parseSchemaTable($formattedTable);
+        return $this->getPhysicalTableColumnsByParts($schema, $tableName);
+    }
+
+    public function getPhysicalTableColumns(PhysicalTableIdentity $identity): array
+    {
+        return $this->getPhysicalTableColumnsByParts($identity->namespace(), $identity->table());
+    }
+
+    private function getPhysicalTableColumnsByParts(string $schema, string $tableName): array
+    {
         if ($tableName === '') {
             return [];
         }

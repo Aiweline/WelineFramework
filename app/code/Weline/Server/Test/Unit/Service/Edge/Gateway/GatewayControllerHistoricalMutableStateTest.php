@@ -48,6 +48,8 @@ final class GatewayControllerHistoricalMutableStateTest extends TestCase
             'state/security-ledger.json',
             'state/security-ledger.pending.json',
             'state/security-ledger.json.untrusted',
+            'state/security-anchor.json',
+            'state/wls-edge-2.initialized.json',
             'state/publication-current.json',
             'state/route-lkg.json',
             'state/journal.jsonl',
@@ -60,6 +62,7 @@ final class GatewayControllerHistoricalMutableStateTest extends TestCase
             'state/emergency-revocations-v1.tsv',
             'runtime/conf/nginx.conf',
             'trust/security-anchor.json',
+            'trust/wls-edge-2.initialized.json',
             'trust/journal.untrusted',
             'trust/snapshot-receipt.key',
             'trust/broker-enrollments.tsv',
@@ -88,7 +91,6 @@ final class GatewayControllerHistoricalMutableStateTest extends TestCase
             'runtime/conf',
             'state/lkg',
             'snapshots',
-            'snapshots-v2',
             'snapshot-candidates-v2',
             'trust/snapshot-receipts',
         ] as $relative) {
@@ -102,7 +104,6 @@ final class GatewayControllerHistoricalMutableStateTest extends TestCase
             'runtime/conf',
             'state/lkg',
             'snapshots',
-            'snapshots-v2',
             'snapshot-candidates-v2',
             'trust/snapshot-receipts',
         ] as $relative) {
@@ -113,9 +114,28 @@ final class GatewayControllerHistoricalMutableStateTest extends TestCase
         self::assertTrue($this->freshInstallBootstrapAllowed());
     }
 
+    public function testFreshBootstrapAllowsUnreferencedSealedSnapshotNamespace(): void
+    {
+        $this->writeResidue('snapshots-v2/' . str_repeat('a', 64) . '/manifest.json');
+
+        self::assertTrue(
+            $this->freshInstallBootstrapAllowed(),
+            'A sealed snapshot has no bootstrap authority without state or receipt evidence.',
+        );
+    }
+
     public function testFreshBootstrapRejectsUnsafeHistoricalNamespacePath(): void
     {
         $this->writeResidue('snapshots-v2');
+
+        self::assertFalse($this->freshInstallBootstrapAllowed());
+    }
+
+    public function testFreshBootstrapRejectsLinkedSealedSnapshotNamespace(): void
+    {
+        $target = $this->path('sealed-snapshot-target');
+        self::assertTrue(\mkdir($target, 0700, true));
+        self::assertTrue(\symlink($target, $this->path('snapshots-v2')));
 
         self::assertFalse($this->freshInstallBootstrapAllowed());
     }

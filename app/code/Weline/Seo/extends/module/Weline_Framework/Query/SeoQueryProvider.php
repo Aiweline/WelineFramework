@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Extends\Module\Weline_Framework\Query;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Seo\Model\SeoOptimizationExperiment;
 use Weline\Seo\Model\SeoOptimizationRun;
 use Weline\Seo\Service\OptimizationListPaginator;
 use Weline\Seo\Service\OptimizationPolicyService;
 use Weline\Seo\Service\SeoOptimizationQueueService;
+use Weline\Seo\Service\SeoSearchQueryHeatService;
+use Weline\Seo\Service\SeoSearchQuerySyncService;
 
 /** Backend/internal control plane for SEO automation. */
 final class SeoQueryProvider implements QueryProviderInterface
@@ -20,9 +23,16 @@ final class SeoQueryProvider implements QueryProviderInterface
         private readonly SeoOptimizationRun $runModel,
         private readonly SeoOptimizationExperiment $experimentModel,
         ?OptimizationListPaginator $paginator = null,
+        ?SeoSearchQueryHeatService $queryHeat = null,
+        ?SeoSearchQuerySyncService $querySync = null,
     ) {
         $this->paginator = $paginator ?? new OptimizationListPaginator();
+        $this->queryHeat = $queryHeat ?? ObjectManager::getInstance(SeoSearchQueryHeatService::class);
+        $this->querySync = $querySync ?? ObjectManager::getInstance(SeoSearchQuerySyncService::class);
     }
+
+    private readonly SeoSearchQueryHeatService $queryHeat;
+    private readonly SeoSearchQuerySyncService $querySync;
 
     private readonly OptimizationListPaginator $paginator;
 
@@ -43,6 +53,10 @@ final class SeoQueryProvider implements QueryProviderInterface
             'enqueueOptimizationEvaluation' => $this->enqueueEvaluation($params),
             'optimizationRuns' => $this->runs($params),
             'optimizationExperiments' => $this->experiments($params),
+            'searchQueryCloud' => $this->searchQueryCloud($params),
+            'siteEventHeat' => $this->siteEventHeat($params),
+            'syncSearchQueryCloud' => $this->syncSearchQueryCloud($params),
+            'evolveFromQueryHeat' => $this->evolveFromQueryHeat($params),
             default => throw new \InvalidArgumentException('SEO query provider does not support operation: ' . $operation),
         };
     }
@@ -83,6 +97,23 @@ final class SeoQueryProvider implements QueryProviderInterface
                     ['name' => 'status', 'type' => 'string', 'required' => false],
                     ['name' => 'page', 'type' => 'int', 'required' => false],
                     ['name' => 'page_size', 'type' => 'int', 'required' => false],
+                ]),
+                $this->operation('searchQueryCloud', 'read', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                    ['name' => 'limit', 'type' => 'int', 'required' => false],
+                ]),
+                $this->operation('siteEventHeat', 'read', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                    ['name' => 'limit', 'type' => 'int', 'required' => false],
+                    ['name' => 'start_date', 'type' => 'string', 'required' => false],
+                    ['name' => 'end_date', 'type' => 'string', 'required' => false],
+                ]),
+                $this->operation('syncSearchQueryCloud', 'write', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                ]),
+                $this->operation('evolveFromQueryHeat', 'write', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                    ['name' => 'request_key', 'type' => 'string', 'required' => false],
                 ]),
             ],
         ];
@@ -129,6 +160,117 @@ final class SeoQueryProvider implements QueryProviderInterface
             ->select()->fetch();
 
         return $this->paginator->page($this->items($model->getItems()), $page, $pageSize);
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function searchQueryCloud(array $params): array
+    {
+        $websiteId = $this->requiredWebsiteId($params);
+        $cloud = $this->queryHeat->cloud($websiteId, (int)($params['limit'] ?? 80));
+        $cloud['gsc_bound'] = $this->querySync->isAccountBound($websiteId) || !empty($cloud['gsc_bound']);
+
+        return $cloud;
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function syncSearchQueryCloud(array $params): array
+    {
+        return $this->querySync->syncWebsite($this->requiredWebsiteId($params));
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function evolveFromQueryHeat(array $params): array
+    {
+        return $this->querySync->evolveFromQueryHeat(
+            $this->requiredWebsiteId($params),
+            (string)($params['request_key'] ?? ''),
+        );
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function siteEventHeat(array $params): array
+    {
+        $websiteId = $this->requiredWebsiteId($params);
+        $endDate = \trim((string)($params['end_date'] ?? $params['endDate'] ?? ''));
+        $startDate = \trim((string)($params['start_date'] ?? $params['startDate'] ?? ''));
+        if ($endDate === '') {
+            $endDate = \date('Y-m-d');
+        }
+        if ($startDate === '') {
+            $startDate = \date('Y-m-d', \strtotime('-28 days'));
+        }
+        $limit = \max(1, \min(80, (int)($params['limit'] ?? 40)));
+        $snapshot = [];
+        try {
+            $snapshot = \w_query('visitor', 'analyticsOptimizationSnapshot', [
+                'websiteId' => $websiteId,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'minPageViews' => 0,
+                'minConversions' => 0,
+            ], 'backend');
+        } catch (\Throwable) {
+            $snapshot = [];
+        }
+        $counts = \is_array($snapshot['summary']['event_counts'] ?? null)
+            ? $snapshot['summary']['event_counts']
+            : [];
+        $items = [];
+        $total = 0;
+        foreach ($counts as $event => $count) {
+            $event = \trim((string)$event);
+            $count = \max(0, (int)$count);
+            if ($event === '' || $count <= 0) {
+                continue;
+            }
+            $total += $count;
+            $items[] = [
+                'event' => $event,
+                'count' => $count,
+                'heat' => 0.0,
+                'source' => 'visitor',
+            ];
+        }
+        $visitorAvailable = $items !== [];
+        if ($items === []) {
+            try {
+                foreach ($this->queryHeat->cloud($websiteId, $limit)['items'] ?? [] as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    $query = \trim((string)($row['query'] ?? ''));
+                    if ($query === '') {
+                        continue;
+                    }
+                    $items[] = [
+                        'event' => $query,
+                        'count' => \max(0, (int)($row['impressions'] ?? 0)),
+                        'heat' => (float)($row['heat'] ?? 0),
+                        'clicks' => \max(0, (int)($row['clicks'] ?? 0)),
+                        'source' => 'search_query',
+                    ];
+                }
+            } catch (\Throwable) {
+            }
+        } else {
+            \usort($items, static fn(array $left, array $right): int => $right['count'] <=> $left['count']);
+            $items = \array_slice($items, 0, $limit);
+            foreach ($items as &$item) {
+                $item['heat'] = $total > 0
+                    ? \round(100.0 * ((float)$item['count'] / (float)$total), 2)
+                    : 0.0;
+            }
+            unset($item);
+        }
+
+        return [
+            'contract' => 'seo.site_event_heat.v1',
+            'website_id' => $websiteId,
+            'window' => ['start' => $startDate, 'end' => $endDate],
+            'items' => $items,
+            'visitor_available' => $visitorAvailable,
+            'fallback' => !$visitorAvailable && $items !== [] ? 'search_query' : null,
+        ];
     }
 
     /** @param array<string,mixed> $params @return array<string,mixed> */

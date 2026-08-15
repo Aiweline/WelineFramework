@@ -68,6 +68,7 @@ final class RequestLifecycleTraceState
 class RequestLifecycleTrace
 {
     private const REQUEST_CONTEXT_ID_KEY = 'request_lifecycle_trace.request_id';
+    private const REDACTED_AUTH_SQL = '[REDACTED: authentication persistence statement]';
 
     private static bool $stateManagerRegistered = false;
 
@@ -373,6 +374,21 @@ class RequestLifecycleTrace
         self::appendCompactSpan($span, $state);
     }
 
+    /**
+     * Remove authentication persistence values before SQL reaches any trace or log sink.
+     */
+    public static function redactDatabaseSql(string $sql): string
+    {
+        return self::containsAuthenticationPersistence($sql)
+            ? self::REDACTED_AUTH_SQL
+            : $sql;
+    }
+
+    public static function containsAuthenticationPersistence(string $sql): bool
+    {
+        return \preg_match('/\b(?:session_digest|token_digest)\b/i', $sql) === 1;
+    }
+
     public static function ensureRequestId(): string
     {
         $state = self::state();
@@ -591,14 +607,16 @@ class RequestLifecycleTrace
     ): array
     {
         $max = self::getMetaStringMaxBytes($state);
-        if ($max <= 0) {
-            return $meta;
-        }
-
         $suffix = '...(truncated)';
         $out = [];
         foreach ($meta as $key => $value) {
-            if (\is_string($value) && \strlen($value) > $max) {
+            if ($key === 'sql'
+                && \is_string($value)
+                && self::containsAuthenticationPersistence($value)) {
+                $out[$key] = self::redactDatabaseSql($value);
+                continue;
+            }
+            if ($max > 0 && \is_string($value) && \strlen($value) > $max) {
                 $out[$key] = \substr($value, 0, $max) . $suffix;
                 continue;
             }

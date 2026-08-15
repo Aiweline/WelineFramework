@@ -118,6 +118,15 @@ class Start extends CommandAbstract
      */
     private const STARTUP_LISTENER_STATE_BUDGET_SECONDS = 120.0;
 
+    /**
+     * Each state-store operation remains inside the platform's 300-second
+     * lock contract. The separate total budget below bounds the cold compile
+     * plus the renewed target-bound handoff phase.
+     */
+    private const STARTUP_LISTENER_STATE_EMULATED_WINDOWS_BUDGET_SECONDS = 300.0;
+
+    private const STARTUP_LISTENER_STATE_EMULATED_WINDOWS_TOTAL_BUDGET_SECONDS = 600.0;
+
     /** Failed-start reservation cleanup is best effort and must never stall shutdown. */
     private const STARTUP_LISTENER_CLEANUP_BUDGET_SECONDS = 1.0;
 
@@ -275,6 +284,8 @@ class Start extends CommandAbstract
 
     private ?float $startupListenerStateDeadlineMonotonic = null;
 
+    private ?float $startupListenerStateTotalDeadlineMonotonic = null;
+
     /** Native cold recovery discarded an authentic but superseded manifest. */
     private bool $nativeServingManifestRebuildRequired = false;
 
@@ -391,6 +402,20 @@ class Start extends CommandAbstract
             $runtimeResolver->resolveTopologyIntent($this->getServerConfig($instanceName, $args), $args);
         } catch (\RuntimeException $exception) {
             $this->printer->error($exception->getMessage());
+            return 1;
+        }
+
+        // Capture the launcher's immutable birth before runtime setup creates
+        // locks, native sockets or child processes. Later lifecycle/listener
+        // payloads reuse this process-local cache instead of entering Windows
+        // process FFI from a native critical section.
+        try {
+            (new MasterLeaseRuntimeIdentity())->captureProcessIdentity((int)\getmypid());
+        } catch (\Throwable $exception) {
+            $this->printer->error(__(
+                'WLS 启动器进程出生身份不可用：%{1}',
+                [$exception->getMessage()],
+            ));
             return 1;
         }
 
@@ -1713,6 +1738,7 @@ class Start extends CommandAbstract
                 'policy_valid' => (bool)($policyCheck['valid'] ?? false),
                 'cache_hit' => (bool)($compiledRuntime['cache_hit'] ?? false),
             ]);
+            $this->renewStartupListenerStateDeadlineAfterColdPreflight();
         } catch (\Throwable $exception) {
             $this->printer->error(__('WLS 编译运行时预检失败：%{1}', [$exception->getMessage()]));
             return 1;
@@ -6145,12 +6171,55 @@ class Start extends CommandAbstract
         return $deadline;
     }
 
+    private static function startupListenerStateBudgetSeconds(
+        bool $requiresEmulatedWindowsIsolation,
+    ): float {
+        return $requiresEmulatedWindowsIsolation
+            ? self::STARTUP_LISTENER_STATE_EMULATED_WINDOWS_BUDGET_SECONDS
+            : self::STARTUP_LISTENER_STATE_BUDGET_SECONDS;
+    }
+
+    private static function startupListenerStateTotalBudgetSeconds(
+        bool $requiresEmulatedWindowsIsolation,
+    ): float {
+        return $requiresEmulatedWindowsIsolation
+            ? self::STARTUP_LISTENER_STATE_EMULATED_WINDOWS_TOTAL_BUDGET_SECONDS
+            : self::STARTUP_LISTENER_STATE_BUDGET_SECONDS;
+    }
+
     private function beginStartupListenerStateDeadline(): float
     {
-        $deadline = self::monotonicSeconds()
-            + self::STARTUP_LISTENER_STATE_BUDGET_SECONDS;
+        $requiresEmulatedWindowsIsolation =
+            PhpRuntimeSafetyProfile::requiresNativeExtensionIsolation();
+        $now = self::monotonicSeconds();
+        if ($this->startupListenerStateTotalDeadlineMonotonic === null) {
+            $this->startupListenerStateTotalDeadlineMonotonic = $now
+                + self::startupListenerStateTotalBudgetSeconds(
+                    $requiresEmulatedWindowsIsolation,
+                );
+        }
+        $totalDeadline = $this->startupListenerStateTotalDeadlineMonotonic;
+        if (!\is_finite($totalDeadline) || $now >= $totalDeadline) {
+            throw new \RuntimeException(
+                'WLS startup listener-state total deadline was exhausted.',
+            );
+        }
+        $deadline = \min(
+            $totalDeadline,
+            $now + self::startupListenerStateBudgetSeconds(
+                $requiresEmulatedWindowsIsolation,
+            ),
+        );
         $this->startupListenerStateDeadlineMonotonic = $deadline;
         return $deadline;
+    }
+
+    private function renewStartupListenerStateDeadlineAfterColdPreflight(): void
+    {
+        if (!PhpRuntimeSafetyProfile::requiresNativeExtensionIsolation()) {
+            return;
+        }
+        $this->beginStartupListenerStateDeadline();
     }
 
     private function startupListenerStateDeadline(): float
@@ -7354,10 +7423,35 @@ class Start extends CommandAbstract
                 'Windows listener handoff metadata cannot be consumed on POSIX.'
             );
         }
-        WindowsListenerHandoff::awaitInstallForMaster(
-            $intent,
-            $this->startupListenerStateDeadline(),
-        );
+        $launchId = (string)$intent['launch_id'];
+        $processName = MasterProcess::getMasterProcessName($instanceName);
+        $processIdentity = '--name=' . $processName . ' --launch-id=' . $launchId;
+        $masterPid = (int)\getmypid();
+
+        // The parent must know the durable child PID before it can create the
+        // target-bound WSAPROTOCOL_INFO envelope. Publish the exact child-owned
+        // lease before waiting for that envelope; otherwise the parent waits
+        // for this registration while this process waits for the parent.
+        Processer::setPid($processIdentity, $masterPid);
+        try {
+            WindowsListenerHandoff::awaitInstallForMaster(
+                $intent,
+                $this->startupListenerStateDeadline(),
+            );
+        } catch (\Throwable $exception) {
+            if (!Processer::removeManagedProcessLeaseRecord(
+                $masterPid,
+                $processName,
+                $launchId,
+            )) {
+                throw new \RuntimeException(
+                    'Windows listener handoff failed and its exact early Master lease could not be retired.',
+                    0,
+                    $exception,
+                );
+            }
+            throw $exception;
+        }
         return true;
     }
 

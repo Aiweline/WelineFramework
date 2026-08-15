@@ -38,6 +38,7 @@ content,content
 账户被禁用！,"Account is disabled!"
 登录异常！,"Login exception!"
 您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,"Your account has not been assigned a role and cannot log in to the backend. Please contact the system administrator to assign a role."
+认证设备服务暂时不可用，请稍后重试。,"The authenticated device service is temporarily unavailable. Please try again later."
 登录凭据错误！,"Invalid login credentials!"
 验证码生成失败，请刷新重试。,"Verification code generation failed, please refresh and try again."
 请完成两步验证以完成登录。,请完成两步验证以完成登录。
@@ -120,9 +121,11 @@ AJAX分配角色,AJAX分配角色
 菜单不存在,"Menu does not exist"
 <var>title</var>,<var>title</var>
 <var>tip</var>,<var>tip</var>
-"Toggle light/dark mode","Toggle light/dark mode"
+主题模式,"Theme mode"
+跟随系统,"Follow system"
+明亮模式,"Light Mode"
+暗黑模式,"Dark Mode"
 "搜索 ...","Search ..."
-主题色系切换,"Theme color switch"
 头像,Avatar
 资料,Profile
 我的钱包,"My Wallet"
@@ -140,6 +143,7 @@ AJAX分配角色,AJAX分配角色
 删除!,Delete!
 删除成功,"Deletion successful"
 知道了,"Got it"
+主题模式切换失败,"Theme mode switch failed"
 网站维护,"Website Maintenance"
 网站正在维护中...,"Website is under maintenance..."
 请稍等片刻,"Please wait a moment"
@@ -317,8 +321,6 @@ Cms内容管理,"CMS Content Management"
 选择预设后，将自动配置所有相关布局选项,"After selecting a preset, all related layout options will be automatically configured"
 主题颜色,"Theme Color"
 选择主题模式,"Select Theme Mode"
-明亮模式,"Light Mode"
-暗黑模式,"Dark Mode"
 RTL模式,"RTL Mode"
 面板,Dashboard
 后台,Backend
@@ -393,6 +395,10 @@ RTL模式,"RTL Mode"
 "WelineFramework Admin","WelineFramework Admin"
 WelineFramework,WelineFramework
 记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
-用户不存在！,"User does not exist!"
+当前认证会话无效。,"The current authenticated session is invalid."
+认证设备服务不可用。,"Authenticated device service is unavailable."
 最近访问,"Recently Visited"
 访问最多,"Most Visited"
+"Toggle light/dark mode","Toggle light/dark mode"
+主题色系切换,"Theme color switch"
+用户不存在！,"User does not exist!"

@@ -83,9 +83,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         if (RequestLifecycleTrace::isEnabled()) {
             $dbTraceStart = microtime(true);
             try {
-                $dbTraceSql = $this->getSqlWithBounds($this->sql);
+                $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             } catch (\Throwable) {
-                $dbTraceSql = $this->sql;
+                $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->sql);
             }
         }
         try {
@@ -94,7 +94,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             if (Env::get('log.dev_sql.enabled', false)) {
                 $log_file = Env::get('log.dev_sql.file', 'dev_sql');
                 // Get SQL with bound values replaced
-                $sqlWithValues = $this->getSqlWithBounds($this->sql);
+                $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
                 Env::log($log_file, $sqlWithValues, 'QUERY', true, true, 0);
             }
         } catch (\Throwable $e) {
@@ -106,7 +106,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             if (Env::get('log.db.enabled', false)) {
                 $file = Env::get('log.db.file', 'db');
                 // Use compact standard format: [timestamp] [QUERY] source - SQL
-                $sqlWithValues = $this->getSqlWithBounds($this->sql);
+                $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
                 Env::log($file, $sqlWithValues, 'QUERY', true, true, 0);
             }
         } catch (\Throwable $e) {
@@ -118,11 +118,12 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         }
         # 调试环境信息
         if (Debug::target('pre_fetch')) {
+            $sensitiveDiagnostic = RequestLifecycleTrace::containsAuthenticationPersistence($this->sql);
             $msg = __('即将执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
-            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
-            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            $msg .= '$this->sql:' . RequestLifecycleTrace::redactDatabaseSql($this->sql) . PHP_EOL;
+            $msg .= '$this->bound_values:' . ($sensitiveDiagnostic ? '[REDACTED]' : json_encode($this->bound_values)) . PHP_EOL;
             Debug::target('pre_fetch', $msg);
         }
         // 防御：fetch_type 为空但 sql 已有时，根据 SQL 推断操作类型（避免链式操作中 query 被 reset/clear 后丢失类型）
@@ -290,7 +291,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             if (Env::get('log.dev_sql.enabled', false)) {
                 $log_file = Env::get('log.dev_sql.file', 'dev_sql');
                 // Get SQL with bound values replaced
-                $sqlWithValues = $this->getSqlWithBounds($this->sql);
+                $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
                 Env::log($log_file, $sqlWithValues, 'QUERY', true, true, 0);
             }
         } catch (\Throwable $e) {
@@ -302,7 +303,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             if (Env::get('log.db.enabled', false)) {
                 $file = Env::get('log.db.file', 'db');
                 // Use compact standard format: [timestamp] [QUERY] source - SQL
-                $sqlWithValues = $this->getSqlWithBounds($this->sql);
+                $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
                 Env::log($file, $sqlWithValues, 'QUERY', true, true, 0);
             }
         } catch (\Throwable $e) {
@@ -310,12 +311,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         }
         # 调试环境信息
         if (Debug::target('fetch')) {
+            $sensitiveDiagnostic = RequestLifecycleTrace::containsAuthenticationPersistence($this->sql);
             $msg = __('执行后信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
-            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
-            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
-            $msg .= __('查询结果:') . (is_string($result) ? $result : json_encode($result)) . PHP_EOL;
+            $msg .= '$this->sql:' . RequestLifecycleTrace::redactDatabaseSql($this->sql) . PHP_EOL;
+            $msg .= '$this->bound_values:' . ($sensitiveDiagnostic ? '[REDACTED]' : json_encode($this->bound_values)) . PHP_EOL;
+            $msg .= __('查询结果:') . ($sensitiveDiagnostic
+                    ? '[REDACTED]'
+                    : (is_string($result) ? $result : json_encode($result))) . PHP_EOL;
             Debug::target('fetch', $msg);
             exit(1);
         }

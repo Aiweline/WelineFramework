@@ -13,13 +13,41 @@ $welineThemeColorMode = $themeData['colorMode'] ?? 'default';
 $layoutType = $themeData['layoutType'] ?? null;
 $layoutOption = $themeData['layoutOption'] ?? null;
 $theme = $themeData['theme'] ?? null;
+$isDev = defined('DEV') && DEV;
+$themeAssetBaseUrl = $isDev ? '/Weline/Theme/view/theme/' : '/static/Weline/Theme/theme/';
+$themeAssetVersion = '20260810-color-mode';
 ?>
 <base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
 <w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
 <template>Weline_Theme::partials/head/site-favicon.phtml</template>
 </w:hook>
 <w:geo slot="head"/>
-<theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
+<script data-no-extract="true">
+    (function(root) {
+        var preference = 'system';
+        try {
+            var stored = window.localStorage.getItem('weline-theme');
+            if (stored === 'system' || stored === 'light' || stored === 'dark') preference = stored;
+        } catch (_) {}
+        var dark = preference === 'dark' || (preference === 'system' && window.matchMedia
+            && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var current = dark ? 'dark' : 'light';
+        root.setAttribute('data-theme-preference', preference);
+        root.setAttribute('data-theme', current);
+        root.setAttribute('data-bs-theme', current);
+        root.style.colorScheme = current;
+    })(document.documentElement);
+</script>
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/variables/_colors.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/variables/_typography.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/variables/_spacing.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/variables/_borders.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/variables/_shadows.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/variables/_auth.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/colors/_light.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/colors/_dark.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <link rel="stylesheet" href="<?= htmlspecialchars($this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css')) ?>" type="text/css">
 <?php
 if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
@@ -67,7 +95,6 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     }
 }
 
-$isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
 $modulesConfigUrl = $isDev
     ? '/Weline/Frontend/view/statics/base/weline.modules.js'
@@ -176,5 +203,6 @@ $this->setData('envConfig', $themeConfigPayload['env']);
         }
     })();
 </script>
-<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260727-smart-dropdown-v2"></script>
+<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/assets/css/theme.css?v=' . $themeAssetVersion) ?>" type="text/css">
+<script src="<?= htmlspecialchars($themeAssetBaseUrl . 'frontend/assets/js/theme.js?v=' . $themeAssetVersion) ?>"></script>
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

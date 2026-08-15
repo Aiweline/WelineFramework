@@ -148,6 +148,7 @@ body.wm-media-manager-open .file-target-preview * {
     }
 
     window.__wmMediaManagerOpenCount = window.__wmMediaManagerOpenCount || 0;
+    var ignoreBackdropUntil = 0;
 
     function markMediaManagerBodyOpen() {
         window.__wmMediaManagerOpenCount++;
@@ -165,6 +166,18 @@ body.wm-media-manager-open .file-target-preview * {
     var overlayElement = document.getElementById(targetId + '-modal-overlay');
     if (overlayElement && overlayElement.parentElement !== document.body) {
         document.body.appendChild(overlayElement);
+    }
+
+    function sameOriginConnector(connectorUrl) {
+        try {
+            var parsed = new URL(connectorUrl, window.location.href);
+            ['public_id', 'preview_width', 'preview_page_type'].forEach(function(key) {
+                parsed.searchParams.delete(key);
+            });
+            return window.location.origin + parsed.pathname + parsed.search + parsed.hash;
+        } catch (_error) {
+            return connectorUrl;
+        }
     }
 
     function openMediaManager(event) {
@@ -185,6 +198,7 @@ body.wm-media-manager-open .file-target-preview * {
         }
 
         overlay.classList.add('wm-show');
+        ignoreBackdropUntil = Date.now() + 400;
         if (window.__wmMediaManagerOpenCount === 0) {
             document.body.style.overflow = 'hidden';
         }
@@ -193,6 +207,8 @@ body.wm-media-manager-open .file-target-preview * {
         if (iframe) {
             var connectorUrl = iframe.getAttribute('data-connector');
             if (connectorUrl) {
+                connectorUrl = sameOriginConnector(connectorUrl);
+                iframe.setAttribute('data-connector', connectorUrl);
                 var targetEl = document.getElementById(targetId);
                 var currentValue = (targetEl && targetEl.value !== undefined) ? (targetEl.value || '') : '';
                 var sep = connectorUrl.indexOf('?') >= 0 ? '&' : '?';
@@ -225,6 +241,9 @@ body.wm-media-manager-open .file-target-preview * {
     if (overlayTrigger) {
         overlayTrigger.addEventListener('click', function(event) {
             if (event.target === overlayTrigger) {
+                if (Date.now() < ignoreBackdropUntil) {
+                    return;
+                }
                 closeMediaManager();
             }
         });

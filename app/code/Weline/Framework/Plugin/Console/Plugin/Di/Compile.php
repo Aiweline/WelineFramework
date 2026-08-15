@@ -72,7 +72,7 @@ class Compile implements \Weline\Framework\Console\CommandInterface
         $this->printing->printing(__('编译开始...'));
         $this->printing->printing(__('清除旧编译内容...'));
         if (!is_dir(Env::path_framework_generated_code)) {
-            mkdir(Env::path_framework_generated_code, 755, true);
+            mkdir(Env::path_framework_generated_code, 0755, true);
         } else {
             $this->printing->printing('编译目录扫描...', '系统');
             $files = scandir(Env::path_framework_generated_code);

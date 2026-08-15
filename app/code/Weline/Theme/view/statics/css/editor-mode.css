@@ -9,6 +9,29 @@
    编辑模式基础样式
    ======================================== */
 body.editor-mode {
+    /* The iframe receives the storefront contract; editor chrome only aliases it. */
+    --editor-mode-surface: var(--weline-theme-surface);
+    --editor-mode-surface-subtle: var(--weline-theme-surface-subtle);
+    --editor-mode-surface-muted: var(--weline-theme-surface-muted);
+    --editor-mode-text: var(--weline-theme-text);
+    --editor-mode-text-secondary: var(--weline-theme-text-secondary);
+    --editor-mode-border: var(--weline-theme-border-color);
+    --editor-mode-primary: var(--weline-theme-primary);
+    --editor-mode-primary-hover: var(--weline-theme-primary-hover);
+    --editor-mode-primary-subtle: var(--weline-theme-primary-subtle);
+    --editor-mode-on-primary: var(--weline-theme-on-primary);
+    --editor-mode-success: var(--weline-theme-success);
+    --editor-mode-warning: var(--weline-theme-warning);
+    --editor-mode-danger: var(--weline-theme-danger);
+    --editor-mode-shadow: var(--weline-theme-shadow-lg);
+    --editor-mode-selection: var(--editor-mode-primary);
+    --editor-mode-selection-hover: var(--editor-mode-primary-hover);
+    --editor-mode-selection-active: var(--editor-mode-success);
+    --editor-mode-selection-invalid: var(--editor-mode-danger);
+    --editor-mode-selection-subtle: var(--editor-mode-primary-subtle);
+    --editor-mode-selection-active-subtle: var(--weline-theme-success-subtle);
+    --editor-mode-selection-gradient: linear-gradient(135deg, var(--editor-mode-selection) 0%, var(--editor-mode-selection-hover) 100%);
+    --editor-mode-selection-shadow: var(--weline-theme-focus-ring);
     /* 防止选中文字干扰编辑 */
     -webkit-user-select: none;
     user-select: none;
@@ -44,11 +67,11 @@ body.editor-mode [data-editor-interactive] {
     gap: 10px;
     max-width: min(520px, calc(100vw - 32px));
     padding: 10px 12px;
-    color: #f8fafc;
-    background: rgba(15, 23, 42, 0.96);
-    border: 1px solid rgba(148, 163, 184, 0.34);
+    color: var(--editor-mode-text);
+    background: var(--editor-mode-surface);
+    border: 1px solid var(--editor-mode-border);
     border-radius: 12px;
-    box-shadow: 0 16px 40px rgba(2, 6, 23, 0.34);
+    box-shadow: var(--editor-mode-shadow);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     pointer-events: auto;
@@ -62,8 +85,8 @@ body.editor-mode [data-editor-interactive] {
     justify-content: center;
     width: 34px;
     height: 34px;
-    color: #bfdbfe;
-    background: rgba(37, 99, 235, 0.28);
+    color: var(--editor-mode-primary);
+    background: var(--editor-mode-primary-subtle);
     border-radius: 9px;
 }
 
@@ -74,14 +97,14 @@ body.editor-mode [data-editor-interactive] {
 }
 
 .theme-preview-mode-notice__copy strong {
-    color: #f8fafc;
+    color: var(--editor-mode-text);
     font-size: 13px;
     font-weight: 700;
     line-height: 1.3;
 }
 
 .theme-preview-mode-notice__copy small {
-    color: #cbd5e1;
+    color: var(--editor-mode-text-secondary);
     font-size: 11px;
     line-height: 1.35;
 }
@@ -94,8 +117,8 @@ body.editor-mode [data-editor-interactive] {
     gap: 5px;
     min-height: 34px;
     padding: 0 11px;
-    color: #fff !important;
-    background: #2563eb;
+    color: var(--editor-mode-on-primary) !important;
+    background: var(--editor-mode-primary);
     border-radius: 9px;
     font-size: 12px;
     font-weight: 700;
@@ -104,13 +127,13 @@ body.editor-mode [data-editor-interactive] {
 }
 
 .theme-preview-mode-notice__exit:hover {
-    color: #fff !important;
-    background: #1d4ed8;
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.32);
+    color: var(--editor-mode-on-primary) !important;
+    background: var(--editor-mode-primary-hover);
+    box-shadow: var(--editor-mode-shadow);
 }
 
 .theme-preview-mode-notice__exit:focus-visible {
-    outline: 3px solid rgba(147, 197, 253, 0.9);
+    outline: 3px solid var(--editor-mode-primary);
     outline-offset: 2px;
 }
 
@@ -150,9 +173,10 @@ body.editor-mode [data-wslot] {
     transition: outline 0.2s ease;
 }
 
+/* Selection/drag affordances are semantic editor tokens, independent of page chrome. */
 /* 普通子插槽 hover - 仅显示虚线 */
 body.editor-mode [data-wslot]:hover {
-    outline-color: #6366f1;
+    outline-color: var(--editor-mode-selection);
 }
 
 /* 整体 header/footer 区域 - 使用 box-shadow 模拟内边框 */
@@ -165,28 +189,28 @@ body.editor-mode footer[data-wslot="footer"] {
 
 body.editor-mode header[data-wslot="header"]:hover,
 body.editor-mode footer[data-wslot="footer"]:hover {
-    box-shadow: inset 0 0 0 3px #6366f1;
+    box-shadow: inset 0 0 0 3px var(--editor-mode-selection);
 }
 
 body.editor-mode header[data-wslot="header"].slot-active,
 body.editor-mode footer[data-wslot="footer"].slot-active {
-    box-shadow: inset 0 0 0 3px #10b981;
+    box-shadow: inset 0 0 0 3px var(--editor-mode-selection-active);
 }
 
 /* 拖拽状态 */
 body.editor-mode [data-wslot].drag-over {
-    outline-color: #10b981;
+    outline-color: var(--editor-mode-selection-active);
     outline-style: solid;
 }
 
 body.editor-mode [data-wslot].drag-invalid {
-    outline-color: #ef4444;
+    outline-color: var(--editor-mode-selection-invalid);
     outline-style: solid;
 }
 
 /* 选中状态 */
 body.editor-mode [data-wslot].slot-active {
-    outline-color: #10b981;
+    outline-color: var(--editor-mode-selection-active);
     outline-style: solid;
 }
 
@@ -211,21 +235,21 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
     align-items: center;
     gap: 4px;
     padding: 4px 10px;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: #fff;
+    background: var(--editor-mode-selection-gradient);
+    color: var(--editor-mode-on-primary);
     font-size: 11px;
     font-weight: 600;
     border: none;
     border-radius: 4px 0 0 4px;
     cursor: pointer;
     white-space: nowrap;
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    box-shadow: var(--editor-mode-selection-shadow);
     pointer-events: auto !important;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .slot-select-btn:hover {
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+    box-shadow: var(--editor-mode-selection-shadow);
 }
 
 .slot-select-btn:active {
@@ -246,19 +270,19 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
     width: 24px;
     height: 24px;
     padding: 0;
-    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
-    color: #fff;
+    background: var(--editor-mode-selection-gradient);
+    color: var(--editor-mode-on-primary);
     border: none;
     border-radius: 0 4px 4px 0;
     cursor: pointer;
     pointer-events: auto !important;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+    box-shadow: var(--editor-mode-selection-shadow);
     transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .slot-info-btn:hover {
-    background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.5);
+    background: var(--editor-mode-selection-gradient);
+    box-shadow: var(--editor-mode-selection-shadow);
 }
 
 .slot-info-btn svg {
@@ -275,15 +299,15 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
     right: 0;
     min-width: 220px;
     max-width: 300px;
-    background: #fff;
+    background: var(--editor-mode-surface);
     border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--editor-mode-shadow);
     padding: 12px;
     z-index: 10001;
     pointer-events: auto !important;
     font-size: 12px;
     line-height: 1.5;
-    color: #334155;
+    color: var(--editor-mode-text-secondary);
     animation: sic-fadein 0.15s ease;
 }
 
@@ -299,18 +323,18 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
     gap: 6px;
     margin-bottom: 8px;
     padding-bottom: 8px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--editor-mode-border);
 }
 
 .sic-header strong {
     font-size: 13px;
-    color: #1e293b;
+    color: var(--editor-mode-text);
 }
 
 .sic-header code {
     font-size: 10px;
-    background: #f1f5f9;
-    color: #64748b;
+    background: var(--editor-mode-surface-subtle);
+    color: var(--editor-mode-text-secondary);
     padding: 1px 5px;
     border-radius: 3px;
     font-family: monospace;
@@ -330,13 +354,13 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
 
 .sic-label {
     flex-shrink: 0;
-    color: #94a3b8;
+    color: var(--editor-mode-text-secondary);
     font-size: 11px;
     min-width: 32px;
 }
 
 .sic-value {
-    color: #475569;
+    color: var(--editor-mode-text-secondary);
     font-size: 11px;
 }
 
@@ -353,18 +377,18 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
 }
 
 .sic-badge-exclusive {
-    background: #fef3c7;
-    color: #b45309;
+    background: var(--weline-theme-warning-subtle);
+    color: var(--editor-mode-warning);
 }
 
 .sic-badge-multiple {
-    background: #d1fae5;
-    color: #047857;
+    background: var(--weline-theme-success-subtle);
+    color: var(--editor-mode-success);
 }
 
 .sic-badge-single {
-    background: #e0e7ff;
-    color: #4338ca;
+    background: var(--editor-mode-primary-subtle);
+    color: var(--editor-mode-primary);
 }
 
 /* 标签列表 */
@@ -377,16 +401,16 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
 .sic-tag {
     display: inline-block;
     padding: 1px 6px;
-    background: #f1f5f9;
-    color: #475569;
+    background: var(--editor-mode-surface-subtle);
+    color: var(--editor-mode-text-secondary);
     border-radius: 3px;
     font-size: 10px;
     font-family: monospace;
 }
 
 .sic-tag-all {
-    background: #dbeafe;
-    color: #2563eb;
+    background: var(--editor-mode-primary-subtle);
+    color: var(--editor-mode-primary);
 }
 
 /* ========================================
@@ -397,8 +421,8 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
 }
 
 @keyframes slot-pulse {
-    0%, 100% { outline-color: #6366f1; }
-    50% { outline-color: #10b981; outline-width: 4px; }
+    0%, 100% { outline-color: var(--editor-mode-selection); }
+    50% { outline-color: var(--editor-mode-selection-active); outline-width: 4px; }
 }
 
 /* ========================================
@@ -409,8 +433,8 @@ body.editor-mode [data-wslot]::before {
     position: absolute;
     top: 2px;
     left: 2px;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: #fff;
+    background: var(--editor-mode-selection-gradient);
+    color: var(--editor-mode-on-primary);
     font-size: 10px;
     font-weight: 600;
     padding: 3px 10px;
@@ -421,7 +445,7 @@ body.editor-mode [data-wslot]::before {
     pointer-events: none;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+    box-shadow: var(--editor-mode-selection-shadow);
 }
 
 body.editor-mode [data-wslot]:hover::before,
@@ -439,10 +463,10 @@ body.editor-mode [data-wslot].drag-over::before {
     justify-content: center;
     min-height: 120px;
     padding: 30px 20px;
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 2px dashed #cbd5e1;
+    background: var(--editor-mode-surface-subtle);
+    border: 2px dashed var(--editor-mode-border);
     border-radius: 12px;
-    color: #64748b;
+    color: var(--editor-mode-text-secondary);
     text-align: center;
     gap: 8px;
 }
@@ -463,7 +487,7 @@ body.editor-mode [data-wslot].drag-over::before {
 .slot-placeholder .placeholder-hint,
 .slot-placeholder > small {
     font-size: 12px;
-    color: #9ca3af;
+    color: var(--editor-mode-text-secondary);
     opacity: 0.8;
 }
 
@@ -482,9 +506,9 @@ body.editor-mode .slot-placeholder {
 }
 
 body.editor-mode .slot-placeholder:hover {
-    border-color: #6366f1;
-    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-    color: #4f46e5;
+    border-color: var(--editor-mode-selection);
+    background: var(--editor-mode-selection-subtle);
+    color: var(--editor-mode-selection);
 }
 
 /* ========================================
@@ -512,28 +536,28 @@ body.editor-mode .slot-placeholder:hover {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #6366f1;
+    background: var(--editor-mode-selection);
     flex-shrink: 0;
-    box-shadow: 0 0 6px rgba(99, 102, 241, 0.6);
+    box-shadow: var(--editor-mode-selection-shadow);
 }
 
 .editor-insert-line {
     flex: 1;
     height: 3px;
-    background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #6366f1 100%);
+    background: var(--editor-mode-selection);
     border-radius: 2px;
-    box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+    box-shadow: var(--editor-mode-selection-shadow);
 }
 
 /* 空插槽整体高亮（整块 footer/header 不叠加背景，避免深色底部/顶部被盖成浅色） */
 body.editor-mode [data-wslot].editor-drop-empty {
-    outline-color: #10b981;
+    outline-color: var(--editor-mode-selection-active);
     outline-style: dashed;
     outline-width: 3px;
 }
 /* 仅对非整块区域插槽叠加浅绿高亮；footer/header 不设 background，保留主题深色 */
 body.editor-mode [data-wslot].editor-drop-empty:not([data-wslot="footer"]):not([data-wslot="header"]) {
-    background-color: rgba(16, 185, 129, 0.05);
+    background-color: var(--editor-mode-selection-active-subtle);
 }
 
 /* 响应式 */

@@ -11,12 +11,12 @@
  * @var \Weline\Framework\View\Template $this
  */
 
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
 $meta = $this->getData('meta') ?? [];
 $extraClass = $meta['class'] ?? '';
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="backend"<?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme-area="backend" <?= $themeConfig->getThemeHtmlAttributes() ?><?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
 <head>
     <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
     <w:template>Weline_Admin::common/head.phtml</w:template>
@@ -28,8 +28,8 @@ $extraClass = $meta['class'] ?? '';
     body {
         margin: 0;
         padding: 0;
-        background-color: var(--backend-color-bg-primary, #fff);
-        color: var(--backend-color-text-primary, #212529);
+        background-color: var(--backend-theme-surface);
+        color: var(--backend-theme-text);
     }
 
     .backend-blank-content {

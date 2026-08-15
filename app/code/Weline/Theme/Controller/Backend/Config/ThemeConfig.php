@@ -329,30 +329,44 @@ class ThemeConfig extends BackendController
      */
     public function postSyncThemeMode()
     {
-        $mode = $this->request->getPost('mode');
-        if (!in_array($mode, ['light', 'dark'])) {
-             return $this->fetchJson(['code' => 400, 'msg' => __('Invalid mode')]);
+        $rawMode = $this->request->getPost('mode');
+        if (!is_string($rawMode)) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('主题模式无效。')]);
+        }
+        $mode = strtolower(trim($rawMode));
+        if (!in_array($mode, ['system', 'light', 'dark'], true)) {
+             return $this->fetchJson(['code' => 400, 'msg' => __('主题模式无效：%{1}', $mode)]);
         }
 
         try {
             $themeConfigBlock = ObjectManager::getInstance(BackendThemeConfigInterface::class);
             $themeConfigBlock->reloadForCurrentUser();
 
-            // 更新 theme-mode-switch
-            $themeConfigBlock->setThemeConfig('theme-mode-switch', $mode);
-
-            // 更新 layouts 相关配置 (仿照 app.js 逻辑)
+            // Normalize the complete data map once so the legacy endpoint has
+            // the same persistence contract as the current settings endpoint.
             $layouts = $themeConfigBlock->getThemeConfig('layouts') ?: [];
-            $layouts['data-topbar'] = $mode;
-            $layouts['data-sidebar'] = $mode;
-            $layouts['data-theme-mode'] = $mode;
-            $layouts['data-layout-mode'] = $mode;
-            
-            $themeConfigBlock->setThemeConfig('layouts', $layouts);
+            if (!is_array($layouts)) {
+                $layouts = [];
+            }
+            $layouts['data-theme-preference'] = $mode;
+            if ($mode === 'light' || $mode === 'dark') {
+                $layouts['data-topbar'] = $mode;
+                $layouts['data-sidebar'] = $mode;
+                $layouts['data-theme-mode'] = $mode;
+                $layouts['data-layout-mode'] = $mode;
+            } else {
+                unset($layouts['data-topbar'], $layouts['data-sidebar'], $layouts['data-theme-mode'], $layouts['data-layout-mode']);
+            }
+            $themeConfigBlock->setThemeConfig([
+                'theme-mode-switch' => $mode,
+                'dark-mode-switch' => $mode === 'dark',
+                'light-mode-switch' => $mode === 'light',
+                'layouts' => $layouts,
+            ]);
 
             return $this->fetchJson(['code' => 200, 'msg' => __('同步成功')]);
         } catch (\Exception $e) {
-            return $this->fetchJson(['code' => 500, 'msg' => __('Sync failed: ') . $e->getMessage()]);
+            return $this->fetchJson(['code' => 500, 'msg' => __('主题模式切换失败')]);
         }
     }
 

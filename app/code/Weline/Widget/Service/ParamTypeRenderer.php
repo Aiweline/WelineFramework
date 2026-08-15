@@ -16,6 +16,7 @@ use Weline\Widget\Ui\ParamType\ImageType;
 use Weline\Widget\Ui\ParamType\MediaImageType;
 use Weline\Widget\Ui\ParamType\NumberType;
 use Weline\Widget\Ui\ParamType\RangeType;
+use Weline\Widget\Ui\ParamType\QuerySelectType;
 use Weline\Widget\Ui\ParamType\SelectType;
 use Weline\Widget\Ui\ParamType\StringType;
 use Weline\Widget\Ui\ParamType\TextareaType;
@@ -57,6 +58,7 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         'range'    => RangeType::class,
         'slider'   => RangeType::class,
         'icon'     => IconType::class,
+        'query_select' => QuerySelectType::class,
     ];
 
     /**

@@ -36,6 +36,17 @@ final class AdminControllerBridge
             if (!method_exists($controller, $candidate)) {
                 continue;
             }
+
+            // fetchJson() throws ResponseTerminateException when Context meta.type=request
+            // (query-bin / HTTP fibers). Temporarily mark the context as a bridge call so
+            // controller actions can return JSON bodies without terminating the outer request.
+            $context = \Weline\Framework\Context::getCurrent();
+            $previousMetaType = null;
+            if ($context !== null) {
+                $previousMetaType = $context->get('meta.type');
+                $context->set('meta.type', 'admin_bridge');
+            }
+
             try {
                 $response = $controller->{$candidate}();
             } catch (ResponseTerminateException $termination) {
@@ -44,6 +55,10 @@ final class AdminControllerBridge
                     throw $termination;
                 }
                 $response = $termination->getBody();
+            } finally {
+                if ($context !== null) {
+                    $context->set('meta.type', $previousMetaType);
+                }
             }
 
             if (is_string($response)) {

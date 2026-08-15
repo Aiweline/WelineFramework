@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Weline\Seo\Cron;
 
 use Weline\Framework\Cron\CronTaskInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoOptimizationExperiment;
 use Weline\Seo\Model\SeoOptimizationPolicy;
 use Weline\Seo\Service\OptimizationPolicyService;
 use Weline\Seo\Service\OptimizationTiming;
 use Weline\Seo\Service\SeoOptimizationQueueService;
+use Weline\Seo\Service\SeoSearchQueryHeatService;
+use Weline\Seo\Service\SeoWebsiteAccountBindingService;
 
 /** Hourly queue admission only; model work remains scheduler-owned. */
 final class SeoOptimizationSchedule implements CronTaskInterface
@@ -19,11 +22,17 @@ final class SeoOptimizationSchedule implements CronTaskInterface
         private readonly SeoOptimizationQueueService $queueService,
         private readonly SeoOptimizationExperiment $experimentModel,
         ?OptimizationTiming $timing = null,
+        ?SeoSearchQueryHeatService $queryHeat = null,
+        ?SeoWebsiteAccountBindingService $bindings = null,
     ) {
         $this->timing = $timing ?? new OptimizationTiming();
+        $this->queryHeat = $queryHeat ?? ObjectManager::getInstance(SeoSearchQueryHeatService::class);
+        $this->bindings = $bindings ?? ObjectManager::getInstance(SeoWebsiteAccountBindingService::class);
     }
 
     private readonly OptimizationTiming $timing;
+    private readonly SeoSearchQueryHeatService $queryHeat;
+    private readonly SeoWebsiteAccountBindingService $bindings;
 
     public function name(): string
     {
@@ -62,7 +71,8 @@ final class SeoOptimizationSchedule implements CronTaskInterface
                     $websiteId,
                     'pagebuilder_ai_site',
                     [],
-                    'daily-' . $now->format('Ymd')
+                    'daily-' . $now->format('Ymd'),
+                    ['trigger_source' => 'scheduler'],
                 );
                 $analysisQueued++;
             } catch (\Throwable $throwable) {
@@ -120,7 +130,30 @@ final class SeoOptimizationSchedule implements CronTaskInterface
     /** @return list<int> */
     private function websiteIds(): array
     {
-        return self::websiteIdsFromPolicies($this->policyService->persistedPolicies());
+        $ids = [];
+        foreach (self::websiteIdsFromPolicies($this->policyService->persistedPolicies()) as $id) {
+            $ids[$id] = $id;
+        }
+        try {
+            foreach ($this->queryHeat->listWebsiteIds() as $id) {
+                if ($id >= 0) {
+                    $ids[$id] = $id;
+                }
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            foreach ($this->bindings->getStatsAccounts() as $info) {
+                $id = self::websiteId($info['website_id'] ?? null);
+                if ($id !== null) {
+                    $ids[$id] = $id;
+                }
+            }
+        } catch (\Throwable) {
+        }
+        \ksort($ids, \SORT_NUMERIC);
+
+        return \array_values($ids);
     }
 
     /** @param list<array<string,mixed>> $policies @return list<int> */

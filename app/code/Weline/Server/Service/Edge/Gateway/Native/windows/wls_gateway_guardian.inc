@@ -1182,7 +1182,7 @@ static int wls_guardian_child_command(int argc, wchar_t **argv)
     };
     wchar_t home[WLS_PATH_CHARS];
     wchar_t run_directory[WLS_PATH_CHARS];
-    const wchar_t *values[sizeof(names) / sizeof(names[0])];
+    const wchar_t *values[sizeof(names) / sizeof(names[0])] = {NULL};
     HANDLE parent_process = NULL;
     HANDLE stop_event = NULL;
     HANDLE reload_event = NULL;
@@ -1194,7 +1194,6 @@ static int wls_guardian_child_command(int argc, wchar_t **argv)
     int result = 1;
     ZeroMemory(home, sizeof(home));
     ZeroMemory(run_directory, sizeof(run_directory));
-    ZeroMemory(values, sizeof(values));
     if (argc != 2 + (int)(sizeof(names) / sizeof(names[0]))
         || argv == NULL || wcscmp(argv[1], L"--guardian-child") != 0) {
         return 64;
@@ -1223,6 +1222,9 @@ static int wls_guardian_child_command(int argc, wchar_t **argv)
         || WaitForSingleObject(reload_event, 0U) != WAIT_TIMEOUT
         || WaitForSingleObject(ready_event, 0U) != WAIT_TIMEOUT
         || WaitForSingleObject(health_event, 0U) != WAIT_TIMEOUT) goto cleanup;
+    /* The fixed paths, authenticated Guardian parent and five exact event
+     * handles are the sole authority for platform-generation residue replay. */
+    InterlockedExchange(&wls_authenticated_platform_generation, 1);
     wls_guardian_child_parent_process = parent_process;
     wls_guardian_service_child_stop_event = stop_event;
     wls_guardian_service_child_reload_event = reload_event;
@@ -1237,6 +1239,7 @@ static int wls_guardian_child_command(int argc, wchar_t **argv)
     }
     result = wls_run_supervisor(home, run_directory);
 cleanup:
+    InterlockedExchange(&wls_authenticated_platform_generation, 0);
     InterlockedExchange(&wls_guardian_bridge_stop, 1);
     if (stop_event != NULL && stop_event != INVALID_HANDLE_VALUE) {
         (void)SetEvent(stop_event);

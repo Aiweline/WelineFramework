@@ -274,7 +274,7 @@ class SchemaRegistry
                 continue;
             }
 
-            $sql = $connector->buildAddIndexSql($tableName, [
+            $sql = $connector->buildAddIndexSql($connector->formatTableName($tableName), [
                 'name' => $indexName,
                 'columns' => array_values($columns),
                 'type' => $indexDef['type'] ?? TableInterface::index_type_KEY,

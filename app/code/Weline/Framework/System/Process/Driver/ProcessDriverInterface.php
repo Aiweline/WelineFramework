@@ -157,6 +157,21 @@ interface ProcessDriverInterface
      * @return array<int, string> pid => 命令行
      */
     public function getProcessCommandLines(array $pids): array;
+
+    /**
+     * 批量捕获显式进程名集合对应的 PID/父 PID/命令行拓扑。
+     *
+     * 实现必须在同一次平台观察中返回三项身份；失败时返回空数组，
+     * 由上层保持 fail closed。
+     *
+     * 可选 root PID 集合用于把平台查询限定到已观察的启动父进程及其直接子进程；
+     * 实现不得把无效 root 集合降级成全系统扫描。
+     *
+     * @param string[] $processNames
+     * @param int[] $rootPids
+     * @return array<int, array{pid: int, parent_pid: int, command_line: string}>
+     */
+    public function findProcessTopologyByNames(array $processNames, array $rootPids = []): array;
     
     /**
      * 通过进程名模式查找所有匹配的 PID

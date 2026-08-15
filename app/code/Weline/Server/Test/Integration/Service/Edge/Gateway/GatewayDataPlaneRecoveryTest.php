@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayCredentialStore;
 use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
+use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 
 /**
@@ -47,6 +48,13 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         if ((string)\getenv('WLS_RUN_GATEWAY_DATA_PLANE_INTEGRATION') !== '1') {
             self::markTestSkipped(
                 'Set WLS_RUN_GATEWAY_DATA_PLANE_INTEGRATION=1 for real gateway data-plane acceptance.',
+            );
+        }
+        if ($this->name() === 'testCurrentSourceGatewayHandlesOneMillionTenantBoundHttp2Requests'
+            && (string)\getenv('WLS_RUN_GATEWAY_MILLION_INTEGRATION') !== '1'
+        ) {
+            self::markTestSkipped(
+                'Set WLS_RUN_GATEWAY_MILLION_INTEGRATION=1 for the exact 1,000,000-request gate.',
             );
         }
         if (\PHP_OS_FAMILY === 'Windows'
@@ -264,6 +272,243 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         );
     }
 
+    public function testCurrentSourceGatewayHandlesOneMillionTenantBoundHttp2Requests(): void
+    {
+        $h2load = $this->which('h2load');
+        if ($h2load === '') {
+            self::markTestSkipped('h2load is required for the exact Gateway million-request gate.');
+        }
+
+        $initialStatus = $this->adminClient()->administratorStatus();
+        self::assertTrue($initialStatus['ok'], \json_encode($initialStatus));
+        $gatewayEpoch = (string)($initialStatus['payload']['epoch'] ?? '');
+        self::assertNotSame('', $gatewayEpoch);
+
+        $alpha = $this->createProjectFixture(
+            '123e4567-e89b-42d3-a456-4266141741a1',
+            'million-alpha.wls.test',
+            'million-alpha-project-marker',
+            'million-alpha-a',
+        );
+        $beta = $this->createProjectFixture(
+            '123e4567-e89b-42d3-a456-4266141741b2',
+            'million-beta.wls.test',
+            'million-beta-project-marker',
+            'million-beta-a',
+        );
+        $alphaClient = $this->enroll($alpha);
+        $betaClient = $this->enroll($beta);
+        $registrations = $this->registerConcurrently([
+            [$alphaClient, $alpha, $gatewayEpoch],
+            [$betaClient, $beta, $gatewayEpoch],
+        ]);
+        $this->waitForCommitted($alphaClient, $alpha['project_uuid'], $registrations[0]);
+        $this->waitForCommitted($betaClient, $beta['project_uuid'], $registrations[1]);
+
+        $beforeStatus = $this->adminClient()->administratorStatus();
+        self::assertTrue($beforeStatus['ok'], \json_encode($beforeStatus));
+        self::assertSame(
+            2,
+            $beforeStatus['payload']['route_counts']['ACTIVE'] ?? 0,
+            \json_encode($beforeStatus['payload'], JSON_UNESCAPED_SLASHES),
+        );
+        $nginxPidBefore = $this->nginxPid();
+        self::assertGreaterThan(0, $nginxPidBefore);
+        $routeGenerationBefore = (int)($beforeStatus['payload']['generation'] ?? 0);
+        self::assertGreaterThan(0, $routeGenerationBefore);
+
+        $this->assertMillionTenantRouteResponse($this->curlRoute($alpha['domain'], '--http2'), $alpha);
+        $this->assertMillionTenantRouteResponse($this->curlRoute($beta['domain'], '--http2'), $beta);
+        $alphaCounterBefore = $this->normalRequestCount($alpha);
+        $betaCounterBefore = $this->normalRequestCount($beta);
+
+        $alphaChunks = [];
+        $betaChunks = [];
+        $requestsPerChunk = 10_000;
+        $chunksPerTenant = 50;
+        $heartbeatDue = 0;
+        $loadStarted = \hrtime(true);
+        for ($chunk = 0; $chunk < $chunksPerTenant; $chunk++) {
+            if (\hrtime(true) >= $heartbeatDue) {
+                $this->refreshMillionTenantLease($alphaClient, $alpha, $gatewayEpoch);
+                $this->refreshMillionTenantLease($betaClient, $beta, $gatewayEpoch);
+                $heartbeatDue = \hrtime(true) + 8_000_000_000;
+            }
+            $alphaChunks[] = $this->runH2loadChunk(
+                $h2load,
+                (string)$alpha['domain'],
+                $requestsPerChunk,
+            );
+
+            if (\hrtime(true) >= $heartbeatDue) {
+                $this->refreshMillionTenantLease($alphaClient, $alpha, $gatewayEpoch);
+                $this->refreshMillionTenantLease($betaClient, $beta, $gatewayEpoch);
+                $heartbeatDue = \hrtime(true) + 8_000_000_000;
+            }
+            $betaChunks[] = $this->runH2loadChunk(
+                $h2load,
+                (string)$beta['domain'],
+                $requestsPerChunk,
+            );
+            self::assertSame(
+                $nginxPidBefore,
+                $this->nginxPid(),
+                'The shared Gateway Nginx PID changed during the million-request gate.',
+            );
+        }
+        $loadDurationSeconds = (\hrtime(true) - $loadStarted) / 1_000_000_000;
+
+        $alphaSummary = $this->summarizeH2loadChunks($alphaChunks);
+        $betaSummary = $this->summarizeH2loadChunks($betaChunks);
+        foreach ([$alphaSummary, $betaSummary] as $summary) {
+            self::assertSame(500_000, $summary['requested']);
+            self::assertSame(500_000, $summary['started']);
+            self::assertSame(500_000, $summary['done']);
+            self::assertSame(500_000, $summary['succeeded']);
+            self::assertSame(500_000, $summary['status_2xx']);
+            self::assertSame(0, $summary['failed']);
+            self::assertSame(0, $summary['errored']);
+            self::assertSame(0, $summary['timeout']);
+            self::assertSame(0, $summary['status_3xx']);
+            self::assertSame(0, $summary['status_4xx']);
+            self::assertSame(0, $summary['status_5xx']);
+        }
+        self::assertSame(
+            500_000,
+            $this->normalRequestCount($alpha) - $alphaCounterBefore,
+            'Alpha traffic did not remain bound to the exact alpha backend.',
+        );
+        self::assertSame(
+            500_000,
+            $this->normalRequestCount($beta) - $betaCounterBefore,
+            'Beta traffic did not remain bound to the exact beta backend.',
+        );
+
+        $this->assertMillionTenantRouteResponse($this->curlRoute($alpha['domain'], '--http2'), $alpha);
+        $this->assertMillionTenantRouteResponse($this->curlRoute($beta['domain'], '--http2'), $beta);
+        $afterStatus = $this->adminClient()->administratorStatus();
+        self::assertTrue($afterStatus['ok'], \json_encode($afterStatus));
+        self::assertSame($gatewayEpoch, (string)($afterStatus['payload']['epoch'] ?? ''));
+        self::assertSame(
+            $routeGenerationBefore,
+            (int)($afterStatus['payload']['generation'] ?? 0),
+            'The active Gateway route generation changed during the million-request gate.',
+        );
+        self::assertSame(
+            $nginxPidBefore,
+            $this->nginxPid(),
+            'The shared Gateway Nginx PID changed during the million-request gate.',
+        );
+        self::assertSame(
+            2,
+            $afterStatus['payload']['route_counts']['ACTIVE'] ?? 0,
+            \json_encode($afterStatus['payload'], JSON_UNESCAPED_SLASHES),
+        );
+
+        $requested = $alphaSummary['requested'] + $betaSummary['requested'];
+        $succeeded = $alphaSummary['succeeded'] + $betaSummary['succeeded'];
+        $failures = $alphaSummary['failed'] + $betaSummary['failed']
+            + $alphaSummary['errored'] + $betaSummary['errored']
+            + $alphaSummary['timeout'] + $betaSummary['timeout']
+            + $alphaSummary['status_3xx'] + $betaSummary['status_3xx']
+            + $alphaSummary['status_4xx'] + $betaSummary['status_4xx']
+            + $alphaSummary['status_5xx'] + $betaSummary['status_5xx'];
+        $qualityGatePassed = $requested === 1_000_000
+            && $succeeded === 1_000_000
+            && $failures === 0
+            && $this->nginxPid() === $nginxPidBefore
+            && (string)($afterStatus['payload']['epoch'] ?? '') === $gatewayEpoch
+            && (int)($afterStatus['payload']['generation'] ?? 0) === $routeGenerationBefore;
+        self::assertTrue($qualityGatePassed);
+
+        $serverRoot = \dirname(__DIR__, 5);
+        $report = [
+            'report_schema_version' => 1,
+            'generated_at' => \gmdate(DATE_ATOM),
+            'benchmark_target_surface' => 'public_edge',
+            'target_endpoint_role' => 'current_source_test_gateway',
+            'platform' => \PHP_OS_FAMILY,
+            'requested_requests' => $requested,
+            'requests' => $succeeded,
+            'status_codes' => ['200' => $succeeded],
+            'failures' => $failures,
+            'http_version_hits' => ['2' => $succeeded],
+            'duration_seconds' => \round($loadDurationSeconds, 6),
+            'qps' => $loadDurationSeconds > 0.0
+                ? \round($succeeded / $loadDurationSeconds, 3)
+                : 0.0,
+            'nginx_pid_before' => $nginxPidBefore,
+            'nginx_pid_after' => $this->nginxPid(),
+            'gateway_epoch_before' => $gatewayEpoch,
+            'gateway_epoch_after' => (string)($afterStatus['payload']['epoch'] ?? ''),
+            'route_generation_before' => $routeGenerationBefore,
+            'route_generation_after' => (int)($afterStatus['payload']['generation'] ?? 0),
+            'tenants' => [
+                'alpha' => $alphaSummary + [
+                    'domain' => $alpha['domain'],
+                    'project_uuid' => $alpha['project_uuid'],
+                    'backend_counter_delta' => $this->normalRequestCount($alpha)
+                        - $alphaCounterBefore - 1,
+                ],
+                'beta' => $betaSummary + [
+                    'domain' => $beta['domain'],
+                    'project_uuid' => $beta['project_uuid'],
+                    'backend_counter_delta' => $this->normalRequestCount($beta)
+                        - $betaCounterBefore - 1,
+                ],
+            ],
+            'current_source_sha256' => [
+                'controller' => (string)\hash_file(
+                    'sha256',
+                    $serverRoot . '/bin/wls_gateway_controller.php',
+                ),
+                'broker_source' => (string)\hash_file(
+                    'sha256',
+                    $serverRoot . '/Service/Edge/Gateway/Native/posix/wls_gateway_broker.c',
+                ),
+                'broker_binary' => (string)\hash_file('sha256', $this->broker),
+                'test' => (string)\hash_file('sha256', __FILE__),
+                'nginx_binary' => (string)\hash_file(
+                    'sha256',
+                    $this->home . '/slots/A/bin/nginx',
+                ),
+                'nginx_config' => (string)\hash_file(
+                    'sha256',
+                    $this->home . '/runtime/conf/nginx.conf',
+                ),
+            ],
+            'quality_gate' => [
+                'passed' => $qualityGatePassed,
+                'checks' => [
+                    'exact_request_completion' => $requested === 1_000_000
+                        && $succeeded === 1_000_000,
+                    'zero_failures' => $failures === 0,
+                    'all_http2' => $succeeded === 1_000_000,
+                    'tenant_backend_binding' => true,
+                    'nginx_pid_stable' => $this->nginxPid() === $nginxPidBefore,
+                    'gateway_epoch_stable'
+                        => (string)($afterStatus['payload']['epoch'] ?? '') === $gatewayEpoch,
+                    'route_generation_stable'
+                        => (int)($afterStatus['payload']['generation'] ?? 0)
+                            === $routeGenerationBefore,
+                ],
+            ],
+        ];
+        $reportDirectory = \dirname(__DIR__, 9) . '/var/log/wls';
+        if (!\is_dir($reportDirectory)) {
+            self::assertTrue(\mkdir($reportDirectory, 0775, true));
+        }
+        $reportPath = $reportDirectory . '/benchmark_report_'
+            . \gmdate('Ymd_His') . '_' . \bin2hex(\random_bytes(3))
+            . '_gateway-current-source_pid' . $nginxPidBefore . '.json';
+        $encodedReport = \json_encode(
+            $report,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ) . "\n";
+        self::assertSame(\strlen($encodedReport), \file_put_contents($reportPath, $encodedReport));
+        @\fwrite(\STDOUT, 'WLS_GATEWAY_MILLION_REPORT=' . $reportPath . "\n");
+    }
+
     public function testMultiProjectProtocolsAndOwnedProcessRecovery(): void
     {
         $initialStatus = $this->adminClient()->administratorStatus();
@@ -271,7 +516,10 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         self::assertSame('wls-edge/2', $initialStatus['payload']['protocol']);
         self::assertSame($this->httpPort, $initialStatus['payload']['public_http']);
         self::assertSame($this->httpsPort, $initialStatus['payload']['public_https']);
-        self::assertTrue($initialStatus['payload']['data_plane']['running']);
+        self::assertTrue(
+            $initialStatus['payload']['data_plane']['running'],
+            \json_encode($initialStatus['payload'], JSON_UNESCAPED_SLASHES),
+        );
         $gatewayEpoch = (string)$initialStatus['payload']['epoch'];
 
         $alpha = $this->createProjectFixture(
@@ -314,15 +562,32 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         );
         $acmeClient = $this->enroll($acme);
         $pendingCertificate = $this->registrationPayload($acme, $gatewayEpoch);
+        $pendingSourceDigest = \hash(
+            'sha256',
+            "wls-pending-certificate\0" . $acme['domain'],
+        );
         $pendingCertificate['routes'][0]['certificate'] = [
+            'state' => 'pending',
+            'valid' => false,
             'pending' => true,
-            'source_digest' => \hash(
+            'cert' => [],
+            'key' => [],
+            'chain' => null,
+            'source_digest' => $pendingSourceDigest,
+            'trust_profile' => 'test',
+            'provider' => 'none',
+            'material_class' => 'none',
+            'provenance_digest' => \hash(
                 'sha256',
-                'wls-pending-certificate' . "\0" . $acme['domain'],
+                "wls-inactive-certificate-provenance/1\0" . $acme['domain']
+                    . "\0pending\0" . $pendingSourceDigest . "\0" . 0
+                    . "\0test",
             ),
             'generation' => 0,
         ];
-        $pendingRegistration = $acmeClient->projectRequest(
+        $pendingCertificate = $this->sealRegistrationPayload($pendingCertificate);
+        $pendingRegistration = $this->projectMutationWithRetry(
+            $acmeClient,
             'register',
             $pendingCertificate,
         );
@@ -340,7 +605,10 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         );
         $challengeToken = 'WLS_ACME_' . \bin2hex(\random_bytes(8));
         $keyAuthorization = $challengeToken . '.' . \str_repeat('A', 43);
-        $challengeSync = $acmeClient->projectRequest('acme-challenge-sync', [
+        $challengeSync = $this->projectMutationWithRetry(
+            $acmeClient,
+            'acme-challenge-sync',
+            [
             'project_uuid' => $acme['project_uuid'],
             'challenge_generation' => 1,
             'challenges' => [[
@@ -375,7 +643,8 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             'sha256',
             $acme['project_uuid'] . ':project:' . $acme['project_generation'],
         );
-        $certificateReady = $acmeClient->projectRequest(
+        $certificateReady = $this->projectMutationWithRetry(
+            $acmeClient,
             'register',
             $this->registrationPayload($acme, $gatewayEpoch),
         );
@@ -392,7 +661,10 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             \strtolower($acme['certificate_fingerprint']),
             \strtolower($this->peerCertificateFingerprint($acme['domain'])),
         );
-        $challengeClear = $acmeClient->projectRequest('acme-challenge-sync', [
+        $challengeClear = $this->projectMutationWithRetry(
+            $acmeClient,
+            'acme-challenge-sync',
+            [
             'project_uuid' => $acme['project_uuid'],
             'challenge_generation' => 2,
             'challenges' => [],
@@ -464,7 +736,8 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         self::assertSame('New', $betaResumed['session_state'], $betaResumed['output']);
         $previousBetaFingerprint = $beta['certificate_fingerprint'];
         $beta = $this->rotateFixtureCertificate($beta);
-        $betaRotation = $betaClient->projectRequest(
+        $betaRotation = $this->projectMutationWithRetry(
+            $betaClient,
             'register',
             $this->registrationPayload($beta, $gatewayEpoch),
         );
@@ -523,50 +796,41 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             'wrong',
         );
         $wrongNonceClient = $this->enroll($wrongNonce);
-        $wrongNonceRegistration = $wrongNonceClient->projectRequest(
+        $wrongNonceRegistration = $this->projectMutationWithRetry(
+            $wrongNonceClient,
             'register',
             $this->registrationPayload($wrongNonce, $gatewayEpoch),
         );
-        self::assertTrue($wrongNonceRegistration['ok'], \json_encode($wrongNonceRegistration));
-        $this->waitForCommitted(
-            $wrongNonceClient,
-            $wrongNonce['project_uuid'],
-            (string)$wrongNonceRegistration['payload']['operation_id'],
+        self::assertFalse(
+            $wrongNonceRegistration['ok'],
+            \json_encode($wrongNonceRegistration),
+        );
+        self::assertSame(
+            'rejected',
+            $wrongNonceRegistration['error']['code'] ?? null,
+        );
+        self::assertSame(
+            'Registration backend identity attestation was rejected.',
+            $wrongNonceRegistration['error']['message'] ?? null,
         );
         $wrongNonceStatus = $this->adminClient()->administratorStatus();
         self::assertSame(
-            1,
+            0,
             $wrongNonceStatus['payload']['route_counts']['PENDING_BACKEND'] ?? 0,
             \json_encode($wrongNonceStatus['payload'], JSON_UNESCAPED_SLASHES),
         );
         $wrongNoncePublic = $this->curlRoute($wrongNonce['domain'], '--http1.1');
-        self::assertSame(503, $wrongNoncePublic['http_code'], $wrongNoncePublic['output']);
+        self::assertSame(421, $wrongNoncePublic['http_code'], $wrongNoncePublic['output']);
         self::assertStringNotContainsString(
             'wrong-nonce-project-marker',
             $wrongNoncePublic['body'],
         );
-        self::assertSame(
+        self::assertNotSame(
             \strtolower($wrongNonce['certificate_fingerprint']),
             \strtolower($this->peerCertificateFingerprint($wrongNonce['domain'])),
         );
         foreach ([$alpha, $beta] as $fixture) {
             self::assertSame(200, $this->curlRoute($fixture['domain'])['http_code']);
-        }
-        $wrongNonceUnregister = $wrongNonceClient->projectRequest('unregister', [
-            'project_uuid' => $wrongNonce['project_uuid'],
-            'instance_id' => $wrongNonce['instance_id'],
-            'instance_generation' => $wrongNonce['instance_generation'],
-            'master_epoch' => $wrongNonce['master_epoch'],
-            'launch_id' => $wrongNonce['launch_id'],
-        ]);
-        self::assertTrue($wrongNonceUnregister['ok'], \json_encode($wrongNonceUnregister));
-        $wrongNonceOperation = (string)($wrongNonceUnregister['payload']['operation_id'] ?? '');
-        if ($wrongNonceOperation !== '') {
-            $this->waitForCommitted(
-                $wrongNonceClient,
-                $wrongNonce['project_uuid'],
-                $wrongNonceOperation,
-            );
         }
 
         $alphaCountBefore = $this->normalRequestCount($alpha);
@@ -624,7 +888,8 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             'alpha-b',
             'alpha-project-marker',
         );
-        $standbyRegistration = $alphaClient->projectRequest(
+        $standbyRegistration = $this->projectMutationWithRetry(
+            $alphaClient,
             'register',
             $this->registrationPayload($alphaStandby, $gatewayEpoch),
         );
@@ -657,14 +922,24 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             $distributedInstanceIds,
             'A stateless project must distribute traffic only after both instances prove capability.',
         );
-        $drain = $alphaClient->projectRequest('drain', [
-            'project_uuid' => $alpha['project_uuid'],
-            'instance_id' => $alpha['instance_id'],
-            'instance_generation' => $alpha['instance_generation'],
-            'master_epoch' => $alpha['master_epoch'],
-            'launch_id' => $alpha['launch_id'],
-            'seconds' => 300,
-        ]);
+        $drain = $this->projectMutationWithRetry(
+            $alphaClient,
+            'drain',
+            [
+                'project_uuid' => $alpha['project_uuid'],
+                'instance_id' => $alpha['instance_id'],
+                'instance_generation' => $alpha['instance_generation'],
+                'master_epoch' => $alpha['master_epoch'],
+                'launch_id' => $alpha['launch_id'],
+                'gateway_epoch' => $gatewayEpoch,
+                'host_boot_id' => GatewayHostBootIdentity::current(),
+                'drain_operation_id' => GatewayHostManager::drainOperationId(
+                    $alpha,
+                    $alpha['instance_id'],
+                ),
+                'seconds' => 300,
+            ],
+        );
         self::assertTrue($drain['ok'], \json_encode($drain));
         $this->waitForCommitted(
             $alphaClient,
@@ -682,15 +957,22 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                 [$betaClient, $beta],
                 [$acmeClient, $acme],
             ] as [$client, $fixture]) {
-                $heartbeat = $client->projectRequest('heartbeat', [
-                    'project_uuid' => $fixture['project_uuid'],
-                    'project_generation' => $fixture['project_generation'],
-                    'instance_id' => $fixture['instance_id'],
-                    'instance_generation' => $fixture['instance_generation'],
-                    'instance_digest' => $fixture['instance_digest'],
-                    'master_epoch' => $fixture['master_epoch'],
-                    'launch_id' => $fixture['launch_id'],
-                ]);
+                $heartbeat = $this->projectMutationWithRetry(
+                    $client,
+                    'heartbeat',
+                    [
+                        'project_uuid' => $fixture['project_uuid'],
+                        'project_generation' => $fixture['project_generation'],
+                        'instance_id' => $fixture['instance_id'],
+                        'instance_generation' => $fixture['instance_generation'],
+                        'instance_digest' => (string)($this
+                            ->registrationPayload($fixture, $gatewayEpoch)['instance_digest'] ?? ''),
+                        'master_epoch' => $fixture['master_epoch'],
+                        'launch_id' => $fixture['launch_id'],
+                        'gateway_epoch' => $gatewayEpoch,
+                        'host_boot_id' => GatewayHostBootIdentity::current(),
+                    ],
+                );
                 self::assertTrue($heartbeat['ok'], \json_encode($heartbeat));
             }
             self::assertSame(200, $this->curlRoute($alpha['domain'])['http_code']);
@@ -705,28 +987,50 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             $leaseStatus['payload']['route_counts']['ACTIVE'] ?? 0,
             \json_encode($leaseStatus['payload'], JSON_UNESCAPED_SLASHES),
         );
-        $this->assertTenantBackendFailureDoesNotRestartGateway($gatewayEpoch);
+        $steadyLeaseFixtures = [
+            [$alphaClient, $alphaStandby],
+            [$betaClient, $beta],
+            [$acmeClient, $acme],
+        ];
+        $this->assertTenantBackendFailureDoesNotRestartGateway(
+            $gatewayEpoch,
+            $steadyLeaseFixtures,
+        );
 
-        if ($this->h3IsCurrentlyEnabled() && $this->curlSupportsHttp3()) {
+        $h3FaultInjection = $this->h3IsCurrentlyEnabled()
+            && $this->curlSupportsHttp3();
+        if ($h3FaultInjection || \PHP_OS_FAMILY === 'Darwin') {
             // The production Agent refreshes leases every 10 seconds. Mirror
-            // that behavior before a bounded Controller/H3 fault injection so
-            // the harness tests protocol isolation rather than fixture expiry.
-            foreach ([
-                [$alphaClient, $alphaStandby],
-                [$betaClient, $beta],
-                [$acmeClient, $acme],
-            ] as [$client, $fixture]) {
-                $heartbeat = $client->projectRequest('heartbeat', [
-                    'project_uuid' => $fixture['project_uuid'],
-                    'project_generation' => $fixture['project_generation'],
-                    'instance_id' => $fixture['instance_id'],
-                    'instance_generation' => $fixture['instance_generation'],
-                    'instance_digest' => $fixture['instance_digest'],
-                    'master_epoch' => $fixture['master_epoch'],
-                    'launch_id' => $fixture['launch_id'],
-                ]);
+            // that behavior before bounded Controller fault injection so the
+            // harness tests protocol/clock isolation rather than fixture expiry.
+            $leaseFixtures = $steadyLeaseFixtures;
+            $leaseCheckpointBefore = $this->durableLeaseMonotonicByInstance();
+            foreach ($leaseFixtures as [$client, $fixture]) {
+                $heartbeat = $this->projectMutationWithRetry(
+                    $client,
+                    'heartbeat',
+                    [
+                        'project_uuid' => $fixture['project_uuid'],
+                        'project_generation' => $fixture['project_generation'],
+                        'instance_id' => $fixture['instance_id'],
+                        'instance_generation' => $fixture['instance_generation'],
+                        'instance_digest' => (string)($this
+                            ->registrationPayload($fixture, $gatewayEpoch)['instance_digest'] ?? ''),
+                        'master_epoch' => $fixture['master_epoch'],
+                        'launch_id' => $fixture['launch_id'],
+                        'gateway_epoch' => $gatewayEpoch,
+                        'host_boot_id' => GatewayHostBootIdentity::current(),
+                    ],
+                );
                 self::assertTrue($heartbeat['ok'], \json_encode($heartbeat));
             }
+            $this->waitForDurableLeaseAdvance(
+                \array_column($leaseFixtures, 1),
+                $leaseCheckpointBefore,
+                8.0,
+            );
+        }
+        if ($h3FaultInjection) {
             $this->assertH3FailureIsolation($alpha['domain'], $beta['domain']);
         }
 
@@ -796,6 +1100,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
 
     private function assertTenantBackendFailureDoesNotRestartGateway(
         string $gatewayEpoch,
+        array $steadyLeaseFixtures,
     ): void {
         $fixture = $this->createProjectFixture(
             '123e4567-e89b-42d3-a456-426614174105',
@@ -804,7 +1109,8 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             'backend-down-a',
         );
         $client = $this->enroll($fixture);
-        $registration = $client->projectRequest(
+        $registration = $this->projectMutationWithRetry(
+            $client,
             'register',
             $this->registrationPayload($fixture, $gatewayEpoch),
         );
@@ -819,10 +1125,39 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         $nginxPid = $this->nginxPid();
         self::assertGreaterThan(0, $nginxPid);
         $this->stopBackend((int)$fixture['master_pid']);
-        $deadline = \microtime(true) + 17.0;
+        $heartbeatFixtures = [...$steadyLeaseFixtures, [$client, $fixture]];
+        // Production backend inspection runs every 60 seconds. Keep every
+        // exact lease alive while waiting through one complete interval so
+        // the assertion cannot depend on the Controller's prior probe phase
+        // or accidentally observe the separate 45-second lease expiry path.
+        $deadline = \microtime(true) + 67.0;
+        $heartbeatDue = \hrtime(true);
         $degradedObserved = false;
         do {
-            $status = $this->adminClient()->administratorStatus();
+            if (\hrtime(true) >= $heartbeatDue) {
+                foreach ($heartbeatFixtures as [$heartbeatClient, $heartbeatFixture]) {
+                    $heartbeat = $this->projectMutationWithRetry(
+                        $heartbeatClient,
+                        'heartbeat',
+                        [
+                            'project_uuid' => $heartbeatFixture['project_uuid'],
+                            'project_generation' => $heartbeatFixture['project_generation'],
+                            'instance_id' => $heartbeatFixture['instance_id'],
+                            'instance_generation' => $heartbeatFixture['instance_generation'],
+                            'instance_digest' => (string)($this
+                                ->registrationPayload($heartbeatFixture, $gatewayEpoch)
+                                    ['instance_digest'] ?? ''),
+                            'master_epoch' => $heartbeatFixture['master_epoch'],
+                            'launch_id' => $heartbeatFixture['launch_id'],
+                            'gateway_epoch' => $gatewayEpoch,
+                            'host_boot_id' => GatewayHostBootIdentity::current(),
+                        ],
+                    );
+                    self::assertTrue($heartbeat['ok'], \json_encode($heartbeat));
+                }
+                $heartbeatDue = \hrtime(true) + 8_000_000_000;
+            }
+            $status = $this->administratorStatusWithRateLimitRetry($deadline);
             self::assertTrue($status['ok'], \json_encode($status));
             self::assertTrue($status['payload']['data_plane']['running']);
             self::assertSame(
@@ -835,6 +1170,9 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             }
             self::assertSame(200, $this->curlRoute('alpha.wls.test')['http_code']);
             self::assertSame(200, $this->curlRoute('beta.wls.test')['http_code']);
+            if ($degradedObserved) {
+                break;
+            }
             \usleep(250000);
         } while (\microtime(true) < $deadline);
         self::assertTrue(
@@ -842,13 +1180,19 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             'The gateway did not distinguish the failed tenant route from a core data-plane outage.',
         );
 
-        $unregister = $client->projectRequest('unregister', [
-            'project_uuid' => $fixture['project_uuid'],
-            'instance_id' => $fixture['instance_id'],
-            'instance_generation' => $fixture['instance_generation'],
-            'master_epoch' => $fixture['master_epoch'],
-            'launch_id' => $fixture['launch_id'],
-        ]);
+        $unregister = $this->projectMutationWithRetry(
+            $client,
+            'unregister',
+            [
+                'project_uuid' => $fixture['project_uuid'],
+                'instance_id' => $fixture['instance_id'],
+                'instance_generation' => $fixture['instance_generation'],
+                'master_epoch' => $fixture['master_epoch'],
+                'launch_id' => $fixture['launch_id'],
+                'gateway_epoch' => $gatewayEpoch,
+                'host_boot_id' => GatewayHostBootIdentity::current(),
+            ],
+        );
         self::assertTrue($unregister['ok'], \json_encode($unregister));
         $operationId = (string)($unregister['payload']['operation_id'] ?? '');
         if ($operationId !== '') {
@@ -1094,20 +1438,63 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
     /** @param array<string,mixed> $fixture */
     private function enroll(array $fixture): GatewayClient
     {
+        $payload = [
+            'project_uuid' => $fixture['project_uuid'],
+            'project_root' => $fixture['project_root'],
+            'certificate_roots' => [
+                'project_ssl' => $fixture['certificate_root'],
+            ],
+            'allowed_domains' => [$fixture['domain']],
+            'capabilities' => [
+                'acme_http_01' => true,
+                'stateless' => true,
+                'shared_session' => false,
+            ],
+        ];
+        $wireFacts = $payload;
+        $wireFacts['project_root'] = (string)\realpath(
+            (string)$payload['project_root'],
+        );
+        $wireFacts['certificate_roots']['project_ssl'] = (string)\realpath(
+            (string)$payload['certificate_roots']['project_ssl'],
+        );
+        \ksort($wireFacts['certificate_roots'], SORT_STRING);
+        \sort($wireFacts['allowed_domains'], SORT_STRING);
+        \ksort($wireFacts['capabilities'], SORT_STRING);
+        $payload['request_digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($wireFacts),
+        );
+        $payload['idempotency_key'] = \substr(\hash(
+            'sha256',
+            $payload['project_uuid'] . ':enroll:' . $payload['request_digest'],
+        ), 0, 40);
         try {
-            $response = $this->adminClient()->request('enroll', [
-                'project_uuid' => $fixture['project_uuid'],
-                'project_root' => $fixture['project_root'],
-                'certificate_roots' => [
-                    'project_ssl' => $fixture['certificate_root'],
-                ],
-                'allowed_domains' => [$fixture['domain']],
-                'capabilities' => [
-                    'acme_http_01' => true,
-                    'stateless' => true,
-                    'shared_session' => false,
-                ],
-            ]);
+            $deadline = \microtime(true) + 20.0;
+            do {
+                $response = $this->adminClient()->request('enroll', $payload);
+                if (($response['ok'] ?? false) === true) {
+                    break;
+                }
+                $code = (string)($response['error']['code'] ?? '');
+                $message = (string)($response['error']['message'] ?? '');
+                $publicationDeferred = \hash_equals('rejected', $code)
+                    && \hash_equals(
+                        'Gateway publication is active; retry_after=1.',
+                        $message,
+                    );
+                $rateDeferred = \hash_equals('rate_limited', $code)
+                    && \hash_equals(
+                        'Gateway request rate limit exceeded; retry_after=1.',
+                        $message,
+                    );
+                if ((!$publicationDeferred && !$rateDeferred)
+                    || \microtime(true) >= $deadline
+                ) {
+                    break;
+                }
+                \sleep(1);
+            } while (true);
         } catch (\Throwable $throwable) {
             self::fail(
                 $throwable->getMessage()
@@ -1147,10 +1534,32 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             self::assertGreaterThanOrEqual(0, $pid);
             if ($pid === 0) {
                 try {
-                    $response = $client->projectRequest(
-                        'register',
-                        $this->registrationPayload($fixture, $gatewayEpoch),
+                    $payload = $this->registrationPayload(
+                        $fixture,
+                        $gatewayEpoch,
                     );
+                    $retryDeadline = \microtime(true) + 15.0;
+                    do {
+                        $response = $client->projectRequest(
+                            'register',
+                            $payload,
+                        );
+                        $publicationDeferred = ($response['ok'] ?? false) !== true
+                            && \hash_equals(
+                                'rejected',
+                                (string)($response['error']['code'] ?? ''),
+                            )
+                            && \hash_equals(
+                                'Gateway publication is active; retry_after=1.',
+                                (string)($response['error']['message'] ?? ''),
+                            );
+                        if (!$publicationDeferred
+                            || \microtime(true) >= $retryDeadline
+                        ) {
+                            break;
+                        }
+                        \sleep(1);
+                    } while (true);
                     \file_put_contents(
                         $resultFile,
                         \json_encode($response, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
@@ -1191,11 +1600,15 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
     {
         $backends = [[
             'host' => '127.0.0.1',
-            'port' => $fixture['backend_port'],
+            'port' => (int)$fixture['backend_port'],
             'weight' => 1,
         ]];
         foreach ((array)($fixture['extra_backends'] ?? []) as $backend) {
-            $backends[] = $backend;
+            $backends[] = [
+                'host' => (string)($backend['host'] ?? ''),
+                'port' => (int)($backend['port'] ?? 0),
+                'weight' => (int)($backend['weight'] ?? 1),
+            ];
         }
         $capabilityEvidence = [
             'schema' => 'wls-stateless-capability/1',
@@ -1204,58 +1617,195 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             'instance_generation' => (int)$fixture['instance_generation'],
             'reason' => 'declared_stateless_runtime',
         ];
-        return [
-            'project_uuid' => $fixture['project_uuid'],
-            'project_root' => $fixture['project_root'],
-            'instance_id' => $fixture['instance_id'],
-            'project_generation' => $fixture['project_generation'],
-            'request_digest' => $fixture['project_digest'],
-            'idempotency_key' => $fixture['project_uuid'] . ':' . $fixture['instance_id']
-                . ':' . $fixture['project_generation'],
-            'instance_generation' => $fixture['instance_generation'],
-            'instance_digest' => $fixture['instance_digest'],
-            'master_epoch' => $fixture['master_epoch'],
-            'launch_id' => $fixture['launch_id'],
-            'gateway_epoch' => $gatewayEpoch,
-            'routes' => [[
-                'route_id' => $fixture['route_id'],
-                'domain' => $fixture['domain'],
-                'backends' => $backends,
-                'backend_identity' => [
-                    'project_uuid' => $fixture['project_uuid'],
-                    'instance_id' => $fixture['instance_id'],
-                    'generation' => $fixture['instance_generation'],
-                    'endpoint_file' => $fixture['endpoint_file'],
-                    'master_pid' => $fixture['master_pid'],
-                    'master_epoch' => $fixture['master_epoch'],
-                    'launch_id' => $fixture['launch_id'],
-                    'edge_capability_secret' => $fixture['edge_secret'],
-                    'edge_capability_digest' => $fixture['edge_digest'],
-                    'session_capability' => 'stateless',
-                    'session_capability_evidence' => $capabilityEvidence,
-                    'session_capability_evidence_digest' => \hash(
-                        'sha256',
-                        GatewayClient::canonicalJson($capabilityEvidence),
-                    ),
-                ],
-                'certificate' => [
-                    'cert' => [
-                        'root_alias' => 'project_ssl',
-                        'relative_path' => $fixture['certificate_relative_dir']
-                            . '/fullchain.pem',
-                    ],
-                    'key' => [
-                        'root_alias' => 'project_ssl',
-                        'relative_path' => $fixture['certificate_relative_dir']
-                            . '/privkey.pem',
-                    ],
-                    'source_digest' => $fixture['certificate_source_digest'],
-                    'generation' => $fixture['certificate_generation'],
-                ],
-            ]],
+        $identity = [
+            'schema' => 'wls-backend-listener-identity/2',
+            'project_uuid' => (string)$fixture['project_uuid'],
+            'instance_id' => (string)$fixture['instance_id'],
+            'generation' => (int)$fixture['instance_generation'],
+            'master_pid' => (int)$fixture['master_pid'],
+            'master_epoch' => (int)$fixture['master_epoch'],
+            'launch_id' => (string)$fixture['launch_id'],
+            'listener_lease_id' => \substr(\hash(
+                'sha256',
+                $fixture['project_uuid'] . "\0" . $fixture['instance_id'] . "\0"
+                    . $fixture['instance_generation'] . "\0" . $fixture['launch_id'],
+            ), 0, 32),
+            'edge_capability_digest' => (string)$fixture['edge_digest'],
+            'session_capability' => 'stateless',
+            'session_capability_evidence' => $capabilityEvidence,
+            'session_capability_evidence_digest' => \hash(
+                'sha256',
+                GatewayClient::canonicalJson($capabilityEvidence),
+            ),
+            'edge_capability_secret' => (string)$fixture['edge_secret'],
         ];
+        $publicIdentity = $identity;
+        unset($publicIdentity['edge_capability_secret']);
+        $identity['public_digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($publicIdentity),
+        );
+        $identity['digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($identity),
+        );
+        $sourceDigest = (string)$fixture['certificate_source_digest'];
+        $certificate = [
+            'state' => 'active',
+            'valid' => true,
+            'pending' => false,
+            'cert' => [
+                'root_alias' => 'project_ssl',
+                'relative_path' => $fixture['certificate_relative_dir']
+                    . '/fullchain.pem',
+            ],
+            'key' => [
+                'root_alias' => 'project_ssl',
+                'relative_path' => $fixture['certificate_relative_dir']
+                    . '/privkey.pem',
+            ],
+            'chain' => null,
+            'source_digest' => $sourceDigest,
+            'trust_profile' => 'test',
+            'provider' => 'self_signed',
+            'material_class' => 'self_signed',
+            'provenance_digest' => \hash(
+                'sha256',
+                "wls-certificate-provenance/1\0" . $fixture['domain'] . "\0"
+                    . $sourceDigest . "\0test\0self_signed\0self_signed",
+            ),
+            'generation' => (int)$fixture['certificate_generation'],
+        ];
+        return $this->sealRegistrationPayload([
+            'project_uuid' => (string)$fixture['project_uuid'],
+            'project_root' => (string)$fixture['project_root'],
+            'certificate_trust_profile' => 'test',
+            'instance_id' => (string)$fixture['instance_id'],
+            'project_generation' => (int)$fixture['project_generation'],
+            'master_epoch' => (int)$fixture['master_epoch'],
+            'launch_id' => (string)$fixture['launch_id'],
+            'gateway_epoch' => $gatewayEpoch,
+            'host_boot_id' => GatewayHostBootIdentity::current(),
+            'routes' => [[
+                'route_id' => \substr(\hash(
+                    'sha256',
+                    $fixture['project_uuid'] . "\0" . $fixture['domain'],
+                ), 0, 32),
+                'domain' => (string)$fixture['domain'],
+                'force_https' => true,
+                'force_root_to_www' => false,
+                'root_to_www_target' => '',
+                'backends' => $backends,
+                'backend_identity' => $identity,
+                'certificate' => $certificate,
+            ]],
+        ]);
     }
 
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function sealRegistrationPayload(array $payload): array
+    {
+        $routes = \array_values((array)($payload['routes'] ?? []));
+        \usort(
+            $routes,
+            static fn (array $left, array $right): int =>
+                (string)($left['domain'] ?? '') <=> (string)($right['domain'] ?? ''),
+        );
+        $projectRouteFacts = [];
+        $policyRouteFacts = [];
+        $backendSets = [];
+        $identity = null;
+        $trustProfile = null;
+        foreach ($routes as $route) {
+            $certificate = (array)($route['certificate'] ?? []);
+            $routeTrustProfile = (string)($certificate['trust_profile'] ?? '');
+            if ($trustProfile === null) {
+                $trustProfile = $routeTrustProfile;
+            } elseif (!\hash_equals($trustProfile, $routeTrustProfile)) {
+                throw new \RuntimeException(
+                    'The test registration must use one certificate trust profile.',
+                );
+            }
+            $projectRouteFacts[] = [
+                'route_id' => (string)($route['route_id'] ?? ''),
+                'domain' => (string)($route['domain'] ?? ''),
+                'certificate' => [
+                    'state' => (string)($certificate['state'] ?? ''),
+                    'source_digest' => (string)($certificate['source_digest'] ?? ''),
+                    'trust_profile' => $routeTrustProfile,
+                    'provider' => (string)($certificate['provider'] ?? ''),
+                    'material_class' => (string)($certificate['material_class'] ?? ''),
+                    'provenance_digest' => (string)($certificate['provenance_digest'] ?? ''),
+                    'generation' => (int)($certificate['generation'] ?? 0),
+                ],
+                'force_https' => (bool)($route['force_https'] ?? true),
+                'force_root_to_www' => (bool)($route['force_root_to_www'] ?? false),
+                'root_to_www_target' => (string)($route['root_to_www_target'] ?? ''),
+            ];
+            $policyRouteFacts[] = [
+                'route_id' => (string)($route['route_id'] ?? ''),
+                'domain' => (string)($route['domain'] ?? ''),
+                'force_https' => (bool)($route['force_https'] ?? true),
+                'force_root_to_www' => (bool)($route['force_root_to_www'] ?? false),
+                'root_to_www_target' => (string)($route['root_to_www_target'] ?? ''),
+            ];
+            $candidateIdentity = (array)($route['backend_identity'] ?? []);
+            if ($identity === null) {
+                $identity = $candidateIdentity;
+            } elseif (!\hash_equals(
+                GatewayClient::canonicalJson($identity),
+                GatewayClient::canonicalJson($candidateIdentity),
+            )) {
+                throw new \RuntimeException(
+                    'The test registration must use one backend identity.',
+                );
+            }
+            $backendSets[] = \array_values((array)($route['backends'] ?? []));
+        }
+        if ($routes === [] || !\is_array($identity) || $identity === []) {
+            throw new \RuntimeException('The test registration has no complete route closure.');
+        }
+        $projectUuid = (string)($payload['project_uuid'] ?? '');
+        $projectRoot = (string)($payload['project_root'] ?? '');
+        $instanceId = (string)($payload['instance_id'] ?? '');
+        $instanceGeneration = (int)($identity['generation'] ?? 0);
+        $requestDigest = \hash('sha256', GatewayClient::canonicalJson([
+            'project_uuid' => $projectUuid,
+            'project_root' => $projectRoot,
+            'backend_capability' => ['policy' => 'runtime_attested'],
+            'routes' => $projectRouteFacts,
+        ]));
+        $projectGeneration = (int)($payload['project_generation'] ?? 0);
+        return \array_replace($payload, [
+            'request_digest' => $requestDigest,
+            'idempotency_key' => \substr(\hash(
+                'sha256',
+                $projectUuid . ':desired:' . $projectGeneration . ':' . $requestDigest,
+            ), 0, 40),
+            'instance_generation' => $instanceGeneration,
+            'instance_digest' => \hash('sha256', GatewayClient::canonicalJson([
+                'project_uuid' => $projectUuid,
+                'instance_id' => $instanceId,
+                'instance_generation' => $instanceGeneration,
+                'backend_identity' => $identity,
+                'backends' => $backendSets,
+            ])),
+            'non_certificate_desired_digest' => \hash(
+                'sha256',
+                GatewayClient::canonicalJson([
+                    'project_uuid' => $projectUuid,
+                    'project_root' => $projectRoot,
+                    'certificate_trust_profile' => $trustProfile,
+                    'backend_capability' => ['policy' => 'runtime_attested'],
+                    'routes' => $policyRouteFacts,
+                ]),
+            ),
+            'routes' => $routes,
+        ]);
+    }
     private function waitForCommitted(
         GatewayClient $client,
         string $projectUuid,
@@ -1268,6 +1818,20 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                 'project_uuid' => $projectUuid,
                 'operation_id' => $operationId,
             ]);
+            if (($response['ok'] ?? false) !== true
+                && \hash_equals(
+                    'rate_limited',
+                    (string)($response['error']['code'] ?? ''),
+                )
+                && \hash_equals(
+                    'Gateway request rate limit exceeded; retry_after=1.',
+                    (string)($response['error']['message'] ?? ''),
+                )
+                && \microtime(true) < $deadline
+            ) {
+                \sleep(1);
+                continue;
+            }
             self::assertTrue($response['ok'], \json_encode($response));
             $last = (array)$response['payload'];
             if (($last['state'] ?? '') === 'COMMITTED') {
@@ -1297,6 +1861,72 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             \usleep(100_000);
         } while (\microtime(true) < $deadline);
         self::fail('Gateway operation did not commit: ' . \json_encode($last));
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function projectMutationWithRetry(
+        GatewayClient $client,
+        string $operation,
+        array $payload,
+    ): array {
+        $deadline = \microtime(true) + 20.0;
+        do {
+            $response = $client->projectRequest($operation, $payload);
+            if (($response['ok'] ?? false) === true) {
+                return $response;
+            }
+            $code = (string)($response['error']['code'] ?? '');
+            $message = (string)($response['error']['message'] ?? '');
+            $publicationDeferred = \hash_equals('rejected', $code)
+                && \hash_equals(
+                    'Gateway publication is active; retry_after=1.',
+                    $message,
+                );
+            $rateDeferred = \hash_equals('rate_limited', $code)
+                && \hash_equals(
+                    'Gateway request rate limit exceeded; retry_after=1.',
+                    $message,
+                );
+            $storageProbeDeferred = \hash_equals('rejected', $code)
+                && \hash_equals(
+                    'Gateway storage persistence proof is not fresh; '
+                        . 'persistent mutation is fail-closed until maintenance refreshes it.',
+                    $message,
+                );
+            if ((!$publicationDeferred && !$rateDeferred && !$storageProbeDeferred)
+                || \microtime(true) >= $deadline
+            ) {
+                return $response;
+            }
+            \sleep(1);
+        } while (true);
+    }
+
+    /** @return array<string,mixed> */
+    private function administratorStatusWithRateLimitRetry(float $deadline): array
+    {
+        do {
+            $response = $this->adminClient()->administratorStatus();
+            if (($response['ok'] ?? false) === true) {
+                return $response;
+            }
+            if (!\hash_equals(
+                    'rate_limited',
+                    (string)($response['error']['code'] ?? ''),
+                )
+                || !\hash_equals(
+                    'Gateway request rate limit exceeded; retry_after=1.',
+                    (string)($response['error']['message'] ?? ''),
+                )
+                || \microtime(true) >= $deadline
+            ) {
+                return $response;
+            }
+            \sleep(1);
+        } while (true);
     }
 
     private function adminClient(): GatewayClient
@@ -1707,8 +2337,18 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                     );
                     $domain = $domains[$iteration % \count($domains)];
                     $probe = $this->curlRoute($domain);
-                    self::assertSame(0, $probe['code'], $probe['output']);
-                    self::assertSame(200, $probe['http_code'], $probe['output']);
+                    $diagnostic = ($probe['code'] ?? -1) === 0
+                        && ($probe['http_code'] ?? 0) === 200
+                            ? $probe['output']
+                            : $this->wallClockLeaseFailureDiagnostic(
+                                $name,
+                                $offset,
+                                $iteration,
+                                $domain,
+                                $probe,
+                            );
+                    self::assertSame(0, $probe['code'], $diagnostic);
+                    self::assertSame(200, $probe['http_code'], $diagnostic);
                     $iteration++;
                     \usleep(150_000);
                 } while (\hrtime(true) < $deadline);
@@ -1732,6 +2372,184 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         foreach ($domains as $domain) {
             self::assertSame(200, $this->curlRoute($domain)['http_code']);
         }
+    }
+
+    /**
+     * @param array<string,mixed> $probe
+     */
+    private function wallClockLeaseFailureDiagnostic(
+        string $controller,
+        int $offset,
+        int $iteration,
+        string $domain,
+        array $probe,
+    ): string {
+        try {
+            $status = $this->adminClient()->administratorStatus();
+        } catch (\Throwable $throwable) {
+            $status = ['diagnostic_error' => $throwable->getMessage()];
+        }
+        try {
+            $state = $this->readGatewayState();
+        } catch (\Throwable $throwable) {
+            $state = ['diagnostic_error' => $throwable->getMessage()];
+        }
+        $routes = [];
+        foreach ((array)($state['routes'] ?? []) as $routeId => $route) {
+            if (!\is_array($route)) {
+                continue;
+            }
+            $instances = [];
+            foreach ((array)($route['instances'] ?? []) as $instanceId => $instance) {
+                if (!\is_array($instance)) {
+                    continue;
+                }
+                $instances[(string)$instanceId] = [
+                    'status' => $instance['status'] ?? null,
+                    'backend_healthy' => $instance['backend_healthy'] ?? null,
+                    'last_heartbeat' => $instance['last_heartbeat'] ?? null,
+                    'last_heartbeat_monotonic'
+                        => $instance['last_heartbeat_monotonic'] ?? null,
+                    'lease_boot_id' => $instance['lease_boot_id'] ?? null,
+                ];
+            }
+            $routes[(string)$routeId] = [
+                'domain' => $route['domain'] ?? null,
+                'status' => $route['status'] ?? null,
+                'instances' => $instances,
+            ];
+        }
+        return (string)\json_encode([
+            'controller' => $controller,
+            'wall_offset' => $offset,
+            'iteration' => $iteration,
+            'domain' => $domain,
+            'probe' => $probe,
+            'admin' => $status,
+            'state' => [
+                'health_state' => $state['health_state'] ?? null,
+                'ready' => $state['ready'] ?? null,
+                'recovery' => $state['recovery'] ?? null,
+                'generation' => $state['generation'] ?? null,
+                'active_config_generation' => $state['active_config_generation'] ?? null,
+                'routes' => $routes,
+            ],
+            'controller_log' => $this->processLog($controller),
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** @return array<string,float> */
+    private function durableLeaseMonotonicByInstance(): array
+    {
+        $readPayload = function (string $file): ?array {
+            $raw = @\file_get_contents($file);
+            if (!\is_string($raw) || $raw === '') {
+                return null;
+            }
+            try {
+                $envelope = \json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\Throwable) {
+                return null;
+            }
+            $payload = \is_array($envelope)
+                ? ($envelope['payload'] ?? null)
+                : null;
+            $sha256 = \is_array($envelope)
+                ? (string)($envelope['sha256'] ?? '')
+                : '';
+            return \is_array($payload)
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $sha256) === 1
+                && \hash_equals($sha256, \hash('sha256', $this->canonicalJson($payload)))
+                    ? $payload
+                    : null;
+        };
+        $record = static function (
+            array &$monotonic,
+            string $projectUuid,
+            string $instanceId,
+            mixed $heartbeat,
+        ): void {
+            if ($projectUuid === ''
+                || $instanceId === ''
+                || (!\is_int($heartbeat) && !\is_float($heartbeat))
+                || !\is_finite((float)$heartbeat)
+                || (float)$heartbeat <= 0.0
+            ) {
+                return;
+            }
+            $key = $projectUuid . "\0" . $instanceId;
+            $monotonic[$key] = \max(
+                $monotonic[$key] ?? 0.0,
+                (float)$heartbeat,
+            );
+        };
+        $monotonic = [];
+        $state = $readPayload(
+            $this->home . DIRECTORY_SEPARATOR . 'state/gateway-state.json',
+        );
+        foreach ((array)($state['instances'] ?? []) as $projectUuid => $instances) {
+            foreach ((array)$instances as $instanceId => $instance) {
+                if (\is_array($instance)) {
+                    $record(
+                        $monotonic,
+                        (string)$projectUuid,
+                        (string)$instanceId,
+                        $instance['last_heartbeat_monotonic'] ?? null,
+                    );
+                }
+            }
+        }
+        $checkpoint = $readPayload(
+            $this->home . DIRECTORY_SEPARATOR . 'state/lease-checkpoint.json',
+        );
+        foreach ((array)($checkpoint['instances'] ?? []) as $instance) {
+            if (!\is_array($instance)) {
+                continue;
+            }
+            $record(
+                $monotonic,
+                (string)($instance['project_uuid'] ?? ''),
+                (string)($instance['instance_id'] ?? ''),
+                $instance['last_heartbeat_monotonic'] ?? null,
+            );
+        }
+        return $monotonic;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $fixtures
+     * @param array<string,float> $before
+     */
+    private function waitForDurableLeaseAdvance(
+        array $fixtures,
+        array $before,
+        float $timeoutSeconds,
+    ): void {
+        $deadline = \hrtime(true) + (int)\ceil($timeoutSeconds * 1_000_000_000);
+        $current = [];
+        do {
+            $current = $this->durableLeaseMonotonicByInstance();
+            $advanced = true;
+            foreach ($fixtures as $fixture) {
+                $key = (string)($fixture['project_uuid'] ?? '')
+                    . "\0"
+                    . (string)($fixture['instance_id'] ?? '');
+                if (($current[$key] ?? 0.0) <= ($before[$key] ?? 0.0)) {
+                    $advanced = false;
+                    break;
+                }
+            }
+            if ($advanced) {
+                return;
+            }
+            \usleep(100_000);
+        } while (\hrtime(true) < $deadline);
+
+        self::fail(
+            'Gateway durable lease authority did not advance before Controller restart: '
+                . \json_encode($current, JSON_UNESCAPED_SLASHES)
+                . "\nController: " . $this->processLog('controller-primary'),
+        );
     }
 
     private function compileWallClockShim(): string
@@ -1822,19 +2640,23 @@ C;
             'SHADOW_VERIFIED',
         ] as $phase) {
             $this->stopProcess('controller-primary');
+            $state = $this->readGatewayState();
+            $transactionId = \bin2hex(\random_bytes(16));
             $candidate = '';
             if (\in_array($phase, ['PREPARED', 'SHADOW_VERIFIED'], true)) {
                 $candidate = $this->home . DIRECTORY_SEPARATOR . 'runtime/conf/candidate-'
-                    . \strtolower($phase) . '.conf';
+                    . (int)($state['active_config_generation'] ?? 0)
+                    . '-' . $transactionId . '.conf';
                 self::assertNotFalse(\copy($config, $candidate));
                 self::assertTrue(\chmod($candidate, 0600));
             }
-            $state = $this->readGatewayState();
             $payload = $this->publicationPayload(
                 $phase,
                 $state,
                 $candidate,
                 $candidate === '' ? '' : (string)\hash_file('sha256', $candidate),
+                '',
+                $transactionId,
             );
             $this->writePublicationEnvelope($publicationFile, $payload);
             $this->startController('controller-primary');
@@ -2076,6 +2898,200 @@ C;
             : 0;
     }
 
+    /**
+     * @param array<string,mixed> $fixture
+     * @param array{code:int,http_code:int,http_version:string,body:string,output:string} $response
+     */
+    private function assertMillionTenantRouteResponse(array $response, array $fixture): void
+    {
+        self::assertSame(0, $response['code'], $response['output']);
+        self::assertSame(200, $response['http_code'], $response['output']);
+        self::assertSame('2', $response['http_version'], $response['output']);
+        $body = \json_decode($response['body'], true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($fixture['marker'], $body['marker'] ?? null);
+        self::assertSame($fixture['project_uuid'], $body['project_uuid'] ?? null);
+        self::assertSame($fixture['instance_id'], $body['instance'] ?? null);
+    }
+
+    /** @param array<string,mixed> $fixture */
+    private function refreshMillionTenantLease(
+        GatewayClient $client,
+        array $fixture,
+        string $gatewayEpoch,
+    ): void {
+        $heartbeat = $this->projectMutationWithRetry(
+            $client,
+            'heartbeat',
+            [
+                'project_uuid' => $fixture['project_uuid'],
+                'project_generation' => $fixture['project_generation'],
+                'instance_id' => $fixture['instance_id'],
+                'instance_generation' => $fixture['instance_generation'],
+                'instance_digest' => (string)($this
+                    ->registrationPayload($fixture, $gatewayEpoch)['instance_digest'] ?? ''),
+                'master_epoch' => $fixture['master_epoch'],
+                'launch_id' => $fixture['launch_id'],
+                'gateway_epoch' => $gatewayEpoch,
+                'host_boot_id' => GatewayHostBootIdentity::current(),
+            ],
+        );
+        self::assertTrue($heartbeat['ok'], \json_encode($heartbeat));
+    }
+
+    /**
+     * @return array{
+     *   requested:int,
+     *   started:int,
+     *   done:int,
+     *   succeeded:int,
+     *   failed:int,
+     *   errored:int,
+     *   timeout:int,
+     *   status_2xx:int,
+     *   status_3xx:int,
+     *   status_4xx:int,
+     *   status_5xx:int,
+     *   duration_seconds:float,
+     *   qps:float,
+     *   output_sha256:string
+     * }
+     */
+    private function runH2loadChunk(string $h2load, string $domain, int $requests): array
+    {
+        $startedAt = \hrtime(true);
+        $result = $this->runCommand([
+            $h2load,
+            '--requests=' . $requests,
+            '--clients=4',
+            '--threads=2',
+            '--max-concurrent-streams=64',
+            '--connection-active-timeout=300s',
+            '--connection-inactivity-timeout=60s',
+            '--alpn-list=h2',
+            '--connect-to=127.0.0.1:' . $this->httpsPort,
+            '--sni=' . $domain,
+            '--header=accept-encoding: identity',
+            'https://' . $domain . ':' . $this->httpsPort . '/',
+        ]);
+        $durationSeconds = (\hrtime(true) - $startedAt) / 1_000_000_000;
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertStringContainsString('Application protocol: h2', $result['output']);
+
+        $integer = static fn (string $value): int => (int)\str_replace(',', '', $value);
+        self::assertSame(1, \preg_match(
+            '/requests:\s+([\d,]+)\s+total,\s+([\d,]+)\s+started,\s+'
+                . '([\d,]+)\s+done,\s+([\d,]+)\s+succeeded,\s+'
+                . '([\d,]+)\s+failed,\s+([\d,]+)\s+errored,\s+'
+                . '([\d,]+)\s+timeout/',
+            $result['output'],
+            $requestMatches,
+        ), $result['output']);
+        self::assertSame(1, \preg_match(
+            '/status codes:\s+([\d,]+)\s+2xx,\s+([\d,]+)\s+3xx,\s+'
+                . '([\d,]+)\s+4xx,\s+([\d,]+)\s+5xx/',
+            $result['output'],
+            $statusMatches,
+        ), $result['output']);
+
+        return [
+            'requested' => $requests,
+            'started' => $integer($requestMatches[2]),
+            'done' => $integer($requestMatches[3]),
+            'succeeded' => $integer($requestMatches[4]),
+            'failed' => $integer($requestMatches[5]),
+            'errored' => $integer($requestMatches[6]),
+            'timeout' => $integer($requestMatches[7]),
+            'status_2xx' => $integer($statusMatches[1]),
+            'status_3xx' => $integer($statusMatches[2]),
+            'status_4xx' => $integer($statusMatches[3]),
+            'status_5xx' => $integer($statusMatches[4]),
+            'duration_seconds' => $durationSeconds,
+            'qps' => $durationSeconds > 0.0 ? $requests / $durationSeconds : 0.0,
+            'output_sha256' => \hash('sha256', $result['output']),
+        ];
+    }
+
+    /**
+     * @param list<array{
+     *   requested:int,
+     *   started:int,
+     *   done:int,
+     *   succeeded:int,
+     *   failed:int,
+     *   errored:int,
+     *   timeout:int,
+     *   status_2xx:int,
+     *   status_3xx:int,
+     *   status_4xx:int,
+     *   status_5xx:int,
+     *   duration_seconds:float,
+     *   qps:float,
+     *   output_sha256:string
+     * }> $chunks
+     * @return array{
+     *   chunks:int,
+     *   requested:int,
+     *   started:int,
+     *   done:int,
+     *   succeeded:int,
+     *   failed:int,
+     *   errored:int,
+     *   timeout:int,
+     *   status_2xx:int,
+     *   status_3xx:int,
+     *   status_4xx:int,
+     *   status_5xx:int,
+     *   duration_seconds:float,
+     *   qps:float,
+     *   output_sha256:list<string>
+     * }
+     */
+    private function summarizeH2loadChunks(array $chunks): array
+    {
+        $summary = [
+            'chunks' => \count($chunks),
+            'requested' => 0,
+            'started' => 0,
+            'done' => 0,
+            'succeeded' => 0,
+            'failed' => 0,
+            'errored' => 0,
+            'timeout' => 0,
+            'status_2xx' => 0,
+            'status_3xx' => 0,
+            'status_4xx' => 0,
+            'status_5xx' => 0,
+            'duration_seconds' => 0.0,
+            'qps' => 0.0,
+            'output_sha256' => [],
+        ];
+        foreach ($chunks as $chunk) {
+            foreach ([
+                'requested',
+                'started',
+                'done',
+                'succeeded',
+                'failed',
+                'errored',
+                'timeout',
+                'status_2xx',
+                'status_3xx',
+                'status_4xx',
+                'status_5xx',
+            ] as $field) {
+                $summary[$field] += $chunk[$field];
+            }
+            $summary['duration_seconds'] += $chunk['duration_seconds'];
+            $summary['output_sha256'][] = $chunk['output_sha256'];
+        }
+        $summary['qps'] = $summary['duration_seconds'] > 0.0
+            ? $summary['succeeded'] / $summary['duration_seconds']
+            : 0.0;
+        $summary['duration_seconds'] = \round($summary['duration_seconds'], 6);
+        $summary['qps'] = \round($summary['qps'], 3);
+        return $summary;
+    }
+
     /** @param array<string,mixed> $fixture */
     private function normalRequestCount(array $fixture): int
     {
@@ -2149,6 +3165,23 @@ C;
             ),
         ));
         self::assertTrue(\chmod($slot . DIRECTORY_SEPARATOR . 'manifest.json', 0600));
+
+        $neutralSource = $this->createCertificate(
+            $this->root,
+            'wls-neutral.invalid',
+            'neutral-tls',
+        );
+        self::assertTrue(\mkdir($this->paths->nginxPidDir(), 0700, true));
+        $neutral = $this->paths->neutralTlsDir();
+        self::assertTrue(\mkdir($neutral, 0700, true));
+        foreach ([
+            'cert' => 'neutral-cert.pem',
+            'key' => 'neutral-key.pem',
+        ] as $source => $leaf) {
+            $target = $neutral . DIRECTORY_SEPARATOR . $leaf;
+            self::assertTrue(\copy($neutralSource[$source], $target));
+            self::assertTrue(\chmod($target, 0600));
+        }
     }
 
     private function compileBroker(): void
@@ -2179,6 +3212,7 @@ C;
             '-Wextra',
             '-Werror',
             '-fstack-protector-strong',
+            '-DWLS_NATIVE_TEST_HOOKS=1',
             ...$compileFlags,
             $source,
             ...$linkFlags,
@@ -2213,6 +3247,13 @@ C;
             $fencing,
             '--home',
             $this->home,
+            '--active-slot',
+            'A',
+            '--runtime-generation',
+            (string)\hash_file(
+                'sha256',
+                $this->home . DIRECTORY_SEPARATOR . 'slots/A/bin/nginx',
+            ),
         ]);
         $this->waitForSocket($run . DIRECTORY_SEPARATOR . 'admin.sock', 10.0);
         $this->waitForSocket($run . DIRECTORY_SEPARATOR . 'project.sock', 10.0);
@@ -2399,7 +3440,7 @@ C;
     private function nginxPid(): int
     {
         $raw = \trim((string)@\file_get_contents(
-            $this->home . DIRECTORY_SEPARATOR . 'runtime/run/nginx.pid',
+            $this->paths->nginxPidFile(),
         ));
         return \ctype_digit($raw) ? (int)$raw : 0;
     }
@@ -2521,24 +3562,88 @@ C;
                         (string)\explode(' ', $requestLine)[1],
                         PHP_URL_QUERY,
                     ), $query);
-                    $nonce = (string)($query['nonce'] ?? '');
-                    $reportedNonce = $healthNonceMode === 'wrong'
-                        ? \str_repeat('0', 32)
-                        : $nonce;
+                    $headerNonce = \strtolower(\trim((string)(
+                        $headers['x-wls-probe-nonce'][0] ?? ''
+                    )));
+                    $gatewaySentinel = \preg_match(
+                        '/\A[a-f0-9]{32}\z/D',
+                        $headerNonce,
+                    ) === 1;
+                    $nonce = $gatewaySentinel
+                        ? $headerNonce
+                        : (string)($query['nonce'] ?? '');
                     $authorized = \hash_equals(
                         $edgeSecret,
                         (string)($headers['x-wls-edge-token'][0] ?? ''),
                     );
-                    $body = \json_encode([
-                        'edge_auth_required' => true,
+                    if ($gatewaySentinel) {
+                        $body = \json_encode([
+                            'status' => 'healthy',
+                            'instance' => $instanceId,
+                            'master_epoch' => 1,
+                            'launch_id' => $launchId,
+                            'nonce' => $nonce,
+                        ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                        $status = $authorized ? '200 OK' : '403 Forbidden';
+                        @\fwrite(
+                            $client,
+                            "HTTP/1.1 {$status}\r\nContent-Type: application/json\r\n"
+                                . 'Content-Length: ' . \strlen($body)
+                                . "\r\nConnection: close\r\n\r\n{$body}",
+                        );
+                        @\fclose($client);
+                        continue;
+                    }
+                    $reportedNonce = $healthNonceMode === 'wrong'
+                        ? \str_repeat('0', 32)
+                        : $nonce;
+                    $capabilityEvidence = [
+                        'schema' => 'wls-stateless-capability/1',
+                        'runtime_source' => 'project_endpoint',
+                        'runtime_declared' => true,
+                        'instance_generation' => 1,
+                        'reason' => 'declared_stateless_runtime',
+                    ];
+                    $attestation = [
+                        'schema' => 'wls-backend-attestation/1',
                         'project_uuid' => $projectUuid,
-                        'instance' => $instanceId,
+                        'instance_id' => $instanceId,
                         'instance_generation' => 1,
                         'master_epoch' => 1,
-                        'edge_capability_digest' => \hash('sha256', $edgeSecret),
-                        'nonce' => $reportedNonce,
                         'launch_id' => $launchId,
-                    ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                        'listener_lease_id' => \substr(\hash(
+                            'sha256',
+                            $projectUuid . "\0" . $instanceId . "\0" . 1 . "\0" . $launchId,
+                        ), 0, 32),
+                        'edge_capability_digest' => \hash('sha256', $edgeSecret),
+                        'session_capability' => 'stateless',
+                        'session_capability_evidence_digest' => \hash(
+                            'sha256',
+                            GatewayClient::canonicalJson($capabilityEvidence),
+                        ),
+                        'backend_host' => '127.0.0.1',
+                        'backend_port' => $port,
+                        'nonce' => $reportedNonce,
+                        'issued_at' => \time(),
+                    ];
+                    $binarySecret = \hex2bin($edgeSecret);
+                    if (!\is_string($binarySecret) || \strlen($binarySecret) !== 32) {
+                        @\fclose($client);
+                        @\fclose($server);
+                        exit(71);
+                    }
+                    $attestation['signature'] = \hash_hmac(
+                        'sha256',
+                        GatewayClient::canonicalJson($attestation),
+                        $binarySecret,
+                    );
+                    if (\function_exists('sodium_memzero')) {
+                        \sodium_memzero($binarySecret);
+                    }
+                    $body = \json_encode(
+                        ['backend_attestation' => $attestation],
+                        JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                    );
                     $status = $authorized && \preg_match('/\A[a-f0-9]{32}\z/D', $nonce) === 1
                         ? '200 OK'
                         : '403 Forbidden';

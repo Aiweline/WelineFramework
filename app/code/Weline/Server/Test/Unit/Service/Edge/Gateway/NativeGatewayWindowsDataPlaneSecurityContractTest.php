@@ -54,6 +54,309 @@ final class NativeGatewayWindowsDataPlaneSecurityContractTest extends TestCase
         );
     }
 
+    public function testBrokerOwnsTheWindowsNginxPidNamespaceAcrossTestStartAndTerminalCleanup(): void
+    {
+        $prepare = $this->between(
+            $this->broker,
+            'static int wls_win_prepare_data_plane_runtime(',
+            'static void wls_win_close_public_sockets(',
+        );
+        foreach ([
+            'wls_win_nginx_pid_directory_open(',
+            'wls_win_nginx_pid_directory_stable_acl_valid(',
+        ] as $required) {
+            self::assertStringContainsString($required, $prepare);
+        }
+
+        foreach ([
+            'wls_win_nginx_pid_leaf_test_cleanup(',
+            'wls_win_nginx_pid_leaf_seal(',
+            'wls_win_nginx_pid_leaf_terminal_cleanup(',
+            'FILE_ADD_FILE | FILE_DELETE_CHILD',
+            'L"nginx-pid"',
+            'wls_read_nginx_pid_leaf(',
+            'wls_win_nginx_pid_legacy_absent(',
+        ] as $required) {
+            self::assertStringContainsString($required, $this->broker);
+        }
+        self::assertStringContainsString(
+            'L"nginx-pid\\\\nginx.pid"',
+            $this->launcher,
+        );
+
+        $retire = $this->between(
+            $this->broker,
+            'static int wls_win_process_tree_retire_v2(',
+            'static int wls_handle_action_v2(',
+        );
+        $death = strpos($retire, 'wls_win_wait_process_tree_exit(');
+        $cleanup = strpos(
+            $retire,
+            'wls_win_nginx_pid_terminal_cleanup_after_exact_death('
+        );
+        self::assertNotFalse($death);
+        self::assertNotFalse($cleanup);
+        self::assertGreaterThan($death, $cleanup);
+        self::assertLessThan(
+            strpos($retire, 'wls_win_write_root_process_tree_retirement('),
+            $cleanup,
+        );
+        self::assertStringContainsString(
+            'wls_nginx_pid_namespace_restart_latched',
+            $this->broker,
+        );
+    }
+
+    public function testPidSourcePublicationKeepsTheWindowsParentAclStable(): void
+    {
+        foreach ([
+            'wls_win_nginx_pid_source_create(',
+            'wls_win_nginx_pid_precreate_canonical_source(',
+            'wls_win_nginx_pid_publish_from_source(',
+            'wls_win_nginx_pid_source_config_create(',
+            'wls_win_nginx_pid_source_config_exact(',
+            'wls_win_nginx_action_config_relative(',
+            'wls_win_nginx_pid_test_sources_prepare(',
+            'wls_win_nginx_pid_directory_no_staged_residue(',
+            'preheld source handle',
+        ] as $required) {
+            self::assertStringContainsString($required, $this->broker);
+        }
+
+        $lifecycle = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_lifecycle_action_v2(',
+            'typedef wchar_t wls_win_snapshot_name',
+        );
+        self::assertStringNotContainsString(
+            'wls_win_nginx_pid_directory_window_acl_apply(',
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            'wls_win_nginx_pid_precreate_canonical_source(',
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            'before->config_path,',
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            'NGINX_START_SERVICE_TREE_RESTART_REQUIRED',
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            'wls_win_nginx_lifecycle_start_restart_required(',
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            'action_failed',
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            'committed',
+            $lifecycle,
+        );
+        self::assertStringContainsString(
+            'if (locked) ReleaseSRWLockExclusive',
+            $lifecycle,
+        );
+        $restartPolicy = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_lifecycle_start_restart_required(',
+            'static int wls_win_nginx_lifecycle_action_v2(',
+        );
+        self::assertStringContainsString(
+            'action_failed && (start_tree_may_exist || latched != 0L)',
+            $restartPolicy,
+        );
+        self::assertStringContainsString(
+            '!committed && latched != 0L',
+            $restartPolicy,
+        );
+        $sourceAcl = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_pid_source_acl_apply(',
+            'static int wls_win_nginx_pid_source_valid(',
+        );
+        self::assertStringContainsString(
+            'FILE_GENERIC_READ | FILE_GENERIC_WRITE',
+            $sourceAcl,
+        );
+        self::assertStringNotContainsString('DELETE |', $sourceAcl);
+        self::assertStringNotContainsString('WRITE_DAC |', $sourceAcl);
+        self::assertStringNotContainsString('WRITE_OWNER |', $sourceAcl);
+        $publication = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_pid_publish_from_source(',
+            'static int WLS_MAYBE_UNUSED wls_win_nginx_pid_leaf_test_cleanup(',
+        );
+        self::assertStringContainsString(
+            'wcscmp(source_leaf, L"nginx.pid") != 0',
+            $publication,
+        );
+        $pidNamespace = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_pid_directory_stable_acl_valid(',
+            'static int wls_win_nginx_pid_legacy_absent(',
+        );
+        self::assertStringNotContainsString(
+            'FILE_ADD_FILE | FILE_DELETE_CHILD',
+            $pidNamespace,
+        );
+        $command = $this->between(
+            $this->broker,
+            'static int wls_win_process_command_matches(',
+            'static int wls_same_file_identity(',
+        );
+        self::assertStringContainsString(
+            '_wcsicmp(arguments[4], config) == 0',
+            $command,
+        );
+        self::assertStringNotContainsString('_wcsnicmp(arguments[4]', $command);
+        $identity = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_pid_identity(',
+            'static int wls_win_nginx_action_receipt(',
+        );
+        self::assertStringContainsString('process_config = context->config_path;', $identity);
+        self::assertStringNotContainsString('wls_nginx_shadow_config_', $identity);
+        $sourceConfig = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_pid_source_config_create(',
+            'static int wls_win_nginx_pid_source_config_remove(',
+        );
+        self::assertStringContainsString('L"%ls\\\\nginx-pid\\\\%ls"', $sourceConfig);
+        self::assertStringContainsString(
+            'wls_win_nginx_pid_source_config_exact(',
+            $sourceConfig,
+        );
+        self::assertStringContainsString(
+            'wls_win_nginx_action_config_relative(context, relative)',
+            $sourceConfig,
+        );
+        self::assertStringContainsString(
+            'home_root, relative, WLS_MAX_ATOMIC_CONFIG,',
+            $sourceConfig,
+        );
+        self::assertStringContainsString(
+            'wls_win_nginx_pid_source_config_remove(',
+            $sourceConfig,
+        );
+        self::assertStringContainsString(
+            'config_created && config_leaf != NULL',
+            $sourceConfig,
+        );
+        self::assertStringContainsString(
+            'CloseHandle(shadow);',
+            $sourceConfig,
+        );
+        self::assertStringContainsString(
+            'wls_win_nginx_pid_flush_directory(nginx_pid_directory)',
+            $sourceConfig,
+        );
+        self::assertStringContainsString(
+            'GetLastError() != ERROR_FILE_NOT_FOUND',
+            $sourceConfig,
+        );
+        $sourceRemove = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_pid_source_remove_empty(',
+            'static int wls_win_nginx_pid_publish_from_source(',
+            2,
+        );
+        $sourceDisposition = strpos(
+            $sourceRemove,
+            'SetFileInformationByHandle(',
+        );
+        $sourceClose = strpos(
+            $sourceRemove,
+            'CloseHandle(source);',
+            is_int($sourceDisposition) ? $sourceDisposition : 0,
+        );
+        $sourceFlush = strpos(
+            $sourceRemove,
+            'wls_win_nginx_pid_flush_directory(directory)',
+            is_int($sourceClose) ? $sourceClose : 0,
+        );
+        $sourceAbsence = strpos(
+            $sourceRemove,
+            'GetLastError() != ERROR_FILE_NOT_FOUND',
+            is_int($sourceFlush) ? $sourceFlush : 0,
+        );
+        self::assertIsInt($sourceDisposition);
+        self::assertIsInt($sourceClose);
+        self::assertIsInt($sourceFlush);
+        self::assertIsInt($sourceAbsence);
+        self::assertGreaterThan($sourceDisposition, $sourceClose);
+        self::assertGreaterThan($sourceClose, $sourceFlush);
+        self::assertGreaterThan($sourceFlush, $sourceAbsence);
+        self::assertStringNotContainsString(
+            'wls_win_neutral_tls_dispose_staged_leaf(',
+            $sourceConfig,
+        );
+        self::assertStringNotContainsString('L"%ls\\\\runtime\\\\conf\\\\%ls"', $sourceConfig);
+        $sidConversion = strpos(
+            $sourceConfig,
+            'data_length = MultiByteToWideChar(',
+        );
+        $sidZero = strpos($sourceConfig, 'ZeroMemory(data_sid, sizeof(data_sid));', $sidConversion);
+        $sidSddl = strpos($sourceConfig, '_snwprintf_s(', $sidConversion);
+        self::assertIsInt($sidConversion);
+        self::assertIsInt($sidZero);
+        self::assertIsInt($sidSddl);
+        self::assertGreaterThan($sidSddl, $sidZero);
+        self::assertStringContainsString(
+            'wls_win_nginx_pid_canonical_source_empty_exact(', $this->broker,
+        );
+        $spawn = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_spawn(',
+            'static int wls_win_nginx_attestation_matches(',
+        );
+        self::assertStringContainsString(
+            'if (strcmp(operation, "TEST") == 0)',
+            $spawn,
+        );
+        self::assertStringContainsString(
+            'wcscmp(config_path, context->config_path) == 0',
+            $spawn,
+        );
+        self::assertStringContainsString(
+            '!wls_win_nginx_pid_source_config_leaf_valid(leaf)',
+            $spawn,
+        );
+        self::assertStringContainsString(
+            '} else if (wcscmp(config_path, context->config_path) != 0)',
+            $spawn,
+        );
+        $pidTest = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_pid_test(',
+            'static int wls_win_nginx_pid_identity(',
+        );
+        self::assertStringContainsString(
+            'wls_win_nginx_pid_leaf_sealed_valid(canonical, canonical_pid)',
+            $pidTest,
+        );
+        self::assertStringContainsString(
+            'wls_same_file_identity(',
+            $pidTest,
+        );
+        self::assertStringContainsString(
+            'wls_win_nginx_pid_test_sources_prepare(',
+            $pidTest,
+        );
+        $cleanup = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_pid_test(',
+            'static int wls_win_nginx_pid_identity(',
+        );
+        self::assertStringContainsString(
+            'InterlockedExchange(&wls_nginx_pid_namespace_restart_latched, 1L);',
+            $cleanup,
+        );
+    }
+
     public function testDataPlaneUsesAProductRestrictingSidAndCannotEnterControlPipe(): void
     {
         foreach ([
@@ -173,8 +476,8 @@ final class NativeGatewayWindowsDataPlaneSecurityContractTest extends TestCase
         );
         foreach ([
             'wls_win_nginx_test_open_regular(',
-            'wls_win_nginx_spawn(',
-            '&before_context, "TEST"',
+            'wls_win_nginx_pid_test(',
+            '&before_context, sockets, deadline, nginx_pid_directory',
             'wls_win_nginx_test_candidate_restore(&config_before)',
             'wls_win_nginx_test_observation_same(',
             'WLS-ACTION/2\\tOK\\tNGINX_TEST',
@@ -1072,6 +1375,201 @@ final class NativeGatewayWindowsDataPlaneSecurityContractTest extends TestCase
         self::assertStringContainsString(
             'sample->raw_sha256',
             $accept,
+        );
+    }
+
+    public function testNeutralTlsServingPairIsBrokerSealedAndRevalidatedBeforeEverySpawn(): void
+    {
+        $servingRootAcl = $this->between(
+            $this->broker,
+            'static int wls_win_neutral_tls_acl_valid(',
+            'static int wls_win_neutral_tls_apply_acl(',
+        );
+        foreach ([
+            'administrators_buffer',
+            'administrators_count',
+            'information.AceCount != 3U',
+            'FILE_ALL_ACCESS',
+            'FILE_TRAVERSE',
+            'FILE_GENERIC_READ',
+        ] as $required) {
+            self::assertStringContainsString($required, $servingRootAcl);
+        }
+        $servingLeafApply = $this->between(
+            $this->broker,
+            'static int wls_win_neutral_tls_apply_acl(',
+            'static HANDLE wls_win_neutral_tls_root_open(',
+        );
+        self::assertStringContainsString(
+            'L"O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x120089;;;%ls)"',
+            $servingLeafApply,
+        );
+        self::assertStringNotContainsString(
+            'L"O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;GR;;;%ls)"',
+            $servingLeafApply,
+        );
+
+        $stateParentAcl = $this->between(
+            $this->broker,
+            'static int wls_win_neutral_tls_state_parent_acl_valid(',
+            'static int wls_win_neutral_tls_state_source_acl_valid(',
+        );
+        foreach ([
+            'administrators_buffer',
+            'SE_DACL_PROTECTED',
+            'OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE',
+            'information.AceCount != 3U',
+            '0x001301BFUL',
+        ] as $required) {
+            self::assertStringContainsString($required, $stateParentAcl);
+        }
+
+        $publication = $this->between(
+            $this->broker,
+            'static int wls_win_neutral_tls_publish_and_validate(',
+            'static int wls_win_prepare_data_plane_runtime(',
+        );
+        foreach ([
+            'wls_win_neutral_tls_publish_from_open_sources(',
+            'wls_win_neutral_tls_consumer_validate(',
+            'wls_win_neutral_tls_state_parent_acl_valid(state)',
+        ] as $required) {
+            self::assertStringContainsString($required, $publication);
+        }
+        self::assertStringNotContainsString(
+            'wls_win_controller_receipt_acl_valid(state)',
+            $publication,
+        );
+
+        $source = $this->between(
+            $this->broker,
+            'static int wls_win_neutral_tls_source_open(',
+            'static int wls_win_neutral_tls_receipt_canonical(',
+        );
+        foreach ([
+            'int certificate_source',
+            'wls_win_neutral_tls_source_certificate_acl_valid(',
+            'wls_win_neutral_tls_source_key_acl_valid(',
+            'wls_handle_is_reparse(',
+            'NumberOfLinks != 1U',
+        ] as $required) {
+            self::assertStringContainsString($required, $source);
+        }
+
+        $sourceAcl = $this->between(
+            $this->broker,
+            'static int wls_win_neutral_tls_state_source_acl_valid(',
+            'static int wls_win_neutral_tls_source_certificate_acl_valid(',
+        );
+        foreach ([
+            'INHERITED_ACE',
+            'SE_DACL_AUTO_INHERITED',
+            'SE_DACL_PROTECTED',
+            'administrators_buffer',
+            'controller_sid',
+            'information.AceCount != 3U',
+            'ace->Header.AceFlags != INHERITED_ACE',
+            'FILE_ALL_ACCESS',
+            '0x001301BFUL',
+        ] as $required) {
+            self::assertStringContainsString($required, $sourceAcl);
+        }
+        $sourceValidators = $this->between(
+            $this->broker,
+            'static int wls_win_neutral_tls_source_certificate_acl_valid(',
+            'static int wls_win_neutral_tls_source_open(',
+        );
+        self::assertStringNotContainsString(
+            'wls_win_controller_receipt_acl_valid(',
+            $sourceValidators,
+        );
+        self::assertSame(
+            2,
+            \substr_count(
+                $sourceValidators,
+                'wls_win_neutral_tls_state_source_acl_valid('
+            ),
+        );
+
+        foreach ([
+            'L"state"',
+            'L"neutral-tls"',
+            'L"neutral-cert.pem"',
+            'L"neutral-key.pem"',
+            'L"neutral-tls.receipt"',
+            'wls_win_snapshot_receipt_mac_v2(',
+            'FILE_FLAG_OPEN_REPARSE_POINT',
+            'wls_same_file_identity(',
+            'wls_win_read_digest_bounded(',
+            'wls_win_snapshot_rename_directory(',
+        ] as $required) {
+            self::assertStringContainsString($required, $this->broker);
+        }
+
+        $prepare = $this->between(
+            $this->broker,
+            'static int wls_win_prepare_data_plane_runtime(',
+            'static void wls_win_close_public_sockets(',
+        );
+        self::assertStringNotContainsString('L"state"', $prepare);
+        self::assertStringNotContainsString(
+            'L"state\\neutral-cert.pem"',
+            $prepare,
+        );
+        self::assertStringNotContainsString(
+            'L"state\\neutral-key.pem"',
+            $prepare,
+        );
+
+        $consumer = $this->between(
+            $this->broker,
+            'static int wls_win_neutral_tls_consumer_validate(',
+            'static int wls_win_neutral_tls_publish_and_validate(',
+        );
+        foreach ([
+            'L"neutral-cert.pem"',
+            'L"neutral-key.pem"',
+            'L"neutral-tls.receipt"',
+            'wls_win_neutral_tls_read_leaf(',
+        ] as $required) {
+            self::assertStringContainsString($required, $consumer);
+        }
+        foreach ([
+            'wls_access_check_handle(',
+            'GENERIC_WRITE',
+            'DELETE',
+            'WRITE_DAC',
+            'WRITE_OWNER',
+        ] as $required) {
+            self::assertStringContainsString($required, $this->broker);
+        }
+
+        $test = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_test_action_v2(',
+            'static int wls_win_nginx_lifecycle_action_v2(',
+        );
+        self::assertStringContainsString(
+            'wls_win_neutral_tls_publish_and_validate(',
+            $test,
+        );
+        self::assertLessThan(
+            \strpos($test, 'wls_win_nginx_spawn('),
+            \strpos($test, 'wls_win_neutral_tls_consumer_validate('),
+        );
+
+        $lifecycle = $this->between(
+            $this->broker,
+            'static int wls_win_nginx_lifecycle_action_v2(',
+            null,
+        );
+        self::assertStringContainsString(
+            'wls_win_neutral_tls_publish_and_validate(',
+            $lifecycle,
+        );
+        self::assertGreaterThanOrEqual(
+            3,
+            \substr_count($lifecycle, 'wls_win_neutral_tls_consumer_validate('),
         );
     }
 

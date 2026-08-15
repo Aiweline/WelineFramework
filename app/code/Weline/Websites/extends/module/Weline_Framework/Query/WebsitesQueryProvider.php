@@ -2187,31 +2187,14 @@ class WebsitesQueryProvider implements QueryProviderInterface
         if ($pos !== false) {
             $normalized = \substr($path, $pos);
         }
-        $area = 'Backend';
-        $controllerSeg = 'Index';
-        $actionSeg = 'index';
-        if (\preg_match('#^/[a-z0-9_-]+/(backend|admin|frontend)/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
-            $area = \ucfirst(\strtolower($mm[1]));
-            $controllerSeg = $mm[2];
-            $actionSeg = $mm[3] ?? 'index';
-        } elseif (\preg_match('#^/[a-z0-9_-]+/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
-            $controllerSeg = $mm[1];
-            $actionSeg = $mm[2] ?? 'index';
-        } else {
+        $resolved = self::resolveAdminRequestTarget($normalized);
+        if ($resolved === null) {
             return ['success' => false, 'message' => 'Unsupported admin path: ' . $normalized];
         }
-        // 多段控制器名（如 site-builder-plan）需去掉 ucwords 产生的空格才能得到类名。
-        $controllerSeg = \str_replace(' ', '', \ucwords(\str_replace(['-', '_'], ' ', $controllerSeg)));
-        $actionSeg = \str_replace('-', '', $actionSeg);
-        $ns = 'Weline\\Websites\\Controller';
-        $class = $ns . '\\' . $area . '\\' . $controllerSeg;
+        $class = $resolved['class'];
+        $actionSeg = $resolved['action'];
         if (!\class_exists($class)) {
-            $classAlt = $ns . '\\' . $controllerSeg;
-            if (\class_exists($classAlt)) {
-                $class = $classAlt;
-            } else {
-                return ['success' => false, 'message' => 'Controller missing: ' . $class];
-            }
+            return ['success' => false, 'message' => 'Controller missing: ' . $class];
         }
         $queryParams = [];
         if (!empty($parts['query'])) {
@@ -2251,5 +2234,63 @@ class WebsitesQueryProvider implements QueryProviderInterface
             $method,
             $body
         );
+    }
+
+    /**
+     * Resolve websites admin/backend controller class + action from a path.
+     *
+     * Supports nested Api controllers, e.g.
+     * `/websites/backend/api/domain-pool` → Backend\Api\DomainPool::index
+     * `/websites/backend/api/domain-pool/check-conflict` → …::checkConflict
+     *
+     * @return array{class:string,action:string}|null
+     */
+    private static function resolveAdminRequestTarget(string $normalized): ?array
+    {
+        $ns = 'Weline\\Websites\\Controller';
+        $area = 'Backend';
+        $controllerSeg = 'Index';
+        $actionSeg = 'index';
+        $apiNs = false;
+
+        if (\preg_match(
+            '#^/[a-z0-9_-]+/(backend|admin|frontend)/api/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i',
+            $normalized,
+            $mm
+        ) === 1) {
+            $area = \ucfirst(\strtolower($mm[1]));
+            $controllerSeg = $mm[2];
+            $actionSeg = $mm[3] ?? 'index';
+            $apiNs = true;
+        } elseif (\preg_match(
+            '#^/[a-z0-9_-]+/(backend|admin|frontend)/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i',
+            $normalized,
+            $mm
+        ) === 1) {
+            $area = \ucfirst(\strtolower($mm[1]));
+            $controllerSeg = $mm[2];
+            $actionSeg = $mm[3] ?? 'index';
+        } elseif (\preg_match('#^/[a-z0-9_-]+/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm) === 1) {
+            $controllerSeg = $mm[1];
+            $actionSeg = $mm[2] ?? 'index';
+        } else {
+            return null;
+        }
+
+        // Multi-segment controller names (e.g. site-builder-plan / domain-pool).
+        $controllerSeg = \str_replace(' ', '', \ucwords(\str_replace(['-', '_'], ' ', $controllerSeg)));
+        $actionSeg = \str_replace('-', '', $actionSeg);
+
+        $class = $apiNs
+            ? $ns . '\\' . $area . '\\Api\\' . $controllerSeg
+            : $ns . '\\' . $area . '\\' . $controllerSeg;
+        if (!\class_exists($class) && !$apiNs) {
+            $classAlt = $ns . '\\' . $controllerSeg;
+            if (\class_exists($classAlt)) {
+                $class = $classAlt;
+            }
+        }
+
+        return ['class' => $class, 'action' => $actionSeg];
     }
 }

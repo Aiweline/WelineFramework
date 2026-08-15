@@ -346,7 +346,7 @@ final class GatewayControllerPortTakenRecoveryTest extends TestCase
     {
         $controller = $this->createController();
         $pidFile = $this->root . DIRECTORY_SEPARATOR
-            . 'home/runtime/run/nginx.pid';
+            . 'home/nginx-pid/nginx.pid';
         self::assertSame(0, \file_put_contents($pidFile, ''));
         self::assertTrue(\chmod($pidFile, 0644));
         $status = (new \ReflectionMethod(
@@ -498,10 +498,12 @@ final class GatewayControllerPortTakenRecoveryTest extends TestCase
         $trust = $home . DIRECTORY_SEPARATOR . 'trust';
         $slot = $home . DIRECTORY_SEPARATOR . 'slots/A';
         $run = $home . DIRECTORY_SEPARATOR . 'runtime/run';
+        $nginxPid = $home . DIRECTORY_SEPARATOR . 'nginx-pid';
         self::assertTrue(\mkdir($state, 0700, true));
         self::assertTrue(\mkdir($trust, 0750, true));
         self::assertTrue(\mkdir($slot . DIRECTORY_SEPARATOR . 'bin', 0700, true));
         self::assertTrue(\mkdir($run, 0700, true));
+        self::assertTrue(\mkdir($nginxPid, 0700, true));
         self::assertNotFalse(\file_put_contents(
             $trust . DIRECTORY_SEPARATOR . 'host-id',
             \bin2hex(\random_bytes(16)),

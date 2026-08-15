@@ -124,14 +124,27 @@ final class SharedStateRuntimeScope
             return '';
         }
 
-        $networkNamespace = @\readlink('/proc/self/ns/net');
-        if (!\is_string($networkNamespace) || $networkNamespace === '') {
-            $networkNamespace = (string)(@\gethostname() ?: @\php_uname('n'));
+        $hostname = '';
+        if (\function_exists('gethostname')) {
+            $resolvedHostname = @\gethostname();
+            $hostname = \is_string($resolvedHostname) ? \trim($resolvedHostname) : '';
         }
-        $machineIdentity = @\file_get_contents('/etc/machine-id');
+        if ($hostname === '' && \function_exists('php_uname')) {
+            $hostname = \trim((string)@\php_uname('n'));
+        }
+
+        $networkNamespace = \function_exists('readlink')
+            ? @\readlink('/proc/self/ns/net')
+            : false;
+        if (!\is_string($networkNamespace) || $networkNamespace === '') {
+            $networkNamespace = $hostname;
+        }
+        $machineIdentity = \function_exists('file_get_contents')
+            ? @\file_get_contents('/etc/machine-id')
+            : false;
         $machineIdentity = \is_string($machineIdentity) ? \trim($machineIdentity) : '';
         if ($machineIdentity === '') {
-            $machineIdentity = (string)(@\gethostname() ?: @\php_uname('n'));
+            $machineIdentity = $hostname;
         }
 
         return 'linux-' . \substr(\hash('sha256', \implode("\0", [

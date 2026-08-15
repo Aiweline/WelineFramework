@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Weline\Database\Service;
 
 use Weline\Database\Model\Migration;
+use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Schema\SchemaDiffOp;
 use Weline\Framework\Setup\Model\MigrationBackup;
@@ -12,9 +17,8 @@ use Weline\Framework\Setup\Model\MigrationBackup;
 /**
  * Durable reverse executor for SchemaDiff records.
  *
- * DDL is deliberately not wrapped in a transaction: MySQL can commit it
- * implicitly. Every completed record is persisted and can be replayed by the
- * compensation path.
+ * Destructive rollback DDL is admitted only when the adapter can keep its
+ * exact-table backup and DDL inside one bounded physical transaction.
  */
 final class SchemaRollbackService
 {
@@ -149,57 +153,91 @@ final class SchemaRollbackService
                 throw new \RuntimeException(__('待回滚 Schema 记录状态已变化: #%{1}', (string)$migrationId));
             }
             $this->assertRecordChecksum($record);
-            $record->setData(Migration::schema_fields_OPERATION_ID, $operationId)->save();
+            $this->migrationModel->bindOperationIdFailClosed($migrationId, $operationId);
+            if (!$connector instanceof PhysicalTableMetadataInterface
+                || !$connector instanceof PhysicalTableIdentityProviderInterface) {
+                throw new \RuntimeException('exact physical table capability unavailable');
+            }
+            if (!$connector instanceof AtomicPhysicalTableChangeInterface) {
+                throw new \RuntimeException('atomic physical table change capability unavailable');
+            }
 
             $kind = (string)($operation['operation_kind'] ?? '');
             $table = (string)($operation['table_name'] ?? '');
             $column = trim((string)($operation['payload']['name'] ?? ''));
             $modelClass = trim((string)($operation['model_class'] ?? '')) ?: null;
-
-            if ($kind === SchemaDiffOp::KIND_CREATE_TABLE) {
-                if (!$this->backupService->backupTableStructure(
-                    $table,
-                    $migrationId,
-                    MigrationBackup::SCOPE_ROLLBACK,
-                    $operationId,
-                )) {
-                    throw new \RuntimeException(__('无法备份表 %{1} 的结构', $table));
-                }
-                $this->backupService->backupTableData(
-                    $table,
-                    $migrationId,
-                    MigrationBackup::SCOPE_ROLLBACK,
-                    $operationId,
-                );
-            } elseif (in_array($kind, [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)) {
-                if ($column === '') {
-                    throw new \RuntimeException(__('Schema 记录 #%{1} 缺少列名', (string)$migrationId));
-                }
-                $this->backupService->backupColumnData(
-                    $table,
-                    $column,
-                    $migrationId,
+            $identity = $connector->resolvePhysicalTableIdentity($table);
+            $connector->atomicPhysicalTableChange(
+                $identity,
+                function (ConnectorInterface $lockedConnector) use (
                     $connector,
-                    $modelClass,
-                    'ROLLBACK',
-                    MigrationBackup::SCOPE_ROLLBACK,
-                    $operationId,
-                );
-            }
-
-            $this->executeDdl((string)$operation['rollback_ddl']);
-            if ($kind === SchemaDiffOp::KIND_DROP_COLUMN && $column !== '') {
-                $this->backupService->restoreColumnDataConflictSafe(
-                    $table,
-                    $column,
+                    $identity,
                     $migrationId,
-                    $connector,
+                    $operationId,
+                    $kind,
+                    $column,
                     $modelClass,
-                    $operation['payload']['default'] ?? null,
-                    MigrationBackup::SCOPE_UPGRADE,
-                );
-            }
-            $record->updateStatus(Migration::STATUS_ROLLED_BACK);
+                    $operation,
+                ): void {
+                    if ($lockedConnector !== $connector
+                        || !$lockedConnector instanceof PhysicalTableMetadataInterface) {
+                        throw new \RuntimeException('atomic physical table connector changed during rollback');
+                    }
+                    $this->loadPlannedSchemaRecordForUpdate(
+                        $migrationId,
+                        Migration::STATUS_INSTALLED,
+                        $operationId,
+                        $operation,
+                    );
+                    if ($kind === SchemaDiffOp::KIND_CREATE_TABLE) {
+                        $this->backupService->smartBackupPhysicalTable(
+                            $identity,
+                            $migrationId,
+                            MigrationBackup::SCOPE_ROLLBACK,
+                            $operationId,
+                            $lockedConnector,
+                        );
+                    } elseif (in_array(
+                        $kind,
+                        [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN],
+                        true,
+                    )) {
+                        if ($column === '') {
+                            throw new \RuntimeException(
+                                __('Schema 记录 #%{1} 缺少列名', (string)$migrationId),
+                            );
+                        }
+                        $this->backupService->backupPhysicalColumnData(
+                            $identity,
+                            $column,
+                            $migrationId,
+                            $modelClass,
+                            'ROLLBACK',
+                            MigrationBackup::SCOPE_ROLLBACK,
+                            $operationId,
+                            $lockedConnector,
+                        );
+                    }
+
+                    $this->executeDdlUsing($lockedConnector, (string)$operation['rollback_ddl']);
+                    if ($kind === SchemaDiffOp::KIND_DROP_COLUMN && $column !== '') {
+                        $this->backupService->restorePhysicalColumnDataConflictSafe(
+                            $identity,
+                            $column,
+                            $migrationId,
+                            $operation['payload']['default'] ?? null,
+                            MigrationBackup::SCOPE_UPGRADE,
+                        );
+                    }
+                    $this->migrationModel->compareAndSwapStatusFailClosed(
+                        $migrationId,
+                        Migration::STATUS_INSTALLED,
+                        Migration::STATUS_ROLLED_BACK,
+                        $operationId,
+                        $this->connectionFactory,
+                    );
+                },
+            );
             $completed[] = $operation;
         }
 
@@ -210,51 +248,135 @@ final class SchemaRollbackService
     public function compensate(array $operations, string $operationId): void
     {
         $connector = $this->connectionFactory->getConnector();
+        if (!$connector instanceof PhysicalTableMetadataInterface
+            || !$connector instanceof PhysicalTableIdentityProviderInterface) {
+            throw new \RuntimeException('exact physical table capability unavailable');
+        }
+        if (!$connector instanceof AtomicPhysicalTableChangeInterface) {
+            throw new \RuntimeException('atomic physical table change capability unavailable');
+        }
+
         foreach (array_reverse($operations) as $operation) {
             $migrationId = (int)($operation['migration_id'] ?? 0);
-            $record = clone $this->migrationModel;
-            $record->load($migrationId);
-            if (!$record->getId()) {
+            if ($migrationId <= 0) {
                 throw new \RuntimeException(__('Schema 补偿记录不存在: #%{1}', (string)$migrationId));
             }
             $kind = (string)($operation['operation_kind'] ?? '');
             $table = (string)($operation['table_name'] ?? '');
             $column = trim((string)($operation['payload']['name'] ?? ''));
-            $modelClass = trim((string)($operation['model_class'] ?? '')) ?: null;
 
-            if ($kind === SchemaDiffOp::KIND_CREATE_TABLE) {
-                if (!$this->backupService->restoreTableStructure(
-                    $table,
+            $identity = $connector->resolvePhysicalTableIdentity($table);
+            $connector->atomicPhysicalTableChange(
+                $identity,
+                function (ConnectorInterface $lockedConnector) use (
+                    $connector,
+                    $identity,
                     $migrationId,
-                    false,
-                    MigrationBackup::SCOPE_ROLLBACK,
                     $operationId,
-                ) || !$this->backupService->restoreTableData(
-                    $table,
-                    $migrationId,
-                    false,
-                    MigrationBackup::SCOPE_ROLLBACK,
-                    $operationId,
-                )) {
-                    throw new \RuntimeException(__('表 %{1} 结构或数据补偿失败', $table));
-                }
-            } else {
-                $this->executeDdl((string)$operation['forward_ddl']);
-                if (in_array($kind, [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true) && $column !== '') {
-                    $this->backupService->restoreColumnDataConflictSafe(
-                        $table,
-                        $column,
+                    $kind,
+                    $column,
+                    $operation,
+                ): void {
+                    if ($lockedConnector !== $connector
+                        || !$lockedConnector instanceof PhysicalTableMetadataInterface) {
+                        throw new \RuntimeException('atomic physical table connector changed during compensation');
+                    }
+                    $record = $this->loadSchemaRecordForUpdate($migrationId, $operationId, $operation);
+                    $status = (string)$record->getData(Migration::schema_fields_STATUS);
+                    if ($status === Migration::STATUS_INSTALLED) {
+                        return;
+                    }
+                    if ($status !== Migration::STATUS_ROLLED_BACK) {
+                        throw new \RuntimeException(__(
+                            'Schema 补偿记录状态或 operation_id 已变化: #%{1}',
+                            (string)$migrationId,
+                        ));
+                    }
+
+                    if ($kind === SchemaDiffOp::KIND_CREATE_TABLE) {
+                        $this->restorePhysicalRollbackTable($identity, $migrationId, $operationId);
+                    } else {
+                        $this->executeDdlUsing($lockedConnector, (string)$operation['forward_ddl']);
+                        if (in_array(
+                            $kind,
+                            [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN],
+                            true,
+                        ) && $column !== '') {
+                            $this->backupService->restorePhysicalColumnDataConflictSafe(
+                                $identity,
+                                $column,
+                                $migrationId,
+                                $operation['payload']['default'] ?? null,
+                                MigrationBackup::SCOPE_ROLLBACK,
+                                $operationId,
+                            );
+                        }
+                    }
+                    $this->migrationModel->compareAndSwapStatusFailClosed(
                         $migrationId,
-                        $connector,
-                        $modelClass,
-                        $operation['payload']['default'] ?? null,
-                        MigrationBackup::SCOPE_ROLLBACK,
+                        Migration::STATUS_ROLLED_BACK,
+                        Migration::STATUS_INSTALLED,
                         $operationId,
+                        $this->connectionFactory,
                     );
-                }
+                },
+            );
+        }
+    }
+
+    private function restorePhysicalRollbackTable(
+        PhysicalTableIdentity $identity,
+        int $migrationId,
+        string $operationId,
+    ): void {
+        $matching = array_values(array_filter(
+            $this->backupService->getBackupsByMigrationId($migrationId),
+            static fn(MigrationBackup $backup): bool =>
+                (string)$backup->getData(MigrationBackup::schema_fields_TABLE_NAME) === $identity->canonical()
+                && (string)$backup->getData(MigrationBackup::schema_fields_BACKUP_SCOPE)
+                    === MigrationBackup::SCOPE_ROLLBACK
+                && (string)$backup->getData(MigrationBackup::schema_fields_OPERATION_ID) === $operationId,
+        ));
+        $structures = [];
+        $tables = [];
+        $chunks = [];
+        foreach ($matching as $backup) {
+            $type = (string)$backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE);
+            if ($type === MigrationBackup::TYPE_STRUCTURE) {
+                $structures[] = $backup;
+            } elseif ($type === MigrationBackup::TYPE_TABLE) {
+                $tables[] = $backup;
+            } elseif ($type === MigrationBackup::TYPE_CHUNK) {
+                $chunks[] = $backup;
             }
-            $record->setData(Migration::schema_fields_OPERATION_ID, $operationId);
-            $record->updateStatus(Migration::STATUS_INSTALLED);
+        }
+        if (count($structures) !== 1 || count($tables) > 1 || ($tables !== [] && $chunks !== [])) {
+            throw new \RuntimeException('physical rollback backup group is incomplete or ambiguous');
+        }
+        if (!$this->backupService->restorePhysicalTableStructure(
+            $identity,
+            $migrationId,
+            MigrationBackup::SCOPE_ROLLBACK,
+            $operationId,
+        )) {
+            throw new \RuntimeException(__('Table %{1} structure compensation failed', $identity->canonical()));
+        }
+        if ($tables !== [] && !$this->backupService->restorePhysicalTableData(
+            $identity,
+            $migrationId,
+            MigrationBackup::SCOPE_ROLLBACK,
+            $operationId,
+            (int)$tables[0]->getId(),
+        )) {
+            throw new \RuntimeException(__('Table %{1} data compensation failed', $identity->canonical()));
+        }
+        if ($chunks !== [] && !$this->backupService->restorePhysicalTableDataChunked(
+            $identity,
+            $migrationId,
+            MigrationBackup::SCOPE_ROLLBACK,
+            $operationId,
+        )) {
+            throw new \RuntimeException(__('Table %{1} chunk compensation failed', $identity->canonical()));
         }
     }
 
@@ -397,32 +519,58 @@ final class SchemaRollbackService
         }
     }
 
-    private function executeDdl(string $ddl): void
+    /** @param array<string, mixed> $operation */
+    private function loadPlannedSchemaRecordForUpdate(
+        int $migrationId,
+        string $expectedStatus,
+        string $operationId,
+        array $operation,
+    ): Migration {
+        $record = $this->loadSchemaRecordForUpdate($migrationId, $operationId, $operation);
+        if ($record->getData(Migration::schema_fields_STATUS) !== $expectedStatus) {
+            throw new \RuntimeException(__('Schema 计划记录状态或 operation_id 已变化: #%{1}', (string)$migrationId));
+        }
+        return $record;
+    }
+
+    /** @param array<string, mixed> $operation */
+    private function loadSchemaRecordForUpdate(
+        int $migrationId,
+        string $operationId,
+        array $operation,
+    ): Migration {
+        $record = (clone $this->migrationModel)->reset()->setConnection($this->connectionFactory)
+            ->where(Migration::schema_fields_ID, $migrationId);
+        $record->additional('FOR UPDATE');
+        $record->find()->fetch();
+        if ((int)$record->getId() !== $migrationId
+            || (string)$record->getData(Migration::schema_fields_OPERATION_ID) !== $operationId) {
+            throw new \RuntimeException(__('Schema 计划记录状态或 operation_id 已变化: #%{1}', (string)$migrationId));
+        }
+        $plannedChecksum = trim((string)($operation['checksum'] ?? ''));
+        if ($plannedChecksum !== ''
+            && !hash_equals(
+                $plannedChecksum,
+                trim((string)$record->getData(Migration::schema_fields_CHECKSUM)),
+            )) {
+            throw new \RuntimeException(__('Schema 计划记录校验和已变化: #%{1}', (string)$migrationId));
+        }
+        $this->assertRecordChecksum($record);
+        return $record;
+    }
+
+    private function executeDdlUsing(ConnectorInterface $connector, string $ddl): void
     {
-        $connector = $this->connectionFactory->getConnector();
-        $sqliteRebuild = str_contains($ddl, '/* WELINE_SQLITE_REBUILD */');
-        $ddl = str_replace('/* WELINE_SQLITE_REBUILD */', '', $ddl);
-        try {
-            if ($sqliteRebuild) {
-                $connector->query('PRAGMA foreign_keys=OFF')->fetch();
-                $connector->beginTransaction();
+        if (str_contains($ddl, '/* WELINE_SQLITE_REBUILD */')) {
+            throw new \RuntimeException('atomic SQLite schema rollback is unsupported');
+        }
+        foreach ($this->splitDdlStatements($ddl) as $statement) {
+            if (trim($statement) === '') {
+                continue;
             }
-            foreach ($this->splitDdlStatements($ddl) as $statement) {
-                if (trim($statement) !== '') {
-                    $connector->query($statement)->fetch();
-                }
-            }
-            if ($sqliteRebuild) {
-                $connector->commit();
-            }
-        } catch (\Throwable $e) {
-            if ($sqliteRebuild) {
-                $connector->rollBack();
-            }
-            throw $e;
-        } finally {
-            if ($sqliteRebuild) {
-                $connector->query('PRAGMA foreign_keys=ON')->fetch();
+            $result = $connector->query($statement)->fetch();
+            if ($result === false) {
+                throw new \RuntimeException('atomic schema rollback DDL failed');
             }
         }
     }

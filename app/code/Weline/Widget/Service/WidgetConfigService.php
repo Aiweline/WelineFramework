@@ -47,6 +47,11 @@ class WidgetConfigService
                             $params[$key]['options'] = $param['option'];
                         }
                     }
+                    foreach ($params as $key => $param) {
+                        if (is_array($param) && !$this->canConfigureParam($param)) {
+                            unset($params[$key]);
+                        }
+                    }
                     return $this->paramSchemaRegistry->expandParams($params);
                 }
             }
@@ -56,7 +61,7 @@ class WidgetConfigService
 
     public function renderForm(int|string $layoutId, array $params, array $config = []): string
     {
-        return $this->paramTypeRenderer->renderForm($layoutId, $params, $config);
+        return $this->paramTypeRenderer->renderForm($layoutId, $this->authorizedParams($params), $config);
     }
 
     public function renderField(string $key, array $param, mixed $value, int|string $layoutId = '', array $attrs = []): string
@@ -69,12 +74,12 @@ class WidgetConfigService
      */
     public function validateConfig(array $params, array $values): array
     {
-        return $this->paramTypeRenderer->validateConfig($params, $values);
+        return $this->paramTypeRenderer->validateConfig($this->authorizedParams($params), $values);
     }
 
     public function processConfig(array $params, array $values): array
     {
-        return $this->paramTypeRenderer->processConfig($params, $values);
+        return $this->paramTypeRenderer->processConfig($this->authorizedParams($params), $values);
     }
 
     public function getRegisteredTypes(): array
@@ -82,5 +87,31 @@ class WidgetConfigService
         $builtinTypes = $this->paramTypeRenderer->getRegisteredTypes();
         $schemaTypes = array_keys($this->paramSchemaRegistry->getRegistry());
         return array_unique(array_merge($builtinTypes, $schemaTypes));
+    }
+
+    /** Restrict sensitive widget fields at both schema and save boundaries. */
+    private function canConfigureParam(array $param): bool
+    {
+        $acl = $param['backend_acl']['source_id'] ?? null;
+        if (!is_string($acl) || $acl === '') {
+            return true;
+        }
+        try {
+            return class_exists(\Weline\Acl\Taglib\Acl::class)
+                && \Weline\Acl\Taglib\Acl::hasPermissionQuiet($acl);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function authorizedParams(array $params): array
+    {
+        foreach ($params as $key => $param) {
+            if (!is_array($param) || !$this->canConfigureParam($param)) {
+                unset($params[$key]);
+            }
+        }
+        return $params;
     }
 }

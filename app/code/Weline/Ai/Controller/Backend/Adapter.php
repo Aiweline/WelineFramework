@@ -15,6 +15,7 @@ namespace Weline\Ai\Controller\Backend;
 
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiScenarioAdapter;
+use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -109,14 +110,41 @@ class Adapter extends BackendController
         $aiModel = ObjectManager::getInstance(AiModel::class);
         return $aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-            ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ',' . AiModel::schema_fields_PRIMARY_MODALITY)
+            ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ','
+                . AiModel::schema_fields_PRIMARY_MODALITY . ',' . AiModel::schema_fields_SUPPLIER)
             ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
             ->select()
             ->fetchArray();
     }
 
+    /**
+     * @return array<string,true> provider_code => true when an active, connected account has an API key
+     */
+    private function getReadyProviderCodes(): array
+    {
+        /** @var Account $account */
+        $account = ObjectManager::getInstance(Account::class);
+        $rows = $account->reset()
+            ->where(Account::schema_fields_IS_ACTIVE, 1)
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+            ->select()
+            ->fetchArray();
+        $ready = [];
+        foreach ($rows as $row) {
+            $code = \strtolower(\trim((string)($row[Account::schema_fields_PROVIDER_CODE] ?? '')));
+            $apiKey = \trim((string)($row[Account::schema_fields_API_KEY] ?? ''));
+            if ($code === '' || $apiKey === '') {
+                continue;
+            }
+            $ready[$code] = true;
+        }
+
+        return $ready;
+    }
+
     private function buildModelOptionItems(array $rows, string $requestedModality = ''): array
     {
+        $readyProviders = $this->getReadyProviderCodes();
         $items = [];
         foreach ($rows as $row) {
             $primaryModality = AiModel::normalizePrimaryModality((string)($row[AiModel::schema_fields_PRIMARY_MODALITY] ?? ''));
@@ -127,10 +155,13 @@ class Adapter extends BackendController
             if ($modelCode === '') {
                 continue;
             }
+            $supplier = \strtolower(\trim((string)($row[AiModel::schema_fields_SUPPLIER] ?? '')));
             $items[] = [
                 'model_code' => $modelCode,
                 'name' => (string)($row[AiModel::schema_fields_NAME] ?? $modelCode),
                 'primary_modality' => $primaryModality,
+                'supplier' => $supplier,
+                'account_ready' => $supplier !== '' && isset($readyProviders[$supplier]),
             ];
         }
         return $items;

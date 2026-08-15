@@ -25,6 +25,11 @@ class BindMediaManagerAiDrawToCurrentText2image20260708V100 extends AbstractMigr
         return '2026-07-08';
     }
 
+    public function getType(): string
+    {
+        return 'data_migration';
+    }
+
     public function install(): bool
     {
         ObjectManager::getInstance(AiDrawModelBinder::class)->bindIfNeeded();

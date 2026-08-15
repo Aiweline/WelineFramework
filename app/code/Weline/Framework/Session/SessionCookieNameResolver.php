@@ -32,6 +32,17 @@ final class SessionCookieNameResolver
     /** Resolve a host cookie name for the active request authority + cookie scope. */
     public static function resolveFor(string $legacyName, ?string $host = null): string
     {
+        return CookieScope::qualifyName(self::resolveUnscopedFor($legacyName, $host));
+    }
+
+    /**
+     * Resolve the authority-qualified name before a module cookie scope suffix.
+     *
+     * Trusted realm bridges use this only to locate a previously attested
+     * Session when their API route has already entered another cookie scope.
+     */
+    public static function resolveUnscopedFor(string $legacyName, ?string $host = null): string
+    {
         $legacyName = trim($legacyName);
         if ($legacyName === '') {
             return '';
@@ -44,7 +55,7 @@ final class SessionCookieNameResolver
             $name .= '_' . $port;
         }
 
-        return CookieScope::qualifyName($name);
+        return $name;
     }
 
     /**

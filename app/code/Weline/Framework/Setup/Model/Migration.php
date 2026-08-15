@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Setup\Model;
 
+use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\ModelInterface;
 use Weline\Framework\Database\Schema\Attribute\Col;
@@ -164,6 +165,46 @@ class Migration extends Model implements ModelInterface
             ->where(self::schema_fields_ID, $migrationId)
             ->where(self::schema_fields_STATUS, $status)
             ->total() === 1;
+    }
+
+    public function compareAndSwapStatusFailClosed(
+        int $migrationId,
+        string $expectedStatus,
+        string $newStatus,
+        string $expectedOperationId,
+        ?ConnectionFactory $connection = null,
+    ): void {
+        if ($migrationId <= 0 || trim($expectedStatus) === '' || trim($newStatus) === '') {
+            throw new \InvalidArgumentException('invalid migration status CAS request');
+        }
+        if ($expectedOperationId !== ''
+            && (trim($expectedOperationId) !== $expectedOperationId
+                || preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\z/D', $expectedOperationId) !== 1)) {
+            throw new \InvalidArgumentException('invalid migration operation_id CAS request');
+        }
+        $connection ??= $this->getConnection();
+        $values = [self::schema_fields_STATUS => $newStatus];
+        if ($newStatus === self::STATUS_ROLLED_BACK) {
+            $values[self::schema_fields_ROLLBACK_AT] = date('Y-m-d H:i:s');
+        }
+        (clone $this)->reset()->setConnection($connection)
+            ->where(self::schema_fields_ID, $migrationId)
+            ->where(self::schema_fields_STATUS, $expectedStatus)
+            ->where(self::schema_fields_OPERATION_ID, $expectedOperationId)
+            ->update($values)
+            ->fetch();
+
+        $fresh = (clone $this)->reset()->setConnection($connection)
+            ->where(self::schema_fields_ID, $migrationId);
+        $fresh->additional('FOR UPDATE');
+        $fresh->find()->fetch();
+        if ((int)$fresh->getData(self::schema_fields_ID) !== $migrationId
+            || $fresh->getData(self::schema_fields_STATUS) !== $newStatus
+            || (string)$fresh->getData(self::schema_fields_OPERATION_ID) !== $expectedOperationId) {
+            throw new \RuntimeException(
+                "migration status CAS persistence failed: migration_id={$migrationId}"
+            );
+        }
     }
 
     /**

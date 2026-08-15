@@ -248,16 +248,19 @@ class Store extends Model
     private function requireParentWebsite(int $websiteId): Website
     {
         $website = ObjectManager::getInstance(Website::class, [], false);
-        $website->setConnection($this->getConnection())
-            ->clearData()->clearQuery()
-            ->where(Website::schema_fields_ID, $websiteId);
+        $website->setConnection($this->getConnection())->clearData()->clearQuery();
+        $sql = 'SELECT * FROM ' . $website->getTable()
+            . ' WHERE ' . Website::schema_fields_ID . ' = :website_id';
         if ($this->supportsForUpdate()) {
-            $website->additional('FOR UPDATE');
+            $sql .= ' FOR UPDATE';
         }
-        $website->find()->fetch();
-        if (!$website->hasData(Website::schema_fields_ID)) {
+        $statement = $this->getConnection()->getConnector()->getWrappedConnection()->prepare($sql);
+        $statement->execute(['website_id' => $websiteId]);
+        $row = $statement->fetch(\PDO::FETCH_ASSOC);
+        if (!is_array($row) || !array_key_exists(Website::schema_fields_ID, $row)) {
             throw new \RuntimeException(__('店铺所属 Website 不存在'));
         }
+        $website->setData($row);
         return $website;
     }
 

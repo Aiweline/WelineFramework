@@ -31,7 +31,10 @@ final class PdoConnection implements ConnectionInterface
     public function execute(string $sql): int
     {
         $result = $this->pdo->exec($sql);
-        return $result !== false ? $result : 0;
+        if ($result === false) {
+            throw new \RuntimeException('PDO::exec failed: ' . ($this->pdo->errorInfo()[2] ?? 'unknown'));
+        }
+        return $result;
     }
 
     public function lastInsertId(?string $name = null): string|false

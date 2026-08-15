@@ -516,6 +516,15 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
 
+// Publish the child-owned PHP PID before the protected credential wait. On
+// Windows ARM64 x64 emulation the launcher PID is not the durable Worker PID;
+// the parent needs this redacted lease before it can authorize the credential.
+\Weline\Server\Service\Runtime\WorkerProcessLease::register(
+    $processName,
+    $orchestratorLaunchId,
+    $orchestratorEpoch
+);
+
 $masterLeaseManager = new \Weline\Server\Service\MasterLeaseManager();
 $masterToken = $masterLeaseManager->resolveProtectedCredentialFromArguments(
         $argv,
@@ -624,11 +633,6 @@ $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
     $orchestratorEpoch
 );
 $childMasterGuard->assertAliveOrExit('启动前 Master 自治检查');
-\Weline\Server\Service\Runtime\WorkerProcessLease::register(
-    $processName,
-    $orchestratorLaunchId,
-    $orchestratorEpoch
-);
 
 // IPC control port. Prefer the explicit Master-provided argument; the endpoint
 // file is only a bootstrap pointer when the argument is absent.

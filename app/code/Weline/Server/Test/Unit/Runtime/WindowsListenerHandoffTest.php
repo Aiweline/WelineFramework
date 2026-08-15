@@ -41,6 +41,49 @@ final class WindowsListenerHandoffTest extends TestCase
         parent::tearDown();
     }
 
+    public function testFreshHandoffDirectoryIsCreatedUnderVerifiedServerRoot(): void
+    {
+        $serverDirectory = $this->directory . DIRECTORY_SEPARATOR . 'var'
+            . DIRECTORY_SEPARATOR . 'server';
+        self::assertTrue(\mkdir($serverDirectory, 0700, true));
+        $instanceDirectory = $serverDirectory . DIRECTORY_SEPARATOR . 'instances';
+
+        $method = new \ReflectionMethod(
+            WindowsListenerHandoff::class,
+            'ensureHandoffDirectory',
+        );
+        $result = $method->invoke(null, $serverDirectory, $instanceDirectory);
+
+        self::assertSame($instanceDirectory, $result);
+        self::assertDirectoryExists($instanceDirectory);
+        self::assertFalse(\is_link($instanceDirectory));
+        self::assertSame(
+            (string)\realpath($serverDirectory),
+            (string)\realpath(\dirname($instanceDirectory)),
+        );
+    }
+
+    public function testMasterSocketInstallDoesNotReenterPendingRegistrySweep(): void
+    {
+        $method = new \ReflectionMethod(
+            WindowsListenerHandoff::class,
+            'installMasterSocket',
+        );
+        $source = \file($method->getFileName());
+        self::assertIsArray($source);
+        $body = \implode('', \array_slice(
+            $source,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringNotContainsString('self::hasMasterSocket(', $body);
+        self::assertStringContainsString(
+            'self::$masterSources[$intentDigest] ?? null',
+            $body,
+        );
+    }
+
     public function testExportOwnershipReleasesWhenPendingRecordCannotBePublished(): void
     {
         [$listener, $host, $port] = $this->listener();

@@ -82,7 +82,7 @@ final class FileStorage implements SessionStorageInterface
             return [];
         }
         if (self::shouldLogSessionOperations()) {
-            w_log_info('[FileStorage] read sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data), [], 'session');
+            w_log_info('[FileStorage] read keys=' . count($data), [], 'session');
         }
         return $data;
     }
@@ -96,7 +96,7 @@ final class FileStorage implements SessionStorageInterface
         $content = \serialize($data);
         $result = @\file_put_contents($filePath, $content, LOCK_EX);
         if (self::shouldLogSessionOperations()) {
-            w_log_info('[FileStorage] write sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data) . ' ok=' . ($result !== false ? '1' : '0'), [], 'session');
+            w_log_info('[FileStorage] write keys=' . count($data) . ' ok=' . ($result !== false ? '1' : '0'), [], 'session');
         }
         return $result !== false;
     }
@@ -110,7 +110,7 @@ final class FileStorage implements SessionStorageInterface
         $existed = \file_exists($filePath);
         $ok = $existed ? @\unlink($filePath) : true;
         if (self::shouldLogSessionOperations()) {
-            w_log_info('[FileStorage] destroy sid=' . substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'), [], 'session');
+            w_log_info('[FileStorage] destroy ok=' . ($ok ? '1' : '0'), [], 'session');
         }
         return $ok;
     }

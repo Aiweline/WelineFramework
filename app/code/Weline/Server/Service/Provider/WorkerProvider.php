@@ -12,6 +12,7 @@ use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
 use Weline\Server\Service\Edge\Gateway\GatewayBackendIngressTokenStore;
+use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
 use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
 
@@ -149,6 +150,15 @@ class WorkerProvider extends AbstractServiceProvider
                 $arguments,
                 WorkerRuntimeArgumentBuilder::gatewayBackendCapability($context),
             );
+            $arguments = \array_merge(
+                $arguments,
+                $this->gatewayListenerIdentityArguments(
+                    $context,
+                    $host,
+                    $port,
+                    $instanceLaunchId,
+                ),
+            );
         }
 
         if ($direct && $listenerMode === 'shared_fd') {
@@ -164,7 +174,9 @@ class WorkerProvider extends AbstractServiceProvider
                     (string)($handoff['lease_id'] ?? ''),
                 ) === 1
             ) {
-                $arguments[] = '--gateway-host-lease-id=' . (string)$handoff['lease_id'];
+                if (!$gatewayBackend) {
+                    $arguments[] = '--gateway-host-lease-id=' . (string)$handoff['lease_id'];
+                }
             }
         } elseif ($direct && !\in_array($listenerMode, ['reuseport', 'worker_ports'], true)) {
             throw new \InvalidArgumentException(
@@ -244,6 +256,79 @@ class WorkerProvider extends AbstractServiceProvider
                 'Pure WLS HTTPS requires wls.ssl.engine=stream.'
             ),
         };
+    }
+
+    /**
+     * Bind the signed backend attestation to the listener the gateway actually
+     * connected to. In Dispatcher topology the request is forwarded to a
+     * private Worker, so the Worker's own port is not the public backend
+     * identity. The immutable startup handoff remains the authority for the
+     * Dispatcher tuple and its host lease.
+     *
+     * @return list<string>
+     */
+    private function gatewayListenerIdentityArguments(
+        ServiceContext $context,
+        string $workerHost,
+        int $workerPort,
+        string $instanceLaunchId,
+    ): array {
+        $gateway = $context->getConfig('wls.gateway', []);
+        $gateway = \is_array($gateway) ? $gateway : [];
+        $dispatcher = $context->runtimeSelection->isDispatcher();
+        $expectedHost = \strtolower(\trim($workerHost));
+        $expectedPort = $dispatcher ? $context->mainPort : $workerPort;
+        if (!\in_array($expectedHost, ['127.0.0.1', '::1'], true)
+            || $expectedPort < 1
+            || $expectedPort > 65535
+        ) {
+            throw new \RuntimeException(
+                'Gateway Worker listener identity is outside the loopback backend boundary.'
+            );
+        }
+
+        $lease = \is_array($gateway['backend_lease'] ?? null)
+            ? $gateway['backend_lease']
+            : [];
+        $leaseId = \strtolower(\trim((string)($lease['lease_id'] ?? '')));
+        if ((int)($lease['schema_version'] ?? 0) !== GatewayPortLeaseAllocator::SCHEMA_VERSION
+            || !\hash_equals($expectedHost, \strtolower(\trim((string)($lease['bind_host'] ?? ''))))
+            || (int)($lease['port'] ?? 0) !== $expectedPort
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $leaseId) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway Worker listener identity does not match its schema-6 backend lease.'
+            );
+        }
+
+        $handoff = \is_array($gateway['startup_listener_handoff'] ?? null)
+            ? $gateway['startup_listener_handoff']
+            : [];
+        if ($handoff !== []) {
+            $handoffLeaseId = \strtolower(\trim((string)($handoff['lease_id'] ?? '')));
+            $handoffLaunchId = \strtolower(\trim((string)($handoff['launch_id'] ?? '')));
+            if ((int)($handoff['schema_version'] ?? 0) !== 1
+                || ($handoff['continuous_ownership'] ?? false) !== true
+                || !\hash_equals($expectedHost, \strtolower(\trim((string)($handoff['bind_host'] ?? ''))))
+                || (int)($handoff['port'] ?? 0) !== $expectedPort
+                || !\hash_equals($leaseId, $handoffLeaseId)
+                || !\hash_equals($instanceLaunchId, $handoffLaunchId)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway Worker listener identity does not match its startup handoff.'
+                );
+            }
+        } elseif ($dispatcher) {
+            throw new \RuntimeException(
+                'Dispatcher-backed Gateway Worker requires a continuous startup listener handoff.'
+            );
+        }
+
+        return [
+            '--gateway-listener-host=' . $expectedHost,
+            '--gateway-listener-port=' . $expectedPort,
+            '--gateway-host-lease-id=' . $leaseId,
+        ];
     }
 
 }

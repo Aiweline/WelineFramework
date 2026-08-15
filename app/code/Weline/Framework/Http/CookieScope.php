@@ -15,9 +15,9 @@ use Weline\Framework\Manager\ObjectManager;
  * {@see self::EVENT_RESOLVE} using framework-neutral fields only
  * (`name_suffix`, `mount_path`, …). Do not put Website model semantics here.
  *
- * Protocol cookies (`__Host-` / `__Secure-` / Worker bootstrap) stay exact:
- * browser prefix rules + QueryBin literal cookie match require Path=/ and the
- * wire name unchanged.
+ * Protocol and authentication-realm cookies (`__Host-` / `__Secure-` /
+ * Worker bootstrap / backend remember-device) stay exact: browser prefix
+ * rules and realm bridges require Path=/ and the wire name unchanged.
  */
 final class CookieScope
 {
@@ -118,6 +118,9 @@ final class CookieScope
             return false;
         }
         if (\str_starts_with($name, '__Host-') || \str_starts_with($name, '__Secure-')) {
+            return true;
+        }
+        if (\preg_match('/^w_backend_ut(?:_[1-9][0-9]{0,4})?$/D', $name) === 1) {
             return true;
         }
 

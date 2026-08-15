@@ -14,6 +14,11 @@ use Weline\Database\Model\Migration;
 use Weline\Database\Service\BackupService;
 use Weline\Database\Service\VersionService;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Registry\Service\RegistryProgress;
@@ -26,19 +31,23 @@ class MigrationService
     private BackupService $backupService;
     private VersionService $versionService;
     private Printing $printing;
+    private HistoricalMigrationMetadataRegistry $historicalMigrationMetadata;
     
     public function __construct(
         ConnectionFactory $connectionFactory,
         Migration $migrationModel,
         BackupService $backupService,
         VersionService $versionService,
-        Printing $printing
+        Printing $printing,
+        ?HistoricalMigrationMetadataRegistry $historicalMigrationMetadata = null,
     ) {
         $this->connectionFactory = $connectionFactory;
         $this->migrationModel = $migrationModel;
         $this->backupService = $backupService;
         $this->versionService = $versionService;
         $this->printing = $printing;
+        $this->historicalMigrationMetadata = $historicalMigrationMetadata
+            ?? new HistoricalMigrationMetadataRegistry();
     }
     
     /**
@@ -79,11 +88,8 @@ class MigrationService
             }
             
             $transactional = $this->isDataOnlyMigration($migrationClass);
-            $query = $transactional ? $this->connectionFactory->query('SELECT 1') : null;
-            if ($query !== null) {
-                $query->beginTransaction();
-            }
-
+            $affectedTables = $this->requiredAffectedTables($migrationClass, $migrationFile);
+            $query = null;
             $migrationId = 0;
             try {
                 $needsBackup = $this->migrationRequiresBackup($migrationClass);
@@ -98,23 +104,57 @@ class MigrationService
                     throw new \RuntimeException(__('无法记录迁移运行状态'));
                 }
 
-                if ($needsBackup) {
-                    $this->performBackup($migrationClass, $migrationId);
+                // The RUNNING audit is durable even if the migration transaction
+                // rolls back. Backed-up migrations receive their transaction from
+                // the exact-table atomic capability; data-only migrations without
+                // backups retain the ordinary transaction path.
+                if ($transactional && !$needsBackup) {
+                    $query = $this->connectionFactory->query('SELECT 1');
+                    $query->beginTransaction();
                 }
-                
-                $result = $migrationClass->install();
+
+                $execute = function () use (
+                    $migrationClass,
+                    $moduleName,
+                    $migrationFile,
+                    $migrationId,
+                    $operationId,
+                ): bool {
+                    $result = $migrationClass->install();
+                    if ($result !== true) {
+                        throw new \RuntimeException(__("迁移执行失败"));
+                    }
+                    $this->restorePreviouslyRolledBackBackups(
+                        $moduleName,
+                        $migrationFile,
+                        $migrationId,
+                    );
+                    $this->migrationModel->compareAndSwapStatusFailClosed(
+                        $migrationId,
+                        Migration::STATUS_RUNNING,
+                        Migration::STATUS_INSTALLED,
+                        $operationId,
+                        $this->connectionFactory,
+                    );
+                    return true;
+                };
+                $result = $needsBackup
+                    ? $this->performBackupAndRun(
+                        $migrationClass,
+                        $migrationId,
+                        $execute,
+                        $affectedTables,
+                    )
+                    : ($affectedTables !== []
+                        ? $this->withAtomicPhysicalTables(
+                            $affectedTables,
+                            static fn() => $execute(),
+                        )
+                        : $execute());
                 
                 if (!$result) {
                     throw new \Exception(__("迁移执行失败"));
                 }
-
-                $this->restorePreviouslyRolledBackBackups(
-                    $moduleName,
-                    $migrationFile,
-                    $migrationId,
-                );
-                
-                $this->updateMigrationStatusById($migrationId, Migration::STATUS_INSTALLED);
                 if ($query !== null) {
                     $query->commit();
                 }
@@ -127,7 +167,13 @@ class MigrationService
                     $query->rollBack();
                 }
                 if ($migrationId > 0) {
-                    $this->updateMigrationStatusById($migrationId, Migration::STATUS_FAILED);
+                    $this->migrationModel->compareAndSwapStatusFailClosed(
+                        $migrationId,
+                        Migration::STATUS_RUNNING,
+                        Migration::STATUS_FAILED,
+                        $operationId,
+                        $this->connectionFactory,
+                    );
                 }
                 throw $e;
             }
@@ -150,6 +196,8 @@ class MigrationService
         string $migrationFile,
         string $operationId = '',
         ?array $expectedBackupStrategy = null,
+        ?int $expectedMigrationId = null,
+        ?string $expectedChecksum = null,
     ): bool
     {
         try {
@@ -161,11 +209,18 @@ class MigrationService
             if (!is_file($migrationFile)) {
                 throw new \RuntimeException(__('迁移文件不存在: %{1}', $migrationFile));
             }
-            $filename = basename($migrationFile);
-            $record = $this->getInstalledMigrationRecord($moduleName, $filename);
-            if ($record === null) {
-                throw new \RuntimeException(__("未找到已安装迁移记录: %{1}", $migrationFile));
+            if ($expectedMigrationId === null || $expectedMigrationId <= 0) {
+                throw new \RuntimeException(__('联动回滚缺少精确 migration_id'));
             }
+            $filename = basename($migrationFile);
+            $record = $this->loadPlannedScriptRecord(
+                $expectedMigrationId,
+                $moduleName,
+                $filename,
+                $operationId,
+                false,
+                $expectedChecksum,
+            );
             $this->assertMigrationChecksum($record, $migrationFile);
 
             $migrationClass = $this->loadMigrationClass($migrationFile);
@@ -179,26 +234,70 @@ class MigrationService
                 throw new \RuntimeException(__('迁移回滚备份策略在预检后已变化: %{1}', $filename));
             }
             $migrationId = (int)$record->getId();
-            $this->performRollbackBackup($migrationClass, $migrationId, $operationId, $backupStrategy);
-            
+            $affectedTables = $this->requiredAffectedTables($migrationClass, $migrationFile);
             $transactional = $this->isDataOnlyMigration($migrationClass);
-            $query = $transactional ? $this->connectionFactory->query('SELECT 1') : null;
+            $query = $transactional && $affectedTables === []
+                ? $this->connectionFactory->query('SELECT 1')
+                : null;
             if ($query !== null) {
                 $query->beginTransaction();
             }
 
             try {
-                $result = $migrationClass->uninstall();
+                $rollback = function () use (
+                    $migrationClass,
+                    $migrationId,
+                    $moduleName,
+                    $filename,
+                    $migrationFile,
+                    $operationId,
+                    $expectedChecksum,
+                ): bool {
+                    $lockedRecord = $this->loadPlannedScriptRecord(
+                        $migrationId,
+                        $moduleName,
+                        $filename,
+                        $operationId,
+                        true,
+                        $expectedChecksum,
+                    );
+                    $this->assertMigrationChecksum($lockedRecord, $migrationFile);
+                    $result = $migrationClass->uninstall();
+                    if ($result !== true) {
+                        throw new \RuntimeException(__("迁移回滚失败"));
+                    }
+
+                    if ($migrationId > 0) {
+                        $this->restoreBackupsForMigration($migrationId);
+                    }
+                    $this->migrationModel->compareAndSwapStatusFailClosed(
+                        $migrationId,
+                        Migration::STATUS_INSTALLED,
+                        Migration::STATUS_ROLLED_BACK,
+                        $operationId,
+                        $this->connectionFactory,
+                    );
+                    return true;
+                };
+                $result = $backupStrategy['strategy'] === 'none'
+                    ? ($affectedTables !== []
+                        ? $this->withAtomicPhysicalTables(
+                            $affectedTables,
+                            static fn() => $rollback(),
+                        )
+                        : $rollback())
+                    : $this->performRollbackBackupAndRun(
+                        $migrationClass,
+                        $migrationId,
+                        $operationId,
+                        $backupStrategy,
+                        $rollback,
+                        $affectedTables,
+                    );
                 
                 if (!$result) {
                     throw new \Exception(__("迁移回滚失败"));
                 }
-                
-                if ($migrationId > 0) {
-                    $this->restoreBackupsForMigration($migrationId);
-                }
-                
-                $record->updateStatus(Migration::STATUS_ROLLED_BACK);
                 if ($query !== null) {
                     $query->commit();
                 }
@@ -228,49 +327,11 @@ class MigrationService
      */
     public function uninstallMigration(string $moduleName, string $migrationFile): bool
     {
-        try {
-            if (!is_file($migrationFile)) {
-                throw new \RuntimeException(__('迁移文件不存在: %{1}', $migrationFile));
-            }
-            $record = $this->getInstalledMigrationRecord($moduleName, basename($migrationFile));
-            if ($record === null) {
-                throw new \RuntimeException(__("迁移记录不存在: %{1}", $migrationFile));
-            }
-            $this->assertMigrationChecksum($record, $migrationFile);
-
-            $migrationClass = $this->loadMigrationClass($migrationFile);
-            if (!$migrationClass instanceof MigrationInterface) {
-                throw new \Exception(__("迁移类必须实现MigrationInterface接口"));
-            }
-
-            $query = $this->isDataOnlyMigration($migrationClass)
-                ? $this->connectionFactory->query('SELECT 1')
-                : null;
-            $query?->beginTransaction();
-            
-            try {
-                // 执行卸载
-                $result = $migrationClass->uninstall();
-                
-                if (!$result) {
-                    throw new \Exception(__("迁移卸载失败"));
-                }
-                
-                $record->updateStatus(Migration::STATUS_ROLLED_BACK);
-                $query?->commit();
-                
-                $this->printing->success(__("迁移卸载成功: %{1}", $migrationFile));
-                return true;
-                
-            } catch (\Throwable $e) {
-                $query?->rollBack();
-                throw $e;
-            }
-            
-        } catch (\Exception $e) {
-            $this->printing->error(__("迁移卸载失败: %{1}", $e->getMessage()));
-            return false;
-        }
+        unset($moduleName, $migrationFile);
+        $this->printing->error(__(
+            '已禁止独立迁移卸载；请通过 ModuleRollbackManagerInterface 创建带原子备份的联动回滚任务'
+        ));
+        return false;
     }
     
     /**
@@ -451,10 +512,39 @@ class MigrationService
         return method_exists($migration, 'getType') && $migration->getType() === 'data_migration';
     }
 
+    /** @return list<string> */
+    private function requiredAffectedTables(
+        MigrationInterface $migration,
+        string $migrationFile,
+    ): array
+    {
+        $type = method_exists($migration, 'getType')
+            ? strtolower(trim((string)$migration->getType()))
+            : '';
+        if ($type !== 'modify_table') {
+            return [];
+        }
+        $tables = method_exists($migration, 'getAffectedTables')
+            ? $this->normalizeIdentifierList((array)$migration->getAffectedTables())
+            : [];
+        if ($tables === []) {
+            $tables = $this->historicalMigrationMetadata->affectedTables($migrationFile);
+        }
+        if ($tables === []) {
+            throw new \RuntimeException(__('modify_table 迁移必须声明受影响的 exact physical tables'));
+        }
+        return $tables;
+    }
+
     /**
      * 根据备份策略执行备份
      */
-    private function performBackup(MigrationInterface $migration, int $migrationId): void
+    private function performBackupAndRun(
+        MigrationInterface $migration,
+        int $migrationId,
+        callable $migrationCallback,
+        array $affectedTables = [],
+    ): mixed
     {
         $strategy = method_exists($migration, 'getBackupStrategy')
             ? $migration->getBackupStrategy()
@@ -472,20 +562,45 @@ class MigrationService
             throw new \RuntimeException(__('列备份策略必须声明至少一个字段'));
         }
 
-        foreach ($tables as $table) {
-            if ($strategyName === 'column') {
-                foreach ($columns as $column) {
-                    $this->backupService->backupColumnData($table, $column, $migrationId);
+        return $this->withAtomicPhysicalTables(
+            array_values(array_unique(array_merge($affectedTables, $tables))),
+            function (
+                ConnectorInterface $connector,
+                array $identities,
+            ) use (
+                $tables,
+                $columns,
+                $strategyName,
+                $migrationId,
+                $migrationCallback,
+            ): mixed {
+                foreach ($tables as $table) {
+                    $identity = $identities[$table] ?? null;
+                    if (!$identity instanceof PhysicalTableIdentity) {
+                        throw new \RuntimeException('physical migration backup identity unavailable');
+                    }
+                    if ($strategyName === 'column') {
+                        foreach ($columns as $column) {
+                            $this->backupService->backupPhysicalColumnData(
+                                $identity,
+                                $column,
+                                $migrationId,
+                                physicalConnector: $connector,
+                            );
+                        }
+                    } else {
+                        $this->backupService->smartBackupPhysicalTable(
+                            $identity,
+                            $migrationId,
+                            physicalConnector: $connector,
+                        );
+                    }
                 }
-            } else {
-                if (!$this->backupService->backupTableStructure($table, $migrationId)) {
-                    throw new \RuntimeException(__('无法备份表 %{1} 的结构', $table));
-                }
-                $this->backupService->backupTableData($table, $migrationId);
-            }
-        }
 
-        $this->printing->info(__("迁移备份完成 (migration_id: %{1})", $migrationId));
+                $this->printing->info(__("迁移备份完成 (migration_id: %{1})", $migrationId));
+                return $migrationCallback();
+            },
+        );
     }
 
     /**
@@ -535,79 +650,90 @@ class MigrationService
      *     forward_backup_types: list<string>
      * } $strategy
      */
-    private function performRollbackBackup(
+    private function performRollbackBackupAndRun(
         MigrationInterface $migration,
         int $migrationId,
         string $operationId,
         array $strategy,
-    ): void {
+        callable $migrationCallback,
+        array $affectedTables = [],
+    ): mixed {
+        unset($migration);
         $strategyName = (string)$strategy['strategy'];
         if ($strategyName === 'none') {
-            return;
+            return $migrationCallback();
         }
 
-        foreach ($strategy['tables'] as $table) {
-            if ($strategyName === 'table') {
-                if (!$this->hasRollbackBackup(
-                    $migrationId,
-                    $table,
-                    MigrationBackup::TYPE_STRUCTURE,
-                    null,
-                    $operationId,
-                )) {
-                    if (!$this->backupService->backupTableStructure(
-                        $table,
-                        $migrationId,
-                        MigrationBackup::SCOPE_ROLLBACK,
-                        $operationId,
-                    )) {
-                        throw new \RuntimeException(__('回滚前无法备份表 %{1} 的结构', $table));
+        return $this->withAtomicPhysicalTables(
+            array_values(array_unique(array_merge($affectedTables, $strategy['tables']))),
+            function (
+                ConnectorInterface $connector,
+                array $identities,
+            ) use (
+                $strategy,
+                $strategyName,
+                $migrationId,
+                $operationId,
+                $migrationCallback,
+            ): mixed {
+                foreach ($strategy['tables'] as $table) {
+                    $identity = $identities[$table] ?? null;
+                    if (!$identity instanceof PhysicalTableIdentity) {
+                        throw new \RuntimeException('physical rollback backup identity unavailable');
+                    }
+                    $canonical = $identity->canonical();
+                    if ($strategyName === 'table') {
+                        // smartBackupPhysicalTable publishes structure and data
+                        // in one transaction. A durable structure row is the
+                        // completion marker; empty tables intentionally have no
+                        // TYPE_TABLE row.
+                        if (!$this->hasRollbackBackup(
+                            $migrationId,
+                            $canonical,
+                            MigrationBackup::TYPE_STRUCTURE,
+                            null,
+                            $operationId,
+                        )) {
+                            $this->backupService->smartBackupPhysicalTable(
+                                $identity,
+                                $migrationId,
+                                MigrationBackup::SCOPE_ROLLBACK,
+                                $operationId,
+                                $connector,
+                            );
+                        }
+                        continue;
+                    }
+
+                    foreach ($strategy['columns'] as $column) {
+                        if ($this->hasRollbackBackup(
+                            $migrationId,
+                            $canonical,
+                            MigrationBackup::TYPE_COLUMN,
+                            $column,
+                            $operationId,
+                        )) {
+                            continue;
+                        }
+                        $this->backupService->backupPhysicalColumnData(
+                            $identity,
+                            $column,
+                            $migrationId,
+                            reason: 'ROLLBACK',
+                            backupScope: MigrationBackup::SCOPE_ROLLBACK,
+                            operationId: $operationId,
+                            physicalConnector: $connector,
+                        );
                     }
                 }
-                if (!$this->hasRollbackBackup(
-                    $migrationId,
-                    $table,
-                    MigrationBackup::TYPE_TABLE,
-                    null,
-                    $operationId,
-                )) {
-                    $this->backupService->backupTableData(
-                        $table,
-                        $migrationId,
-                        MigrationBackup::SCOPE_ROLLBACK,
-                        $operationId,
-                    );
-                }
-                continue;
-            }
 
-            foreach ($strategy['columns'] as $column) {
-                if ($this->hasRollbackBackup(
-                    $migrationId,
-                    $table,
-                    MigrationBackup::TYPE_COLUMN,
-                    $column,
-                    $operationId,
-                )) {
-                    continue;
-                }
-                $this->backupService->backupColumnData(
-                    $table,
-                    $column,
-                    $migrationId,
-                    null,
-                    null,
-                    'ROLLBACK',
-                    MigrationBackup::SCOPE_ROLLBACK,
-                    $operationId,
-                );
-            }
-        }
-
-        $this->printing->info(__(
-            '迁移回滚备份完成 (migration_id: %{1}, operation_id: %{2})',
-            [(string)$migrationId, $operationId]
-        ));
+                $this->printing->info(__(
+                    '迁移回滚备份完成 (migration_id: %{1}, operation_id: %{2})',
+                    [(string)$migrationId, $operationId]
+                ));
+                return $migrationCallback();
+            },
+        );
     }
 
     private function hasRollbackBackup(
@@ -630,6 +756,55 @@ class MigrationService
             }
         }
         return false;
+    }
+
+    /**
+     * @param list<string> $logicalTables
+     * @param callable(ConnectorInterface, array<string, PhysicalTableIdentity>): mixed $callback
+     */
+    private function withAtomicPhysicalTables(array $logicalTables, callable $callback): mixed
+    {
+        $connector = $this->connectionFactory->getConnector();
+        if (!$connector instanceof PhysicalTableMetadataInterface
+            || !$connector instanceof PhysicalTableIdentityProviderInterface) {
+            throw new \RuntimeException('exact physical table capability unavailable');
+        }
+        if (!$connector instanceof AtomicPhysicalTableChangeInterface) {
+            throw new \RuntimeException('atomic physical table change capability unavailable');
+        }
+
+        $identities = [];
+        $locks = [];
+        foreach ($logicalTables as $logicalTable) {
+            $identity = $connector->resolvePhysicalTableIdentity($logicalTable);
+            $identities[$logicalTable] = $identity;
+            $locks[$identity->canonical()] = $identity;
+        }
+        ksort($locks, SORT_STRING);
+        $ordered = array_values($locks);
+
+        $acquire = function (int $offset) use (
+            &$acquire,
+            $connector,
+            $ordered,
+            $identities,
+            $callback,
+        ): mixed {
+            if (!isset($ordered[$offset])) {
+                return $callback($connector, $identities);
+            }
+            return $connector->atomicPhysicalTableChange(
+                $ordered[$offset],
+                function (ConnectorInterface $locked) use ($connector, &$acquire, $offset): mixed {
+                    if ($locked !== $connector) {
+                        throw new \RuntimeException('atomic migration connector changed during callback');
+                    }
+                    return $acquire($offset + 1);
+                },
+            );
+        };
+
+        return $acquire(0);
     }
 
     /**
@@ -685,20 +860,44 @@ class MigrationService
                 $table = (string)$backup->getData(MigrationBackup::schema_fields_TABLE_NAME);
                 $type = (string)$backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE);
                 $operationId = (string)$backup->getData(MigrationBackup::schema_fields_OPERATION_ID);
+                $physicalIdentity = null;
+                if (str_contains($table, '.')) {
+                    try {
+                        $physicalIdentity = PhysicalTableIdentity::fromCanonical($table);
+                    } catch (\InvalidArgumentException) {
+                        // Pre exact-physical backup rows remain on the legacy path.
+                    }
+                }
                 if ($type === MigrationBackup::TYPE_STRUCTURE) {
-                    if ($this->connectionFactory->getConnector()->tableExist($table)) {
+                    $connector = $this->connectionFactory->getConnector();
+                    $exists = $physicalIdentity !== null
+                        ? ($connector instanceof PhysicalTableMetadataInterface
+                            && $connector->physicalTableExists($physicalIdentity))
+                        : $connector->tableExist($table);
+                    if ($physicalIdentity !== null && !$connector instanceof PhysicalTableMetadataInterface) {
+                        throw new \RuntimeException('exact physical table capability unavailable during restore');
+                    }
+                    if ($exists) {
                         $this->backupService->markBackupRestored($backupId);
                     }
                     continue;
                 }
                 if ($type === MigrationBackup::TYPE_TABLE) {
-                    $result = $this->backupService->restoreTableDataConflictSafe(
-                        $table,
-                        $sourceMigrationId,
-                        MigrationBackup::SCOPE_ROLLBACK,
-                        $operationId,
-                        $backupId,
-                    );
+                    $result = $physicalIdentity !== null
+                        ? $this->backupService->restorePhysicalTableDataConflictSafe(
+                            $physicalIdentity,
+                            $sourceMigrationId,
+                            MigrationBackup::SCOPE_ROLLBACK,
+                            $operationId,
+                            $backupId,
+                        )
+                        : $this->backupService->restoreTableDataConflictSafe(
+                            $table,
+                            $sourceMigrationId,
+                            MigrationBackup::SCOPE_ROLLBACK,
+                            $operationId,
+                            $backupId,
+                        );
                     $conflicts += $result['conflicts'];
                     continue;
                 }
@@ -707,17 +906,27 @@ class MigrationService
                     if ($column === '') {
                         throw new \RuntimeException(__('回滚列备份 #%{1} 缺少字段名', (string)$backupId));
                     }
-                    $result = $this->backupService->restoreColumnDataConflictSafe(
-                        $table,
-                        $column,
-                        $sourceMigrationId,
-                        null,
-                        null,
-                        null,
-                        MigrationBackup::SCOPE_ROLLBACK,
-                        $operationId,
-                        $backupId,
-                    );
+                    $result = $physicalIdentity !== null
+                        ? $this->backupService->restorePhysicalColumnDataConflictSafe(
+                            $physicalIdentity,
+                            $column,
+                            $sourceMigrationId,
+                            null,
+                            MigrationBackup::SCOPE_ROLLBACK,
+                            $operationId,
+                            $backupId,
+                        )
+                        : $this->backupService->restoreColumnDataConflictSafe(
+                            $table,
+                            $column,
+                            $sourceMigrationId,
+                            null,
+                            null,
+                            null,
+                            MigrationBackup::SCOPE_ROLLBACK,
+                            $operationId,
+                            $backupId,
+                        );
                     $conflicts += $result['conflicts'];
                 }
             }
@@ -862,16 +1071,6 @@ class MigrationService
         }
     }
 
-    private function updateMigrationStatusById(int $migrationId, string $status): void
-    {
-        $migration = clone $this->migrationModel;
-        $migration->load($migrationId);
-        if (!$migration->getId()) {
-            throw new \RuntimeException(__('迁移记录不存在: %{1}', (string)$migrationId));
-        }
-        $migration->updateStatus($status);
-    }
-
     private function getInstalledMigrationRecord(string $moduleName, string $migrationFile): ?Migration
     {
         $items = $this->migrationModel->reset()
@@ -901,6 +1100,38 @@ class MigrationService
         if (!is_string($actual) || !hash_equals($expected, $actual)) {
             throw new \RuntimeException(__('迁移文件校验和不一致，禁止自动回滚: %{1}', basename($migrationFile)));
         }
+    }
+
+    private function loadPlannedScriptRecord(
+        int $migrationId,
+        string $moduleName,
+        string $filename,
+        string $operationId,
+        bool $forUpdate = false,
+        ?string $expectedChecksum = null,
+    ): Migration {
+        $record = (clone $this->migrationModel)->reset()->setConnection($this->connectionFactory)
+            ->where(Migration::schema_fields_ID, $migrationId);
+        if ($forUpdate) {
+            $record->additional('FOR UPDATE');
+        }
+        $record->find()->fetch();
+        if ((int)$record->getId() !== $migrationId
+            || (string)$record->getData(Migration::schema_fields_MODULE) !== $moduleName
+            || basename((string)$record->getData(Migration::schema_fields_FILE)) !== $filename
+            || $record->getData(Migration::schema_fields_STATUS) !== Migration::STATUS_INSTALLED
+            || (string)$record->getData(Migration::schema_fields_OPERATION_ID) !== $operationId) {
+            throw new \RuntimeException(__('迁移计划记录状态、文件或 operation_id 已变化: #%{1}', (string)$migrationId));
+        }
+        $expectedChecksum = trim((string)$expectedChecksum);
+        if ($expectedChecksum === ''
+            || !hash_equals(
+                $expectedChecksum,
+                trim((string)$record->getData(Migration::schema_fields_CHECKSUM)),
+            )) {
+            throw new \RuntimeException(__('迁移计划记录校验和已变化或缺失: #%{1}', (string)$migrationId));
+        }
+        return $record;
     }
     
     
@@ -1354,18 +1585,22 @@ class MigrationService
             $file = (string)($migration['file'] ?? '');
             $migrationId = (int)($migration['migration_id'] ?? 0);
             if ($migrationId > 0 && $operationId !== '') {
-                $record = clone $this->migrationModel;
-                $record->load($migrationId);
-                if (!$record->getId() || $record->getData(Migration::schema_fields_STATUS) !== Migration::STATUS_INSTALLED) {
+                $record = (clone $this->migrationModel)->reset()->setConnection($this->connectionFactory)
+                    ->where(Migration::schema_fields_ID, $migrationId);
+                $record->find()->fetch();
+                if ((int)$record->getId() !== $migrationId
+                    || $record->getData(Migration::schema_fields_STATUS) !== Migration::STATUS_INSTALLED) {
                     throw new \RuntimeException(__('迁移记录状态已变化: #%{1}', (string)$migrationId));
                 }
-                $record->setData(Migration::schema_fields_OPERATION_ID, $operationId)->save();
+                $this->migrationModel->bindOperationIdFailClosed($migrationId, $operationId);
             }
             if (!$this->rollbackMigration(
                 $moduleName,
                 $file,
                 $operationId,
                 (array)($migration['rollback_backup_strategy'] ?? []),
+                $migrationId,
+                trim((string)($migration['checksum'] ?? '')),
             )) {
                 throw new \RuntimeException(__('回滚迁移 %{1} 失败', (string)($migration['filename'] ?? basename($file))));
             }
@@ -1383,6 +1618,14 @@ class MigrationService
                 throw new \RuntimeException(__('正向补偿迁移 %{1} 失败', (string)($migration['filename'] ?? basename($file))));
             }
         }
+    }
+
+    public function releaseRecoveredOperationBindings(string $operationId): int
+    {
+        if (trim($operationId) === '' || strlen($operationId) > 64) {
+            throw new \InvalidArgumentException(__('operation_id 无效'));
+        }
+        return $this->migrationModel->releaseRecoveredOperationBindingsFailClosed($operationId);
     }
     
     /**

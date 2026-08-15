@@ -106,7 +106,7 @@ final class GatewayProjectEndpointReader
                 // files do not end in .json and are filtered below. Matching a
                 // generic ".tmp." substring would hide valid instance IDs such
                 // as "primary.tmp.worker" from the complete project view.
-                if (self::isSidecarLeaf($leaf)) {
+                if (self::isReservedStateLeaf($leaf)) {
                     continue;
                 }
                 if (!\str_ends_with($leaf, '.json')) {
@@ -205,8 +205,13 @@ final class GatewayProjectEndpointReader
         }
     }
 
-    private static function isSidecarLeaf(string $leaf): bool
+    public static function isReservedStateLeaf(string $leaf): bool
     {
-        return \str_ends_with($leaf, '.json.lock');
+        return \str_ends_with($leaf, '.json.lock')
+            || $leaf === '.wls-listener-handoff-pending.json'
+            || \preg_match(
+                '/\A\.wls-listener-handoff-[a-f0-9]{32}-master\.json\z/D',
+                $leaf,
+            ) === 1;
     }
 }

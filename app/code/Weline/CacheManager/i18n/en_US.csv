@@ -1,9 +1,15 @@
-﻿请先选择要清理的缓存,请先选择要清理的缓存
+﻿"参数 identity 不能为空","参数 identity 不能为空"
+"缓存池 %{1} 已清理","Cache pool %{1} has been cleaned"
+"WLS 共享命名空间已同步清理","WLS shared namespace has been cleaned up synchronously"
+已强制清理所有缓存池（包括持久缓存）,"Forcibly cleared all cache pools (including persistent cache)"
+已清理所有非持久缓存池,"Cleaned all non-persistent cache pools"
+"并额外清理 %{1} 个 WLS 共享缓存命名空间","And additionally clean up %{1} WLS shared cache namespaces"
+请先选择要清理的缓存,请先选择要清理的缓存
 清理中...,清理中...
 所选缓存已清理完成,所选缓存已清理完成
 部分缓存清理失败，请查看提示后重试,部分缓存清理失败，请查看提示后重试
-已清理所有非持久缓存池,"Cleaned all non-persistent cache pools"
 请求失败,请求失败
+"bin-query 接口不可用，请刷新页面后重试","bin-query 接口不可用，请刷新页面后重试"
 确定要清理所选缓存池吗？,确定要清理所选缓存池吗？
 所选缓存里包含持久缓存，将以强制模式清理。是否继续？,所选缓存里包含持久缓存，将以强制模式清理。是否继续？
 确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。,确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。
@@ -30,14 +36,9 @@
 保存缓存策略,保存缓存策略
 "mdi mdi-content-save","mdi mdi-content-save"
 保存运行时缓存策略,保存运行时缓存策略
-"参数 identity 不能为空","参数 identity 不能为空"
 操作成功！,"Operation successful!"
 请至少选择一个缓存项,"Please select at least one cache item"
 批量缓存状态已更新,"Batch cache status updated"
-"缓存池 %{1} 已清理","Cache pool %{1} has been cleaned"
-"WLS 共享命名空间已同步清理","WLS shared namespace has been cleaned up synchronously"
-已强制清理所有缓存池（包括持久缓存）,"Forcibly cleared all cache pools (including persistent cache)"
-"并额外清理 %{1} 个 WLS 共享缓存命名空间","And additionally clean up %{1} WLS shared cache namespaces"
 定时任务执行完成！已清理过期缓存文件。,"Scheduled Task Execution Completed! Expired Cache Files Have Been Cleaned Up."
 "定时任务执行失败: %{1}。请检查 Cron 配置和日志。","Scheduled Task Execution Failed: %{1}. Please Check the Cron Configuration and Logs."
 缓存管理,"Cache Management"
@@ -107,3 +108,4 @@ APCu,APCu
 缓存清理完成,"Cache Cleanup Complete"
 "缓存清理任务执行失败: %{1}","Cache Cleanup Task Execution Failed: %{1}"
 "缓存清理失败: %{1}","Cache Cleanup Failed: %{1}"
+"""参数 identity 不能为空""","参数 identity 不能为空"

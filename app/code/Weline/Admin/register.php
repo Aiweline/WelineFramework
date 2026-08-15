@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Admin',
     __DIR__,
-    '1.0.1',
+    '1.0.3',
     '<a href="https://bbs.aiweline.com">Admin后台管理模块</a>',
     [
         'Weline_SystemConfig',

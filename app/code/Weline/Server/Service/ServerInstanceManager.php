@@ -2774,6 +2774,9 @@ class ServerInstanceManager
                         'WLS instance endpoint directory exceeds its raw capacity.',
                     );
                 }
+                if (GatewayProjectEndpointReader::isReservedStateLeaf($leaf)) {
+                    continue;
+                }
                 if (!\str_ends_with($leaf, '.json')) {
                     continue;
                 }

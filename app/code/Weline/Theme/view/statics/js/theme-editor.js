@@ -2492,59 +2492,17 @@
                 scheduleFitWidgetPreviews();
                 return;
             }
-            if (!isWidgetPreviewFallbackCanvas(canvas)) {
-                return;
-            }
             const item = canvas.closest?.('.widget-item[data-widget-code]');
-            ensureWidgetCanvasPreview(
-                canvas,
-                canvas.dataset.widgetModule || item?.dataset?.widgetModule || item?.getAttribute?.('data-widget-module') || '',
-                canvas.dataset.widgetCode || item?.dataset?.widgetCode || item?.getAttribute?.('data-widget-code') || '',
-                { area: canvas.dataset.widgetArea || state.editorArea || 'frontend' }
-            );
-        });
-    }
-
-    async function ensureWidgetCanvasPreview(canvas, widgetModule, widgetCode, options = {}) {
-        if (!canvas || canvas.dataset.previewLoading === '1') {
-            return;
-        }
-        if (!isWidgetPreviewFallbackCanvas(canvas) && canvas.dataset.previewLoaded === '1') {
-            canvas.dataset.previewLoaded = '1';
-            scheduleFitWidgetPreviews();
-            return;
-        }
-        if (!isWidgetPreviewFallbackCanvas(canvas) && canvas.querySelector('[class*="widget-"]')) {
-            canvas.dataset.previewLoaded = '1';
-            scheduleFitWidgetPreviews();
-            return;
-        }
-        if (!widgetModule || !widgetCode || !config.apiWidgetPreview) {
-            return;
-        }
-        canvas.dataset.previewLoading = '1';
-        try {
-            const url = new URL(config.apiWidgetPreview, window.location.origin);
-            url.searchParams.set('widget_module', widgetModule);
-            url.searchParams.set('widget_code', widgetCode);
-            url.searchParams.set('editor_area', options.area || state.editorArea || 'frontend');
-            url.searchParams.set('theme_id', String(state.themeId || 0));
-            url.searchParams.set('_t', String(Date.now()));
-            const data = await apiJson(url.toString(), { silent: true });
-            const html = (data && data.html) ? sanitizeHtmlForEditorPreview(data.html) : '';
-            if (html.trim() !== '') {
-                canvas.innerHTML = html;
-                normalizeWidgetCanvasPreview(canvas);
-                if (!isWidgetPreviewFallbackHtml(html)) {
-                    canvas.dataset.previewLoaded = '1';
-                }
-                scheduleFitWidgetPreviews();
+            const widgetCode = canvas.dataset.widgetCode || item?.dataset?.widgetCode || item?.getAttribute?.('data-widget-code') || '';
+            const widgetName = item?.dataset?.widgetName || widgetCode;
+            if (isWidgetPreviewFallbackCanvas(canvas)) {
+                // Loading the library must stay local: per-widget rendering is an
+                // explicit user action from the preview button, not an eager API fan-out.
+                canvas.innerHTML = buildClientComponentPreviewHtml(widgetCode, widgetName);
+                canvas.dataset.previewLoaded = '1';
             }
-        } catch (err) {
-            console.warn('[ThemeEditor] ensureWidgetCanvasPreview failed:', widgetModule, widgetCode, err);
-        } finally {
-            delete canvas.dataset.previewLoading;
-        }
+            scheduleFitWidgetPreviews();
+        });
     }
 
     function mountWidgetPreviewHtml(canvas, previewHtml) {
@@ -6287,7 +6245,9 @@
         itemEl.appendChild(previewWrap);
 
         if (isWidgetPreviewFallbackHtml(previewHtml)) {
-            ensureWidgetCanvasPreview(canvas, wModule, wCode, { area: canvas.dataset.widgetArea });
+            // The library renders a local fallback during hydration.  Network
+            // rendering is reserved for the explicit preview dialog action.
+            canvas.dataset.previewPending = '1';
         }
 
         return itemEl;

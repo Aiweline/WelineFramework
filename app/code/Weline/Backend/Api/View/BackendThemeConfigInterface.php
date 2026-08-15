@@ -18,6 +18,11 @@ interface BackendThemeConfigInterface
     /** Resolve the current backend color mode as a scalar. */
     public function getThemeModel(): string;
 
+    /**
+     * Return safe document-root attributes for the persisted color preference.
+     */
+    public function getThemeHtmlAttributes(): string;
+
     /** Persist either one key or a data-only configuration map. */
     public function setThemeConfig(string|array $key, mixed $value = ''): static;
 }

@@ -1,0 +1,8 @@
+<?php
+
+/** @var \Weline\Framework\View\Template $this */
+$this->assign('device_manager_area', 'backend');
+?>
+<div class="container-fluid session-manager-backend-page" weline-code="session_manager.backend.device.index">
+    <?= $this->fetch('Weline_SessionManager::templates/device/manager.phtml') ?>
+</div>

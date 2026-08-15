@@ -13,8 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Customer',
     __DIR__,
-    '1.0.0',
+    '1.0.1',
     '前端客户管理模块',
     ['Weline_Framework', 'Weline_Backend', 'Weline_Frontend']
 );
-

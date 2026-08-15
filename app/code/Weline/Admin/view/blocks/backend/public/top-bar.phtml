@@ -27,7 +27,7 @@ if ($logoSm === '') {
     }
 
     #page-topbar #vertical-menu-btn,
-    #page-topbar #theme-mode-toggle,
+    #page-topbar [data-weline-backend-theme-trigger],
     #page-topbar .navbar-header .noti-icon,
     #page-topbar .navbar-header .weline-notif-btn {
         width: 44px !important;
@@ -85,13 +85,18 @@ if ($logoSm === '') {
         <div class="d-flex align-items-center">
             <w:i18n:language:switcher />
 
-            <button type="button"
-                    class="btn header-item noti-icon waves-effect ms-1"
-                    id="theme-mode-toggle"
-                    title="<?= __('Toggle light/dark mode') ?>"
-                    aria-label="<?= __('Toggle light/dark mode') ?>">
-                <i class="ri-moon-clear-line"></i>
-            </button>
+            <div class="dropdown d-inline-block ms-1">
+                <button type="button" id="topbar-theme-mode" class="btn header-item noti-icon waves-effect"
+                        data-bs-toggle="dropdown" data-weline-backend-theme-trigger
+                        aria-haspopup="true" aria-expanded="false" aria-label="<?= __('主题模式') ?>">
+                    <i class="mdi mdi-laptop"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="topbar-theme-mode">
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="system" data-weline-theme-mode="system"><?= __('跟随系统') ?></button>
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="light" data-weline-theme-mode="light"><?= __('明亮模式') ?></button>
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="dark" data-weline-theme-mode="dark"><?= __('暗黑模式') ?></button>
+                </div>
+            </div>
 
             <?php echo framework_view_process_block([
                 'class' => 'Weline\\Backend\\Block\\System\\Notification',
@@ -214,7 +219,7 @@ if ($logoSm === '') {
         }
 
         #page-topbar #vertical-menu-btn,
-        #page-topbar #theme-mode-toggle,
+        #page-topbar [data-weline-backend-theme-trigger],
         #page-topbar .navbar-header .noti-icon,
         #page-topbar .navbar-header .weline-notif-btn {
             width: 38px !important;
@@ -295,7 +300,7 @@ if ($logoSm === '') {
         #page-topbar .navbar-header .dropdown .header-item,
         #page-topbar .navbar-header .dropdown .show.header-item,
         #page-topbar #vertical-menu-btn,
-        #page-topbar #theme-mode-toggle,
+        #page-topbar [data-weline-backend-theme-trigger],
         #page-topbar .navbar-header .noti-icon,
         #page-topbar .navbar-header .weline-notif-btn,
         #page-topbar .user-dropdown .header-item {
@@ -411,66 +416,5 @@ if ($logoSm === '') {
             closeManualDropdowns();
         }, true);
 
-        var themeToggle = document.getElementById('theme-mode-toggle');
-        if (!themeToggle) {
-            return;
-        }
-
-        function getThemeMode() {
-            var body = document.body;
-            var root = document.documentElement;
-            var mode = body.getAttribute('data-topbar')
-                || body.getAttribute('data-sidebar')
-                || root.getAttribute('data-theme-mode')
-                || root.getAttribute('data-bs-theme');
-            return mode === 'dark' ? 'dark' : 'light';
-        }
-
-        function updateThemeToggleIcon(mode) {
-            var icon = themeToggle.querySelector('i');
-            if (!icon) {
-                return;
-            }
-            icon.className = mode === 'dark' ? 'ri-sun-line' : 'ri-moon-clear-line';
-        }
-
-        function applyThemeMode(mode) {
-            var normalizedMode = mode === 'dark' ? 'dark' : 'light';
-            var body = document.body;
-            var root = document.documentElement;
-
-            body.setAttribute('data-topbar', normalizedMode);
-            body.setAttribute('data-sidebar', normalizedMode);
-            body.setAttribute('data-theme-mode', normalizedMode);
-            body.setAttribute('data-layout-mode', normalizedMode);
-            body.setAttribute('data-bs-theme', normalizedMode);
-            root.setAttribute('data-theme-mode', normalizedMode);
-            root.setAttribute('data-layout-mode', normalizedMode);
-            root.setAttribute('data-bs-theme', normalizedMode);
-
-            updateThemeToggleIcon(normalizedMode);
-        }
-
-        applyThemeMode(getThemeMode());
-
-        themeToggle.addEventListener('click', function (event) {
-            event.preventDefault();
-
-            var nextMode = getThemeMode() === 'dark' ? 'light' : 'dark';
-            applyThemeMode(nextMode);
-
-            if (typeof window.setThemeConfig === 'function') {
-                window.setThemeConfig({
-                    layouts: {
-                        'data-topbar': nextMode,
-                        'data-sidebar': nextMode,
-                        'data-theme-mode': nextMode,
-                        'data-layout-mode': nextMode
-                    },
-                    'theme-mode-switch': nextMode,
-                    'rtl-mode-switch': false
-                });
-            }
-        });
     })();
 </script>

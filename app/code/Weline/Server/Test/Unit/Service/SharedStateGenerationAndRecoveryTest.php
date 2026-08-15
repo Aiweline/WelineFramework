@@ -9,6 +9,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\SharedStateServiceRegistry;
+use Weline\Server\Service\SharedStateRuntimeScope;
 
 final class SharedStateGenerationAndRecoveryTest extends TestCase
 {
@@ -452,6 +453,78 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
         self::assertFileExists($backup);
     }
 
+    public function testRegistryReadRetriesOnlyAnAtomicReplacementWindow(): void
+    {
+        $directory = $this->temporaryDirectory('registry-read-retry');
+        $registryFile = $directory . DIRECTORY_SEPARATOR . 'registry.json';
+        $role = ControlMessage::ROLE_SESSION_SERVER;
+        $record = [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'pid' => 4371,
+            'token_file_name' => 'session_server.token',
+        ];
+        $writer = $this->registryAt($registryFile);
+        $writer->putRecord($role, $record);
+
+        $transientReader = new class($registryFile) extends SharedStateServiceRegistry {
+            public int $readAttempts = 0;
+
+            public function __construct(private readonly string $registryFile)
+            {
+            }
+
+            public function getRegistryFile(): string
+            {
+                return $this->registryFile;
+            }
+
+            protected function readValidatedRegistryDocument(string $file): ?array
+            {
+                ++$this->readAttempts;
+                if ($this->readAttempts === 1) {
+                    throw new \RuntimeException(
+                        'Unable to open WLS shared-state service registry.'
+                    );
+                }
+                return parent::readValidatedRegistryDocument($file);
+            }
+        };
+
+        self::assertSame(4371, $transientReader->getRecord($role)['pid'] ?? null);
+        self::assertSame(2, $transientReader->readAttempts);
+
+        $unsafeReader = new class($registryFile) extends SharedStateServiceRegistry {
+            public int $readAttempts = 0;
+
+            public function __construct(private readonly string $registryFile)
+            {
+            }
+
+            public function getRegistryFile(): string
+            {
+                return $this->registryFile;
+            }
+
+            protected function readValidatedRegistryDocument(string $file): ?array
+            {
+                ++$this->readAttempts;
+                throw new \RuntimeException(
+                    'WLS shared-state service registry has an invalid size.'
+                );
+            }
+        };
+
+        try {
+            $unsafeReader->getRecord($role);
+            self::fail('A non-transient registry failure was retried or accepted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('invalid size', $exception->getMessage());
+        }
+        self::assertSame(1, $unsafeReader->readAttempts);
+    }
+
     public function testFirstRuntimePublicationUsesTheConcurrentRegistryAuthority(): void
     {
         $directory = $this->temporaryDirectory('first-runtime-after-sidecar');
@@ -561,6 +634,10 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
             'port' => 19970,
             'pid' => 4382,
             'token_file_name' => 'session_server.token',
+            'started_at' => '2026-08-12T00:00:00+08:00',
+            'process_name' => 'weline-wls-session-authenticated-recovery',
+            'instance_name' => 'shared-session-authenticated-recovery',
+            'service_instance_name' => 'shared-session-authenticated-recovery',
         ]);
         $registryAuthority['lifecycle_generation'] = 7;
         $runtimeAuthority = SharedStateServiceRegistry::bindLifecycleGeneration($role, [
@@ -617,7 +694,7 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
             'role' => $role,
             'host' => '127.0.0.1',
             'port' => 26278,
-            'pid' => 4384,
+            'pid' => 4382,
             'token_file_name' => 'session_server.token',
             'started_at' => '2026-08-12T00:00:00+08:00',
             'process_name' => 'weline-wls-session-authenticated-recovery',
@@ -638,7 +715,7 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
         $runtime = \json_decode((string)\file_get_contents($runtimeFile), true);
 
         self::assertSame(8, $selected['lifecycle_generation'] ?? null);
-        self::assertSame(4384, $selected['pid'] ?? null);
+        self::assertSame(4382, $selected['pid'] ?? null);
         self::assertSame(8, $record['lifecycle_generation'] ?? null);
         self::assertSame(8, $runtime['lifecycle_generation'] ?? null);
         self::assertSame(
@@ -651,6 +728,219 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
         );
         self::assertArrayNotHasKey('_authenticated_identity_verified', $record);
         self::assertArrayNotHasKey('_authenticated_identity_verified', $runtime);
+    }
+
+    public function testAuthenticatedProbeUsesLiveRegistryStartedAtBeforeConflictRecovery(): void
+    {
+        $directory = $this->temporaryDirectory('authenticated-probe-started-at');
+        $runtimeFile = $directory . DIRECTORY_SEPARATOR . 'session.json';
+        $registry = $this->registryAt(
+            $directory . DIRECTORY_SEPARATOR . 'registry.json',
+        );
+        $role = ControlMessage::ROLE_SESSION_SERVER;
+        $scope = SharedStateRuntimeScope::sidecarIdentityToken();
+        $definition = [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'token_file_name' => 'session_server.token',
+            'process_name' => 'weline-wls-session-' . $scope . '-shared-19970',
+            'service_instance_name' => 'shared-session-' . $scope . '-19970',
+        ];
+        $liveStartedAt = '2026-08-12T00:00:00+08:00';
+        $registry->putRecord($role, [
+            ...$definition,
+            'pid' => \getmypid(),
+            'started_at' => $liveStartedAt,
+            'instance_name' => (string)$definition['service_instance_name'],
+        ]);
+
+        $manager = new class($runtimeFile, $registry) extends SharedStateServiceManager {
+            public function __construct(
+                private readonly string $runtimeFile,
+                private readonly SharedStateServiceRegistry $registry,
+            ) {
+            }
+
+            /** @param array<string,mixed> $runtime */
+            public function publishRuntime(array $runtime): void
+            {
+                $this->writeRuntimeFile(ControlMessage::ROLE_SESSION_SERVER, $runtime);
+            }
+
+            /** @param array<string,mixed> $definition @return array<string,mixed> */
+            public function probeRuntime(array $definition): array
+            {
+                return $this->probeDefinition($definition);
+            }
+
+            protected function getRuntimeFilePath(string $role): string
+            {
+                return $this->runtimeFile;
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                return true;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                return [
+                    'reusable' => true,
+                    'pid' => \getmypid(),
+                    'port' => (int)$definition['port'],
+                    'role' => (string)$definition['role'],
+                    'token_file_name' => $expectedTokenFileName,
+                    'process_name' => (string)$definition['process_name'],
+                    'instance_name' => (string)$definition['service_instance_name'],
+                ];
+            }
+        };
+        $manager->publishRuntime([
+            ...$definition,
+            'pid' => 4383,
+            'started_at' => '2026-08-11T00:00:00+08:00',
+            'instance_name' => (string)$definition['service_instance_name'],
+        ]);
+
+        $probe = $manager->probeRuntime($definition);
+
+        self::assertTrue((bool)($probe['healthy'] ?? false));
+        self::assertTrue((bool)($probe['runtime']['_authenticated_identity_verified'] ?? false));
+        self::assertSame(\getmypid(), $probe['runtime']['pid'] ?? null);
+        self::assertSame($liveStartedAt, $probe['runtime']['started_at'] ?? null);
+    }
+
+    public function testEnsureAdvancesAuthenticatedLiveRegistryPastHigherStaleRuntimeWithConsumers(): void
+    {
+        $directory = $this->temporaryDirectory('ensure-authenticated-higher-runtime-consumers');
+        $runtimeFile = $directory . DIRECTORY_SEPARATOR . 'session.json';
+        $lockPath = $directory . DIRECTORY_SEPARATOR . 'session.lifecycle.lock';
+        $registry = $this->registryAt(
+            $directory . DIRECTORY_SEPARATOR . 'registry.json',
+        );
+        $role = ControlMessage::ROLE_SESSION_SERVER;
+        $scope = SharedStateRuntimeScope::sidecarIdentityToken();
+        $definition = [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'token_file_name' => 'session_server.token',
+            'process_name' => 'weline-wls-session-' . $scope . '-shared-19970',
+            'service_instance_name' => 'shared-session-' . $scope . '-19970',
+        ];
+        $registry->putRecord($role, [
+            ...$definition,
+            'pid' => 19148,
+            'started_at' => '2026-08-11T19:03:53+00:00',
+            'instance_name' => (string)$definition['service_instance_name'],
+            'consumers' => [
+                'preexisting-consumer' => [
+                    'consumer_code' => 'preexisting-consumer',
+                    'owner_type' => 'instance',
+                    'last_ensured_at' => '2026-08-11T19:03:54+00:00',
+                ],
+            ],
+        ]);
+        $manager = new class($runtimeFile, $lockPath, $registry, $definition) extends SharedStateServiceManager {
+            /** @param array<string,mixed> $definition */
+            public function __construct(
+                private readonly string $runtimeFile,
+                private readonly string $lockPath,
+                private readonly SharedStateServiceRegistry $registry,
+                private readonly array $definition,
+            ) {
+            }
+
+            /** @param array<string,mixed> $runtime */
+            public function publishRuntime(array $runtime): void
+            {
+                $this->writeRuntimeFile(ControlMessage::ROLE_SESSION_SERVER, $runtime);
+            }
+
+            protected function getRuntimeFilePath(string $role): string
+            {
+                return $this->runtimeFile;
+            }
+
+            protected function getRoleLifecycleLockPath(string $role): string
+            {
+                return $this->lockPath;
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function buildRoleDefinition(
+                string $role,
+                string $requesterInstanceName,
+                array $config,
+                array $envConfig,
+                array $reservedPorts = [],
+            ): array {
+                return $this->definition;
+            }
+
+            protected function probeDefinition(array $definition): array
+            {
+                return [
+                    'healthy' => true,
+                    'runtime' => [
+                        ...$definition,
+                        'pid' => 19148,
+                        'started_at' => '2026-08-11T19:03:53+00:00',
+                        'healthy_at' => '2026-08-11T19:03:54+00:00',
+                        'instance_name' => (string)$definition['service_instance_name'],
+                        '_authenticated_identity_verified' => true,
+                    ],
+                ];
+            }
+
+            protected function ensureSharedProcessLogVisible(
+                array $runtime,
+                string $requesterInstanceName,
+            ): void {
+            }
+        };
+        $staleRuntime = [
+            ...$definition,
+            'pid' => 13247,
+            'started_at' => '2026-08-11T19:00:23+00:00',
+            'instance_name' => (string)$definition['service_instance_name'],
+            'registered' => true,
+            'consumer_count' => 1,
+        ];
+        $manager->publishRuntime($staleRuntime);
+        $staleRuntime = \json_decode((string)\file_get_contents($runtimeFile), true);
+        $staleRuntime['lifecycle_generation'] = 2;
+        $manager->publishRuntime($staleRuntime);
+
+        $ensured = $manager->ensure(
+            $role,
+            [],
+            self::sessionPortEnv(),
+            'recovery-consumer',
+        );
+        $runtime = \json_decode((string)\file_get_contents($runtimeFile), true);
+        $record = $registry->getRecord($role);
+
+        self::assertSame(3, $ensured['lifecycle_generation'] ?? null);
+        self::assertSame(19148, $ensured['pid'] ?? null);
+        self::assertSame(3, $runtime['lifecycle_generation'] ?? null);
+        self::assertSame(3, $record['lifecycle_generation'] ?? null);
+        self::assertSame(2, $ensured['consumer_count'] ?? null);
+        self::assertSame(
+            $record['lifecycle_identity_digest'] ?? null,
+            $runtime['lifecycle_identity_digest'] ?? null,
+        );
     }
 
     public function testAuthenticatedLiveSidecarAdvancesPastHigherStaleRuntimeGeneration(): void
@@ -1721,6 +2011,15 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
             ) {
             }
 
+            /** @param array<string,mixed> $runtime */
+            public function publishRuntime(array $runtime): void
+            {
+                $this->writeRuntimeFile(
+                    ControlMessage::ROLE_SESSION_SERVER,
+                    $runtime,
+                );
+            }
+
             /** @param array<string,mixed> $definition @return array<string,mixed> */
             public function publishReadyRuntime(array $definition): array
             {
@@ -1765,7 +2064,7 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
                         'port' => (int)$definition['port'],
                         'pid' => 5201,
                         'token_file_name' => (string)$definition['token_file_name'],
-                        'started_at' => '2026-08-11T13:23:59+00:00',
+                        'started_at' => '2026-08-11T13:23:39+00:00',
                         'healthy_at' => '2026-08-11T13:24:00+00:00',
                         'process_name' => (string)$definition['process_name'],
                         'instance_name' => (string)$definition['service_instance_name'],
@@ -1782,6 +2081,26 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
             }
         };
 
+        $manager->publishRuntime([
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'pid' => 5199,
+            'token_file_name' => 'session_server.token',
+            'started_at' => '2026-08-11T13:20:00+00:00',
+            'healthy_at' => '2026-08-11T13:20:01+00:00',
+            'process_name' => 'weline-wls-session-stale-runtime',
+            'instance_name' => 'shared-session-stale-runtime',
+            'service_instance_name' => 'shared-session-stale-runtime',
+            'shared_service' => true,
+        ]);
+        $staleRuntime = \json_decode((string)\file_get_contents($runtimeFile), true);
+        self::assertSame(1, $staleRuntime['lifecycle_generation'] ?? null);
+        self::assertNotSame(
+            $registry->getRecord($role)['lifecycle_identity_digest'] ?? null,
+            $staleRuntime['lifecycle_identity_digest'] ?? null,
+        );
+
         $published = $manager->publishReadyRuntime([
             'role' => $role,
             'host' => '127.0.0.1',
@@ -1794,9 +2113,10 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
         $runtime = \json_decode((string)\file_get_contents($runtimeFile), true);
         $record = $registry->getRecord($role);
 
-        self::assertSame(1, $published['lifecycle_generation'] ?? null);
-        self::assertSame(1, $runtime['lifecycle_generation'] ?? null);
-        self::assertSame(1, $record['lifecycle_generation'] ?? null);
+        self::assertSame(2, $published['lifecycle_generation'] ?? null);
+        self::assertSame(5201, $published['pid'] ?? null);
+        self::assertSame(2, $runtime['lifecycle_generation'] ?? null);
+        self::assertSame(2, $record['lifecycle_generation'] ?? null);
         self::assertSame(
             '2026-08-11T13:23:39+00:00',
             $runtime['started_at'] ?? null,
@@ -1805,6 +2125,8 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
             $record['lifecycle_identity_digest'] ?? null,
             $runtime['lifecycle_identity_digest'] ?? null,
         );
+        self::assertArrayNotHasKey('_authenticated_identity_verified', $runtime);
+        self::assertArrayNotHasKey('_authenticated_identity_verified', $record);
     }
 
     public function testCallerSuppliedStaleBindingCannotRollBackAnExistingIdentity(): void

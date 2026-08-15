@@ -1,0 +1,18 @@
+/**
+ * Weline Default frontend brand overlay (light).
+ *
+ * Component rules belong to Weline_Theme. This file is intentionally limited
+ * to semantic brand tokens so every Bootstrap/Weline component shares them.
+ */
+:root,
+[data-theme="light"] {
+    --color-primary: #2563eb;
+    --color-primary-rgb: 37, 99, 235;
+    --color-primary-hover: #1d4ed8;
+    --color-primary-active: #1e40af;
+    --color-primary-dark: #1e40af;
+    --color-primary-bg-subtle: rgba(37, 99, 235, 0.12);
+    --color-primary-border-subtle: rgba(37, 99, 235, 0.34);
+    --color-primary-text-emphasis: #1d4ed8;
+    --color-on-primary: #ffffff;
+}
