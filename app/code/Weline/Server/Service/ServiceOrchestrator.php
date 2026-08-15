@@ -110,7 +110,7 @@ class ServiceOrchestrator
      */
     private const GATEWAY_FALLBACK_COLD_START_PUBLICATION_SECONDS = 15.0;
     private const GATEWAY_PORT_LEASE_OPERATION_SECONDS = 3.0;
-    private const WINDOWS_GATEWAY_PORT_LEASE_OPERATION_SECONDS = 8.0;
+    private const WINDOWS_GATEWAY_PORT_LEASE_OPERATION_SECONDS = 30.0;
     private const GATEWAY_NATIVE_DRAIN_SECONDS = 300;
     private const GATEWAY_NATIVE_FINALIZE_GRACE_SECONDS = 15;
     private const MAX_PROVIDER_VENDORS = 256;
@@ -16939,6 +16939,45 @@ class ServiceOrchestrator
             return;
         }
 
+        // The same authenticated child may retransmit READY when its final
+        // ACK was lost. Once this exact client/launch/lease has already been
+        // admitted, acknowledge it before replaying capability, namespace,
+        // listener-adoption, lease-confirmation, or route-publication work.
+        // Those gates can perform native Windows process inspection and are
+        // one-time admission side effects, not duplicate-message validation.
+        $isDuplicateReadyFromSameClient = $instance->state === ServiceInstance::STATE_READY
+            && $instance->ipcClientId === $clientId;
+        $readyAlreadyRecorded = $instance->getMeta('ready_at') !== null;
+        $readyConfirmationExpired = $this->isPendingReadyConfirmationExpired($instance);
+        if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded && !$readyConfirmationExpired) {
+            $workerId = (int)($instance->getMeta('worker_id') ?? $instance->instanceId);
+            $this->controlServer?->sendTo(
+                $clientId,
+                ControlMessage::ackReady(
+                    $workerId,
+                    false,
+                    (int)($instance->port ?? 0),
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                    'final',
+                    $this->buildLinuxHttp3FinalAckRoute($instance),
+                )
+            );
+            WlsLogger::info_(
+                "[Orchestrator] 重复 READY 已幂等处理: {$instance->role}#{$instance->instanceId} (clientId={$clientId}, port={$instance->port})"
+            );
+            return;
+        }
+        if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded && $readyConfirmationExpired) {
+            WlsLogger::warning_(
+                "[Orchestrator] READY 确认超过 " . self::READY_CONFIRM_TIMEOUT_SEC
+                . "s 未完成，重置确认窗口: {$instance->role}#{$instance->instanceId} (clientId={$clientId}, port={$instance->port})"
+            );
+            $this->resetPendingReadyConfirmation($instance, $clientId, false);
+        }
+
         if ($instance->role === ControlMessage::ROLE_DISPATCHER) {
             $expectedDigest = \strtolower(\trim($this->runtimePolicyPublishedDigest));
             $reportedDigest = \strtolower(\trim((string)($msg['policy_digest'] ?? '')));
@@ -17648,54 +17687,6 @@ class ServiceOrchestrator
                 );
                 return;
             }
-        }
-
-        $isDuplicateReadyFromSameClient = $instance->state === ServiceInstance::STATE_READY
-            && $instance->ipcClientId === $clientId;
-        $readyAlreadyRecorded = $instance->getMeta('ready_at') !== null;
-        $readyConfirmationExpired = $this->isPendingReadyConfirmationExpired($instance);
-        if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded && !$readyConfirmationExpired) {
-            $workerId = (int) ($instance->getMeta('worker_id') ?? $instance->instanceId);
-            $http3FinalRoute = $this->buildLinuxHttp3FinalAckRoute($instance);
-            $this->controlServer?->sendTo(
-                $clientId,
-                ControlMessage::ackReady(
-                    $workerId,
-                    false,
-                    (int)($instance->port ?? 0),
-                    (string)($msg['msg_id'] ?? ''),
-                    $this->getInstanceSlotId($instance),
-                    $this->getInstanceLeaseId($instance),
-                    $this->getInstanceGeneration($instance),
-                    'final',
-                    $http3FinalRoute,
-                )
-            );
-            if ($instance->role === ControlMessage::ROLE_WORKER
-                && $instance->port !== null
-                && $instance->port > 0
-                && !isset($this->workerRoutePublishSuppressedInstanceIds[$instance->instanceId])) {
-                $this->convergeDispatcherRouteTableAfterWorkerReady();
-            } elseif ($instance->role === ControlMessage::ROLE_DISPATCHER) {
-                $this->syncDispatcherFullWorkerPoolFromRegistry(true);
-            }
-            WlsLogger::info_(
-                "[Orchestrator] 重复 READY 已幂等处理: {$instance->role}#{$instance->instanceId} (clientId={$clientId}, port={$instance->port})"
-            );
-            if ($this->context !== null) {
-                $this->persistServicesInfo($this->context);
-            }
-            if ($instance->role === ControlMessage::ROLE_WORKER) {
-                $this->broadcastNativeHttp3Availability(null, true);
-            }
-            return;
-        }
-        if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded && $readyConfirmationExpired) {
-            WlsLogger::warning_(
-                "[Orchestrator] READY 确认超过 " . self::READY_CONFIRM_TIMEOUT_SEC
-                . "s 未完成，重置确认窗口: {$instance->role}#{$instance->instanceId} (clientId={$clientId}, port={$instance->port})"
-            );
-            $this->resetPendingReadyConfirmation($instance, $clientId, false);
         }
 
         $instance->state = ServiceInstance::STATE_READY;
