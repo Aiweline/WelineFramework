@@ -61,7 +61,8 @@ $rtlModeSwitch = !empty($themeConfigData['rtl-mode-switch']);
         <div class="p-4">
             <div class="mb-3">
                 <label class="form-label"><?= __('选择主题模式') ?></label>
-                <select class="form-select theme-choice" id="theme-mode-switch">
+                <select class="form-select theme-choice" id="theme-mode-switch" data-weline-backend-theme-mode data-weline-theme-mode>
+                    <option value="system" <?= ($themeModeSwitch === 'system' || ($themeModeSwitch === '' && !$lightModeSwitch && !$darkModeSwitch)) ? 'selected' : '' ?>><?= __('跟随系统') ?></option>
                     <option value="light" <?= ($themeModeSwitch === 'light' || ($themeModeSwitch === '' && $lightModeSwitch)) ? 'selected' : '' ?>><?= __('明亮模式') ?></option>
                     <option value="dark" <?= ($themeModeSwitch === 'dark' || $darkModeSwitch) ? 'selected' : '' ?>><?= __('暗黑模式') ?></option>
                 </select>

@@ -87,6 +87,28 @@ function wlsRun(array $command, float $timeoutSeconds = 20.0): array
     return ['code' => $exitCode, 'output' => \trim($output)];
 }
 
+/** @return array{code:int,output:string} */
+function wlsSc(array $arguments, float $timeoutSeconds = 20.0): array
+{
+    $systemRoot = (string)\getenv('SystemRoot');
+    if ($systemRoot === '') {
+        throw new \RuntimeException('SystemRoot is unavailable.');
+    }
+    return wlsRun([$systemRoot . '\\System32\\sc.exe', ...$arguments], $timeoutSeconds);
+}
+
+function wlsCheckedSc(array $arguments, float $timeoutSeconds = 20.0): string
+{
+    $result = wlsSc($arguments, $timeoutSeconds);
+    if ($result['code'] !== 0) {
+        throw new \RuntimeException(
+            'sc.exe failed (' . $result['code'] . '): '
+                . \implode(' ', $arguments) . "\n" . $result['output'],
+        );
+    }
+    return $result['output'];
+}
+
 function wlsChecked(array $command, float $timeoutSeconds = 20.0): string
 {
     $result = wlsRun($command, $timeoutSeconds);
@@ -154,7 +176,7 @@ function wlsWindowsTool(string $name): string
     return $path;
 }
 
-function wlsAssertPlainDirectory(string $path): void
+function wlsAssertPlainDirectory(string $path, float $timeoutSeconds = 10.0): void
 {
     if (!\is_dir($path) || \is_link($path)) {
         throw new \RuntimeException('Directory is missing or is a link: ' . $path);
@@ -163,7 +185,10 @@ function wlsAssertPlainDirectory(string $path): void
         return;
     }
     $powershell = wlsWindowsTool('WindowsPowerShell\\v1.0\\powershell.exe');
-    $script = '$item = Get-Item -LiteralPath $args[0] -Force -ErrorAction Stop; '
+    $pathBase64 = \base64_encode($path);
+    $script = '$targetPath = [Text.Encoding]::UTF8.GetString('
+        . '[Convert]::FromBase64String(\'' . $pathBase64 . '\')); '
+        . '$item = Get-Item -LiteralPath $targetPath -Force -ErrorAction Stop; '
         . 'if (-not $item.PSIsContainer) { exit 20 }; '
         . 'if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { exit 21 }';
     $result = wlsRun([
@@ -175,8 +200,7 @@ function wlsAssertPlainDirectory(string $path): void
         'Bypass',
         '-Command',
         $script,
-        $path,
-    ], 10.0);
+    ], $timeoutSeconds);
     if ($result['code'] !== 0) {
         throw new \RuntimeException(
             'Directory reparse validation failed (' . $result['code'] . '): '
@@ -245,12 +269,12 @@ function wlsMkdir(string $path): void
     }
 }
 
-function wlsMkdirExclusive(string $path): void
+function wlsMkdirExclusive(string $path, float $verificationTimeoutSeconds = 10.0): void
 {
     if (\file_exists($path) || \is_link($path) || !\mkdir($path, 0700, false)) {
         throw new \RuntimeException('Refusing to reuse temporary directory ' . $path);
     }
-    wlsAssertPlainDirectory($path);
+    wlsAssertPlainDirectory($path, $verificationTimeoutSeconds);
 }
 
 function wlsRestrictFixtureRoot(string $path): void
@@ -275,13 +299,13 @@ function wlsCopy(string $source, string $destination): void
     }
 }
 
-function wlsRemoveTree(string $root): void
+function wlsRemoveTree(string $root, float $verificationTimeoutSeconds = 10.0): void
 {
     if (!\file_exists($root) && !\is_link($root)) {
         return;
     }
     if (\preg_match(
-        '/\Aweline-wls2-ci-(?:path|bounded)-[a-f0-9]{16}\z/D',
+        '/\Aweline-wls2-ci-(?:path|bounded|scm)-[a-f0-9]{16}\z/D',
         \basename($root),
     ) !== 1) {
         throw new \RuntimeException('Refusing unsafe fixture cleanup target: ' . $root);
@@ -293,7 +317,7 @@ function wlsRemoveTree(string $root): void
     ) {
         throw new \RuntimeException('Fixture cleanup escaped ProgramData: ' . $root);
     }
-    wlsAssertPlainDirectory($root);
+    wlsAssertPlainDirectory($root, $verificationTimeoutSeconds);
     $iterator = new \RecursiveIteratorIterator(
         new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
         \RecursiveIteratorIterator::CHILD_FIRST,
@@ -602,11 +626,29 @@ function wlsPathSecurityTest(array $arguments): void
             'destination_reparse_rejected' => true,
         ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
     } finally {
-        if ($sourceLink !== '' && \is_link($sourceLink)) {
-            @\unlink($sourceLink);
+        if ($sourceLink !== ''
+            && (\is_link($sourceLink) || \file_exists($sourceLink))
+            && !@\unlink($sourceLink)
+        ) {
+            throw new \RuntimeException('Temporary source reparse fixture was not removed.');
         }
-        if ($destinationLink !== '' && \is_link($destinationLink)) {
-            @\unlink($destinationLink);
+        if ($sourceLink !== ''
+            && (\is_link($sourceLink) || \file_exists($sourceLink))) {
+            throw new \RuntimeException('Temporary source reparse fixture still exists.');
+        }
+        if ($destinationLink !== ''
+            && (\is_link($destinationLink) || \file_exists($destinationLink))
+            && !@\rmdir($destinationLink)
+        ) {
+            throw new \RuntimeException(
+                'Temporary destination directory reparse fixture was not removed.',
+            );
+        }
+        if ($destinationLink !== ''
+            && (\is_link($destinationLink) || \file_exists($destinationLink))) {
+            throw new \RuntimeException(
+                'Temporary destination directory reparse fixture still exists.',
+            );
         }
         if ($rootCreated) {
             wlsRemoveTree($root);
@@ -649,6 +691,8 @@ function wlsBoundedResult(string $directory): array
 
 function wlsCrossProcessPipeOrphanReaper(
     string $autoload,
+    string $filesystem,
+    string $runner,
     string $helper,
 ): void {
     $leaf = 'pipe-' . \bin2hex(\random_bytes(16));
@@ -656,12 +700,13 @@ function wlsCrossProcessPipeOrphanReaper(
         . \bin2hex(\random_bytes(8));
     $producerCode = <<<'PHP'
 require $argv[1];
+require $argv[2];
 $class = 'Weline\\Server\\Service\\Edge\\Gateway\\GatewayBoundedCommandRunner';
 $parentMethod = new ReflectionMethod($class, 'windowsResultParent');
 $parent = $parentMethod->invoke(null);
-$directory = $parent . DIRECTORY_SEPARATOR . $argv[3];
+$directory = $parent . DIRECTORY_SEPARATOR . $argv[4];
 $process = proc_open(
-    [$argv[2], '--pipe-prepare', '--transaction-dir=' . $directory],
+    [$argv[3], '--pipe-prepare', '--transaction-dir=' . $directory],
     [0 => ['file', 'NUL', 'r'], 1 => ['file', 'NUL', 'a'], 2 => ['file', 'NUL', 'a']],
     $pipes,
     null,
@@ -680,11 +725,11 @@ if (($code >= 0 ? $code : $closed) !== 0 || !touch($directory, time() - 120)) {
     exit(32);
 }
 $ready = $directory . "\n";
-if (file_put_contents($argv[4], $ready, LOCK_EX) !== strlen($ready)) { exit(33); }
+if (file_put_contents($argv[5], $ready, LOCK_EX) !== strlen($ready)) { exit(33); }
 sleep(60);
 PHP;
     $producer = \proc_open(
-        [\PHP_BINARY, '-r', $producerCode, $autoload, $helper, $leaf, $ready],
+        [\PHP_BINARY, '-r', $producerCode, $autoload, $runner, $helper, $leaf, $ready],
         [
             0 => ['file', 'NUL', 'r'],
             1 => ['file', 'NUL', 'a'],
@@ -737,7 +782,9 @@ PHP;
 
         $reaperCode = <<<'PHP'
 require $argv[1];
-$path = realpath($argv[2]);
+require $argv[2];
+require $argv[3];
+$path = realpath($argv[4]);
 if (!is_string($path)) { exit(41); }
 $proof = [
     'path' => $path,
@@ -745,20 +792,47 @@ $proof = [
     'sha256' => hash_file('sha256', $path),
     'source' => 'windows-integration',
 ];
+$target = (string)($argv[5] ?? '');
+$leaf = basename($target);
+$parentMethod = new ReflectionMethod(
+    'Weline\\Server\\Service\\Edge\\Gateway\\GatewayBoundedCommandRunner',
+    'windowsResultParent',
+);
+$parent = (string)$parentMethod->invoke(null);
+if (preg_match('/\Apipe-[a-f0-9]{32}\z/D', $leaf) !== 1
+    || strcasecmp($target, $parent . DIRECTORY_SEPARATOR . $leaf) !== 0) {
+    exit(43);
+}
 $method = new ReflectionMethod(
     'Weline\\Server\\Service\\Edge\\Gateway\\GatewayBoundedCommandRunner',
     'reapWindowsPipeOrphans',
 );
-$ok = $method->invoke(null, $proof, (hrtime(true) / 1000000000) + 15.0);
-echo $ok ? 'reaped' : 'failed';
-exit($ok ? 0 : 42);
+$deadline = hrtime(true) + 5_000_000_000;
+do {
+    $ok = $method->invoke(null, $proof, $deadline / 1_000_000_000);
+    if (!$ok) {
+        echo 'failed';
+        exit(42);
+    }
+    clearstatcache(true, $target);
+    if (!file_exists($target) && !is_link($target)) {
+        echo 'reaped';
+        exit(0);
+    }
+    usleep(25_000);
+} while (hrtime(true) < $deadline);
+echo 'retained';
+exit(43);
 PHP;
         $reaped = wlsRun([
             \PHP_BINARY,
             '-r',
             $reaperCode,
             $autoload,
+            $filesystem,
+            $runner,
             $helper,
+            $directory,
         ], 20.0);
         if ($reaped['code'] !== 0 || $reaped['output'] !== 'reaped') {
             throw new \RuntimeException(
@@ -769,6 +843,7 @@ PHP;
 
         $parentCode = <<<'PHP'
 require $argv[1];
+require $argv[2];
 $method = new ReflectionMethod(
     'Weline\\Server\\Service\\Edge\\Gateway\\GatewayBoundedCommandRunner',
     'windowsResultParent',
@@ -776,7 +851,7 @@ $method = new ReflectionMethod(
 echo $method->invoke(null);
 PHP;
         $parentResult = wlsRun([
-            \PHP_BINARY, '-r', $parentCode, $autoload,
+            \PHP_BINARY, '-r', $parentCode, $autoload, $runner,
         ], 10.0);
         if ($parentResult['code'] !== 0 || $parentResult['output'] === '') {
             throw new \RuntimeException('Unable to resolve the pipe result parent.');
@@ -802,7 +877,10 @@ PHP;
             '-r',
             $reaperCode,
             $autoload,
+            $filesystem,
+            $runner,
             $helper,
+            $nextDirectory,
         ], 20.0);
         if ($nextReaped['code'] !== 0
             || \file_exists($nextDirectory)
@@ -815,12 +893,6 @@ PHP;
             @\proc_close($producer);
         }
         @\unlink($ready);
-        if ($directory !== '' && \is_dir($directory)) {
-            wlsRemoveTree($directory);
-        }
-        if ($nextDirectory !== '' && \is_dir($nextDirectory)) {
-            wlsRemoveTree($nextDirectory);
-        }
     }
 }
 
@@ -842,6 +914,20 @@ function wlsBoundedCommandTest(array $arguments): void
     $autoload = \realpath(\dirname(__DIR__, 9) . '/vendor/autoload.php');
     if (!\is_string($autoload) || !\is_file($autoload)) {
         throw new \RuntimeException('WLS autoload is unavailable for cross-process reaping.');
+    }
+    $runner = \realpath(
+        \dirname(__DIR__, 5)
+            . '/Service/Edge/Gateway/GatewayBoundedCommandRunner.php',
+    );
+    $filesystem = \realpath(
+        \dirname(__DIR__, 5)
+            . '/Service/Edge/Gateway/GatewayProjectStateFilesystem.php',
+    );
+    if (!\is_string($runner) || !\is_file($runner)) {
+        throw new \RuntimeException('Current bounded-command runner source is unavailable.');
+    }
+    if (!\is_string($filesystem) || !\is_file($filesystem)) {
+        throw new \RuntimeException('Current project-state filesystem source is unavailable.');
     }
     $programData = (string)\getenv('ProgramData');
     if ($programData === '') {
@@ -996,7 +1082,7 @@ function wlsBoundedCommandTest(array $arguments): void
             throw new \RuntimeException('KILL_ON_CLOSE left a descendant alive after helper death.');
         }
 
-        wlsCrossProcessPipeOrphanReaper($autoload, $helper);
+        wlsCrossProcessPipeOrphanReaper($autoload, $filesystem, $runner, $helper);
 
         $existing = $root . '\\existing';
         wlsMkdirExclusive($existing);
@@ -1092,6 +1178,12 @@ function wlsCapacityRemoveFailpointMarker(
         throw new \RuntimeException('Refusing unsafe capacity failpoint marker.');
     }
     $powershell = wlsWindowsTool('WindowsPowerShell\\v1.0\\powershell.exe');
+    $markerInspectScript = '$path=[Text.Encoding]::UTF8.GetString('
+        . '[Convert]::FromBase64String(\''
+        . \base64_encode($marker)
+        . '\')); $item=Get-Item -LiteralPath $path -Force -ErrorAction Stop; '
+        . 'if ($item.PSIsContainer) { exit 20 }; '
+        . 'if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { exit 21 }';
     $plain = wlsRun([
         $powershell,
         '-NoLogo',
@@ -1100,10 +1192,7 @@ function wlsCapacityRemoveFailpointMarker(
         '-ExecutionPolicy',
         'Bypass',
         '-Command',
-        '$item = Get-Item -LiteralPath $args[0] -Force -ErrorAction Stop; '
-            . 'if ($item.PSIsContainer) { exit 20 }; '
-            . 'if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { exit 21 }',
-        $marker,
+        $markerInspectScript,
     ], 10.0);
     if ($plain['code'] !== 0 || !\unlink($marker)) {
         throw new \RuntimeException('Unable to remove exact capacity failpoint marker.');
@@ -1590,6 +1679,14 @@ function wlsWindowsCapacityTest(array $arguments): void
         }
         wlsMkdir($junctionTarget);
         $powershell = wlsWindowsTool('WindowsPowerShell\\v1.0\\powershell.exe');
+        $junctionCreateScript = '$path=[Text.Encoding]::UTF8.GetString('
+            . '[Convert]::FromBase64String(\''
+            . \base64_encode($junctionPath)
+            . '\')); $target=[Text.Encoding]::UTF8.GetString('
+            . '[Convert]::FromBase64String(\''
+            . \base64_encode($junctionTarget)
+            . '\')); New-Item -ItemType Junction -Path $path -Target $target '
+            . '-ErrorAction Stop | Out-Null';
         $junction = wlsRun([
             $powershell,
             '-NoLogo',
@@ -1598,10 +1695,7 @@ function wlsWindowsCapacityTest(array $arguments): void
             '-ExecutionPolicy',
             'Bypass',
             '-Command',
-            'New-Item -ItemType Junction -Path $args[0] -Target $args[1] '
-                . '-ErrorAction Stop | Out-Null',
-            $junctionPath,
-            $junctionTarget,
+            $junctionCreateScript,
         ], 15.0);
         if ($junction['code'] !== 0) {
             throw new \RuntimeException(
@@ -1622,6 +1716,10 @@ function wlsWindowsCapacityTest(array $arguments): void
                 'Windows derived-root junction/other-volume anchor failed open before HELD.',
             );
         }
+        $junctionRemoveScript = '$path=[Text.Encoding]::UTF8.GetString('
+            . '[Convert]::FromBase64String(\''
+            . \base64_encode($junctionPath)
+            . '\')); Remove-Item -LiteralPath $path -Force -ErrorAction Stop';
         $junctionRemoval = wlsRun([
             $powershell,
             '-NoLogo',
@@ -1630,8 +1728,7 @@ function wlsWindowsCapacityTest(array $arguments): void
             '-ExecutionPolicy',
             'Bypass',
             '-Command',
-            'Remove-Item -LiteralPath $args[0] -Force -ErrorAction Stop',
-            $junctionPath,
+            $junctionRemoveScript,
         ], 15.0);
         if ($junctionRemoval['code'] !== 0 || \is_dir($junctionPath)) {
             throw new \RuntimeException(
@@ -1686,6 +1783,42 @@ function wlsWindowsCapacityTest(array $arguments): void
         }
         $conflictRoot = $capacity . '\\' . $nonce . '.allocating';
         wlsMkdir($conflictRoot);
+        $currentUserSidResult = wlsRun([
+            $powershell,
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            '[Security.Principal.WindowsIdentity]::GetCurrent().User.Value',
+        ], 15.0);
+        $currentUserSid = \trim($currentUserSidResult['output']);
+        if ($currentUserSidResult['code'] !== 0
+            || \preg_match(
+                '/\AS-1-(?:[0-9]+-){1,15}[0-9]+\z/D',
+                $currentUserSid,
+            ) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Unable to resolve the current Windows capacity fixture owner SID.',
+            );
+        }
+        wlsChecked([
+            wlsWindowsTool('icacls.exe'),
+            $conflictRoot,
+            '/setowner',
+            '*' . $currentUserSid,
+            '/Q',
+        ]);
+        wlsChecked([
+            wlsWindowsTool('icacls.exe'),
+            $conflictRoot,
+            '/inheritance:r',
+            '/grant:r',
+            '*S-1-5-18:(OI)(CI)(F)',
+            '*S-1-5-32-544:(OI)(CI)(F)',
+            '*S-1-5-80-3070340479-3168417268-2770794561-992406300-110075626:(OI)(CI)(F)',
+            '/Q',
+        ]);
         $conflictInspect = wlsCapacityCommand(
             $candidate,
             $common,
@@ -2210,6 +2343,609 @@ function wlsWindowsProductionCapacityTest(array $arguments): void
     }
 }
 
+function wlsServiceState(string $service): ?int
+{
+    $result = wlsSc(['queryex', $service]);
+    if ($result['code'] !== 0) {
+        return \str_contains($result['output'], '1060') ? null : -1;
+    }
+    return \preg_match('/STATE\s*:\s*([0-9]+)/i', $result['output'], $matches) === 1
+        ? (int)$matches[1]
+        : -1;
+}
+
+function wlsWaitServiceState(string $service, int $expected, float $timeoutSeconds): string
+{
+    $deadline = \hrtime(true) + (int)\round($timeoutSeconds * 1_000_000_000);
+    $result = ['output' => 'not queried'];
+    do {
+        $result = wlsSc(['queryex', $service]);
+        if ($result['code'] === 0
+            && \preg_match('/STATE\s*:\s*([0-9]+)/i', $result['output'], $matches) === 1
+            && (int)$matches[1] === $expected) {
+            return $result['output'];
+        }
+        \usleep(100_000);
+    } while (\hrtime(true) < $deadline);
+    throw new \RuntimeException(
+        'Service did not reach state ' . $expected . ': ' . $result['output'],
+    );
+}
+
+function wlsWaitServiceDeleted(string $service, float $timeoutSeconds): void
+{
+    $deadline = \hrtime(true) + (int)\round($timeoutSeconds * 1_000_000_000);
+    do {
+        if (wlsServiceState($service) === null) {
+            return;
+        }
+        \usleep(100_000);
+    } while (\hrtime(true) < $deadline);
+    throw new \RuntimeException('Temporary Windows service was not deleted.');
+}
+
+function wlsStartCount(string $marker): int
+{
+    if (!\is_file($marker)) {
+        return 0;
+    }
+    $lines = \file($marker, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    return \is_array($lines) ? \count($lines) : 0;
+}
+
+function wlsWaitStarts(string $marker, int $minimum, float $timeoutSeconds): int
+{
+    $deadline = \hrtime(true) + (int)\round($timeoutSeconds * 1_000_000_000);
+    $count = 0;
+    do {
+        $count = wlsStartCount($marker);
+        if ($count >= $minimum) {
+            return $count;
+        }
+        \usleep(100_000);
+    } while (\hrtime(true) < $deadline);
+    throw new \RuntimeException('Broker starts did not reach ' . $minimum . '.');
+}
+
+function wlsProcessExited(int $pid): bool
+{
+    if ($pid < 1) {
+        return false;
+    }
+    $script = 'if (Get-Process -Id ' . $pid . ' -ErrorAction SilentlyContinue) { exit 1 }';
+    return wlsRun([
+        wlsWindowsTool('WindowsPowerShell\\v1.0\\powershell.exe'),
+        '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $script,
+    ], 10.0)['code'] === 0;
+}
+
+function wlsServiceSid(string $service): string
+{
+    $result = wlsSc(['showsid', $service]);
+    if ($result['code'] !== 0
+        || \preg_match('/\bS-1-5-80(?:-[0-9]+){5}\b/', $result['output'], $matches) !== 1
+    ) {
+        throw new \RuntimeException('Unable to derive the temporary service SID.');
+    }
+    return $matches[0];
+}
+
+function wlsApplyExactSddl(string $path, string $sddl): void
+{
+    if (!\file_exists($path) || \is_link($path)) {
+        throw new \RuntimeException('ACL target is missing or is a link: ' . $path);
+    }
+    $pathBase64 = \base64_encode($path);
+    $sddlBase64 = \base64_encode($sddl);
+    $script = '$path = [Text.Encoding]::UTF8.GetString('
+        . '[Convert]::FromBase64String(\'' . $pathBase64 . '\')); '
+        . '$sddl = [Text.Encoding]::UTF8.GetString('
+        . '[Convert]::FromBase64String(\'' . $sddlBase64 . '\')); '
+        . '$acl = Get-Acl -LiteralPath $path -ErrorAction Stop; '
+        . '$acl.SetSecurityDescriptorSddlForm($sddl); '
+        . 'Set-Acl -LiteralPath $path -AclObject $acl -ErrorAction Stop';
+    wlsChecked([
+        wlsWindowsTool('WindowsPowerShell\\v1.0\\powershell.exe'),
+        '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-Command', $script,
+    ], 20.0);
+}
+
+function wlsCanonicalJsonValue(mixed $value): mixed
+{
+    if (!\is_array($value)) {
+        return $value;
+    }
+    if (\array_is_list($value)) {
+        return \array_map(wlsCanonicalJsonValue(...), $value);
+    }
+    \ksort($value, SORT_STRING);
+    foreach ($value as $key => $item) {
+        $value[$key] = wlsCanonicalJsonValue($item);
+    }
+    return $value;
+}
+
+/** @param array<string,mixed> $manifest */
+function wlsRuntimeGeneration(array $manifest): string
+{
+    unset($manifest['runtime_generation']);
+    return \hash('sha256', \json_encode(
+        wlsCanonicalJsonValue($manifest),
+        JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+    ));
+}
+
+function wlsCopyCurrentSource(string $source, string $destination): void
+{
+    $sourceHash = \hash_file('sha256', $source);
+    if (!\is_string($sourceHash) || !\is_file($source) || !\copy($source, $destination)) {
+        throw new \RuntimeException('Unable to stage current source candidate: ' . $source);
+    }
+    $destinationHash = \hash_file('sha256', $destination);
+    if (!\is_string($destinationHash) || !\hash_equals($sourceHash, $destinationHash)) {
+        throw new \RuntimeException('Staged candidate hash mismatch: ' . $source);
+    }
+}
+
+/** @return array{home:string,run:string,guardian:string,marker:string,hold:string,failFirst:string} */
+function wlsPrepareScmHome(
+    string $root,
+    string $guardian,
+    string $launcher,
+    string $testBroker,
+    string $boundedCommand,
+    string $secretKey,
+    string $serviceSid,
+): array {
+    $dataPlaneSid = 'S-1-5-80-3611316956-1833621424-61377994-3153356469-2496947245';
+    if (\preg_match('/\AS-1-5-80(?:-[0-9]+){5}\z/D', $serviceSid) !== 1) {
+        throw new \RuntimeException('Temporary service SID is invalid.');
+    }
+    $home = $root . '\\home';
+    $run = $home . '\\runtime\\run';
+    $slot = $home . '\\slots\\A';
+    foreach ([
+        $home . '\\state', $home . '\\trust', $home . '\\nginx-pid',
+        $run, $slot . '\\release', $slot . '\\bin', $slot . '\\app',
+        $home . '\\bin', $home . '\\guardian\\v1',
+    ] as $directory) {
+        wlsMkdir($directory);
+    }
+    $installedGuardian = $home . '\\guardian\\v1\\wls-gateway-guardian.exe';
+    wlsCopyCurrentSource($guardian, $installedGuardian);
+    wlsCopyCurrentSource($launcher, $home . '\\bin\\wls-gateway-launcher.exe');
+    wlsCopyCurrentSource($boundedCommand, $home . '\\bin\\wls-bounded-command.exe');
+    $sources = [
+        'bin/wls-gateway-broker.exe' => $testBroker,
+        'bin/php.exe' => PHP_BINARY,
+        'bin/nginx.exe' => $testBroker,
+        'bin/wls-gateway-launcher.exe' => $launcher,
+    ];
+    foreach ($sources as $relative => $source) {
+        wlsCopyCurrentSource($source, $slot . '\\' . \str_replace('/', '\\', $relative));
+    }
+    wlsWrite($slot . '\\app\\controller.php', "<?php\n");
+    $durableContract = [
+        'schema_version' => 2,
+        'security_ledger_read_schema' => 8,
+        'security_ledger_write_schema' => 8,
+        'snapshot_receipt_read_schema' => 2,
+        'snapshot_receipt_write_schema' => 2,
+        'snapshot_namespace' => 'snapshots-v2',
+        'nonce_wal_schema' => 1,
+        'nginx_test_schema' => 1,
+    ];
+    $capabilities = ['stable_launcher_rollback_target_proof' => true];
+    $releaseComponents = [];
+    $installedComponents = [];
+    foreach ([
+        'app/controller.php' => 0644,
+        'bin/nginx.exe' => 0755,
+        'bin/php.exe' => 0755,
+        'bin/wls-gateway-broker.exe' => 0755,
+        'bin/wls-gateway-launcher.exe' => 0755,
+    ] as $relative => $mode) {
+        $installed = $slot . '\\' . \str_replace('/', '\\', $relative);
+        $hash = \hash_file('sha256', $installed);
+        $size = \filesize($installed);
+        if (!\is_string($hash) || !\is_int($size)) {
+            throw new \RuntimeException('Unable to hash staged component ' . $relative);
+        }
+        $releaseComponents[$relative] = ['sha256' => $hash, 'size' => $size, 'mode' => $mode];
+        $installedComponents[$relative] = ['sha256' => $hash, 'size' => $size, 'mode' => $mode];
+    }
+    $releaseManifest = \json_encode([
+        'schema_version' => 2,
+        'version' => '2.0.0-windows-scm-current-source',
+        'implementation_level' => 'wls-2.0',
+        'durable_state_contract' => $durableContract,
+        'capabilities' => $capabilities,
+        'components' => $releaseComponents,
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+    $releaseManifestPath = $slot . '\\release\\manifest.json';
+    $releaseSignaturePath = $slot . '\\release\\manifest.sig';
+    wlsWrite($releaseManifestPath, $releaseManifest);
+    wlsWrite($releaseSignaturePath, \base64_encode(
+        \sodium_crypto_sign_detached($releaseManifest, $secretKey),
+    ) . PHP_EOL);
+    foreach ([
+        'release/manifest.json' => $releaseManifestPath,
+        'release/manifest.sig' => $releaseSignaturePath,
+    ] as $relative => $path) {
+        $hash = \hash_file('sha256', $path);
+        $size = \filesize($path);
+        if (!\is_string($hash) || !\is_int($size)) {
+            throw new \RuntimeException('Unable to hash staged component ' . $relative);
+        }
+        $installedComponents[$relative] = ['sha256' => $hash, 'size' => $size, 'mode' => 0600];
+    }
+    \ksort($installedComponents, SORT_STRING);
+    $installed = [
+        'schema_version' => 2,
+        'role' => 'host_gateway',
+        'slot' => 'A',
+        'capabilities' => $capabilities,
+        'durable_state_contract' => $durableContract,
+        'components' => $installedComponents,
+    ];
+    $installed['runtime_generation'] = wlsRuntimeGeneration($installed);
+    $installedManifestPath = $slot . '\\manifest.json';
+    wlsWrite($installedManifestPath, \json_encode(
+        $installed,
+        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+    ) . PHP_EOL);
+    wlsWrite($home . '\\trust\\active-slot', "A\n");
+    wlsWrite(
+        $home . '\\trust\\stable-launcher.sha256',
+        \hash_file('sha256', $home . '\\bin\\wls-gateway-launcher.exe') . "\n",
+    );
+
+    $systemRootSddl = 'O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)';
+    $systemRootDirectorySddl = 'O:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)';
+    $slotFileSddl = 'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1200a9;;;' . $serviceSid . ')';
+    $nginxFileSddl = $slotFileSddl . '(A;;0x1200a9;;;' . $dataPlaneSid . ')';
+    $slotDirectorySddl = 'O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+        . '(A;OICI;0x1200a9;;;' . $serviceSid . ')';
+    $hostDataPlaneDirectorySddl = 'O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)'
+        . '(A;;0x1200a9;;;' . $serviceSid . ')(A;;0x20;;;' . $dataPlaneSid . ')';
+    $slotDataPlaneDirectorySddl = 'O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)'
+        . '(A;;0x1200a9;;;' . $serviceSid . ')(A;;0x20;;;' . $dataPlaneSid . ')';
+    foreach (\array_keys($releaseComponents) as $relative) {
+        wlsApplyExactSddl(
+            $slot . '\\' . \str_replace('/', '\\', $relative),
+            $relative === 'bin/nginx.exe' ? $nginxFileSddl : $slotFileSddl,
+        );
+    }
+    foreach ([$releaseManifestPath, $releaseSignaturePath, $installedManifestPath] as $file) {
+        wlsApplyExactSddl($file, $slotFileSddl);
+    }
+    foreach ([
+        $home . '\\trust\\active-slot',
+        $home . '\\trust\\stable-launcher.sha256',
+        $home . '\\bin\\wls-gateway-launcher.exe',
+        $home . '\\bin\\wls-bounded-command.exe',
+        $installedGuardian,
+    ] as $file) {
+        wlsApplyExactSddl($file, $systemRootSddl);
+    }
+    foreach ([$slot . '\\app', $slot . '\\release'] as $directory) {
+        wlsApplyExactSddl($directory, $slotDirectorySddl);
+    }
+    wlsApplyExactSddl($home . '\\trust', $slotDirectorySddl);
+    foreach ([$slot . '\\bin', $slot, $home . '\\slots'] as $directory) {
+        wlsApplyExactSddl($directory, $slotDataPlaneDirectorySddl);
+    }
+    wlsApplyExactSddl($home . '\\nginx-pid', $hostDataPlaneDirectorySddl);
+    foreach ([
+        $home . '\\runtime\\run',
+        $home . '\\runtime',
+        $home . '\\state',
+        $home . '\\bin',
+        $home . '\\guardian\\v1',
+        $home . '\\guardian',
+    ] as $directory) {
+        wlsApplyExactSddl($directory, $systemRootDirectorySddl);
+    }
+    wlsApplyExactSddl($home, $hostDataPlaneDirectorySddl);
+    return [
+        'home' => $home, 'run' => $run, 'guardian' => $installedGuardian,
+        'marker' => $home . '\\state\\test-starts.log',
+        'hold' => $home . '\\state\\test-hold',
+        'failFirst' => $home . '\\state\\test-fail-first',
+    ];
+}
+
+function wlsServiceTest(array $arguments, bool $retainForReboot = false): void
+{
+    if (PHP_OS_FAMILY !== 'Windows'
+        || (string)\getenv('WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION') !== '1') {
+        throw new \RuntimeException('Windows SCM integration requires its explicit Windows environment flag.');
+    }
+    $keyFile = wlsOption($arguments, 'key-file');
+    $guardian = wlsOption($arguments, 'guardian');
+    $launcher = wlsOption($arguments, 'launcher');
+    $testBroker = wlsOption($arguments, 'test-broker');
+    $boundedCommand = wlsOption($arguments, 'bounded-command');
+    foreach ([$keyFile, $guardian, $launcher, $testBroker, $boundedCommand] as $candidate) {
+        if (!\is_file($candidate) || !\is_string(\hash_file('sha256', $candidate))) {
+            throw new \RuntimeException('Current-build SCM candidate is missing or unhashed: ' . $candidate);
+        }
+    }
+    $service = 'ai-test-wls-gateway-' . \bin2hex(\random_bytes(16));
+    if ($service === 'weline-wls-gateway-v2') {
+        throw new \RuntimeException('Refusing the fixed production Windows service name.');
+    }
+    $existing = wlsSc(['query', $service]);
+    if ($existing['code'] === 0 || !\str_contains($existing['output'], '1060')) {
+        throw new \RuntimeException('Random SCM service already exists or is indeterminate: ' . $existing['output']);
+    }
+    $programData = (string)\getenv('ProgramData');
+    if ($programData === '') {
+        throw new \RuntimeException('ProgramData is unavailable.');
+    }
+    wlsAssertPlainDirectory($programData, 60.0);
+    $root = $programData . '\\weline-wls2-ci-scm-' . \bin2hex(\random_bytes(8));
+    $secret = null;
+    $createAttempted = false;
+    $created = false;
+    $serviceReferenceReleased = true;
+    $rootCreated = false;
+    $retained = false;
+    $fixture = [];
+    $failure = null;
+    try {
+        $payload = \file_get_contents($keyFile);
+        if (!\is_string($payload)) {
+            throw new \RuntimeException('Unable to read ephemeral signing key.');
+        }
+        try {
+            $key = \json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
+        } finally {
+            \sodium_memzero($payload);
+        }
+        $secret = \base64_decode((string)($key['secret_key_base64'] ?? ''), true);
+        if (!\is_string($secret) || \strlen($secret) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+            throw new \RuntimeException('Ephemeral signing key is invalid.');
+        }
+        wlsMkdirExclusive($root, 60.0);
+        $rootCreated = true;
+        wlsRestrictFixtureRoot($root);
+        $serviceSid = wlsServiceSid($service);
+        $fixture = wlsPrepareScmHome(
+            $root,
+            $guardian,
+            $launcher,
+            $testBroker,
+            $boundedCommand,
+            $secret,
+            $serviceSid,
+        );
+        $binaryPath = '"' . $fixture['guardian'] . '" --service --service-name=' . $service
+            . ' --service-test-root="' . $fixture['home'] . '" --home="' . $fixture['home']
+            . '" --run="' . $fixture['run'] . '"';
+        $createAttempted = true;
+        $serviceReferenceReleased = false;
+        wlsCheckedSc(['create', $service, 'binPath=', $binaryPath, 'start=', 'auto', 'obj=', 'LocalSystem']);
+        $created = true;
+        wlsCheckedSc(['sidtype', $service, 'unrestricted']);
+        wlsCheckedSc(['failure', $service, 'reset=', '0', 'actions=', 'restart/5000/restart/5000/restart/5000']);
+        wlsCheckedSc(['failureflag', $service, '1']);
+        wlsWrite($fixture['hold'], "hold\n");
+        wlsWrite($fixture['failFirst'], "fail-first\n");
+        wlsCheckedSc(['start', $service]);
+        $firstRunning = wlsWaitServiceState($service, 4, 40.0);
+        if (wlsStartCount($fixture['marker']) !== 1
+            || \preg_match('/PID\s*:\s*([0-9]+)/i', $firstRunning, $firstPidMatch) !== 1
+            || (int)$firstPidMatch[1] < 1
+        ) {
+            throw new \RuntimeException(
+                'The first SCM generation did not reach RUNNING before failure injection.',
+            );
+        }
+        $firstPid = (int)$firstPidMatch[1];
+        if (!\is_file($fixture['failFirst'])
+            || \is_link($fixture['failFirst'])
+            || \file_get_contents($fixture['failFirst']) !== "fail-first\n"
+            || !\unlink($fixture['failFirst'])) {
+            throw new \RuntimeException('Unable to release the exact first-generation failure trigger.');
+        }
+        wlsWaitStarts($fixture['marker'], 2, 40.0);
+        $running = wlsWaitServiceState($service, 4, 40.0);
+        if (wlsStartCount($fixture['marker']) !== 2
+            || \preg_match('/PID\s*:\s*([0-9]+)/i', $running, $pid) !== 1
+            || (int)$pid[1] < 1
+            || (int)$pid[1] === $firstPid
+        ) {
+            throw new \RuntimeException(
+                'SCM did not recover exactly once into a distinct service generation.',
+            );
+        }
+        $recoveredPid = (int)$pid[1];
+        $beforeStop = wlsStartCount($fixture['marker']);
+        wlsCheckedSc(['stop', $service]);
+        wlsWaitServiceState($service, 1, 40.0);
+        if (!wlsProcessExited($recoveredPid)) {
+            throw new \RuntimeException('Explicit SCM stop retained the recovered service process.');
+        }
+        \usleep(6_000_000);
+        if (wlsServiceState($service) !== 1 || wlsStartCount($fixture['marker']) !== $beforeStop) {
+            throw new \RuntimeException('Explicit SCM stop incorrectly triggered recovery.');
+        }
+        wlsCheckedSc(['start', $service]);
+        wlsWaitStarts($fixture['marker'], $beforeStop + 1, 40.0);
+        $finalRunning = wlsWaitServiceState($service, 4, 40.0);
+        $result = [
+            'service' => $service, 'current_source_sha256_verified' => true,
+            'unexpected_failure_scm_recovered' => true,
+            'distinct_scm_generation' => true,
+            'explicit_stop_remained_stopped' => true,
+            'explicit_start_ready' => true,
+        ];
+        if ($retainForReboot) {
+            if (\preg_match('/PID\s*:\s*([0-9]+)/i', $finalRunning, $finalPid) !== 1
+                || (int)$finalPid[1] < 1
+                || wlsStartCount($fixture['marker']) !== $beforeStop + 1
+            ) {
+                throw new \RuntimeException('Retained SCM reboot fixture is not stably running.');
+            }
+            $artifactPaths = [
+                'guardian' => $fixture['guardian'],
+                'launcher' => $fixture['home'] . '\\bin\\wls-gateway-launcher.exe',
+                'broker' => $fixture['home'] . '\\slots\\A\\bin\\wls-gateway-broker.exe',
+                'bounded_command' => $fixture['home'] . '\\bin\\wls-bounded-command.exe',
+            ];
+            $artifactSha256 = [];
+            foreach ($artifactPaths as $name => $path) {
+                $digest = \hash_file('sha256', $path);
+                if (!\is_string($digest) || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1) {
+                    throw new \RuntimeException('Unable to hash retained SCM artifact: ' . $name);
+                }
+                $artifactSha256[$name] = $digest;
+            }
+            $result['root'] = $root;
+            $result['home'] = $fixture['home'];
+            $result['running_pid'] = (int)$finalPid[1];
+            $result['start_count'] = wlsStartCount($fixture['marker']);
+            $result['artifact_sha256'] = $artifactSha256;
+        }
+        $encodedResult = \json_encode(
+            $result,
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+        if ($retainForReboot) {
+            $retained = true;
+        }
+        echo $encodedResult . PHP_EOL;
+    } catch (\Throwable $exception) {
+        $stageNames = [];
+        $stageFiles = isset($fixture['home'])
+            ? \glob($fixture['home'] . '\\state\\service-stage-*')
+            : false;
+        if (\is_array($stageFiles)) {
+            foreach ($stageFiles as $stageFile) {
+                $stageName = \basename($stageFile);
+                if (\preg_match('/\Aservice-stage-[a-z0-9-]+\z/D', $stageName) === 1) {
+                    $stageNames[] = $stageName;
+                }
+            }
+        }
+        \sort($stageNames, SORT_STRING);
+        $failure = new \RuntimeException(
+            $exception->getMessage() . ' stages='
+                . ($stageNames === [] ? 'none' : \implode(',', $stageNames)),
+            (int)$exception->getCode(),
+            $exception,
+        );
+    } finally {
+        if (\is_string($secret)) {
+            \sodium_memzero($secret);
+        }
+        $cleanupErrors = [];
+        if (!$retained && !$created && $createAttempted) {
+            $definition = wlsSc(['qc', $service], 10.0);
+            if ($definition['code'] === 0
+                && \str_contains(\strtolower($definition['output']), \strtolower((string)($fixture['guardian'] ?? '')))) {
+                $created = true;
+            } elseif ($definition['code'] !== 0 && \str_contains($definition['output'], '1060')) {
+                $serviceReferenceReleased = true;
+            } else {
+                $cleanupErrors[] = 'Temporary SCM service ownership is indeterminate.';
+            }
+        }
+        if (!$retained && $created) {
+            try {
+                if (wlsServiceState($service) !== 1) {
+                    wlsSc(['stop', $service], 20.0);
+                    wlsWaitServiceState($service, 1, 30.0);
+                }
+                wlsCheckedSc(['delete', $service]);
+                wlsWaitServiceDeleted($service, 30.0);
+                $serviceReferenceReleased = true;
+            } catch (\Throwable $cleanup) {
+                $cleanupErrors[] = $cleanup->getMessage();
+            }
+        }
+        if (!$retained && $rootCreated) {
+            try {
+                if (!$serviceReferenceReleased) {
+                    throw new \RuntimeException('SCM may still reference the fixture root.');
+                }
+                wlsRemoveTree($root, 60.0);
+                if (\is_dir($root) || \is_link($root)) {
+                    throw new \RuntimeException('SCM fixture root remained after cleanup.');
+                }
+            } catch (\Throwable $cleanup) {
+                $cleanupErrors[] = $cleanup->getMessage();
+            }
+        }
+        if ($cleanupErrors !== []) {
+            throw new \RuntimeException((string)($failure?->getMessage() . ' Cleanup: ') . \implode(' ', $cleanupErrors), 0, $failure);
+        }
+    }
+    if ($failure !== null) {
+        throw $failure;
+    }
+}
+
+function wlsServiceRebootCleanup(array $arguments): void
+{
+    if (PHP_OS_FAMILY !== 'Windows'
+        || (string)\getenv('WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION') !== '1') {
+        throw new \RuntimeException('Windows SCM cleanup requires its explicit environment flag.');
+    }
+    $service = wlsOption($arguments, 'service');
+    $root = wlsOption($arguments, 'root');
+    if ($service === 'weline-wls-gateway-v2'
+        || \preg_match('/\Aai-test-wls-gateway-[a-f0-9]{32}\z/D', $service) !== 1) {
+        throw new \RuntimeException('Refusing a non-ephemeral Windows service name.');
+    }
+    $programData = (string)\getenv('ProgramData');
+    if ($programData === '') {
+        throw new \RuntimeException('ProgramData is unavailable.');
+    }
+    $rootPrefix = \rtrim($programData, "\\/") . '\\weline-wls2-ci-scm-';
+    $rootSuffix = \substr($root, \strlen($rootPrefix));
+    if (\strncasecmp($root, $rootPrefix, \strlen($rootPrefix)) !== 0
+        || \strlen($rootSuffix) !== 16
+        || \preg_match('/\A[a-f0-9]{16}\z/D', $rootSuffix) !== 1) {
+        throw new \RuntimeException('Refusing a non-ephemeral Windows fixture root.');
+    }
+    wlsAssertPlainDirectory($programData, 60.0);
+    wlsAssertPlainDirectory($root, 60.0);
+    $guardian = $root . '\\home\\guardian\\v1\\wls-gateway-guardian.exe';
+    if (!\is_file($guardian) || \is_link($guardian)) {
+        throw new \RuntimeException('Retained SCM Guardian is missing or unsafe.');
+    }
+    $definition = wlsSc(['qc', $service], 20.0);
+    if ($definition['code'] !== 0
+        || !\str_contains(
+            \strtolower($definition['output']),
+            \strtolower($guardian),
+        )
+        || !\str_contains(
+            \strtolower($definition['output']),
+            \strtolower('--service-test-root="' . $root . '\\home"'),
+        )) {
+        throw new \RuntimeException('Retained SCM service ownership is indeterminate.');
+    }
+    if (wlsServiceState($service) !== 1) {
+        wlsCheckedSc(['stop', $service]);
+        wlsWaitServiceState($service, 1, 40.0);
+    }
+    wlsCheckedSc(['delete', $service]);
+    wlsWaitServiceDeleted($service, 40.0);
+    wlsRemoveTree($root, 60.0);
+    if (\is_dir($root) || \is_link($root)) {
+        throw new \RuntimeException('Retained SCM fixture root remained after cleanup.');
+    }
+    echo \json_encode([
+        'service' => $service,
+        'service_deleted' => true,
+        'root_deleted' => true,
+    ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+}
+
 $mode = $argv[1] ?? '';
 try {
     if ($mode === 'keygen') {
@@ -2222,13 +2958,22 @@ try {
         wlsWindowsCapacityTest(\array_slice($argv, 2));
     } elseif ($mode === 'capacity-production-test') {
         wlsWindowsProductionCapacityTest(\array_slice($argv, 2));
+    } elseif ($mode === 'service-test') {
+        wlsServiceTest(\array_slice($argv, 2));
+    } elseif ($mode === 'service-reboot-prepare') {
+        wlsServiceTest(\array_slice($argv, 2), true);
+    } elseif ($mode === 'service-reboot-cleanup') {
+        wlsServiceRebootCleanup(\array_slice($argv, 2));
     } else {
         throw new \InvalidArgumentException(
             'Usage: keygen --output=<file> | path-security-test --broker=<file> | '
                 . 'bounded-command-test --helper=<file> | '
                 . 'capacity-test --launcher=<file> | '
                 . 'capacity-production-test --launcher=<file> --home=<ProgramData home> '
-                . '--platform-definition=<file>',
+                . '--platform-definition=<file> | service-test --key-file=<file> '
+                . '--guardian=<file> --launcher=<file> --test-broker=<file> '
+                . '--bounded-command=<file> | service-reboot-prepare <service-test options> | '
+                . 'service-reboot-cleanup --service=<random service> --root=<random ProgramData root>',
         );
     }
 } catch (\Throwable $exception) {

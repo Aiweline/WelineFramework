@@ -15,13 +15,13 @@
        ======================================== */
     --backend-color-text-primary: #212529;
     --backend-color-text-secondary: #6c757d;
-    --backend-color-text-tertiary: #adb5bd;
+    --backend-color-text-tertiary: #475569;
     --backend-color-text-disabled: #ced4da;
     --backend-color-text-muted: #6c757d;
     --backend-color-text-light: #f8f9fa;
     --backend-color-text-light-secondary: #dee2e6;
     --backend-color-text-dark: #212529;
-    --backend-color-text-placeholder: #adb5bd;
+    --backend-color-text-placeholder: #475569;
     --backend-color-text-inverse: #ffffff;
 
     /* ========================================
@@ -40,10 +40,10 @@
     /* ========================================
        边框色
        ======================================== */
-    --backend-color-border-default: #dee2e6;
+    --backend-color-border-default: #64748b;
     --backend-color-border-emphasis: #adb5bd;
     --backend-color-border-focus: var(--backend-color-primary);
-    --backend-color-border-light: #e9ecef;
+    --backend-color-border-light: #64748b;
     --backend-color-border-dark: #6c757d;
 
     /* ========================================
@@ -54,18 +54,18 @@
     --backend-color-sidebar-text: var(--backend-color-text-primary);
     --backend-color-sidebar-hover: var(--backend-color-bg-secondary);
     --backend-color-sidebar-active: var(--backend-color-primary-bg-subtle);
-    --backend-color-sidebar-border: var(--backend-color-border-light);
+    --backend-color-sidebar-border: var(--backend-color-border-default);
     
     /* 头部 */
     --backend-color-header-bg: #ffffff;
     --backend-color-header-text: var(--backend-color-text-primary);
-    --backend-color-header-border: var(--backend-color-border-light);
+    --backend-color-header-border: var(--backend-color-border-default);
     
     /* 表格 */
     --backend-color-table-bg: #ffffff;
     --backend-color-table-bg-striped: var(--backend-color-bg-secondary);
     --backend-color-table-bg-hover: var(--backend-color-bg-tertiary);
-    --backend-color-table-border: var(--backend-color-border-light);
+    --backend-color-table-border: var(--backend-color-border-default);
     
     /* 卡片 */
     --backend-color-card-bg: #ffffff;
@@ -77,4 +77,29 @@
     --backend-color-input-border: var(--backend-color-border-default);
     --backend-color-input-focus-border: var(--backend-color-primary);
     --backend-color-input-disabled-bg: var(--backend-color-bg-tertiary);
+
+    /* Semantic status/interaction contract shared by Bootstrap and Weline. */
+    --backend-color-bg-canvas: #f1f5f9;
+    --backend-color-link: #4338ca;
+    --backend-color-link-hover: #3730a3;
+    --backend-color-primary: #4f46e5;
+    --backend-color-primary-rgb: 79, 70, 229;
+    --backend-color-primary-hover: #4338ca;
+    --backend-color-primary-active: #3730a3;
+    --backend-color-primary-bg-subtle: #e0e7ff;
+    --backend-color-primary-border-subtle: #a5b4fc;
+    --backend-color-primary-text-emphasis: #3730a3;
+    --backend-color-on-primary: #ffffff;
+    --backend-color-secondary: #475569; --backend-color-secondary-rgb: 71, 85, 105; --backend-color-secondary-hover: #334155; --backend-color-secondary-active: #1e293b; --backend-color-on-secondary: #ffffff; --backend-color-secondary-bg-subtle: #e2e8f0; --backend-color-secondary-border-subtle: #94a3b8; --backend-color-secondary-text-emphasis: #334155;
+    --backend-color-success: #15803d; --backend-color-success-hover: #166534; --backend-color-success-active: #14532d; --backend-color-on-success: #ffffff; --backend-color-success-bg-subtle: #dcfce7; --backend-color-success-border-subtle: #86efac; --backend-color-success-text-emphasis: #166534;
+    --backend-color-warning: #a16207; --backend-color-warning-hover: #854d0e; --backend-color-warning-active: #713f12; --backend-color-on-warning: #ffffff; --backend-color-warning-bg-subtle: #fef3c7; --backend-color-warning-border-subtle: #fcd34d; --backend-color-warning-text-emphasis: #92400e;
+    --backend-color-danger: #b91c1c; --backend-color-danger-hover: #991b1b; --backend-color-danger-active: #7f1d1d; --backend-color-on-danger: #ffffff; --backend-color-danger-bg-subtle: #fee2e2; --backend-color-danger-border-subtle: #fca5a5; --backend-color-danger-text-emphasis: #991b1b;
+    --backend-color-info: #0369a1; --backend-color-info-hover: #075985; --backend-color-info-active: #0c4a6e; --backend-color-on-info: #ffffff; --backend-color-info-bg-subtle: #e0f2fe; --backend-color-info-border-subtle: #7dd3fc; --backend-color-info-text-emphasis: #075985;
+    --backend-color-alert-success-bg: var(--backend-color-success-bg-subtle); --backend-color-alert-success-text: var(--backend-color-success-text-emphasis); --backend-color-alert-success-border: var(--backend-color-success-border-subtle);
+    --backend-color-alert-warning-bg: var(--backend-color-warning-bg-subtle); --backend-color-alert-warning-text: var(--backend-color-warning-text-emphasis); --backend-color-alert-warning-border: var(--backend-color-warning-border-subtle);
+    --backend-color-alert-danger-bg: var(--backend-color-danger-bg-subtle); --backend-color-alert-danger-text: var(--backend-color-danger-text-emphasis); --backend-color-alert-danger-border: var(--backend-color-danger-border-subtle);
+    --backend-color-alert-info-bg: var(--backend-color-info-bg-subtle); --backend-color-alert-info-text: var(--backend-color-info-text-emphasis); --backend-color-alert-info-border: var(--backend-color-info-border-subtle);
+    --backend-card-shadow: 0 8px 24px rgb(15 23 42 / 0.10); --backend-dropdown-shadow: 0 18px 40px rgb(15 23 42 / 0.14); --backend-modal-shadow: 0 24px 56px rgb(15 23 42 / 0.18); --backend-focus-ring: 0 0 0 3px rgb(79 70 229 / 0.35);
+    --backend-color-text-rgb: 33, 37, 41; --backend-color-bg-canvas-rgb: 241, 245, 249; --backend-color-emphasis-rgb: 33, 37, 41;
+    --backend-color-success-rgb: 21, 128, 61; --backend-color-warning-rgb: 161, 98, 7; --backend-color-danger-rgb: 185, 28, 28; --backend-color-info-rgb: 3, 105, 161;
 }

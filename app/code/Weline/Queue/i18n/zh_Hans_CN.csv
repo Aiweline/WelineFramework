@@ -22,6 +22,8 @@
 "请提供 queue_id 或 biz_key。","请提供 queue_id 或 biz_key。"
 队列不存在。,队列不存在。
 队列编辑失败。,队列编辑失败。
+队列暂停失败。,队列暂停失败。
+队列已暂停。,队列已暂停。
 队列接管失败。,队列接管失败。
 队列接管完成。,队列接管完成。
 队列删除失败。,队列删除失败。
@@ -68,6 +70,7 @@
 "与 biz_key 二选一","与 biz_key 二选一"
 定位键,定位键
 "允许字段：name/module/content/result/process/biz_key/auto/type_id；禁止直接修改状态与 dispatch fence","允许字段：name/module/content/result/process/biz_key/auto/type_id；禁止直接修改状态与 dispatch fence"
+"安全释放当前 Queue attempt 并将状态置为 stop，不在当前请求中执行消费者。","安全释放当前 Queue attempt 并将状态置为 stop，不在当前请求中执行消费者。"
 "安全释放当前 Queue attempt 并重置为 pending，不在当前请求中执行消费者。","安全释放当前 Queue attempt 并重置为 pending，不在当前请求中执行消费者。"
 "为 true 时仅在受管身份确认后终止当前 Worker","为 true 时仅在受管身份确认后终止当前 Worker"
 "接管所有者：system_scheduler 或 manual_cli","接管所有者：system_scheduler 或 manual_cli"
@@ -309,7 +312,6 @@ dir：,dir：
 "Queue Transport 检测到 PID 已不属于当前 attempt，未发送终止信号并已释放过期 fence。","Queue Transport 检测到 PID 已不属于当前 attempt，未发送终止信号并已释放过期 fence。"
 "Queue Transport 已确认终止超时 Worker。","Queue Transport 已确认终止超时 Worker。"
 "队列已暂停，并确认对应 Worker 已退出。","队列已暂停，并确认对应 Worker 已退出。"
-队列已暂停。,队列已暂停。
 "队列已安全恢复为 pending，等待后续调度。","队列已安全恢复为 pending，等待后续调度。"
 队列没有需要更新的业务字段。,队列没有需要更新的业务字段。
 队列业务字段已更新。,队列业务字段已更新。
@@ -362,7 +364,6 @@ dir：,dir：
 不支持的操作类型：%{1},不支持的操作类型：%{1}
 队列记录不存在,队列记录不存在
 队列已成功删除,队列已成功删除
-队列暂停失败。,队列暂停失败。
 队列继续失败。,队列继续失败。
 队列状态已更新，但提交后的数据刷新未完成。,队列状态已更新，但提交后的数据刷新未完成。
 队列已暂停,队列已暂停

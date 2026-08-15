@@ -206,6 +206,52 @@ PHP,
         }
     }
 
+    public function testWindowsTimeoutReceiptUsesASeparatePostContainmentPublicationDeadline(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/Native/windows/wls_bounded_command.c',
+        );
+        $mainStart = \strpos($source, 'int wmain(int argc, wchar_t **argv)');
+        self::assertIsInt($mainStart);
+        $main = \substr($source, $mainStart);
+
+        self::assertStringContainsString(
+            '#define WLS_RESULT_PUBLICATION_GRACE_MS ((ULONGLONG)2000U)',
+            $source,
+        );
+        $captureComplete = \strpos(
+            $main,
+            'if (stdout_capture.io_error != 0L || stderr_capture.io_error != 0L)',
+        );
+        $publicationDeadline = \strpos(
+            $main,
+            'publication_deadline = GetTickCount64() + WLS_RESULT_PUBLICATION_GRACE_MS;',
+        );
+        $publish = \strpos($main, 'if (!wls_publish_results(');
+        self::assertIsInt($captureComplete);
+        self::assertIsInt($publicationDeadline);
+        self::assertIsInt($publish);
+        self::assertGreaterThan($captureComplete, $publicationDeadline);
+        self::assertGreaterThan($publicationDeadline, $publish);
+        self::assertMatchesRegularExpression(
+            '/wls_publish_results\(.*?capture_shared\.truncated,\s*'
+                . 'publication_deadline,\s*&publication_deadline_expired\s*\)/s',
+            $main,
+        );
+        self::assertStringNotContainsString(
+            "capture_shared.truncated,\n        deadline,\n",
+            $main,
+        );
+        self::assertMatchesRegularExpression(
+            '/wls_close_handle\(&result_temp_file\);\s*'
+                . 'if \(result_paths_ready && !result_published\) \{\s*'
+                . '\(void\)DeleteFileW\(result_temp_path\);\s*'
+                . '\(void\)DeleteFileW\(result_path\);/s',
+            $main,
+        );
+    }
+
     public function testDeferredReaperConvergesWatchdogKilledPipeStaging(): void
     {
         $transaction = $this->directory . DIRECTORY_SEPARATOR . 'pipe-deferred';
@@ -401,6 +447,21 @@ PHP,
         ] as $contract) {
             self::assertStringContainsString($contract, $native);
         }
+        $nativeReaper = $this->sourceBetween(
+            $native,
+            'static int wls_pipe_reap_orphan(',
+            'static int wls_pipe_prepare(',
+        );
+        self::assertMatchesRegularExpression(
+            '/CreateFileW\(\s*transaction_dir,\s*'
+                . 'FILE_READ_ATTRIBUTES \| READ_CONTROL \| DELETE,\s*'
+                . 'FILE_SHARE_READ,/s',
+            $nativeReaper,
+        );
+        self::assertStringNotContainsString(
+            "FILE_READ_ATTRIBUTES | READ_CONTROL | DELETE,\n        0U,",
+            $nativeReaper,
+        );
 
         $integration = (string)\file_get_contents(
             \dirname(__DIR__, 4)
@@ -416,6 +477,29 @@ PHP,
         ] as $contract) {
             self::assertStringContainsString($contract, $integration);
         }
+    }
+
+    public function testWindowsStateIdentityIgnoresOnlySyntheticPermissionBits(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayProjectStateFilesystem.php',
+        );
+        $sameState = $this->sourceBetween(
+            $source,
+            'private static function sameState(',
+            'private static function sameOpenFileIdentity(',
+        );
+
+        self::assertStringContainsString(
+            "\$field === 'mode' && \\PHP_OS_FAMILY === 'Windows'",
+            $sameState,
+        );
+        self::assertSame(2, \substr_count($sameState, '&= 0170000'));
+        self::assertStringContainsString(
+            "foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as \$field)",
+            $sameState,
+        );
     }
 
     private function sourceBetween(

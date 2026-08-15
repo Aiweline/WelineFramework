@@ -13,8 +13,9 @@
 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
 -->
+<?php $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class); ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="backend">
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme-area="backend" <?= $themeConfig->getThemeHtmlAttributes() ?>>
 <head>
     <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
@@ -38,8 +39,8 @@
 body {
     margin: 0;
     padding: 0;
-    background-color: var(--backend-color-bg-primary, #fff);
-    color: var(--backend-color-text-primary, #212529);
+    background-color: var(--backend-theme-surface);
+    color: var(--backend-theme-text);
 }
 
 .backend-main-content--minimal {

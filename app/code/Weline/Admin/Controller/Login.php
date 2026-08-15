@@ -14,6 +14,7 @@ namespace Weline\Admin\Controller;
 use Weline\Admin\Helper\Data;
 use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Admin\Service\BackendLoginReturnUrlService;
+use Weline\Admin\Service\BackendRememberLoginService;
 use Weline\Admin\Service\BackendVerificationCodeGate;
 use Weline\Backend\Api\Auth\BackendInteractiveAuthInterface;
 use Weline\Backend\Api\Auth\BackendLoginAccount;
@@ -33,7 +34,6 @@ use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
-use Weline\Framework\System\Text;
 use Weline\Framework\View\Asset\MediaUrl;
 
 class Login extends \Weline\Framework\App\Controller\BackendController
@@ -323,7 +323,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $aclRoleId = $hasRole ? $adminUsernameUser->getRoleId() : ($isSuperAdminById ? 1 : 0);
                 $this->session->getSession()->set('backend_acl_role_id', $aclRoleId);
                 $this->session->getSession()->set('backend_acl_is_enabled', $adminUsernameUser->getIsEnabled() ? 1 : 0);
-                w_auth_log('login_post_success', '登录成功，写入 Session ACL 上下文', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'acl_role_id' => $aclRoleId, 'session_id_hint' => \substr($this->session->getId(), 0, 8) . '...', 'session' => $this->getSessionDataForLog()]);
+                w_auth_log('login_post_success', '登录成功，写入 Session ACL 上下文', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'acl_role_id' => $aclRoleId, 'session' => $this->getSessionDataForLog()]);
             } catch (\Exception $e) {
                 w_auth_log('login_post_exception', '登录过程异常', ['user_id' => $adminUsernameUser->getId(), 'message' => $e->getMessage(), 'session' => $this->getSessionDataForLog()]);
                 throw $e;
@@ -337,20 +337,19 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             # 登录成功后清理验证码相关的session数据
             $this->clearBackendVerificationCodeState();
             $this->syncSandboxCookie($adminUsernameUser->isSandboxAccount());
-            # 检测是否记住我
-            if ($this->request->getParam('remember')) {
-                $token = Text::random_string(32);
-                $rememberTtl = 7 * 24 * 60 * 60;
-                $token_expire_time = \time() + $rememberTtl;
-                $this->adminUser->storeRememberToken(
-                    $adminUsernameUser->getId(),
-                    $token,
-                    $token_expire_time,
+            try {
+                ObjectManager::getInstance(BackendRememberLoginService::class)->configureRememberedLogin(
+                    $adminUsernameUser,
+                    (bool)$this->request->getParam('remember'),
+                    $this->session,
                 );
-                Cookie::set(SessionCookieNameResolver::resolveFor('w_ut'), $token, $rememberTtl, ['path' => '/']);
-                $this->session->set('remember_expire_time', $token_expire_time);
-            } else {
-                $this->session->delete('remember_expire_time');
+            } catch (\Throwable) {
+                w_auth_log('login_post_device_service_failed', '设备认证服务不可用，拒绝完成后台登录', [
+                    'user_id' => $adminUsernameUser->getId(),
+                ]);
+                MessageManager::error(__('认证设备服务暂时不可用，请稍后重试。'));
+                $this->redirect($this->getLoginUrlWithReturnUrl($returnUrl));
+                return;
             }
         } else {
             w_auth_log('login_post_password_fail', '密码验证失败', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'session' => $this->getSessionDataForLog()]);
@@ -694,12 +693,8 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $this->session->logout();
         $this->session->getSession()->delete('backend_acl_role_id');
         $this->session->getSession()->delete('backend_acl_is_enabled');
-        if ($userId) {
-            $this->adminUser->invalidateRememberTokenForUser((int)$userId);
-        }
-        $rememberCookieName = SessionCookieNameResolver::resolveFor('w_ut');
-        Cookie::set($rememberCookieName, '', -1, ['path' => '/']);
-        Cookie::set($rememberCookieName, '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
+        ObjectManager::getInstance(BackendRememberLoginService::class)
+            ->clearAfterLogout((int)($userId ?? 0));
         Cookie::set('w_sandbox', '', -1, ['path' => '/']);
         Cookie::set('w_sandbox', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         $this->session->delete('remember_expire_time');

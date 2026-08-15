@@ -679,7 +679,7 @@ File: Main Js File
 
     function initSettings() {
         // 主题颜色设置
-        $("#theme-mode-switch, #rtl-mode-switch,#dark-mode-radio,#light-mode-radio,#reset-theme").on("change", function (e) {
+        $("#rtl-mode-switch,#dark-mode-radio,#light-mode-radio,#reset-theme").on("change", function (e) {
             updateThemeSetting(e.target.id);
         });
 
@@ -702,25 +702,176 @@ File: Main Js File
             return null;
         }
         const mode = layout['theme-mode-switch'].trim().toLowerCase();
-        if (mode !== 'light' && mode !== 'dark') {
+        if (mode !== 'system' && mode !== 'light' && mode !== 'dark') {
             return null;
         }
-        return {
-            mode: mode,
-            rtl_mode: layout['rtl-mode-switch'] === true
-        };
+        const result = {mode: mode};
+        if (Object.prototype.hasOwnProperty.call(layout, 'rtl-mode-switch')) {
+            result.rtl_mode = layout['rtl-mode-switch'] === true;
+        }
+        return result;
     }
 
-    function applyThemeModeToDocument(mode) {
-        const normalizedMode = mode === 'dark' ? 'dark' : 'light';
-        const targets = [document.body, document.documentElement].filter(Boolean);
-        targets.forEach(function (target) {
-            target.setAttribute('data-topbar', normalizedMode);
-            target.setAttribute('data-sidebar', normalizedMode);
-            target.setAttribute('data-bs-theme', normalizedMode);
-            target.setAttribute('data-theme-mode', normalizedMode);
-            target.setAttribute('data-layout-mode', normalizedMode);
+    function resolveCurrentThemeMode(preference) {
+        if (preference === 'dark') {
+            return 'dark';
+        }
+        if (preference === 'system' && window.matchMedia) {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        return 'light';
+    }
+
+    function applyThemeModeToDocument(preference) {
+        const canonicalRuntime = window.__WelineBackendThemeRuntime;
+        const canonicalState = canonicalRuntime && typeof canonicalRuntime.apply === 'function'
+            ? canonicalRuntime.apply(preference)
+            : null;
+        const normalizedPreference = canonicalState ? canonicalState.preference : (preference === 'dark' || preference === 'light' || preference === 'system'
+            ? preference
+            : 'light');
+        const normalizedMode = canonicalState ? canonicalState.theme : resolveCurrentThemeMode(normalizedPreference);
+        if (!canonicalState) {
+            const targets = [document.body, document.documentElement].filter(Boolean);
+            targets.forEach(function (target) {
+                target.setAttribute('data-theme-preference', normalizedPreference);
+                target.setAttribute('data-theme', normalizedMode);
+                target.setAttribute('data-topbar', normalizedMode);
+                target.setAttribute('data-sidebar', normalizedMode);
+                target.setAttribute('data-bs-theme', normalizedMode);
+                target.setAttribute('data-theme-mode', normalizedMode);
+                target.setAttribute('data-layout-mode', normalizedMode);
+                target.style.colorScheme = normalizedMode;
+            });
+        }
+        $('[data-weline-backend-theme-mode]').each(function () {
+            if (this instanceof HTMLSelectElement) {
+                this.value = normalizedPreference;
+                return;
+            }
+            const active = this.getAttribute('data-weline-backend-theme-mode') === normalizedPreference;
+            this.classList.toggle('active', active);
+            this.setAttribute('aria-pressed', active ? 'true' : 'false');
+            this.setAttribute('aria-current', active ? 'true' : 'false');
         });
+        $('[data-weline-theme-mode]').each(function () {
+            if (this instanceof HTMLSelectElement) {
+                this.value = normalizedPreference;
+                return;
+            }
+            const active = this.getAttribute('data-weline-theme-mode') === normalizedPreference;
+            this.classList.toggle('active', active);
+            this.setAttribute('aria-pressed', active ? 'true' : 'false');
+            this.setAttribute('aria-current', active ? 'true' : 'false');
+        });
+        $('[data-weline-backend-theme-trigger]').each(function () {
+            this.setAttribute('data-theme-preference', normalizedPreference);
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.classList.remove('mdi-theme-light-dark', 'mdi-weather-sunny', 'mdi-weather-night', 'mdi-laptop');
+                icon.classList.add(normalizedPreference === 'dark'
+                    ? 'mdi-weather-night'
+                    : (normalizedPreference === 'light' ? 'mdi-weather-sunny' : 'mdi-laptop'));
+            }
+        });
+        if (!canonicalState) {
+            document.dispatchEvent(new CustomEvent('themechange', {
+                detail: {theme: normalizedMode, preference: normalizedPreference}
+            }));
+        }
+        return normalizedMode;
+    }
+
+    function bindSystemThemeMode() {
+        // Weline_Theme owns the sole media listener.  Admin only bridges its
+        // controls to the canonical runtime, avoiding duplicate themechange.
+    }
+
+    function bindBackendThemeKeyboardNavigation() {
+        const root = document.documentElement;
+        if (!root || root.dataset.welineBackendThemeKeyboardBound === '1') {
+            return;
+        }
+        root.dataset.welineBackendThemeKeyboardBound = '1';
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Enter') {
+                return;
+            }
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+            const trigger = target.closest('[data-weline-backend-theme-trigger]');
+            const modeItem = target.closest('[data-weline-backend-theme-mode]:not(:disabled)');
+            const dropdown = trigger
+                ? trigger.parentElement
+                : modeItem
+                    ? modeItem.closest('.dropdown')
+                    : null;
+            if (!dropdown) {
+                return;
+            }
+            const menu = dropdown.querySelector('.dropdown-menu');
+            const items = Array.from(dropdown.querySelectorAll('[data-weline-backend-theme-mode]:not(:disabled)'));
+            if (!menu || items.length === 0) {
+                return;
+            }
+
+            if (event.key === 'Enter') {
+                if (!modeItem || !menu.contains(modeItem)) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                modeItem.click();
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (modeItem && menu.contains(modeItem)) {
+                const currentIndex = items.indexOf(modeItem);
+                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                items[(currentIndex + direction + items.length) % items.length].focus();
+                return;
+            }
+
+            if (!trigger) {
+                return;
+            }
+
+            const item = event.key === 'ArrowDown' ? items[0] : items[items.length - 1];
+            if (menu.classList.contains('show')) {
+                item.focus();
+                return;
+            }
+
+            trigger.click();
+            const focusItem = function () {
+                item.focus();
+            };
+            if (typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(focusItem);
+            } else {
+                window.setTimeout(focusItem, 0);
+            }
+        }, true);
+    }
+
+    let backendThemePersistenceCount = 0;
+
+    function beginBackendThemePersistence() {
+        backendThemePersistenceCount += 1;
+        document.documentElement.setAttribute('data-weline-theme-persisting', 'true');
+    }
+
+    function endBackendThemePersistence() {
+        backendThemePersistenceCount = Math.max(0, backendThemePersistenceCount - 1);
+        if (backendThemePersistenceCount === 0) {
+            document.documentElement.removeAttribute('data-weline-theme-persisting');
+        }
     }
 
     async function setThemeConfig(layout, reload = true) {
@@ -729,21 +880,47 @@ File: Main Js File
         }
 
         const themeModeConfig = resolveThemeModeConfig(layout);
-        if (themeModeConfig && typeof window.w_query === 'function') {
+        if (themeModeConfig && typeof window.fetch === 'function') {
+            let themeModeConfigUrl;
+            if (typeof window.site !== 'undefined' && typeof window.site.buildUrl === 'function') {
+                themeModeConfigUrl = window.site.buildUrl('system/ThemeConfig/Set');
+            } else if (typeof window.backend_url === 'function') {
+                themeModeConfigUrl = window.backend_url('system/theme-config/set');
+            } else {
+                themeModeConfigUrl = window.location.pathname.split('/').slice(0, 4).join('/') + '/system/theme-config/set';
+            }
+            applyThemeModeToDocument(themeModeConfig.mode);
+            beginBackendThemePersistence();
             try {
-                await window.w_query('theme', 'setBackendThemeMode', themeModeConfig, { area: 'backend' });
-                applyThemeModeToDocument(themeModeConfig.mode);
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                };
+                if (window.site && window.site.csrf_token) {
+                    headers['X-CSRF-TOKEN'] = String(window.site.csrf_token);
+                }
+                const response = await window.fetch(themeModeConfigUrl, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(layout),
+                    credentials: 'same-origin'
+                });
+                const result = await response.json().catch(function () { return {}; });
+                if (!response.ok || result.code >= 400 || result.success === false) {
+                    throw new Error(result.msg || result.message || __('主题模式切换失败'));
+                }
                 if (reload) {
                     window.location.reload();
                 }
             } catch (error) {
                 if (typeof BackendToast !== 'undefined' && BackendToast && typeof BackendToast.error === 'function') {
-                    BackendToast.error(error && error.message ? error.message : 'Theme mode switch failed.');
+                    BackendToast.error(error && error.message ? error.message : __('主题模式切换失败'));
                 }
                 if (window.DEV === true || window.WELINE_ENV === 'DEV') {
                     console.error('[Weline.Theme] theme mode switch failed', error);
                 }
             } finally {
+                endBackendThemePersistence();
                 if (typeof hideLoading === 'function') {
                     hideLoading();
                 }
@@ -774,8 +951,13 @@ File: Main Js File
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(layout)
                 });
-                if ((200 === res.code || res.success === true) && reload) {
-                    window.location.reload();
+                if (200 === res.code || res.success === true) {
+                    if (themeModeConfig) {
+                        applyThemeModeToDocument(themeModeConfig.mode);
+                    }
+                    if (reload) {
+                        window.location.reload();
+                    }
                 }
             } catch (error) {
                 if (typeof BackendToast !== 'undefined' && BackendToast && typeof BackendToast.error === 'function') {
@@ -831,8 +1013,8 @@ File: Main Js File
             const themeMode = $("#theme-mode-switch").val();
             setThemeConfig({
                 layouts: {
-                    'data-topbar': themeMode === 'dark' ? 'dark' : 'light',
-                    'data-sidebar': themeMode === 'dark' ? 'dark' : 'light',
+                    'data-topbar': resolveCurrentThemeMode(themeMode),
+                    'data-sidebar': resolveCurrentThemeMode(themeMode),
                 },
                 'theme-mode-switch': themeMode,
                 'rtl-mode-switch': $("#rtl-mode-switch").prop("checked") === true,
@@ -873,6 +1055,44 @@ File: Main Js File
 
     function init() {
         initSettings();
+        applyThemeModeToDocument(document.documentElement.getAttribute('data-theme-preference') || 'light');
+        bindSystemThemeMode();
+        bindBackendThemeKeyboardNavigation();
+        $(document).on('change', '[data-weline-backend-theme-mode]', function () {
+            const preference = this.value || this.getAttribute('data-weline-backend-theme-mode');
+            setThemeConfig({
+                layouts: {
+                    'data-topbar': resolveCurrentThemeMode(preference),
+                    'data-sidebar': resolveCurrentThemeMode(preference),
+                },
+                'theme-mode-switch': preference,
+            }, false);
+        });
+        $(document).on('click', '[data-weline-backend-theme-mode]:not(select), [data-weline-theme-mode]:not(select)', function (event) {
+            const preference = this.getAttribute('data-weline-backend-theme-mode') || this.getAttribute('data-weline-theme-mode');
+            if (preference !== 'system' && preference !== 'light' && preference !== 'dark') {
+                return;
+            }
+            event.preventDefault();
+            setThemeConfig({
+                layouts: {
+                    'data-topbar': resolveCurrentThemeMode(preference),
+                    'data-sidebar': resolveCurrentThemeMode(preference),
+                },
+                'theme-mode-switch': preference,
+            }, false);
+        });
+        $(document).on('click', '[data-theme-toggle]:not([data-weline-backend-theme-mode]):not([data-weline-theme-mode])', function (event) {
+            event.preventDefault();
+            const nextPreference = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            setThemeConfig({
+                layouts: {
+                    'data-topbar': resolveCurrentThemeMode(nextPreference),
+                    'data-sidebar': resolveCurrentThemeMode(nextPreference),
+                },
+                'theme-mode-switch': nextPreference,
+            }, false);
+        });
         initMenuItem();
         initLeftMenuCollapse();
         initFullScreen();

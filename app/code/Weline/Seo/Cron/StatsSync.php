@@ -7,6 +7,7 @@ namespace Weline\Seo\Cron;
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoWebsiteStats;
+use Weline\Seo\Service\SeoSearchQueryHeatService;
 use Weline\Seo\Service\SeoWebsiteAccountBindingService;
 use Weline\Seo\Service\SeoWebsiteDirectory;
 
@@ -113,6 +114,7 @@ class StatsSync implements CronTaskInterface
                         $statsRecord = $statsModel->reset();
                         $statsRecord->getOrCreateTodayStats($websiteId, $accountId, $platform);
                         $statsRecord->updateStats($result['data']);
+                        $this->upsertSearchQueries($websiteId, $accountId, $platform, $result['data']);
                         
                         $syncedCount++;
                         $messages[] = sprintf(
@@ -160,6 +162,34 @@ class StatsSync implements CronTaskInterface
         } catch (\Throwable $e) {
             return 'SEO 统计同步失败：' . $e->getMessage();
         }
+    }
+
+    /** @param array<string,mixed> $statsData */
+    private function upsertSearchQueries(int $websiteId, int $accountId, string $platform, array $statsData): void
+    {
+        $queries = $statsData['search_queries'] ?? null;
+        if (!\is_array($queries) || $queries === []) {
+            $extra = \is_array($statsData['extra'] ?? null) ? $statsData['extra'] : [];
+            $queries = \is_array($extra['search_queries'] ?? null) ? $extra['search_queries'] : [];
+        }
+        if ($queries === []) {
+            return;
+        }
+        $window = \is_array($statsData['search_window'] ?? null) ? $statsData['search_window'] : [];
+        if ($window === []) {
+            $extra = \is_array($statsData['extra'] ?? null) ? $statsData['extra'] : [];
+            $window = \is_array($extra['search_window'] ?? null) ? $extra['search_window'] : [];
+        }
+        /** @var SeoSearchQueryHeatService $heatService */
+        $heatService = ObjectManager::getInstance(SeoSearchQueryHeatService::class);
+        $heatService->upsertQueries(
+            $websiteId,
+            $accountId,
+            $platform,
+            $queries,
+            (string)($window['start'] ?? date('Y-m-d', strtotime('-28 days'))),
+            (string)($window['end'] ?? date('Y-m-d', strtotime('-1 day'))),
+        );
     }
 
     public function timeout(): int

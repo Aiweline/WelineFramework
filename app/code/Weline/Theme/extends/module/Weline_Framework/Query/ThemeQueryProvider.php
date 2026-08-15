@@ -6,8 +6,6 @@ namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 use Weline\Backend\Api\View\BackendThemeConfigInterface;
 use Weline\Eav\Api\Options\EavOptionsQueryInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\ModuleProcessCacheResetterRegistry;
-use Weline\Framework\Runtime\ProcessCacheResetContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
@@ -16,7 +14,6 @@ use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeResourceCatalog;
-use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeVirtualLayoutService;
 use Weline\Widget\Api\Param\ParamFormRendererInterface;
@@ -265,9 +262,13 @@ class ThemeQueryProvider implements QueryProviderInterface
 
     private function setBackendThemeMode(array $params): array
     {
-        $mode = strtolower(trim((string)($params['mode'] ?? '')));
-        if (!in_array($mode, ['light', 'dark'], true)) {
-            throw new \InvalidArgumentException((string)__('Invalid backend theme mode: %{1}', $mode));
+        $rawMode = $params['mode'] ?? null;
+        if (!is_string($rawMode)) {
+            throw new \InvalidArgumentException((string)__('主题模式无效。'));
+        }
+        $mode = strtolower(trim($rawMode));
+        if (!in_array($mode, ['system', 'light', 'dark'], true)) {
+            throw new \InvalidArgumentException((string)__('主题模式无效：%{1}', $mode));
         }
 
         $themeConfig = $this->backendThemeConfig;
@@ -281,10 +282,15 @@ class ThemeQueryProvider implements QueryProviderInterface
         $layouts = isset($originConfig['layouts']) && is_array($originConfig['layouts'])
             ? $originConfig['layouts']
             : [];
-        $layouts['data-topbar'] = $mode;
-        $layouts['data-sidebar'] = $mode;
-        $layouts['data-theme-mode'] = $mode;
-        $layouts['data-layout-mode'] = $mode;
+        $layouts['data-theme-preference'] = $mode;
+        if ($mode === 'system') {
+            unset($layouts['data-topbar'], $layouts['data-sidebar'], $layouts['data-theme-mode'], $layouts['data-layout-mode']);
+        } else {
+            $layouts['data-topbar'] = $mode;
+            $layouts['data-sidebar'] = $mode;
+            $layouts['data-theme-mode'] = $mode;
+            $layouts['data-layout-mode'] = $mode;
+        }
 
         $nextConfig = $originConfig;
         $nextConfig['theme-mode-switch'] = $mode;
@@ -296,17 +302,10 @@ class ThemeQueryProvider implements QueryProviderInterface
         $nextConfig['layouts'] = $layouts;
 
         $themeConfig->setThemeConfig($nextConfig);
-        ObjectManager::getInstance(ModuleProcessCacheResetterRegistry::class)->reset(
-            new ProcessCacheResetContext(ProcessCacheResetContext::REASON_CACHE_CLEAR, true),
-        );
-        ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
-            null,
-            'backend_theme_mode',
-        );
-
         return [
             'success' => true,
             'mode' => $mode,
+            'preference' => $mode,
             'layouts' => $layouts,
             'msg' => (string)__('同步成功'),
             'message' => (string)__('同步成功'),
@@ -1406,13 +1405,13 @@ class ThemeQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'setBackendThemeMode',
-                    'description' => __('同步后台亮色/暗色模式'),
+                    'description' => __('同步后台跟随系统、亮色或暗色模式'),
                     'frontend' => true,
                     'auth' => 'backend',
                     'backend_acl' => ['kind' => 'self'],
                     'mode' => 'write',
                     'params' => [
-                        ['name' => 'mode', 'type' => 'string', 'required' => true, 'description' => __('light 或 dark')],
+                        ['name' => 'mode', 'type' => 'string', 'required' => true, 'description' => __('system、light 或 dark')],
                         ['name' => 'rtl_mode', 'type' => 'bool', 'required' => false],
                         ['name' => 'rtl', 'type' => 'bool', 'required' => false],
                     ],

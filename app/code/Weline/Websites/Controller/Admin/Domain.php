@@ -2569,7 +2569,9 @@ class Domain extends BackendController
                 'msg' => 'success',
                 'data' => ['accounts' => $result],
             ]);
-        } catch (\Throwable $e) {
+        } catch (\Exception $e) {
+            // ResponseTerminateException extends Error (not Exception) so fetchJson() can
+            // propagate through AdminControllerBridge / query-bin without being swallowed.
             return $this->fetchJson([
                 'code' => 500,
                 'msg' => __('获取账户列表失败：%{1}', [$e->getMessage()]),
@@ -3477,7 +3479,8 @@ class Domain extends BackendController
                     'cdn_accounts' => $cdnAccounts,
                 ],
             ]);
-        } catch (\Throwable $e) {
+        } catch (\Exception $e) {
+            // ResponseTerminateException extends Error; keep Exception-only catch for query-bin bridge.
             return $this->fetchJson([
                 'code' => 500,
                 'msg' => __('获取账户列表失败：%{1}', [$e->getMessage()]),
@@ -4025,7 +4028,8 @@ class Domain extends BackendController
                     'https_result' => $httpsResult,
                 ],
             ]);
-        } catch (\Throwable $e) {
+        } catch (\Exception $e) {
+            // ResponseTerminateException extends Error; keep Exception-only catch for query-bin bridge.
             return $this->fetchJson([
                 'code' => 500,
                 'msg' => __('新建域名失败：%{1}', [$e->getMessage()]),

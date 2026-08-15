@@ -468,6 +468,34 @@ final class StartCommandArgsSolidificationTest extends TestCase
             $start,
         );
         self::assertStringContainsString(
+            'STARTUP_LISTENER_STATE_EMULATED_WINDOWS_BUDGET_SECONDS = 300.0',
+            $start,
+        );
+        self::assertStringContainsString(
+            'STARTUP_LISTENER_STATE_EMULATED_WINDOWS_TOTAL_BUDGET_SECONDS = 600.0',
+            $start,
+        );
+        $listenerBudget = new \ReflectionMethod(
+            Start::class,
+            'startupListenerStateBudgetSeconds',
+        );
+        self::assertSame(120.0, $listenerBudget->invoke(null, false));
+        self::assertSame(300.0, $listenerBudget->invoke(null, true));
+        $listenerTotalBudget = new \ReflectionMethod(
+            Start::class,
+            'startupListenerStateTotalBudgetSeconds',
+        );
+        self::assertSame(120.0, $listenerTotalBudget->invoke(null, false));
+        self::assertSame(600.0, $listenerTotalBudget->invoke(null, true));
+        self::assertStringContainsString(
+            'PhpRuntimeSafetyProfile::requiresNativeExtensionIsolation()',
+            $start,
+        );
+        self::assertStringContainsString(
+            '$this->renewStartupListenerStateDeadlineAfterColdPreflight();',
+            $start,
+        );
+        self::assertStringContainsString(
             'STARTUP_LISTENER_CLEANUP_BUDGET_SECONDS = 1.0',
             $start,
         );
@@ -509,6 +537,39 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertStringNotContainsString(
             'new \\Weline\\Server\\Service\\Edge\\Gateway\\GatewayPortLeaseAllocator();',
             $start,
+        );
+    }
+
+    public function testWindowsMasterPublishesItsExactLeaseBeforeWaitingForListenerHandoff(): void
+    {
+        $method = new \ReflectionMethod(
+            Start::class,
+            'adoptWindowsStartupListenerFromEndpoint',
+        );
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $publishAt = \strpos($source, 'Processer::setPid($processIdentity, $masterPid);');
+        $waitAt = \strpos($source, 'WindowsListenerHandoff::awaitInstallForMaster(');
+        self::assertIsInt($publishAt);
+        self::assertIsInt($waitAt);
+        self::assertLessThan(
+            $waitAt,
+            $publishAt,
+            'The real Master must publish its exact launch identity before the parent can target the listener handoff.',
+        );
+        self::assertStringContainsString(
+            "' --launch-id=' . \$launchId",
+            $source,
+        );
+        self::assertStringContainsString(
+            'Processer::removeManagedProcessLeaseRecord(',
+            $source,
         );
     }
 

@@ -15,6 +15,7 @@ use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Runtime\Resumable\RuntimeTaskWatchdog;
 use Weline\Server\Service\MasterLeaseManager;
+use Weline\Server\Service\Runtime\WorkerProcessLease;
 
 /** Dedicated supervisor process for resumable task Runners. */
 final class Watch extends CommandAbstract
@@ -146,6 +147,7 @@ final class Watch extends CommandAbstract
         $instanceName = $this->stringArgument($args, 'instance-name', 'default');
         $epoch = $this->integerArgument($args, 'epoch');
         $launchId = $this->stringArgument($args, 'launch-id');
+        $processName = $this->stringArgument($args, 'name');
         $workerId = max(1, $this->integerArgument($args, 'worker-id', 1));
         $masterPid = $this->integerArgument($args, 'master-pid');
         $masterLeaseFile = $this->stringArgument($args, 'master-lease-file');
@@ -154,6 +156,11 @@ final class Watch extends CommandAbstract
                 'Runtime Watchdog --master-token is forbidden; use the protected child ledger.'
             );
         }
+        // Processer marks every framework service as child-owned on Windows.
+        // Publish getmypid() before the parent opens the credential gate so an
+        // ARM64 x64-emulation PID transition cannot leave the launcher PID as
+        // the service authority.
+        WorkerProcessLease::register($processName, $launchId, $epoch);
         $arguments = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
         $masterToken = (new MasterLeaseManager())->resolveProtectedCredentialFromArguments(
             \is_array($arguments) ? $arguments : [],

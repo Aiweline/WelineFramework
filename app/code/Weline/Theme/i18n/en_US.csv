@@ -6,7 +6,8 @@
 当前没有可用于预览的前台主题。,当前没有可用于预览的前台主题。
 "缺少预览 token。","缺少预览 token。"
 "预览 token 无效或已过期。","预览 token 无效或已过期。"
-"Invalid backend theme mode: %{1}","Invalid backend theme mode: %{1}"
+主题模式无效。,主题模式无效。
+主题模式无效：%{1},"Invalid theme mode: %{1}"
 同步成功,"Sync succeeded"
 "Theme target 布局复制参数不完整。","Theme target layout copy parameters are incomplete."
 "复制 Theme target 布局选择","Copy Theme target layout selection"
@@ -36,8 +37,8 @@
 "生成 Theme 前台预览 token","生成 Theme 前台预览 token"
 "校验 Theme 前台预览 token","校验 Theme 前台预览 token"
 "Theme editor signed backend request bridge","Theme editor signed backend request bridge"
-同步后台亮色/暗色模式,同步后台亮色/暗色模式
-"light 或 dark","light 或 dark"
+同步后台跟随系统、亮色或暗色模式,同步后台跟随系统、亮色或暗色模式
+"system、light 或 dark","system、light 或 dark"
 按区域激活主题,按区域激活主题
 "frontend 或 backend","frontend 或 backend"
 "Theme 虚拟部件智能体","Theme virtual component agent"
@@ -724,8 +725,7 @@ Default,Default
 "Missing parameter key for reset action","Missing parameter key for reset action"
 重置成功,"Reset Successful"
 "Save failed:","Save failed:"
-"Invalid mode","Invalid mode"
-"Sync failed:","Sync failed:"
+主题模式切换失败,"Theme mode switch failed"
 "参数不完整：category 不能为空","Incomplete parameters: category cannot be empty"
 "Please select a theme","Please select a theme"
 "Preview config published to formal scope","Preview config published to formal scope"
@@ -1744,7 +1744,10 @@ CSS变量配置,"CSS variable configuration"
 Desktop,Desktop
 Tablet,Tablet
 Mobile,Mobile
-"Toggle light/dark mode","Toggle light/dark mode"
+主题模式,"Theme mode"
+跟随系统,"Follow system"
+明亮模式,"Light mode"
+暗黑模式,"Dark mode"
 "Simplified Chinese","Simplified Chinese"
 "Traditional Chinese","Traditional Chinese"
 "Select language","Select language"
@@ -2514,6 +2517,12 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 编译less静态资源！,"Compile Less Static Resources!"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"Invalid backend theme mode: %{1}","Invalid backend theme mode: %{1}"
+同步后台亮色/暗色模式,同步后台亮色/暗色模式
+"light 或 dark","light 或 dark"
+"Invalid mode","Invalid mode"
+"Sync failed:","Sync failed:"
+"Toggle light/dark mode","Toggle light/dark mode"
 "摘要 slot，可由结账模块写入真实金额、优惠和配送信息。","摘要 slot，可由结账模块写入真实金额、优惠和配送信息。"
 Theme,Theme
 Home,Home

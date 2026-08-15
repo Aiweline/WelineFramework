@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
+use Weline\Server\Service\Edge\Gateway\GatewayLinuxSystemdLayout;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 use Weline\Server\Service\Edge\Gateway\GatewayPlatformServiceInstaller;
 
@@ -939,6 +940,35 @@ final class GatewayPlatformServiceInstallerSafetyTest extends TestCase
             'ReadWritePaths="/etc/systemd/system"',
             $template,
         );
+        self::assertStringContainsString('After=network.target', $template);
+        self::assertStringNotContainsString('After=network-online.target', $template);
+        self::assertStringNotContainsString('Wants=network-online.target', $template);
+        self::assertStringContainsString('User=root', $template);
+        self::assertStringContainsString('Group=weline-gateway', $template);
+        self::assertStringContainsString('RuntimeDirectoryMode=0771', $template);
+        self::assertStringContainsString(
+            'private function recoverAuthenticatedInitialRollbackRunDirectory(',
+            $source,
+        );
+        $recovery = $this->sourceBetween(
+            $source,
+            'private function recoverAuthenticatedInitialRollbackRunDirectory(',
+            'public function renderDefinition(',
+        );
+        foreach ([
+            "'ROLLING_BACK'",
+            '$this->installedDefinition()',
+            'GatewayBoundedTreeWalker::collect($runDir, true)',
+            'posixNoFollowAclOpenFlags(true)',
+            'fremovexattr',
+            'fchown',
+            'fchmod',
+            'fsync',
+            '[0, 0, 0700]',
+            '[0, $controllerGid, 0771]',
+        ] as $contract) {
+            self::assertStringContainsString($contract, $recovery);
+        }
     }
 
     public function testWindowsPollTimeoutUsesRemainingTransitionBudget(): void
@@ -1476,6 +1506,88 @@ final class GatewayPlatformServiceInstallerSafetyTest extends TestCase
         );
     }
 
+    public function testLinuxSystemdPersistentStopAcceptsOnlyAnExplicitAbsentUnitReplay(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php',
+        );
+        $stop = $this->sourceBetween(
+            $source,
+            'private function stopWithinDeadline(',
+            'public function restart(',
+        );
+        $systemd = $this->sourceBetween(
+            $stop,
+            "if (\$kind === 'systemd-system') {",
+            "if (\$kind === 'windows-service') {",
+        );
+        self::assertStringContainsString(
+            '$result = $this->runCommand([',
+            $systemd,
+        );
+        self::assertStringContainsString("'disable',", $systemd);
+        self::assertStringContainsString("'--now',", $systemd);
+        self::assertStringContainsString('does not exist', $systemd);
+        self::assertStringContainsString(
+            '$this->assertPlatformServiceStopped($kind);',
+            $systemd,
+        );
+        self::assertStringNotContainsString('$this->mustRun([', $systemd);
+        self::assertLessThan(
+            \strpos($systemd, '$this->assertPlatformServiceStopped($kind);'),
+            \strpos($systemd, '\\preg_match('),
+        );
+    }
+    public function testLinuxSystemdPersistentStopProofBindsTheTargetAndAbsentLink(): void
+    {
+        $this->paths->ensureDirectories();
+        $layout = new GatewayLinuxSystemdLayout($this->paths);
+        $definition = "[Unit]\nDescription=WLS stopped-proof fixture\n";
+        $layout->publishNewDefinitionAndFixedLink($definition);
+
+        $link = $this->paths->systemdServiceLinkFile();
+        self::assertTrue(\unlink($link));
+        $layout->assertDisabledCurrentDefinition($definition);
+
+        self::assertTrue(\symlink(
+            $this->paths->systemdServiceDefinitionFile(),
+            $link,
+        ));
+        try {
+            $layout->assertDisabledCurrentDefinition($definition);
+            self::fail('A disabled systemd proof must reject a restored fixed link.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'disabled canonical systemd link',
+                $exception->getMessage(),
+            );
+        }
+
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php',
+        );
+        $proof = $this->sourceBetween(
+            $source,
+            'private function persistentStoppedProofWithinDeadline(',
+            'public function start(',
+        );
+        self::assertStringContainsString(
+            '$this->installedDefinitionFromMetadata(false)',
+            $proof,
+        );
+        self::assertStringContainsString(
+            '->assertDisabledCurrentDefinition($definition);',
+            $proof,
+        );
+        self::assertStringContainsString(
+            '$this->installedDefinition()',
+            $proof,
+        );
+    }
+
+
     public function testWindowsDerivedParentAuthorityUsesTheExactDaclContract(): void
     {
         $platformSource = (string)\file_get_contents(
@@ -1675,6 +1787,79 @@ final class GatewayPlatformServiceInstallerSafetyTest extends TestCase
         self::assertStringContainsString("'acl_sha256'", $capture);
     }
 
+    public function testPosixCapacityAnchorsMatchInstalledRuntimeAuthority(): void
+    {
+        $platformSource = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php',
+        );
+        $posixAuthority = $this->sourceBetween(
+            $platformSource,
+            'public function assertRebootstrapDerivedRootPosixAuthority(',
+            'private function rebootstrapDerivedRootWindowsServiceRights(',
+        );
+        foreach ([
+            "=> [\$controllerUid, [\$dataPlaneGid], [0750]]",
+            "=> [\$controllerUid, [\$dataPlaneGid], [0770]]",
+            "=> [\$controllerUid, [\$controllerGid], [0700]]",
+            'Gateway runtime child authority path is unsupported.',
+        ] as $required) {
+            self::assertStringContainsString($required, $posixAuthority);
+        }
+
+        $launcherSource = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/Native/posix/wls_gateway_launcher.c',
+        );
+        foreach ([
+            '{"runtime/conf", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0750}',
+            '{"runtime/temp", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0770}',
+            '{"runtime/shadow", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_CONTROLLER, 0700}',
+            '{"runtime/run", WLS_CAPACITY_ANCHOR_CONTROLLER, WLS_CAPACITY_ANCHOR_DATA_PLANE, 0750}',
+            'wls_capacity_open_relative_anchor(',
+            'AT_SYMLINK_NOFOLLOW',
+            'O_NOFOLLOW',
+            'wls_guardian_acl_free_fd(next_fd, 0)',
+        ] as $required) {
+            self::assertStringContainsString($required, $launcherSource);
+        }
+
+        $managerSource = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/HostGatewayPackageManager.php',
+        );
+        $capture = $this->sourceBetween(
+            $managerSource,
+            'private function captureRebootstrapDerivedRootProof(',
+            'private function assertRebootstrapDerivedRootProofContract(',
+        );
+        $rootModeStart = \strpos(
+            $capture,
+            '$mode = \\PHP_OS_FAMILY',
+        );
+        $rootAuthorityEnd = \strpos(
+            $capture,
+            '$windowsAuthority =',
+            $rootModeStart === false ? 0 : $rootModeStart,
+        );
+        self::assertIsInt($rootModeStart);
+        self::assertIsInt($rootAuthorityEnd);
+        $rootAuthority = \substr(
+            $capture,
+            $rootModeStart,
+            $rootAuthorityEnd - $rootModeStart,
+        );
+        self::assertStringContainsString(
+            '->assertRebootstrapDerivedRootPosixAuthority(',
+            $rootAuthority,
+        );
+        self::assertStringNotContainsString(
+            '($mode & 0022)',
+            $rootAuthority,
+            'Exact fixed-path authority, not a blanket group-write ban, owns the runtime/temp 0770 decision.',
+        );
+    }
+
     public function testWindowsDerivedSddlMasksRoundTripInPowerShell(): void
     {
         if (\PHP_OS_FAMILY !== 'Windows') {
@@ -1756,8 +1941,10 @@ POWERSHELL;
         self::assertStringContainsString('system.posix_acl_access', $proof);
         self::assertStringContainsString('system.posix_acl_default', $proof);
         self::assertStringContainsString('acl_get_fd_np', $proof);
-        self::assertStringContainsString('0x20000', $proof);
-        self::assertStringContainsString('0x100', $proof);
+        self::assertStringContainsString(
+            'self::posixNoFollowAclOpenFlags($directory)',
+            $proof,
+        );
         self::assertStringContainsString("'/proc/self/fd/'", $proof);
         self::assertStringContainsString('posixAclDescriptorStatus(', $proof);
         self::assertStringContainsString('struct wls_darwin_stat', $proof);
@@ -1792,6 +1979,45 @@ POWERSHELL;
         );
     }
 
+    public function testPosixAclOpenFlagsAreArchitectureSpecificAndSingleSourced(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php',
+        );
+        $helper = $this->sourceBetween(
+            $source,
+            'private static function posixNoFollowAclOpenFlags(',
+            'private function removeLinuxPosixDirectoryAcl(',
+        );
+
+        self::assertStringContainsString(
+            "match (\\strtolower(\\php_uname('m')))",
+            $helper,
+        );
+        self::assertStringContainsString(
+            "'x86_64', 'amd64'\n                    => ((\$directory ? 0x10000 : 0) | 0x20000 | 0x80000)",
+            $helper,
+        );
+        self::assertStringContainsString(
+            "'aarch64', 'arm64'\n                    => ((\$directory ? 0x4000 : 0) | 0x8000 | 0x80000)",
+            $helper,
+        );
+        self::assertStringContainsString(
+            'Unsupported WLS Gateway POSIX ACL architecture.',
+            $helper,
+        );
+        self::assertStringContainsString(
+            "'Darwin' => ((\$directory ? 0x100000 : 0) | 0x100 | 0x1000000)",
+            $helper,
+        );
+        self::assertSame(
+            5,
+            \substr_count($source, 'posixNoFollowAclOpenFlags('),
+            'One helper declaration and the four known Linux ACL call sites are required.',
+        );
+    }
+
     public function testPosixDerivedRootAuthorityRejectsAnUntrustedOwner(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
@@ -1823,7 +2049,7 @@ POWERSHELL;
         );
     }
 
-    public function testDerivedSnapshotNamespacesHaveDistinctFixedAuthorityProfiles(): void
+    public function testDerivedSnapshotAndNeutralTlsNamespacesHaveFixedAuthorityProfiles(): void
     {
         $this->paths->ensureDirectories();
         $installer = new GatewayPlatformServiceInstaller($this->paths);
@@ -1840,6 +2066,12 @@ POWERSHELL;
                 $this->paths->snapshotCandidatesDir(),
             ),
         );
+        self::assertSame(
+            GatewayPlatformServiceInstaller::DERIVED_AUTHORITY_NEUTRAL_TLS,
+            $installer->rebootstrapDerivedRootAuthorityProfile(
+                $this->paths->neutralTlsDir(),
+            ),
+        );
 
         $source = (string)\file_get_contents(
             \dirname(__DIR__, 5)
@@ -1851,6 +2083,7 @@ POWERSHELL;
         );
         self::assertStringContainsString("'rights' => 'GX'", $source);
         self::assertStringContainsString("'rights' => 'GA'", $source);
+        self::assertStringContainsString("'(A;;0x20;;;'", $source);
         $permissions = $this->sourceBetween(
             $source,
             'private function ensureServiceIdentityAndPermissions()',
@@ -1868,6 +2101,183 @@ POWERSHELL;
             '$this->paths->snapshotCandidatesDir(),',
             $permissions,
         );
+        self::assertStringContainsString(
+            '$this->paths->neutralTlsDir(),',
+            $permissions,
+        );
+        self::assertStringContainsString(
+            '$this->paths->neutralTlsDir() => [0, $dataPlaneGid, 0710]',
+            $permissions,
+        );
+        $neutralTlsAcl = $this->sourceBetween(
+            $permissions,
+            '$this->applyWindowsNeutralTlsServingRootAcl(',
+            'if (\\file_exists($launcherRecoveryStatus)',
+        );
+        self::assertStringContainsString(
+            '$this->paths->neutralTlsDir(),',
+            $neutralTlsAcl,
+        );
+
+        $authority = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayWindowsHostRootAuthority.php',
+        );
+        $profiles = $this->sourceBetween(
+            $authority,
+            'private static function bootstrapProfiles(): array',
+            'private static function bootstrapSddl(): string',
+        );
+        self::assertStringContainsString("'neutral-tls' => [", $profiles);
+        self::assertStringContainsString('O:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)', $profiles);
+        self::assertStringContainsString(
+            '"(A;;0x20;;;$dataPlane)"',
+            $profiles,
+        );
+
+        $rebootstrap = $this->sourceBetween(
+            $source,
+            'private function rebootstrapDerivedRootWindowsExpectedSddl(',
+            'private static function windowsDerivedAuthoritySddlRights(',
+        );
+        self::assertStringContainsString(
+            "'O:S-1-5-18D:P'",
+            $rebootstrap,
+        );
+        self::assertStringNotContainsString(
+            'WINDOWS_CONTROLLER_SERVICE_SID',
+            $rebootstrap,
+        );
+
+        $descendants = $this->sourceBetween(
+            $source,
+            'private function rebootstrapDerivedDescendantWindowsContracts(',
+            'private function windowsDerivedTrustDescendantIsRootOnly(',
+        );
+        $neutralDescendant = $this->sourceBetween(
+            $descendants,
+            'self::DERIVED_AUTHORITY_NEUTRAL_TLS => [',
+            'self::DERIVED_AUTHORITY_SNAPSHOT_CANDIDATES_V2 => [',
+        );
+        self::assertStringContainsString("'S-1-5-18'", $neutralDescendant);
+        self::assertStringNotContainsString(
+            "'S-1-5-32-544'",
+            $neutralDescendant,
+        );
+        self::assertStringContainsString(
+            "\$directory ? 'GX' : 'R'",
+            $neutralDescendant,
+        );
+        self::assertStringNotContainsString("'GRGX'", $neutralDescendant);
+        $rights = $this->sourceBetween(
+            $source,
+            'private static function windowsDerivedAuthoritySddlRights(',
+            'private function securePackageTransactionTrustWithinDeadline(',
+        );
+        self::assertStringContainsString("'R' => '0x120089'", $rights);
+    }
+
+    public function testNginxPidRootIsSealedSeparatelyFromMutableRuntime(): void
+    {
+        $pathsSource = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayPaths.php',
+        );
+        $installerSource = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php',
+        );
+        $authoritySource = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayWindowsHostRootAuthority.php',
+        );
+
+        self::assertSame(
+            $this->paths->home() . DIRECTORY_SEPARATOR . 'nginx-pid',
+            $this->paths->nginxPidDir(),
+        );
+        self::assertSame(
+            $this->paths->nginxPidDir() . DIRECTORY_SEPARATOR . 'nginx.pid',
+            $this->paths->nginxPidFile(),
+        );
+        self::assertStringContainsString(
+            '$this->paths->nginxPidDir() => [0, $dataPlaneGid, 0711]',
+            $installerSource,
+        );
+        self::assertStringContainsString(
+            '$this->applyWindowsNginxPidRootAcl(',
+            $installerSource,
+        );
+        self::assertStringContainsString(
+            'private function applyWindowsNginxPidRootAcl(string $path): void',
+            $installerSource,
+        );
+        self::assertStringContainsString(
+            "'(A;;0x20;;;' . self::WINDOWS_CONTROLLER_SERVICE_SID . ')'",
+            $installerSource,
+        );
+        self::assertStringContainsString(
+            "'(A;;0x20;;;' . self::WINDOWS_DATA_PLANE_SERVICE_SID . ')'",
+            $installerSource,
+        );
+        self::assertStringContainsString(
+            "'nginx-pid' => [",
+            $authoritySource,
+        );
+        self::assertStringContainsString(
+            '"(A;;0x20;;;$controller)"',
+            $authoritySource,
+        );
+        self::assertStringContainsString(
+            '"(A;;0x20;;;$dataPlane)"',
+            $authoritySource,
+        );
+        self::assertStringContainsString(
+            'never import the legacy mutable runtime/run/nginx.pid artifact',
+            $pathsSource,
+        );
+
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return;
+        }
+        $this->paths->ensureDirectories();
+        $installer = new GatewayPlatformServiceInstaller($this->paths);
+        $installer->assertNginxPidNamespaceAuthority();
+        self::assertTrue(\chmod($this->paths->nginxPidDir(), 0755));
+        try {
+            $installer->assertNginxPidNamespaceAuthority();
+            self::fail('A PID root outside its fixed authority must be rejected.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'PID namespace authority is unsafe',
+                $exception->getMessage(),
+            );
+        }
+    }
+
+    public function testSecureControllerTreeCanonicalizesExistingNeutralTlsPairToPrivate0600(): void
+    {
+        $this->paths->ensureDirectories();
+        $state = $this->paths->stateDir();
+        $cert = $state . DIRECTORY_SEPARATOR . 'neutral-cert.pem';
+        $key = $state . DIRECTORY_SEPARATOR . 'neutral-key.pem';
+        self::assertNotFalse(file_put_contents($cert, "neutral certificate\n"));
+        self::assertNotFalse(file_put_contents($key, "neutral key\n"));
+        self::assertTrue(chmod($cert, 0644));
+        self::assertTrue(chmod($key, 0644));
+
+        $stateStatus = lstat($state);
+        self::assertIsArray($stateStatus);
+        (new \ReflectionMethod(GatewayPlatformServiceInstaller::class, 'secureControllerTree'))
+            ->invoke(
+                new GatewayPlatformServiceInstaller($this->paths),
+                $state,
+                (int)$stateStatus['uid'],
+                (int)$stateStatus['gid'],
+            );
+
+        self::assertSame(0600, (int)\fileperms($cert) & 0777);
+        self::assertSame(0600, (int)\fileperms($key) & 0777);
     }
 
     public function testWindowsCollectingBackupAclRequiresAuthenticatedTerminalReceipt(): void

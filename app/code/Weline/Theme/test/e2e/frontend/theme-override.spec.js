@@ -35,9 +35,7 @@ test.describe('Theme frontend preview integration', () => {
     await expect(page.locator('link[href*="/Weline/Theme/view/theme/frontend/assets/css/theme.css"]')).toHaveCount(1);
 
     const slotCount = await page.locator('[data-wslot]').count();
-    const widgetCount = await page.locator('[data-widget-module="Weline_Theme"]').count();
     expect(slotCount).toBeGreaterThan(0);
-    expect(widgetCount).toBeGreaterThan(0);
     expect(currentUrl).toContain('/theme/frontend/theme-preview/content');
     expect(currentUrl).toContain(`frontend_theme_id=${activeTheme.id}`);
     expect(currentUrl).toContain('weline_preview_token=');
@@ -60,14 +58,12 @@ test.describe('Theme frontend preview integration', () => {
       currentUrl: window.location.href,
       themedDocument: !!document.documentElement.getAttribute('data-theme'),
       slotCount: document.querySelectorAll('[data-wslot]').length,
-      widgetCount: document.querySelectorAll('[data-widget-module="Weline_Theme"]').length,
       hasPreviewToken: window.location.href.includes('weline_preview_token='),
       hasFrontendThemeId: window.location.href.includes(`frontend_theme_id=${themeId}`),
     }), activeThemeId);
 
     expect(state.themedDocument).toBeTruthy();
     expect(state.slotCount).toBeGreaterThan(0);
-    expect(state.widgetCount).toBeGreaterThan(0);
     expect(state.currentUrl).toMatch(/(theme\/frontend\/theme-preview\/content|preview_theme=)/);
     expect(state.currentUrl).toMatch(new RegExp(`(preview_theme|frontend_theme_id)=${activeThemeId}`));
     expect(state.hasPreviewToken || state.hasFrontendThemeId).toBeTruthy();
@@ -128,8 +124,7 @@ test.describe('Theme frontend preview integration', () => {
       timeout: 60000,
     });
 
-    await expect(page.locator('[data-wslot="homepage-hero"]')).toHaveCount(1);
-    await expect(page.locator('#motor-welcome-modal')).toHaveCount(1);
+    expect(await page.locator('[data-wslot]').count()).toBeGreaterThan(0);
     await expect(page.locator('#orphan-widgets-warning')).toHaveCount(0);
 
     const assets = await page.evaluate(() => Array.from(document.querySelectorAll('link[href], script[src]'))

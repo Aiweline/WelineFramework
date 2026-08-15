@@ -552,8 +552,12 @@ class App
     private function isFrontendQueryBinRequestUri(string $requestUri): bool
     {
         $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
-        $normalizedPath = '/' . \ltrim($path, '/');
-        return \strtolower($normalizedPath) === \strtolower(Env::getFrontendQueryBinPath());
+        $normalizedPath = \strtolower('/' . \ltrim($path, '/'));
+
+        return $normalizedPath === \strtolower(Env::getFrontendQueryBinPath())
+            // Url::parser removes the rest_frontend prefix before scope/session
+            // gates run. Keep the exact internal transport path deferred too.
+            || $normalizedPath === '/framework/query-bin';
     }
 
     private function isFrontendWorkerScopeDeferredRequestUri(string $requestUri): bool

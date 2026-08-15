@@ -78,13 +78,17 @@ final class MasterChildCredentialStore
 
     private readonly MasterLeaseManager $leaseManager;
     private readonly MasterLeaseRuntimeIdentity $runtimeIdentity;
+    private readonly bool $allowUnknownMasterOwnerForChildResolution;
 
     public function __construct(
         ?MasterLeaseManager $leaseManager = null,
         ?MasterLeaseRuntimeIdentity $runtimeIdentity = null,
+        ?bool $allowUnknownMasterOwnerForChildResolution = null,
     ) {
         $this->runtimeIdentity = $runtimeIdentity ?? new MasterLeaseRuntimeIdentity();
         $this->leaseManager = $leaseManager ?? new MasterLeaseManager($this->runtimeIdentity);
+        $this->allowUnknownMasterOwnerForChildResolution = $allowUnknownMasterOwnerForChildResolution
+            ?? (PHP_OS_FAMILY === 'Windows');
     }
 
     public static function pathForInstance(string $instance): string
@@ -704,12 +708,18 @@ final class MasterChildCredentialStore
             if ($taskId !== '') {
                 self::assertTaskId($taskId);
             }
-            $lease = $this->requireRunningMaster(
+            $master = $this->resolveRunningMasterForCurrentChild(
                 $leaseFile,
                 $instance,
                 $masterPid,
                 $masterEpoch,
             );
+            if ($master['pending']) {
+                $result['pending'] = true;
+                $result['reason'] = $master['reason'];
+                return $result;
+            }
+            $lease = $master['lease'];
             $state = $this->readState($instance);
             if ($state === null || !$this->stateMatchesMaster($state, $lease)) {
                 // A leftover ledger from a previous Master must not kill the
@@ -721,9 +731,16 @@ final class MasterChildCredentialStore
                 return $result;
             }
             if ((int)$lease['lease_sequence'] < (int)$state['master_lease_sequence_floor']) {
-                throw new \RuntimeException(
-                    'Managed-child credential ledger is ahead of the Master lease sequence.'
-                );
+                // The running Master publishes its heartbeat and credential
+                // ledger as two independently atomic files. A child can read
+                // the old heartbeat immediately before the new ledger wins
+                // that race. Keep the gate closed and retry within the
+                // caller's existing bounded credential deadline; a genuinely
+                // impossible sequence never becomes authorized.
+                $result['pending'] = true;
+                $result['reason'] =
+                    'Managed-child credential ledger is waiting for the Master lease sequence.';
+                return $result;
             }
             $kind = $taskId !== '' ? self::KIND_TASK : self::KIND_SERVICE;
             $subjectId = $taskId !== '' ? $taskId : $slotId;
@@ -888,18 +905,12 @@ final class MasterChildCredentialStore
         int $masterEpoch,
         string $masterToken = '',
     ): array {
-        self::assertInstance($instance);
-        if (!self::sameLexicalPath($leaseFile, MasterLeaseManager::pathForInstance($instance))) {
-            throw new \RuntimeException('Managed-child Master lease path does not match the instance.');
-        }
-        $validation = $this->leaseManager->validateRunningLease(
+        $validation = $this->validateRunningMaster(
             $leaseFile,
             $instance,
             $masterPid,
             $masterEpoch,
             $masterToken,
-            0,
-            true,
         );
         if (($validation['authorized'] ?? false) !== true
             || !\is_array($validation['lease'] ?? null)
@@ -911,6 +922,103 @@ final class MasterChildCredentialStore
         }
 
         return $validation['lease'];
+    }
+
+    /**
+     * @return array{
+     *   lease:array<string,mixed>,
+     *   owner_unknown:bool,
+     *   pending:bool,
+     *   reason:string
+     * }
+     */
+    private function resolveRunningMasterForCurrentChild(
+        string $leaseFile,
+        string $instance,
+        int $masterPid,
+        int $masterEpoch,
+    ): array {
+        $validation = $this->validateRunningMaster(
+            $leaseFile,
+            $instance,
+            $masterPid,
+            $masterEpoch,
+        );
+        if (($validation['authorized'] ?? false) === true
+            && \is_array($validation['lease'] ?? null)
+        ) {
+            return [
+                'lease' => $validation['lease'],
+                'owner_unknown' => false,
+                'pending' => false,
+                'reason' => '',
+            ];
+        }
+        if ($this->allowUnknownMasterOwnerForChildResolution
+            && ($validation['fresh'] ?? false) === true
+            && ($validation['same_boot'] ?? false) === true
+            && ($validation['veto'] ?? false) === true
+            && ($validation['foreign_pid_namespace'] ?? false) === false
+            && ($validation['owner_status'] ?? '') === MasterLeaseRuntimeIdentity::OWNER_UNKNOWN
+            && \is_array($validation['lease'] ?? null)
+        ) {
+            return [
+                'lease' => $validation['lease'],
+                'owner_unknown' => true,
+                'pending' => false,
+                'reason' => '',
+            ];
+        }
+        if ($this->allowUnknownMasterOwnerForChildResolution
+            && ($validation['fresh'] ?? true) === false
+            && ($validation['same_boot'] ?? false) === true
+            && ($validation['foreign_pid_namespace'] ?? false) === false
+            && ($validation['owner_status'] ?? '') === MasterLeaseRuntimeIdentity::OWNER_MATCH
+            && ($validation['identity_authorized'] ?? false) === true
+            && \is_array($validation['lease'] ?? null)
+        ) {
+            // A Windows WMI/x64-emulation launch can keep the single-threaded
+            // Master inside Processer longer than the ordinary heartbeat
+            // window. The child must not authorize from stale state, but it
+            // may remain pending until that exact, live Master returns from
+            // spawn and refreshes the lease.
+            return [
+                'lease' => $validation['lease'],
+                'owner_unknown' => false,
+                'pending' => true,
+                'reason' => 'Exact live Master is waiting to refresh its startup heartbeat.',
+            ];
+        }
+
+        throw new \RuntimeException(
+            'Managed-child Master lease is not authorized: '
+            . (string)($validation['reason'] ?? 'unknown reason'),
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private function validateRunningMaster(
+        string $leaseFile,
+        string $instance,
+        int $masterPid,
+        int $masterEpoch,
+        string $masterToken = '',
+    ): array
+    {
+        self::assertInstance($instance);
+        if (!self::sameLexicalPath($leaseFile, MasterLeaseManager::pathForInstance($instance))) {
+            throw new \RuntimeException('Managed-child Master lease path does not match the instance.');
+        }
+
+        return $this->leaseManager->validateRunningLease(
+            $leaseFile,
+            $instance,
+            $masterPid,
+            $masterEpoch,
+            $masterToken,
+            0,
+            true,
+        );
     }
 
     /** @param array<string,mixed>|null $state @param array<string,mixed> $lease @return array<string,mixed> */

@@ -6,6 +6,8 @@ namespace Weline\Framework\Setup\Stage;
 
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableSnapshotInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Schema\DbSchemaReader;
 use Weline\Framework\Database\Schema\IndexDefinitionContract;
@@ -57,6 +59,9 @@ class SchemaDiffStage extends AbstractStage
 
     /** @var array<string, array{before: string, after: string}> */
     private array $tableFingerprints = [];
+
+    /** @var array<string, string> */
+    private array $physicalTableFingerprints = [];
 
     /** @var array<string, array<string, string>> */
     private array $moduleSchemaFingerprints = [];
@@ -118,6 +123,7 @@ class SchemaDiffStage extends AbstractStage
         $this->diffOps = [];
         $this->moduleVersions = [];
         $this->tableFingerprints = [];
+        $this->physicalTableFingerprints = [];
         $this->moduleSchemaFingerprints = [];
         $this->moduleSchemaLegacyFingerprints = [];
         $this->moduleSchemaHistoricalFingerprints = [];
@@ -240,6 +246,13 @@ class SchemaDiffStage extends AbstractStage
                 'before' => $this->schemaFingerprint($actual, true),
                 'after' => $this->schemaFingerprint($declared, true),
             ];
+            if ($actual instanceof TableSchema
+                && $connector instanceof PhysicalTableIdentityProviderInterface
+                && $connector instanceof PhysicalTableSnapshotInterface) {
+                $identity = $connector->resolvePhysicalTableIdentity($tableName);
+                $this->physicalTableFingerprints[$tableName]
+                    = $connector->physicalTableCatalogFingerprint($identity);
+            }
             $ops = $this->diffEngine->diff(
                 $declared,
                 $actual,
@@ -287,6 +300,7 @@ class SchemaDiffStage extends AbstractStage
             $this->executor->execute($connector, $this->diffOps, [
                 'module_versions' => $this->moduleVersions,
                 'table_fingerprints' => $this->tableFingerprints,
+                'physical_table_fingerprints' => $this->physicalTableFingerprints,
                 'module_schema_fingerprints' => $this->moduleSchemaFingerprints,
                 'module_schema_fingerprint_candidates' => $this->moduleSchemaFingerprintCandidates,
                 'checkpoint_runtime_qualifiers' => $this->checkpointRuntimeQualifiers,
@@ -343,6 +357,7 @@ class SchemaDiffStage extends AbstractStage
         $this->diffOps = [];
         $this->moduleVersions = [];
         $this->tableFingerprints = [];
+        $this->physicalTableFingerprints = [];
         $this->moduleSchemaFingerprints = [];
         $this->moduleSchemaLegacyFingerprints = [];
         $this->moduleSchemaHistoricalFingerprints = [];

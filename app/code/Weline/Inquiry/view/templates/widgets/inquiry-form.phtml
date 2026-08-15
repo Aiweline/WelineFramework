@@ -1,0 +1,5 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+echo \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Inquiry\Api\InquiryRendererInterface::class)->render((string)($inquiry_code ?? ''), [
+    'mode' => $mode ?? 'inline', 'id' => $instance_id ?? '', 'trigger_selector' => $trigger_selector ?? '', 'custom_css' => $custom_css ?? '', 'custom_js' => $custom_js ?? '',
+]);

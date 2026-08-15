@@ -240,8 +240,44 @@ final class GatewayPathsTest extends TestCase
         self::assertDirectoryExists($paths->slotsDir());
         self::assertDirectoryExists($paths->sealedSnapshotsDir());
         self::assertDirectoryExists($paths->snapshotCandidatesDir());
+        self::assertDirectoryExists(
+            $paths->neutralTlsDir(),
+        );
+        self::assertDirectoryDoesNotExist(
+            $paths->stateDir() . DIRECTORY_SEPARATOR . 'neutral-tls',
+        );
+        self::assertDirectoryDoesNotExist(
+            $paths->runtimeDir() . DIRECTORY_SEPARATOR . 'neutral-tls',
+        );
         self::assertDirectoryDoesNotExist($paths->slotDir('A'));
         self::assertDirectoryDoesNotExist($paths->slotDir('B'));
+    }
+
+    public function testNginxPidNamespaceIsFixedOutsideMutableRuntime(): void
+    {
+        \putenv('WLS_GATEWAY_TEST_MODE=1');
+        \putenv('WLS_GATEWAY_HOME=' . $this->root);
+        \putenv('WLS_GATEWAY_LISTEN_HTTP=21080');
+        \putenv('WLS_GATEWAY_LISTEN_HTTPS=21443');
+
+        $paths = new GatewayPaths();
+
+        self::assertSame(
+            $paths->home() . DIRECTORY_SEPARATOR . 'nginx-pid',
+            $paths->nginxPidDir(),
+        );
+        self::assertSame(
+            $paths->nginxPidDir() . DIRECTORY_SEPARATOR . 'nginx.pid',
+            $paths->nginxPidFile(),
+        );
+
+        $paths->ensureDirectories();
+
+        self::assertDirectoryExists($paths->nginxPidDir());
+        self::assertFileDoesNotExist(
+            $paths->runtimeDir() . DIRECTORY_SEPARATOR . 'run'
+                . DIRECTORY_SEPARATOR . 'nginx.pid',
+        );
     }
 
     public function testSystemdDedicatedDefinitionLayoutKeepsTestModeOutOfEtc(): void
@@ -330,6 +366,40 @@ final class GatewayPathsTest extends TestCase
                 );
             }
         }
+    }
+
+    public function testProductionPosixDirectoryAclProofUsesArchitectureSpecificOpenFlags(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayPaths.php',
+        );
+        $method = new \ReflectionMethod(
+            GatewayPaths::class,
+            'assertProductionPosixDirectoryAclFree',
+        );
+        $proof = \implode("\n", \array_slice(
+            \explode("\n", $source),
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString(
+            "match (\\strtolower(\\php_uname('m')))",
+            $proof,
+        );
+        self::assertStringContainsString(
+            "'x86_64', 'amd64' => (0x10000 | 0x20000 | 0x80000)",
+            $proof,
+        );
+        self::assertStringContainsString(
+            "'aarch64', 'arm64' => (0x4000 | 0x8000 | 0x80000)",
+            $proof,
+        );
+        self::assertStringContainsString(
+            'Unsupported WLS Gateway POSIX ACL architecture.',
+            $proof,
+        );
     }
 
     private function removeTree(string $root): void

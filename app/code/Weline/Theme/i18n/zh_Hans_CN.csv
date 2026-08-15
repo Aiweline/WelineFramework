@@ -6,7 +6,8 @@
 当前没有可用于预览的前台主题。,当前没有可用于预览的前台主题。
 "缺少预览 token。","缺少预览 token。"
 "预览 token 无效或已过期。","预览 token 无效或已过期。"
-"Invalid backend theme mode: %{1}","Invalid backend theme mode: %{1}"
+主题模式无效。,主题模式无效。
+主题模式无效：%{1},主题模式无效：%{1}
 同步成功,同步成功
 "Theme target 布局复制参数不完整。","Theme target 布局复制参数不完整。"
 "复制 Theme target 布局选择","复制 Theme target 布局选择"
@@ -36,8 +37,8 @@
 "生成 Theme 前台预览 token","生成 Theme 前台预览 token"
 "校验 Theme 前台预览 token","校验 Theme 前台预览 token"
 "Theme editor signed backend request bridge","Theme editor signed backend request bridge"
-同步后台亮色/暗色模式,同步后台亮色/暗色模式
-"light 或 dark","light 或 dark"
+同步后台跟随系统、亮色或暗色模式,同步后台跟随系统、亮色或暗色模式
+"system、light 或 dark","system、light 或 dark"
 按区域激活主题,按区域激活主题
 "frontend 或 backend","frontend 或 backend"
 "Theme 虚拟部件智能体","Theme 虚拟部件智能体"
@@ -724,8 +725,7 @@ Default,Default
 "Missing parameter key for reset action","Missing parameter key for reset action"
 重置成功,重置成功
 "Save failed:","Save failed:"
-"Invalid mode","Invalid mode"
-"Sync failed:","Sync failed:"
+主题模式切换失败,主题模式切换失败
 "参数不完整：category 不能为空","参数不完整：category 不能为空"
 "Please select a theme","Please select a theme"
 "Preview config published to formal scope","Preview config published to formal scope"
@@ -1744,7 +1744,10 @@ CSS变量配置,CSS变量配置
 Desktop,Desktop
 Tablet,Tablet
 Mobile,Mobile
-"Toggle light/dark mode","Toggle light/dark mode"
+主题模式,主题模式
+跟随系统,跟随系统
+明亮模式,明亮模式
+暗黑模式,暗黑模式
 "Simplified Chinese","Simplified Chinese"
 "Traditional Chinese","Traditional Chinese"
 "Select language","Select language"
@@ -2514,6 +2517,12 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 编译less静态资源！,编译less静态资源！
 静态文件：weline.modules.js编译文件！,静态文件：weline.modules.js编译文件！
 编译主题资源（less、weline.modules.js等）,编译主题资源（less、weline.modules.js等）
+"Invalid backend theme mode: %{1}","Invalid backend theme mode: %{1}"
+同步后台亮色/暗色模式,同步后台亮色/暗色模式
+"light 或 dark","light 或 dark"
+"Invalid mode","Invalid mode"
+"Sync failed:","Sync failed:"
+"Toggle light/dark mode","Toggle light/dark mode"
 "可恢复任务 API 不可用。","可恢复任务 API 不可用。"
 预览图任务无法安全恢复,预览图任务无法安全恢复
 预览图任务事件达到资源上限,预览图任务事件达到资源上限

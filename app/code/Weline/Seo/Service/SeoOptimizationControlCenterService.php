@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Seo\Model\SeoOptimizationActivity;
 use Weline\Seo\Model\SeoOptimizationCycle;
@@ -33,17 +34,45 @@ final class SeoOptimizationControlCenterService
         private readonly OptimizationPolicyService $policyService,
         ?OptimizationRunSelection $runSelection = null,
         ?OptimizationTiming $timing = null,
+        ?SeoWebsiteDirectory $websiteDirectory = null,
+        ?SeoSearchQueryHeatService $queryHeat = null,
+        ?SeoWebsiteAccountBindingService $bindings = null,
     ) {
         $this->runSelection = $runSelection ?? new OptimizationRunSelection();
         $this->timing = $timing ?? new OptimizationTiming();
+        $this->websiteDirectory = $websiteDirectory ?? new SeoWebsiteDirectory();
+        $this->queryHeat = $queryHeat ?? ObjectManager::getInstance(SeoSearchQueryHeatService::class);
+        $this->bindings = $bindings ?? ObjectManager::getInstance(SeoWebsiteAccountBindingService::class);
     }
 
     private readonly OptimizationRunSelection $runSelection;
     private readonly OptimizationTiming $timing;
+    private readonly SeoWebsiteDirectory $websiteDirectory;
+    private readonly SeoSearchQueryHeatService $queryHeat;
+    private readonly SeoWebsiteAccountBindingService $bindings;
 
-    /** @return array<string,mixed> */
-    public function snapshot(?int $websiteId): array
+    /**
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    public function snapshot(?int $websiteId, array $options = []): array
     {
+        if ($this->truthy($options['sites_only'] ?? $options['directory_only'] ?? false)) {
+            $sites = [];
+            foreach ($this->authorizedSites() as $id => $site) {
+                $sites[] = [
+                    'website_id' => $id,
+                    'name' => (string)($site['name'] ?? ('网站 #' . $id)),
+                    'domain' => (string)($site['domain'] ?? ''),
+                ];
+            }
+
+            return [
+                'schema' => 'seo.optimization.control-center.sites.v1',
+                'sites' => $sites,
+            ];
+        }
+
         $scope = $this->scope($websiteId);
         $tasks = $this->taskList([
             'website_id' => $websiteId,
@@ -570,28 +599,78 @@ final class SeoOptimizationControlCenterService
     {
         $sites = [];
         try {
-            $raw = \w_query('websites', 'getWebsiteList', [], 'backend');
-            $rows = \is_array($raw['items'] ?? null) ? $raw['items'] : (\is_array($raw) ? $raw : []);
-            foreach ($rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                $id = $this->websiteId($row['website_id'] ?? $row['id'] ?? null);
-                if ($id === null) {
-                    continue;
-                }
-                $name = \trim((string)($row['name'] ?? $row['website_name'] ?? $row['code'] ?? ''));
-                $domain = \trim((string)($row['domain'] ?? $row['host'] ?? $row['base_url'] ?? ''));
-                $sites[$id] = [
-                    'name' => $name !== '' ? \mb_substr($name, 0, 160, 'UTF-8') : ('网站 #' . $id),
-                    'domain' => \mb_substr(\preg_replace('/[?#].*$/', '', $domain) ?? '', 0, 255, 'UTF-8'),
-                ];
+            foreach ($this->websiteDirectory->listWebsites() as $row) {
+                $this->putAuthorizedSite($sites, $row);
             }
         } catch (\Throwable) {
-            return [];
+        }
+        foreach ($this->fallbackWebsiteIds() as $id) {
+            if (isset($sites[$id])) {
+                continue;
+            }
+            $row = null;
+            try {
+                $row = $this->websiteDirectory->getWebsiteById($id);
+            } catch (\Throwable) {
+                $row = null;
+            }
+            if (\is_array($row)) {
+                $this->putAuthorizedSite($sites, $row);
+                continue;
+            }
+            $sites[$id] = [
+                'name' => '网站 #' . $id,
+                'domain' => '',
+            ];
         }
         \ksort($sites, \SORT_NUMERIC);
         return $sites;
+    }
+
+    /** @param array<int,array{name:string,domain:string}> $sites @param array<string,mixed> $row */
+    private function putAuthorizedSite(array &$sites, array $row): void
+    {
+        $id = $this->websiteId($row['website_id'] ?? $row['id'] ?? null);
+        if ($id === null) {
+            return;
+        }
+        $name = \trim((string)($row['name'] ?? $row['website_name'] ?? $row['code'] ?? ''));
+        $domain = \trim((string)($row['domain'] ?? $row['host'] ?? $row['url'] ?? $row['base_url'] ?? ''));
+        $sites[$id] = [
+            'name' => $name !== '' ? \mb_substr($name, 0, 160, 'UTF-8') : ('网站 #' . $id),
+            'domain' => \mb_substr(\preg_replace('/[?#].*$/', '', $domain) ?? '', 0, 255, 'UTF-8'),
+        ];
+    }
+
+    /** @return list<int> */
+    private function fallbackWebsiteIds(): array
+    {
+        $ids = [];
+        foreach ($this->policyService->persistedPolicies() as $policy) {
+            $id = $this->websiteId($policy[SeoOptimizationPolicy::schema_fields_WEBSITE_ID] ?? null);
+            if ($id !== null) {
+                $ids[$id] = $id;
+            }
+        }
+        try {
+            foreach ($this->queryHeat->listWebsiteIds() as $id) {
+                if ($id >= 0) {
+                    $ids[$id] = $id;
+                }
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            foreach ($this->bindings->getStatsAccounts() as $info) {
+                $id = $this->websiteId($info['website_id'] ?? null);
+                if ($id !== null) {
+                    $ids[$id] = $id;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return \array_values($ids);
     }
 
     /** @return array{sites:array<int,array{name:string,domain:string}>,ids:array<int,true>} */
@@ -1045,6 +1124,19 @@ final class SeoOptimizationControlCenterService
         }
         $decoded = \base64_decode(\strtr($value, '-_', '+/'), true);
         return \is_string($decoded) && \strlen($decoded) <= 255 ? $decoded : '';
+    }
+
+    private function truthy(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value !== 0;
+        }
+        $raw = \strtolower(\trim((string)$value));
+
+        return $raw !== '' && !\in_array($raw, ['0', 'false', 'no', 'off', 'null'], true);
     }
 
     private function iso(string $value): ?string

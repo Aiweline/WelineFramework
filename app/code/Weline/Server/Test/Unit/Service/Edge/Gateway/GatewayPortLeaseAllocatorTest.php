@@ -197,6 +197,110 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         $allocator->reserveBound('site-gateway-fallback', static fn (int $port): bool => true);
     }
 
+    public function testSchemaThreeLegacyLaunchNamesAreReadableButNeverAuthorizeServing(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Master-owned inherited listener test is POSIX-only.');
+        }
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $allocator = $this->allocator('legacy-schema-three', $hostState, $leaseDirectory);
+        $listener = $this->listener();
+        $lease = $allocator->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port) use ($listener): bool {
+                $listener->acquire('127.0.0.1', $port);
+                return true;
+            },
+        );
+        $identity = $this->processIdentity();
+        $masterLaunchId = \str_repeat('a', 32);
+        $workerLaunchId = \str_repeat('b', 32);
+        $allocator->prepareTransfer(
+            'site-gateway-fallback',
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            (int)$lease['port'],
+            $masterLaunchId,
+        );
+        $active = $allocator->confirmTransferred(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            \getmypid(),
+            $workerLaunchId,
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            $this->masterProcessName,
+            $masterLaunchId,
+            $identity['birth'],
+            $identity['pid_namespace_id'],
+        );
+        $leaseFile = $leaseDirectory . DIRECTORY_SEPARATOR
+            . \substr(\hash(
+                'sha256',
+                (string)$lease['project_uuid'] . ':site-gateway-fallback',
+            ), 0, 24) . '.json';
+        $legacyLaunchId = 'gateway_backend-1-a36146e33dd2';
+        $legacy = [
+            'schema_version' => 3,
+            'project_uuid' => (string)$active['project_uuid'],
+            'instance' => (string)$active['instance'],
+            'state' => 'ACTIVE',
+            'port' => (int)$active['port'],
+            'master_pid' => (int)$active['master_pid'],
+            'worker_pid' => (int)$active['worker_pid'],
+            'lease_id' => (string)$active['lease_id'],
+            'launch_id' => $legacyLaunchId,
+            'workers' => [[
+                'pid' => (int)$active['worker_pid'],
+                'launch_id' => $legacyLaunchId,
+                'confirmed_at' => (string)$active['confirmed_at'],
+                'confirmed_timestamp' => (int)$active['confirmed_timestamp'],
+            ]],
+            'reserved_at' => (string)$active['reserved_at'],
+            'reserved_timestamp' => (int)$active['reserved_timestamp'],
+            'confirmed_at' => (string)$active['confirmed_at'],
+            'confirmed_timestamp' => (int)$active['confirmed_timestamp'],
+            'draining_at' => null,
+        ];
+        $this->writeLeaseFixture($leaseFile, $legacy);
+
+        $observed = $allocator->status('site-gateway-fallback');
+        self::assertIsArray($observed);
+        self::assertSame(3, $observed['schema_version']);
+        self::assertSame($legacyLaunchId, $observed['launch_id']);
+        self::assertNull($allocator->liveServingLease(
+            'site-gateway-fallback',
+            '127.0.0.1',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            \getmypid(),
+        ));
+
+        $readableLease = new \ReflectionMethod($allocator, 'assertReadableLease');
+        $qualifiedLegacy = $legacy;
+        $qualifiedLegacy['instance']
+            = 'ai-test-linux-gateway-0728-28:gateway-backend';
+        $readableLease->invoke($allocator, $qualifiedLegacy);
+        $qualifiedLegacy['instance'] = 'gateway/../../foreign';
+        try {
+            $readableLease->invoke($allocator, $qualifiedLegacy);
+            self::fail('A malformed legacy fallback instance was accepted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('malformed', $exception->getMessage());
+        }
+
+        $legacy['launch_id'] = '../gateway-backend';
+        $this->writeLeaseFixture($leaseFile, $legacy);
+        try {
+            $allocator->status('site-gateway-fallback');
+            self::fail('A malformed legacy fallback launch identity was accepted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('malformed', $exception->getMessage());
+        }
+    }
+
     public function testFailedDrainCanCasTheExactLiveLeaseBackToActive(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {

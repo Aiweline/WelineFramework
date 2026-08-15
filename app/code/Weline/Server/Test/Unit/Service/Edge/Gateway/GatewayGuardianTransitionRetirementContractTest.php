@@ -150,6 +150,27 @@ final class GatewayGuardianTransitionRetirementContractTest extends TestCase
         );
     }
 
+    public function testGuardianRecoveryInventoryNamesTheFixedNeutralTlsNamespace(): void
+    {
+        $protocol = (string)\file_get_contents(
+            $this->gateway . '/GatewayGuardianTransitionProtocol.php',
+        );
+
+        self::assertStringContainsString("'neutral-tls' => [", $protocol);
+        self::assertStringContainsString(
+            "'root_id' => 'host/neutral-tls'",
+            $protocol,
+        );
+        self::assertStringContainsString(
+            "'authority_profile' => 'root-data-plane-traverse-neutral-tls-v2'",
+            $protocol,
+        );
+        self::assertStringContainsString(
+            "'authority_policy' => 'root-data-plane-traverse-neutral-tls-v2-recreate-sealed'",
+            $protocol,
+        );
+    }
+
     private function methodBody(
         string $source,
         string $startNeedle,

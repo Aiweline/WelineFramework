@@ -56,20 +56,15 @@ class PgsqlTableNameStrategy implements TableNameStrategyInterface
         // 使用运行时 schema（动态获取 current_schema）
         $schema = $this->getRuntimeSchema();
 
-        // 如果表名包含点号，检查第一部分
+        // PostgreSQL 的两段名称始终是 schema.table。显式 schema 必须原样保留，
+        // 再交给 formatter 分段引用；只有无点名称才使用运行时 schema。
         if (str_contains($logicalName, '.')) {
-            [$firstPart, $tablePart] = explode('.', $logicalName, 2);
-            $firstPart = trim($firstPart, '`"');
-
-            // 如果第一部分是已知的 schema（如 public, information_schema 等），使用它
-            // 否则，第一部分可能是数据库名，忽略它，使用运行时 schema
-            if (in_array(strtolower($firstPart), ['public', 'information_schema', 'pg_catalog', 'pg_toast'])) {
-                $schema = $firstPart;
-                $logicalName = $tablePart;
-            } else {
-                // 第一部分是数据库名或其他，忽略它，使用表名部分
-                $logicalName = trim($tablePart, '`"');
+            [$explicitSchema, $tablePart] = explode('.', $logicalName, 2);
+            $explicitSchema = trim($explicitSchema);
+            if ($explicitSchema !== '') {
+                $schema = $explicitSchema;
             }
+            $logicalName = trim($tablePart);
         }
 
         // 处理表前缀
@@ -80,4 +75,3 @@ class PgsqlTableNameStrategy implements TableNameStrategyInterface
         return $this->identifierFormatter->quoteQualified($schema, $table);
     }
 }
-

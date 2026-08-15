@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Session;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\RequestScope;
@@ -300,7 +301,54 @@ class SessionFactory
         $session = $this->createSession();
         $areaConfig = new AreaConfig($area);
 
-        $authSession = new AuthenticatedSession($session, $areaConfig);
+        $runtimeProviders = null;
+        try {
+            $runtimeProviders = ObjectManager::getInstance(RuntimeProviderResolver::class);
+        } catch (\Throwable) {
+            $runtimeProviders = new RuntimeProviderResolver(new ServiceProviderRegistry());
+        }
+        $authSession = new AuthenticatedSession($session, $areaConfig, $runtimeProviders);
+        if ($fiber === null) {
+            $this->authSessionInstances[$area] = $authSession;
+        } else {
+            $this->getFiberRequestScope($fiber, true)->set($scopeKey, $authSession);
+        }
+
+        return $authSession;
+    }
+
+    /**
+     * Restore an already attested Session ID into one authentication area for
+     * the current request.
+     *
+     * @internal Trusted runtime bridges only. The caller must authenticate the
+     * Session ID before invoking this method.
+     */
+    public function restoreAuthenticatedSession(
+        string $area,
+        string $sessionId,
+    ): AuthenticatedSessionInterface {
+        if (!AreaConfig::hasArea($area)
+            || $sessionId === ''
+            || trim($sessionId) !== $sessionId
+            || strlen($sessionId) > 4096
+            || preg_match('/^[\x21-\x7E]+$/D', $sessionId) !== 1) {
+            throw new \InvalidArgumentException('Authenticated Session restoration input is invalid.');
+        }
+
+        $ttl = (int)($this->config['lifetime'] ?? $this->config['session_ttl'] ?? 3600);
+        $session = new Session($this->createStorage(), $this->createStrategy(), $ttl);
+        $session->start($sessionId);
+
+        try {
+            $runtimeProviders = ObjectManager::getInstance(RuntimeProviderResolver::class);
+        } catch (\Throwable) {
+            $runtimeProviders = new RuntimeProviderResolver(new ServiceProviderRegistry());
+        }
+        $authSession = new AuthenticatedSession($session, new AreaConfig($area), $runtimeProviders);
+
+        $fiber = $this->currentRequestFiber();
+        $scopeKey = self::AUTH_SESSION_SCOPE_PREFIX . $area;
         if ($fiber === null) {
             $this->authSessionInstances[$area] = $authSession;
         } else {

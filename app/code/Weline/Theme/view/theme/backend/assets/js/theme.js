@@ -1923,44 +1923,79 @@
     })();
 
     /**
-     * 监听postMessage消息，支持从父窗口切换主题色系（用于主题预览）
+     * 后端预览和正常后台共用同一套三态运行时。监听器读取根节点的当前偏好，
+     * 因而从显式模式切回 system 后仍会继续响应系统主题变化。
      */
-    (function initThemeColorMessageListener() {
+    (function initBackendThemeRuntime() {
+        const root = document.documentElement;
+        if (!root) {
+            return;
+        }
+
+        const media = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+        const normalizePreference = function (value) {
+            return value === 'system' || value === 'light' || value === 'dark' ? value : 'system';
+        };
+        const resolve = function (preference) {
+            const currentPreference = normalizePreference(preference || root.getAttribute('data-theme-preference'));
+            const themeMode = currentPreference === 'dark'
+                ? 'dark'
+                : (currentPreference === 'system' && media && media.matches ? 'dark' : 'light');
+            return { preference: currentPreference, theme: themeMode };
+        };
+        const apply = function (preference) {
+            const state = resolve(preference);
+            [root, document.body].filter(Boolean).forEach(function (target) {
+                target.setAttribute('data-theme-preference', state.preference);
+                target.setAttribute('data-theme', state.theme);
+                target.setAttribute('data-bs-theme', state.theme);
+                target.setAttribute('data-theme-mode', state.theme);
+                target.setAttribute('data-layout-mode', state.theme);
+                target.setAttribute('data-topbar', state.theme);
+                target.setAttribute('data-sidebar', state.theme);
+                target.style.colorScheme = state.theme;
+            });
+            document.dispatchEvent(new CustomEvent('themechange', {
+                detail: { theme: state.theme, preference: state.preference }
+            }));
+            return state;
+        };
+
+        const runtime = window.__WelineBackendThemeRuntime || {};
+        runtime.resolve = resolve;
+        runtime.apply = apply;
+        window.__WelineBackendThemeRuntime = runtime;
+        if (media && !runtime.systemListenerBound) {
+            runtime.systemListenerBound = true;
+            const updateSystemTheme = function () {
+                if (root.getAttribute('data-theme-preference') === 'system') {
+                    runtime.apply('system');
+                }
+            };
+            if (typeof media.addEventListener === 'function') {
+                media.addEventListener('change', updateSystemTheme);
+            } else if (typeof media.addListener === 'function') {
+                media.addListener(updateSystemTheme);
+            }
+        }
+
+        if (runtime.messageListenerBound) {
+            return;
+        }
+        runtime.messageListenerBound = true;
         window.addEventListener('message', function(event) {
-            // 安全检查：只接受来自同源的消息（在预览场景中，父窗口和iframe是同源的）
+            if (event.origin !== window.location.origin) {
+                return;
+            }
             if (event.data && event.data.type === 'switchThemeColor') {
                 const themeColor = event.data.themeColor;
-                if (themeColor) {
-                    // 后端使用setThemeConfig函数切换主题色系
-                    if (typeof window.setThemeConfig === 'function') {
-                        const themeMode = themeColor === 'dark' ? 'dark' : 'light';
-                        window.setThemeConfig({
-                            layouts: {
-                                'data-topbar': themeMode,
-                                'data-sidebar': themeMode,
-                            },
-                            'theme-mode-switch': themeMode,
-                        }, false); // false表示不重新加载页面
-                        
-                        // 发送确认消息回父窗口
-                        if (event.source && event.source !== window) {
-                            event.source.postMessage({
-                                type: 'themeColorSwitched',
-                                themeColor: themeColor
-                            }, '*');
-                        }
-                    } else {
-                        // 如果setThemeConfig不存在，尝试直接设置data属性
-                        document.documentElement.setAttribute('data-topbar', themeColor === 'dark' ? 'dark' : 'light');
-                        document.documentElement.setAttribute('data-sidebar', themeColor === 'dark' ? 'dark' : 'light');
-                        
-                        // 发送确认消息回父窗口
-                        if (event.source && event.source !== window) {
-                            event.source.postMessage({
-                                type: 'themeColorSwitched',
-                                themeColor: themeColor
-                            }, '*');
-                        }
+                if (themeColor === 'system' || themeColor === 'light' || themeColor === 'dark') {
+                    const state = runtime.apply(themeColor);
+                    if (event.source && event.source !== window) {
+                        event.source.postMessage({
+                            type: 'themeColorSwitched',
+                            themeColor: themeColor
+                        }, window.location.origin);
                     }
                 }
             }
@@ -2046,16 +2081,16 @@
             overlay.id = 'weline-error-overlay';
             overlay.style.cssText = `
                 position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(0, 0, 0, 0.75); display: flex; align-items: center;
+                background: var(--backend-component-overlay); display: flex; align-items: center;
                 justify-content: center; z-index: 99999;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             `;
 
             const content = document.createElement('div');
             content.style.cssText = `
-                background: var(--backend-color-card-bg, #fff); border-radius: 12px; padding: 32px;
+                background: var(--backend-component-surface); border-radius: 12px; padding: 32px;
                 max-width: 480px; width: 90%; text-align: center;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                box-shadow: var(--backend-component-shadow-lg);
             `;
 
             const iconEl = document.createElement('div');
@@ -2064,21 +2099,21 @@
 
             const titleEl = document.createElement('h2');
             titleEl.style.cssText = `
-                font-size: 22px; font-weight: 600; color: var(--backend-color-text-primary, #1f2937);
+                font-size: 22px; font-weight: 600; color: var(--backend-theme-text);
                 margin: 0 0 12px 0;
             `;
             titleEl.textContent = title;
 
             const messageEl = document.createElement('p');
             messageEl.style.cssText = `
-                font-size: 15px; color: var(--backend-color-text-secondary, #6b7280);
+                font-size: 15px; color: var(--backend-theme-text-secondary);
                 margin: 0 0 8px 0; line-height: 1.6;
             `;
             messageEl.textContent = message;
 
             const statusEl = document.createElement('p');
             statusEl.style.cssText = `
-                font-size: 13px; color: var(--backend-color-text-tertiary, #9ca3af);
+                font-size: 13px; color: var(--backend-theme-text-muted);
                 margin: 0 0 24px 0;
             `;
             statusEl.textContent = statusCode > 0 ? `HTTP ${statusCode}` : '';
@@ -2086,7 +2121,7 @@
             const countdownEl = document.createElement('div');
             countdownEl.id = 'weline-error-countdown';
             countdownEl.style.cssText = `
-                font-size: 13px; color: var(--backend-color-text-tertiary, #9ca3af);
+                font-size: 13px; color: var(--backend-theme-text-muted);
                 margin-bottom: 20px;
             `;
 
@@ -2095,8 +2130,8 @@
 
             const retryBtn = document.createElement('button');
             retryBtn.style.cssText = `
-                background: var(--backend-color-primary, #3b82f6); border: none; border-radius: 8px;
-                padding: 10px 20px; font-size: 14px; color: #fff; cursor: pointer; transition: all 0.2s;
+                background: var(--backend-theme-primary); border: none; border-radius: 8px;
+                padding: 10px 20px; font-size: 14px; color: var(--backend-theme-on-primary); cursor: pointer; transition: all 0.2s;
             `;
             retryBtn.textContent = retryBtnText;
             retryBtn.onclick = () => {
@@ -2106,8 +2141,8 @@
 
             const closeBtn = document.createElement('button');
             closeBtn.style.cssText = `
-                background: var(--backend-color-card-bg-hover, #f3f4f6); border: none; border-radius: 8px;
-                padding: 10px 20px; font-size: 14px; color: var(--backend-color-text-secondary, #6b7280);
+                background: var(--backend-component-surface-subtle); border: none; border-radius: 8px;
+                padding: 10px 20px; font-size: 14px; color: var(--backend-theme-text-secondary);
                 cursor: pointer; transition: all 0.2s;
             `;
             closeBtn.textContent = closeBtnText;

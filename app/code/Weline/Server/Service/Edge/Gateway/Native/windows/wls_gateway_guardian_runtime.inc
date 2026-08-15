@@ -1041,13 +1041,16 @@ static int wls_guardian_runtime_monitor_child(
                 result = transition_result == 2
                     ? WLS_GUARDIAN_MONITOR_RESTORE
                     : WLS_GUARDIAN_MONITOR_FAILED;
-            } else if (child_exit == WLS_CONTROL_TREE_RELOAD) {
-                InterlockedExchange(
-                    &wls_service_reload_consumed,
-                    InterlockedCompareExchange(
-                        &wls_service_reload_generation, 0, 0
-                    )
-                );
+            } else if (child_exit == WLS_CONTROL_TREE_RELOAD
+                || child_exit == WLS_SERVICE_TREE_RESTART) {
+                if (child_exit == WLS_CONTROL_TREE_RELOAD) {
+                    InterlockedExchange(
+                        &wls_service_reload_consumed,
+                        InterlockedCompareExchange(
+                            &wls_service_reload_generation, 0, 0
+                        )
+                    );
+                }
                 result = WLS_GUARDIAN_MONITOR_RESTART_CHILD;
             }
             goto cleanup;

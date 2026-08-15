@@ -159,6 +159,31 @@ class RequestLifecycleTraceTest extends TestCase
         self::assertCount(1, RequestLifecycleTrace::getSpans());
     }
 
+    public function testDatabaseTraceRedactsAuthenticationDigestStatements(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        $digest = \str_repeat('a', 64);
+
+        RequestLifecycleTrace::recordSpan(
+            'db::insert::weline_remembered_device_credential',
+            1.25,
+            'db',
+            null,
+            [
+                'sql' => "INSERT INTO weline_remembered_device_credential (token_digest) VALUES ('{$digest}')",
+                'operation' => 'insert',
+                'table' => 'weline_remembered_device_credential',
+            ],
+        );
+
+        $span = RequestLifecycleTrace::getSpans()[0];
+        self::assertSame('[REDACTED: authentication persistence statement]', $span['meta']['sql']);
+        self::assertSame('weline_remembered_device_credential', $span['meta']['table']);
+        self::assertStringNotContainsString($digest, (string)json_encode($span));
+    }
+
     /**
      * @param array<int, array<string, mixed>> $spans
      */

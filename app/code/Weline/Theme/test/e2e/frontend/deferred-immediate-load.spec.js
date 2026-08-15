@@ -1,7 +1,6 @@
 // @weline-e2e-runtime fallback
 // app/code/Weline/Theme/test/e2e/frontend/deferred-immediate-load.spec.js
-// 冒烟：主题预览页包含 theme.js 与带 data-load-order="last" 的声明脚本（与 theme.js 延迟加载约定一致）。
-// Weline.declare 行为以 Weline/Theme/test/Unit/DeferredImmediateLoadTest.js 为准；当前环境下预览页未必挂载 window.Weline（见 theme-override 仅校验 SSR/资源）。
+// 冒烟：主题预览页包含 Theme 运行时。业务模块是否注册延迟脚本不属于 Theme 的契约。
 // @weline-e2e-transport direct
 
 const {
@@ -37,7 +36,7 @@ async function openLiveHomePreview(page) {
 test.describe('Deferred immediate load (preview DOM smoke)', () => {
   test.describe.configure({ retries: 1, timeout: 120000 });
 
-  test('live preview exposes theme.js and at least one data-load-order="last" script', async ({ page }) => {
+  test('live preview exposes the Theme runtime without a server error', async ({ page }) => {
     await openLiveHomePreview(page);
 
     await expect(page.locator('html')).toHaveAttribute('data-theme', /.+/);
@@ -45,15 +44,6 @@ test.describe('Deferred immediate load (preview DOM smoke)', () => {
 
     const themeJsScripts = page.locator('script[src*="theme.js"]');
     await expect(themeJsScripts.first()).toBeAttached({ timeout: 30000 });
-
-    const deferredScripts = page.locator('script[data-load-order="last"]');
-    await expect(deferredScripts.first()).toBeAttached({ timeout: 30000 });
-
-    const searchDeferredOk = await page.evaluate(() => Array.from(document.querySelectorAll('script[data-load-order="last"]')).some((el) => {
-      const t = el.textContent || '';
-      return t.includes('search') && (t.includes('declare') || t.includes('WeShop_Search'));
-    }));
-    expect(searchDeferredOk).toBeTruthy();
 
     const body = page.locator('body');
     await expect(body).toBeVisible();

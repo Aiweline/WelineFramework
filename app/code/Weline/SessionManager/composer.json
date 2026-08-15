@@ -26,6 +26,9 @@
         }
     },
     "require": {
+        "weline/framework": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-customer": "@dev",
         "php": "^8.4",
         "ext-iconv": "*",
         "ext-json": "*",

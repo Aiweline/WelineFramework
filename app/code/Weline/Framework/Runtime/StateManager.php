@@ -362,6 +362,23 @@ class StateManager
             }
         }
 
+        // A reset callback or an object destructor may legitimately touch the
+        // database after the ordinary db_connection_cleanup callback ran.
+        // Close the current request/Fiber owner once more at the true request
+        // boundary so a completed Fiber cannot strand a pool slot forever.
+        $databaseCleanupOmitted = $omitCallbackNames !== null
+            && \in_array('db_connection_cleanup', $omitCallbackNames, true);
+        if (
+            !$databaseCleanupOmitted
+            && \class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class, false)
+        ) {
+            try {
+                \Weline\Framework\Database\Connection\Pool\ConnectionPool::requestEndCleanup();
+            } catch (\Throwable $e) {
+                RequestResetException::append($failures, 'database_owner_boundary', $e);
+            }
+        }
+
         if ($failures !== []) {
             throw new RequestResetException('state_manager', $failures);
         }
@@ -809,16 +826,6 @@ class StateManager
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Router\Core::class);
         });
         
-        // ========== 6. 数据库连接事务清理 ==========
-        // FPM 下进程结束时未提交的事务由数据库自动回滚。
-        // WLS 下连接池跨请求复用，必须在请求结束时手动回滚残留事务并归还连接。
-        
-        self::registerResetCallback('db_connection_cleanup', function () {
-            if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class, false)) {
-                \Weline\Framework\Database\Connection\Pool\ConnectionPool::requestEndCleanup();
-            }
-        });
-        
         // ========== 7. 维护模式缓存 ==========
         // 每个请求都应检查最新的维护状态，不依赖进程级缓存。
         
@@ -926,7 +933,18 @@ class StateManager
             }
         });
 
-        // 必须是最后一个核心回调：上面的 Template/模块/会话清理仍需要当前 request scope id。
+        // ========== 25. 数据库 owner 终端清理 ==========
+        // 模块 resetter、Session 清理及对象析构均可能仍需访问数据库；只有它们全部完成后
+        // 才能回滚并归还当前请求/Fiber owner 的物理连接。此回调仍位于 RequestContext
+        // 销毁之前；StateManager::reset() 在整个
+        // callback 表结束后还会执行一次幂等终端清理，覆盖随后注册的扩展回调。
+        self::registerResetCallback('db_connection_cleanup', function () {
+            if (\class_exists(\Weline\Framework\Database\Connection\Pool\ConnectionPool::class, false)) {
+                \Weline\Framework\Database\Connection\Pool\ConnectionPool::requestEndCleanup();
+            }
+        });
+
+        // 必须是最后一个核心回调：上面的 Template/模块/会话/数据库清理仍需要当前 request scope id。
         self::registerResetCallback('request_context', function () {
             RequestContext::cleanup();
         });

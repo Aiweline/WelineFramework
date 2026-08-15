@@ -128,6 +128,16 @@ final class ProductAdminMutationService
         ]);
     }
 
+    public function updateProductSku(int $websiteId, int $productId, string $sku): void
+    {
+        $this->assertWebsiteId($websiteId);
+        if ($productId <= 0) {
+            throw new \InvalidArgumentException(__('product_id 不能小于等于 0'));
+        }
+
+        $this->products->updateSku($websiteId, $productId, $sku);
+    }
+
     private function requireIdentity(string $sku): ProductIdentity
     {
         $sku = $this->skuRegistry->normalizeSku($sku);

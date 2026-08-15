@@ -55,6 +55,8 @@ class MigrationBackup extends Model implements ModelInterface
     public const TYPE_CONSTRAINT = 'constraint';
     public const TYPE_CHUNK = 'chunk';
     public const TYPE_CONFLICT = 'conflict';
+    public const TYPE_OPERATION = 'operation';
+    public const TYPE_VIEW = 'view';
 
     public const RETENTION_PROTECTED = 'protected';
     public const RETENTION_EXPIRING = 'expiring';
@@ -184,16 +186,35 @@ class MigrationBackup extends Model implements ModelInterface
         if (!$backup->getId()) {
             return false;
         }
-        $backup->addData([
+        $expectedIdentity = [
+            self::schema_fields_ID => (int)$backup->getData(self::schema_fields_ID),
+            self::schema_fields_MIGRATION_ID => (int)$backup->getData(self::schema_fields_MIGRATION_ID),
+            self::schema_fields_TABLE_NAME => (string)$backup->getData(self::schema_fields_TABLE_NAME),
+            self::schema_fields_BACKUP_TYPE => (string)$backup->getData(self::schema_fields_BACKUP_TYPE),
+            self::schema_fields_BACKUP_SCOPE => (string)$backup->getData(self::schema_fields_BACKUP_SCOPE),
+            self::schema_fields_OPERATION_ID => (string)$backup->getData(self::schema_fields_OPERATION_ID),
+        ];
+        $restoredAt = date('Y-m-d H:i:s');
+        $retainUntil = date('Y-m-d H:i:s', time() + max(1, $retentionDays) * 86400);
+        $saved = $backup->addData([
             self::schema_fields_RETENTION_STATE => self::RETENTION_EXPIRING,
-            self::schema_fields_RESTORED_AT => date('Y-m-d H:i:s'),
-            self::schema_fields_RETAIN_UNTIL => date('Y-m-d H:i:s', time() + max(1, $retentionDays) * 86400),
+            self::schema_fields_RESTORED_AT => $restoredAt,
+            self::schema_fields_RETAIN_UNTIL => $retainUntil,
         ])->save();
+        if ($saved === false || $saved === 0) {
+            return false;
+        }
 
-        return (clone $this)->reset()
-            ->where(self::schema_fields_ID, $backupId)
-            ->where(self::schema_fields_RETENTION_STATE, self::RETENTION_EXPIRING)
-            ->total() === 1;
+        $verification = (clone $this)->reset();
+        $verification->where(self::schema_fields_ID, $backupId)->find()->fetch();
+        foreach ($expectedIdentity as $field => $expected) {
+            if ((string)$verification->getData($field) !== (string)$expected) {
+                return false;
+            }
+        }
+        return $verification->getData(self::schema_fields_RETENTION_STATE) === self::RETENTION_EXPIRING
+            && (string)$verification->getData(self::schema_fields_RESTORED_AT) === $restoredAt
+            && (string)$verification->getData(self::schema_fields_RETAIN_UNTIL) === $retainUntil;
     }
 
     public function getBackupDataSize(int $migrationId): int

@@ -199,6 +199,7 @@ ID,ID
 受管计划任务失败，任务未提供错误摘要。,"The managed scheduled task failed without an error summary."
 等待受管计划任务时丢失状态围栏：%{1},"Lost the managed scheduled-task state fence while waiting: %{1}"
 """Cron 查询器不支持的操作：%{1}""","Unsupported Cron query operation: %{1}"
+系统定时任务名称无效：%{1},"System scheduled task name is invalid: %{1}"
 后台手动运行对应的任务记录已不存在。,"The task record for this manual background run no longer exists."
 后台手动运行代次已被替换，停止转发旧代次日志：%{1},"The manual background generation was replaced; stopped forwarding the old generation log: %{1}"
 后台手动运行失败，任务未提供错误摘要。,"The manual background run failed without an error summary."

@@ -2,11 +2,11 @@
 
 return [
     "name" => 'Weline_Admin',
-    "version" => '1.0.1',
+    "version" => '1.0.3',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',
-        'Weline_Framework' => '*',
+        'Weline_Framework' => '^2.4',
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [

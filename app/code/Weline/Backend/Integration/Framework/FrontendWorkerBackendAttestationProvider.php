@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Backend\Integration\Framework;
 
 use Weline\Backend\Model\BackendUser;
+use Weline\Backend\Service\BackendAttestedSessionCookieResolver;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FrontendWorkerBackendAttestationException;
 use Weline\Framework\Runtime\FrontendWorkerBackendAttestationProviderInterface;
@@ -22,6 +23,11 @@ final class FrontendWorkerBackendAttestationProvider implements FrontendWorkerBa
     // SSE_TRANSPORT_REOPENING while the detached runner keeps working.
     private const BINDING_TTL = 7200;
     private const SLIDE_WHEN_REMAINING_SECONDS = 900;
+
+    public function __construct(
+        private readonly BackendAttestedSessionCookieResolver $sessionCookieResolver,
+    ) {
+    }
 
     public function issueBinding(
         string $authorityHost,
@@ -58,7 +64,7 @@ final class FrontendWorkerBackendAttestationProvider implements FrontendWorkerBa
             throw $this->invalid();
         }
 
-        $identity = $this->currentIdentity();
+        $identity = $this->currentIdentity($binding->sessionFingerprint);
         if ($identity === null
             || $identity['user_id'] !== $binding->backendUserId
             || !\hash_equals($identity['session_fingerprint'], $binding->sessionFingerprint)) {
@@ -82,9 +88,23 @@ final class FrontendWorkerBackendAttestationProvider implements FrontendWorkerBa
     }
 
     /** @return array{user_id:int,session_fingerprint:string}|null */
-    private function currentIdentity(): ?array
+    private function currentIdentity(?string $expectedSessionFingerprint = null): ?array
     {
-        $session = SessionFactory::getInstance()->createBackendSession();
+        if ($expectedSessionFingerprint === null) {
+            $session = SessionFactory::getInstance()->createBackendSession();
+        } else {
+            $sessionId = $this->sessionCookieResolver->resolve($expectedSessionFingerprint);
+            if ($sessionId === null) {
+                return null;
+            }
+            // The Query endpoint may already be inside a storefront Website
+            // cookie scope. Install the exact attested backend Session into the
+            // request factory so authorization and the provider share identity.
+            $session = SessionFactory::getInstance()->restoreAuthenticatedSession(
+                'backend',
+                $sessionId,
+            );
+        }
         if (!$session->isLoggedIn()) {
             return null;
         }

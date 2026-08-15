@@ -704,7 +704,13 @@ final class GatewayProtocolReceiptContractTest extends TestCase
         self::assertStringContainsString('wls_prepare_nginx_test_candidate(', $action);
         self::assertStringContainsString('wls_restore_nginx_test_candidate(', $action);
         self::assertStringContainsString('wls_nginx_test_context_binding_same(', $action);
-        self::assertStringContainsString('&before.action, "TEST"', $action);
+        self::assertStringContainsString(
+            "test_spawn_status = wls_nginx_spawn_wait(\n"
+                . "            &before.action,\n"
+                . "            \"TEST\",\n"
+                . '            pid_source_config,',
+            $action,
+        );
         self::assertStringContainsString('candidate_granted = 0;', $action);
         self::assertStringContainsString('NGINX_TEST_FAILED', $action);
         self::assertStringContainsString('WLS-NGINX-TEST-RESTORE-FAILED/1', $source);
@@ -773,8 +779,19 @@ final class GatewayProtocolReceiptContractTest extends TestCase
         self::assertIsInt($start);
         self::assertIsInt($end);
         $lifecycle = \substr($source, $start, $end - $start);
-        $test = \strpos($lifecycle, '&before, "TEST", NULL, 0U, deadline');
-        $same = \strpos($lifecycle, 'wls_nginx_action_context_same(&before, &after)', $test ?: 0);
+        $testCall = "test_spawn_status = wls_nginx_spawn_wait(\n"
+            . "            &before,\n"
+            . "            \"TEST\",\n"
+            . '            test_pid_source_config,';
+        $test = \strpos(
+            $lifecycle,
+            $testCall,
+        );
+        $same = \strpos(
+            $lifecycle,
+            'wls_nginx_action_context_same(&before, &after)',
+            $test ?: 0,
+        );
         $reload = \strpos(
             $lifecycle,
             'reload ? "RELOAD" : "START"',

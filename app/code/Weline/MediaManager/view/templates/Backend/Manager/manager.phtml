@@ -1,6 +1,6 @@
 <notempty name="is_iframe">
 <css>Weline_MediaManager::css/backend-theme-vars.css</css>
-<script>(function(){var d=document.documentElement;d.setAttribute('data-theme','backend');d.setAttribute('data-theme-mode','{{$theme_mode|default:"light"}}');})();</script>
+<script>(function(){var d=document.documentElement,p='{{$theme_preference|default:"system"}}';if(['system','light','dark'].indexOf(p)<0)p='system';var q=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var applyFallback=function(){var m=p==='dark'||(p==='system'&&q&&q.matches)?'dark':'light';d.setAttribute('data-theme-area','backend');d.setAttribute('data-theme-preference',p);d.setAttribute('data-theme',m);d.setAttribute('data-bs-theme',m);d.setAttribute('data-theme-mode',m);d.setAttribute('data-layout-mode',m);d.style.colorScheme=m;};applyFallback();document.addEventListener('DOMContentLoaded',function(){var runtime=window.__WelineBackendThemeRuntime;if(runtime&&typeof runtime.apply==='function'){runtime.apply(p);return;}if(p==='system'&&q){if(q.addEventListener)q.addEventListener('change',applyFallback);else if(q.addListener)q.addListener(applyFallback);}}, {once:true});})();</script>
 </notempty>
 <css>Weline_MediaManager::css/manager.css</css>
 <js>Weline_MediaManager::js/manager.js</js>
@@ -299,6 +299,7 @@
             size: parseInt('{{$size|default:"102400"}}') || 102400,
             lockPath: '{{$lock_path|default:"0"}}' === '1' || '{{$lock_path|default:"0"}}' === 'true',
             initialValue: '{{$initial_value|default:""}}',
+            themePreference: '{{$theme_preference|default:"system"}}',
             themeMode: '{{$theme_mode|default:"light"}}',
             i18n: {
                 connectorNotConfigured: '@lang{连接器URL未配置，请刷新页面}',

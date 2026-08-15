@@ -303,8 +303,9 @@ final class RollbackBackupFixture20260713V110 extends AbstractMigration implemen
     {
         $table = (string)getenv('WELINE_TEST_ROLLBACK_TABLE');
         $connector = $this->connectionFactory->getConnector();
+        $physicalTable = $connector->formatTableName($table);
         if (!$connector->hasField($table, 'rollback_value')) {
-            $connector->query($connector->buildAlterAddColumnSql($table, [
+            $connector->query($connector->buildAlterAddColumnSql($physicalTable, [
                 'name' => 'rollback_value',
                 'type' => 'varchar',
                 'length' => 255,
@@ -323,8 +324,9 @@ final class RollbackBackupFixture20260713V110 extends AbstractMigration implemen
     {
         $table = (string)getenv('WELINE_TEST_ROLLBACK_TABLE');
         $connector = $this->connectionFactory->getConnector();
+        $physicalTable = $connector->formatTableName($table);
         if ($connector->hasField($table, 'rollback_value')) {
-            $connector->query($connector->buildAlterDropColumnSql($table, 'rollback_value'))->fetch();
+            $connector->query($connector->buildAlterDropColumnSql($physicalTable, 'rollback_value'))->fetch();
         }
         return true;
     }

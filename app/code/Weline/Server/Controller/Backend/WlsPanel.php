@@ -10,6 +10,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Server\Service\WlsPanelDashboardDataService;
+use Weline\Server\Service\WlsPanelLifecycleService;
 use Weline\Server\Service\WlsPanelPluginDiscoveryService;
 use Weline\Server\Service\WlsPanelPluginRefreshService;
 use Weline\Server\Service\WlsPanelProjectConfigCenterService;
@@ -32,6 +33,39 @@ class WlsPanel extends BackendController
     public function getProjects(): string
     {
         return $this->renderPanel('projects', (string)__('WLS 项目'));
+    }
+
+    #[Acl('Weline_Server::wls_panel_lifecycle_status', '查看 WLS 项目运行状态', 'mdi-heart-pulse', '查看项目 WLS 实例和 Ready 状态', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_READ)]
+    public function getLifecycleStatus(): string
+    {
+        /** @var WlsPanelLifecycleService $lifecycleService */
+        $lifecycleService = ObjectManager::getInstance(WlsPanelLifecycleService::class);
+        return $this->fetchJson(
+            $lifecycleService->status((string)$this->request->getGet('project_key', ''))
+        );
+    }
+
+    #[Acl('Weline_Server::wls_panel_lifecycle_reload', '重载 WLS 项目', 'mdi-refresh', '滚动重载项目 WLS 工作进程', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_EDIT)]
+    public function postLifecycleReload(): string
+    {
+        /** @var WlsPanelLifecycleService $lifecycleService */
+        $lifecycleService = ObjectManager::getInstance(WlsPanelLifecycleService::class);
+        return $this->fetchJson(
+            $lifecycleService->reload((string)$this->request->getPost('project_key', ''))
+        );
+    }
+
+    #[Acl('Weline_Server::wls_panel_lifecycle_restart', '重启 WLS 项目', 'mdi-restart-alert', '保持 Master 在线并重建项目全部 WLS 工作进程', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_EDIT)]
+    public function postLifecycleRestart(): string
+    {
+        /** @var WlsPanelLifecycleService $lifecycleService */
+        $lifecycleService = ObjectManager::getInstance(WlsPanelLifecycleService::class);
+        return $this->fetchJson(
+            $lifecycleService->restart(
+                (string)$this->request->getPost('project_key', ''),
+                (string)$this->request->getPost('confirm_project', '')
+            )
+        );
     }
 
     #[Acl('Weline_Server::wls_panel_gateway', '查看 WLS 面板网关', 'mdi-router-network', '查看 WLS 面板网关', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
@@ -222,12 +256,15 @@ class WlsPanel extends BackendController
         $projectRegistry = ObjectManager::getInstance(WlsPanelProjectRegistryService::class);
         /** @var WlsPanelSecurityDataService $securityDataService */
         $securityDataService = ObjectManager::getInstance(WlsPanelSecurityDataService::class);
+        /** @var WlsPanelLifecycleService $lifecycleService */
+        $lifecycleService = ObjectManager::getInstance(WlsPanelLifecycleService::class);
         $panelDashboardData = $dashboardDataService->getDashboardData();
         $panelProjects = \is_array($panelDashboardData['projects'] ?? null) ? $panelDashboardData['projects'] : [];
 
         $this->assign('activePage', $activePage);
         $this->assign('title', $title);
         $this->assign('panelDashboardData', $panelDashboardData);
+        $this->assign('panelLifecycleTargets', $lifecycleService->getTargets($panelProjects));
         $this->assign(
             'panelSecurityData',
             $securityDataService->getSecurityDataFromFilters([

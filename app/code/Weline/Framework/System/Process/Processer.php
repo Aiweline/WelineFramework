@@ -6075,7 +6075,10 @@ PHP;
                 $results,
                 $timingStartedAtNanoseconds,
                 $timings,
-                self::resolveWindowsBatchCreateHelperParallelism(\count($batchLaunchItems))
+                self::resolveWindowsBatchCreateHelperParallelism(
+                    \count($batchLaunchItems),
+                    true,
+                )
             );
         }
 
@@ -6086,7 +6089,10 @@ PHP;
                 $results,
                 $timingStartedAtNanoseconds,
                 $timings,
-                self::resolveWindowsBatchCreateHelperParallelism(\count($batchLaunchItems))
+                self::resolveWindowsBatchCreateHelperParallelism(
+                    \count($batchLaunchItems),
+                    false,
+                )
             );
         }
 
@@ -6437,7 +6443,17 @@ PHP;
     ): array {
         $timingStartedAtNanoseconds ??= \hrtime(true);
         $itemCount = \count($batchLaunchItems);
-        $resultBudgetSeconds = self::resolveWindowsBatchCreateNonBlockingResultRowTimeout($itemCount);
+        $batchRequiresHandleIsolation = false;
+        foreach ($batchLaunchItems as $item) {
+            $batchRequiresHandleIsolation = $batchRequiresHandleIsolation
+                || (bool)($item['isolate_parent_handles'] ?? false);
+        }
+        $emulatedRuntimeProfile = self::windowsBatchEmulatedRuntimeProfileActive();
+        $resultBudgetSeconds = self::resolveWindowsBatchCreateNonBlockingResultRowTimeout(
+            $itemCount,
+            $batchRequiresHandleIsolation,
+            $emulatedRuntimeProfile,
+        );
         $parallelism ??= self::resolveWindowsBatchCreateHelperParallelism($itemCount);
         $parallelism = \min(\max(1, $itemCount), \max(1, \min(8, $parallelism)));
         $groups = \array_fill(0, $parallelism, []);
@@ -6543,15 +6559,33 @@ PHP;
         $timings['result'] = self::monotonicElapsedSeconds($phaseStartedAtNanoseconds);
 
         $phaseStartedAtNanoseconds = \hrtime(true);
-        $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution($batchLaunchItems, $pidMap, false);
-        $pidResolutionTimeout = self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(\count($pidResolutionItems));
+        $topologyRootPidMap = self::windowsBatchTopologyRootPidMap($helpers);
+        $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution(
+            $batchLaunchItems,
+            $pidMap,
+            false,
+            $batchRequiresHandleIsolation && $emulatedRuntimeProfile,
+            $topologyRootPidMap,
+        );
+        $pidResolutionTimeout = \max(
+            self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(
+                \count($pidResolutionItems),
+                $batchRequiresHandleIsolation,
+                $emulatedRuntimeProfile,
+            ),
+            self::resolveWindowsBatchCreateChildOwnedPidResolutionTimeout($pidResolutionItems),
+        );
         // Result-row waiting and managed-process adoption are two different
         // recovery paths. On Windows/UNC, PowerShell may start children and then
         // fail to flush result rows before the row deadline; still give the
         // process-name/launch-id registry path its own short budget so WLS does
         // not report live dispatcher/workers as pid=0.
         $resolvedPidMap = $pidResolutionTimeout > 0.0
-            ? self::waitForManagedProcessLaunchBatch($pidResolutionItems, $pidResolutionTimeout)
+            ? self::waitForManagedProcessLaunchBatch(
+                $pidResolutionItems,
+                $pidResolutionTimeout,
+                $batchRequiresHandleIsolation && $emulatedRuntimeProfile,
+            )
             : [];
 
         foreach ($helpers as $helper) {
@@ -6559,7 +6593,11 @@ PHP;
             $rememberLaunchItems = [];
             foreach ($helper['launch_items'] as $item) {
                 $key = (string) ($item['key'] ?? '');
-                $pid = (int) ($pidMap[$key] ?? $resolvedPidMap[$key] ?? 0);
+                $pid = self::selectWindowsBatchCreatePid(
+                    $item,
+                    (int)($pidMap[$key] ?? 0),
+                    (int)($resolvedPidMap[$key] ?? 0),
+                );
                 $results[$key] = self::recordWindowsBatchCreatePid($item, $pid);
                 $item['launcher_pid_recorded'] = !(bool) ($item['child_owns_pid'] ?? false)
                     && (int) $results[$key] > 0;
@@ -6596,7 +6634,8 @@ PHP;
                     (bool)($helper['isolate_parent_handles'] ?? false),
                     (string)($helper['isolated_batch_id'] ?? ''),
                     (int)($helper['isolated_broker_pid'] ?? 0),
-                    (string)($helper['isolated_submission_state'] ?? 'not_required')
+                    (string)($helper['isolated_submission_state'] ?? 'not_required'),
+                    (string)($helper['submitter_script_path'] ?? '')
                 );
             }
         }
@@ -6689,6 +6728,39 @@ PHP;
             return ['helper' => null, 'reason' => 'PowerShell script write failed'];
         }
 
+        $submitterScriptPath = '';
+        $helperCommand = self::buildWindowsPowerShellProcOpenCommand($scriptPath);
+        $helperLabel = 'PowerShell';
+        if ($isolateParentHandles) {
+            $workingDirectory = self::resolveWindowsHelperWorkingDirectory();
+            if ($workingDirectory === null) {
+                @\unlink($scriptPath);
+                @\unlink($resultPath);
+                @\unlink($errorPath);
+                @\unlink($stdoutPath);
+                @\unlink($submissionPath);
+
+                return ['helper' => null, 'reason' => 'isolated helper working directory unavailable'];
+            }
+            $submitterScriptPath = (string)(self::writeWindowsWmiBatchSubmitterScript(
+                $scriptPath,
+                $isolatedBatchId,
+                $submissionPath,
+                $workingDirectory,
+            ) ?? '');
+            if ($submitterScriptPath === '') {
+                @\unlink($scriptPath);
+                @\unlink($resultPath);
+                @\unlink($errorPath);
+                @\unlink($stdoutPath);
+                @\unlink($submissionPath);
+
+                return ['helper' => null, 'reason' => 'WMI submitter script write failed'];
+            }
+            $helperCommand = self::buildWindowsCscriptProcOpenCommand($submitterScriptPath);
+            $helperLabel = 'cscript WMI submitter';
+        }
+
         $lastError = null;
         \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
             $lastError = $msg;
@@ -6697,7 +6769,7 @@ PHP;
         });
         try {
             $psProcess = @\proc_open(
-                self::buildWindowsPowerShellProcOpenCommand($scriptPath),
+                $helperCommand,
                 [
                     0 => ['pipe', 'r'],
                     // PowerShell can emit progress/CLIXML on startup. NUL is
@@ -6725,13 +6797,16 @@ PHP;
             @\unlink($resultPath);
             @\unlink($errorPath);
             @\unlink($stdoutPath);
+            if ($submitterScriptPath !== '') {
+                @\unlink($submitterScriptPath);
+            }
             if ($submissionPath !== '') {
                 @\unlink($submissionPath);
             }
 
             return [
                 'helper' => null,
-                'reason' => 'proc_open PowerShell helper failed'
+                'reason' => 'proc_open ' . $helperLabel . ' failed'
                     . ($lastError !== null ? ': ' . $lastError : ''),
             ];
         }
@@ -6749,6 +6824,9 @@ PHP;
             );
             $status = @\proc_get_status($psProcess);
             self::finishWindowsDetachedHelperProcess($psProcess, $status);
+            if ($submitterScriptPath !== '' && @\unlink($submitterScriptPath)) {
+                $submitterScriptPath = '';
+            }
 
             // Re-read both durable channels after the submitter is closed, then
             // converge by unique batch identity before classifying ambiguity.
@@ -6761,9 +6839,11 @@ PHP;
             ) {
                 $submission = $afterClose;
             }
-            $resolvedBrokerPid = self::findWindowsIsolatedBatchBrokerPid($isolatedBatchId, $scriptPath);
-            if ($resolvedBrokerPid > 0) {
-                $submission = ['state' => 'committed', 'broker_pid' => $resolvedBrokerPid];
+            if (self::windowsIsolatedBatchSubmissionNeedsBrokerLookup($submission)) {
+                $resolvedBrokerPid = self::findWindowsIsolatedBatchBrokerPid($isolatedBatchId, $scriptPath);
+                if ($resolvedBrokerPid > 0) {
+                    $submission = ['state' => 'committed', 'broker_pid' => $resolvedBrokerPid];
+                }
             }
 
             $isolatedSubmissionState = (string)($submission['state'] ?? 'ambiguous');
@@ -6787,9 +6867,51 @@ PHP;
                 'isolated_batch_id' => $isolatedBatchId,
                 'isolated_broker_pid' => $isolatedBrokerPid,
                 'isolated_submission_state' => $isolatedSubmissionState,
+                'submitter_script_path' => $submitterScriptPath,
             ],
             'reason' => '',
         ];
+    }
+
+    /** @param array{state?:string,broker_pid?:int} $submission */
+    private static function windowsIsolatedBatchSubmissionNeedsBrokerLookup(array $submission): bool
+    {
+        return !\hash_equals('committed', (string)($submission['state'] ?? ''))
+            || (int)($submission['broker_pid'] ?? 0) <= 0;
+    }
+
+    /**
+     * Bind every launch item to the exact isolated broker whose durable
+     * submission acknowledgement committed that helper. The short-lived
+     * Start-Process PID remains discovery evidence; the committed broker is
+     * the stable topology authority on Windows ARM64 x64 emulation.
+     *
+     * @param array<int, array<string,mixed>> $helpers
+     * @return array<string,int>
+     */
+    private static function windowsBatchTopologyRootPidMap(array $helpers): array
+    {
+        $roots = [];
+        foreach ($helpers as $helper) {
+            if (!\hash_equals(
+                'committed',
+                (string)($helper['isolated_submission_state'] ?? ''),
+            )) {
+                continue;
+            }
+            $brokerPid = (int)($helper['isolated_broker_pid'] ?? 0);
+            if ($brokerPid <= 0) {
+                continue;
+            }
+            foreach ((array)($helper['launch_items'] ?? []) as $item) {
+                $key = \trim((string)($item['key'] ?? ''));
+                if ($key !== '') {
+                    $roots[$key] = $brokerPid;
+                }
+            }
+        }
+
+        return $roots;
     }
 
     /**
@@ -7293,8 +7415,22 @@ CDEF,
         \error_log('[Processer] batchCreateWindows unavailable: ' . $reason . ($logged ? '' : ' (no command log target)'));
     }
 
-    private static function resolveWindowsBatchCreateHelperParallelism(int $itemCount): int
-    {
+    private static function resolveWindowsBatchCreateHelperParallelism(
+        int $itemCount,
+        bool $isolateParentHandles = false,
+        ?bool $emulatedRuntimeProfile = null,
+    ): int {
+        $emulatedRuntimeProfile ??= self::windowsBatchEmulatedRuntimeProfileActive();
+        if ($isolateParentHandles && $emulatedRuntimeProfile) {
+            // Every isolated lane requires its own synchronous WMI broker
+            // commit before PID adoption can begin. On Windows ARM64 running
+            // x64 PHP, opening several lanes serially can consume the first
+            // child's entire authorization window. One broker still launches
+            // the batch asynchronously, but exposes every Start-Process root
+            // before the shared exact-topology scan starts.
+            return 1;
+        }
+
         $configured = Env::get('system.processer.windows_batch_create_helper_parallelism', null);
         if (\is_numeric($configured) && (int)$configured > 0) {
             return \min(\max(1, $itemCount), \max(1, \min(8, (int)$configured)));
@@ -7368,7 +7504,7 @@ CDEF,
      * WLS startup still needs a short best-effort PID pass, otherwise every
      * child returns 0 and upper layers fall into slow recovery/adoption paths.
      *
-     * @param array<int, array{key: string, block?: bool}> $launchItems
+     * @param array<int, array{key: string, block?: bool, child_owns_pid?: bool}> $launchItems
      * @param array<string, int> $pidMap
      * @return array<int, array<string, mixed>>
      */
@@ -7385,43 +7521,263 @@ CDEF,
     private static function collectLaunchItemsNeedingPidResolution(
         array $launchItems,
         array $pidMap,
-        bool $blockingOnly
+        bool $blockingOnly,
+        bool $allowNonChildOwnedTransition = false,
+        array $topologyRootPidMap = [],
     ): array
     {
-        return \array_values(\array_filter(
-            $launchItems,
-            static fn (array $item): bool => (!$blockingOnly || (bool) ($item['block'] ?? false))
-                && (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
-        ));
+        $pending = [];
+        foreach ($launchItems as $item) {
+            $key = (string)($item['key'] ?? '');
+            $launcherPid = (int)($pidMap[$key] ?? 0);
+            if (($blockingOnly && !(bool)($item['block'] ?? false))
+                || ($launcherPid > 0
+                    && !self::windowsBatchChildPidRequiresResolution($item)
+                    && (!$allowNonChildOwnedTransition
+                        || !self::windowsBatchTransitionPidRequiresResolution($item, true)))
+            ) {
+                continue;
+            }
+
+            // Start-Process is an OS-observed discovery root, never the final
+            // child authority on the emulated transition path.
+            $item['launcher_pid'] = $launcherPid;
+            $item['topology_root_pid'] = (int)($topologyRootPidMap[$key] ?? 0);
+            $pending[] = $item;
+        }
+
+        return $pending;
     }
 
-    private static function resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(int $pendingCount): float
+    /** @param array{command?:string,child_owns_pid?:bool} $item */
+    private static function windowsBatchChildPidRequiresResolution(array $item): bool
     {
+        return self::windowsBatchTransitionPidRequiresResolution($item, false);
+    }
+
+    /** @param array{command?:string,child_owns_pid?:bool} $item */
+    private static function windowsBatchTransitionPidRequiresResolution(
+        array $item,
+        bool $allowNonChildOwned,
+    ): bool {
+        if (!$allowNonChildOwned && !(bool)($item['child_owns_pid'] ?? false)) {
+            return false;
+        }
+
+        $command = (string)($item['command'] ?? '');
+        $launchId = self::extractCommandLineArg($command, 'launch-id');
+        if ($launchId === '') {
+            return false;
+        }
+        if (self::extractCommandLineArg($command, 'slot-id') !== ''
+            && self::extractCommandLineArg($command, 'lease-id') !== ''
+        ) {
+            return true;
+        }
+
+        // The detached Master predates the slot/lease child protocol. Its
+        // exact argv still carries a random launch identity and a unique
+        // instance/name tuple, so it must participate in the same committed
+        // WMI-broker topology resolution instead of trusting a late result row.
+        return self::windowsBatchExactMasterArgvIdentity($item) !== null;
+    }
+
+    /**
+     * @param array<string,mixed> $item
+     * @return array{instance:string,name:string,launch_id:string,script:string}|null
+     */
+    private static function windowsBatchExactMasterArgvIdentity(array $item): ?array
+    {
+        $arguments = $item['argument_list'] ?? null;
+        if (!(bool)($item['exact_argv'] ?? false)
+            || !\is_array($arguments)
+            || !\array_is_list($arguments)
+        ) {
+            return null;
+        }
+
+        $tokens = \array_values(\array_map('strval', $arguments));
+        $startIndex = \array_search('server:start', $tokens, true);
+        if (!\is_int($startIndex)
+            || $startIndex < 1
+            || !isset($tokens[$startIndex + 1])
+            || \str_starts_with($tokens[$startIndex + 1], '--')
+            || !\in_array('--master-only', $tokens, true)
+        ) {
+            return null;
+        }
+
+        $name = '';
+        $launchId = '';
+        foreach ($tokens as $token) {
+            if (\str_starts_with($token, '--name=')) {
+                if ($name !== '') {
+                    return null;
+                }
+                $name = \substr($token, \strlen('--name='));
+            } elseif (\str_starts_with($token, '--launch-id=')) {
+                if ($launchId !== '') {
+                    return null;
+                }
+                $launchId = \substr($token, \strlen('--launch-id='));
+            }
+        }
+
+        $expectedName = \trim((string)($item['process_name'] ?? ''));
+        $expectedLaunchId = \trim(self::extractCommandLineArg(
+            (string)($item['command'] ?? ''),
+            'launch-id',
+        ));
+        if ($name === ''
+            || $launchId === ''
+            || $expectedName === ''
+            || $expectedLaunchId === ''
+            || !\hash_equals($expectedName, $name)
+            || !\hash_equals($expectedLaunchId, $launchId)
+            || \preg_match('/^[a-f0-9]{32}$/D', $launchId) !== 1
+        ) {
+            return null;
+        }
+
+        return [
+            'instance' => $tokens[$startIndex + 1],
+            'name' => $name,
+            'launch_id' => $launchId,
+            'script' => $tokens[$startIndex - 1],
+        ];
+    }
+
+    private static function windowsBatchEmulatedRuntimeProfileActive(
+        ?array $detectedProfile = null,
+    ): bool {
+        $detectedProfile ??= \Weline\Framework\Console\PhpCliRuntimePreflight::inspect();
+
+        return !empty($detectedProfile['requires_jit_isolation'])
+            && \hash_equals(
+                \Weline\Framework\Console\PhpCliRuntimePreflight::PROFILE,
+                \trim((string)($detectedProfile['profile'] ?? '')),
+            );
+    }
+
+    /**
+     * A child-owned PID row is only the Start-Process observation. Windows on
+     * ARM64 may replace that x64 emulation process with a second process which
+     * has the same argv but a different PID. The child lease is therefore the
+     * only authoritative PID and receives a bounded registration budget.
+     *
+     * @param array<int, array{child_owns_pid?: bool}> $pendingItems
+     */
+    private static function resolveWindowsBatchCreateChildOwnedPidResolutionTimeout(array $pendingItems): float
+    {
+        foreach ($pendingItems as $item) {
+            if (!(bool)($item['child_owns_pid'] ?? false)) {
+                continue;
+            }
+
+            $configured = (float)(Env::get(
+                'system.processer.windows_child_owned_pid_resolution_timeout_sec',
+                15,
+            ) ?? 15);
+
+            return \max(1.0, \min(60.0, $configured > 0.0 ? $configured : 15.0));
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * @param array{child_owns_pid?: bool} $item
+     */
+    private static function selectWindowsBatchCreatePid(array $item, int $launcherPid, int $registeredPid): int
+    {
+        if ($registeredPid > 0 && self::isRunningByPid($registeredPid)) {
+            return $registeredPid;
+        }
+
+        // The registered child identity wins whenever available. A still-live
+        // Start-Process PID remains a valid fallback on native Windows, while
+        // an exited ARM64 x64-emulation transition PID is never returned.
+        return $launcherPid > 0 && self::isRunningByPid($launcherPid) ? $launcherPid : 0;
+    }
+
+    private static function resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(
+        int $pendingCount,
+        bool $isolateParentHandles = false,
+        bool $emulatedRuntimeProfile = false,
+        ?float $configuredOverride = null,
+    ): float {
         if ($pendingCount <= 0) {
             return 0.0;
         }
 
-        $configured = (float) (Env::get('system.processer.windows_batch_create_nonblocking_pid_resolution_timeout_sec', 0) ?? 0);
+        $configured = $configuredOverride ?? (float) (Env::get(
+            'system.processer.windows_batch_create_nonblocking_pid_resolution_timeout_sec',
+            0,
+        ) ?? 0);
         if ($configured > 0.0) {
-            return \max(0.02, \min(1.0, $configured));
+            return $isolateParentHandles && $emulatedRuntimeProfile
+                ? \max(0.1, \min(60.0, $configured))
+                : \max(0.02, \min(1.0, $configured));
+        }
+        if ($isolateParentHandles && $emulatedRuntimeProfile) {
+            // Parent-PID constrained CIM observations are sub-second even on
+            // Windows ARM64 x64 emulation. Keep a bounded window for the
+            // durable execution leaf to appear without permitting a global
+            // process-table scan to define the startup budget.
+            return 8.0;
         }
 
         return \min(0.8, \max(0.15, 0.08 + ($pendingCount * 0.06)));
     }
 
-    private static function resolveWindowsBatchCreateNonBlockingResultRowTimeout(int $pendingCount): float
-    {
+    private static function resolveWindowsBatchCreateTransitionScanDelay(
+        float $timeoutSeconds,
+        bool $allowNonChildOwnedTransition,
+    ): float {
+        if ($allowNonChildOwnedTransition) {
+            // Windows ARM64 can expose the x64 Start-Process transition several
+            // seconds before its durable execution leaf. A single early CIM
+            // sample therefore observes a PID that has exited by commit time.
+            // Wait for that bounded transition to settle, then take one
+            // broker/launcher-parent constrained snapshot.
+            return \min(4.0, \max(1.0, $timeoutSeconds / 2.0));
+        }
+
+        return \min(7.0, \max(1.0, $timeoutSeconds / 2.0));
+    }
+
+    private static function resolveWindowsBatchCreateNonBlockingResultRowTimeout(
+        int $pendingCount,
+        bool $isolateParentHandles = false,
+        bool $emulatedRuntimeProfile = false,
+        ?float $configuredOverride = null,
+    ): float {
         if ($pendingCount <= 0) {
             return 0.0;
         }
 
-        $configured = (float) (Env::get('system.processer.windows_batch_create_nonblocking_result_timeout_sec', 0) ?? 0);
+        $configured = $configuredOverride ?? (float) (Env::get(
+            'system.processer.windows_batch_create_nonblocking_result_timeout_sec',
+            0,
+        ) ?? 0);
         if ($configured > 0.0) {
-            return \max(0.05, \min(8.0, $configured));
+            return $isolateParentHandles && $emulatedRuntimeProfile
+                ? \max(0.05, \min(30.0, $configured))
+                : \max(0.05, \min(8.0, $configured));
+        }
+        if ($isolateParentHandles && $emulatedRuntimeProfile) {
+            // One WMI-owned broker intentionally launches this batch in a
+            // single, isolated process. Windows 11 ARM64 may spend roughly
+            // four seconds in each x64 Start-Process transition, so the old
+            // sub-eight-second window discarded the authoritative launcher
+            // PIDs before a six-child WLS batch had been submitted. Keep the
+            // wait bounded, but long enough to collect every per-item row;
+            // those PIDs become exact topology roots for the later leaf scan.
+            return \min(30.0, \max(8.0, 2.0 + ($pendingCount * 4.0)));
         }
 
-        // Keep the default non-blocking path strictly sub-second. Slow shared
-        // folders can opt into a larger bounded value through the setting above.
+        // Keep the native default non-blocking path strictly sub-second. Slow
+        // native shared folders can opt into the existing bounded setting.
         return \min(0.6, \max(0.15, 0.08 + ($pendingCount * 0.06)));
     }
 
@@ -7808,7 +8164,11 @@ CDEF,
      * @param array<int, array{key: string, command: string, process_name: string}> $launchItems
      * @return array<string, int>
      */
-    private static function waitForManagedProcessLaunchBatch(array $launchItems, float $timeoutSeconds = 5.0): array
+    private static function waitForManagedProcessLaunchBatch(
+        array $launchItems,
+        float $timeoutSeconds = 5.0,
+        bool $allowNonChildOwnedTransition = false,
+    ): array
     {
         if ($launchItems === []) {
             return [];
@@ -7816,18 +8176,12 @@ CDEF,
 
         $pending = [];
         foreach ($launchItems as $item) {
-            $key = (string) ($item['key'] ?? '');
-            $command = (string) ($item['command'] ?? '');
-            $processName = (string) ($item['process_name'] ?? '');
-            if ($key === '' || $command === '' || $processName === '') {
+            $key = (string)($item['key'] ?? '');
+            $pendingItem = self::normalizeWindowsBatchPendingLaunchItem($item);
+            if ($key === '' || $pendingItem === null) {
                 continue;
             }
-
-            $pending[$key] = [
-                'command' => $command,
-                'process_name' => $processName,
-                'launch_id' => self::extractCommandLineArg($command, 'launch-id'),
-            ];
+            $pending[$key] = $pendingItem;
         }
 
         if ($pending === []) {
@@ -7839,22 +8193,55 @@ CDEF,
             'system.processer.windows_batch_create_pid_resolution_system_scan',
             '0'
         ))), ['1', 'true', 'yes', 'on'], true);
+        $startedAtNanoseconds = \hrtime(true);
         $deadlineNanoseconds = self::monotonicDeadlineFrom(
-            \hrtime(true),
+            $startedAtNanoseconds,
             \max(0.1, $timeoutSeconds),
         );
+        $exactScanNotBeforeNanoseconds = self::monotonicDeadlineFrom(
+            $startedAtNanoseconds,
+            self::resolveWindowsBatchCreateTransitionScanDelay(
+                $timeoutSeconds,
+                $allowNonChildOwnedTransition,
+            ),
+        );
+        $lastExactScanNanoseconds = 0;
         do {
             foreach ($pending as $key => $item) {
                 // Fast path: WLS children register their own exact managed
                 // identity. This is O(1) file/index lookup and avoids the very
                 // slow Windows command-line scan in the startup hot path.
-                $registeredPid = (int) self::getData($item['command'], 'pid');
-                if ($registeredPid > 0) {
+                $registeredRecord = self::getData($item['command']);
+                $registeredPid = (int)($registeredRecord['pid'] ?? 0);
+                if ($registeredPid > 0
+                    && self::windowsBatchRegisteredPidCanResolveLaunchItem($registeredRecord, $item)
+                    && self::isRunningByPid($registeredPid)
+                ) {
                     $resolved[$key] = $registeredPid;
                     unset($pending[$key]);
-                    continue;
                 }
+            }
 
+            $nowNanoseconds = \hrtime(true);
+            if ($pending !== []
+                && $nowNanoseconds >= $exactScanNotBeforeNanoseconds
+                && ($lastExactScanNanoseconds <= 0
+                    || ($nowNanoseconds - $lastExactScanNanoseconds) >= 2_000_000_000)
+            ) {
+                $lastExactScanNanoseconds = $nowNanoseconds;
+                foreach (self::findWindowsBatchTransitionPids(
+                    $pending,
+                    $allowNonChildOwnedTransition,
+                ) as $key => $transitionPid) {
+                    if (!isset($pending[$key]) || $transitionPid <= 0) {
+                        continue;
+                    }
+                    $resolved[$key] = $transitionPid;
+                    unset($pending[$key]);
+                }
+            }
+
+            foreach ($pending as $key => $item) {
                 if (!$allowSystemScan) {
                     continue;
                 }
@@ -7888,6 +8275,373 @@ CDEF,
         } while (\hrtime(true) < $deadlineNanoseconds);
 
         return $resolved;
+    }
+
+    /**
+     * Preserve every field needed to authenticate a pending Windows launch.
+     * In particular, detached Master uses exact argv rather than the
+     * slot/lease child grammar; reducing the item to its display command makes
+     * that launch permanently ineligible for broker-bound topology adoption.
+     *
+     * @param array<string,mixed> $item
+     * @return array<string,mixed>|null
+     */
+    private static function normalizeWindowsBatchPendingLaunchItem(array $item): ?array
+    {
+        $command = (string)($item['command'] ?? '');
+        $processName = (string)($item['process_name'] ?? '');
+        if ($command === '' || $processName === '') {
+            return null;
+        }
+
+        $pending = [
+            'command' => $command,
+            'process_name' => $processName,
+            'launch_id' => self::extractCommandLineArg($command, 'launch-id'),
+            'child_owns_pid' => (bool)($item['child_owns_pid'] ?? false),
+            'launcher_pid' => (int)($item['launcher_pid'] ?? 0),
+            'topology_root_pid' => (int)($item['topology_root_pid'] ?? 0),
+        ];
+        if (!(bool)($item['exact_argv'] ?? false)) {
+            return $pending;
+        }
+
+        $arguments = $item['argument_list'] ?? null;
+        if (!\is_array($arguments) || !\array_is_list($arguments)) {
+            return null;
+        }
+        $pending['exact_argv'] = true;
+        $pending['argument_list'] = \array_values(\array_map('strval', $arguments));
+
+        return $pending;
+    }
+
+    /**
+     * @param array<string,mixed> $record
+     * @param array{command:string,process_name:string,launch_id:string} $item
+     */
+    private static function windowsBatchRegisteredPidMatchesLaunchItem(array $record, array $item): bool
+    {
+        $expectedLaunchId = (string)$item['launch_id'];
+        $recordedLaunchId = \trim((string)($record['launch_id'] ?? ''));
+        $expectedProcessName = self::normalizeName((string)$item['process_name']);
+        $recordedProcessName = self::getRecordedProcessName($record);
+        $expectedPnameKey = self::buildPnameKey((string)$item['command']);
+        $recordedPnameKey = (string)($record['pname_key'] ?? '');
+
+        return $expectedLaunchId !== ''
+            && $recordedLaunchId !== ''
+            && \hash_equals($expectedLaunchId, $recordedLaunchId)
+            && $expectedProcessName !== ''
+            && $recordedProcessName !== ''
+            && \hash_equals($expectedProcessName, $recordedProcessName)
+            && $expectedPnameKey !== ''
+            && $recordedPnameKey !== ''
+            && \hash_equals($expectedPnameKey, $recordedPnameKey);
+    }
+
+    /**
+     * A child-owned registration can be published by both the x64 transition
+     * process and its durable execution leaf on Windows ARM64. The first row
+     * is therefore evidence for discovery, not authority; only the exact
+     * command/topology scan below may commit that PID. Native Windows reaches
+     * the same scan as a unique exact-command process.
+     *
+     * @param array<string,mixed> $record
+     * @param array{child_owns_pid?:bool,command:string,process_name:string,launch_id:string} $item
+     */
+    private static function windowsBatchRegisteredPidCanResolveLaunchItem(array $record, array $item): bool
+    {
+        if (!self::windowsBatchRegisteredPidMatchesLaunchItem($record, $item)) {
+            return false;
+        }
+        if (!(bool)($item['child_owns_pid'] ?? false)) {
+            return true;
+        }
+
+        $registeredPid = (int)($record['pid'] ?? 0);
+        $launcherPid = (int)($item['launcher_pid'] ?? 0);
+        return $registeredPid > 0
+            && $launcherPid > 0
+            && $registeredPid === $launcherPid;
+    }
+
+    /**
+     * Resolve the unique live process created by the Windows ARM64 x64
+     * emulation transition. This discovery never authorizes a signal: the
+     * caller immediately binds the returned PID to the managed-child
+     * credential ledger and its process-birth identity.
+     *
+     * @param array{command:string,process_name:string,launch_id:string} $item
+     */
+    private static function findWindowsBatchTransitionPid(array $item): int
+    {
+        $resolved = self::findWindowsBatchTransitionPids(['candidate' => $item]);
+
+        return (int)($resolved['candidate'] ?? 0);
+    }
+
+    /**
+     * Capture one Windows topology snapshot for the complete pending batch.
+     * PowerShell/CIM startup dominates this path on ARM64 x64 emulation, so
+     * serial per-child scans can exceed the shared startup deadline.
+     *
+     * @param array<string, array{command:string,process_name:string,launch_id:string,child_owns_pid?:bool}> $items
+     * @return array<string,int>
+     */
+    private static function findWindowsBatchTransitionPids(
+        array $items,
+        bool $allowNonChildOwnedTransition = false,
+    ): array {
+        if (!self::isWindows() || $items === []) {
+            return [];
+        }
+
+        $eligible = [];
+        $processNames = [];
+        foreach ($items as $key => $item) {
+            if (!self::windowsBatchTransitionPidRequiresResolution(
+                $item,
+                $allowNonChildOwnedTransition,
+            ) || !self::windowsBatchLiveCommandMatchesLaunchItem((string)$item['command'], $item)
+            ) {
+                continue;
+            }
+            $processName = \trim((string)$item['process_name']);
+            if ($processName === '') {
+                continue;
+            }
+            $eligible[(string)$key] = $item;
+            $processNames[$processName] = true;
+        }
+        if ($eligible === []) {
+            return [];
+        }
+
+        $topologyRootPids = [];
+        foreach ($eligible as $item) {
+            $launcherPid = (int)($item['launcher_pid'] ?? 0);
+            if ($launcherPid > 0) {
+                $topologyRootPids[$launcherPid] = true;
+            }
+            $topologyRootPid = (int)($item['topology_root_pid'] ?? 0);
+            if ($topologyRootPid > 0) {
+                $topologyRootPids[$topologyRootPid] = true;
+            }
+        }
+        if ($allowNonChildOwnedTransition && $topologyRootPids === []) {
+            return [];
+        }
+
+        $snapshot = self::getDriver()->findProcessTopologyByNames(
+            \array_keys($processNames),
+            \array_keys($topologyRootPids),
+        );
+        if ($snapshot === []) {
+            return [];
+        }
+
+        return self::selectWindowsBatchTransitionPidsFromSnapshot(
+            $eligible,
+            $snapshot,
+            $allowNonChildOwnedTransition,
+        );
+    }
+
+    /**
+     * @param array<string, array{command:string,process_name:string,launch_id:string}> $items
+     * @param array<int, array{pid:int,parent_pid:int,command_line:string}> $snapshot
+     * @return array<string,int>
+     */
+    private static function selectWindowsBatchTransitionPidsFromSnapshot(
+        array $items,
+        array $snapshot,
+        bool $requireLauncherDescendant = false,
+    ): array {
+        $resolved = [];
+        foreach ($items as $key => $item) {
+            $matchedPids = [];
+            $parentByPid = [];
+            foreach ($snapshot as $row) {
+                $pid = (int)($row['pid'] ?? 0);
+                $parentPid = (int)($row['parent_pid'] ?? 0);
+                $commandLine = (string)($row['command_line'] ?? '');
+                if ($pid <= 0 || $parentPid < 0) {
+                    continue;
+                }
+                $parentByPid[$pid] = $parentPid;
+                if (self::windowsBatchLiveCommandMatchesLaunchItem($commandLine, $item)) {
+                    $matchedPids[$pid] = $pid;
+                }
+            }
+
+            if ($requireLauncherDescendant) {
+                $launcherPid = (int)($item['launcher_pid'] ?? 0);
+                $topologyRootPid = (int)($item['topology_root_pid'] ?? 0);
+                if ($topologyRootPid <= 0) {
+                    $topologyRootPid = $launcherPid;
+                }
+                if ($topologyRootPid <= 0) {
+                    continue;
+                }
+                $matchedPids = \array_filter(
+                    $matchedPids,
+                    static fn(int $pid): bool => self::windowsBatchPidDescendsFromLauncher(
+                        $pid,
+                        $topologyRootPid,
+                        $parentByPid,
+                    ),
+                );
+            }
+
+            $selected = self::selectWindowsBatchTransitionLeafPid(
+                \array_values($matchedPids),
+                $parentByPid,
+            );
+            if ($selected > 0) {
+                $resolved[(string)$key] = $selected;
+            }
+        }
+
+        return $resolved;
+    }
+
+    /** @param array<int,int> $parentByPid */
+    private static function windowsBatchPidDescendsFromLauncher(
+        int $pid,
+        int $launcherPid,
+        array $parentByPid,
+    ): bool {
+        $visited = [];
+        while ($pid > 0 && !isset($visited[$pid])) {
+            $visited[$pid] = true;
+            $pid = (int)($parentByPid[$pid] ?? 0);
+            if ($pid === $launcherPid) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * An ARM64 x64-emulation transition can briefly expose both the original
+     * process and an exact-command child. Only a unique deepest child is the
+     * durable PHP process; unrelated duplicate identities remain ambiguous.
+     *
+     * @param list<int> $matchedPids
+     * @param array<int,int> $parentByPid
+     */
+    private static function selectWindowsBatchTransitionLeafPid(array $matchedPids, array $parentByPid): int
+    {
+        $matched = [];
+        foreach ($matchedPids as $pid) {
+            $pid = (int)$pid;
+            if ($pid > 0) {
+                $matched[$pid] = true;
+            }
+        }
+        if (\count($matched) < 2) {
+            return \count($matched) === 1 ? (int)\array_key_first($matched) : 0;
+        }
+
+        $parentsWithMatchedChildren = [];
+        $matchedEdges = 0;
+        foreach (\array_keys($matched) as $pid) {
+            $parentPid = (int)($parentByPid[$pid] ?? 0);
+            if ($parentPid > 0 && isset($matched[$parentPid])) {
+                $parentsWithMatchedChildren[$parentPid] = true;
+                $matchedEdges++;
+            }
+        }
+        if ($matchedEdges < 1) {
+            return 0;
+        }
+
+        $leaves = \array_values(\array_filter(
+            \array_keys($matched),
+            static fn(int $pid): bool => !isset($parentsWithMatchedChildren[$pid]),
+        ));
+
+        return \count($leaves) === 1 ? (int)$leaves[0] : 0;
+    }
+
+    /**
+     * @param array{command:string,process_name:string,launch_id:string} $item
+     */
+    private static function windowsBatchLiveCommandMatchesLaunchItem(string $liveCommand, array $item): bool
+    {
+        $expectedCommand = (string)$item['command'];
+        if ($liveCommand === '' || $expectedCommand === '' || \str_contains($liveCommand, "\0")) {
+            return false;
+        }
+
+        $masterIdentity = self::windowsBatchExactMasterArgvIdentity($item);
+        if ($masterIdentity !== null) {
+            $liveTokens = self::tokenizeCommandLineArguments($liveCommand);
+            $startIndex = \array_search('server:start', $liveTokens, true);
+            if (!\is_int($startIndex)
+                || $startIndex < 1
+                || !isset($liveTokens[$startIndex + 1])
+                || !\in_array('--master-only', $liveTokens, true)
+                || !\hash_equals($masterIdentity['instance'], $liveTokens[$startIndex + 1])
+                || \strcasecmp(
+                    \str_replace('/', '\\', $masterIdentity['script']),
+                    \str_replace('/', '\\', $liveTokens[$startIndex - 1]),
+                ) !== 0
+            ) {
+                return false;
+            }
+
+            return \hash_equals(
+                $masterIdentity['name'],
+                self::extractCommandLineArg($liveCommand, 'name'),
+            ) && \hash_equals(
+                $masterIdentity['launch_id'],
+                self::extractCommandLineArg($liveCommand, 'launch-id'),
+            );
+        }
+
+        $requiredArguments = [
+            'name',
+            'launch-id',
+            'slot-id',
+            'lease-id',
+            'epoch',
+            'master-pid',
+        ];
+        foreach ($requiredArguments as $argument) {
+            $expected = self::extractCommandLineArg($expectedCommand, $argument);
+            $actual = self::extractCommandLineArg($liveCommand, $argument);
+            if ($expected === '' || $actual === '' || !\hash_equals($expected, $actual)) {
+                return false;
+            }
+        }
+
+        // WLS child commands do not share one synthetic instance option:
+        // sidecars use --instance-name, the Dispatcher carries
+        // --windows-listener-wls-instance, and Workers bind the instance in
+        // their canonical --name. Compare every instance option actually
+        // present in the submitted command without requiring one that the
+        // child protocol never emits.
+        foreach (['instance-name', 'windows-listener-wls-instance', 'bootstrap-instance'] as $argument) {
+            $expected = self::extractCommandLineArg($expectedCommand, $argument);
+            if ($expected === '') {
+                continue;
+            }
+            $actual = self::extractCommandLineArg($liveCommand, $argument);
+            if ($actual === '' || !\hash_equals($expected, $actual)) {
+                return false;
+            }
+        }
+
+        return \hash_equals(
+            self::normalizeName((string)$item['process_name']),
+            self::normalizeName(self::extractCommandLineArg($liveCommand, 'name')),
+        ) && \hash_equals(
+            (string)$item['launch_id'],
+            self::extractCommandLineArg($liveCommand, 'launch-id'),
+        );
     }
 
     /**
@@ -8622,6 +9376,144 @@ POWERSHELL;
         ];
     }
 
+    private static function writeWindowsWmiBatchSubmitterScript(
+        string $brokerScriptPath,
+        string $batchId,
+        string $submissionPath,
+        string $workingDirectory,
+    ): ?string {
+        $script = self::buildWindowsWmiBatchSubmitterScript(
+            $brokerScriptPath,
+            $batchId,
+            $submissionPath,
+            $workingDirectory,
+        );
+        if ($script === null) {
+            return null;
+        }
+
+        $tmpBase = \tempnam(\sys_get_temp_dir(), 'weline-wmi-submit-');
+        if (!\is_string($tmpBase) || $tmpBase === '') {
+            return null;
+        }
+        $scriptPath = $tmpBase . '.vbs';
+        @\unlink($tmpBase);
+        if (@\file_put_contents($scriptPath, $script) === false) {
+            @\unlink($scriptPath);
+            return null;
+        }
+
+        return $scriptPath;
+    }
+
+    private static function buildWindowsWmiBatchSubmitterScript(
+        string $brokerScriptPath,
+        string $batchId,
+        string $submissionPath,
+        string $workingDirectory,
+    ): ?string {
+        if (\preg_match('/^[a-f0-9]{32}$/D', $batchId) !== 1) {
+            return null;
+        }
+        foreach ([$brokerScriptPath, $submissionPath, $workingDirectory] as $value) {
+            if ($value === '' || \preg_match('/[\r\n\0]/', $value) === 1) {
+                return null;
+            }
+        }
+
+        $powerShell = self::resolveWindowsPowerShellExecutable();
+        if ($powerShell === '' || \preg_match('/[\r\n\0]/', $powerShell) === 1) {
+            return null;
+        }
+        $commandLine = self::buildWindowsCommandLineFromArgv([
+            $powerShell,
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $brokerScriptPath,
+            self::WINDOWS_ISOLATED_BATCH_MARKER,
+            self::WINDOWS_ISOLATED_BATCH_ID_PREFIX . $batchId,
+        ]);
+
+        $batch = self::toWindowsVbsStringLiteral($batchId);
+        $submission = self::toWindowsVbsStringLiteral($submissionPath);
+        $command = self::toWindowsVbsStringLiteral($commandLine);
+        $working = self::toWindowsVbsStringLiteral($workingDirectory);
+        $marker = self::toWindowsVbsStringLiteral('WELINE_ISOLATED_SUBMIT');
+
+        return \implode("\r\n", [
+            'Option Explicit',
+            'Dim processClass, brokerPid, returnValue, fso, outputFile, submissionLine',
+            'Dim commandLine, workingDirectory, submissionPath, batchId',
+            'commandLine = ' . $command,
+            'workingDirectory = ' . $working,
+            'submissionPath = ' . $submission,
+            'batchId = ' . $batch,
+            'brokerPid = 0',
+            'returnValue = 1',
+            'On Error Resume Next',
+            'Set processClass = GetObject("winmgmts:\\\\.\\root\\cimv2:Win32_Process")',
+            'If Err.Number = 0 Then',
+            '    returnValue = processClass.Create(commandLine, workingDirectory, Null, brokerPid)',
+            'End If',
+            'If Err.Number <> 0 Or returnValue <> 0 Or brokerPid <= 0 Then',
+            '    submissionLine = batchId & vbTab & "failed" & vbTab & "0"',
+            '    Set fso = CreateObject("Scripting.FileSystemObject")',
+            '    Set outputFile = fso.CreateTextFile(submissionPath, True, False)',
+            '    If Err.Number = 0 Then outputFile.Write submissionLine',
+            '    If Err.Number = 0 Then outputFile.Close',
+            '    WScript.Quit 1',
+            'End If',
+            'submissionLine = batchId & vbTab & "committed" & vbTab & CStr(brokerPid)',
+            'Set fso = CreateObject("Scripting.FileSystemObject")',
+            'Set outputFile = fso.CreateTextFile(submissionPath, True, False)',
+            'If Err.Number = 0 Then outputFile.Write submissionLine',
+            'If Err.Number = 0 Then outputFile.Close',
+            'WScript.Echo ' . $marker . ' & vbTab & batchId & vbTab & CStr(brokerPid)',
+            'WScript.Quit 0',
+            '',
+        ]);
+    }
+
+    /** @return list<string> */
+    private static function buildWindowsCscriptProcOpenCommand(string $scriptPath): array
+    {
+        return [
+            self::resolveWindowsCscriptExecutable(),
+            '//B',
+            '//NoLogo',
+            '//T:5',
+            $scriptPath,
+        ];
+    }
+
+    private static function resolveWindowsCscriptExecutable(): string
+    {
+        if (!self::isWindows()) {
+            return 'cscript';
+        }
+
+        $systemRoot = \rtrim((string)(\getenv('SystemRoot') ?: \getenv('windir') ?: 'C:\\Windows'), '\\/');
+        foreach ([
+            $systemRoot . '\\Sysnative\\cscript.exe',
+            $systemRoot . '\\System32\\cscript.exe',
+            $systemRoot . '\\SysWOW64\\cscript.exe',
+        ] as $candidate) {
+            if (\is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return 'cscript.exe';
+    }
+
+    private static function toWindowsVbsStringLiteral(string $value): string
+    {
+        return '"' . \str_replace('"', '""', $value) . '"';
+    }
+
     private static function resolveWindowsPowerShellExecutable(): string
     {
         if (!self::isWindows()) {
@@ -8669,7 +9561,8 @@ POWERSHELL;
         bool $isolateParentHandles = false,
         string $isolatedBatchId = '',
         int $isolatedBrokerPid = 0,
-        string $isolatedSubmissionState = 'not_required'
+        string $isolatedSubmissionState = 'not_required',
+        string $submitterScriptPath = ''
     ): void
     {
         if (!\is_resource($process)) {
@@ -8689,6 +9582,7 @@ POWERSHELL;
             'isolated_batch_id' => $isolatedBatchId,
             'isolated_broker_pid' => $isolatedBrokerPid,
             'isolated_submission_state' => $isolatedSubmissionState,
+            'submitter_script_path' => $submitterScriptPath,
         ];
     }
 
@@ -8842,7 +9736,7 @@ POWERSHELL;
      */
     private static function cleanupWindowsDetachedBatchHelperFiles(array $helper): void
     {
-        foreach (['script_path', 'result_path', 'error_path', 'stdout_path'] as $field) {
+        foreach (['script_path', 'submitter_script_path', 'result_path', 'error_path', 'stdout_path'] as $field) {
             $path = (string) ($helper[$field] ?? '');
             if ($path !== '') {
                 @\unlink($path);
@@ -8911,6 +9805,7 @@ POWERSHELL;
     private static function collectWindowsIsolatedBatchEnvironment(): array
     {
         $criticalNames = [
+            'PHPRC',
             'PHP_INI_SCAN_DIR',
             'LOCALAPPDATA',
             'USERPROFILE',
@@ -8995,6 +9890,8 @@ POWERSHELL;
                 return null;
             }
             $isolatedEnvironment = self::collectWindowsIsolatedBatchEnvironment();
+            $isolatedEnvironment['WLS_WINDOWS_ISOLATED_BATCH_COMMIT_GRACE'] = '1';
+            \ksort($isolatedEnvironment);
 
             $lines[] = '$welineBatchId = ' . self::toPowerShellSingleQuoted($isolatedBatchId);
             $lines[] = '$welineSubmissionFile = ' . self::toPowerShellSingleQuoted($submissionPath);

@@ -14,6 +14,8 @@ class SharedStateServiceRegistry
     private const LIFECYCLE_SCHEMA = 'wls-shared-lifecycle/2';
     private const MAX_REGISTRY_BYTES = 4 * 1024 * 1024;
     private const MAX_SAFE_GENERATION = 9_007_199_254_740_991;
+    private const READ_RACE_MAX_ATTEMPTS = 3;
+    private const READ_RACE_RETRY_DELAY_MICROSECONDS = 1_000;
 
     /**
      * @return array<string, mixed>
@@ -782,12 +784,19 @@ class SharedStateServiceRegistry
     private function readData(): array
     {
         $file = $this->getRegistryFile();
-        $data = ServerInstanceManager::readValidatedJsonStatic(
-            $file,
-            self::registryRecoveryValidator(),
-            'WLS shared-state service registry',
-            self::MAX_REGISTRY_BYTES,
-        );
+        for ($attempt = 1; ; ++$attempt) {
+            try {
+                $data = $this->readValidatedRegistryDocument($file);
+                break;
+            } catch (\RuntimeException $exception) {
+                if ($attempt >= self::READ_RACE_MAX_ATTEMPTS
+                    || !self::isAtomicReplacementReadRace($exception)
+                ) {
+                    throw $exception;
+                }
+                \usleep(self::READ_RACE_RETRY_DELAY_MICROSECONDS);
+            }
+        }
         if ($data === null) {
             return ['services' => []];
         }
@@ -795,6 +804,28 @@ class SharedStateServiceRegistry
         $services = \is_array($data['services'] ?? null) ? $data['services'] : [];
 
         return ['services' => $services];
+    }
+
+    /** @return array<string, mixed>|null */
+    protected function readValidatedRegistryDocument(string $file): ?array
+    {
+        return ServerInstanceManager::readValidatedJsonStatic(
+            $file,
+            self::registryRecoveryValidator(),
+            'WLS shared-state service registry',
+            self::MAX_REGISTRY_BYTES,
+        );
+    }
+
+    private static function isAtomicReplacementReadRace(\RuntimeException $exception): bool
+    {
+        return \in_array($exception->getMessage(), [
+            'WLS shared-state service registry is missing or unsafe.',
+            'WLS shared-state service registry path is indeterminate or unsafe.',
+            'Unable to open WLS shared-state service registry.',
+            'WLS shared-state service registry changed before reading.',
+            'WLS shared-state service registry changed while being read.',
+        ], true);
     }
 
     private static function safeGeneration(mixed $generation): int

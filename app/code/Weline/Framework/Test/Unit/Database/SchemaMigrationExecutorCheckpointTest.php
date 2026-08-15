@@ -21,10 +21,12 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Connector;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\DbManager\ConfigProvider;
+use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Schema\ColumnDefinition;
 use Weline\Framework\Database\Schema\SchemaCheckpointDataException;
 use Weline\Framework\Database\Schema\SchemaDiffOp;
 use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
+use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Setup\Model\Migration;
 
@@ -64,7 +66,7 @@ final class SchemaMigrationExecutorCheckpointTest extends TestCase
         $executor = new SchemaMigrationExecutor(
             $this->createMock(EventsManager::class),
             $migration,
-            null,
+            $this->createMock(BackupService::class),
         );
         $executor->execute($this->createMock(ConnectorInterface::class), [], [
             'module_versions' => [$module => $version],
@@ -83,6 +85,7 @@ final class SchemaMigrationExecutorCheckpointTest extends TestCase
         $executor = new SchemaMigrationExecutor(
             $this->createMock(EventsManager::class),
             $migration,
+            $this->createMock(BackupService::class),
         );
 
         $this->expectException(SchemaCheckpointDataException::class);
@@ -118,6 +121,7 @@ final class SchemaMigrationExecutorCheckpointTest extends TestCase
         $executor = new SchemaMigrationExecutor(
             $this->createMock(EventsManager::class),
             $migration,
+            $this->createMock(BackupService::class),
         );
         $executor->execute($this->createMock(ConnectorInterface::class), [], [
             'module_versions' => [$module => $version],
@@ -137,6 +141,7 @@ final class SchemaMigrationExecutorCheckpointTest extends TestCase
         $executor = new SchemaMigrationExecutor(
             $this->createMock(EventsManager::class),
             $migration,
+            $this->createMock(BackupService::class),
         );
 
         $this->expectException(\RuntimeException::class);
@@ -160,6 +165,7 @@ final class SchemaMigrationExecutorCheckpointTest extends TestCase
         $executor = new SchemaMigrationExecutor(
             $this->createMock(EventsManager::class),
             $migration,
+            $this->createMock(BackupService::class),
         );
 
         try {
@@ -187,6 +193,7 @@ final class SchemaMigrationExecutorCheckpointTest extends TestCase
         $executor = new SchemaMigrationExecutor(
             $this->createMock(EventsManager::class),
             $migration,
+            $this->createMock(BackupService::class),
         );
 
         try {
@@ -199,6 +206,69 @@ final class SchemaMigrationExecutorCheckpointTest extends TestCase
                 unlink($dbPath);
             }
         }
+    }
+
+    /**
+     * @dataProvider destructiveColumnOperationProvider
+     */
+    public function testDestructiveColumnOperationStopsBeforeDdlWhenBackupFails(
+        string $kind,
+        string $backupReason,
+    ): void {
+        $migration = $this->getMockBuilder(Migration::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['recordSchemaDdl'])
+            ->getMock();
+        $migration->expects(self::once())->method('recordSchemaDdl')->willReturn(101);
+
+        $connector = $this->schemaConnectorMock();
+        $connector->expects(self::never())->method('query');
+        if ($kind === SchemaDiffOp::KIND_DROP_COLUMN) {
+            $connector->method('buildAlterAddColumnSql')->willReturn('ALTER TABLE unit_probe ADD COLUMN legacy text');
+            $connector->method('buildAlterDropColumnSql')->willReturn('ALTER TABLE unit_probe DROP COLUMN legacy');
+        } else {
+            $connector->method('buildAlterModifyColumnSql')->willReturn('ALTER TABLE unit_probe ALTER COLUMN legacy TYPE text');
+        }
+
+        $backup = $this->createMock(BackupService::class);
+        $backup->expects(self::once())
+            ->method('backupColumnData')
+            ->with(
+                'unit_probe',
+                'legacy',
+                101,
+                self::identicalTo($connector),
+                'Weline\\Unit\\Model\\Probe',
+                $backupReason,
+            )
+            ->willThrowException(new \RuntimeException('backup unavailable'));
+
+        $payload = new ColumnDefinition('legacy', 'text', null, true);
+        $op = new SchemaDiffOp(
+            $kind,
+            'unit_probe',
+            $payload,
+            'Weline\\Unit\\Model\\Probe',
+            $kind === SchemaDiffOp::KIND_MODIFY_COLUMN
+                ? new ColumnDefinition('legacy', 'varchar', 255, true)
+                : null,
+        );
+        $executor = new SchemaMigrationExecutor(
+            $this->createMock(EventsManager::class),
+            $migration,
+            $backup,
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('backup unavailable');
+        $executor->execute($connector, [$op]);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function destructiveColumnOperationProvider(): iterable
+    {
+        yield 'drop column' => [SchemaDiffOp::KIND_DROP_COLUMN, 'DROP'];
+        yield 'modify column' => [SchemaDiffOp::KIND_MODIFY_COLUMN, 'MODIFY'];
     }
 
     /** @return array{Connector, string} */
@@ -226,6 +296,18 @@ final class SchemaMigrationExecutorCheckpointTest extends TestCase
             new ColumnDefinition('marker', 'text', null, false),
             'Weline\\Unit\\Model\\Probe',
         );
+    }
+
+    /** @return ConnectorInterface&\PHPUnit\Framework\MockObject\MockObject */
+    private function schemaConnectorMock(): ConnectorInterface
+    {
+        $config = $this->createMock(ConfigProviderInterface::class);
+        $config->method('getDbType')->willReturn('pgsql');
+
+        $connector = $this->createMock(ConnectorInterface::class);
+        $connector->method('getConfigProvider')->willReturn($config);
+        $connector->method('formatTableName')->willReturnArgument(0);
+        return $connector;
     }
 
     private function checkpointMigrationMock(): Migration

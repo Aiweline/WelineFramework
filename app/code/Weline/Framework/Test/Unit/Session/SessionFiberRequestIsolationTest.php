@@ -77,6 +77,57 @@ final class SessionFiberRequestIsolationTest extends TestCase
         self::assertSame($authA, $authAAfterResume);
     }
 
+    public function testAuthenticatedIdentityAndDeviceValidationCacheStayInsideOwningFiber(): void
+    {
+        $userIdA = null;
+        $userIdAAfterResume = null;
+        $rawUserIdB = null;
+        $userIdB = 'not-read';
+
+        $validation = new \ReflectionProperty(
+            \Weline\Framework\Session\Auth\AuthenticatedSession::class,
+            'deviceValidationResult',
+        );
+
+        $fiberA = new \Fiber(function () use (
+            &$userIdA,
+            &$userIdAAfterResume,
+            $validation,
+        ): void {
+            $session = $this->factory->createFrontendSession();
+            $session->start('fiber-auth-a');
+            $session->getSession()->set('WF_FRONTEND_USER', 'fiber-a@example.test');
+            $session->getSession()->set('WF_FRONTEND_USER_ID', 101);
+            $validation->setValue($session, true);
+            $userIdA = $session->getUserId();
+            \Fiber::suspend();
+            $userIdAAfterResume = $this->factory->createFrontendSession()->getUserId();
+        });
+
+        $fiberB = new \Fiber(function () use (
+            &$rawUserIdB,
+            &$userIdB,
+            $validation,
+        ): void {
+            $session = $this->factory->createFrontendSession();
+            $session->start('fiber-auth-b');
+            $session->getSession()->set('WF_FRONTEND_USER', 'fiber-b@example.test');
+            $session->getSession()->set('WF_FRONTEND_USER_ID', 202);
+            $validation->setValue($session, false);
+            $rawUserIdB = $session->getSession()->get('WF_FRONTEND_USER_ID');
+            $userIdB = $session->getUserId();
+        });
+
+        $fiberA->start();
+        $fiberB->start();
+        $fiberA->resume();
+
+        self::assertSame(101, $userIdA);
+        self::assertSame(101, $userIdAAfterResume);
+        self::assertSame(202, $rawUserIdB);
+        self::assertNull($userIdB);
+    }
+
     public function testResetRequestInstancesClearsOnlyCurrentFiber(): void
     {
         $sessionA = null;

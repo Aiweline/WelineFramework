@@ -3,19 +3,22 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Extends\Module\Weline_Framework\Query;
 
+use Weline\Captcha\Api\CaptchaManagerInterface;
 use Weline\Customer\Api\CustomerLoginChallengeCreatorInterface;
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Customer\Model\Customer;
-use Weline\Customer\Model\CustomerToken;
 use Weline\Customer\Service\AccountSidebarContentGate;
 use Weline\Customer\Service\CustomerAccountService;
 use Weline\Customer\Service\CustomerAuthReturnUrlService;
+use Weline\Customer\Service\CustomerRememberDeviceService;
 use Weline\Customer\Service\PasswordResetService;
 use Weline\Framework\App\Env;
+use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\View\Template;
@@ -23,6 +26,7 @@ use Weline\Framework\View\Template;
 class AccountQueryProvider implements QueryProviderInterface
 {
     private readonly CustomerAuthReturnUrlService $authReturnUrlService;
+    private ?CaptchaManagerInterface $captchaManager;
 
     public function __construct(
         private readonly Customer $customerModel,
@@ -31,10 +35,12 @@ class AccountQueryProvider implements QueryProviderInterface
         private readonly SessionFactory $sessionFactory,
         private readonly Request $request,
         private readonly EventsManager $eventsManager,
-        ?CustomerAuthReturnUrlService $authReturnUrlService = null
+        ?CustomerAuthReturnUrlService $authReturnUrlService = null,
+        ?CaptchaManagerInterface $captchaManager = null,
     ) {
         $this->authReturnUrlService = $authReturnUrlService
             ?? ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
+        $this->captchaManager = $captchaManager;
     }
 
     public function getProviderName(): string
@@ -128,10 +134,7 @@ class AccountQueryProvider implements QueryProviderInterface
         $session = $this->sessionFactory->createFrontendSession();
         $userId = (int)($session->getUserId() ?? 0);
         $session->logout();
-        if ($userId > 0) {
-            $this->clearRememberMeToken($userId);
-        }
-        Cookie::set('w_ut', '', -3600, ['path' => '/']);
+        ObjectManager::getInstance(CustomerRememberDeviceService::class)->clearAfterLogout($userId);
         Cookie::set('w_sandbox', '', -3600, ['path' => '/']);
         $adminPath = Env::getAreaRoutePrefix('backend') ?? '';
         if ($adminPath !== '') {
@@ -161,6 +164,9 @@ class AccountQueryProvider implements QueryProviderInterface
         $rememberDuration = max(0, (int)($params['remember_duration'] ?? 0));
         if ($username === '' || $password === '') {
             return $this->failure('Username/email and password are required.');
+        }
+        if (!$this->verifyLoginCaptcha($params)) {
+            return $this->failure('Human verification failed or expired. Please try again.');
         }
 
         $user = $this->findCustomerByLogin($username);
@@ -199,13 +205,15 @@ class AccountQueryProvider implements QueryProviderInterface
             ->resetAttemptTimes()
             ->save();
         $this->syncSandboxCookie($user->isSandboxAccount());
-        $this->issueRememberMeToken($user, $rememberDuration);
+        ObjectManager::getInstance(CustomerRememberDeviceService::class)
+            ->issueForAuthenticatedCustomer($user, $rememberDuration, $session);
 
-        $this->eventsManager->dispatch('Weline_Customer_Account_Login::login_after', new \Weline\Framework\DataObject\DataObject([
+        $loginEvent = new DataObject([
             'user' => $user,
             'request' => $this->request,
             'session' => $session,
-        ]));
+        ]);
+        $this->eventsManager->dispatch('Weline_Customer_Account_Login::login_after', $loginEvent);
 
         $target = $this->authReturnUrlService->formatRedirect(
             $this->authReturnUrlService->consume($session, $redirectUrl)
@@ -411,40 +419,45 @@ class AccountQueryProvider implements QueryProviderInterface
         return ObjectManager::getInstance(CustomerLoginChallengeHandlerInterface::class);
     }
 
-    private function issueRememberMeToken(Customer $user, int $rememberDuration): void
+    /** @param array<string,mixed> $submission */
+    private function verifyLoginCaptcha(array $submission): bool
     {
-        if ($rememberDuration <= 0) {
-            return;
+        if (
+            !$this->captchaManager instanceof CaptchaManagerInterface
+            && !RegistryModulePresence::isActivePresent('Weline_Captcha')
+        ) {
+            return true;
         }
 
-        $token = CustomerToken::generateToken();
-        $expireTime = time() + $rememberDuration;
-        /** @var CustomerToken $userToken */
-        $userToken = ObjectManager::getInstance(CustomerToken::class);
-        $userToken->reset()
-            ->where(CustomerToken::schema_fields_user_id, $user->getId())
-            ->where(CustomerToken::schema_fields_type, 'remember_me')
-            ->delete()
-            ->fetch();
-        $userToken->reset()
-            ->setUserId((int)$user->getId())
-            ->setToken($token)
-            ->setType('remember_me')
-            ->setTokenExpireTime($expireTime)
-            ->save();
+        try {
+            $this->captchaManager ??= ObjectManager::getInstance(CaptchaManagerInterface::class);
 
-        Cookie::set('w_ut', $token, $rememberDuration, ['path' => '/']);
+            return $this->captchaManager->verifySubmission(
+                $submission,
+                'customer.login',
+                $this->requestHostname(),
+                $this->request->clientIP(),
+            );
+        } catch (\Throwable $throwable) {
+            \w_log_error(
+                'Storefront worker login captcha verification failed: ' . $throwable->getMessage(),
+                ['intent' => 'customer.login'],
+                'captcha',
+            );
+            return false;
+        }
     }
 
-    private function clearRememberMeToken(int $userId): void
+    private function requestHostname(): string
     {
-        /** @var CustomerToken $userToken */
-        $userToken = ObjectManager::getInstance(CustomerToken::class);
-        $userToken->reset()
-            ->where(CustomerToken::schema_fields_user_id, $userId)
-            ->where(CustomerToken::schema_fields_type, 'remember_me')
-            ->delete()
-            ->fetch();
+        $host = \trim((string)(
+            $this->request->getServer('HTTP_HOST')
+            ?: $this->request->getServer('SERVER_NAME')
+            ?: ''
+        ));
+        $hostname = $host === '' ? '' : \parse_url('http://' . \ltrim($host, '/'), PHP_URL_HOST);
+
+        return \is_string($hostname) ? \strtolower(\rtrim($hostname, '.')) : '';
     }
 
     private function syncSandboxCookie(bool $enabled): void
@@ -524,6 +537,9 @@ class AccountQueryProvider implements QueryProviderInterface
                         'remember_duration' => ['type' => 'int', 'min' => 0, 'max' => 31536000],
                         'redirect_url' => ['type' => 'string', 'max_length' => 512],
                         'redirect' => ['type' => 'string', 'max_length' => 512],
+                        'captcha_provider' => ['type' => 'string', 'max_length' => 64],
+                        'captcha_token' => ['type' => 'string', 'max_length' => 128],
+                        'captcha_response' => ['type' => 'string', 'max_length' => 8192],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Sign in storefront customer',

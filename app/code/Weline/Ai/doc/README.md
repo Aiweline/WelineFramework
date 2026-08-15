@@ -30,6 +30,10 @@
 - 检查清单
 - 系统交付文档
 
+模块当前需求与版本进度：
+- [需求](./需求.md) - 当前确认的业务逻辑、范围与验收标准
+- [开发日志](./开发日志.md) - 按目标版本记录实现、复审、测试与验收状态
+
 ### 🔌 API参考
 - [API文档](./API/API文档.md) - API接口完整说明
 
@@ -95,6 +99,14 @@ Scenario/Skill/Style 能力和翻译服务均在该命名空间发布。
 `TextToImageScenarioBindingResult`。默认图像模型、模态/供应商筛选、后台配置可用性、供应商账号修复、
 场景 ORM 和幂等绑定写入全部由 Ai 内部实现所有。调用模块不得自行组装
 `AiDefaultModel`、`AiModel`、`AiScenarioAdapter`、`ConfigResolver` 或 `DefaultModelManager`。
+
+### 场景图像生成参考媒体契约
+
+`ScenarioImageGenerationInterface::generate()` 的 `$mediaContract` 可提交 provider-neutral `image`
+参考媒体；网关只负责 allowlist 透传到 `AiService::generateImage()`。模型、Provider、供应商账号、
+endpoint 与密钥等路由字段仍在任意嵌套层级禁止传入。参考图选择、媒体格式/大小校验、透明背景、
+Logo 文字策略、OCR/Vision 和最终资产验收由调用模块及 Provider 的既有契约负责，`Weline_Ai`
+不会引入 PageBuilder 业务依赖。完整需求与验收边界见 `REQ-AI-0001`。
 Agent 扩展需要按既定 `AiModel` 直接调用供应商时，通过
 `AgentModelExecutorInterface` 执行；需要自行组织供应商会话时只使用
 `Provider\ProviderRuntimeInterface` 及其返回的公开 Session 契约。供应商选择、ORM 模型还原、

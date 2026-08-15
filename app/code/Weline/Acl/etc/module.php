@@ -25,5 +25,6 @@ return [
         \Weline\Acl\Api\Resource\WhitelistServiceInterface::class => \Weline\Acl\Service\WhitelistService::class,
         \Weline\Acl\Api\Statistics\MenuStatisticsInterface::class => \Weline\Acl\Service\MenuStatistics::class,
         'request_resetter.Weline_Acl' => \Weline\Acl\Api\Runtime\RequestResetter::class,
+        'process_cache_resetter.Weline_Acl' => \Weline\Acl\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

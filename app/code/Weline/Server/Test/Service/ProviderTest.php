@@ -36,6 +36,7 @@ class ProviderTest extends TestCase
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    ...self::testServingFence(),
                     'edge' => ['adapter' => 'wls'],
                     'public_origin' => 'https://test.weline.test',
                     'worker_count' => 4,
@@ -54,6 +55,19 @@ class ProviderTest extends TestCase
         );
     }
 
+    /** @return array{serving_manifest_path:string,serving_manifest_generation:int,serving_manifest_digest:string,serving_instance_generation:int,serving_certificate_trust_profile:string} */
+    private static function testServingFence(): array
+    {
+        return [
+            'serving_manifest_path' => \sys_get_temp_dir()
+                . DIRECTORY_SEPARATOR . 'wls-provider-test-serving-manifest.json',
+            'serving_manifest_generation' => 1,
+            'serving_manifest_digest' => \str_repeat('f', 64),
+            'serving_instance_generation' => 1,
+            'serving_certificate_trust_profile' => 'test',
+        ];
+    }
+
     public function testWorkerProviderBasic(): void
     {
         $provider = new WorkerProvider();
@@ -69,6 +83,7 @@ class ProviderTest extends TestCase
     public function testWorkerProviderBuildCommand(): void
     {
         $provider = new WorkerProvider();
+        $fence = self::testServingFence();
         $command = $provider->buildCommand(1, $this->context);
 
         $this->assertStringContainsString('worker_ssl.php', $command->script);
@@ -76,6 +91,11 @@ class ProviderTest extends TestCase
         $this->assertContains('10444', $command->arguments);
         $this->assertContains('test-instance', $command->arguments);
         $this->assertStringStartsWith('weline-wls-worker-test-instance', $command->getProcessName());
+        $this->assertContains('--serving-manifest=' . $fence['serving_manifest_path'], $command->arguments);
+        $this->assertContains('--serving-manifest-generation=' . $fence['serving_manifest_generation'], $command->arguments);
+        $this->assertContains('--serving-manifest-digest=' . $fence['serving_manifest_digest'], $command->arguments);
+        $this->assertContains('--serving-instance-generation=' . $fence['serving_instance_generation'], $command->arguments);
+        $this->assertContains('--serving-certificate-trust-profile=' . $fence['serving_certificate_trust_profile'], $command->arguments);
         $this->assertContains('--wls-loop-driver=event', $command->arguments);
         $this->assertContains('--memory-limit=512M', $command->arguments);
         $this->assertContains('--worker-count=4', $command->arguments);
@@ -84,6 +104,7 @@ class ProviderTest extends TestCase
     public function testLinuxDirectSslWorkerBuildCommandUsesDeferredSsl(): void
     {
         $provider = new WorkerProvider();
+        $fence = self::testServingFence();
         $context = new ServiceContext(
             instanceName: 'direct-instance',
             epoch: 1,
@@ -100,6 +121,7 @@ class ProviderTest extends TestCase
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    ...$fence,
                     'edge' => ['adapter' => 'wls'],
                     'public_origin' => 'https://127.0.0.1:9981',
                     'worker_count' => 4,
@@ -116,6 +138,11 @@ class ProviderTest extends TestCase
         $this->assertStringContainsString('worker_ssl.php', $command->script);
         $this->assertContains('0.0.0.0', $command->arguments);
         $this->assertContains('9981', $command->arguments);
+        $this->assertContains('--serving-manifest=' . $fence['serving_manifest_path'], $command->arguments);
+        $this->assertContains('--serving-manifest-generation=' . $fence['serving_manifest_generation'], $command->arguments);
+        $this->assertContains('--serving-manifest-digest=' . $fence['serving_manifest_digest'], $command->arguments);
+        $this->assertContains('--serving-instance-generation=' . $fence['serving_instance_generation'], $command->arguments);
+        $this->assertContains('--serving-certificate-trust-profile=' . $fence['serving_certificate_trust_profile'], $command->arguments);
         $this->assertContains('--wls-listener-mode=reuseport', $command->arguments);
         $this->assertNotContains('--reuseport', $command->arguments);
         $this->assertContains('--defer-ssl', $command->arguments);

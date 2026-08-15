@@ -39,7 +39,6 @@ final class GatewayCredentialStore
      */
     public function load(?string $expectedProjectUuid = null): array
     {
-        $hostId = $this->hostId();
         $projectRoot = $this->root();
         $directory = $this->credentialDirectory();
         $directoryStatus = @\lstat($directory);
@@ -59,62 +58,25 @@ final class GatewayCredentialStore
         }
         $this->assertProjectDirectoryChain($directory, $projectRoot);
         $this->assertCredentialDirectory($directory, $projectRoot, $owner, true);
-        $file = $directory . DIRECTORY_SEPARATOR . $hostId . '.cred';
-        $encoded = GatewayProjectStateFilesystem::readOptional(
-            $file,
-            16_384,
-            'Host-bound WLS Gateway project credential',
+        $seal = fn ($handle, string $path): mixed => $this->preserveProjectOwner(
+            $handle,
+            $path,
+            $owner,
         );
-        if ($encoded === null) {
-            throw new \RuntimeException(
-                'This project is not enrolled on the trusted WLS 2.0 host gateway.'
-            );
-        }
-        $decoded = \json_decode($encoded, true);
-        if (!\is_array($decoded)
-            || ($decoded['schema_version'] ?? null) !== 1
-            || !\is_string($decoded['protocol'] ?? null)
-            || !\hash_equals(GatewayPaths::PROTOCOL, (string)($decoded['protocol'] ?? ''))
-            || !\is_string($decoded['host_id'] ?? null)
-            || !\hash_equals($hostId, (string)($decoded['host_id'] ?? ''))
-            || !\is_string($decoded['project_uuid'] ?? null)
-            || !\hash_equals(
-                (string)$decoded['project_uuid'],
-                \strtolower(\trim((string)$decoded['project_uuid'])),
-            )
-            || !$this->isUuidV4((string)$decoded['project_uuid'])
-            || !\is_string($decoded['credential_id'] ?? null)
-            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($decoded['credential_id'] ?? '')) !== 1
-            || (\array_key_exists('credential_generation', $decoded)
-                && (!\is_int($decoded['credential_generation'])
-                    || (int)$decoded['credential_generation'] < 1))
-            || !\is_string($decoded['secret'] ?? null)
-            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)($decoded['secret'] ?? '')) !== 1
-            || !\is_string($decoded['issued_at'] ?? null)
-            || \strlen((string)$decoded['issued_at']) > 128
-            || \strtotime((string)$decoded['issued_at']) === false
-            || ($expectedProjectUuid !== null
-                && !\hash_equals(
-                    \strtolower(\trim($expectedProjectUuid)),
-                    (string)$decoded['project_uuid'],
-                ))
-        ) {
-            throw new \RuntimeException(
-                'The host-bound WLS Gateway project credential is invalid.'
-            );
-        }
-        return [
-            'schema_version' => 1,
-            'protocol' => GatewayPaths::PROTOCOL,
-            'host_id' => $hostId,
-            'project_uuid' => (string)$decoded['project_uuid'],
-            'credential_id' => (string)$decoded['credential_id'],
-            // Credentials written before local generation persistence remain
-            // usable; all newly installed Controller responses carry it.
-            'credential_generation' => (int)($decoded['credential_generation'] ?? 1),
-            'secret' => (string)$decoded['secret'],
-            'issued_at' => (string)$decoded['issued_at'],
-        ];
+
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
+            function () use ($directory, $owner, $expectedProjectUuid): array {
+                $files = $this->credentialFiles($directory);
+                return $this->activeCredential(
+                    $directory,
+                    $files,
+                    $owner,
+                    $expectedProjectUuid,
+                )['payload'];
+            },
+            $seal,
+        );
     }
 
     /** @param array<string,mixed> $credential */
@@ -216,18 +178,12 @@ final class GatewayCredentialStore
     ): string {
         $this->credentialDeadlineRemaining($deadlineMonotonic);
         $rotationId = $this->rotationId($rotationId);
-        $payload = $this->credentialPayload($credential, $expectedProjectUuid);
         $projectRoot = $this->root();
         $directory = $this->prepareCredentialDirectory($projectRoot);
         $owner = @\lstat($projectRoot);
         if (!\is_array($owner)) {
             throw new \RuntimeException('Unable to inspect the project credential owner.');
         }
-        $file = $this->pendingFile($directory, $rotationId);
-        $encoded = \json_encode(
-            $payload,
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-        ) . PHP_EOL;
         $seal = fn ($handle, string $path): mixed => $this->preserveProjectOwner(
             $handle,
             $path,
@@ -236,9 +192,10 @@ final class GatewayCredentialStore
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
             function () use (
+                $credential,
+                $expectedProjectUuid,
+                $rotationId,
                 $directory,
-                $file,
-                $encoded,
                 $owner,
                 $seal,
                 $deadlineMonotonic,
@@ -248,6 +205,25 @@ final class GatewayCredentialStore
                     $directory,
                     $deadlineMonotonic,
                 );
+                $active = $this->activeCredential(
+                    $directory,
+                    $credentials,
+                    $owner,
+                );
+                $payload = $this->credentialPayload(
+                    $credential,
+                    $expectedProjectUuid,
+                    (string)$active['host_id'],
+                );
+                $file = $this->pendingFile(
+                    $directory,
+                    $rotationId,
+                    (string)$active['host_id'],
+                );
+                $encoded = \json_encode(
+                    $payload,
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                ) . PHP_EOL;
                 $overflowAfterImage = $this->assertRecoverableOverflowAfterImage(
                     $credentials,
                     $file,
@@ -295,9 +271,33 @@ final class GatewayCredentialStore
             $owner,
             true,
         );
-        return $this->readCredentialPayload(
-            $this->pendingFile($directory, $this->rotationId($rotationId)),
-            $expectedProjectUuid,
+        $seal = fn ($handle, string $path): mixed => $this->preserveProjectOwner(
+            $handle,
+            $path,
+            $owner,
+        );
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
+            function () use (
+                $directory,
+                $owner,
+                $rotationId,
+                $expectedProjectUuid,
+            ): array {
+                $files = $this->credentialFiles($directory);
+                $active = $this->activeCredential($directory, $files, $owner);
+                $hostId = (string)$active['host_id'];
+                return $this->readCredentialPayload(
+                    $this->pendingFile(
+                        $directory,
+                        $this->rotationId($rotationId),
+                        $hostId,
+                    ),
+                    $expectedProjectUuid,
+                    $hostId,
+                );
+            },
+            $seal,
         );
     }
 
@@ -315,8 +315,6 @@ final class GatewayCredentialStore
         if (!\is_array($owner)) {
             throw new \RuntimeException('Unable to inspect the project credential owner.');
         }
-        $active = $directory . DIRECTORY_SEPARATOR . $this->hostId() . '.cred';
-        $pending = $this->pendingFile($directory, $rotationId);
         $seal = fn ($handle, string $path): mixed => $this->preserveProjectOwner(
             $handle,
             $path,
@@ -326,8 +324,7 @@ final class GatewayCredentialStore
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
             function () use (
                 $directory,
-                $active,
-                $pending,
+                $rotationId,
                 $expectedProjectUuid,
                 $owner,
                 $seal,
@@ -338,7 +335,15 @@ final class GatewayCredentialStore
                     $directory,
                     $deadlineMonotonic,
                 );
-                $payload = $this->readCredentialPayload($pending, $expectedProjectUuid);
+                $selected = $this->activeCredential($directory, $files, $owner);
+                $active = (string)$selected['file'];
+                $hostId = (string)$selected['host_id'];
+                $pending = $this->pendingFile($directory, $rotationId, $hostId);
+                $payload = $this->readCredentialPayload(
+                    $pending,
+                    $expectedProjectUuid,
+                    $hostId,
+                );
                 $encoded = \json_encode(
                     $payload,
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
@@ -404,10 +409,24 @@ final class GatewayCredentialStore
         );
         GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
-            function () use ($directory, $rotationId, $deadlineMonotonic): bool {
+            function () use (
+                $directory,
+                $owner,
+                $rotationId,
+                $deadlineMonotonic,
+            ): bool {
                 $this->credentialDeadlineRemaining($deadlineMonotonic);
+                $files = $this->credentialFiles(
+                    $directory,
+                    $deadlineMonotonic,
+                );
+                $active = $this->activeCredential($directory, $files, $owner);
                 return GatewayProjectStateFilesystem::removeRegular(
-                    $this->pendingFile($directory, $this->rotationId($rotationId)),
+                    $this->pendingFile(
+                        $directory,
+                        $this->rotationId($rotationId),
+                        (string)$active['host_id'],
+                    ),
                     'aborted pending gateway credential',
                 );
             },
@@ -436,7 +455,6 @@ final class GatewayCredentialStore
         }
         $this->assertCredentialDirectory($directory, $projectRoot, $owner, true);
         $this->assertProjectDirectoryChain($directory, $projectRoot);
-        $file = $directory . DIRECTORY_SEPARATOR . $this->hostId() . '.cred';
         $seal = fn ($handle, string $path): mixed => $this->preserveProjectOwner(
             $handle,
             $path,
@@ -444,10 +462,15 @@ final class GatewayCredentialStore
         );
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
-            function () use ($file, $deadlineMonotonic): bool {
+            function () use ($directory, $owner, $deadlineMonotonic): bool {
                 $this->credentialDeadlineRemaining($deadlineMonotonic);
+                $files = $this->credentialFiles(
+                    $directory,
+                    $deadlineMonotonic,
+                );
+                $active = $this->activeCredential($directory, $files, $owner);
                 return GatewayProjectStateFilesystem::removeRegular(
-                    $file,
+                    (string)$active['file'],
                     'host-bound gateway credential',
                 );
             },
@@ -619,6 +642,117 @@ final class GatewayCredentialStore
         );
     }
 
+    /**
+     * Select the only committed active credential from project-owned state.
+     * The host trust tree is intentionally not project-readable; the leaf name
+     * and stored payload provide the same host binding for project requests.
+     *
+     * @param list<string> $files
+     * @param array<string|int,mixed> $owner
+     * @return array{file:string,host_id:string,payload:array<string,mixed>}
+     */
+    private function activeCredential(
+        string $directory,
+        array $files,
+        array $owner,
+        ?string $expectedProjectUuid = null,
+    ): array {
+        $active = [];
+        foreach ($files as $file) {
+            $matches = [];
+            if (\preg_match(
+                '/\A([a-f0-9]{32})\.cred\z/D',
+                \basename($file),
+                $matches,
+            ) === 1) {
+                $active[] = [
+                    'file' => $file,
+                    'host_id' => (string)$matches[1],
+                ];
+            }
+        }
+        if (\count($active) !== 1) {
+            throw new \RuntimeException(
+                'Project gateway active credential is missing or ambiguous.'
+            );
+        }
+        $file = (string)$active[0]['file'];
+        $hostId = (string)$active[0]['host_id'];
+        $encoded = GatewayProjectStateFilesystem::read(
+            $file,
+            16_384,
+            'Host-bound WLS Gateway project credential',
+        );
+        $this->assertProjectOwnedRegularFile($file, $owner, \strlen($encoded));
+        $decoded = \json_decode($encoded, true);
+        if (!\is_array($decoded)) {
+            throw new \RuntimeException(
+                'The host-bound WLS Gateway project credential is invalid.'
+            );
+        }
+        return [
+            'file' => $file,
+            'host_id' => $hostId,
+            'payload' => $this->storedCredentialPayload(
+                $decoded,
+                $hostId,
+                $expectedProjectUuid,
+            ),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $decoded
+     * @return array<string,mixed>
+     */
+    private function storedCredentialPayload(
+        array $decoded,
+        string $hostId,
+        ?string $expectedProjectUuid = null,
+    ): array {
+        $hostId = \strtolower(\trim($hostId));
+        $projectUuid = (string)($decoded['project_uuid'] ?? '');
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $hostId) !== 1
+            || ($decoded['schema_version'] ?? null) !== 1
+            || !\is_string($decoded['protocol'] ?? null)
+            || !\hash_equals(GatewayPaths::PROTOCOL, (string)$decoded['protocol'])
+            || !\is_string($decoded['host_id'] ?? null)
+            || !\hash_equals($hostId, (string)$decoded['host_id'])
+            || !\is_string($decoded['project_uuid'] ?? null)
+            || !\hash_equals($projectUuid, \strtolower(\trim($projectUuid)))
+            || !$this->isUuidV4($projectUuid)
+            || !\is_string($decoded['credential_id'] ?? null)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)$decoded['credential_id']) !== 1
+            || (\array_key_exists('credential_generation', $decoded)
+                && (!\is_int($decoded['credential_generation'])
+                    || (int)$decoded['credential_generation'] < 1))
+            || !\is_string($decoded['secret'] ?? null)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$decoded['secret']) !== 1
+            || !\is_string($decoded['issued_at'] ?? null)
+            || \strlen((string)$decoded['issued_at']) > 128
+            || \strtotime((string)$decoded['issued_at']) === false
+            || ($expectedProjectUuid !== null
+                && !\hash_equals(
+                    \strtolower(\trim($expectedProjectUuid)),
+                    $projectUuid,
+                ))
+        ) {
+            throw new \RuntimeException(
+                'The host-bound WLS Gateway project credential is invalid.'
+            );
+        }
+        return [
+            'schema_version' => 1,
+            'protocol' => GatewayPaths::PROTOCOL,
+            'host_id' => $hostId,
+            'project_uuid' => $projectUuid,
+            'credential_id' => (string)$decoded['credential_id'],
+            'credential_generation' => (int)($decoded['credential_generation'] ?? 1),
+            'secret' => (string)$decoded['secret'],
+            'issued_at' => (string)$decoded['issued_at'],
+        ];
+    }
+
     public function hostId(): string
     {
         $hostId = \strtolower(\trim(GatewayProjectStateFilesystem::read(
@@ -636,17 +770,21 @@ final class GatewayCredentialStore
     private function credentialPayload(
         array $credential,
         string $expectedProjectUuid,
+        ?string $expectedHostId = null,
     ): array {
-        $hostId = $this->hostId();
+        $hostId = $expectedHostId === null
+            ? $this->hostId()
+            : \strtolower(\trim($expectedHostId));
         $expectedProjectUuid = \strtolower(\trim($expectedProjectUuid));
         $projectUuid = \strtolower(\trim((string)($credential['project_uuid'] ?? '')));
         $credentialId = \strtolower(\trim((string)($credential['credential_id'] ?? '')));
         $credentialGeneration = $credential['credential_generation'] ?? 1;
         $secret = \strtolower(\trim((string)($credential['secret'] ?? '')));
         $issuedAt = \trim((string)($credential['issued_at'] ?? \gmdate(DATE_ATOM)));
-        if (!\hash_equals($hostId, \strtolower(\trim((string)(
-            $credential['host_id'] ?? ''
-        ))))
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $hostId) !== 1
+            || !\hash_equals($hostId, \strtolower(\trim((string)(
+                $credential['host_id'] ?? ''
+            ))))
             || !$this->isUuidV4($expectedProjectUuid)
             || !\hash_equals($expectedProjectUuid, $projectUuid)
             || !\hash_equals(
@@ -681,6 +819,7 @@ final class GatewayCredentialStore
     private function readCredentialPayload(
         string $file,
         string $expectedProjectUuid,
+        ?string $expectedHostId = null,
     ): array {
         $encoded = GatewayProjectStateFilesystem::readOptional(
             $file,
@@ -691,7 +830,11 @@ final class GatewayCredentialStore
         if (!\is_array($decoded) || ($decoded['schema_version'] ?? null) !== 1) {
             throw new \RuntimeException('Pending WLS Gateway credential is missing or invalid.');
         }
-        return $this->credentialPayload($decoded, $expectedProjectUuid);
+        return $this->storedCredentialPayload(
+            $decoded,
+            $expectedHostId ?? $this->hostId(),
+            $expectedProjectUuid,
+        );
     }
 
     private function rotationId(string $rotationId): string
@@ -703,9 +846,18 @@ final class GatewayCredentialStore
         return $rotationId;
     }
 
-    private function pendingFile(string $directory, string $rotationId): string
-    {
-        return $directory . DIRECTORY_SEPARATOR . $this->hostId()
+    private function pendingFile(
+        string $directory,
+        string $rotationId,
+        ?string $expectedHostId = null,
+    ): string {
+        $hostId = $expectedHostId ?? $this->hostId();
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $hostId) !== 1) {
+            throw new \RuntimeException(
+                'Project gateway credential host binding is invalid.'
+            );
+        }
+        return $directory . DIRECTORY_SEPARATOR . $hostId
             . '.rotate-' . $rotationId . '.pending';
     }
 

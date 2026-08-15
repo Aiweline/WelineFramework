@@ -39,6 +39,16 @@ class AddSitemapUrlLocale20260724V101 extends AbstractMigration
         return [SitemapUrl::schema_table];
     }
 
+    public function requiresBackup(): bool
+    {
+        return true;
+    }
+
+    public function getBackupStrategy(): array
+    {
+        return ['strategy' => 'table', 'tables' => [SitemapUrl::schema_table], 'columns' => []];
+    }
+
     public function install(): bool
     {
         $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
@@ -84,11 +94,14 @@ class AddSitemapUrlLocale20260724V101 extends AbstractMigration
         ];
 
         if ($connection->hasIndex($table, $legacy)) {
-            $connection->query($connection->buildDropIndexSql($table, $legacy))->fetch();
+            $connection->query($connection->buildDropIndexSql(
+                $connection->formatTableName($table),
+                $legacy,
+            ))->fetch();
         }
 
         if (!$connection->hasIndex($table, $target)) {
-            $connection->query($connection->buildAddIndexSql($table, [
+            $connection->query($connection->buildAddIndexSql($connection->formatTableName($table), [
                 'name' => $target,
                 'type' => TableInterface::index_type_UNIQUE,
                 'columns' => $columns,

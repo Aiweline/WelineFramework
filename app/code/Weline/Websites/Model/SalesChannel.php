@@ -228,16 +228,19 @@ class SalesChannel extends Model
     private function requireActiveParentStore(int $storeId): Store
     {
         $store = ObjectManager::getInstance(Store::class, [], false);
-        $store->setConnection($this->getConnection())
-            ->clearData()->clearQuery()
-            ->where(Store::schema_fields_ID, $storeId);
+        $store->setConnection($this->getConnection())->clearData()->clearQuery();
+        $sql = 'SELECT * FROM ' . $store->getTable()
+            . ' WHERE ' . Store::schema_fields_ID . ' = :store_id';
         if ($this->supportsForUpdate()) {
-            $store->additional('FOR UPDATE');
+            $sql .= ' FOR UPDATE';
         }
-        $store->find()->fetch();
-        if (!$store->hasData(Store::schema_fields_ID)) {
+        $statement = $this->getConnection()->getConnector()->getWrappedConnection()->prepare($sql);
+        $statement->execute(['store_id' => $storeId]);
+        $row = $statement->fetch(\PDO::FETCH_ASSOC);
+        if (!is_array($row) || !array_key_exists(Store::schema_fields_ID, $row)) {
             throw new \RuntimeException(__('渠道所属店铺不存在'));
         }
+        $store->setData($row);
         if ((string)$store->getData(Store::schema_fields_LIFECYCLE_STATUS) !== Store::LIFECYCLE_ACTIVE
             || $store->getData(Store::schema_fields_TOMBSTONED_AT) !== null) {
             throw new \RuntimeException(__('非活动店铺下不允许新增、更新或删除销售渠道'));

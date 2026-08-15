@@ -28,6 +28,8 @@ $panelDashboardData = is_array($panelDashboardData) ? $panelDashboardData : [];
 $dashboardMetrics = is_array($panelDashboardData['metrics'] ?? null) ? $panelDashboardData['metrics'] : [];
 $securityData = is_array($panelDashboardData['security'] ?? null) ? $panelDashboardData['security'] : [];
 $runtimeData = is_array($panelDashboardData['runtime'] ?? null) ? $panelDashboardData['runtime'] : [];
+$panelLifecycleTargets = $this->getData('panelLifecycleTargets');
+$panelLifecycleTargets = is_array($panelLifecycleTargets) ? $panelLifecycleTargets : [];
 $dashboardErrors = is_array($panelDashboardData['errors'] ?? null) ? array_values($panelDashboardData['errors']) : [];
 $projectCards = is_array($panelDashboardData['projects'] ?? null) ? array_values($panelDashboardData['projects']) : [];
 $panelProjectConfigCenter = $this->getData('panelProjectConfigCenter');
@@ -2729,6 +2731,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                 <th><?= __('实例') ?></th>
                                 <th><?= __('域名') ?></th>
                                 <th><?= __('状态') ?></th>
+                                <th><?= __('WLS') ?></th>
                                 <th><?= __('Nginx 公网入口') ?></th>
                                 <th><?= __('路径') ?></th>
                                 <th><?= __('操作') ?></th>
@@ -2750,6 +2753,24 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         $projectDbLink = (string)($project['db'] ?? '');
                         $projectPhpLabel = (string)($project['php_label'] ?? __('可编辑运行时档案'));
                         $projectDbLabel = (string)($project['db_label'] ?? __('点击配置档案'));
+                        $projectLifecycleKey = $projectType === 'current'
+                            ? 'current'
+                            : ($projectType === 'registered' && $projectId > 0
+                                ? 'registered:' . $projectId
+                                : 'unmanaged:' . $projectIndex);
+                        $projectLifecycle = is_array($panelLifecycleTargets[$projectLifecycleKey] ?? null)
+                            ? $panelLifecycleTargets[$projectLifecycleKey]
+                            : [];
+                        $projectLifecycleAvailable = !empty($projectLifecycle['available']);
+                        $projectLifecycleReady = !empty($projectLifecycle['ready']);
+                        $projectLifecycleBusy = !empty($projectLifecycle['busy']);
+                        $projectLifecycleStateLabel = (string)($projectLifecycle['state_label'] ?? __('不可控制'));
+                        $projectLifecycleInstance = (string)($projectLifecycle['instance'] ?? '');
+                        $projectLifecycleMessage = (string)($projectLifecycle['message'] ?? __('当前项目无法从此面板控制 WLS。'));
+                        $projectLifecycleUpdatedAt = (string)($projectLifecycle['updated_at'] ?? '');
+                        $projectLifecyclePillClass = $projectLifecycleReady
+                            ? 'is-on'
+                            : ($projectLifecycleBusy ? '' : 'is-off');
                         $projectPhpOperationUrl = $buildOperationCapabilityUrl('php-profile', 'WLS PHP Manager', $buildProjectOperationContext($project, 'php-profile'));
                         $projectDbOperationUrl = $buildOperationCapabilityUrl('database-profile', 'WLS Database Manager', $buildProjectOperationContext($project, 'database-profile'));
                         $projectFileManagerUrl = $buildOperationCapabilityUrl('file-manager', 'WLS File Manager', $buildProjectOperationContext($project, 'file-manager'));
@@ -2781,7 +2802,13 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <tr class="wls-project-row"
                             data-wls-project-row
                             data-wls-project-search="<?= $escapeHtml($projectSearchText) ?>"
-                            data-wls-project-detail="<?= $escapeHtml($projectDetailId) ?>">
+                            data-wls-project-detail="<?= $escapeHtml($projectDetailId) ?>"
+                            data-wls-lifecycle-scope
+                            data-wls-lifecycle-project-key="<?= $escapeHtml($projectLifecycleKey) ?>"
+                            data-wls-lifecycle-project-name="<?= $escapeHtml($projectName) ?>"
+                            data-wls-lifecycle-instance="<?= $escapeHtml($projectLifecycleInstance) ?>"
+                            data-wls-lifecycle-available="<?= $projectLifecycleAvailable ? '1' : '0' ?>"
+                            data-wls-lifecycle-busy="<?= $projectLifecycleBusy ? '1' : '0' ?>">
                             <td>
                                 <div class="wls-project-instance-cell">
                                     <strong><?= htmlspecialchars($projectName, ENT_QUOTES, 'UTF-8') ?></strong>
@@ -2795,6 +2822,17 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                 <?php else: ?>
                                     <span class="wls-status-pill is-off"><?= __('未知') ?></span>
                                 <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="wls-lifecycle-cell">
+                                    <span class="wls-status-pill <?= $escapeHtml($projectLifecyclePillClass) ?>"
+                                          data-wls-lifecycle-state><?= $escapeHtml($projectLifecycleStateLabel) ?></span>
+                                    <small data-wls-lifecycle-instance-label>
+                                        <?= $projectLifecycleInstance !== ''
+                                            ? $escapeHtml(__('实例：%{1}', [$projectLifecycleInstance]))
+                                            : $escapeHtml(__('未绑定实例')) ?>
+                                    </small>
+                                </div>
                             </td>
                             <td>
                                 <span class="wls-status-pill is-on">Nginx</span>
@@ -2812,6 +2850,14 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                             data-wls-project-detail-toggle
                                             aria-controls="<?= $escapeHtml($projectDetailId) ?>"
                                             aria-expanded="false"><?= __('详情') ?></button>
+                                    <button class="wls-lifecycle-button is-reload"
+                                            type="button"
+                                            data-wls-lifecycle-action="reload"
+                                            <?= !$projectLifecycleAvailable || $projectLifecycleBusy ? 'disabled' : '' ?>><?= __('重载') ?></button>
+                                    <button class="wls-lifecycle-button is-restart"
+                                            type="button"
+                                            data-wls-lifecycle-action="restart"
+                                            <?= !$projectLifecycleAvailable || $projectLifecycleBusy ? 'disabled' : '' ?>><?= __('重启') ?></button>
                                     <?php if ($projectAdminLink !== ''): ?>
                                         <a href="<?= htmlspecialchars($projectAdminLink, ENT_QUOTES, 'UTF-8') ?>"><?= __('后台') ?></a>
                                     <?php endif; ?>
@@ -2822,7 +2868,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             </td>
                         </tr>
                         <tr class="wls-project-detail-row" data-wls-project-detail-row id="<?= $escapeHtml($projectDetailId) ?>" hidden>
-                            <td colspan="6">
+                            <td colspan="7">
                                 <div class="wls-project-detail-panel">
                                     <div class="wls-project-meta">
                                         <div>
@@ -2846,6 +2892,57 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                             <span class="wls-meta-value">Nginx</span>
                                         </div>
                                     </div>
+                                    <section class="wls-lifecycle-control"
+                                             data-wls-lifecycle-scope
+                                             data-wls-lifecycle-project-key="<?= $escapeHtml($projectLifecycleKey) ?>"
+                                             data-wls-lifecycle-project-name="<?= $escapeHtml($projectName) ?>"
+                                             data-wls-lifecycle-instance="<?= $escapeHtml($projectLifecycleInstance) ?>"
+                                             data-wls-lifecycle-available="<?= $projectLifecycleAvailable ? '1' : '0' ?>"
+                                             data-wls-lifecycle-busy="<?= $projectLifecycleBusy ? '1' : '0' ?>"
+                                             aria-label="<?= $escapeHtml(__('WLS 生命周期控制')) ?>">
+                                        <div class="wls-lifecycle-control-head">
+                                            <div>
+                                                <strong><?= __('WLS 生命周期') ?></strong>
+                                                <span><?= __('重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。') ?></span>
+                                            </div>
+                                            <span class="wls-status-pill <?= $escapeHtml($projectLifecyclePillClass) ?>"
+                                                  data-wls-lifecycle-state><?= $escapeHtml($projectLifecycleStateLabel) ?></span>
+                                        </div>
+                                        <dl class="wls-lifecycle-facts">
+                                            <div>
+                                                <dt><?= __('实例') ?></dt>
+                                                <dd data-wls-lifecycle-instance-label><?= $projectLifecycleInstance !== '' ? $escapeHtml($projectLifecycleInstance) : '-' ?></dd>
+                                            </div>
+                                            <div>
+                                                <dt><?= __('Worker 代际') ?></dt>
+                                                <dd data-wls-lifecycle-generation><?= (int)($projectLifecycle['worker_generation'] ?? 0) ?></dd>
+                                            </div>
+                                            <div>
+                                                <dt><?= __('Ready Worker') ?></dt>
+                                                <dd data-wls-lifecycle-workers><?= (int)($projectLifecycle['ready_workers'] ?? 0) ?>/<?= (int)($projectLifecycle['total_workers'] ?? 0) ?></dd>
+                                            </div>
+                                            <div>
+                                                <dt><?= __('更新时间') ?></dt>
+                                                <dd data-wls-lifecycle-updated><?= $escapeHtml($projectLifecycleUpdatedAt !== '' ? $projectLifecycleUpdatedAt : '-') ?></dd>
+                                            </div>
+                                        </dl>
+                                        <div class="wls-lifecycle-message" data-wls-lifecycle-message aria-live="polite">
+                                            <?= $escapeHtml($projectLifecycleMessage) ?>
+                                        </div>
+                                        <div class="wls-lifecycle-actions">
+                                            <button class="wls-lifecycle-button is-reload"
+                                                    type="button"
+                                                    data-wls-lifecycle-action="reload"
+                                                    <?= !$projectLifecycleAvailable || $projectLifecycleBusy ? 'disabled' : '' ?>><?= __('重载项目') ?></button>
+                                            <button class="wls-lifecycle-button is-restart"
+                                                    type="button"
+                                                    data-wls-lifecycle-action="restart"
+                                                    <?= !$projectLifecycleAvailable || $projectLifecycleBusy ? 'disabled' : '' ?>><?= __('重启工作进程') ?></button>
+                                            <?php if (!$projectLifecycleAvailable && $projectPanelLink !== ''): ?>
+                                                <a href="<?= $escapeHtml($projectPanelLink) ?>"><?= __('打开项目面板') ?></a>
+                                            <?php endif; ?>
+                                        </div>
+                                    </section>
                                     <div class="wls-project-actions">
                                 <?php if ($projectAdminLink !== ''): ?>
                                     <a href="<?= htmlspecialchars($projectAdminLink, ENT_QUOTES, 'UTF-8') ?>"><?= __('项目后台') ?></a>
@@ -2884,7 +2981,35 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <span data-wls-project-page-label></span>
                         <button class="wls-secondary-button" type="button" data-wls-project-page-next><?= __('下一页') ?></button>
                     </div>
+                </div>
+                <dialog class="wls-lifecycle-dialog" data-wls-lifecycle-dialog>
+                    <form method="dialog" data-wls-lifecycle-restart-form>
+                        <div class="wls-lifecycle-dialog-head">
+                            <div>
+                                <span class="wls-status-pill is-risk-high"><?= __('高风险操作') ?></span>
+                                <h3><?= __('重启 WLS 工作进程') ?></h3>
                             </div>
+                            <button class="wls-dialog-close" type="button" data-wls-lifecycle-dialog-close aria-label="<?= $escapeHtml(__('关闭')) ?>">×</button>
+                        </div>
+                        <p><?= __('重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。') ?></p>
+                        <dl class="wls-lifecycle-dialog-target">
+                            <div><dt><?= __('项目') ?></dt><dd data-wls-lifecycle-dialog-project>-</dd></div>
+                            <div><dt><?= __('实例') ?></dt><dd data-wls-lifecycle-dialog-instance>-</dd></div>
+                        </dl>
+                        <label class="wls-form-field">
+                            <span><?= __('输入项目名称以确认') ?></span>
+                            <input type="text"
+                                   autocomplete="off"
+                                   data-wls-lifecycle-confirm-input
+                                   placeholder="<?= $escapeHtml(__('输入上方项目名称')) ?>">
+                        </label>
+                        <div class="wls-lifecycle-dialog-validation" data-wls-lifecycle-dialog-validation aria-live="polite"></div>
+                        <div class="wls-lifecycle-dialog-actions">
+                            <button class="wls-secondary-button" type="button" data-wls-lifecycle-dialog-cancel><?= __('取消') ?></button>
+                            <button class="wls-lifecycle-button is-restart" type="submit" data-wls-lifecycle-dialog-submit disabled><?= __('确认重启') ?></button>
+                        </div>
+                    </form>
+                </dialog>
             </section>
 
         <?php endif; ?>
@@ -3639,6 +3764,190 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     display: grid;
     gap: 14px;
     padding: 16px;
+}
+.wls-lifecycle-cell {
+    display: grid;
+    gap: 5px;
+    min-width: 118px;
+}
+.wls-lifecycle-cell small {
+    color: var(--wls-muted);
+    font-size: 11px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+.wls-lifecycle-button {
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    justify-content: center;
+    min-height: 30px;
+    padding: 5px 11px;
+    transition: background-color 180ms ease, border-color 180ms ease, opacity 180ms ease;
+}
+.wls-lifecycle-button.is-reload {
+    background: var(--wls-success-surface);
+    border-color: rgba(15, 143, 134, 0.3);
+    color: var(--wls-success);
+}
+.wls-lifecycle-button.is-restart {
+    background: var(--wls-danger-surface);
+    border-color: rgba(185, 46, 46, 0.3);
+    color: var(--wls-danger);
+}
+.wls-lifecycle-button:hover:not(:disabled),
+.wls-lifecycle-button:focus-visible:not(:disabled) {
+    border-color: currentColor;
+    outline: 3px solid var(--wls-focus-ring);
+    outline-offset: 1px;
+}
+.wls-lifecycle-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.46;
+}
+.wls-lifecycle-control {
+    background: var(--wls-surface);
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+    display: grid;
+    gap: 13px;
+    padding: 14px;
+}
+.wls-lifecycle-control-head {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+}
+.wls-lifecycle-control-head > div {
+    display: grid;
+    gap: 4px;
+}
+.wls-lifecycle-control-head strong {
+    color: var(--wls-text);
+    font-size: 15px;
+}
+.wls-lifecycle-control-head span:not(.wls-status-pill),
+.wls-lifecycle-message {
+    color: var(--wls-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.wls-lifecycle-facts,
+.wls-lifecycle-dialog-target {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0;
+}
+.wls-lifecycle-facts div,
+.wls-lifecycle-dialog-target div {
+    background: var(--wls-surface-2);
+    border: 1px solid var(--wls-border);
+    border-radius: 7px;
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 9px 10px;
+}
+.wls-lifecycle-facts dt,
+.wls-lifecycle-dialog-target dt {
+    color: var(--wls-muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+.wls-lifecycle-facts dd,
+.wls-lifecycle-dialog-target dd {
+    color: var(--wls-text);
+    font-size: 13px;
+    font-weight: 800;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+.wls-lifecycle-message {
+    background: var(--wls-surface-2);
+    border-left: 3px solid var(--wls-accent);
+    border-radius: 6px;
+    min-height: 38px;
+    padding: 9px 11px;
+}
+.wls-lifecycle-actions,
+.wls-lifecycle-dialog-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.wls-lifecycle-actions a {
+    color: var(--wls-accent-2);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+}
+.wls-lifecycle-dialog {
+    background: var(--wls-surface);
+    border: 1px solid var(--wls-border);
+    border-radius: 12px;
+    box-shadow: 0 28px 80px rgba(3, 18, 26, 0.34);
+    color: var(--wls-text);
+    margin: auto;
+    max-width: min(560px, calc(100vw - 28px));
+    padding: 0;
+    width: 100%;
+}
+.wls-lifecycle-dialog::backdrop {
+    background: rgba(3, 18, 26, 0.68);
+    backdrop-filter: blur(2px);
+}
+.wls-lifecycle-dialog form {
+    display: grid;
+    gap: 16px;
+    padding: 20px;
+}
+.wls-lifecycle-dialog p {
+    color: var(--wls-muted);
+    line-height: 1.55;
+    margin: 0;
+}
+.wls-lifecycle-dialog-head {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+}
+.wls-lifecycle-dialog-head > div {
+    display: grid;
+    gap: 8px;
+}
+.wls-lifecycle-dialog-head h3 {
+    color: var(--wls-text);
+    font-size: 20px;
+    margin: 0;
+}
+.wls-dialog-close {
+    background: transparent;
+    border: 0;
+    color: var(--wls-muted);
+    cursor: pointer;
+    font-size: 26px;
+    line-height: 1;
+    padding: 2px 4px;
+}
+.wls-lifecycle-dialog-target {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.wls-lifecycle-dialog-validation {
+    color: var(--wls-danger);
+    font-size: 12px;
+    min-height: 18px;
+}
+.wls-lifecycle-dialog-actions {
+    justify-content: flex-end;
 }
 .wls-project-list-empty {
     border: 1px dashed var(--wls-border);
@@ -4939,6 +5248,12 @@ a.wls-meta-value:hover {
     .wls-rule-diff-values {
         grid-template-columns: minmax(0, 1fr);
     }
+    .wls-lifecycle-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .wls-lifecycle-control-head {
+        flex-direction: column;
+    }
     .wls-project-meta div {
         grid-template-columns: minmax(0, 1fr);
         gap: 4px;
@@ -5016,6 +5331,10 @@ a.wls-meta-value:hover {
     }
     .wls-shell-main {
         padding: 16px 10px 24px;
+    }
+    .wls-lifecycle-facts,
+    .wls-lifecycle-dialog-target {
+        grid-template-columns: minmax(0, 1fr);
     }
     .wls-shell-nav {
         grid-template-columns: minmax(0, 1fr);
@@ -5394,6 +5713,278 @@ a.wls-meta-value:hover {
     });
 
     render();
+})();
+
+(function () {
+    const list = document.querySelector('[data-wls-project-list]');
+    if (!list) {
+        return;
+    }
+
+    const messages = <?= json_encode([
+        'apiUnavailable' => __('WLS 后台业务 API 尚未加载。'),
+        'requestFailed' => __('WLS 生命周期操作失败。'),
+        'submittingReload' => __('正在提交项目重载…'),
+        'submittingRestart' => __('正在提交项目重启…'),
+        'waitingReady' => __('操作已提交，正在等待实例恢复到 Ready…'),
+        'reloadCompleted' => __('项目重载完成，实例已恢复到 Ready。'),
+        'restartCompleted' => __('项目重启完成，Master 保持在线且工作进程已恢复到 Ready。'),
+        'pollTimeout' => __('操作已提交，但等待 Ready 超时；请继续查看实例状态。'),
+        'confirmMismatch' => __('输入的项目名称不匹配。'),
+        'instancePrefix' => __('实例：%{1}'),
+        'noInstance' => __('未绑定实例'),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const scopes = Array.from(list.querySelectorAll('[data-wls-lifecycle-scope]'));
+    const pending = new Set();
+    const dialog = document.querySelector('[data-wls-lifecycle-dialog]');
+    const dialogForm = dialog ? dialog.querySelector('[data-wls-lifecycle-restart-form]') : null;
+    const dialogProject = dialog ? dialog.querySelector('[data-wls-lifecycle-dialog-project]') : null;
+    const dialogInstance = dialog ? dialog.querySelector('[data-wls-lifecycle-dialog-instance]') : null;
+    const dialogInput = dialog ? dialog.querySelector('[data-wls-lifecycle-confirm-input]') : null;
+    const dialogSubmit = dialog ? dialog.querySelector('[data-wls-lifecycle-dialog-submit]') : null;
+    const dialogValidation = dialog ? dialog.querySelector('[data-wls-lifecycle-dialog-validation]') : null;
+    let restartTarget = null;
+
+    const projectScopes = function (projectKey) {
+        return scopes.filter(function (scope) {
+            return scope.getAttribute('data-wls-lifecycle-project-key') === projectKey;
+        });
+    };
+
+    const api = function () {
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            return Promise.reject(new Error(messages.apiUnavailable));
+        }
+        return Promise.resolve(window.Weline.Api.resource('wlsPanelLifecycle'));
+    };
+
+    const errorMessage = function (error) {
+        return error && error.message ? error.message : String(error || messages.requestFailed);
+    };
+
+    const setMessage = function (projectKey, message) {
+        projectScopes(projectKey).forEach(function (scope) {
+            const node = scope.querySelector('[data-wls-lifecycle-message]');
+            if (node) {
+                node.textContent = message;
+            }
+        });
+    };
+
+    const renderStatus = function (projectKey, status) {
+        const available = status && status.available === true;
+        const busy = status && status.busy === true;
+        const ready = status && status.ready === true;
+        const stateLabel = String((status && status.state_label) || '');
+        const instance = String((status && status.instance) || '');
+        projectScopes(projectKey).forEach(function (scope) {
+            scope.setAttribute('data-wls-lifecycle-instance', instance);
+            scope.setAttribute('data-wls-lifecycle-available', available ? '1' : '0');
+            scope.setAttribute('data-wls-lifecycle-busy', busy ? '1' : '0');
+            scope.querySelectorAll('[data-wls-lifecycle-state]').forEach(function (node) {
+                node.classList.remove('is-on', 'is-off');
+                if (ready) {
+                    node.classList.add('is-on');
+                } else if (!busy) {
+                    node.classList.add('is-off');
+                }
+                node.textContent = stateLabel;
+            });
+            scope.querySelectorAll('[data-wls-lifecycle-instance-label]').forEach(function (node) {
+                node.textContent = scope.classList.contains('wls-project-row')
+                    ? (instance ? messages.instancePrefix.replace('%{1}', instance) : messages.noInstance)
+                    : (instance || '-');
+            });
+            const generation = scope.querySelector('[data-wls-lifecycle-generation]');
+            if (generation) {
+                generation.textContent = String((status && status.worker_generation) || 0);
+            }
+            const workers = scope.querySelector('[data-wls-lifecycle-workers]');
+            if (workers) {
+                workers.textContent = String((status && status.ready_workers) || 0)
+                    + '/' + String((status && status.total_workers) || 0);
+            }
+            const updated = scope.querySelector('[data-wls-lifecycle-updated]');
+            if (updated) {
+                updated.textContent = String((status && status.updated_at) || '-');
+            }
+            const message = scope.querySelector('[data-wls-lifecycle-message]');
+            if (message && status && status.message) {
+                message.textContent = String(status.message);
+            }
+            scope.querySelectorAll('[data-wls-lifecycle-action]').forEach(function (button) {
+                button.disabled = !available || busy || pending.has(projectKey);
+            });
+        });
+    };
+
+    const setPending = function (projectKey, value, message) {
+        if (value) {
+            pending.add(projectKey);
+        } else {
+            pending.delete(projectKey);
+        }
+        projectScopes(projectKey).forEach(function (scope) {
+            const available = scope.getAttribute('data-wls-lifecycle-available') === '1';
+            const busy = scope.getAttribute('data-wls-lifecycle-busy') === '1';
+            scope.querySelectorAll('[data-wls-lifecycle-action]').forEach(function (button) {
+                button.disabled = value || !available || busy;
+            });
+        });
+        if (message) {
+            setMessage(projectKey, message);
+        }
+    };
+
+    const pollUntilReady = async function (resource, projectKey, action, baselineGeneration, baselineRevision) {
+        let sawBusy = false;
+        let failures = 0;
+        for (let attempt = 0; attempt < 40; attempt++) {
+            await new Promise(function (resolve) {
+                window.setTimeout(resolve, 1500);
+            });
+            try {
+                const status = await resource.status({project_key: projectKey});
+                failures = 0;
+                sawBusy = sawBusy || status.busy === true;
+                renderStatus(projectKey, status);
+                const generationAdvanced = Number(status.worker_generation || 0) > baselineGeneration;
+                const revisionChanged = baselineRevision !== ''
+                    && String(status.worker_revision || '') !== ''
+                    && String(status.worker_revision) !== baselineRevision;
+                if (status.ready === true && (generationAdvanced || revisionChanged || sawBusy)) {
+                    setPending(projectKey, false, action === 'restart'
+                        ? messages.restartCompleted
+                        : messages.reloadCompleted);
+                    return;
+                }
+            } catch (error) {
+                failures++;
+                if (failures >= 3) {
+                    setPending(projectKey, false, errorMessage(error));
+                    return;
+                }
+            }
+        }
+        setPending(projectKey, false, messages.pollTimeout);
+    };
+
+    const executeAction = async function (projectKey, action, projectName) {
+        setPending(
+            projectKey,
+            true,
+            action === 'restart' ? messages.submittingRestart : messages.submittingReload
+        );
+        try {
+            const resource = await api();
+            const result = action === 'restart'
+                ? await resource.restart({project_key: projectKey, confirm_project: projectName})
+                : await resource.reload({project_key: projectKey});
+            if (!result || result.success !== true) {
+                setPending(projectKey, false, String((result && result.message) || messages.requestFailed));
+                if (result && result.status) {
+                    renderStatus(projectKey, result.status);
+                }
+                return;
+            }
+            if (result.status) {
+                renderStatus(projectKey, result.status);
+            }
+            setPending(projectKey, true, String(result.message || messages.waitingReady));
+            await pollUntilReady(
+                resource,
+                projectKey,
+                action,
+                Number(result.baseline_worker_generation || 0),
+                String(result.baseline_worker_revision || '')
+            );
+        } catch (error) {
+            setPending(projectKey, false, errorMessage(error));
+        }
+    };
+
+    const closeDialog = function () {
+        restartTarget = null;
+        if (dialog && dialog.open) {
+            dialog.close();
+        }
+    };
+
+    const syncDialogConfirmation = function () {
+        const matches = restartTarget && dialogInput
+            && dialogInput.value.trim() === restartTarget.projectName;
+        if (dialogSubmit) {
+            dialogSubmit.disabled = !matches;
+        }
+        if (dialogValidation) {
+            dialogValidation.textContent = dialogInput && dialogInput.value !== '' && !matches
+                ? messages.confirmMismatch
+                : '';
+        }
+    };
+
+    const openRestartDialog = function (scope) {
+        if (!dialog || !dialogInput || typeof dialog.showModal !== 'function') {
+            return;
+        }
+        restartTarget = {
+            projectKey: scope.getAttribute('data-wls-lifecycle-project-key') || '',
+            projectName: scope.getAttribute('data-wls-lifecycle-project-name') || '',
+            instance: scope.getAttribute('data-wls-lifecycle-instance') || '',
+        };
+        if (dialogProject) {
+            dialogProject.textContent = restartTarget.projectName || '-';
+        }
+        if (dialogInstance) {
+            dialogInstance.textContent = restartTarget.instance || '-';
+        }
+        dialogInput.value = '';
+        syncDialogConfirmation();
+        dialog.showModal();
+        window.requestAnimationFrame(function () {
+            dialogInput.focus();
+        });
+    };
+
+    list.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-wls-lifecycle-action]');
+        if (!button || button.disabled) {
+            return;
+        }
+        const scope = button.closest('[data-wls-lifecycle-scope]');
+        if (!scope) {
+            return;
+        }
+        const projectKey = scope.getAttribute('data-wls-lifecycle-project-key') || '';
+        const projectName = scope.getAttribute('data-wls-lifecycle-project-name') || '';
+        if (button.getAttribute('data-wls-lifecycle-action') === 'restart') {
+            openRestartDialog(scope);
+            return;
+        }
+        executeAction(projectKey, 'reload', projectName);
+    });
+
+    if (dialogInput) {
+        dialogInput.addEventListener('input', syncDialogConfirmation);
+    }
+    if (dialog) {
+        dialog.querySelectorAll('[data-wls-lifecycle-dialog-close], [data-wls-lifecycle-dialog-cancel]').forEach(function (button) {
+            button.addEventListener('click', closeDialog);
+        });
+    }
+    if (dialogForm) {
+        dialogForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (!restartTarget || !dialogInput
+                || dialogInput.value.trim() !== restartTarget.projectName) {
+                syncDialogConfirmation();
+                return;
+            }
+            const target = restartTarget;
+            closeDialog();
+            executeAction(target.projectKey, 'restart', target.projectName);
+        });
+    }
 })();
 
 (function () {

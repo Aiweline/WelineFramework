@@ -37,9 +37,21 @@ abstract class AbstractCompiler implements CompilerInterface
         $identityField = $options['identity_field'] ?? 'id';
         $tableAlias = $options['table_alias'] ?? 'main_table';
 
-        $table = $this->formatTableFromAst($ast, $action !== 'insert');
+        $includeTableAlias = !in_array($action, ['insert', 'delete'], true);
+        $table = $this->formatTableFromAst($ast, $includeTableAlias);
         $joins = $this->buildJoins($ast['joins'] ?? [], $tableAlias);
-        $wheres = $this->buildWheres($ast['where'] ?? [], $ast);
+        $whereAst = $ast['where'] ?? [];
+        if ($action === 'delete' && $tableAlias !== '') {
+            $aliasPattern = '/^(?:`|\")?' . preg_quote($tableAlias, '/') . '(?:`|\")?\./';
+            foreach ($whereAst as &$where) {
+                if (!is_array($where) || !isset($where[0]) || !is_string($where[0])) {
+                    continue;
+                }
+                $where[0] = preg_replace($aliasPattern, '', trim($where[0])) ?? $where[0];
+            }
+            unset($where);
+        }
+        $wheres = $this->buildWheres($whereAst, $ast);
         $order = $this->buildOrder($ast['order'] ?? []);
         $groupBy = $this->buildGroupBy((string)($ast['group'] ?? ''));
         $having = !empty($ast['having']) ? 'HAVING ' . $ast['having'] : '';
@@ -104,7 +116,14 @@ abstract class AbstractCompiler implements CompilerInterface
         string $limit
     ): string {
         $fields = $this->formatFields($ast['select']['fields'] ?? '*', $ast['from']['alias'] ?? 'main_table');
-        return trim("SELECT {$fields} FROM {$table} {$joins} {$wheres} {$groupBy} {$having} {$extra} {$order} {$limit}");
+        $isLockingClause = preg_match(
+            '/^(?:FOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)|LOCK\s+IN\s+SHARE\s+MODE)\b/i',
+            trim($extra),
+        ) === 1;
+        $beforeLimitExtra = $isLockingClause ? '' : $extra;
+        $afterLimitExtra = $isLockingClause ? $extra : '';
+
+        return trim("SELECT {$fields} FROM {$table} {$joins} {$wheres} {$groupBy} {$having} {$beforeLimitExtra} {$order} {$limit} {$afterLimitExtra}");
     }
 
     protected function buildWheres(array $wheres, array $ast = []): string
@@ -144,8 +163,7 @@ abstract class AbstractCompiler implements CompilerInterface
             }
 
             if (($where[2] ?? null) === null) {
-                $op = strtolower(trim((string)($where[1] ?? '=')));
-                $isNot = in_array($op, ['!=', '<>', 'not', 'not ='], true);
+                $isNot = $this->nullComparisonIsNot((string)($where[1] ?? '='));
                 $parts[] = '(' . $fieldQuoted . ($isNot ? ' IS NOT NULL' : ' IS NULL') . ')' . $logic;
                 continue;
             }
@@ -401,6 +419,17 @@ abstract class AbstractCompiler implements CompilerInterface
     protected function normalizeOperator(string $op): string
     {
         return in_array($op, self::WHERE_CONDITIONS, true) ? strtoupper($op) : '=';
+    }
+
+    /**
+     * A null RHS must use SQL's IS predicate. Keep explicit IS NULL variants
+     * aligned with legacy adapter builders while preserving existing symbolic
+     * null-comparison operators.
+     */
+    private function nullComparisonIsNot(string $operator): bool
+    {
+        $operator = strtolower(trim((string)preg_replace('/\s+/', ' ', $operator)));
+        return in_array($operator, ['!=', '<>', 'not', 'not =', 'is not null'], true);
     }
 
     abstract protected function buildInsert(array $ast, string $table, array $options): string;

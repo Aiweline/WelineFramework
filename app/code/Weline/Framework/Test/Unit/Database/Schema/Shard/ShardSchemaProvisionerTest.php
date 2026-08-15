@@ -284,6 +284,7 @@ final class ShardSchemaProvisionerTest extends TestCase
             $executor = new SchemaMigrationExecutor(
                 $this->createMock(EventsManager::class),
                 $migration,
+                $this->createMock(\Weline\Framework\Database\Service\BackupService::class),
             );
             $provisioner = new ShardSchemaProvisioner(
                 $factory,

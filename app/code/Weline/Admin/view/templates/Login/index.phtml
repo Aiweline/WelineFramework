@@ -1736,6 +1736,104 @@ for ($loginInkIndex = 0; $loginInkIndex < $loginInkStrokeCount; $loginInkIndex++
         color: #7f8f88;
     }
 
+    /* The compact login overlay must not repaint a light canvas in dark mode. */
+    [data-theme="dark"] body.weline-admin-login-page {
+        background: var(--login-page-bg);
+        color: var(--login-text-primary);
+    }
+
+    [data-theme="dark"] body.weline-admin-login-page::before {
+        opacity: 0.16;
+        background-image:
+            linear-gradient(105deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.42) 48%, rgba(30, 41, 59, 0.6)),
+            var(--login-custom-bg);
+        filter: saturate(0.78) contrast(1.02);
+    }
+
+    [data-theme="dark"] .weline-admin-login-card {
+        border-color: var(--login-shell-border);
+        background: var(--login-card-bg);
+        box-shadow: var(--login-shell-shadow);
+    }
+
+    [data-theme="dark"] .weline-admin-login-card:hover,
+    [data-theme="dark"] .weline-admin-login-card:focus-within {
+        border-color: var(--login-surface-border);
+        background: var(--login-card-bg);
+        box-shadow: 0 22px 54px rgba(2, 6, 23, 0.5), 0 0 0 1px rgba(148, 163, 184, 0.08) inset;
+    }
+
+    [data-theme="dark"] .weline-admin-login-panel-inner,
+    [data-theme="dark"] .weline-admin-login-card:hover .weline-admin-login-panel-inner,
+    [data-theme="dark"] .weline-admin-login-card:focus-within .weline-admin-login-panel-inner {
+        border-color: var(--login-surface-border);
+        background: var(--login-surface-bg);
+        box-shadow: 0 16px 42px rgba(2, 6, 23, 0.28);
+    }
+
+    [data-theme="dark"] .weline-admin-login-heading,
+    [data-theme="dark"] .login-form-label,
+    [data-theme="dark"] .weline-admin-login-remember,
+    [data-theme="dark"] .weline-admin-login-support-title {
+        color: var(--login-text-primary);
+    }
+
+    [data-theme="dark"] .weline-admin-login-subtitle,
+    [data-theme="dark"] .weline-admin-login-option-note,
+    [data-theme="dark"] .weline-admin-login-support-copy {
+        color: var(--login-text-secondary);
+    }
+
+    [data-theme="dark"] .login-form-input,
+    [data-theme="dark"] .login-verification-input {
+        border-color: var(--login-input-border);
+        background: var(--login-input-bg);
+        color: var(--login-text-primary);
+    }
+
+    [data-theme="dark"] .weline-admin-login-card:hover .login-form-input,
+    [data-theme="dark"] .weline-admin-login-card:hover .login-verification-input,
+    [data-theme="dark"] .weline-admin-login-card:focus-within .login-form-input,
+    [data-theme="dark"] .weline-admin-login-card:focus-within .login-verification-input,
+    [data-theme="dark"] .login-form-input:focus,
+    [data-theme="dark"] .login-verification-input:focus {
+        border-color: var(--login-input-focus-border);
+        background: var(--login-input-bg);
+        color: var(--login-text-primary);
+    }
+
+    [data-theme="dark"] .login-form-input::placeholder,
+    [data-theme="dark"] .login-verification-input::placeholder,
+    [data-theme="dark"] .login-input-icon-wrap .input-icon {
+        color: var(--login-text-muted);
+    }
+
+    [data-theme="dark"] .weline-admin-login-messages .wflash--warning {
+        border-color: var(--backend-color-warning-border-subtle, rgba(251, 191, 36, 0.42));
+        background: var(--backend-color-alert-warning-bg, rgba(120, 53, 15, 0.48));
+        color: var(--backend-color-alert-warning-text, #fde68a);
+        box-shadow: 0 14px 30px rgba(2, 6, 23, 0.26);
+    }
+
+    [data-theme="dark"] .weline-admin-login-messages .wflash--warning .wflash__title,
+    [data-theme="dark"] .weline-admin-login-messages .wflash--warning .wflash__body {
+        color: var(--backend-color-alert-warning-text, #fde68a);
+    }
+
+    [data-theme="dark"] .weline-admin-login-messages .wflash--danger {
+        border-color: var(--backend-color-danger-border-subtle, rgba(251, 113, 133, 0.42));
+        background: var(--backend-color-alert-danger-bg, rgba(127, 29, 29, 0.5));
+    }
+
+    [data-theme="dark"] .weline-admin-login-messages .wflash--danger .wflash__title,
+    [data-theme="dark"] .weline-admin-login-messages .wflash--danger .wflash__body {
+        color: var(--backend-color-alert-danger-text, #fecdd3);
+    }
+
+    [data-theme="dark"] .weline-admin-login-copyright {
+        color: var(--login-text-muted);
+    }
+
     @media (max-width: 575.98px) {
         .weline-admin-login-viewport {
             padding: 0.9rem;

@@ -123,6 +123,24 @@ class SessionFactoryTest extends TestCase
         $this->assertSame('WF_BACKEND_USER_MODEL', $session->getAreaConfig()->getUserModelKey());
     }
 
+    public function testRestoreAuthenticatedSessionInstallsAttestedAreaInstance(): void
+    {
+        $sessionId = 'attested-backend-session-unit';
+
+        $restored = $this->factory->restoreAuthenticatedSession('backend', $sessionId);
+
+        $this->assertSame($sessionId, $restored->getId());
+        $this->assertSame($restored, $this->factory->createBackendSession());
+        $this->assertSame('backend', $restored->getArea());
+    }
+
+    public function testRestoreAuthenticatedSessionRejectsUntrustedInputShape(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->factory->restoreAuthenticatedSession('backend', " invalid\n");
+    }
+
     public function testResetRequestInstances(): void
     {
         $session1 = $this->factory->createSession();

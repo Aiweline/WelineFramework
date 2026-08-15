@@ -138,6 +138,47 @@ final class GatewayLinuxSystemdLayout
         }
     }
 
+    /**
+     * Restore only the canonical link removed by an authenticated persistent
+     * systemd stop.  The caller owns the stopped-tree proof.  Creating the
+     * final name directly is deliberately no-clobber: a foreign or concurrent
+     * occupant makes symlink() fail instead of being replaced.
+     */
+    public function restoreDisabledCurrentDefinitionAndFixedLink(
+        string $definition,
+    ): void {
+        $this->paths->assertSystemdDefinitionDirectoryAuthority();
+        $this->paths->assertSystemdUnitLinkDirectoryAuthority();
+        $this->reconcileCanonicalLinkStaging();
+        $this->assertExactTarget($definition);
+
+        $link = $this->paths->systemdServiceLinkFile();
+        $state = $this->fixedLinkState();
+        if ($state === 'exact') {
+            $this->assertCurrentDefinitionAndFixedLink($definition);
+            return;
+        }
+        if ($state !== 'missing'
+            || \file_exists($link)
+            || \is_link($link)
+            || !@\symlink($this->paths->systemdServiceDefinitionFile(), $link)
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway disabled canonical systemd link cannot be restored safely.',
+            );
+        }
+
+        $published = $this->assertExactFixedLink();
+        GatewayProjectStateFilesystem::syncDirectory(\dirname($link));
+        $durable = $this->assertExactFixedLink();
+        if (!$this->sameIdentity($published, $durable)) {
+            throw new \RuntimeException(
+                'WLS Gateway canonical systemd link changed during stopped-state recovery.',
+            );
+        }
+        $this->assertCurrentDefinitionAndFixedLink($definition);
+    }
+
     public function assertCurrentDefinitionAndFixedLink(
         string $definition,
     ): void {
@@ -150,6 +191,47 @@ final class GatewayLinuxSystemdLayout
             );
         }
     }
+    /**
+     * Prove the exact post-disable layout without recreating the canonical
+     * systemd name. The dedicated target remains the durable definition
+     * authority while both the final link and its reserved staging namespace
+     * must be absent.
+     */
+    public function assertDisabledCurrentDefinition(string $definition): void
+    {
+        $this->paths->assertSystemdDefinitionDirectoryAuthority();
+        $this->paths->assertSystemdUnitLinkDirectoryAuthority();
+
+        $target = $this->assertExactTarget($definition);
+        $link = $this->paths->systemdServiceLinkFile();
+        $directory = \dirname($link);
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || $this->fixedLinkState() !== 'missing'
+            || \file_exists($link)
+            || \is_link($link)
+            || $this->canonicalLinkStagingInventory($directory) !== []
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway disabled canonical systemd link is not exactly absent.',
+            );
+        }
+
+        $directoryAfter = @\lstat($directory);
+        $durableTarget = $this->assertExactTarget($definition);
+        if (!\is_array($directoryAfter)
+            || !$this->sameIdentity($directoryBefore, $directoryAfter)
+            || !$this->sameIdentity($target, $durableTarget)
+            || $this->fixedLinkState() !== 'missing'
+            || \file_exists($link)
+            || \is_link($link)
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway disabled systemd layout changed during proof.',
+            );
+        }
+    }
+
 
     /**
      * The stop/disable boundary is owned by GatewayPlatformServiceInstaller.

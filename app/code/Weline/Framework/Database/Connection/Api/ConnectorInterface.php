@@ -164,45 +164,57 @@ interface ConnectorInterface
     public function quoteIdentifier(string $identifier): string;
 
     /**
-     * 生成 ADD COLUMN DDL。$col: name, type, length?, nullable, primaryKey, autoIncrement, default?, comment, unique
+     * Build DDL for the adapter's current exact physical target. $table may be
+     * qualified and/or quoted; implementations must not add a prefix or replace
+     * its namespace. $col: name, type, length?, nullable, primaryKey,
+     * autoIncrement, default?, comment, unique.
      */
     public function buildAlterAddColumnSql(string $table, array $col): string;
 
     /**
-     * 生成 MODIFY COLUMN DDL（方言由各适配器实现）。
-     * @param string $table 表名
+     * Generate MODIFY COLUMN DDL for the exact physical target. The adapter
+     * must not prefix $table or replace an explicit namespace.
+     * @param string $table 当前 adapter 的 exact physical 表名（可 qualified/quoted）
      * @param array $col 新列定义（name, type, length?, nullable, ...）
      * @param array|null $existingCol 现有列定义；类型变更时用于生成兼容当前类型的 NULL 填充值，避免 UPDATE 类型不匹配
      */
     public function buildAlterModifyColumnSql(string $table, array $col, ?array $existingCol = null): string;
 
     /**
-     * 生成 DROP COLUMN DDL。
+     * Generate DROP COLUMN DDL for the exact physical target; never prefix or
+     * replace its namespace.
      */
     public function buildAlterDropColumnSql(string $table, string $colName): string;
 
     /**
-     * 生成表注释 DDL。PostgreSQL 用 COMMENT ON TABLE，MySQL 用 ALTER TABLE COMMENT。
+     * Generate table-comment DDL for the exact physical target; never prefix
+     * or replace its namespace. PostgreSQL uses COMMENT ON TABLE and MySQL ALTER TABLE COMMENT.
      */
     public function buildAlterTableCommentSql(string $table, string $comment): string;
 
     /**
-     * 生成 ADD INDEX / CREATE INDEX DDL。$idx: name, columns, type, method
+     * Generate ADD/CREATE INDEX DDL for the exact physical target; never
+     * prefix or replace its namespace. $idx: name, columns, type, method.
      */
     public function buildAddIndexSql(string $table, array $idx): string;
 
     /**
-     * 生成 DROP INDEX DDL。
+     * Generate DROP INDEX DDL owned by the exact physical target; never prefix
+     * or replace its namespace.
      */
     public function buildDropIndexSql(string $table, string $indexName): string;
 
     /**
-     * 生成 ADD FOREIGN KEY DDL。$fk: name, columns, referencesTable, referencesColumns, onDeleteCascade, onUpdateCascade
+     * Generate ADD FOREIGN KEY DDL for the exact physical target. $table is
+     * never prefixed or moved; referencesTable deliberately remains a logical
+     * name and is resolved by the adapter. Other keys: name, columns,
+     * referencesColumns, onDeleteCascade, onUpdateCascade.
      */
     public function buildAddForeignKeySql(string $table, array $fk): string;
 
     /**
-     * 生成 DROP FOREIGN KEY / DROP CONSTRAINT DDL。
+     * Generate DROP FOREIGN KEY/CONSTRAINT DDL for the exact physical target;
+     * never prefix or replace its namespace.
      */
     public function buildDropForeignKeySql(string $table, string $fkName): string;
 

@@ -10,10 +10,11 @@
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. 本文件：`app/code/Weline/Framework/doc/AI-INDEX.md`
 5. 模块说明：`app/code/Weline/Framework/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-8. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-9. 只读取本次任务相关源码、配置和验证入口
+6. 认证/设备任务：`app/code/Weline/Framework/doc/需求.md`、`app/code/Weline/Framework/doc/开发日志.md`、`app/code/Weline/SessionManager/doc/设备管理架构.md`
+7. `app/code/Weline/Theme/doc/AI-INDEX.md`
+8. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+9. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+10. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -35,13 +36,13 @@
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：12
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：2
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：12
-- `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：14
+- `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：15
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：53
-- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：37
+- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：38
 - `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：2
 - `Ui`：后台/编辑器 UI 参数、schema 或渲染支撑。 文件数：1
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
-- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：13
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：16
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：3
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：3
@@ -57,6 +58,8 @@
 
 ## doc 目录
 
+- `app/code/Weline/Framework/doc/需求.md`
+- `app/code/Weline/Framework/doc/开发日志.md`
 - `app/code/Weline/Framework/doc/0-简介/理念/WelineFramework框架设计目的！.txt`
 - `app/code/Weline/Framework/doc/1-部署/服务器部署.md`
 - `app/code/Weline/Framework/doc/2-快速开始/01-概述.md`
@@ -137,7 +140,7 @@
 - `app/code/Weline/Framework/doc/event/fpc/缓存命中响应.md`
 - `app/code/Weline/Framework/doc/event/framework/resource_changed.md`
 - `app/code/Weline/Framework/doc/event/framework/系统消息通知.md`
-- `... 另有 63 个文档，请按任务在该模块 doc/ 下继续查找`
+- `... 另有 66 个文档，请按任务在该模块 doc/ 下继续查找`
 
 ## 开发前门禁
 

@@ -147,7 +147,7 @@ class FrameworkDbBootstrapStage extends AbstractStage
                 'comment' => $col->comment,
                 'unique' => $col->unique,
             ];
-            $sql = $connector->buildAlterAddColumnSql($tableName, $colArr);
+            $sql = $connector->buildAlterAddColumnSql($connector->formatTableName($tableName), $colArr);
             if ($sql !== '') {
                 $connector->query($sql)->fetch();
             }
@@ -204,7 +204,7 @@ class FrameworkDbBootstrapStage extends AbstractStage
                 || $connector->hasField($backupsTable, $column->name)) {
                 continue;
             }
-            $sql = $connector->buildAlterAddColumnSql($backupsTable, [
+            $sql = $connector->buildAlterAddColumnSql($connector->formatTableName($backupsTable), [
                 'name' => $column->name,
                 'type' => $column->type,
                 'length' => $column->length,
@@ -245,7 +245,7 @@ class FrameworkDbBootstrapStage extends AbstractStage
             if ($connector->hasField($tableName, $col->name)) {
                 continue;
             }
-            $sql = $connector->buildAlterAddColumnSql($tableName, [
+            $sql = $connector->buildAlterAddColumnSql($connector->formatTableName($tableName), [
                 'name' => $col->name,
                 'type' => $col->type,
                 'length' => $col->length,

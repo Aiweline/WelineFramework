@@ -300,6 +300,15 @@ final class GatewayRegistrationBuilder
         if ($publicHost === '') {
             $publicHost = \trim((string)($gatewayCertificate['domain'] ?? ''));
         }
+        $certificateMap = $this->appendEndpointPendingGenerationFallback(
+            $certificateMap,
+            $publicHost,
+            $endpointCert,
+            $endpointKey,
+            $gatewayCertificate,
+            $certificateTrustProfile,
+            ($gateway['certificate_pending'] ?? false) === true,
+        );
         $certificateMap = $this->appendEndpointActiveGenerationFallback(
             $certificateMap,
             $publicHost,
@@ -549,6 +558,15 @@ final class GatewayRegistrationBuilder
         if ($publicHost === '') {
             $publicHost = \trim((string)($gatewayCertificate['domain'] ?? ''));
         }
+        $certificateMap = $this->appendEndpointPendingGenerationFallback(
+            $certificateMap,
+            $publicHost,
+            $endpointCert,
+            $endpointKey,
+            $gatewayCertificate,
+            $certificateTrustProfile,
+            ($endpointGateway['certificate_pending'] ?? false) === true,
+        );
         $certificateMap = $this->appendEndpointActiveGenerationFallback(
             $certificateMap,
             $publicHost,
@@ -568,7 +586,9 @@ final class GatewayRegistrationBuilder
         // immutable certificate generation is activated. A 257th endpoint
         // fallback domain, normalized duplicate, invalid policy or missing www
         // target must not leave a partial per-domain generation behind.
-        $preflightRoutes = $this->preflightCertificateRoutes($certificateMap);
+        $preflightRoutes = $this->publicRegistrationCertificateRoutes(
+            $this->preflightCertificateRoutes($certificateMap),
+        );
         $instanceGeneration = (int)($endpointGateway['instance_generation'] ?? 0);
         if ($instanceGeneration < 1) {
             throw new \RuntimeException(
@@ -1324,6 +1344,111 @@ final class GatewayRegistrationBuilder
     }
 
     /**
+     * A pending endpoint is not a certificate fact source. It may contribute
+     * only its exact public Host after both endpoint projections prove the
+     * same production challenge-only state with no certificate material.
+     *
+     * @param array<mixed,mixed> $certificateMap
+     * @param array<string,mixed> $gatewayCertificate
+     * @return array<mixed,mixed>
+     */
+    private function appendEndpointPendingGenerationFallback(
+        array $certificateMap,
+        string $publicHost,
+        string $endpointCertificate,
+        string $endpointPrivateKey,
+        array $gatewayCertificate,
+        string $trustProfile,
+        bool $certificatePending,
+    ): array {
+        if (!$certificatePending) {
+            return $certificateMap;
+        }
+
+        $domain = $this->normalizeGatewayDomain($publicHost);
+        $sourceDomain = $this->normalizeGatewayDomain((string)(
+            $gatewayCertificate['domain'] ?? ''
+        ));
+        $trustProfile = ProjectCertificateGenerationStore::normalizeTrustProfile(
+            $trustProfile,
+        );
+        $sourceTrustProfile = \array_key_exists('trust_profile', $gatewayCertificate)
+            ? ProjectCertificateGenerationStore::normalizeTrustProfile((string)(
+                $gatewayCertificate['trust_profile']
+            ))
+            : '';
+        if ($domain === null
+            || \str_starts_with($domain, '*.')
+            || $sourceDomain === null
+            || !\hash_equals($domain, $sourceDomain)
+            || !\hash_equals(
+                ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
+                $trustProfile,
+            )
+            || !\hash_equals($trustProfile, $sourceTrustProfile)
+            || ($gatewayCertificate['pending'] ?? null) !== true
+            || $endpointCertificate !== ''
+            || $endpointPrivateKey !== ''
+            || \trim((string)($gatewayCertificate['cert_path'] ?? '')) !== ''
+            || \trim((string)($gatewayCertificate['key_path'] ?? '')) !== ''
+            || \trim((string)($gatewayCertificate['chain_path'] ?? '')) !== ''
+            || (int)($gatewayCertificate['generation'] ?? -1) !== 0
+            || \trim((string)($gatewayCertificate['source_digest'] ?? '')) !== ''
+            || \trim((string)($gatewayCertificate['provenance_digest'] ?? '')) !== ''
+            || \trim((string)($gatewayCertificate['material_class'] ?? '')) !== ''
+            || \trim((string)(
+                $gatewayCertificate['leaf_fingerprint_sha256'] ?? ''
+            )) !== ''
+            || !\hash_equals(
+                ProjectCertificateGenerationStore::PROVIDER_EXTERNAL,
+                \strtolower(\trim((string)($gatewayCertificate['provider'] ?? ''))),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Runtime endpoint pending certificate after-image is invalid.',
+            );
+        }
+
+        $mapKey = $domain;
+        $existingMaterial = [];
+        foreach ($certificateMap as $candidateKey => $candidateMaterial) {
+            if (!\is_string($candidateKey)
+                || !\is_array($candidateMaterial)
+                || $this->normalizeGatewayDomain($candidateKey) !== $domain
+            ) {
+                continue;
+            }
+            $mapKey = $candidateKey;
+            $existingMaterial = $candidateMaterial;
+            break;
+        }
+        $existingState = \strtolower(\trim((string)(
+            $existingMaterial['certificate_state'] ?? ''
+        )));
+        $existingCertificate = \trim((string)($existingMaterial['cert'] ?? ''));
+        $existingPrivateKey = \trim((string)($existingMaterial['key'] ?? ''));
+        if ($existingState === 'disabled'
+            || $existingState === 'active'
+            || $existingCertificate !== ''
+            || $existingPrivateKey !== ''
+        ) {
+            return $certificateMap;
+        }
+
+        $certificateMap[$mapKey] = \array_replace($existingMaterial, [
+            'cert' => '',
+            'key' => '',
+            'chain' => '',
+            'cert_type' => 'exact',
+            'force_https' => $existingMaterial['force_https'] ?? 1,
+            'force_root_to_www' => $existingMaterial['force_root_to_www'] ?? 0,
+            'certificate_state' => 'pending',
+            'provider' => ProjectCertificateGenerationStore::PROVIDER_EXTERNAL,
+        ]);
+        return $certificateMap;
+    }
+
+    /**
      * A runtime endpoint is an observed consumer of project certificate truth,
      * never an alternate certificate fact source. It may fill a storage-map
      * hole only when every endpoint field matches the currently active,
@@ -1565,6 +1690,29 @@ final class GatewayRegistrationBuilder
         }
         \ksort($routes, SORT_STRING);
         return \array_values($routes);
+    }
+
+    /**
+     * Project-local certificate facts remain part of the serving manifest,
+     * but the host Gateway accepts only public DNS/SNI tenant routes.
+     *
+     * @param list<array{domain:string}> $routes
+     * @return list<array{domain:string}>
+     */
+    private function publicRegistrationCertificateRoutes(array $routes): array
+    {
+        return \array_values(\array_filter(
+            $routes,
+            static function (array $route): bool {
+                $domain = (string)($route['domain'] ?? '');
+                $body = \str_starts_with($domain, '*.')
+                    ? \substr($domain, 2)
+                    : $domain;
+                return $body !== ''
+                    && !\hash_equals('localhost', $body)
+                    && \filter_var($body, FILTER_VALIDATE_IP) === false;
+            },
+        ));
     }
 
     /**

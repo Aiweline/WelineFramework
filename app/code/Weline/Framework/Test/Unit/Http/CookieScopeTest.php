@@ -16,6 +16,7 @@ final class CookieScopeTest extends TestCase
 {
     protected function tearDown(): void
     {
+        CookieScope::setPolicyResolverOverride(null);
         HeaderCollector::reset();
         parent::tearDown();
     }
@@ -49,6 +50,28 @@ final class CookieScopeTest extends TestCase
         $collector = HeaderCollector::getInstance();
         $collector->setCookie($cookieName, 'dev-token', \time() + 60, '/', '', false, true, 'Strict');
         $cookies = \array_values($collector->getCookies());
+        self::assertCount(1, $cookies);
+        self::assertSame($cookieName, $cookies[0]['name']);
+        self::assertSame('/', $cookies[0]['path']);
+    }
+
+    public function testBackendRememberDeviceCookieStaysExactAcrossWebsiteScope(): void
+    {
+        CookieScope::setPolicyResolverOverride(static fn(): array => [
+            'active' => true,
+            'name_suffix' => '_w0',
+            'name_suffix_pattern' => '/_w\d+$/D',
+            'mount_path' => '/store',
+            'expire_unscoped_aliases' => true,
+            'revision' => 'backend-realm-test',
+        ]);
+        $cookieName = 'w_backend_ut_9502';
+        self::assertTrue(CookieScope::isProtocolCookie($cookieName));
+        self::assertSame($cookieName, CookieScope::qualifyName($cookieName));
+
+        $collector = HeaderCollector::getInstance();
+        $collector->setCookie($cookieName, '', time() - 3600, '/', '', true, true, 'None; Partitioned');
+        $cookies = array_values($collector->getCookies());
         self::assertCount(1, $cookies);
         self::assertSame($cookieName, $cookies[0]['name']);
         self::assertSame('/', $cookies[0]['path']);

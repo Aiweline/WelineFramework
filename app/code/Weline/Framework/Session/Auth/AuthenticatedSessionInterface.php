@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Session\Auth;
 
 use Weline\Framework\Session\SessionLifecycleInterface;
+use Weline\Framework\Session\Auth\Device\AuthenticatedLoginContext;
 
 /**
  * 认证 Session 接口
@@ -22,7 +23,10 @@ interface AuthenticatedSessionInterface extends SessionLifecycleInterface
      *
      * @param AuthenticableInterface $user 实现了 AuthenticableInterface 的用户模型
      */
-    public function login(AuthenticableInterface $user): void;
+    public function login(
+        AuthenticableInterface $user,
+        ?AuthenticatedLoginContext $context = null,
+    ): void;
 
     /**
      * 用户登出

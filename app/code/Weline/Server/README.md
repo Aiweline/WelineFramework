@@ -29,6 +29,18 @@ php bin/w server:benchmark
 php bin/w server:stop
 ```
 
+## WLS 面板项目生命周期管理
+
+后台 `server/backend/wls-panel/projects` 提供按项目边界的 WLS 管理：
+
+- **重载**：提交 `RELOAD_TYPE_CODE`，滚动替换 Worker，Master 保持在线。
+- **重启**：提交 `RELOAD_TYPE_FORCE`，重建全部 Worker 与辅助服务；必须输入完整项目名称确认。
+- 面板只允许控制当前代码目录对应的本地实例；独立子项目必须进入其自己的 WLS 面板操作，浏览器不能提交任意实例名或项目路径。
+- 状态由 Master IPC 返回，界面显示 Ready Worker、Worker 代际和实例名。完成判据使用 Worker `generation + launch_id/PID` 指纹，不把仅代表 Master 启动代际的 `epoch` 误当作重载完成标记。
+- 操作使用 `Weline.Api.resource('wlsPanelLifecycle')`，服务端同时检查后台登录、ACL 路由权限、实例单飞锁和运行状态。
+
+生产更新必须先执行 `php bin/w framework:compile` 与 `php bin/w setup:upgrade --route`，再对目标实例执行代码重载；这样 QueryProvider、ACL 与菜单注册会同时生效。
+
 ## 📖 服务器类型
 
 ### 1. WLS (Weline Server) - 高性能服务器

@@ -10,9 +10,10 @@
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. 本文件：`app/code/Weline/Backend/doc/AI-INDEX.md`
 5. 模块说明：`app/code/Weline/Backend/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-8. 只读取本次任务相关源码、配置和验证入口
+6. 认证/设备任务：`app/code/Weline/Backend/doc/需求.md`、`app/code/Weline/Backend/doc/开发日志.md`、`app/code/Weline/SessionManager/doc/设备管理架构.md`
+7. `app/code/Weline/Theme/doc/AI-INDEX.md`
+8. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+9. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -29,19 +30,19 @@
 
 - `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：45
 - `Block`：视图数据块。配合模板输出页面数据，变更前要读对应模板和 layout。 文件数：5
-- `Config`：配置读取、合并或 schema 支撑。涉及作用域配置时同时读 SystemConfig 文档。 文件数：2
+- `Config`：配置读取、合并或 schema 支撑。涉及作用域配置时同时读 SystemConfig 文档。 文件数：3
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：6
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：19
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：20
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：17
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：11
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：24
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：26
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：3
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：6
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：2
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：20
-- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：20
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：22
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：21
+- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：22
+- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：23
 
 ## 从源码识别到的开发提示
 
@@ -59,6 +60,8 @@
 - `app/code/Weline/Backend/doc/menu-acl-and-backend-entry-conventions.md`
 - `app/code/Weline/Backend/doc/开发/plan.md`
 - `app/code/Weline/Backend/doc/开发/task.md`
+- `app/code/Weline/Backend/doc/开发日志.md`
+- `app/code/Weline/Backend/doc/需求.md`
 
 ## 开发前门禁
 

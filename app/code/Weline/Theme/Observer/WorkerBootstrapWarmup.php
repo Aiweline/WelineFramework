@@ -298,7 +298,16 @@ class WorkerBootstrapWarmup implements ObserverInterface
             BP . '/app/code/Weline/Frontend/view/statics/base/weline.modules.js',
             BP . '/app/code/Weline/Frontend/view/statics/js/weline-api.js',
             BP . '/app/code/Weline/Frontend/view/statics/js/weline-api-worker.js',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css',
             BP . '/app/code/Weline/Theme/view/theme/frontend/assets/js/theme.js',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/variables/_colors.css',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/variables/_typography.css',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/variables/_spacing.css',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/variables/_borders.css',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/variables/_shadows.css',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/variables/_auth.css',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/colors/_light.css',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/colors/_dark.css',
             BP . '/app/code/Weline/Theme/view/theme/backend/assets/css/theme.css',
             BP . '/app/code/Weline/Theme/view/theme/backend/assets/js/theme.js',
             BP . '/app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js',
@@ -308,6 +317,8 @@ class WorkerBootstrapWarmup implements ObserverInterface
             BP . '/app/code/Weline/Theme/view/theme/backend/variables/_colors.css',
             BP . '/app/code/Weline/Theme/view/theme/backend/variables/_spacing.css',
             BP . '/app/code/Weline/Theme/view/theme/backend/variables/_typography.css',
+            BP . '/app/code/Weline/Theme/view/theme/backend/variables/_borders.css',
+            BP . '/app/code/Weline/Theme/view/theme/backend/variables/_shadows.css',
         ];
         foreach ($this->viewWarmupContribution()->staticFiles as $relativePath) {
             $paths[] = BP . '/' . $relativePath;

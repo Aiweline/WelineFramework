@@ -50,7 +50,10 @@
 事务、锁与迁移语义的正式结论必须有 PostgreSQL 证据。
 `DEBUG=true` 只开启调试能力，不会自动切换数据库；只有显式 `SANDBOX`
 请求或 `enableSandboxMode()` 才能选用 `sandbox_db`。`env.php` 的持久化更新
-使用独立锁、同目录完整临时文件和原子替换，禁止先截断正式配置再写入。
+使用独立锁、同目录完整临时文件和原子替换，禁止先截断正式配置再写入。原子替换前，
+临时文件必须继承现有 `env.php` 的 UID、GID 与权限位，避免以 `root` 执行安装或升级后
+把 PHP-FPM 运行用户排除在配置文件读取权限之外；部署验收应同时检查 `stat` 与一次新的
+PHP-FPM 请求，而不能只验证当前 CLI 进程。
 
 ## 站外 BinQuery 与站内 Worker QueryBin
 

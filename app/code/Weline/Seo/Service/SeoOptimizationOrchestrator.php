@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Interface\OptimizationTargetAdapterInterface;
 use Weline\Seo\Model\SeoOptimizationExperiment;
 use Weline\Seo\Model\SeoOptimizationPolicy;
@@ -23,13 +24,16 @@ final class SeoOptimizationOrchestrator
         private readonly SeoOptimizationActivityService $activityService,
         ?OptimizationTiming $timing = null,
         ?OptimizationPublicationState $publicationState = null,
+        ?SeoSearchQueryHeatService $queryHeat = null,
     ) {
         $this->timing = $timing ?? new OptimizationTiming();
         $this->publicationState = $publicationState ?? new OptimizationPublicationState();
+        $this->queryHeat = $queryHeat ?? ObjectManager::getInstance(SeoSearchQueryHeatService::class);
     }
 
     private readonly OptimizationTiming $timing;
     private readonly OptimizationPublicationState $publicationState;
+    private readonly SeoSearchQueryHeatService $queryHeat;
 
     /** @param array<string,mixed> $payload @return array<string,mixed> */
     public function analyze(array $payload): array
@@ -49,6 +53,8 @@ final class SeoOptimizationOrchestrator
         }
         $targets = $this->selectTargets($adapter, $websiteId, $payload['target'] ?? []);
         $requestKey = \trim((string)($payload['request_key'] ?? $this->timing->now()->format('Ymd')));
+        $applyIntent = \trim((string)($payload['apply_intent'] ?? ''));
+        $mode = $this->effectiveMode($policy, $applyIntent);
         $limitedTargets = \array_slice($targets, 0, 200);
         $cycleId = $this->activityService->beginCycle(
             $websiteId,
@@ -60,7 +66,7 @@ final class SeoOptimizationOrchestrator
         $results = [];
         foreach ($limitedTargets as $target) {
             try {
-                $result = $this->analyzeTarget($adapter, $websiteId, $policy, $target, $requestKey);
+                $result = $this->analyzeTarget($adapter, $websiteId, $policy, $target, $requestKey, $applyIntent);
             } catch (\Throwable $throwable) {
                 $result = [
                     'status' => 'failed',
@@ -84,7 +90,7 @@ final class SeoOptimizationOrchestrator
         return [
             'status' => 'completed',
             'website_id' => $websiteId,
-            'mode' => (string)$policy['mode'],
+            'mode' => $mode,
             'target_count' => \count($targets),
             'results' => $results,
         ];
@@ -101,6 +107,7 @@ final class SeoOptimizationOrchestrator
         array $policy,
         array $target,
         string $requestKey,
+        string $applyIntent = '',
     ): array {
         $snapshot = $adapter->snapshot($websiteId, $target);
         $snapshot = $this->reconcileTerminalCheckpoint($adapter, $websiteId, $snapshot);
@@ -163,15 +170,21 @@ final class SeoOptimizationOrchestrator
             $this->finishRun($run, 'failed', $evidence, [], 'analysis_failed', $throwable->getMessage());
             return $this->runResult($run, 'failed', $runKey, 'analysis_failed');
         }
-        if ((float)$recommendation['confidence'] < (float)($policy['min_confidence'] ?? 0.8)) {
+        $mode = $this->effectiveMode($policy, $applyIntent);
+        $heatEligible = $this->evidenceService->isQueryHeatEligible($snapshot, $policy, $evidence);
+        $minConfidence = (float)($policy['min_confidence'] ?? 0.8);
+        if ($heatEligible) {
+            $minConfidence = \min($minConfidence, (float)($policy['min_heat_confidence'] ?? 0.40));
+        }
+        if ((float)$recommendation['confidence'] < $minConfidence) {
             $this->finishRun($run, 'confidence_rejected', $evidence, $recommendation);
             return $this->runResult($run, 'confidence_rejected', $runKey);
         }
-        if ((string)$policy['mode'] === SeoOptimizationPolicy::MODE_SHADOW) {
+        if ($mode === SeoOptimizationPolicy::MODE_SHADOW) {
             $this->finishRun($run, 'shadow_ready', $evidence, $recommendation);
             return $this->runResult($run, 'shadow_ready', $runKey);
         }
-        if ((string)$policy['mode'] === SeoOptimizationPolicy::MODE_AUTO_PUBLISH
+        if ($mode === SeoOptimizationPolicy::MODE_AUTO_PUBLISH
             && empty($policy['standing_authorized'])
         ) {
             $this->finishRun(
@@ -242,7 +255,7 @@ final class SeoOptimizationOrchestrator
             return $this->runResult($run, $status, $runKey, (string)($apply['reason'] ?? 'apply_failed'));
         }
 
-        if ((string)$policy['mode'] === SeoOptimizationPolicy::MODE_AUTO_DRAFT) {
+        if ($mode === SeoOptimizationPolicy::MODE_AUTO_DRAFT) {
             $evidence['automation'] = [
                 'mode' => SeoOptimizationPolicy::MODE_AUTO_DRAFT,
                 'status' => 'draft_ready',
@@ -262,7 +275,7 @@ final class SeoOptimizationOrchestrator
         }
 
         $publish = [];
-        if ((string)$policy['mode'] === SeoOptimizationPolicy::MODE_AUTO_PUBLISH) {
+        if ($mode === SeoOptimizationPolicy::MODE_AUTO_PUBLISH) {
             $publish = $this->safePublish($adapter, [
                 'website_id' => $websiteId,
                 'page_type' => $pageType,
@@ -358,17 +371,60 @@ final class SeoOptimizationOrchestrator
     /** @param mixed $requested @return list<array<string,mixed>> */
     private function selectTargets(OptimizationTargetAdapterInterface $adapter, int $websiteId, mixed $requested): array
     {
-        $targets = $adapter->targets($websiteId);
-        if (!\is_array($requested) || $requested === [] || \array_is_list($requested)) {
-            return \array_values(\array_filter($targets, 'is_array'));
+        $rawTargets = $adapter->targets($websiteId);
+        $targets = \array_values(\array_filter(\is_array($rawTargets) ? $rawTargets : [], 'is_array'));
+        if (\is_array($requested) && $requested !== [] && !\array_is_list($requested)) {
+            $pageType = \trim((string)($requested['page_type'] ?? ''));
+            $blockKey = \trim((string)($requested['block_key'] ?? ''));
+            return \array_values(\array_filter($targets, static fn(array $target): bool =>
+                (string)($target['page_type'] ?? '') === $pageType
+                && (string)($target['block_key'] ?? '') === $blockKey
+            ));
         }
-        $pageType = \trim((string)($requested['page_type'] ?? ''));
-        $blockKey = \trim((string)($requested['block_key'] ?? ''));
-        return \array_values(\array_filter($targets, static fn(mixed $target): bool =>
-            \is_array($target)
-            && (string)($target['page_type'] ?? '') === $pageType
-            && (string)($target['block_key'] ?? '') === $blockKey
-        ));
+        if ($targets === []) {
+            return $targets;
+        }
+        try {
+            $queries = $this->queryHeat->cloud($websiteId, 80)['items'] ?? [];
+        } catch (\Throwable) {
+            return $targets;
+        }
+        if (!\is_array($queries) || $queries === []) {
+            return $targets;
+        }
+        $enriched = [];
+        foreach ($targets as $target) {
+            $values = \is_array($target['current_values'] ?? null) ? $target['current_values'] : [];
+            if ($values === []) {
+                try {
+                    $snapshot = $adapter->snapshot($websiteId, $target);
+                    $values = \is_array($snapshot['current_values'] ?? null) ? $snapshot['current_values'] : [];
+                } catch (\Throwable) {
+                    $values = [];
+                }
+            }
+            $target['current_values'] = $values;
+            $enriched[] = $target;
+        }
+        $ranked = $this->queryHeat->rankTargetsByQueryHeat($enriched, $queries, 20);
+        if ($ranked === []) {
+            return $targets;
+        }
+
+        return \array_map(
+            static fn(array $row): array => $row['target'],
+            $ranked,
+        );
+    }
+
+    /** @param array<string,mixed> $policy */
+    private function effectiveMode(array $policy, string $applyIntent): string
+    {
+        if ($applyIntent === SeoOptimizationPolicy::MODE_AUTO_DRAFT) {
+            return SeoOptimizationPolicy::MODE_AUTO_DRAFT;
+        }
+
+        return (string)$policy['mode'];
     }
 
     /** @param array<string,mixed> $snapshot */

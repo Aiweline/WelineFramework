@@ -109,6 +109,7 @@ class ServiceOrchestrator
      */
     private const GATEWAY_FALLBACK_COLD_START_PUBLICATION_SECONDS = 15.0;
     private const GATEWAY_PORT_LEASE_OPERATION_SECONDS = 3.0;
+    private const WINDOWS_GATEWAY_PORT_LEASE_OPERATION_SECONDS = 8.0;
     private const GATEWAY_NATIVE_DRAIN_SECONDS = 300;
     private const GATEWAY_NATIVE_FINALIZE_GRACE_SECONDS = 15;
     private const MAX_PROVIDER_VENDORS = 256;
@@ -165,6 +166,11 @@ class ServiceOrchestrator
     private array $windowsSupplementalListenerIntents = [];
     /** @var array<string,array<string,mixed>> supplemental role => current host lease */
     private array $windowsSupplementalHostLeases = [];
+    /** @var array<string,string> child slot => stable PID recovery rejection */
+    private array $publishedWindowsChildPidRecoveryFailures = [];
+    /** @var array<string,string> child slot => pre-authorization kernel process birth */
+    private array $recoveredWindowsChildProcessBirths = [];
+    private string $publishedWindowsChildProcessCaptureFailure = '';
     private ?DarwinDatagramRouterTransport $darwinHttp3DatagramRouter = null;
 
     private bool $running = false;
@@ -766,6 +772,35 @@ class ServiceOrchestrator
                 $this->requestStop('master_lease_unavailable', skipDrain: true);
             }
         }
+    }
+
+    /**
+     * A Windows WMI/x64-emulation spawn can block the single-threaded Master
+     * beyond the ordinary heartbeat window. Refresh the exact current owner
+     * before publishing any child credential; failures remain fatal and no
+     * stale lease is ever used to authorize the child.
+     */
+    protected function refreshMasterLeaseAfterBlockingSpawn(): void
+    {
+        $context = $this->context;
+        if (!$this->isWindowsRuntime()
+            || $context === null
+            || $context->masterLeaseFile === ''
+            || $context->masterToken === ''
+        ) {
+            return;
+        }
+
+        (new MasterLeaseManager())->touchRunning(
+            $context->instanceName,
+            $context->masterPid,
+            $context->controlPort,
+            $context->epoch,
+            $context->masterToken,
+        );
+        $this->lastMasterLeaseTouchAt = self::monotonicSeconds();
+        $this->masterLeaseTouchFailureSince = 0.0;
+        $this->masterLeaseTouchFailureCount = 0;
     }
 
     private function markMasterLeaseStopping(): void
@@ -3403,6 +3438,19 @@ class ServiceOrchestrator
      */
     private function isLaunchPortOwnedByInstance(ServiceInstance $instance, array $inspect): bool
     {
+        $port = (int)($instance->port ?? 0);
+        if (($inspect['in_use'] ?? false)
+            && $this->isMasterOwnedSharedListenerPort($instance->role, $port)
+        ) {
+            // Windows attributes a duplicated listener to the process that
+            // created the socket even after the exact Dispatcher receives its
+            // source copy.  The retained, continuously owned handoff socket
+            // and its lease/instance/launch digest are stronger evidence than
+            // that advisory kernel PID.  A foreign listener still fails closed
+            // because it cannot satisfy hasRetainedWindowsStartupListener().
+            return true;
+        }
+
         $ownerPid = (int)($inspect['pid'] ?? 0);
         if ($ownerPid <= 0) {
             return false;
@@ -4242,6 +4290,7 @@ class ServiceOrchestrator
             'prepare_total_ms' => \max(0, (int) \round(($batchSpawnStartedAt - $prepareStartedAt) * 1000)),
         ]);
         $pids = $this->batchCreateProcesses($commands);
+        $this->refreshMasterLeaseAfterBlockingSpawn();
         $credentialInstances = [];
         foreach ($prepared as $key => $item) {
             if (($item['instance'] ?? null) instanceof ServiceInstance) {
@@ -4514,6 +4563,7 @@ class ServiceOrchestrator
         );
         $batchSpawnStartedAt = self::monotonicSeconds();
         $pids = $this->batchCreateProcesses($commands);
+        $this->refreshMasterLeaseAfterBlockingSpawn();
         $this->authorizeSpawnedInstanceCredentials($preparedInstances, $pids);
         foreach ($preparedInstances as $instanceId => $preparedInstance) {
             $this->publishWindowsListenerHandoffForInstance(
@@ -5364,6 +5414,7 @@ class ServiceOrchestrator
         ) {
             return;
         }
+        $pids = $this->recoverPublishedWindowsChildPids($instances, $pids);
         $children = [];
         foreach ($instances as $key => $instance) {
             $pid = (int)($pids[$key] ?? 0);
@@ -5371,8 +5422,11 @@ class ServiceOrchestrator
                 $pid = (int)($pids[(string)$key] ?? 0);
             }
             if ($pid <= 0) {
+                $recoveryReason = $this->publishedWindowsChildPidRecoveryFailures[(string)$key]
+                    ?? 'unavailable';
                 throw new \RuntimeException(
-                    "Managed child {$instance->role}#{$instance->instanceId} did not return an authoritative PID."
+                    "Managed child {$instance->role}#{$instance->instanceId} did not return an authoritative PID"
+                    . " (Windows lease recovery: {$recoveryReason})."
                 );
             }
             // Publish the exact PID in the in-memory authority before opening
@@ -5399,7 +5453,7 @@ class ServiceOrchestrator
             $context->masterToken,
             $children,
         );
-        foreach ($instances as $instance) {
+        foreach ($instances as $key => $instance) {
             $identity = $authorized[$this->getInstanceSlotId($instance)] ?? null;
             $credentialId = \is_array($identity)
                 ? (string)($identity['credential_id'] ?? '')
@@ -5413,6 +5467,7 @@ class ServiceOrchestrator
             $credentialPid = \is_array($identity)
                 ? (int)($identity['pid'] ?? 0)
                 : 0;
+            $recoveredProcessBirth = $this->recoveredWindowsChildProcessBirths[(string)$key] ?? '';
             $namespaceValid = PHP_OS_FAMILY === 'Linux'
                 ? \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $pidNamespaceId) === 1
                 : $pidNamespaceId === '';
@@ -5421,6 +5476,8 @@ class ServiceOrchestrator
                 || !$namespaceValid
                 || $credentialPid < 1
                 || $credentialPid !== $instance->getTrackingPid()
+                || ($recoveredProcessBirth !== ''
+                    && !\hash_equals($recoveredProcessBirth, $processBirth))
             ) {
                 throw new \RuntimeException(
                     "Managed child {$instance->role}#{$instance->instanceId} credential publication failed."
@@ -5431,6 +5488,183 @@ class ServiceOrchestrator
             $instance->setMeta('child_process_birth', $processBirth);
             $instance->setMeta('child_pid_namespace_id', $pidNamespaceId);
         }
+    }
+
+    /**
+     * Windows ARM64 x64 emulation may detach the durable PHP execution leaf
+     * from the PowerShell/WMI topology before Processer can adopt it. WLS
+     * children publish a redacted, launch-bound managed lease before waiting
+     * for their credential; recover only that exact live identity here.
+     *
+     * @param array<string|int,ServiceInstance> $instances
+     * @param array<string|int,int> $pids
+     * @return array<string|int,int>
+     */
+    protected function recoverPublishedWindowsChildPids(array $instances, array $pids): array
+    {
+        $this->publishedWindowsChildPidRecoveryFailures = [];
+        $this->recoveredWindowsChildProcessBirths = [];
+        if (!$this->isWindowsRuntime()) {
+            return $pids;
+        }
+
+        $requests = [];
+        $candidatePids = [];
+        foreach ($instances as $key => $instance) {
+            $currentPid = (int)($pids[$key] ?? 0);
+            if ($currentPid <= 0 && \is_int($key)) {
+                $currentPid = (int)($pids[(string)$key] ?? 0);
+            }
+            if ($currentPid > 0 || !$instance instanceof ServiceInstance) {
+                continue;
+            }
+
+            $processName = \trim($this->getInstanceProcessName($instance));
+            $launchId = \trim($this->getInstanceLaunchId($instance));
+            $metadataFailure = $processName === ''
+                || \preg_match('/^[a-zA-Z0-9_.:@-]+$/D', $processName) !== 1
+                ? 'process_name_invalid'
+                : (\preg_match('/^[a-f0-9]{32}$/D', $launchId) !== 1
+                    ? 'launch_id_invalid'
+                    : ($instance->epoch <= 0 ? 'epoch_invalid' : ''));
+            if ($metadataFailure !== '') {
+                $this->logPublishedWindowsChildPidRecoveryRejection($key, $metadataFailure);
+                continue;
+            }
+
+            $expectedPname = '--name=' . $processName;
+            $record = $this->readPublishedWindowsChildLease($expectedPname);
+            $recordPid = (int)($record['pid'] ?? 0);
+            $recordTime = (int)($record['time'] ?? 0);
+            $recordEpoch = (int)($record['epoch'] ?? 0);
+            $recordedProcessName = \trim((string)($record['process_name'] ?? ''));
+            $recordedLaunchId = \trim((string)($record['launch_id'] ?? ''));
+            $recordedPnameKey = \trim((string)($record['pname_key'] ?? ''));
+            $startedAt = $instance->startedAt;
+            $recordFailure = $recordPid <= 0
+                ? 'lease_pid_missing'
+                : ($recordTime <= 0
+                    ? 'lease_time_missing'
+                    : ($recordEpoch !== $instance->epoch
+                        ? 'lease_epoch_mismatch'
+                        : (!\hash_equals($processName, $recordedProcessName)
+                            ? 'lease_process_name_mismatch'
+                            : (!\hash_equals($launchId, $recordedLaunchId)
+                                ? 'lease_launch_id_mismatch'
+                                : (!\hash_equals($expectedPname, $recordedPnameKey)
+                                    ? 'lease_pname_mismatch'
+                                    : (($startedAt >= 1_000_000_000.0
+                                        && $recordTime < ((int)\floor($startedAt) - 1))
+                                        ? 'lease_stale'
+                                        : ''))))));
+            if ($recordFailure !== '') {
+                $this->logPublishedWindowsChildPidRecoveryRejection($key, $recordFailure);
+                continue;
+            }
+
+            $requests[$key] = [
+                'pid' => $recordPid,
+                'expected_process_name' => $processName,
+                'expected_launch_id' => $launchId,
+                'expected_pname' => $expectedPname,
+            ];
+            $candidatePids[$key] = $recordPid;
+        }
+
+        if ($requests === []) {
+            return $pids;
+        }
+
+        $probes = $this->probePublishedWindowsChildPids($requests);
+        foreach ($requests as $key => $_request) {
+            $probe = \is_array($probes[$key] ?? null) ? $probes[$key] : [];
+            $candidatePid = (int)($candidatePids[$key] ?? 0);
+            $probeState = (string)($probe['state'] ?? '');
+            $probeReason = (string)($probe['reason'] ?? '');
+            $probePidMatches = $candidatePid > 0
+                && (int)($probe['pid'] ?? 0) === $candidatePid;
+            $probeIdentityMatches = $probePidMatches
+                && \hash_equals(Processer::PROCESS_STATE_RUNNING, $probeState)
+                && \hash_equals('identity_match', $probeReason);
+            $probeIdentityUnavailable = $probePidMatches
+                && \hash_equals(Processer::PROCESS_STATE_UNKNOWN, $probeState)
+                && \hash_equals('live_identity_unavailable', $probeReason);
+            if (!$probeIdentityMatches && !$probeIdentityUnavailable) {
+                $this->logPublishedWindowsChildPidRecoveryRejection(
+                    $key,
+                    'probe_' . (\trim($probeReason) ?: 'missing'),
+                );
+                continue;
+            }
+
+            $processIdentity = $this->capturePublishedWindowsChildProcessIdentity($candidatePid);
+            $processBirth = \trim((string)($processIdentity['birth'] ?? ''));
+            $pidNamespaceId = (string)($processIdentity['pid_namespace_id'] ?? '');
+            if (\preg_match('/^[a-f0-9]{64}$/D', $processBirth) !== 1
+                || $pidNamespaceId !== ''
+            ) {
+                $this->logPublishedWindowsChildPidRecoveryRejection(
+                    $key,
+                    'kernel_' . ($this->publishedWindowsChildProcessCaptureFailure
+                        ?: 'process_birth_unavailable'),
+                );
+                continue;
+            }
+            $pids[$key] = $candidatePid;
+            $this->recoveredWindowsChildProcessBirths[(string)$key] = $processBirth;
+            WlsLogger::info_(
+                '[Orchestrator] Recovered exact Windows child PID from its managed lease for '
+                . (string)$key
+                . ' pid=' . $candidatePid,
+            );
+        }
+
+        return $pids;
+    }
+
+    /** @return array{birth:string,pid_namespace_id:string}|array{} */
+    protected function capturePublishedWindowsChildProcessIdentity(int $pid): array
+    {
+        $this->publishedWindowsChildProcessCaptureFailure = '';
+        try {
+            return (new MasterLeaseRuntimeIdentity())->captureProcessIdentity($pid);
+        } catch (\Throwable $throwable) {
+            $message = $throwable->getMessage();
+            $this->publishedWindowsChildProcessCaptureFailure = \str_contains(
+                $message,
+                'process is not running',
+            ) ? 'process_missing' : (\str_contains($message, 'birth identity is unavailable')
+                ? 'process_birth_unavailable'
+                : 'process_capture_failed');
+            return [];
+        }
+    }
+
+    protected function logPublishedWindowsChildPidRecoveryRejection(string|int $key, string $reason): void
+    {
+        $this->publishedWindowsChildPidRecoveryFailures[(string)$key] = $reason;
+        WlsLogger::warning_(
+            '[Orchestrator] Exact Windows child PID lease recovery rejected for '
+            . (string)$key
+            . ' reason=' . $reason,
+        );
+    }
+
+    /** @return array<string,mixed> */
+    protected function readPublishedWindowsChildLease(string $expectedPname): array
+    {
+        $record = Processer::getData($expectedPname);
+
+        return \is_array($record) ? $record : [];
+    }
+
+    /**
+     * @param array<string|int,array{pid:int,expected_process_name:string,expected_launch_id:string,expected_pname:string}> $requests
+     * @return array<string|int,array<string,mixed>>
+     */
+    protected function probePublishedWindowsChildPids(array $requests): array
+    {
+        return Processer::probeManagedProcessIdentities($requests, true);
     }
 
     /** @return array{birth:string,pid_namespace_id:string} */
@@ -5665,6 +5899,7 @@ class ServiceOrchestrator
                     'childOwnsPid' => true,
                 ],
             ]);
+            $this->refreshMasterLeaseAfterBlockingSpawn();
 
             $pid = (int)($pids['single'] ?? 0);
             try {
@@ -5806,6 +6041,20 @@ class ServiceOrchestrator
             return;
         }
         if ($this->isWindowsRuntime()) {
+            if ($usesStartupListener
+                && $role === ControlMessage::ROLE_DISPATCHER
+                && $this->hasRetainedWindowsStartupListener(
+                    $context,
+                    $backendLease !== [] ? $backendLease : $publicLease,
+                )
+            ) {
+                return;
+            }
+            if ($usesStartupListener && $role === ControlMessage::ROLE_DISPATCHER) {
+                throw new \RuntimeException(
+                    'Windows Dispatcher startup requires the Master-owned listener source copy.'
+                );
+            }
             throw new \RuntimeException('Windows cannot use the POSIX inherited shared-listener topology.');
         }
 
@@ -5829,6 +6078,87 @@ class ServiceOrchestrator
                 . ', inherited_fd=' . DirectSharedListener::INHERITED_FD
             );
         }
+    }
+
+    /** @param array<string,mixed> $lease */
+    private function hasRetainedWindowsStartupListener(
+        ServiceContext $context,
+        array $lease,
+    ): bool {
+        $persisted = $context->getConfig(
+            'wls.gateway.startup_listener_handoff',
+            [],
+        );
+        if (!\is_array($persisted)
+            || $persisted === []
+            || (int)($persisted['schema_version'] ?? 0) !== 1
+            || !\hash_equals(
+                WindowsListenerHandoff::TRANSPORT,
+                (string)($persisted['transport'] ?? ''),
+            )
+            || ($persisted['continuous_ownership'] ?? false) !== true
+        ) {
+            return false;
+        }
+
+        $intentDigest = (string)($persisted['intent_digest'] ?? '');
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $intentDigest) !== 1
+            || !WindowsListenerHandoff::hasMasterSocket($intentDigest)
+        ) {
+            return false;
+        }
+        $intent = WindowsListenerHandoff::masterIntent($intentDigest);
+        if ((int)($intent['schema_version'] ?? 0) !== 1
+            || !\hash_equals(
+                WindowsListenerHandoff::TRANSPORT,
+                (string)($intent['transport'] ?? ''),
+            )
+            || ($intent['continuous_ownership'] ?? false) !== true
+        ) {
+            return false;
+        }
+        foreach ([
+            'handoff_id',
+            'intent_digest',
+            'lease_id',
+            'instance',
+            'wls_instance',
+            'bind_host',
+            'launch_id',
+            'master_path',
+        ] as $field) {
+            if (!\is_string($intent[$field] ?? null)
+                || !\hash_equals(
+                    (string)($persisted[$field] ?? ''),
+                    (string)$intent[$field],
+                )
+            ) {
+                return false;
+            }
+        }
+
+        return (int)($intent['port'] ?? 0) === $context->mainPort
+            && (int)($intent['port'] ?? 0) === (int)($lease['port'] ?? 0)
+            && \hash_equals(
+                $context->instanceName,
+                (string)($intent['wls_instance'] ?? ''),
+            )
+            && \hash_equals(
+                (string)($lease['lease_id'] ?? ''),
+                (string)($intent['lease_id'] ?? ''),
+            )
+            && \hash_equals(
+                (string)($lease['instance'] ?? ''),
+                (string)($intent['instance'] ?? ''),
+            )
+            && \hash_equals(
+                (string)($lease['bind_host'] ?? ''),
+                (string)($intent['bind_host'] ?? ''),
+            )
+            && \hash_equals(
+                (string)$context->getConfig('wls.gateway.launch_id', ''),
+                (string)($intent['launch_id'] ?? ''),
+            );
     }
 
     /**
@@ -5913,6 +6243,18 @@ class ServiceOrchestrator
 
         if ($this->context === null) {
             return false;
+        }
+
+        if ($this->isWindowsRuntime()
+            && $role === ControlMessage::ROLE_DISPATCHER
+            && $port === $this->context->mainPort
+        ) {
+            $lease = $this->gatewayInitialBackendLease();
+            if ($lease === []) {
+                $lease = $this->publicEdgeLease();
+            }
+            return $lease !== []
+                && $this->hasRetainedWindowsStartupListener($this->context, $lease);
         }
 
         // Pure-WLS Dispatcher/Redirect inherit the CLI-reserved public edge
@@ -32038,7 +32380,9 @@ class ServiceOrchestrator
         ?float $deadlineMonotonic = null,
     ): GatewayPortLeaseAllocator {
         $deadlineMonotonic ??= self::monotonicSeconds()
-            + self::GATEWAY_PORT_LEASE_OPERATION_SECONDS;
+            + ($this->isWindowsRuntime()
+                ? self::WINDOWS_GATEWAY_PORT_LEASE_OPERATION_SECONDS
+                : self::GATEWAY_PORT_LEASE_OPERATION_SECONDS);
 
         return new GatewayPortLeaseAllocator(
             operationDeadlineMonotonic: $deadlineMonotonic,

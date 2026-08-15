@@ -35,7 +35,8 @@ class CheckUserLogin implements ObserverInterface
     public function execute(\Weline\Framework\Event\Event &$event): void
     {
         // 获取当前路由路径
-        $path = $this->request->getPathInfo();
+        $path = (string)($this->request->getPathInfo()
+            ?: (\function_exists('w_env_request_uri') ? \w_env_request_uri() : ''));
 
         // 检查是否是TwoFactorAuth相关路径
         if ($this->isTwoFactorAuthPath($path)) {
@@ -89,4 +90,3 @@ class CheckUserLogin implements ObserverInterface
         return str_starts_with($path, '/api/');
     }
 }
-

@@ -7,9 +7,6 @@ namespace Weline\Customer\Service;
 use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
 use Weline\Customer\Api\Auth\CustomerIdentity;
 use Weline\Customer\Model\Customer;
-use Weline\Customer\Model\CustomerToken;
-use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 
 final class CustomerAccountFacade implements CustomerAccountFacadeInterface
@@ -84,33 +81,18 @@ final class CustomerAccountFacade implements CustomerAccountFacadeInterface
 
     public function issueRememberToken(CustomerIdentity $identity, int $rememberDuration): void
     {
-        if ($rememberDuration <= 0) {
-            return;
+        $customer = $this->newCustomerModel()->load($identity->getId());
+        if (!$customer->getId()) {
+            throw new \RuntimeException((string)__('客户账号不存在'));
         }
-
-        $token = CustomerToken::generateToken();
-        $expireTime = time() + $rememberDuration;
-
-        /** @var CustomerToken $userToken */
-        $userToken = ObjectManager::getInstance(CustomerToken::class);
-        $userToken->reset()
-            ->where(CustomerToken::schema_fields_user_id, $identity->getId())
-            ->where(CustomerToken::schema_fields_type, 'remember_me')
-            ->delete();
-
-        $userToken->reset()
-            ->setUserId($identity->getId())
-            ->setToken($token)
-            ->setType('remember_me')
-            ->setTokenExpireTime($expireTime)
-            ->save();
-
-        Cookie::set('w_ut', $token, $rememberDuration, ['path' => '/']);
+        $session = SessionFactory::getInstance()->createFrontendSession();
+        \Weline\Framework\Manager\ObjectManager::getInstance(CustomerRememberDeviceService::class)
+            ->issueForAuthenticatedCustomer($customer, $rememberDuration, $session);
     }
 
     private function newCustomerModel(): Customer
     {
-        return ObjectManager::getInstance(Customer::class, [], false);
+        return \Weline\Framework\Manager\ObjectManager::getInstance(Customer::class, [], false);
     }
 
     private function map(Customer $customer): CustomerIdentity

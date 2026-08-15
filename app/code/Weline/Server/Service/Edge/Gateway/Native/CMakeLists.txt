@@ -68,6 +68,7 @@ if(WIN32)
         wls-gateway-launcher
         PRIVATE
         advapi32
+        ntdll
         ole32
         shell32
     )
@@ -75,6 +76,7 @@ if(WIN32)
         target_link_libraries(wls-gateway-launcher PRIVATE unofficial-sodium::sodium)
     else()
         target_include_directories(wls-gateway-launcher PRIVATE ${SODIUM_INCLUDE_DIR})
+        target_compile_definitions(wls-gateway-launcher PRIVATE SODIUM_STATIC)
         target_link_libraries(wls-gateway-launcher PRIVATE ${SODIUM_LIBRARY})
     endif()
 
@@ -97,6 +99,7 @@ if(WIN32)
         wls-gateway-guardian
         PRIVATE
         advapi32
+        ntdll
         ole32
         shell32
     )
@@ -104,6 +107,7 @@ if(WIN32)
         target_link_libraries(wls-gateway-guardian PRIVATE unofficial-sodium::sodium)
     else()
         target_include_directories(wls-gateway-guardian PRIVATE ${SODIUM_INCLUDE_DIR})
+        target_compile_definitions(wls-gateway-guardian PRIVATE SODIUM_STATIC)
         target_link_libraries(wls-gateway-guardian PRIVATE ${SODIUM_LIBRARY})
     endif()
     if(MSVC)
@@ -217,7 +221,23 @@ if(WIN32)
 else()
     find_package(PkgConfig REQUIRED)
     find_package(Threads REQUIRED)
+    option(
+        WLS_LINK_STATIC_SODIUM
+        "Link native gateway binaries against a static libsodium archive"
+        ON
+    )
     pkg_check_modules(SODIUM REQUIRED libsodium)
+    if(WLS_LINK_STATIC_SODIUM)
+        find_file(
+            WLS_SODIUM_STATIC_LIBRARY
+            NAMES libsodium.a
+            HINTS ${SODIUM_LIBRARY_DIRS}
+            REQUIRED
+        )
+        set(WLS_SODIUM_LINK_LIBRARIES "${WLS_SODIUM_STATIC_LIBRARY}")
+    else()
+        set(WLS_SODIUM_LINK_LIBRARIES "${SODIUM_LIBRARIES}")
+    endif()
     set(
         WLS_HTTP3_NATIVE_ROOT
         "${CMAKE_CURRENT_SOURCE_DIR}/../../../../Protocol/Http3/Native"
@@ -297,7 +317,7 @@ else()
     target_compile_options(wls-gateway-broker PRIVATE -Wall -Wextra -Werror -fstack-protector-strong)
     target_include_directories(wls-gateway-broker PRIVATE ${SODIUM_INCLUDE_DIRS})
     target_link_directories(wls-gateway-broker PRIVATE ${SODIUM_LIBRARY_DIRS})
-    target_link_libraries(wls-gateway-broker PRIVATE ${SODIUM_LIBRARIES} Threads::Threads)
+    target_link_libraries(wls-gateway-broker PRIVATE ${WLS_SODIUM_LINK_LIBRARIES} Threads::Threads)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_definitions(wls-gateway-broker PRIVATE _GNU_SOURCE)
         if(WLS_BUILD_HTTP3_TRANSPORT)
@@ -443,7 +463,7 @@ else()
     target_compile_options(wls-gateway-launcher PRIVATE -Wall -Wextra -Werror -fstack-protector-strong)
     target_include_directories(wls-gateway-launcher PRIVATE ${SODIUM_INCLUDE_DIRS})
     target_link_directories(wls-gateway-launcher PRIVATE ${SODIUM_LIBRARY_DIRS})
-    target_link_libraries(wls-gateway-launcher PRIVATE ${SODIUM_LIBRARIES})
+    target_link_libraries(wls-gateway-launcher PRIVATE ${WLS_SODIUM_LINK_LIBRARIES})
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_definitions(wls-gateway-launcher PRIVATE _GNU_SOURCE)
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")

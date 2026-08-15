@@ -97,6 +97,16 @@ abstract class AbstractProcessDriver implements ProcessDriverInterface
 
         return $commandLines;
     }
+
+    /**
+     * @inheritDoc
+     */
+    public function findProcessTopologyByNames(array $processNames, array $rootPids = []): array
+    {
+        unset($processNames, $rootPids);
+
+        return [];
+    }
     
     /**
      * 执行命令并返回输出

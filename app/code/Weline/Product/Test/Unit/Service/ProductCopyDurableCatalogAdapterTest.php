@@ -710,6 +710,7 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
             new SchemaMigrationExecutor(
                 $this->createMock(EventsManager::class),
                 $migration,
+                $this->createMock(\Weline\Framework\Database\Service\BackupService::class),
             ),
         );
         return new ProductShardProvisioner($registry, $generic, $catalog);

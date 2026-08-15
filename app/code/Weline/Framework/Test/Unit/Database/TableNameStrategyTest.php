@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Framework\Database\test;
+namespace Weline\Framework\Test\Unit\Database;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Dialect\PgsqlIdentifierFormatter;
@@ -21,13 +21,25 @@ class TableNameStrategyTest extends TestCase
         $this->assertSame('`core`.`wl_demo_table`', $strategy->resolve('wl_demo_table', 'core'));
     }
 
-    public function testPgsqlStrategyUsesPublicSchema(): void
+    public function testPgsqlStrategyUsesRuntimeSchemaOnlyWhenLogicalNameHasNoSchema(): void
     {
         $formatter = new PgsqlIdentifierFormatter();
         $strategy = new PgsqlTableNameStrategy($formatter, 'wl_', 'public');
 
         $this->assertSame('"public"."wl_demo"', $strategy->resolve('demo'));
-        $this->assertSame('"public"."wl_demo"', $strategy->resolve('analytics.demo'));
+        $this->assertSame('"analytics"."wl_demo"', $strategy->resolve('analytics.demo'));
+        $this->assertSame('"tenant_42"."wl_demo"', $strategy->resolve('tenant_42.demo'));
+    }
+
+    public function testPgsqlStrategyQuotesUntrustedExplicitSchemaAsOneIdentifier(): void
+    {
+        $formatter = new PgsqlIdentifierFormatter();
+        $strategy = new PgsqlTableNameStrategy($formatter, 'wl_', 'public');
+
+        $this->assertSame(
+            '"analytics; DROP SCHEMA public CASCADE --"."wl_demo"',
+            $strategy->resolve('analytics; DROP SCHEMA public CASCADE --.demo'),
+        );
     }
 
     public function testPgsqlStrategyKeepsQuotedPrefixedTableOnce(): void
@@ -38,4 +50,3 @@ class TableNameStrategyTest extends TestCase
         $this->assertSame('"public"."m_acl"', $strategy->resolve('"public"."m_acl"'));
     }
 }
-

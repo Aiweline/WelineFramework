@@ -704,6 +704,120 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
         self::assertStringContainsString($argument, $builder);
     }
 
+    public function testWindowsScmRecoveryGateUsesOnlyCurrentBuildArtifactsAndAnEphemeralService(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $workflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-native.yml',
+        );
+        $windows = self::jobBlock($workflow, 'windows');
+        $recovery = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/'
+                . 'windows_service_recovery.php',
+        );
+        $native = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Service/Edge/Gateway/Native/windows/'
+                . 'wls_gateway_launcher.c',
+        );
+        $testBroker = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Service/Edge/Gateway/Native/windows/'
+                . 'wls_gateway_test_broker.c',
+        );
+        $serviceTest = \substr(
+            $recovery,
+            (int)\strpos($recovery, 'function wlsServiceTest'),
+            (int)\strpos($recovery, '$mode = $argv[1]')
+                - (int)\strpos($recovery, 'function wlsServiceTest'),
+        );
+
+        self::assertStringContainsString(
+            'WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION: "1"',
+            $windows,
+        );
+        self::assertMatchesRegularExpression(
+            '/service-test[\s\S]*?--guardian=build\/wls-gateway-native\/Release\/'
+                . 'wls-gateway-guardian\.exe[\s\S]*?--launcher=build\/wls-gateway-native\/'
+                . 'Release\/wls-gateway-launcher\.exe[\s\S]*?--test-broker='
+                . 'build\/wls-gateway-native\/Release\/wls-gateway-test-broker\.exe'
+                . '[\s\S]*?--bounded-command=build\/wls-gateway-native\/Release\/'
+                . 'wls-bounded-command\.exe/',
+            $windows,
+        );
+        self::assertStringContainsString('function wlsServiceTest', $recovery);
+        self::assertStringContainsString('hash_file(\'sha256\'', $recovery);
+        self::assertStringContainsString('random_bytes(16)', $recovery);
+        self::assertStringContainsString('weline-wls2-ci-scm-', $recovery);
+        self::assertStringContainsString('(?:path|bounded|scm)-[a-f0-9]{16}', $recovery);
+        self::assertStringNotContainsString(
+            "WLS_WINDOWS_TEST_SERVICE = 'weline-wls-gateway-v2'",
+            $recovery,
+        );
+        self::assertStringContainsString('wlsWaitServiceDeleted', $recovery);
+        self::assertStringContainsString('wlsProcessExited($recoveredPid)', $serviceTest);
+        self::assertStringContainsString("wlsWaitStarts(\$fixture['marker'], 2, 40.0)", $serviceTest);
+        self::assertStringContainsString("wlsWrite(\$fixture['failFirst'], \"fail-first\\n\")", $serviceTest);
+        self::assertStringContainsString('wlsWaitServiceState($service, 4, 40.0)', $serviceTest);
+        self::assertStringContainsString('(int)$pid[1] === $firstPid', $serviceTest);
+        self::assertStringContainsString("'distinct_scm_generation' => true", $serviceTest);
+        self::assertStringContainsString('service-reboot-prepare', $recovery);
+        self::assertStringContainsString('service-reboot-cleanup', $recovery);
+        self::assertStringContainsString('function wlsServiceRebootCleanup', $serviceTest);
+        self::assertStringContainsString('$retained = true', $serviceTest);
+        self::assertStringContainsString("\$result['artifact_sha256'] = \$artifactSha256;", $serviceTest);
+        self::assertStringContainsString("\$result['running_pid'] = (int)\$finalPid[1];", $serviceTest);
+        self::assertStringContainsString('wlsWaitServiceDeleted($service, 40.0)', $serviceTest);
+        self::assertStringContainsString('wlsRemoveTree($root, 60.0)', $serviceTest);
+        self::assertStringNotContainsString('taskkill.exe', $serviceTest);
+        self::assertStringContainsString('wlsRemoveTree($root)', $recovery);
+        self::assertStringContainsString('--service-name=', $recovery);
+        self::assertStringContainsString('--service-test-root=', $recovery);
+        self::assertStringContainsString('WLS_NATIVE_TEST_HOOKS', $native);
+        self::assertStringContainsString('wls_service_test_record_stage', $native);
+        foreach ([
+            'service-entry', 'service-generation-ready', 'supervisor-entry',
+            'jobs-ready', 'launch-entry', 'active-slot-ready', 'reconcile-ready',
+            'durable-slot-ready', 'recovery-ready', 'pid-recovery-ready',
+            'before-create-process', 'after-create-process',
+        ] as $stage) {
+            self::assertStringContainsString('L"' . $stage . '"', $native);
+        }
+        self::assertMatchesRegularExpression(
+            '/struct wls_launch_path_workspace \{[\s\S]*?'
+                . 'wchar_t command\[WLS_PATH_CHARS \* 4U\];[\s\S]*?\};'
+                . '[\s\S]*?static int wls_launch_with_workspace\(/',
+            $native,
+        );
+        self::assertMatchesRegularExpression(
+            '/static int wls_launch\([\s\S]*?HeapAlloc\([\s\S]*?'
+                . 'wls_launch_with_workspace\([\s\S]*?'
+                . 'SecureZeroMemory\(workspace, sizeof\(\*workspace\)\);'
+                . '[\s\S]*?HeapFree\(GetProcessHeap\(\), 0U, workspace\);/',
+            $native,
+        );
+        self::assertStringContainsString('service-stage-*', $serviceTest);
+        self::assertStringContainsString("' stages='", $serviceTest);
+        self::assertStringContainsString(
+            'wlsAssertPlainDirectory($programData, 60.0)',
+            $serviceTest,
+        );
+        self::assertMatchesRegularExpression(
+            '/wls_service_test_mode\)[\s\S]*?wls_initialize_service_generation\(\) != 0'
+                . '[\s\S]*?service-generation-ready[\s\S]*?'
+                . 'wls_run_supervisor\(wls_service_home, wls_service_run\)/',
+            $native,
+        );
+        self::assertMatchesRegularExpression(
+            '/if \(!marker_existed\) \{[\s\S]*?SetEvent\(ready_event\)'
+                . '[\s\S]*?GetFileAttributesW\(fail_first\)'
+                . '[\s\S]*?return 7;[\s\S]*?\}'
+                . '[\s\S]*?if \(wls_test_start_nginx\(/',
+            $testBroker,
+            'The deterministic failure must follow SERVICE_RUNNING but precede PID authority.',
+        );
+        self::assertStringContainsString('--service-name', $native);
+        self::assertStringContainsString('--service-test-root', $native);
+    }
+
     public function testReleaseContainersConsumeOnlyHostVerifiedImmutableImageOutputs(): void
     {
         $root = \dirname(__DIR__, 9);
@@ -869,6 +983,73 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
         self::assertMatchesRegularExpression(
             '/WLS_LINUX_REUSEPORT_BPF_CODE_SHA256 "[a-f0-9]{64}"/',
             $generatedHeader,
+        );
+    }
+
+    public function testLinuxReleaseNativeBuildLinksSodiumStatically(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $cmake = (string)\file_get_contents(
+            $root . '/app/code/Weline/Server/Service/Edge/Gateway/Native/CMakeLists.txt',
+        );
+        $nativeWorkflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-native.yml',
+        );
+
+        self::assertStringContainsString('WLS_LINK_STATIC_SODIUM', $cmake);
+        self::assertStringContainsString('NAMES libsodium.a', $cmake);
+        self::assertStringContainsString(
+            'target_link_libraries(wls-gateway-broker PRIVATE ${WLS_SODIUM_LINK_LIBRARIES} Threads::Threads)',
+            $cmake,
+        );
+        self::assertStringContainsString(
+            'target_link_libraries(wls-gateway-launcher PRIVATE ${WLS_SODIUM_LINK_LIBRARIES})',
+            $cmake,
+        );
+        self::assertStringContainsString(
+            '-DWLS_LINK_STATIC_SODIUM=ON',
+            self::jobBlock($nativeWorkflow, 'posix'),
+        );
+    }
+
+    public function testProductionProvenanceAuthorityComesFromProtectedTargetVariables(): void
+    {
+        $root = \dirname(__DIR__, 9);
+        $workflow = (string)\file_get_contents(
+            $root . '/.github/workflows/wls-gateway-package.yml',
+        );
+        $assemble = self::jobBlock($workflow, 'assemble-production');
+        $audit = self::jobBlock($workflow, 'audit-production');
+        $sign = self::jobBlock($workflow, 'sign-production');
+
+        self::assertStringNotContainsString('      provenance_sha256:', $workflow);
+        self::assertStringNotContainsString('${{ inputs.provenance_sha256 }}', $workflow);
+        foreach ([
+            'WLS_GATEWAY_PROVENANCE_SHA256_LINUX_X86_64',
+            'WLS_GATEWAY_PROVENANCE_SHA256_LINUX_ARM64',
+            'WLS_GATEWAY_PROVENANCE_SHA256_DARWIN_X86_64',
+            'WLS_GATEWAY_PROVENANCE_SHA256_DARWIN_ARM64',
+            'WLS_GATEWAY_PROVENANCE_SHA256_WINDOWS_X86_64',
+        ] as $protectedVariable) {
+            self::assertStringContainsString($protectedVariable, $assemble);
+            self::assertStringContainsString($protectedVariable, $audit);
+            self::assertStringContainsString($protectedVariable, $sign);
+        }
+        self::assertStringContainsString(
+            '"--release-public-key-hex=$env:RELEASE_PUBLIC_KEY_HEX"',
+            $assemble,
+        );
+        self::assertStringContainsString(
+            '"--approved-provenance-sha256=$env:WLS_PROVENANCE_SHA256"',
+            $assemble,
+        );
+        self::assertStringContainsString(
+            '"--expected-provenance-sha256=$WLS_PROVENANCE_SHA256"',
+            $audit,
+        );
+        self::assertStringContainsString(
+            '"--expected-provenance-sha256=$WLS_PROVENANCE_SHA256"',
+            $sign,
         );
     }
 

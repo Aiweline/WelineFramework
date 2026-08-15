@@ -196,12 +196,6 @@ final class ModuleRollbackExecutor
                     ModuleVersionOperation::schema_fields_RECOVERY_JSON => json_encode($journal, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     ModuleVersionOperation::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
                 ])->save();
-                return [
-                    'success' => false,
-                    'operation_id' => $operationId,
-                    'status' => ModuleVersionOperation::STATUS_FAILED_RECOVERED,
-                    'error' => $failure->getMessage(),
-                ];
             } catch (\Throwable $compensationFailure) {
                 $journal['compensation_error'] = $compensationFailure->getMessage();
                 $journal['manual_command'] = $this->recoveryCommand($operationId);
@@ -217,6 +211,33 @@ final class ModuleRollbackExecutor
                     $journal['manual_command']
                 ), 0, $compensationFailure);
             }
+
+            try {
+                $this->migrationService->releaseRecoveredOperationBindings($operationId);
+            } catch (\Throwable $releaseFailure) {
+                // Compensation is already complete. Keep failed_recovered as the
+                // release authority so a retry can atomically release all rows.
+                $journal['binding_release_error'] = $releaseFailure->getMessage();
+                $operation->setData([
+                    ModuleVersionOperation::schema_fields_STATUS => ModuleVersionOperation::STATUS_FAILED_RECOVERED,
+                    ModuleVersionOperation::schema_fields_PHASE => 'binding_release_failed',
+                    ModuleVersionOperation::schema_fields_ERROR => $failure->getMessage() . ' | ' . $releaseFailure->getMessage(),
+                    ModuleVersionOperation::schema_fields_RECOVERY_JSON => json_encode($journal, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ModuleVersionOperation::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+                ])->save();
+                throw new \RuntimeException(
+                    __('自动补偿已完成，但 operation_id 绑定释放失败，可安全重试'),
+                    0,
+                    $releaseFailure,
+                );
+            }
+
+            return [
+                'success' => false,
+                'operation_id' => $operationId,
+                'status' => ModuleVersionOperation::STATUS_FAILED_RECOVERED,
+                'error' => $failure->getMessage(),
+            ];
         } finally {
             flock($lockHandle, LOCK_UN);
             fclose($lockHandle);
@@ -247,6 +268,21 @@ final class ModuleRollbackExecutor
                 ModuleVersionOperation::schema_fields_RECOVERY_JSON => json_encode($journal, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ModuleVersionOperation::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
             ])->save();
+            try {
+                $this->migrationService->releaseRecoveredOperationBindings($operationId);
+            } catch (\Throwable $releaseFailure) {
+                $operation->setData([
+                    ModuleVersionOperation::schema_fields_STATUS => ModuleVersionOperation::STATUS_FAILED_RECOVERED,
+                    ModuleVersionOperation::schema_fields_PHASE => 'binding_release_failed',
+                    ModuleVersionOperation::schema_fields_ERROR => $releaseFailure->getMessage(),
+                    ModuleVersionOperation::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+                ])->save();
+                throw new \RuntimeException(
+                    __('人工恢复已完成补偿，但 operation_id 绑定释放失败'),
+                    0,
+                    $releaseFailure,
+                );
+            }
             return ['success' => true, 'operation_id' => $operationId, 'status' => ModuleVersionOperation::STATUS_FAILED_RECOVERED];
         } finally {
             flock($lockHandle, LOCK_UN);

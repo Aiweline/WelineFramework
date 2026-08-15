@@ -35,6 +35,16 @@ class RebuildCmsPageWebsiteUnique20260703V103 extends AbstractMigration
         return [Page::schema_table];
     }
 
+    public function requiresBackup(): bool
+    {
+        return true;
+    }
+
+    public function getBackupStrategy(): array
+    {
+        return ['strategy' => 'table', 'tables' => [Page::schema_table], 'columns' => []];
+    }
+
     public function install(): bool
     {
         $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
@@ -53,7 +63,10 @@ class RebuildCmsPageWebsiteUnique20260703V103 extends AbstractMigration
         }
 
         if ($connection->hasIndex($table, 'uk_cms_page_identifier_scope')) {
-            $connection->query($connection->buildDropIndexSql($table, 'uk_cms_page_identifier_scope'))->fetch();
+            $connection->query($connection->buildDropIndexSql(
+                $connection->formatTableName($table),
+                'uk_cms_page_identifier_scope',
+            ))->fetch();
         }
 
         $this->ensureIndexes($connection, $table);
@@ -149,7 +162,7 @@ class RebuildCmsPageWebsiteUnique20260703V103 extends AbstractMigration
 
         foreach ($indexes as $name => $index) {
             if (!$connection->hasIndex($table, $name)) {
-                $connection->query($connection->buildAddIndexSql($table, [
+                $connection->query($connection->buildAddIndexSql($connection->formatTableName($table), [
                     'name' => $name,
                     'type' => $index['type'],
                     'columns' => $index['columns'],
