@@ -18,6 +18,21 @@ use Weline\Server\Supervisor\Client\SupervisorChildClient;
 
 final class MasterLeaseOrchestratorArgsTest extends TestCase
 {
+    public function testWindowsArm64X64ChildCredentialWaitCoversParentPidAuthorityWindow(): void
+    {
+        $method = new \ReflectionMethod(MasterLeaseManager::class, 'childCredentialWaitSeconds');
+        $method->setAccessible(true);
+
+        self::assertSame(7.0, $method->invoke(null, [
+            'profile' => 'native',
+            'requires_jit_isolation' => false,
+        ]));
+        self::assertSame(45.0, $method->invoke(null, [
+            'profile' => 'windows-arm64-x64-cli-safe-v2',
+            'requires_jit_isolation' => true,
+        ]));
+    }
+
     public function testAllManagedChildArgvHidesCredential(): void
     {
         $orchestrator = new ServiceOrchestrator();
