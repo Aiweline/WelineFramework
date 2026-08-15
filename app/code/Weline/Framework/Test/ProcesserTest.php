@@ -293,7 +293,7 @@ class ProcesserTest extends TestCore
         self::assertStringContainsString('--launch-id=launch-visible', $script);
     }
 
-    public function testBuildWindowsBatchCreateScriptUsesExplicitArgumentArrayForBackgroundProcess(): void
+    public function testBuildWindowsBatchCreateScriptUsesEncodedArgumentLineForBackgroundProcess(): void
     {
         $script = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchCreateScript', [
             [[
@@ -313,10 +313,10 @@ class ProcesserTest extends TestCore
 
         self::assertIsString($script);
         self::assertStringContainsString("WindowStyle = 'Hidden'", $script);
-        self::assertStringContainsString('$argList = @(', $script);
-        self::assertStringContainsString("'worker.php'", $script);
-        self::assertStringContainsString("'--name=weline-worker-hidden'", $script);
-        self::assertStringContainsString("'--launch-id=launch-visible'", $script);
+        self::assertStringContainsString(
+            "\$startArgs.ArgumentList = 'worker.php --name=weline-worker-hidden --launch-id=launch-visible'",
+            $script,
+        );
         self::assertStringContainsString('Start-Process @startArgs', $script);
     }
 
@@ -484,7 +484,12 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertSame([
-            ['key' => 'worker-hidden', 'block' => true],
+            [
+                'key' => 'worker-hidden',
+                'block' => true,
+                'launcher_pid' => 0,
+                'topology_root_pid' => 0,
+            ],
         ], $resolved);
     }
 
@@ -504,8 +509,18 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertSame([
-            ['key' => 'phase-one-visible', 'block' => false],
-            ['key' => 'worker-hidden', 'block' => true],
+            [
+                'key' => 'phase-one-visible',
+                'block' => false,
+                'launcher_pid' => 0,
+                'topology_root_pid' => 0,
+            ],
+            [
+                'key' => 'worker-hidden',
+                'block' => true,
+                'launcher_pid' => 0,
+                'topology_root_pid' => 0,
+            ],
         ], $resolved);
     }
 
@@ -527,7 +542,11 @@ class ProcesserTest extends TestCore
             false,
         ]);
 
-        self::assertSame($items, $resolved);
+        self::assertSame([[
+            ...$items[0],
+            'launcher_pid' => 4321,
+            'topology_root_pid' => 0,
+        ]], $resolved);
     }
 
     public function testChildOwnedPidSelectionPrefersRegistrationAndRejectsAnExitedLauncher(): void
@@ -853,6 +872,132 @@ class ProcesserTest extends TestCore
         ));
     }
 
+    public function testWindowsEmulatedSharedSidecarResolvesItsDurableExactArgvLeaf(): void
+    {
+        $launchId = '0123456789abcdef0123456789abcdef';
+        $name = 'weline-wls-memory-p795cf46d-shared-24992';
+        $php = 'C:\\Tools\\PHP84\\php.exe';
+        $arguments = [
+            '-d',
+            'opcache.jit=0',
+            '-d',
+            'opcache.jit_buffer_size=0',
+            'C:\\repo\\app\\code\\Weline\\Server\\bin\\session_server.php',
+            '127.0.0.1',
+            '24992',
+            'shared-memory-p795cf46d-24992',
+            '--instance-name=shared-memory-p795cf46d-24992',
+            '--token-file-name=memory_server.p795cf46d.token',
+            '--bootstrap-instance=ai-test-win-million-current',
+            '--log-instance-name=shared-memory-p795cf46d-24992',
+            '--shared-service=1',
+            '--memory-limit=512M',
+            '--launch-id=' . $launchId,
+            '--role=memory_server',
+            '--name=' . $name,
+        ];
+        $liveCommand = '"' . $php . '" ' . \implode(' ', $arguments);
+        $item = [
+            'key' => 'memory_server',
+            'command' => $liveCommand,
+            'php' => $php,
+            'argument_list' => $arguments,
+            'exact_argv' => true,
+            'process_name' => $name,
+            'child_owns_pid' => true,
+            'block' => false,
+        ];
+
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchTransitionPidRequiresResolution',
+            [$item, true],
+        ));
+
+        $pending = $this->invokePrivateStatic(
+            Processer::class,
+            'collectLaunchItemsNeedingPidResolution',
+            [[$item], ['memory_server' => 4100], false, true, ['memory_server' => 4000]],
+        );
+        self::assertCount(1, $pending);
+        self::assertSame($php, $pending[0]['php'] ?? null);
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [$liveCommand, $pending[0]],
+        ));
+
+        $snapshot = [
+            4000 => ['pid' => 4000, 'parent_pid' => 900, 'command_line' => 'powershell.exe batch.ps1'],
+            4100 => ['pid' => 4100, 'parent_pid' => 4000, 'command_line' => $liveCommand],
+            4101 => ['pid' => 4101, 'parent_pid' => 4100, 'command_line' => $liveCommand],
+        ];
+        self::assertSame(['memory_server' => 4101], $this->invokePrivateStatic(
+            Processer::class,
+            'selectWindowsBatchTransitionPidsFromSnapshot',
+            [['memory_server' => $pending[0]], $snapshot, true],
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'windowsBatchLiveCommandMatchesLaunchItem',
+            [\str_replace('memory_server.p795cf46d.token', 'memory_server.foreign.token', $liveCommand), $pending[0]],
+        ));
+    }
+
+    public function testWindowsEmulatedMasterOwnedBatchRebindsTransitionPidToDurableLeaf(): void
+    {
+        $command = 'worker.php'
+            . ' --name=weline-wls-worker-master-owned'
+            . ' --launch-id=0123456789abcdef0123456789abcdef'
+            . ' --slot-id=worker#1'
+            . ' --lease-id=fedcba9876543210fedcba9876543210'
+            . ' --epoch=1'
+            . ' --master-pid=900';
+        $item = [
+            'key' => 'worker-1',
+            'command' => $command,
+            'php' => 'C:\\Tools\\PHP84\\php.exe',
+            'argument_list' => [
+                'worker.php',
+                '--name=weline-wls-worker-master-owned',
+                '--launch-id=0123456789abcdef0123456789abcdef',
+                '--slot-id=worker#1',
+                '--lease-id=fedcba9876543210fedcba9876543210',
+                '--epoch=1',
+                '--master-pid=900',
+            ],
+            'exact_argv' => true,
+            'process_name' => 'weline-wls-worker-master-owned',
+            'child_owns_pid' => true,
+            'block' => false,
+        ];
+        $resolverCalls = 0;
+
+        $result = $this->invokePrivateStatic(
+            Processer::class,
+            'resolveWindowsMasterOwnedEmulatedBatchPids',
+            [
+                [$item],
+                ['worker-1' => 4000],
+                true,
+                static function (array $pending, float $timeout, bool $requireLauncherDescendant) use (&$resolverCalls): array {
+                    $resolverCalls++;
+                    self::assertCount(1, $pending);
+                    self::assertSame(4000, $pending[0]['launcher_pid'] ?? null);
+                    self::assertSame(4000, $pending[0]['topology_root_pid'] ?? null);
+                    self::assertGreaterThanOrEqual(1.0, $timeout);
+                    self::assertTrue($requireLauncherDescendant);
+
+                    return ['worker-1' => 4100];
+                },
+                static fn (int $pid): bool => $pid === 4100,
+            ],
+        );
+
+        self::assertSame(1, $resolverCalls);
+        self::assertSame(['worker-1' => 4100], $result);
+    }
+
     public function testWindowsManagedBatchPendingIdentityPreservesExactArgv(): void
     {
         $arguments = [
@@ -873,6 +1018,7 @@ class ProcesserTest extends TestCore
                 'command' => 'windows-isolated-exact-argv'
                     . ' --name=weline-wls-master-isolated-win'
                     . ' --launch-id=0123456789abcdef0123456789abcdef',
+                'php' => 'C:\\php\\php.exe',
                 'process_name' => 'weline-wls-master-isolated-win',
                 'child_owns_pid' => true,
                 'launcher_pid' => 4100,
@@ -884,6 +1030,7 @@ class ProcesserTest extends TestCore
 
         self::assertIsArray($pending);
         self::assertTrue($pending['exact_argv'] ?? false);
+        self::assertSame('C:\\php\\php.exe', $pending['php'] ?? null);
         self::assertSame($arguments, $pending['argument_list'] ?? null);
         self::assertSame(4100, $pending['launcher_pid'] ?? null);
         self::assertSame(4000, $pending['topology_root_pid'] ?? null);

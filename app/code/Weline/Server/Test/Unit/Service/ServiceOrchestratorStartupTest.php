@@ -2874,6 +2874,97 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(1, $ackMessages, 'duplicate READY should still receive ACK_READY');
     }
 
+    public function testAuthenticatedDuplicateWorkerReadySkipsCapabilityAndRouteSideEffects(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+            /** @var list<int> */
+            public array $closed = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closed[] = $clientId;
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $context = $this->createWorkerInfraContext();
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+        $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
+        $this->writePrivate($orchestrator, 'containerRegistryDigest', self::TEST_CONTAINER_DIGEST);
+
+        $dispatcher = new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'duplicate-dispatcher',
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 201,
+        );
+        $registry->addInstance($dispatcher);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'duplicate-worker',
+            port: 29340,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 202,
+        );
+        $worker->setMeta('worker_id', 1);
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'duplicate-worker');
+        $worker->setMeta('generation', 1);
+        $worker->setMeta('ready_at', (\hrtime(true) / 1_000_000_000) - 1.0);
+        $registry->addInstance($worker);
+
+        // An already admitted child may retransmit only its authenticated
+        // READY identity after losing ACK_READY. Capability/homepage/listener
+        // evidence was consumed by the first admission and must not be replayed.
+        $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
+            'epoch' => $context->epoch,
+            'launch_id' => 'duplicate-worker',
+            'msg_id' => 'duplicate-worker',
+            'slot_id' => 'worker#1',
+            'lease_id' => 'duplicate-worker',
+            'generation' => 1,
+            'port' => 29340,
+            'role' => ControlMessage::ROLE_WORKER,
+        ], 202]);
+
+        $messageTypes = [];
+        foreach ($mockControl->sent as $entry) {
+            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
+            if (\is_array($decoded)) {
+                $messageTypes[] = (string)($decoded['type'] ?? '');
+            }
+        }
+
+        self::assertSame([], $mockControl->closed);
+        self::assertSame([ControlMessage::TYPE_ACK_READY], $messageTypes);
+        self::assertSame(ServiceInstance::STATE_READY, $worker->state);
+    }
+
     public function testExpiredPendingWorkerReadyCanBeReplacedByNewWorkerReady(): void
     {
         $mockControl = new class extends MasterControlServer {
@@ -5815,7 +5906,12 @@ class ServiceOrchestratorStartupTest extends TestCase
         ]);
         $primaryProperty->setValue(null, $intentDigest);
 
-        $orchestrator = new ServiceOrchestrator();
+        $orchestrator = new class extends ServiceOrchestrator {
+            protected function isWindowsRuntime(): bool
+            {
+                return true;
+            }
+        };
         $this->writePrivate($orchestrator, 'context', $context);
 
         try {
@@ -6334,6 +6430,11 @@ class ServiceOrchestratorStartupTest extends TestCase
                 return $this->recoverPublishedWindowsChildPids($instances, $pids);
             }
 
+            protected function isWindowsRuntime(): bool
+            {
+                return true;
+            }
+
             protected function readPublishedWindowsChildLease(string $expectedPname): array
             {
                 $this->leaseReads[] = $expectedPname;
@@ -6426,6 +6527,11 @@ class ServiceOrchestratorStartupTest extends TestCase
             public function recover(array $instances, array $pids): array
             {
                 return $this->recoverPublishedWindowsChildPids($instances, $pids);
+            }
+
+            protected function isWindowsRuntime(): bool
+            {
+                return true;
             }
 
             protected function publishedWindowsChildPidRecoveryDeadline(): float
