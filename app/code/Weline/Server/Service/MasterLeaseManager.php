@@ -26,7 +26,7 @@ class MasterLeaseManager
     private const LOCK_WAIT_SEC = 5.0;
     private const LOCK_RETRY_USEC = 10_000;
     private const CHILD_CREDENTIAL_WAIT_SEC = 7.0;
-    private const WINDOWS_EMULATED_CHILD_CREDENTIAL_WAIT_SEC = 45.0;
+    private const WINDOWS_EMULATED_CHILD_CREDENTIAL_WAIT_SEC = 120.0;
 
     /** @var list<string> */
     private const SCHEMA_FIELDS = [
@@ -623,9 +623,11 @@ class MasterLeaseManager
      * Windows ARM64 may run x64 PHP through an emulation transition. The
      * parent must retain the WMI broker and resolve the durable execution PID
      * before publishing a credential, which can legally outlive the ordinary
-     * seven-second child bootstrap window. Keep that child unprivileged and
-     * fail closed, but give the authenticated emulation profile a bounded
-     * window covering the parent's result-row and PID-authority budgets.
+     * seven-second child bootstrap window. A cold six-child batch performs the
+     * bounded result-row pass and the exact PID-authority pass sequentially;
+     * Windows ARM64 x64 emulation has measured that path above 50 seconds.
+     * Keep the child unprivileged and fail closed, but retain it through the
+     * complete parent publication path inside the Master's startup budget.
      *
      * @param array{profile?:mixed,requires_jit_isolation?:mixed}|null $runtimeProfile
      */

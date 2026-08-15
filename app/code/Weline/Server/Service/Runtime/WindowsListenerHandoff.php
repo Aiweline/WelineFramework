@@ -824,11 +824,29 @@ final class WindowsListenerHandoff
             $runtime->monotonicNow() + self::ENVELOPE_LIFETIME_SECONDS,
         );
         do {
-            self::sweepPendingExports(
-                \dirname($path),
-                $runtime,
-                $deadlineMonotonic,
-            );
+            try {
+                self::sweepPendingExports(
+                    \dirname($path),
+                    $runtime,
+                    $deadlineMonotonic,
+                );
+            } catch (\RuntimeException $exception) {
+                if (!\hash_equals(
+                    'Timed out acquiring the WLS state lock.',
+                    $exception->getMessage(),
+                )) {
+                    throw $exception;
+                }
+                // The target imports and validates the duplicated listener
+                // while holding this registry lock. A slow but live target is
+                // normal contention, not publication failure; retry only this
+                // bounded lock timeout inside the existing envelope deadline.
+                if ($runtime->monotonicNow() >= $deadline) {
+                    break;
+                }
+                SchedulerSystem::usleep(self::POLL_INTERVAL_MICROSECONDS);
+                continue;
+            }
             if (!isset(self::$ownedExportProtocols[$protocolDigest])) {
                 return;
             }

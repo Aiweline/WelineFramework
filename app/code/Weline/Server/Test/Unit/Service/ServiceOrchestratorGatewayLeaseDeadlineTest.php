@@ -87,10 +87,10 @@ final class ServiceOrchestratorGatewayLeaseDeadlineTest extends TestCase
 
         self::assertIsFloat($deadline);
         self::assertGreaterThanOrEqual(
-            $before + 7.9,
+            $before + 29.9,
             $deadline,
-            'Windows READY must leave time for exact process-birth and argv attestation before the bounded lease lock.',
+            'Windows READY must retain the exact process-birth, argv and listener-lease confirmation through a cold emulated launch.',
         );
-        self::assertLessThanOrEqual($after + 8.05, $deadline);
+        self::assertLessThanOrEqual($after + 30.05, $deadline);
     }
 }
