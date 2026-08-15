@@ -6,6 +6,7 @@ namespace Weline\Server\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Cache\Namespace\NamespacePath;
+use Weline\Framework\Console\PhpCliRuntimePreflight;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\Policy\RuntimePolicyBundle;
@@ -151,6 +152,8 @@ class ServiceOrchestrator
         ControlMessage::ROLE_WORKER => true,
     ];
     private const MASTER_LEASE_TOUCH_INTERVAL_SEC = 2.0;
+    private const WINDOWS_CHILD_PID_LEASE_WAIT_SEC = 2.0;
+    private const WINDOWS_EMULATED_CHILD_PID_LEASE_WAIT_SEC = 40.0;
 
     private ServiceRegistry $registry;
     private ?ControlPlaneServerInterface $controlServer = null;
@@ -5510,6 +5513,7 @@ class ServiceOrchestrator
 
         $requests = [];
         $candidatePids = [];
+        $leaseRecoveryDeadline = 0.0;
         foreach ($instances as $key => $instance) {
             $currentPid = (int)($pids[$key] ?? 0);
             if ($currentPid <= 0 && \is_int($key)) {
@@ -5533,30 +5537,41 @@ class ServiceOrchestrator
             }
 
             $expectedPname = '--name=' . $processName;
-            $record = $this->readPublishedWindowsChildLease($expectedPname);
-            $recordPid = (int)($record['pid'] ?? 0);
-            $recordTime = (int)($record['time'] ?? 0);
-            $recordEpoch = (int)($record['epoch'] ?? 0);
-            $recordedProcessName = \trim((string)($record['process_name'] ?? ''));
-            $recordedLaunchId = \trim((string)($record['launch_id'] ?? ''));
-            $recordedPnameKey = \trim((string)($record['pname_key'] ?? ''));
-            $startedAt = $instance->startedAt;
-            $recordFailure = $recordPid <= 0
-                ? 'lease_pid_missing'
-                : ($recordTime <= 0
-                    ? 'lease_time_missing'
-                    : ($recordEpoch !== $instance->epoch
-                        ? 'lease_epoch_mismatch'
-                        : (!\hash_equals($processName, $recordedProcessName)
-                            ? 'lease_process_name_mismatch'
-                            : (!\hash_equals($launchId, $recordedLaunchId)
-                                ? 'lease_launch_id_mismatch'
-                                : (!\hash_equals($expectedPname, $recordedPnameKey)
-                                    ? 'lease_pname_mismatch'
-                                    : (($startedAt >= 1_000_000_000.0
-                                        && $recordTime < ((int)\floor($startedAt) - 1))
-                                        ? 'lease_stale'
-                                        : ''))))));
+            if ($leaseRecoveryDeadline <= 0.0) {
+                $leaseRecoveryDeadline = $this->publishedWindowsChildPidRecoveryDeadline();
+            }
+            do {
+                $record = $this->readPublishedWindowsChildLease($expectedPname);
+                $recordPid = (int)($record['pid'] ?? 0);
+                $recordTime = (int)($record['time'] ?? 0);
+                $recordEpoch = (int)($record['epoch'] ?? 0);
+                $recordedProcessName = \trim((string)($record['process_name'] ?? ''));
+                $recordedLaunchId = \trim((string)($record['launch_id'] ?? ''));
+                $recordedPnameKey = \trim((string)($record['pname_key'] ?? ''));
+                $startedAt = $instance->startedAt;
+                $recordFailure = $recordPid <= 0
+                    ? 'lease_pid_missing'
+                    : ($recordTime <= 0
+                        ? 'lease_time_missing'
+                        : ($recordEpoch !== $instance->epoch
+                            ? 'lease_epoch_mismatch'
+                            : (!\hash_equals($processName, $recordedProcessName)
+                                ? 'lease_process_name_mismatch'
+                                : (!\hash_equals($launchId, $recordedLaunchId)
+                                    ? 'lease_launch_id_mismatch'
+                                    : (!\hash_equals($expectedPname, $recordedPnameKey)
+                                        ? 'lease_pname_mismatch'
+                                        : (($startedAt >= 1_000_000_000.0
+                                            && $recordTime < ((int)\floor($startedAt) - 1))
+                                            ? 'lease_stale'
+                                            : ''))))));
+                if ($recordFailure !== 'lease_pid_missing'
+                    || $this->publishedWindowsChildPidRecoveryNow() >= $leaseRecoveryDeadline
+                ) {
+                    break;
+                }
+                $this->waitForPublishedWindowsChildPidRecovery();
+            } while (true);
             if ($recordFailure !== '') {
                 $this->logPublishedWindowsChildPidRecoveryRejection($key, $recordFailure);
                 continue;
@@ -5620,6 +5635,31 @@ class ServiceOrchestrator
         }
 
         return $pids;
+    }
+
+    protected function publishedWindowsChildPidRecoveryDeadline(): float
+    {
+        $runtimeProfile = PhpCliRuntimePreflight::inspect();
+        $waitSeconds = !empty($runtimeProfile['requires_jit_isolation'])
+            && \hash_equals(
+                PhpCliRuntimePreflight::PROFILE,
+                \trim((string)($runtimeProfile['profile'] ?? '')),
+            )
+            ? self::WINDOWS_EMULATED_CHILD_PID_LEASE_WAIT_SEC
+            : self::WINDOWS_CHILD_PID_LEASE_WAIT_SEC;
+
+        return $this->publishedWindowsChildPidRecoveryNow() + $waitSeconds;
+    }
+
+    protected function publishedWindowsChildPidRecoveryNow(): float
+    {
+        return self::monotonicSeconds();
+    }
+
+    protected function waitForPublishedWindowsChildPidRecovery(): void
+    {
+        $this->touchMasterLeaseIfDue(self::monotonicSeconds());
+        SchedulerSystem::usleep(50_000);
     }
 
     /** @return array{birth:string,pid_namespace_id:string}|array{} */
