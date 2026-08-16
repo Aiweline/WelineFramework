@@ -54,6 +54,7 @@
 - `app/code/Weline/Server/doc/Dispatcher分流架构设计.md`
 - `app/code/Weline/Server/doc/IPC控制通道架构.md`
 - `app/code/Weline/Server/doc/README.md`
+- `app/code/Weline/Server/doc/WLS当前能力与验收状态.md`
 - `app/code/Weline/Server/doc/SSE无阻塞检测方法.md`
 - `app/code/Weline/Server/doc/WLS-DISPATCHER-IDLE-SELECT-WAKEUP-FIX-2026-07-05.md`
 - `app/code/Weline/Server/doc/WLS-EventBuffer-SSL-Worker.md`
