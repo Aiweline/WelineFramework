@@ -28,6 +28,8 @@ final class MasterChildCredentialStoreTest extends TestCase
     private array $processNamespace = [];
     /** @var list<array{0:int,1:string,2:string}> */
     private array $terminationCalls = [];
+    /** @var (\Closure(int):void)|null */
+    private ?\Closure $processInfoProbe = null;
     private float $now = 7_000.0;
     private string $bootId = '';
 
@@ -39,6 +41,7 @@ final class MasterChildCredentialStoreTest extends TestCase
         $this->processStart = [];
         $this->processNamespace = [];
         $this->terminationCalls = [];
+        $this->processInfoProbe = null;
         $this->now = 7_000.0;
         $this->bootId = \str_repeat('7', 64);
     }
@@ -388,6 +391,85 @@ final class MasterChildCredentialStoreTest extends TestCase
         self::assertLessThan(500.0, $elapsedMs);
     }
 
+    public function testSlowExistingProcessObservationNeverRunsWhileCredentialLedgerLockIsHeld(): void
+    {
+        [$instance, $token, $manager, $store, $lease] = $this->fixture('child-prune-outside-lock');
+        unset($manager);
+        $masterPid = (int)\getmypid();
+        $oldPid = $masterPid + 31_001;
+        $newPid = $masterPid + 31_002;
+        $this->registerProcess($oldPid, 'old-worker-start');
+        $this->registerProcess($newPid, 'new-worker-start');
+        $store->authorizeServices($lease, $instance, $masterPid, 3, $token, [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => ControlMessage::ROLE_WORKER . '#1',
+            'launch_id' => 'old-worker-launch',
+            'lease_id' => 'old-worker-lease',
+            'generation' => 1,
+            'pid' => $oldPid,
+        ]]);
+
+        $observed = false;
+        $peerAcquiredLedgerLock = null;
+        $lockPath = MasterChildCredentialStore::lockPathForInstance($instance);
+        $this->processInfoProbe = static function (int $pid) use (
+            $oldPid,
+            $lockPath,
+            &$observed,
+            &$peerAcquiredLedgerLock,
+        ): void {
+            if ($pid !== $oldPid || $observed) {
+                return;
+            }
+            $observed = true;
+            $script = <<<'PHP'
+$lock = fopen($argv[1], 'c+b');
+if ($lock === false) {
+    exit(2);
+}
+$acquired = flock($lock, LOCK_EX | LOCK_NB);
+fwrite(STDOUT, $acquired ? "acquired\n" : "blocked\n");
+if ($acquired) {
+    flock($lock, LOCK_UN);
+}
+fclose($lock);
+PHP;
+            $pipes = [];
+            $process = \proc_open(
+                [PHP_BINARY, '-r', $script, $lockPath],
+                [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+            );
+            if (!\is_resource($process)) {
+                throw new \RuntimeException('Unable to start the peer ledger-lock probe.');
+            }
+            $stdout = (string)\stream_get_contents($pipes[1]);
+            $stderr = (string)\stream_get_contents($pipes[2]);
+            \fclose($pipes[1]);
+            \fclose($pipes[2]);
+            $exit = \proc_close($process);
+            if ($exit !== 0) {
+                throw new \RuntimeException('Peer ledger-lock probe failed: ' . $stderr);
+            }
+            $peerAcquiredLedgerLock = \trim($stdout) === 'acquired';
+        };
+
+        $store->authorizeServices($lease, $instance, $masterPid, 3, $token, [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => ControlMessage::ROLE_WORKER . '#2',
+            'launch_id' => 'new-worker-launch',
+            'lease_id' => 'new-worker-lease',
+            'generation' => 1,
+            'pid' => $newPid,
+        ]]);
+
+        self::assertTrue($observed, 'The existing record must be observed before pruning.');
+        self::assertTrue(
+            $peerAcquiredLedgerLock,
+            'Existing-process observation must happen before the credential ledger lock is acquired.',
+        );
+    }
+
     public function testUnknownLedgerFieldsFailClosedWithoutPublishingRootCredential(): void
     {
         [$instance, $token, $manager, $store, $lease] = $this->fixture('child-ledger-schema');
@@ -546,6 +628,9 @@ final class MasterChildCredentialStoreTest extends TestCase
             bootIdentityResolver: fn (): string => $this->bootId,
             monotonicClock: fn (): float => $this->now,
             processInfoResolver: function (int $pid): array {
+                if ($this->processInfoProbe !== null) {
+                    ($this->processInfoProbe)($pid);
+                }
                 $alive = $this->processAlive[$pid] ?? false;
                 return [
                     'exists' => $alive,

@@ -73,7 +73,7 @@ final class ThemeDataRequestState
 class ThemeData
 {
     public const WIDGET_I18N_INSTANCE_CONFIG_KEY = '_i18n_instance';
-    private const RUNTIME_CACHE_TTL = 300;
+    private const RUNTIME_CACHE_TTL = 86400;
     private const SHARED_CACHE_NAMESPACE = 'weline_site_runtime';
 
     private static ?ThemeDataRequestState $mainState = null;

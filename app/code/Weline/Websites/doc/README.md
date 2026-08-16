@@ -41,6 +41,7 @@
 - Scope Token 使用 `v1.<kid>.<payload>.<sig>` 和预置 keyring，精确绑定 Host、audience、三段 Scope、store mode 与 context version。请求路径不得临时生成密钥。
 - Scope rollout 默认 `off`；`shadow` 只做服务端观察，`allowlist` 只让精确 dev/test 三元组取得权威，`on` 才全量权威。默认 Worker Session JSON 存储仍是单机/受控验证能力；Redis snapshot-CAS 也仅是 dev/test 共享语义探针，生产模式会拒绝启用。多节点 `on` 之前必须接入专用持久 credential store，并完成真实双节点一次消费与故障转移门禁。
 - `WebsiteData` 是运行时站点事实来源。它把克隆的 Website 快照和派生缓存存在当前 `RequestContext`，按请求/Fiber 隔离；默认语言、默认货币、已关联语言/货币都应该从这里或其模型读取。
+- 后台或 bootstrap 在安装完整 `WebsiteData` 快照前读取本地化信息时，`LocalizationProvider` 只在拥有真实 request id 的当前 `RequestContext` 内复用 language/currency 回退查询，并显式缓存空结果；非请求启动路径不建立进程级缓存。
 - URL 本地化兼容货币/语言单段和两种双段顺序，canonical 固定为 `currency -> locale`；后台 area key 必须是 URL 第一段。
 - Website 默认时区只写当前 `RequestContext`，不得修改 PHP 进程全局 timezone。`QueryBin` 成功响应的 `scope_meta` 只包含 Scope 身份、locale/currency/timezone 和 context version 等安全字段，不包含 Token、签名、bootstrap ID 或密钥。
 - 跨模块与前端调用网站能力时，优先使用已发布的 `w_query('websites', ...)`，不要直接依赖内部服务类。

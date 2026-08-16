@@ -200,6 +200,7 @@ flowchart TB
 
 - 每个 WLS 请求的 Session flush、response snapshot、namespace snapshot、trace、`StateManager`、module resetter、globals、`Context::leave()` 与 phase release 分别执行；任一步失败不得跳过后续可执行清理，最后按 stage/capability 聚合报错。
 - 普通、异常、SSE 和取消请求共用同一 finally 契约；取消挂起 Fiber 前必须先恢复目标 Fiber 投影，再向 Fiber 抛入 `RequestExitException` 以展开 Runtime/Worker finally，不得直接丢弃 Scope bucket。
+- 取消展开允许 session、cache lease、DB 等嵌套 finally 在有界的 16 个协作挂起点内继续清理；真正持续重新挂起的 Fiber 仍按连续 3 次不完整取消进入 Worker quarantine，不会通过扩大重试取消隔离。
 - 目标 Fiber 恢复只切换 superglobals、SSE/URL scratch 与已注册请求静态投影；`Context`、`HeaderCollector` 和 ObjectManager request bucket 由各自 Fiber WeakMap 保留，不覆盖主循环状态。
 - reset/cleanup、Fiber resume/capture 或 post-response cleanup 任一失败，Worker 都会设置一次性 `drain-after-response` 原因。当前连接强制 `Connection: close`，普通 H1 Worker 消费该原因后立即关闭 listener、停止接单并向 Master 报告 quarantine 退出原因；不允许仅记日志后继续复用。
 - module request state 必须位于当前 `RequestContext`/Fiber；进程级配置缓存、指标和共享连接池不得伪装成请求态被 peer Fiber 清空。

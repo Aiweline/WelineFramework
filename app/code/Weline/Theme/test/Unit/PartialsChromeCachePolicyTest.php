@@ -10,6 +10,14 @@ use ReflectionMethod;
 use ReflectionProperty;
 use Weline\Theme\Block\Partials;
 use Weline\Theme\Helper\ComponentMetaParser;
+use Weline\Theme\Helper\ThemeData;
+use Weline\Theme\Observer\ControllerFetchFileBefore;
+
+\defined('BP') || \define('BP', \dirname(__DIR__, 6) . \DIRECTORY_SEPARATOR);
+\defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);
+
+require_once BP . 'app/autoload.php';
+require_once BP . 'app/code/Weline/Theme/Block/Partials.php';
 
 final class PartialsChromeCachePolicyTest extends TestCase
 {
@@ -45,7 +53,7 @@ final class PartialsChromeCachePolicyTest extends TestCase
 
         self::assertIsArray($cache);
         self::assertSame('chrome', (string)($cache['mode']['default'] ?? ''));
-        self::assertSame('role', (string)($cache['auth']['default'] ?? ''));
+        self::assertSame('user', (string)($cache['auth']['default'] ?? ''));
     }
 
     public function testTopbarChromeAuthDefaultsToUser(): void
@@ -76,6 +84,47 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertGreaterThan(0, (int)$policy['ttl']);
     }
 
+    public function testExplicitOffPolicyIsNeverPromotedByAChromeTypeFallback(): void
+    {
+        $partials = (new \ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(Partials::class, 'resolveChromeCachePolicy');
+        $method->setAccessible(true);
+
+        self::assertNull($method->invoke(
+            $partials,
+            'unit-test-explicit-off.phtml',
+            ['cache' => ['mode' => ['default' => 'off']]],
+            'head',
+        ));
+    }
+
+    public function testBackendHeadCacheIdentityRetainsPageAndLayoutData(): void
+    {
+        $partials = (new \ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(Partials::class, 'resolveChromePartialCacheDataContext');
+        $method->setAccessible(true);
+
+        $first = $method->invoke($partials, 'backend', 'head', [
+            'meta' => ['title' => 'Orders'],
+            'layout' => ['type' => 'admin', 'option' => 'wide'],
+        ]);
+        $second = $method->invoke($partials, 'backend', 'head', [
+            'meta' => ['title' => 'Customers'],
+            'layout' => ['type' => 'admin', 'option' => 'compact'],
+        ]);
+
+        self::assertNotSame($first, $second);
+    }
+
+    public function testChromeOutputPathHasNoSharedRuntimeCacheHook(): void
+    {
+        $class = new ReflectionClass(Partials::class);
+
+        self::assertFalse($class->hasProperty('runtimeCache'));
+        self::assertFalse($class->hasMethod('readRuntimePartialOutputCache'));
+        self::assertFalse($class->hasMethod('acquirePartialRefreshLock'));
+    }
+
     public function testRememberPartialOutputEvictsOldestWhenFull(): void
     {
         $partials = (new \ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
@@ -97,6 +146,22 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertCount($max, $cache);
         self::assertArrayNotHasKey('key-0', $cache);
         self::assertArrayHasKey('key-new', $cache);
+    }
+
+    public function testBackendChromeAndThemeDataRemainHotAcrossAnIdleDay(): void
+    {
+        $partials = (new ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+        $staleTtl = new ReflectionMethod(Partials::class, 'partialOutputStaleTtl');
+        $staleTtl->setAccessible(true);
+
+        $themeDataTtl = new ReflectionMethod(ThemeData::class, 'runtimeCacheTtl');
+        $themeDataTtl->setAccessible(true);
+        $observerTtl = new ReflectionMethod(ControllerFetchFileBefore::class, 'runtimeCacheTtl');
+        $observerTtl->setAccessible(true);
+
+        self::assertGreaterThanOrEqual(86400, $staleTtl->invoke($partials));
+        self::assertGreaterThanOrEqual(86400, $themeDataTtl->invoke(null));
+        self::assertGreaterThanOrEqual(86400, $observerTtl->invoke(null));
     }
 
     /**

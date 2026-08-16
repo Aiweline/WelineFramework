@@ -4921,26 +4921,47 @@ const DevToolPanel = (function() {
     }
 
     function getPerformanceTiming() {
-        const timing = performance.timing;
-        if (!timing) {
+        const navigation = performance.getEntriesByType('navigation')[0];
+        if (!navigation) {
             return null;
         }
-        
+
+        try {
+            const navigationUrl = new URL(navigation.name, location.href);
+            const currentUrl = new URL(location.href);
+            navigationUrl.hash = '';
+            currentUrl.hash = '';
+
+            if (navigationUrl.href !== currentUrl.href) {
+                return {
+                    staleNavigation: true,
+                    navigationEntry: null
+                };
+            }
+        } catch (error) {
+            return {
+                staleNavigation: true,
+                navigationEntry: null
+            };
+        }
+
         return {
+            staleNavigation: false,
+            navigationEntry: navigation,
             // DNS查询耗时
-            dns: timing.domainLookupEnd - timing.domainLookupStart,
+            dns: navigation.domainLookupEnd - navigation.domainLookupStart,
             // TCP连接耗时
-            tcp: timing.connectEnd - timing.connectStart,
+            tcp: navigation.connectEnd - navigation.connectStart,
             // 请求耗时
-            request: timing.responseStart - timing.requestStart,
+            request: navigation.responseStart - navigation.requestStart,
             // 响应耗时
-            response: timing.responseEnd - timing.responseStart,
+            response: navigation.responseEnd - navigation.responseStart,
             // DOM解析耗时
-            domParsing: timing.domInteractive - timing.responseEnd,
+            domParsing: navigation.domInteractive - navigation.responseEnd,
             // DOMContentLoaded耗时
-            domContentLoaded: timing.domContentLoadedEventEnd - timing.navigationStart,
+            domContentLoaded: navigation.domContentLoadedEventEnd,
             // 页面完全加载耗时
-            loadComplete: timing.loadEventEnd - timing.navigationStart,
+            loadComplete: navigation.loadEventEnd,
             // 首次渲染时间
             firstPaint: performance.getEntriesByType('paint').find(entry => entry.name === 'first-paint')?.startTime || 0,
             // 首次内容绘制时间
@@ -6233,10 +6254,11 @@ const DevToolPanel = (function() {
         let html = '<div class="performance-stats dev-tool-performance-shell">';
 
         const timing = getPerformanceTiming();
-        if (timing) {
+        const hasCurrentNavigationTiming = Boolean(timing && !timing.staleNavigation);
+        if (hasCurrentNavigationTiming) {
             const wlsDuration = (function() {
                 try {
-                    var nav = performance.getEntriesByType('navigation')[0];
+                    var nav = timing.navigationEntry;
                     var st = nav && nav.serverTiming;
                     if (st) {
                         var wls = st.find(function(t) { return t.name === 'wls'; });
@@ -6329,9 +6351,12 @@ const DevToolPanel = (function() {
                 html += '</div>';
             }
         } else {
+            var performanceUnavailableMessage = timing && timing.staleNavigation
+                ? '当前页面通过登录跳转或局部导航进入，浏览器 Navigation Timing 属于上一文档；请刷新当前页获取准确数据。'
+                : '性能 API 不可用，无法读取页面加载阶段。';
             html += '<div class="dev-tool-performance-panel">';
             html += '<div class="dev-tool-performance-panel-body">';
-            html += '<div class="dev-tool-performance-empty">性能 API 不可用，无法读取页面加载阶段。</div>';
+            html += '<div class="dev-tool-performance-empty">' + escapeHtml(performanceUnavailableMessage) + '</div>';
             html += '</div>';
             html += '</div>';
         }
@@ -6340,10 +6365,10 @@ const DevToolPanel = (function() {
         html += '<div class="dev-tool-performance-panel">';
         html += '<div class="dev-tool-performance-panel-head">';
         html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-cubes"></i> 资源加载统计</div>';
-        html += '<div class="dev-tool-performance-panel-note">当前页面资源</div>';
+        html += '<div class="dev-tool-performance-panel-note">' + (hasCurrentNavigationTiming ? '当前页面资源' : '未使用上一文档资源数据') + '</div>';
         html += '</div>';
 
-        const resources = performance.getEntriesByType('resource');
+        const resources = hasCurrentNavigationTiming ? performance.getEntriesByType('resource') : [];
         const resourceStats = {
             total: resources.length,
             js: 0,

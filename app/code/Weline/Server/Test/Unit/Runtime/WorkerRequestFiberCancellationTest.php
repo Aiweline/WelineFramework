@@ -86,6 +86,38 @@ final class WorkerRequestFiberCancellationTest extends TestCase
         self::assertSame(0, WorkerResponseMemoryGuard::incompleteRequestFiberCancelStreak());
     }
 
+    public function testCancellationCompletesAcrossMultipleCleanupSuspensions(): void
+    {
+        $remainingCleanupSuspensions = 6;
+        $finallyCalls = 0;
+        $fiber = new \Fiber(static function () use (&$remainingCleanupSuspensions, &$finallyCalls): void {
+            Context::enter(new Context(['meta' => ['id' => 'request']]));
+            try {
+                while ($remainingCleanupSuspensions > 0) {
+                    try {
+                        \Fiber::suspend();
+                    } catch (RequestExitException) {
+                        --$remainingCleanupSuspensions;
+                    }
+                }
+            } finally {
+                ++$finallyCalls;
+                RequestContext::cleanup();
+                Context::leave();
+            }
+        });
+
+        self::assertNull($fiber->start());
+        $snapshot = WlsFiberContext::captureForFiber($fiber);
+
+        self::assertTrue(wlsUnwindRequestFiberForCancellation($fiber, $snapshot, 'unit_test_cleanup_chain'));
+        self::assertTrue($fiber->isTerminated());
+        self::assertSame(0, $remainingCleanupSuspensions);
+        self::assertSame(1, $finallyCalls);
+        self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
+        self::assertSame(0, WorkerResponseMemoryGuard::incompleteRequestFiberCancelStreak());
+    }
+
     public function testStubbornIncompleteCancelDefersQuarantineUntilStreakThreshold(): void
     {
         $threshold = WorkerResponseMemoryGuard::INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK;
