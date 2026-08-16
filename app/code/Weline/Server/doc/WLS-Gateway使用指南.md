@@ -1,12 +1,11 @@
 # WLS 2.0 Gateway 使用指南
 
-> 状态：实现检查点完成、跨平台发布验收中。edge 决策、稳定项目身份、纯 WLS 降级、Native Platform Broker、
-> 双通道鉴权、enrollment、证书快照、事务发布、A/B/LKG 和 Controller/Nginx
-> 恢复链均已有实现与专项验证；平台守护的有界维护重试、熔断收敛和
-> `next_retry` 状态仍属发布阻断项。Linux systemd、真实 80/443、宿主 reboot、legacy
-> 显式提升、fallback/rejoin、双租户 H2/H3 百万和撤销墓碑不变量已在隔离 VM 通过。
-> macOS 原生 Broker/Launcher/数据面已在随机端口实测；macOS/Windows 系统服务 ACL
-> 与 reboot、Windows 实机、首次 ACME 和剩余发布门禁尚未全部完成。
+> 当前状态：**LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL**。当前源码的纯 WLS
+> 直接数据面已在 macOS、Linux 和 Windows QEMU x64 兼容环境完成各 100 万次
+> HTTP/2 请求且 0 错误；这不是 managed Gateway 公网 80/443、物理 Windows/MSVC/SCM、
+> 系统冷重启或公网 CA/DNS 首签通过。纯 WLS HTTP/3/QUIC 与 HTTP/2 SSE DATA-frame
+> 流式尚未实现。完整状态、报告摘要和待验证项见
+> [WLS 当前能力与验收状态](WLS当前能力与验收状态.md)。
 
 ## 1. 角色边界
 
@@ -335,6 +334,8 @@ Master 的受保护 lease 是运行中实例的代际事实源。status、Benchm
 - 当前宿主网关可用于开发联调，不等同于计划完成后的生产可用声明。
 
 ## 6. 当前本机验收边界
+
+> 当前结论与三平台百万报告以 [WLS 当前能力与验收状态](WLS当前能力与验收状态.md) 为准。下方带日期、旧测试数或旧任务号的内容只保留为历史回归证据；不得据此宣称物理 Windows/MSVC/SCM、macOS system-domain 冷重启或公网首签已经完成。
 
 macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller、Nginx 和 backend，
 不会安装平台服务、绑定 80/443 或操作既存网关；Linux 验收只在隔离 Lima VM 使用
