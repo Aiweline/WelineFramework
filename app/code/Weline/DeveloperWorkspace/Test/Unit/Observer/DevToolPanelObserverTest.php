@@ -116,4 +116,20 @@ final class DevToolPanelObserverTest extends TestCase
             . 'window.__WELINE_DEV_TOOL__={"requestId":"old-config-12345678"};</script>'
         ));
     }
+
+    public function testPerformancePanelRejectsTimingFromAnotherDocument(): void
+    {
+        $template = file_get_contents(dirname(__DIR__, 3) . '/view/hooks/dev-tool-panel.phtml');
+
+        self::assertIsString($template);
+        self::assertStringContainsString("performance.getEntriesByType('navigation')[0]", $template);
+        self::assertStringContainsString('navigationUrl.href !== currentUrl.href', $template);
+        self::assertStringContainsString('staleNavigation: true', $template);
+        self::assertStringContainsString('浏览器 Navigation Timing 属于上一文档', $template);
+        self::assertStringContainsString(
+            "const resources = hasCurrentNavigationTiming ? performance.getEntriesByType('resource') : [];",
+            $template
+        );
+        self::assertStringNotContainsString('const timing = performance.timing;', $template);
+    }
 }

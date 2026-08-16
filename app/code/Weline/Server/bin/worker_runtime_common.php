@@ -470,8 +470,9 @@ function wlsDrainPostResponseTasks(
  * Unwind a suspended request Fiber so its Runtime and Worker finally blocks
  * execute before the connection state and request scope are discarded.
  *
- * Long-lived SSE handlers may re-suspend once while catching RequestExitException.
- * Retry a bounded number of throws before grading the cancel incomplete, and only
+ * Request cleanup can cross several cooperative suspension points while nested
+ * finally blocks release sessions, cache leases, and database state. Retry a
+ * bounded number of throws before grading the cancel incomplete, and only
  * quarantine the Worker after a streak of incomplete cancels (not a single flake).
  */
 if (!\function_exists('wlsUnwindRequestFiberForCancellation')) {
@@ -491,7 +492,7 @@ function wlsUnwindRequestFiberForCancellation(
         return false;
     }
 
-    $maxThrows = 3;
+    $maxThrows = 16;
     for ($attempt = 0; $attempt < $maxThrows; $attempt++) {
         if ($fiber->isTerminated()) {
             break;

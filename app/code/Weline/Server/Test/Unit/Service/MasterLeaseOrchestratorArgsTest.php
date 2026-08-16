@@ -23,10 +23,15 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
         $method = new \ReflectionMethod(MasterLeaseManager::class, 'childCredentialWaitSeconds');
         $method->setAccessible(true);
 
-        self::assertSame(7.0, $method->invoke(null, [
+        $ordinaryWait = $method->invoke(null, [
             'profile' => 'native',
             'requires_jit_isolation' => false,
-        ]));
+        ]);
+        self::assertSame(
+            MasterChildCredentialStore::publicationWaitSeconds(),
+            $ordinaryWait,
+        );
+        self::assertGreaterThan(22.0, $ordinaryWait);
         self::assertSame(120.0, $method->invoke(null, [
             'profile' => 'windows-arm64-x64-cli-safe-v2',
             'requires_jit_isolation' => true,

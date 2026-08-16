@@ -5,6 +5,9 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\MasterControlServer;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\MasterLeaseManager;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
@@ -194,6 +197,46 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             if (\is_file($instanceFile . '.lock')) {
                 @\unlink($instanceFile . '.lock');
             }
+        }
+    }
+
+    public function testStoppedLeaseRemainsTheNextMasterEpochFloorAfterEndpointCleanup(): void
+    {
+        $instanceName = 'ut-master-stopping-floor-' . \bin2hex(\random_bytes(4));
+        $leasePath = MasterLeaseManager::pathForInstance($instanceName);
+        $runtimeDirectory = \dirname($leasePath);
+        self::assertTrue(@\mkdir($runtimeDirectory, 0700, true) || \is_dir($runtimeDirectory));
+
+        $runtimeIdentity = new MasterLeaseRuntimeIdentity();
+        GatewayProjectStateFilesystem::atomicWrite(
+            $leasePath,
+            (string)\json_encode([
+                'schema' => MasterLeaseManager::SCHEMA,
+                'instance' => $instanceName,
+                'master_pid' => 999_999_999,
+                'control_port' => 29191,
+                'master_epoch' => 7,
+                'master_token' => \str_repeat('a', 64),
+                'state' => MasterLeaseManager::STATE_STOPPING,
+                'host_boot_id' => $runtimeIdentity->hostBootId(),
+                'updated_monotonic' => $runtimeIdentity->monotonicNow(),
+                'lease_sequence' => 3,
+                'master_process_birth' => \str_repeat('b', 64),
+                'pid_namespace_id' => '',
+                'diagnostic_updated_at' => '2026-08-16T03:15:00.000000Z',
+            ], JSON_THROW_ON_ERROR),
+            0600,
+        );
+
+        $master = new MasterProcess();
+        $this->writePrivate($master, 'instanceName', $instanceName);
+
+        try {
+            self::assertSame(8, $this->invokePrivate($master, 'resolveNextMasterEpoch'));
+        } finally {
+            @\unlink($leasePath);
+            @\unlink(MasterLeaseManager::lockPathForInstance($instanceName));
+            @\rmdir($runtimeDirectory);
         }
     }
 

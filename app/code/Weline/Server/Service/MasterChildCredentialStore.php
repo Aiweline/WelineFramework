@@ -33,11 +33,13 @@ final class MasterChildCredentialStore
     // authorizeServices does not abort mid-retry and crash Master self-audit.
     private const PROCESS_CAPTURE_WAIT_SEC = 12.0;
     private const PROCESS_CAPTURE_RETRY_USEC = 50_000;
+    private const PRUNE_OBSERVATION_WAIT_SEC = 5.0;
     // Align with MasterLeaseManager::LOCK_WAIT_SEC. A 2s wait was too short when
     // several authorizeServices / self-audit fibers contended the ledger during
     // Darwin birth-capture retries, amplifying "Timed out acquiring the WLS
     // state lock" into a worker respawn storm.
     private const LEDGER_LOCK_WAIT_SEC = 5.0;
+    private const PUBLICATION_WAIT_MARGIN_SEC = 1.0;
 
     /** @var list<string> */
     private const STATE_FIELDS = [
@@ -105,6 +107,20 @@ final class MasterChildCredentialStore
         return \dirname(self::pathForInstance($instance))
             . DIRECTORY_SEPARATOR
             . 'master_child_credentials.lock';
+    }
+
+    /**
+     * Upper bound used by a newly spawned child while its exact credential is
+     * captured and committed by the parent. Keep the consumer wait derived
+     * from the producer's two bounded phases instead of maintaining an
+     * independent, shorter timeout.
+     */
+    public static function publicationWaitSeconds(): float
+    {
+        return self::PROCESS_CAPTURE_WAIT_SEC
+            + self::PRUNE_OBSERVATION_WAIT_SEC
+            + self::LEDGER_LOCK_WAIT_SEC
+            + self::PUBLICATION_WAIT_MARGIN_SEC;
     }
 
     /**
@@ -280,6 +296,9 @@ final class MasterChildCredentialStore
             );
             $prepared[] = $identity;
         }
+        $prunableCredentialIds = $this->collectPrunableCredentialIds(
+            $this->readState($instance)['records'] ?? [],
+        );
 
         return $this->mutate($instance, function (?array $state) use (
             $leaseFile,
@@ -288,6 +307,7 @@ final class MasterChildCredentialStore
             $masterEpoch,
             $masterToken,
             $prepared,
+            $prunableCredentialIds,
         ): array {
             $currentLease = $this->requireRunningMaster(
                 $leaseFile,
@@ -297,7 +317,10 @@ final class MasterChildCredentialStore
                 $masterToken,
             );
             $state = $this->stateForMaster($state, $currentLease);
-            $records = $this->pruneRecords($state['records']);
+            $records = $this->applyPrunableCredentialIds(
+                $state['records'],
+                $prunableCredentialIds,
+            );
             $authorized = [];
             foreach ($prepared as $child) {
                 $this->removeServiceSlotAndDescendants($records, $child['slot_id']);
@@ -354,6 +377,9 @@ final class MasterChildCredentialStore
             $childPid,
             $this->runtimeIdentity->monotonicNow() + self::PROCESS_CAPTURE_WAIT_SEC,
         );
+        $prunableCredentialIds = $this->collectPrunableCredentialIds(
+            $this->readState($instance)['records'] ?? [],
+        );
 
         return $this->mutate($instance, function (?array $state) use (
             $leaseFile,
@@ -362,6 +388,7 @@ final class MasterChildCredentialStore
             $masterEpoch,
             $parentCredential,
             $tuple,
+            $prunableCredentialIds,
         ): array {
             $lease = $this->requireRunningMaster(
                 $leaseFile,
@@ -388,7 +415,10 @@ final class MasterChildCredentialStore
                     'A managed desired-state task must inherit its parent Agent slot.'
                 );
             }
-            $records = $this->pruneRecords($state['records']);
+            $records = $this->applyPrunableCredentialIds(
+                $state['records'],
+                $prunableCredentialIds,
+            );
             foreach ($records as $record) {
                 if ($record['kind'] === self::KIND_TASK
                     && \hash_equals($tuple['subject_id'], $record['subject_id'])
@@ -1230,11 +1260,24 @@ final class MasterChildCredentialStore
         return $matches[0];
     }
 
-    /** @param list<array<string,mixed>> $records @return list<array<string,mixed>> */
-    private function pruneRecords(array $records): array
+    /**
+     * Observe process ownership before taking the credential ledger lock.
+     * The returned credential IDs commit the process and authorization
+     * identity fields, so a concurrent replacement cannot be mistaken for the
+     * observed record. A bounded pass leaves unobserved records untouched.
+     *
+     * @param list<array<string,mixed>> $records
+     * @return list<string>
+     */
+    private function collectPrunableCredentialIds(array $records): array
     {
-        $live = [];
+        $prunable = [];
+        $deadline = $this->runtimeIdentity->monotonicNow()
+            + self::PRUNE_OBSERVATION_WAIT_SEC;
         foreach ($records as $record) {
+            if ($this->runtimeIdentity->monotonicNow() >= $deadline) {
+                break;
+            }
             $status = $this->runtimeIdentity->observeProcessIdentity(
                 (int)$record['pid'],
                 (string)$record['process_birth'],
@@ -1244,17 +1287,38 @@ final class MasterChildCredentialStore
                 MasterLeaseRuntimeIdentity::OWNER_MISSING,
                 MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
             ], true)) {
-                continue;
+                $prunable[] = (string)$record['credential_id'];
             }
-            $live[] = $record;
         }
-        $liveIds = \array_fill_keys(\array_column($live, 'credential_id'), true);
 
-        return \array_values(\array_filter(
-            $live,
-            static fn (array $record): bool => $record['kind'] !== self::KIND_TASK
-                || isset($liveIds[$record['parent_credential_id']]),
-        ));
+        return $prunable;
+    }
+
+    /**
+     * Apply only observations that still identify the exact locked snapshot.
+     * Removing a service also removes its task descendants; records added or
+     * replaced after the pre-lock observation remain untouched.
+     *
+     * @param list<array<string,mixed>> $records
+     * @param list<string> $prunableCredentialIds
+     * @return list<array<string,mixed>>
+     */
+    private function applyPrunableCredentialIds(
+        array $records,
+        array $prunableCredentialIds,
+    ): array {
+        if ($records === [] || $prunableCredentialIds === []) {
+            return $records;
+        }
+        $prunable = \array_fill_keys($prunableCredentialIds, true);
+        foreach ($records as $record) {
+            $credentialId = (string)$record['credential_id'];
+            if (isset($prunable[$credentialId])) {
+                $this->removeRecordAndDescendants($records, $credentialId);
+            }
+        }
+
+        return $records;
     }
 
     /** @param list<array<string,mixed>> $records */

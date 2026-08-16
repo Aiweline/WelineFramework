@@ -9,6 +9,12 @@ use ReflectionMethod;
 use ReflectionProperty;
 use Weline\Theme\Block\Partials;
 
+\defined('BP') || \define('BP', \dirname(__DIR__, 6) . \DIRECTORY_SEPARATOR);
+\defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);
+
+require_once BP . 'app/autoload.php';
+require_once BP . 'app/code/Weline/Theme/Block/Partials.php';
+
 final class PartialsStaticOutputEmptyCacheTest extends TestCase
 {
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */

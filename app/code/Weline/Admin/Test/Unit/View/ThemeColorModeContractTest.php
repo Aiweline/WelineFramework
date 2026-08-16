@@ -6,6 +6,8 @@ namespace Weline\Admin\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
 
+\defined('BP') || \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+
 final class ThemeColorModeContractTest extends TestCase
 {
     public function testAdminControlsExposeKeyboardAccessibleThreeStateMode(): void
@@ -57,6 +59,37 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertSame(1, substr_count($canonicalRuntime, "media.addEventListener('change', updateSystemTheme)"));
         self::assertSame(1, substr_count($canonicalRuntime, 'media.addListener(updateSystemTheme)'));
         self::assertStringContainsString('runtime.systemListenerBound', $canonicalRuntime);
+    }
+
+    public function testBackendShellHasOneOwnerForBlockingRuntimeAssets(): void
+    {
+        $adminHead = $this->read('app/code/Weline/Admin/view/templates/common/head.phtml');
+        $backendHeader = $this->read('app/code/Weline/Backend/view/blocks/header/base.phtml');
+        $themeHead = $this->read('app/code/Weline/Theme/view/theme/backend/partials/head/default.phtml');
+        $shellSources = $adminHead . "\n" . $backendHeader . "\n" . $themeHead;
+
+        self::assertSame(
+            1,
+            substr_count($shellSources, 'backend/lib/jquery/3.6.0/jquery.js'),
+            'The backend header owns jQuery; the Admin head must not load it again.'
+        );
+        self::assertSame(
+            1,
+            substr_count($shellSources, 'backend/assets/js/theme.js'),
+            'The Theme head partial is the sole owner of the backend theme runtime.'
+        );
+        self::assertSame(
+            1,
+            substr_count($shellSources, 'backend/assets/js/backend-components.js'),
+            'The Theme head partial is the sole owner of backend components.'
+        );
+        foreach (['_colors.css', '_typography.css', '_spacing.css', '_borders.css', '_shadows.css'] as $asset) {
+            self::assertSame(
+                1,
+                substr_count($shellSources, 'backend/variables/' . $asset),
+                $asset . ' must not be emitted by both Admin and Theme heads.'
+            );
+        }
     }
 
     private function read(string $path): string

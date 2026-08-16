@@ -25,7 +25,6 @@ class MasterLeaseManager
     private const MAX_PROTECTED_LEASE_BYTES = 16_384;
     private const LOCK_WAIT_SEC = 5.0;
     private const LOCK_RETRY_USEC = 10_000;
-    private const CHILD_CREDENTIAL_WAIT_SEC = 7.0;
     private const WINDOWS_EMULATED_CHILD_CREDENTIAL_WAIT_SEC = 120.0;
 
     /** @var list<string> */
@@ -381,10 +380,6 @@ class MasterLeaseManager
                 return $result;
             }
             $result['lease'] = $lease;
-            if ((string)$lease['state'] !== self::STATE_RUNNING) {
-                $result['reason'] = 'Master lease is not running.';
-                return $result;
-            }
             if (($expectedInstance !== ''
                     && !\hash_equals($expectedInstance, (string)$lease['instance']))
                 || ($expectedMasterPid > 0 && $expectedMasterPid !== (int)$lease['master_pid'])
@@ -404,6 +399,10 @@ class MasterLeaseManager
             $result['same_boot'] = $sameBoot;
             if (!$sameBoot) {
                 $result['reason'] = 'Master lease belongs to another host boot.';
+                return $result;
+            }
+            if ((string)$lease['state'] !== self::STATE_RUNNING) {
+                $result['reason'] = 'Master lease is not running.';
                 return $result;
             }
             $now = $runtime->monotonicNow();
@@ -623,7 +622,7 @@ class MasterLeaseManager
      * Windows ARM64 may run x64 PHP through an emulation transition. The
      * parent must retain the WMI broker and resolve the durable execution PID
      * before publishing a credential, which can legally outlive the ordinary
-     * seven-second child bootstrap window. A cold six-child batch performs the
+     * producer-derived child bootstrap window. A cold six-child batch performs the
      * bounded result-row pass and the exact PID-authority pass sequentially;
      * Windows ARM64 x64 emulation has measured that path above 50 seconds.
      * Keep the child unprivileged and fail closed, but retain it through the
@@ -643,7 +642,7 @@ class MasterLeaseManager
             return self::WINDOWS_EMULATED_CHILD_CREDENTIAL_WAIT_SEC;
         }
 
-        return self::CHILD_CREDENTIAL_WAIT_SEC;
+        return MasterChildCredentialStore::publicationWaitSeconds();
     }
 
     /** @return array{authorized:bool,reason:string} */
