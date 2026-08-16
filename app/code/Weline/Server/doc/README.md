@@ -2,6 +2,8 @@
 
 本目录记录 Weline Server（WLS）的现行架构、运行方式和历史设计。开发与排障优先阅读现行文档；带日期的修复报告和阶段方案只作为历史证据，不作为当前实现契约。
 
+当前完成度、真实运行证据、未实现高级能力和外部环境门禁统一见 [WLS 当前能力与验收状态](WLS当前能力与验收状态.md)。其它文档出现冲突时，以该页的当前状态为准；历史 checkpoint 仍保留为历史事实。
+
 WLS 2.0 启动统一使用 `--edge=auto|gateway|wls`。项目发布合同要求最终发行物必须在
 固定平台路径携带已签名的完整 Gateway/Nginx 包；只有完成发布组装后的项目才满足这一
 前置，当前源码树或仅上传 overlay artifact 不等于项目已经携带。`auto` 优先加入已受信的 `wls-edge/2` 宿主网关；若网关
@@ -19,16 +21,12 @@ WLS 2.0 启动统一使用 `--edge=auto|gateway|wls`。项目发布合同要求�
 项目 UUID、desired/certificate generation 和摘要保存在 `app/etc/wls-project.json`；
 该文件随项目目录迁移，宿主只保存可重建的 UUID 路径声明、端口租约和证书快照。当前
 WLS 2.0 已形成平台 Broker、`wls-edge/2` 协议鉴权、证书事务和 LKG/A-B
-恢复的实现检查点。历史检查点曾对网关 H1/H2、纯 WLS H1/H2、双租户、
-Controller 接管与 Worker reload/drain 执行严格百万矩阵；但当前未提交的
-恢复链修复改变了源码 generation，这些历史数据不得作为当前验收。当前状态
-为 `IMPLEMENTATION REOPENED / ACCEPTANCE BLOCKED`，必须在复审阻断项闭合后重跑 PostgreSQL、
-真实恢复、当前源码百万请求和三平台门禁。
-Linux PostgreSQL legacy 80/443 已使用受信历史签名包完成启动失败、激活后失败回滚和
-成功提升；提升后最终 HTTP/2 百万仍为 1,000,000/1,000,000、0 错误。Windows
-Service/Named Pipe DACL/reboot 实机、macOS LaunchDaemon ACL/reboot，以及外部
-CA/DNS 公网首次签发尚未闭合，TASK-013 未全绿，因此 TASK-014 的发布前置仍不成立。
-完成这些外部证据前不得宣称三平台生产就绪。
+恢复的实现检查点。带日期的旧百万矩阵、任务号和冻结分类只作为历史证据。
+
+当前源码的纯 WLS 直接数据面已完成 macOS、Linux 和 Windows QEMU x64 兼容环境的
+三端百万请求，状态为 `LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL`。物理
+Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows 容量门禁和
+公网 CA/DNS 首签仍未闭合；完成这些外部或系统级证据前不得宣称三平台生产就绪。
 
 ## 推荐阅读
 
@@ -60,6 +58,8 @@ CA/DNS 公网首次签发尚未闭合，TASK-013 未全绿，因此 TASK-014 的
 | 安全与规则 | [WLS 安全与规则配置推演](WLS安全与规则配置推演.md) |
 
 ## 状态权威速查
+
+> 本节列出运行事实源，不代表全部能力已经验收。完成度与未完成项以 [WLS 当前能力与验收状态](WLS当前能力与验收状态.md) 为准。
 
 - Master `ServiceRegistry`：进程生命周期、槽位、代际和 READY。
 - Dispatcher 的版本化 `SET_ROUTE_TABLE` 快照：数据面路由。

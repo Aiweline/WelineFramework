@@ -84,6 +84,8 @@
 - WLS 已启动（`php bin/w server:start` 或通过 Dispatcher 访问 Worker）
 - 使用带 Fiber 的 worker（默认 worker.php 已接入 Fiber + WlsFiberContext）
 
+> 协议边界：本文验证的是 SSE 请求不会阻塞 Worker，不构成 HTTP/2 SSE 验收。当前 HTTP/2 仅支持普通请求/响应，SSE 的持续 DATA-frame 流式输出尚未实现；详见 [WLS 当前能力与验收状态](WLS当前能力与验收状态.md)。
+
 ---
 
 ## 方法一：浏览器双标签（最直观）
