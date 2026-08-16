@@ -7,12 +7,15 @@ namespace Weline\Websites\Api\Localization;
 use Weline\Framework\App\Localization\LocalizationProviderInterface;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteLanguage;
 
 final class LocalizationProvider implements LocalizationProviderInterface
 {
+    private const FALLBACK_CACHE_PREFIX = 'websites.localization_provider.fallback.v1.';
+
     public function priority(): int
     {
         return 100;
@@ -30,7 +33,12 @@ final class LocalizationProvider implements LocalizationProviderInterface
             return [];
         }
 
-        return ObjectManager::getInstance(WebsiteLanguage::class)->getWebsiteLanguageCodes($websiteId);
+        return $this->fallbackCodes(
+            'language',
+            $websiteId,
+            static fn(): array => ObjectManager::getInstance(WebsiteLanguage::class)
+                ->getWebsiteLanguageCodes($websiteId),
+        );
     }
 
     public function currencyCodes(): array
@@ -44,7 +52,12 @@ final class LocalizationProvider implements LocalizationProviderInterface
             return [];
         }
 
-        return ObjectManager::getInstance(WebsiteCurrency::class)->getWebsiteCurrencyCodes($websiteId);
+        return $this->fallbackCodes(
+            'currency',
+            $websiteId,
+            static fn(): array => ObjectManager::getInstance(WebsiteCurrency::class)
+                ->getWebsiteCurrencyCodes($websiteId),
+        );
     }
 
     public function supportsLanguage(string $code): ?bool
@@ -55,6 +68,32 @@ final class LocalizationProvider implements LocalizationProviderInterface
     public function supportsCurrency(string $code): ?bool
     {
         return null;
+    }
+
+    /**
+     * Backend and bootstrap requests may know the website id before a full
+     * WebsiteData snapshot has been installed. Cache that fallback lookup in
+     * the current request, including an intentionally empty result.
+     *
+     * @param callable(): array $loader
+     * @return array<int, string>
+     */
+    private function fallbackCodes(string $dimension, int $websiteId, callable $loader): array
+    {
+        if (RequestContext::getId() === null) {
+            return $loader();
+        }
+
+        $key = self::FALLBACK_CACHE_PREFIX . $dimension . '.' . $websiteId;
+        if (RequestContext::has($key)) {
+            $codes = RequestContext::get($key, []);
+            return \is_array($codes) ? $codes : [];
+        }
+
+        $codes = $loader();
+        RequestContext::set($key, $codes);
+
+        return $codes;
     }
 
     private function websiteId(): ?int

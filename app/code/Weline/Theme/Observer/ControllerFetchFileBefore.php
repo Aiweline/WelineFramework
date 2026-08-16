@@ -47,7 +47,7 @@ final class ControllerFetchFileBeforeRequestCacheState
  */
 class ControllerFetchFileBefore implements ObserverInterface
 {
-    private const RUNTIME_CACHE_TTL = 300;
+    private const RUNTIME_CACHE_TTL = 86400;
 
     private static ?ControllerFetchFileBeforeRequestCacheState $mainRequestCache = null;
     /** @var \WeakMap<\Fiber, ControllerFetchFileBeforeRequestCacheState>|null */
