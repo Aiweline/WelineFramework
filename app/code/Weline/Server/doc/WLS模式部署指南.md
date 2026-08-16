@@ -440,9 +440,9 @@ php bin/w server:start -p 9981
 
 | Surface | 默认策略 | 证据边界 |
 |---|---|---|
-| Nginx 公网 HTTPS | HTTP/2 → HTTP/1.1；H3 条件启用 | 真实 TLS 1.3 + ALPN/HTTP 请求门禁；H3 必须通过 owner 绑定的 HTTP/3-only WLS health 请求，Nginx 本地响应/缓存不算，PHP cURL verifier 不可用时保持 pending |
+| Nginx 公网 HTTPS | HTTP/2 → HTTP/1.1；H3 条件启用 | H3 属 managed Nginx/Gateway 能力，只有 owner/generation 绑定的 HTTP/3-only WLS health 真实请求可判已验证；配置、静态合同或本地缓存不算。当前三平台百万结果不覆盖此 surface |
 | Nginx → WLS 回源 | HTTP/1.1 Keep-Alive | 业务请求保持连接池；仅 `/_wls/` fresh 门禁传播精确 `Connection: close`；只有显式内部 host/port 才压测这一层 |
-| 纯 WLS 公网 HTTPS | HTTP/2 → HTTP/1.1；无 H3 | 真实 TLS 1.3 + ALPN H2 自检、H2/H1 请求与实例 endpoint 绑定；Session Ticket/跨 Worker 恢复保持 pending |
+| 纯 WLS 公网 HTTPS | HTTP/2 → HTTP/1.1；HTTP/3/QUIC 未实现 | 普通 H2/H1 请求与实例 endpoint 已有真实证据；HTTP/2 SSE DATA-frame 流式未实现；Session Ticket/跨 Worker 恢复尚未完成验收，不能写成已支持 |
 
 下面的 `h1` 配置描述的是 Nginx 模式下的 WLS 回源端点，不代表公网客户端只能使用 HTTP/1.1：
 
@@ -488,7 +488,7 @@ WLS 不在启动时预装全部语言或全部模块词典。Worker 首次处理
 
 ### 5.2 TLS 1.3、HTTP/3 与会话复用边界
 
-Nginx 模式的公网 TLS 与协议能力只认 Nginx 的配置、编译能力和真实端点证据：
+Nginx 模式的公网 TLS 与协议能力只认 Nginx 的配置、编译能力和真实端点证据。当前完成度以 [WLS 当前能力与验收状态](WLS当前能力与验收状态.md) 为准：
 
 - 托管 Nginx 默认要求 TLS 1.3，并以 ALPN `h2` 为首选；不支持 H2 的客户端自动回退 HTTP/1.1。Nginx 到 WLS 始终使用明文 HTTP/1.1 Keep-Alive。
 - 外部/宿主机 Nginx 不属于当前受支持启动路径；所有公网协议门禁只认本实例项目托管 Nginx。
