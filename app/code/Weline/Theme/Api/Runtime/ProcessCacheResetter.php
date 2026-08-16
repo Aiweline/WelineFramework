@@ -16,7 +16,7 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
-        // Soft pressure: keep chrome HTML output (process + theme_runtime handle).
+        // Soft pressure: keep process-local chrome HTML output.
         // Explicit cache clear: wipe everything including partial HTML.
         if ($context->isExplicitCacheClear()) {
             Partials::clearAllCaches();

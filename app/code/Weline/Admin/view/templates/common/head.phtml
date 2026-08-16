@@ -3,8 +3,6 @@
 /**@var \Weline\Backend\Api\View\BackendThemeConfigInterface $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
 $isDev = defined('DEV') && DEV;
-$themeAssetBaseUrl = $isDev ? '/Weline/Theme/view/theme/' : '/static/Weline/Theme/theme/';
-$themeAssetVersion = '20260810-color-mode';
 $backendThemePreference = $themeConfig->getOriginThemeConfig('theme-mode-switch');
 if (!in_array($backendThemePreference, ['system', 'light', 'dark'], true)) {
     $backendThemePreference = 'light';
@@ -87,50 +85,7 @@ endif;
         width: 2em;
     }
 </style>
-<?php
-// 始终加载主题基础变量CSS（所有变量的默认值）
-// 注意：必须先加载 _colors.css（定义所有 --backend-* 颜色变量）
-?>
-<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_colors.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
-<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_typography.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
-<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_spacing.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
-<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_borders.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
-<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/variables/_shadows.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
-<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/colors/_light.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
-<theme:css>Weline_Theme::theme/backend/colors/_light.css</theme:css>
-<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/colors/_dark.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
-<theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
-<?php
-// 加载主题色系和变量CSS文件（预览配置）
-$previewContextService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\PreviewContextService::class);
-if ($previewContextService->shouldUseStoredContext()) {
-    $previewContext = $previewContextService->getCurrentContext();
-    $previewThemeId = $previewContextService->getThemeIdForArea('backend', $previewContext, false);
-    if ($previewThemeId > 0) {
-        $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
-        $theme = $themeContext->resolveTheme('backend');
-        if ($theme && $theme->getId()) {
-        // 加载色系CSS文件
-        $themeMode = \Weline\Theme\Helper\LayoutScanner::getColorConfig($theme, 'backend');
-        if ($themeMode && $themeMode !== 'light'): ?>
-<theme:css>Weline_Theme::theme/backend/colors/_<?= $themeMode ?>.css</theme:css>
-<?php 
-        endif;
-        
-        // 加载变量CSS文件
-        $variables = \Weline\Theme\Helper\LayoutScanner::getVariablesConfig($theme, 'backend');
-        foreach ($variables as $variable) {
-            if ($variable): ?>
-                <theme:css>Weline_Theme::theme/backend/variables/_<?= $variable ?>.css</theme:css>
-<?php 
-            endif;
-        }
-    }
-    }
-}
-?>
-<!--JS-->
-<js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>
+<!-- Theme CSS/JS is owned by Weline_Theme::partials/head. Backend\Header\Base owns jQuery. -->
 <?php
 // 注入主题配置（必须在 theme.js 加载前）
 $baseUrl = $this->request->getBaseUrl();
@@ -185,10 +140,6 @@ $themeConfigPayload = [
 <script data-no-extract="true">
 window.__WelineThemeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFlags) ?>;
 </script>
-<!-- 主题核心 JS（Weline 对象、模块加载器、API 代理等） -->
-<script src="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/js/theme.js?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
-<!-- 后台全局组件（BackendToast、BackendConfirm 等） -->
-<script src="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/js/backend-components.js?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 <?php if (DEV): ?>
     <!--        <script src="@static(Weline_Backend::/backend/lib/jquery/3.6.0/jquery.map)"></script>-->
 <?php endif; ?>
@@ -459,5 +410,4 @@ body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
     }
 }
 </style>
-<!-- Canonical adapter follows every Admin/header stylesheet and inline override. -->
-<link rel="stylesheet" href="<?= htmlspecialchars($themeAssetBaseUrl . 'backend/assets/css/theme.css?v=' . $themeAssetVersion, ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+<!-- The canonical Theme adapter follows this template via Weline_Theme::partials/head. -->
