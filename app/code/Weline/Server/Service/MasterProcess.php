@@ -287,7 +287,11 @@ class MasterProcess
             ]);
             if ($autoAssign) {
                 $projectOffset = self::getProjectPortOffset();
-                $preferredBase = 20000 + $this->mainPort + $projectOffset;
+                $preferredBase = self::deriveAutomaticControlPortBase(
+                    $this->mainPort,
+                    $projectOffset,
+                    $scanMax,
+                );
             } else {
                 $preferredBase = $configuredControlPort;
             }
@@ -1586,6 +1590,36 @@ class MasterProcess
         $offset = ($hashInt % 10000);
 
         return $offset;
+    }
+
+    /**
+     * Keep the historical automatic control-port base whenever its complete
+     * bounded scan fits. Overflow is folded into the IANA dynamic/private
+     * range so every valid public port still yields a deterministic base.
+     */
+    private static function deriveAutomaticControlPortBase(
+        int $mainPort,
+        int $projectOffset,
+        int $scanMax,
+    ): int {
+        if ($mainPort < 1 || $mainPort > 65535) {
+            throw new \InvalidArgumentException('WLS public port must be between 1 and 65535.');
+        }
+
+        $boundedScanMax = \max(1, \min(512, $scanMax));
+        $rawPreferredBase = 20000 + $mainPort + $projectOffset;
+        $maximumBase = 65535 - $boundedScanMax + 1;
+        if ($rawPreferredBase >= 1024 && $rawPreferredBase <= $maximumBase) {
+            return $rawPreferredBase;
+        }
+
+        $dynamicRangeMinimum = 49152;
+        $candidateSpan = $maximumBase - $dynamicRangeMinimum + 1;
+        if ($candidateSpan < 1) {
+            throw new \LogicException('WLS automatic control-port scan range is empty.');
+        }
+
+        return $dynamicRangeMinimum + ($rawPreferredBase % $candidateSpan);
     }
 
     /**

@@ -1442,7 +1442,9 @@ final class MasterChildCredentialStore
     private function readState(string $instance): ?array
     {
         $path = self::pathForInstance($instance);
-        $this->assertPrivateRuntimeDirectory(\dirname($path));
+        if (!$this->assertPrivateRuntimeDirectory(\dirname($path), true)) {
+            return null;
+        }
         $status = @\lstat($path);
         if (!\is_array($status)) {
             if (\file_exists($path) || \is_link($path)) {
@@ -1678,8 +1680,10 @@ final class MasterChildCredentialStore
         );
     }
 
-    private function assertPrivateRuntimeDirectory(string $directory): void
-    {
+    private function assertPrivateRuntimeDirectory(
+        string $directory,
+        bool $allowMissingLeaf = false,
+    ): bool {
         $root = \rtrim(Env::VAR_DIR, '/\\');
         if ($root === ''
             || !\str_starts_with($directory . DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR)
@@ -1694,15 +1698,36 @@ final class MasterChildCredentialStore
             throw new \RuntimeException('Managed-child credential directory is not private.');
         }
         $relative = \trim((string)\substr($directory, \strlen($root)), '/\\');
+        $components = \preg_split('#[/\\\\]+#', $relative) ?: [];
+        $lastComponentIndex = \count($components) - 1;
         $current = $root;
-        foreach (\preg_split('#[/\\\\]+#', $relative) ?: [] as $component) {
+        foreach ($components as $componentIndex => $component) {
             if ($component === '' || $component === '.' || $component === '..') {
                 throw new \RuntimeException('Managed-child credential directory component is invalid.');
             }
             $current .= DIRECTORY_SEPARATOR . $component;
             $status = @\lstat($current);
-            if (!\is_array($status)
-                || \is_link($current)
+            if (!\is_array($status)) {
+                if ($allowMissingLeaf
+                    && $componentIndex === $lastComponentIndex
+                    && !\file_exists($current)
+                    && !\is_link($current)
+                ) {
+                    $parentStatus = @\lstat(\dirname($current));
+                    if (!\is_array($parentStatus)
+                        || \is_link(\dirname($current))
+                        || ((((int)($parentStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+                        || (PHP_OS_FAMILY !== 'Windows'
+                            && (((int)($parentStatus['mode'] ?? 0)) & 0100) === 0)
+                    ) {
+                        throw new \RuntimeException('Managed-child credential directory ancestry is unsafe.');
+                    }
+
+                    return false;
+                }
+                throw new \RuntimeException('Managed-child credential directory ancestry is unsafe.');
+            }
+            if (\is_link($current)
                 || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
                 || (PHP_OS_FAMILY !== 'Windows'
                     && (int)($status['uid'] ?? -1) !== (int)($rootStatus['uid'] ?? -2))
@@ -1716,6 +1741,8 @@ final class MasterChildCredentialStore
         ) {
             throw new \RuntimeException('Managed-child credential directory is not private.');
         }
+
+        return true;
     }
 
     /** @param array<string|int,mixed> $status */
