@@ -25,7 +25,7 @@ use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\StateManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\View\Form\FormRenderer;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Util\SelectFieldListSplitter;
@@ -105,9 +105,8 @@ abstract class AbstractModel extends DataObject
     /*索引字段排序*/
     public array $_index_sort_keys = [];
 
-    /** 请求级 load 身份映射：同请求内相同 (class, pk) 只查一次库、只派发一次事件，WLS 下由 StateManager 重置 */
+    /** @var array<string,array<string,array<string,mixed>>> 按框架 request_id 隔离的 load 身份映射 */
     private static array $loadIdentityMap = [];
-    private static bool $loadIdentityMapRegistered = false;
     public array $_fields = [];
     # 装载join模型时字段数据，用于字段冲突
     public array $_join_model_fields = [];
@@ -618,12 +617,15 @@ abstract class AbstractModel extends DataObject
      */
     public function load(int|string $field_or_pk_value, $value = null): AbstractModel
     {
-        $this->registerLoadIdentityMapResetter();
+        $requestId = self::loadIdentityMapRequestId();
+        if ($requestId !== null) {
+            self::registerLoadIdentityMapCleanup($requestId);
+        }
         $cacheKey = static::class . '::' . (is_null($value) ? (string) $field_or_pk_value : $field_or_pk_value . '::' . $value);
-        if (isset(self::$loadIdentityMap[$cacheKey]) && is_array(self::$loadIdentityMap[$cacheKey])) {
+        if ($requestId !== null && isset(self::$loadIdentityMap[$requestId][$cacheKey]) && is_array(self::$loadIdentityMap[$requestId][$cacheKey])) {
             $this->clearDataObject();
-            $this->setObjectData(self::$loadIdentityMap[$cacheKey]);
-            $this->_model_fields_data = self::$loadIdentityMap[$cacheKey];
+            $this->setObjectData(self::$loadIdentityMap[$requestId][$cacheKey]);
+            $this->_model_fields_data = self::$loadIdentityMap[$requestId][$cacheKey];
             $this->fetch_after();
             $this->clearQuery();
             return $this;
@@ -648,7 +650,9 @@ abstract class AbstractModel extends DataObject
         if (is_array($data)) {
             $this->setObjectData($data);
             $this->_model_fields_data = $data;
-            self::$loadIdentityMap[$cacheKey] = $data;
+            if ($requestId !== null) {
+                self::$loadIdentityMap[$requestId][$cacheKey] = $data;
+            }
         }
         if (!empty($eventManager->getEventObservers($eventNameAfter))) {
             $eventManager->dispatch($eventNameAfter, $eventData);
@@ -659,16 +663,35 @@ abstract class AbstractModel extends DataObject
         return $this;
     }
 
-    private function registerLoadIdentityMapResetter(): void
+    private static function loadIdentityMapRequestId(): ?string
     {
-        if (self::$loadIdentityMapRegistered) {
+        $requestId = RequestContext::getRequestId();
+        if (!is_string($requestId) || $requestId === '') {
+            return null;
+        }
+
+        return $requestId;
+    }
+
+    private static function registerLoadIdentityMapCleanup(string $requestId): void
+    {
+        RequestContext::onCleanup(
+            static function () use ($requestId): void {
+                unset(self::$loadIdentityMap[$requestId]);
+            },
+            'AbstractModel::loadIdentityMap:' . \hash('sha256', $requestId),
+        );
+    }
+
+    private static function invalidateLoadIdentityMapEntry(string $cacheKey): void
+    {
+        $requestId = self::loadIdentityMapRequestId();
+        if ($requestId === null) {
             return;
         }
-        if (class_exists(StateManager::class)) {
-            StateManager::registerResetCallback('AbstractModel::loadIdentityMap', static function (): void {
-                self::$loadIdentityMap = [];
-            });
-            self::$loadIdentityMapRegistered = true;
+        unset(self::$loadIdentityMap[$requestId][$cacheKey]);
+        if ((self::$loadIdentityMap[$requestId] ?? []) === []) {
+            unset(self::$loadIdentityMap[$requestId]);
         }
     }
     /***************便捷查询 开始 *********************/
@@ -862,7 +885,7 @@ abstract class AbstractModel extends DataObject
             if ($this->_primary_key) {
                 $pk = $this->getData($this->_primary_key);
                 if ($pk !== null && $pk !== '') {
-                    unset(self::$loadIdentityMap[static::class . '::' . (string)$pk]);
+                    self::invalidateLoadIdentityMapEntry(static::class . '::' . (string)$pk);
                 }
             }
         } catch (RollbackOnlyException $exception) {

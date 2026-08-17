@@ -21,8 +21,9 @@
 - Registry Model：`Model/DisplayNumberRegistry`（additive schema，`setup:upgrade`）
 - DTO：`Api/Data/DisplayNumberRef`
 - 资金后处理扩展点：`Api/OrderPostPaymentHookInterface` +
-  `Api/Data/OrderPaidContext` + `NoopOrderPostPaymentHook`
-  （模块 `provides` 默认绑定 Noop，可由后续模块替换）
+  `Api/Data/OrderPaidContext` + `OrderPaidStateHook`。默认实现只校验
+  Order 持久快照并幂等推进通用订单状态，不加载具体支付渠道 Model；
+  其他模块可替换该 provider，但不得绕过冻结上下文或 Order 状态机
 - Minor-unit 金额 DTO：复用 `Api/Data/MoneySnapshot`（不改 Refund/Invoice 资金逻辑）
 
 `OrderFacade::create` 为每张 Order 分配 `number_kind=order` 展示号；提交失败时与组一并回滚。

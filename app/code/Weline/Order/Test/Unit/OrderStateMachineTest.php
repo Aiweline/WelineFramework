@@ -15,11 +15,13 @@ use PDO;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Order\Service\OrderStateMachine;
 use Weline\Order\Service\OrderStateTransitionException;
 use Weline\Order\Model\Order;
@@ -99,6 +101,103 @@ class OrderStateMachineTest extends TestCase
             )->fetch();
             self::assertSame(Order::STATUS_PENDING, $row[0]['status'] ?? null);
             self::assertSame(0, (int)($row[0]['state_version'] ?? -1));
+        } finally {
+            $this->cleanup($path, $connection, $connector);
+        }
+    }
+
+    public function testSequentialTransitionsInsideOneTransactionUseFreshCasPostImages(): void
+    {
+        [$path, $connection, $connector, $model] = $this->database();
+        $model->beginTransaction();
+        try {
+            $machine = $this->machine(
+                $model,
+                static fn (string $name, array $data): array => $data,
+            );
+
+            $machine->transition(1, Order::STATUS_PROCESSING, 'confirm');
+            $paid = $machine->transition(1, Order::STATUS_PAID, 'paid');
+
+            self::assertSame(Order::STATUS_PAID, $paid->getData(Order::schema_fields_STATUS));
+            self::assertSame(2, (int)$paid->getData(Order::schema_fields_STATE_VERSION));
+            $row = $connector->query(
+                'SELECT status,state,state_version FROM weline_order WHERE order_id=1'
+            )->fetch()[0] ?? [];
+            self::assertSame(Order::STATUS_PAID, $row['status'] ?? null);
+            self::assertSame(Order::STATUS_PAID, $row['state'] ?? null);
+            self::assertSame(2, (int)($row['state_version'] ?? -1));
+        } finally {
+            $model->rollBack();
+            $this->cleanup($path, $connection, $connector);
+        }
+    }
+
+    public function testModelLoadIdentityMapIsIsolatedByFrameworkRequestId(): void
+    {
+        [$path, $connection, $connector] = $this->database();
+        try {
+            $fiberA = new \Fiber(static function () use ($connection): array {
+                Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+                RequestContext::setId('order-request-a');
+                $model = new Order();
+                $model->setConnection($connection);
+                $model->__init();
+                $first = (string)$model->load(1)->getData(Order::schema_fields_STATUS);
+                \Fiber::suspend($first);
+                $cached = (string)$model->load(1)->getData(Order::schema_fields_STATUS);
+                RequestContext::cleanup();
+                Context::leave();
+
+                return [$first, $cached];
+            });
+            self::assertSame(Order::STATUS_PENDING, $fiberA->start());
+
+            $connector->query(
+                "UPDATE weline_order SET status='processing',state='processing',state_version=1 WHERE order_id=1"
+            )->fetch();
+
+            $fiberB = new \Fiber(static function () use ($connection): string {
+                Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+                RequestContext::setId('order-request-b');
+                $model = new Order();
+                $model->setConnection($connection);
+                $model->__init();
+                $status = (string)$model->load(1)->getData(Order::schema_fields_STATUS);
+                RequestContext::cleanup();
+                Context::leave();
+
+                return $status;
+            });
+            self::assertNull($fiberB->start());
+            self::assertTrue($fiberB->isTerminated());
+            self::assertSame(Order::STATUS_PROCESSING, $fiberB->getReturn());
+
+            self::assertNull($fiberA->resume());
+            self::assertTrue($fiberA->isTerminated());
+            self::assertSame(
+                [Order::STATUS_PENDING, Order::STATUS_PENDING],
+                $fiberA->getReturn(),
+            );
+
+            $connector->query(
+                "UPDATE weline_order SET status='paid',state='paid',state_version=2 WHERE order_id=1"
+            )->fetch();
+            $fiberC = new \Fiber(static function () use ($connection): string {
+                Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+                RequestContext::setId('order-request-a');
+                $model = new Order();
+                $model->setConnection($connection);
+                $model->__init();
+                $status = (string)$model->load(1)->getData(Order::schema_fields_STATUS);
+                RequestContext::cleanup();
+                Context::leave();
+
+                return $status;
+            });
+            self::assertNull($fiberC->start());
+            self::assertTrue($fiberC->isTerminated());
+            self::assertSame(Order::STATUS_PAID, $fiberC->getReturn());
         } finally {
             $this->cleanup($path, $connection, $connector);
         }
