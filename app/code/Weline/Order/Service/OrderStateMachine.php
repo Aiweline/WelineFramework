@@ -188,7 +188,14 @@ class OrderStateMachine
                 );
             }
 
-            $order = $this->newOrder()->load($orderId);
+            $order = $this->findByIdFresh($orderId);
+            if ($order === null) {
+                throw new OrderStateTransitionException(
+                    self::ERROR_NOT_FOUND,
+                    \__('订单不存在'),
+                    ['order_id' => $orderId],
+                );
+            }
             $eventData['order'] = $order;
             $this->dispatch('Weline_Order::order_status_changed', $eventData);
             if ($ownsTransaction) {
@@ -263,14 +270,25 @@ class OrderStateMachine
             Order::schema_fields_STATE => $newStatus,
             Order::schema_fields_STATE_VERSION => $expectedVersion + 1,
         ])->fetch();
-        $updated = $writer->getQueryData();
-        if ($updated === false || $updated === null || $updated === 0) {
-            return false;
-        }
-        $reloaded = $this->newOrder()->load($orderId);
+        // Some adapters report an empty result set for a successful UPDATE.
+        // The authoritative CAS result is the exact persisted post-image,
+        // not the adapter's transport-specific return shape or the request
+        // identity map (which may still contain the pre-CAS row).
+        $reloaded = $this->findByIdFresh($orderId);
 
-        return (string)$reloaded->getData(Order::schema_fields_STATUS) === $newStatus
+        return $reloaded !== null
+            && (string)$reloaded->getData(Order::schema_fields_STATUS) === $newStatus
             && (int)$reloaded->getData(Order::schema_fields_STATE_VERSION) === $expectedVersion + 1;
+    }
+
+    private function findByIdFresh(int $orderId): ?Order
+    {
+        $order = $this->newOrder()
+            ->where(Order::schema_fields_ID, $orderId)
+            ->find()
+            ->fetch();
+
+        return $order instanceof Order && $order->getId() ? $order : null;
     }
     
 }

@@ -20,7 +20,7 @@ use Weline\Order\Model\OrderItem;
 use Weline\Order\Service\InvoiceService;
 use Weline\Order\Service\OrderFacade;
 use Weline\Order\Service\OrderFacadeConflictException;
-use Weline\Order\Service\NoopOrderPostPaymentHook;
+use Weline\Order\Service\OrderPaidStateHook;
 use Weline\Payment\Api\Data\PaymentEffectRecord;
 use Weline\Tax\Service\TaxEngine;
 
@@ -39,7 +39,7 @@ final class OrderFacadeDatabaseIntegrationTest extends TestCase
             ObjectManager::getInstance(OrderFacadeInterface::class),
         );
         self::assertInstanceOf(
-            NoopOrderPostPaymentHook::class,
+            OrderPaidStateHook::class,
             ObjectManager::getInstance(OrderPostPaymentHookInterface::class),
         );
     }

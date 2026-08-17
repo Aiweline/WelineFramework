@@ -6,7 +6,8 @@
 
 ## 触发时机
 
-在 `PaymentService::recordPayment()` 方法中，当订单支付金额达到订单总额时，订单状态更新为已支付后。
+在旧 `PaymentService` 完成支付记录，或公开 `OrderFacade::notifyOrderPaid()`
+通过 `OrderPaidStateHook` 首次把通用 Order 投影推进到已支付后。后者重放时不重复触发。
 
 ## 数据格式
 
@@ -14,7 +15,10 @@
 [
     'order' => Order对象,
     'order_id' => int,
-    'payment' => OrderPayment对象,
+    'order_uuid' => string,
+    'context' => OrderPaidContext对象,
+    'metadata' => array,
+    'payment' => OrderPayment对象|null,
 ]
 ```
 
@@ -22,7 +26,10 @@
 
 - `order` (Order) - 订单对象
 - `order_id` (int) - 订单ID
-- `payment` (OrderPayment) - 支付记录对象
+- `order_uuid` (string) - 通用 Order UUID
+- `context` (OrderPaidContext|null) - Facade 路径提供的冻结 Order 快照
+- `metadata` (array) - 不可信扩展元数据，不参与订单身份、Scope 或金额判定
+- `payment` (OrderPayment|null) - 仅旧 PaymentService 路径可能提供的支付记录
 
 ## 使用场景
 
