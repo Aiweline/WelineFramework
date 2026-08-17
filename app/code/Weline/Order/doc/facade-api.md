@@ -14,7 +14,7 @@ Checkout / Payment / Inventory **不得**引用 Order 内部 Model/Service。
 | `create(CreateCheckoutGroupCommand): CreateCheckoutGroupResult` | 唯一 writer；`idempotency_key`+`request_hash` |
 | `get(orderUuid): OrderReadResult` | 按 Order UUID 只读投影 |
 | `order_admin.lookupDisplayNumber(kind, number, website, store)` | backend QueryProvider kind-qualified 查号（DEC-017）；省略 kind → `display_number_kind_required` |
-| `notifyOrderPaid(orderUuid, metadata)` | 从持久化 read model 构造 `OrderPaidContext` 后触发 `OrderPostPaymentHookInterface`（默认 Noop；不改资金逻辑） |
+| `notifyOrderPaid(orderUuid, metadata)` | 从持久化 read model 构造 `OrderPaidContext` 后触发 `OrderPostPaymentHookInterface`；默认 `OrderPaidStateHook` 仅按 Order 自有快照幂等推进支付/订单状态，不读取支付渠道 Model，也不改退款、发票或履约资金逻辑 |
 
 ## 幂等
 
@@ -22,6 +22,10 @@ Checkout / Payment / Inventory **不得**引用 Order 内部 Model/Service。
 - 同 key + 异 hash → `order_request_hash_conflict`
 - DB 唯一键竞态后重新读取既有 Group：同 hash 收敛为 replay，异 hash 保持
   `order_request_hash_conflict`，不会把正常竞争伪报成提交失败。
+- `notifyOrderPaid` 以持久 Order 快照和状态版本为权威；首次通知推进
+  `pending → processing → paid`，相同通知重放不重复派发 `order_paid`。
+- WLS 中 ORM `load()` 身份映射按 `RequestContext` 的 request ID 隔离；
+  状态 CAS 后强制读取持久 post-image，不能把另一个请求或写入前快照当成当前事实。
 
 命令在规划和写入前 fail-fast：key 长度、64 位小写 SHA-256、三位大写货币、
 Scope 范围、行数/字段长度、非负 minor-unit 以及整数运算溢出均先校验。
