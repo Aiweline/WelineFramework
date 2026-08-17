@@ -240,6 +240,19 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
         }
     }
 
+    public function testAutomaticControlPortBaseBoundsHighPublicPortsAndPreservesLegacyBases(): void
+    {
+        $method = new \ReflectionMethod(MasterProcess::class, 'deriveAutomaticControlPortBase');
+        $method->setAccessible(true);
+
+        $highPortBase = (int)$method->invoke(null, 64012, 6307, 64);
+        self::assertGreaterThanOrEqual(49152, $highPortBase);
+        self::assertLessThanOrEqual(65535 - 64 + 1, $highPortBase);
+        self::assertLessThanOrEqual(65535, $highPortBase + 63);
+        self::assertSame($highPortBase, (int)$method->invoke(null, 64012, 6307, 64));
+        self::assertSame(44389, (int)$method->invoke(null, 18082, 6307, 64));
+    }
+
     private function writePrivate(object $object, string $property, mixed $value): void
     {
         $reflection = new \ReflectionProperty($object, $property);

@@ -722,6 +722,31 @@ PHP;
         self::assertSame([true], $manager->managedNameRequirements);
     }
 
+    public function testMissingCredentialRuntimeDirectoryIsEmptyButANonDirectoryLeafFailsClosed(): void
+    {
+        $instance = 'missing-credential-runtime-' . \bin2hex(\random_bytes(4));
+        $runtimeDirectory = \dirname(MasterLeaseManager::pathForInstance($instance));
+        $runtimeRoot = \dirname($runtimeDirectory);
+        self::assertTrue(\is_dir($runtimeRoot) || @\mkdir($runtimeRoot, 0755, true));
+        self::assertFalse(\file_exists($runtimeDirectory) || \is_link($runtimeDirectory));
+
+        $class = new \ReflectionClass(MasterChildCredentialStore::class);
+        $store = $class->newInstanceWithoutConstructor();
+        $readState = $class->getMethod('readState');
+        $readState->setAccessible(true);
+        self::assertNull($readState->invoke($store, $instance));
+
+        self::assertNotFalse(\file_put_contents($runtimeDirectory, 'unsafe'));
+        try {
+            $readState->invoke($store, $instance);
+            self::fail('A non-directory credential runtime leaf must remain fail-closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('ancestry is unsafe', $exception->getMessage());
+        } finally {
+            @\unlink($runtimeDirectory);
+        }
+    }
+
     public function testWindowsCredentialResolutionWaitsForAnExactLiveMasterHeartbeatRefresh(): void
     {
         $instance = 'windows-stale-live-master-' . \bin2hex(\random_bytes(4));
