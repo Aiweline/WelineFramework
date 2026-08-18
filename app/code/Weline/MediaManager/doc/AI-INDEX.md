@@ -54,6 +54,8 @@
 
 - `app/code/Weline/MediaManager/doc/AI作图-需求说明.md`
 - `app/code/Weline/MediaManager/doc/README.md`
+- `app/code/Weline/MediaManager/doc/需求.md`
+- `app/code/Weline/MediaManager/doc/开发日志.md`
 - `app/code/Weline/MediaManager/doc/event/integration/supported_preview_formats.md`
 
 ## 开发前门禁
