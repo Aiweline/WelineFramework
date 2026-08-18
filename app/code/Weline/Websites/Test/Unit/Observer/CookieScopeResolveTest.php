@@ -93,6 +93,16 @@ final class CookieScopeResolveTest extends TestCase
         self::assertSame('WELINE_SESSID_w251', SessionCookieNameResolver::resolve('shop.test'));
     }
 
+    public function testBackendAreaDoesNotQualifySessionCookieOrExpireUnscopedAliases(): void
+    {
+        $this->enterRequest(257, 'https://shop.test:9555/', backend: true);
+
+        self::assertSame('/', CookieScope::resolvePath('/'));
+        self::assertSame('WELINE_SESSID', CookieScope::qualifyName('WELINE_SESSID'));
+        self::assertSame('WELINE_SESSID_9555', SessionCookieNameResolver::resolve('shop.test:9555'));
+        self::assertFalse(CookieScope::shouldExpireUnscopedAliases());
+    }
+
     public function testHeaderCollectorEmitsIsolatedCookieAndKeepsProtocolExact(): void
     {
         $this->enterRequest(257, 'https://shop.test/aisite_accept_ok');
@@ -118,7 +128,7 @@ final class CookieScopeResolveTest extends TestCase
         self::assertSame('/', $cookies[0]['path']);
     }
 
-    private function enterRequest(int $websiteId, string $websiteUrl): void
+    private function enterRequest(int $websiteId, string $websiteUrl, bool $backend = false): void
     {
         if (Context::hasCurrent()) {
             Context::leave();
@@ -127,12 +137,14 @@ final class CookieScopeResolveTest extends TestCase
         HeaderCollector::reset();
 
         Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
-        RequestContext::setId('cookie-scope-' . $websiteId);
+        RequestContext::setId('cookie-scope-' . $websiteId . ($backend ? '-backend' : ''));
         RequestContext::setWelineWebsiteId($websiteId);
         RequestContext::setWelineWebsiteUrl($websiteUrl);
-        WelineEnv::set('is_backend', false, 'CookieScopeResolveTest');
-        WelineEnv::set('area', 'frontend', 'CookieScopeResolveTest');
+        RequestContext::setWelineArea($backend ? RequestContext::AREA_BACKEND : RequestContext::AREA_FRONTEND);
+        WelineEnv::set('is_backend', $backend, 'CookieScopeResolveTest');
+        WelineEnv::set('area', $backend ? 'backend' : 'frontend', 'CookieScopeResolveTest');
         Context::current()->set('input.server.HTTP_HOST', 'shop.test');
         Context::current()->set('input.host', 'shop.test');
+        Context::current()->set('route.area', $backend ? RequestContext::AREA_BACKEND : RequestContext::AREA_FRONTEND);
     }
 }

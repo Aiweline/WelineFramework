@@ -242,6 +242,65 @@ class WlsRequest extends Request
     {
         return $port > 0 && $port <= 65535;
     }
+
+    /**
+     * Public listen port for a direct WLS client connection when Host omits it.
+     *
+     * Local browsers often hit `*.weline.test` via 127.0.0.1 and are therefore
+     * classified as a trusted proxy. They do not send X-Forwarded-*. In that
+     * case the worker listen port is the public authority. Explicit forwarded
+     * 80/443 (or forwarded proto without a non-standard port) still keep the
+     * protocol default so an internal worker port cannot leak into cookies.
+     *
+     * @param array<string, mixed> $serverInfo
+     * @param array<string, string> $headers
+     */
+    private static function directNonStandardListenPort(
+        array $serverInfo,
+        bool $trustForwardedHeaders,
+        array $headers,
+    ): ?int {
+        if ($trustForwardedHeaders) {
+            $forwardedPort = self::trustedForwardedPort($headers);
+            if ($forwardedPort === 80 || $forwardedPort === 443) {
+                return null;
+            }
+            if ($forwardedPort !== null) {
+                return $forwardedPort;
+            }
+            // X-Forwarded-Proto alone is not a public-port signal: HTTP/2
+            // ConnectionAdapter always injects it on direct TLS connections.
+        }
+
+        $raw = $serverInfo['WLS_PORT'] ?? $serverInfo['SERVER_PORT'] ?? \getenv('WLS_PORT') ?: '';
+        if (!\is_int($raw) && !(\is_string($raw) && $raw !== '' && \ctype_digit($raw))) {
+            return null;
+        }
+
+        $port = (int)$raw;
+        if (!self::isValidTcpPort($port) || $port === 80 || $port === 443) {
+            return null;
+        }
+
+        return $port;
+    }
+
+    /** @param array<string, string> $headers */
+    private static function trustedForwardedPort(array $headers): ?int
+    {
+        $raw = \trim(\explode(',', (string)(
+            $headers['X-Forwarded-Port']
+            ?? $headers['x-forwarded-port']
+            ?? $headers['Weline-Original-Port']
+            ?? $headers['weline-original-port']
+            ?? ''
+        ), 2)[0]);
+        if ($raw === '' || !\ctype_digit($raw)) {
+            return null;
+        }
+        $port = (int)$raw;
+        return self::isValidTcpPort($port) ? $port : null;
+    }
     
     /**
      * 解析原始 HTTP 数据
@@ -584,11 +643,14 @@ class WlsRequest extends Request
         $serverName = $hostAuthority['server_name'];
         $hostPort = $hostAuthority['port'];
         
-        // 端口优先级：Host 头中的端口 > 协议默认端口。
+        // 端口优先级：Host 头中的端口 > 直连非标准监听端口 > 协议默认端口。
+        // HTTP/2 :authority 经常省略非默认端口；若因此把 SERVER_PORT 写成 443，
+        // Session Cookie 会在 WELINE_SESSID_9555 与 WELINE_SESSID 之间漂移。
         if ($hostPort !== null) {
             $serverPort = $hostPort;
         } else {
-            $serverPort = $isHttps ? 443 : 80;
+            $serverPort = self::directNonStandardListenPort($serverInfo, $trustForwardedHeaders, $headers)
+                ?? ($isHttps ? 443 : 80);
         }
         
         // 清理 Host 头：如果包含默认端口号（:80 或 :443），去掉它

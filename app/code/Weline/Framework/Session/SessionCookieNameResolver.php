@@ -58,6 +58,19 @@ final class SessionCookieNameResolver
         return $name;
     }
 
+    private static function normalizeTcpPort(mixed $value): ?int
+    {
+        if (!\is_int($value) && !(\is_string($value) && $value !== '' && \ctype_digit($value))) {
+            return null;
+        }
+        $port = (int)$value;
+        if ($port < 1 || $port > 65535) {
+            return null;
+        }
+
+        return $port;
+    }
+
     /**
      * Cookie Path for the session cookie under the active cookie scope.
      */
@@ -140,15 +153,18 @@ final class SessionCookieNameResolver
         }
 
         $serverPort = $context->get('input.server.SERVER_PORT');
-        if (
-            !is_int($serverPort)
-            && !(is_string($serverPort) && $serverPort !== '' && ctype_digit($serverPort))
-        ) {
-            return $host;
+        $port = self::normalizeTcpPort($serverPort);
+        if ($port === null || $port === 80 || $port === 443) {
+            $listenPort = self::normalizeTcpPort($context->get('input.server.WLS_PORT'));
+            if ($listenPort === null) {
+                $envListen = \getenv('WLS_PORT');
+                $listenPort = self::normalizeTcpPort(\is_string($envListen) ? $envListen : null);
+            }
+            if ($listenPort !== null && $listenPort !== 80 && $listenPort !== 443) {
+                $port = $listenPort;
+            }
         }
-
-        $port = (int)$serverPort;
-        if ($port < 1 || $port > 65535 || $port === 80 || $port === 443) {
+        if ($port === null || $port === 80 || $port === 443) {
             return $host;
         }
 
