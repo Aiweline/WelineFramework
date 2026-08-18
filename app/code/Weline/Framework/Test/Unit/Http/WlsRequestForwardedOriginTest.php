@@ -88,13 +88,73 @@ final class WlsRequestForwardedOriginTest extends TestCase
         self::assertSame('https://127.0.0.1:8443', $request->getBaseHost());
     }
 
-    private function createRequest(string $headers): WlsRequest
+    public function testDirectListenPortFillsHostWhenAuthorityOmitsNonStandardPort(): void
+    {
+        $request = $this->createRequest(
+            "Host: p05113ef3.weline.test\r\n",
+            [
+                'HTTPS' => 'on',
+                'REQUEST_SCHEME' => 'https',
+                'WLS_PORT' => 9555,
+            ],
+        );
+
+        self::assertTrue($request->isSecure());
+        self::assertSame('p05113ef3.weline.test:9555', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('9555', $_SERVER['SERVER_PORT'] ?? null);
+        self::assertSame(
+            'https://p05113ef3.weline.test:9555/customer/account/logout',
+            $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null,
+        );
+    }
+
+    public function testTrustedLocalClientWithoutForwardedHeadersUsesListenPort(): void
+    {
+        $request = $this->createRequest(
+            "Host: p05113ef3.weline.test\r\n",
+            [
+                'HTTPS' => 'on',
+                'REQUEST_SCHEME' => 'https',
+                'WLS_PORT' => 9555,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
+        );
+
+        self::assertTrue($request->isSecure());
+        self::assertSame('p05113ef3.weline.test:9555', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('9555', $_SERVER['SERVER_PORT'] ?? null);
+    }
+
+    public function testTrustedProxyKeepsDefaultHttpsPortInsteadOfInternalWorkerPort(): void
+    {
+        $request = $this->createRequest(
+            "Host: shop.example.test\r\n"
+            . "X-Forwarded-Proto: https\r\n"
+            . "X-Forwarded-Port: 443\r\n",
+            [
+                'HTTPS' => 'on',
+                'REQUEST_SCHEME' => 'https',
+                'WLS_PORT' => 10001,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
+        );
+
+        self::assertTrue($request->isSecure());
+        self::assertSame('shop.example.test', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('443', $_SERVER['SERVER_PORT'] ?? null);
+        self::assertSame('https://shop.example.test/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
+    }
+
+    /**
+     * @param array<string, mixed> $serverInfo
+     */
+    private function createRequest(string $headers, array $serverInfo = []): WlsRequest
     {
         $rawRequest = "GET /customer/account/logout HTTP/1.1\r\n"
             . $headers
             . "Accept: text/html\r\n"
             . "\r\n";
 
-        return WlsRequest::fromRaw($rawRequest);
+        return WlsRequest::fromRaw($rawRequest, $serverInfo);
     }
 }
