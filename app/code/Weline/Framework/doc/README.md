@@ -64,7 +64,7 @@ PHP-FPM 请求，而不能只验证当前 CLI 进程。
 
 站内 Worker Session 由服务端构造权威区域，`frontend` 与 `backend` 绑定互斥。Scope Token、后台 Session ID、binding digest、HMAC secret 均不得进入页面 JavaScript；页面只接收一次性的 43 字符 opaque bootstrap ID。当前时限为：bootstrap 120 秒、未绑定 Worker Session 600 秒、nonce 180 秒、stream ticket 60 秒；Scope-bound Session 使用已验证 Scope Token 的固定 1800 秒窗口，并与 Token 验签共享“签发时间最多领先 60 秒”的边界，过期时间不延长；Backend Session 最长 600 秒且还受后台证明的更早到期时间约束。共享状态恢复会重新验证这些规范时间窗，不能用持久化数据延长权限。
 
-当 Scope provider 判定当前 HTTPS storefront 为 `allowlist/on` 时，无 bootstrap 的握手在创建 Session 前返回 401 `scope_binding_required`，不得占用未绑定 Session 容量。已配置 provider、keyring 或状态存储不可用时保留 503；只有 proof 无效、过期或已消费等客户端错误归一为 401。二进制输出保护不得把 stray output 原文写日志，只允许记录字节数与 SHA-256。
+当 Scope provider 判定当前 HTTPS storefront 为 `allowlist/on` 时，无 bootstrap 的握手在创建 Session 前返回 401 `scope_binding_required`，不得占用未绑定 Session 容量。已配置 provider、keyring 或状态存储不可用时保留 503；只有 proof 无效、过期或已消费等客户端错误归一为 401。Provider 若抛出 `ResumableTaskAccessDeniedException`（含 backend 证明与 Session 不一致），QueryBin 映射为 401 `backend_attestation_invalid`，不得再包装成 500 `Internal server error.`。二进制输出保护不得把 stray output 原文写日志，只允许记录字节数与 SHA-256。
 
 默认 Session/nonce/ticket/bootstrap 存储位于 `var/cache/frontend_worker/store.json`。实现要求目录 `0700`、文件 `0600`、锁内原子替换、8 MiB 硬上限和不安全文件 fail-closed。该存储只适合单机或受控 allowlist 验证。
 

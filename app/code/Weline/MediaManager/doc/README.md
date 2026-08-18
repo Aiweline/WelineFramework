@@ -54,5 +54,5 @@ The connector must preserve normal nested media folders while refusing traversal
 
 ## Query Providers
 
-- `media_manager`（`MediaManagerQueryProvider`）：后台会话可读 AI 作图配置、保存当前用户拥有的生成结果；浏览器侧走 bin-query / `Weline.Api.*`，生成本身仍由 `runtime_task` 启动。
+- `media_manager`（`MediaManagerQueryProvider`）：后台会话可读 AI 作图配置、保存当前用户拥有的生成结果；浏览器侧走 bin-query / `Weline.Api.*`，生成本身仍由 `runtime_task` 启动。普通 `config/connector/save` 优先取 QueryBin 已证明的 backend Worker 用户 ID，无 Worker 上下文时才回退 backend Session；不得借用 `ResumableTaskOwnerResolver`（那是 runtime_task 的 owner/lease 校验）。身份一律称 backend，不称 admin。
 - `media_manager_asset`（`MediaManagerAssetQueryProvider`）：可信模块只读边界，按媒体哈希读取图片字节；`frontend=false`，不暴露给浏览器 Query。

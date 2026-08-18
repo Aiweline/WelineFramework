@@ -202,3 +202,4 @@ OK,OK
 "AI 请求在确认结果前中断，无法安全重试。","AI 请求在确认结果前中断，无法安全重试。"
 本地存储,"Local Storage"
 文件管理器,"File Manager"
+请先登录后台,"Please log in to the backend first"
