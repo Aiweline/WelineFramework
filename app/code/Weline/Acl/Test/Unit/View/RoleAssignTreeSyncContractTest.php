@@ -17,9 +17,10 @@ final class RoleAssignTreeSyncContractTest extends TestCase
         self::assertStringContainsString('function isTreeLeaf(tree, id)', $template);
         self::assertStringContainsString('if (!isTreeLeaf(tree, id))', $template);
         self::assertStringContainsString('Do not programmatically select_node() parents', $template);
-        self::assertStringContainsString("if (!isTagNodeId(id) && isTreeLeaf(menuTree, id))", $template);
-        self::assertStringContainsString('if (menuTree.get_node(id) && !isTreeLeaf(menuTree, id))', $template);
         self::assertStringContainsString('three_state: true', $template);
+        self::assertStringContainsString('Shared grant set is the save source of truth', $template);
+        self::assertStringNotContainsString('menuVisibleLeaves[id] && !menuTree.is_selected(id)', $template);
+        self::assertStringNotContainsString('shared.delete(id);', $template);
     }
 
     public function testAssignTreeCssKillsJstreeLightSpriteInDarkMode(): void
