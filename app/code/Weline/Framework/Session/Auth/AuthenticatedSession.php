@@ -189,6 +189,7 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
             return $this->deviceValidationResult;
         }
 
+        $rejectReason = 'device_provider_error';
         try {
             $registry = $this->resolveDeviceRegistry();
             if ($registry === null) {
@@ -211,9 +212,17 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
                 }
                 return $this->deviceValidationResult = true;
             }
+            $rejectReason = $validation->reason !== '' ? $validation->reason : 'device_invalid';
         } catch (\Throwable) {
             // A configured device provider is fail-closed; resolveDeviceRegistry already
             // distinguishes it from the optional-not-configured legacy path.
+        }
+
+        if (\function_exists('w_auth_log')) {
+            w_auth_log('auth_device_rejected', '认证设备校验失败，已清除登录态', [
+                'area' => $this->areaConfig->getArea(),
+                'reason' => $rejectReason,
+            ]);
         }
 
         $this->clearAuthenticationState(true);

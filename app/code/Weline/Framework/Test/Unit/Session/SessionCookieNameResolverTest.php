@@ -50,6 +50,19 @@ final class SessionCookieNameResolverTest extends TestCase
         self::assertTrue(SessionCookieNameResolver::hasRequestCookie());
     }
 
+    public function testCurrentHostUsesWlsListenPortWhenHttpsDefaultPortHidesDedicatedInstance(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        RequestContext::setId('session-cookie-wls-port-test');
+        Context::current()->set('input.server.HTTP_HOST', 'p05113ef3.weline.test');
+        Context::current()->set('input.server.SERVER_PORT', 443);
+        Context::current()->set('input.server.WLS_PORT', 9555);
+        Context::current()->set('input.host', 'p05113ef3.weline.test');
+
+        self::assertSame('p05113ef3.weline.test:9555', SessionCookieNameResolver::currentHost());
+        self::assertSame('WELINE_SESSID_9555', SessionCookieNameResolver::resolve());
+    }
+
     public function testExplicitAuthorityPortWinsOverDifferentListenerPort(): void
     {
         Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
