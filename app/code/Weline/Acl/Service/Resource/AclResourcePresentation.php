@@ -379,9 +379,10 @@ final class AclResourcePresentation
     }
 
     /**
-     * If a previously granted menu root is absent from POST and no menu descendant
-     * remains posted, drop every descendant (pc/api/query included) so a stale
-     * shared/tag-tree selection cannot resurrect the unchecked subtree.
+     * Posted ids are the grant fact. The role UI only submits jstree leaves, so a
+     * still-granted menu parent is often absent from POST. Do not treat that as
+     * unchecking the subtree: only a menu with zero posted descendants of any type
+     * is fully unchecked. Posted leaves are never dropped.
      *
      * @param list<string> $postedIds
      * @param list<string> $previouslyGrantedIds
@@ -425,19 +426,21 @@ final class AclResourcePresentation
             if (!self::isMenusType((string)($byId[$sourceId]['type'] ?? ''))) {
                 continue;
             }
-            $hasPostedMenuDescendant = false;
+            $hasPostedDescendant = false;
             foreach ($descendants[$sourceId] ?? [] as $descendant) {
-                if (isset($posted[$descendant]) && self::isMenusType((string)($byId[$descendant]['type'] ?? ''))) {
-                    $hasPostedMenuDescendant = true;
+                if (isset($posted[$descendant])) {
+                    $hasPostedDescendant = true;
                     break;
                 }
             }
-            if ($hasPostedMenuDescendant) {
+            if ($hasPostedDescendant) {
                 continue;
             }
             $drop[$sourceId] = true;
             foreach ($descendants[$sourceId] ?? [] as $descendant) {
-                $drop[$descendant] = true;
+                if (!isset($posted[$descendant])) {
+                    $drop[$descendant] = true;
+                }
             }
         }
 

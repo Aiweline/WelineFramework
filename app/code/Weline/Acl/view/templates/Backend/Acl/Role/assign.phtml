@@ -1408,7 +1408,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         window.__aclSyncing = true;
         try {
             ids.forEach(function(id) {
-                if (!isTagNodeId(id) && (!tree.get_node(id) || isTreeLeaf(tree, id))) {
+                if (!isTagNodeId(id)) {
                     window.__aclSharedSourceIds.add(id);
                 }
                 if (tree.get_node(id) && !tree.is_selected(id)) {
@@ -1531,16 +1531,11 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         // flush menu tree selection into shared
         var menuTree = $('#acl').jstree(true);
         if (menuTree) {
-            var visibleIds = {};
-            $('#acl li').each(function() { visibleIds[this.id] = true; });
             menuTree.get_selected().forEach(function(id) {
                 if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
             });
-            window.__aclSharedSourceIds.forEach(function(id) {
-                if (visibleIds[id] && !menuTree.is_selected(id)) {
-                    window.__aclSharedSourceIds.delete(id);
-                }
-            });
+            // Do not subtract shared grants from jstree selection: three_state
+            // only selects leaves, so parents and hidden matches would be dropped.
         }
         window.__aclActiveView = 'tag';
         $('#acl-menu-panel').hide();
@@ -1553,29 +1548,16 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     });
 
     $('#save_button').on('click', function() {
+        // Shared grant set is the save source of truth. jstree three_state,
+        // search and filters must not subtract still-checked grants.
         var shared = window.__aclSharedSourceIds || new Set(initialSelected);
         var menuTree = $('#acl').jstree(true);
         var tagTree = $('#acl-tag').jstree(true);
 
         if (menuTree) {
             menuTree.get_selected().forEach(function(id) {
-                if (!isTagNodeId(id) && isTreeLeaf(menuTree, id)) {
+                if (!isTagNodeId(id)) {
                     shared.add(id);
-                }
-            });
-            var menuVisibleLeaves = {};
-            $('#acl li').each(function() {
-                if (isTreeLeaf(menuTree, this.id)) {
-                    menuVisibleLeaves[this.id] = true;
-                }
-            });
-            Array.from(shared).forEach(function(id) {
-                if (menuTree.get_node(id) && !isTreeLeaf(menuTree, id)) {
-                    shared.delete(id);
-                    return;
-                }
-                if (menuVisibleLeaves[id] && !menuTree.is_selected(id)) {
-                    shared.delete(id);
                 }
             });
         }
@@ -1583,13 +1565,6 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         if (tagTree && window.__aclActiveView === 'tag') {
             tagTree.get_selected().forEach(function(id) {
                 if (!isTagNodeId(id)) shared.add(id);
-            });
-            var tagVisibleLeaves = {};
-            $('#acl-tag li[data-node-kind="leaf"]').each(function() { tagVisibleLeaves[this.id] = true; });
-            shared.forEach(function(id) {
-                if (tagVisibleLeaves[id] && !tagTree.is_selected(id)) {
-                    shared.delete(id);
-                }
             });
             rebuildTagGrantsFromTree();
             var keptTagGrants = new Set();
@@ -1735,10 +1710,15 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         var rootSel = activeTreeSelector();
         var hasFilter = !!(moduleFilter || typeFilter);
 
-        if (rootSel === '#acl-tag') {
-            applyTagFilters(tree, moduleFilter, typeFilter, hasFilter);
-        } else {
-            applyMenuFilters(tree, moduleFilter, typeFilter, hasFilter);
+        window.__aclSyncing = true;
+        try {
+            if (rootSel === '#acl-tag') {
+                applyTagFilters(tree, moduleFilter, typeFilter, hasFilter);
+            } else {
+                applyMenuFilters(tree, moduleFilter, typeFilter, hasFilter);
+            }
+        } finally {
+            window.__aclSyncing = false;
         }
     }
 
