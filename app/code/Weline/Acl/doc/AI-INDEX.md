@@ -54,6 +54,8 @@
 ## doc 目录
 
 - `app/code/Weline/Acl/doc/README.md`
+- `app/code/Weline/Acl/doc/需求.md`
+- `app/code/Weline/Acl/doc/开发日志.md`
 - `app/code/Weline/Acl/doc/event/无权限访问重定向前.md`
 - `app/code/Weline/Acl/doc/event/角色检查.md`
 - `app/code/Weline/Acl/doc/multi-resource-catalog.md`
