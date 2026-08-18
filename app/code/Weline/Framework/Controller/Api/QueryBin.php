@@ -15,6 +15,7 @@ use Weline\Framework\Runtime\FrontendWorkerBackendAttestationException;
 use Weline\Framework\Runtime\FrontendWorkerBackendAttestationProviderInterface;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
+use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
 use Weline\Framework\Runtime\RequestAuthority;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolution;
@@ -147,6 +148,22 @@ class QueryBin extends FrontendRestController
                 'request_id' => $requestId,
             ];
             $statusCode = $exception->getHttpStatus();
+        } catch (ResumableTaskAccessDeniedException $exception) {
+            $markPhase('resumable_access_denied', [
+                'code' => 'backend_attestation_invalid',
+                'status' => 401,
+                'class' => $exception::class,
+            ]);
+            $payload = [
+                'ok' => false,
+                'data' => null,
+                'error' => [
+                    'code' => 'backend_attestation_invalid',
+                    'message' => (string)__('后台页面凭证已失效，请刷新页面后重试。'),
+                ],
+                'request_id' => $requestId,
+            ];
+            $statusCode = 401;
         } catch (\InvalidArgumentException $exception) {
             $markPhase('invalid_argument_exception');
             $payload = [
