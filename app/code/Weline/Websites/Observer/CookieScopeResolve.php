@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Observer;
 
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Runtime\RequestContext;
@@ -18,6 +19,14 @@ final class CookieScopeResolve implements ObserverInterface
 {
     public function execute(Event &$event): void
     {
+        // Backend/rest_backend is a host-wide admin realm. Applying storefront
+        // website suffixes here makes login and the next admin navigation emit
+        // different Session cookie names, then expire the one that still holds
+        // WF_BACKEND_USER_ID.
+        if ($this->isBackendArea()) {
+            return;
+        }
+
         $revision = $this->revision();
         if ($revision === '') {
             return;
@@ -60,6 +69,29 @@ final class CookieScopeResolve implements ObserverInterface
         }
 
         return $websiteId . '|' . $websiteUrl;
+    }
+
+    private function isBackendArea(): bool
+    {
+        $area = '';
+        try {
+            $area = (string)RequestContext::getWelineArea();
+        } catch (\Throwable) {
+            $area = '';
+        }
+        if (\in_array($area, [RequestContext::AREA_BACKEND, RequestContext::AREA_REST_BACKEND], true)) {
+            return true;
+        }
+
+        try {
+            if ((bool)WelineEnv::get('is_backend', false)) {
+                return true;
+            }
+            $envArea = (string)WelineEnv::get('area', '');
+            return \in_array($envArea, [RequestContext::AREA_BACKEND, RequestContext::AREA_REST_BACKEND], true);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function websiteId(): int
