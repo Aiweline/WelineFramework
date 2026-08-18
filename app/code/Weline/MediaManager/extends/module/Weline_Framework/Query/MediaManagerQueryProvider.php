@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Extends\Module\Weline_Framework\Query;
 
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
-use Weline\Framework\Service\Runtime\ResumableTaskOwnerResolver;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
+use Weline\Framework\Session\SessionFactory;
 use Weline\MediaManager\Helper\MimeTypes;
 use Weline\MediaManager\Service\AiDrawService;
 use Weline\MediaManager\Service\CollectingSseWriter;
 use Weline\MediaManager\Service\ConnectorOptionsBuilder;
 use Weline\MediaManager\Service\ConnectorService;
 use Weline\MediaManager\Service\MediaUploadBase64Hydrator;
-use Weline\Framework\Http\Cookie;
 
 /**
  * Browser-facing MediaManager operations that need the authenticated backend
@@ -25,7 +27,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
 {
     public function __construct(
         private readonly AiDrawService $aiDrawService,
-        private readonly ResumableTaskOwnerResolver $ownerResolver,
+        private readonly SessionFactory $sessions,
     ) {
     }
 
@@ -170,7 +172,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
     /** @return array<string,mixed> */
     private function config(): array
     {
-        $this->backendAdminId();
+        $this->backendUserId();
         return $this->aiDrawService->getConfigStatus();
     }
 
@@ -180,7 +182,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
      */
     private function polishPrompt(array $params): array
     {
-        $this->backendAdminId();
+        $this->backendUserId();
         return $this->aiDrawService->polishPrompt((string)($params['prompt'] ?? ''));
     }
 
@@ -190,7 +192,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
      */
     private function save(array $params): array
     {
-        return $this->aiDrawService->save($this->backendAdminId(), $params);
+        return $this->aiDrawService->save($this->backendUserId(), $params);
     }
 
     /**
@@ -199,7 +201,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
      */
     private function connector(array $params): array
     {
-        $this->backendAdminId();
+        $this->backendUserId();
         /** @var \Weline\Framework\Http\Request $request */
         $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
         /** @var MediaUploadBase64Hydrator $hydrator */
@@ -249,10 +251,10 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
      */
     private function generate(array $params): array
     {
-        $adminId = $this->backendAdminId();
+        $backendUserId = $this->backendUserId();
         $collector = new CollectingSseWriter();
         try {
-            $this->aiDrawService->streamGenerate($collector, $adminId, $params);
+            $this->aiDrawService->streamGenerate($collector, $backendUserId, $params);
         } catch (\Throwable $e) {
             return [
                 'success' => false,
@@ -266,14 +268,53 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
         ];
     }
 
-    private function backendAdminId(): int
+    private function backendUserId(): int
     {
-        $owner = $this->ownerResolver->resolve();
-        if ($owner->area !== 'backend'
-            || \preg_match('/^backend:([1-9][0-9]*)$/', $owner->principal, $matches) !== 1) {
-            throw new ResumableTaskAccessDeniedException('Media AI draw requires an authenticated backend owner.');
+        $fromWorker = $this->backendUserIdFromWorkerContext();
+        if ($fromWorker !== null) {
+            return $fromWorker;
         }
 
-        return (int)$matches[1];
+        $session = $this->sessions->createBackendSession();
+        if (!$session->isStarted()) {
+            $session->start();
+        }
+        $userId = $session->isLoggedIn() ? (int)($session->getUserId() ?? 0) : 0;
+        if ($userId <= 0) {
+            $this->denyBackendLogin();
+        }
+
+        return $userId;
+    }
+
+    /**
+     * QueryBin already restored and ACL-checked the attested backend binding.
+     * Re-starting a PHP Session from the API cookie would create a different
+     * empty identity and fail closed as "please log in".
+     */
+    private function backendUserIdFromWorkerContext(): ?int
+    {
+        if (!RequestContext::has(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY)) {
+            return null;
+        }
+
+        $execution = RequestContext::get(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY);
+        if (!$execution instanceof FrontendWorkerExecutionContext
+            || $execution->area !== FrontendWorkerExecutionContext::AREA_BACKEND
+            || $execution->backendBinding === null
+            || $execution->backendBinding->backendUserId <= 0) {
+            $this->denyBackendLogin();
+        }
+
+        return $execution->backendBinding->backendUserId;
+    }
+
+    private function denyBackendLogin(): never
+    {
+        throw new FrontendQueryException(
+            'auth_error',
+            (string)__('请先登录后台'),
+            401,
+        );
     }
 }
