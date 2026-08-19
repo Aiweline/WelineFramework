@@ -56,7 +56,13 @@
 当支付失败时触发，允许其他模块执行失败后的操作，如记录日志、发送通知、释放库存等。,"Triggered when payment fails, allowing other modules to perform post-failure operations, such as logging, sending notifications, releasing inventory, etc."
 结账接口不支持该操作：%{1},"Checkout does not support operation: %{1}"
 购物车币种与当前请求币种不一致,购物车币种与当前请求币种不一致
-"当前请求没有可结账的 Storefront Scope","当前请求没有可结账的 Storefront Scope"
+支付恢复凭据不完整，请重新进入结账流程。,"Payment recovery details are incomplete. Please restart checkout."
+"支付重试幂等键长度须为 1..128。","The payment retry idempotency key must be 1 to 128 characters."
+找不到可恢复的支付状态，请从订单列表继续。,"No recoverable payment state was found. Please continue from your order list."
+无法声明该支付重试，请从订单列表重试。,无法声明该支付重试，请从订单列表重试。
+无法恢复该支付，请从订单列表重试。,"This payment cannot be resumed. Please retry from your order list."
+订单已创建，但支付未完成。请重试支付。,"Your order was created, but payment was not completed. Please retry payment."
+订单已创建，但暂时无法恢复支付，请联系支持。,"Your order was created, but payment recovery is temporarily unavailable. Please contact support."
 结账信息已加载,"Checkout data loaded"
 购物车为空，请先加入商品。,购物车为空，请先加入商品。
 暂无可用配送方式。,暂无可用配送方式。
@@ -155,8 +161,6 @@
 后台订单详情页之后,"After Backend Order Detail Page"
 在后台订单详情页面内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the backend order detail page content, allowing other modules to add custom content at the bottom of the order detail page."
 结账,Checkout
-我的订单,"My Orders"
-订单详情,"Order Details"
 无效的请求方法,"Invalid request method"
 请先登录,"Please login first"
 订单不存在,"Order does not exist"
@@ -190,26 +194,32 @@
 已送达,Delivered
 成功,Success
 失败,Failed
+状态待确认,状态待确认
+订单中心,订单中心
+订单详情,"Order Details"
+返回我的订单,返回我的订单
 订单信息,"Order Information"
 订单号,"Order Number"
 订单状态,"Order Status"
-支付状态,"Payment Status"
-配送状态,"Shipping Status"
-创建时间,"Created Time"
-订单项,"Order Items"
+订单标识,订单标识
+订单商品,订单商品
+暂无商品明细,暂无商品明细
+订单商品明细,订单商品明细
 产品名称,"Product Name"
 SKU,SKU
 数量,Quantity
 单价,"Unit Price"
-总价,"Total Price"
+小计,小计
+未命名商品,未命名商品
 费用明细,"Cost Details"
 商品小计,Subtotal
 运费,"Shipping Fee"
 税费,Tax
-折扣,Discount
 订单总额,"Total Amount"
-返回订单列表,"Back to Order List"
+我的订单,"My Orders"
 暂无订单,"No Orders"
+支付状态,"Payment Status"
+创建时间,"Created Time"
 查看详情,"View Details"
 取消订单,"Cancel Order"
 确定要取消此订单吗？,"Are you sure you want to cancel this order?"
@@ -217,16 +227,30 @@ SKU,SKU
 保留订单,保留订单
 取消订单失败，请稍后重试,取消订单失败，请稍后重试
 感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
+返回订单列表,"Back to Order List"
+继续购物,继续购物
 正在加载结账信息...,正在加载结账信息...
 结账信息加载失败，请稍后重试。,结账信息加载失败，请稍后重试。
 提交订单,提交订单
 正在提交订单...,正在提交订单...
-订单已创建，正在打开结果页面。,订单已创建，正在打开结果页面。
-订单已创建。,订单已创建。
+订单已创建，正在继续支付。,"Order created. Continuing to payment."
+订单已创建，支付仍在处理中。,"Your order was created and payment is still processing."
+订单已创建，但支付未完成。您可以重试支付，不会重复下单。,"Your order was created, but payment was not completed. You can retry without creating another order."
+重试支付,"Retry payment"
+继续支付,"Continue payment"
+正在重试支付...,"Retrying payment..."
+订单编号,"Order reference"
 "Weline.Api 尚未就绪，请刷新页面后重试。","Weline.Api 尚未就绪，请刷新页面后重试。"
 安全结账,安全结账
 "购物车、配送、支付和订单创建都由 Weline 核心模块承接。","购物车、配送、支付和订单创建都由 Weline 核心模块承接。"
 返回购物车,返回购物车
+暂时无法结账,暂时无法结账
+购物车是空的,购物车是空的
+先选择需要采购的商品，再回来完成配送与支付。,先选择需要采购的商品，再回来完成配送与支付。
+返回选购,返回选购
+查看购物车,查看购物车
+订单已创建,"Order created"
+支付状态待确认,"Payment status pending confirmation"
 收货信息,收货信息
 收货人,收货人
 电话,电话
@@ -249,6 +273,10 @@ SKU,SKU
 客户ID,"Customer ID"
 操作,Actions
 查看,View
+配送状态,"Shipping Status"
+订单项,"Order Items"
+总价,"Total Price"
+折扣,Discount
 返回列表,"Back to List"
 订单列表,订单列表
 订单号关键词,订单号关键词
@@ -299,6 +327,9 @@ SKU,SKU
 客户端交易事实字段被拒绝：%{1},客户端交易事实字段被拒绝：%{1}
 库存能力不可用，结账已阻断,库存能力不可用，结账已阻断
 已提交报价会话缺少冻结结果,已提交报价会话缺少冻结结果
+订单已创建，正在打开结果页面。,订单已创建，正在打开结果页面。
+订单已创建。,订单已创建。
+"当前请求没有可结账的 Storefront Scope","当前请求没有可结账的 Storefront Scope"
 参数不完整,"Incomplete parameters"
 订单状态更新成功,"Order status updated successfully"
 更新失败：%{1},"Update failed: %{1}"

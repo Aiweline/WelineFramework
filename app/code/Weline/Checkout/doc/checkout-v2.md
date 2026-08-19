@@ -29,6 +29,16 @@
   缺行、重复行、同版本同 Scope LKG 缺失或无法回放均阻断。
 - submit 从持久 CheckoutSession 重建同一请求校验 Quote 的
   `rule_set_hash`，不依赖报价 Worker 的内存状态；规则变化要求重报价。
+- 订单事务完成后，支付由 `CheckoutOrderPaymentService` 归一化为
+  `paid` / `pending` / `failed`。顶层 submit 成功只表示 CheckoutGroup
+  已创建或回放，不能替代支付结果。
+- `CheckoutPaymentRecoveryStateService` 记录已提交 Session 的支付结果；
+  `resumePaymentV2` 原子领取一次恢复尝试并为支付生成新的幂等键，始终复用
+  原 CheckoutGroup/Orders，不再次调用订单 writer。
+- 成功页必须持有已提交 CheckoutSession 生成的短期高熵
+  `checkout_token`。WLS 跨 Worker 跳转尚未恢复前台身份时，该 token
+  作为成功页能力凭证；请求中已有登录身份时，仍拒绝与冻结 customer
+  不一致的访问。订单详情继续由 customer + website 所有权验证。
 
 ## 入口
 
@@ -39,7 +49,8 @@
 | 提交 | `Checkout/Service/CheckoutGroupSubmitService` |
 | Session Model | `Checkout/Model/CheckoutSession`（additive） |
 | Cart boundary | `Cart/Api/CheckoutCartSnapshotInterface`（服务端身份、Scope、重新定价） |
-| Query | `shippingInfo.listQuoteOptions` / `quote`；`checkout.freezeQuote` / `submitV2`（Session ORM 跨 Worker；成功 submit 经 OrderFacade DB writer 落库） |
+| Query | `shippingInfo.listQuoteOptions` / `quote`；`checkout.freezeQuote` / `submitV2` / `resumePaymentV2`（Session ORM 跨 Worker；成功 submit 经 OrderFacade DB writer 落库） |
+| Payment recovery | `CheckoutOrderPaymentService`、`CheckoutPaymentRecoveryStateService`、`CheckoutSessionAccessService` |
 | Session | `CheckoutSessionStoreInterface` → `OrmCheckoutSessionStore`（表 `weline_checkout_session`） |
 | Order/Inventory | `OrderFacadeInterface` + `InventoryCapabilityInterface`；Warehouse cutover 仅依赖 `DefaultWarehouseResolverInterface` + `WarehouseInventoryCapabilityInterface`，Checkout 不引用对方内部 Model/Service |
 | E2E | `plan-p2e002-current-source.spec.js` 使用真实数据库 Shipping、Cart、Session、Order 与 Inventory |
@@ -60,7 +71,7 @@ php bin/w e2e:run app/code/Weline/Checkout/test/e2e/frontend/plan-p2e002-current
 运费归属按 `split_key` 排序后的首张需配送 Order 为 owner；owner 内按
 最大余数法分摊且合计不丢分。
 
-模块：`Weline_Checkout` `1.4.2`；`Weline_Cart` `1.2.0`；
+模块：`Weline_Checkout` `1.4.4`；`Weline_Cart` `1.2.1`；
 `Weline_Shipping` `2.2.0`；`Weline_Inventory` `2.5.5`；
-`Weline_Order` `2.12.3`；`Weline_Tax` `2.1.2`
+`Weline_Order` `2.12.5`；`Weline_Tax` `2.1.2`
 （`setup:upgrade` 建 `weline_checkout_session` 和新增 Tax 快照列）。

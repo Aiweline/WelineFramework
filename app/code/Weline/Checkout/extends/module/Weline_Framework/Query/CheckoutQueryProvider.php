@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Extends\Module\Weline_Framework\Query;
 
+use Weline\Cart\Api\CartScopeResolverInterface;
 use Weline\Cart\Api\CheckoutCartSnapshotInterface;
 use Weline\Cart\Service\CartV2ConflictException;
 use Weline\Cart\Service\CartV2Service;
 use Weline\Checkout\Service\CheckoutGroupSubmitService;
 use Weline\Checkout\Service\CheckoutIdentityService;
+use Weline\Checkout\Service\CheckoutOrderPaymentService;
+use Weline\Checkout\Service\CheckoutPaymentRecoveryStateService;
 use Weline\Checkout\Service\CheckoutService;
 use Weline\Checkout\Service\CheckoutV2ConflictException;
 use Weline\Checkout\Service\PaymentService;
@@ -20,6 +23,9 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Order\Api\Data\CreateCheckoutGroupResult;
+use Weline\Shipping\Model\DeliveryAddress;
+use Weline\Shipping\Service\DeliveryAddressService;
 
 /**
  * 前台结账 Facade：聚合购物车、配送、支付，供 Theme 结账页通过 Weline.Api.resource('checkout') 调用。
@@ -30,17 +36,23 @@ class CheckoutQueryProvider implements QueryProviderInterface
 
     private ?CustomerAccountFacadeInterface $customerAccounts;
 
+    private ?CartScopeResolverInterface $cartScopeResolver;
+
     public function __construct(
         private readonly CheckoutService $checkoutService,
         private readonly PaymentService $paymentService,
         private readonly SessionFactory $sessionFactory,
         private readonly CheckoutIdentityService $checkoutIdentityService,
         private readonly CheckoutGroupSubmitService $checkoutGroupSubmitService,
+        private readonly CheckoutOrderPaymentService $checkoutOrderPaymentService,
+        private readonly CheckoutPaymentRecoveryStateService $paymentRecoveryState,
         ?CheckoutCartSnapshotInterface $checkoutCartSnapshots = null,
         ?CustomerAccountFacadeInterface $customerAccounts = null,
+        ?CartScopeResolverInterface $cartScopeResolver = null,
     ) {
         $this->checkoutCartSnapshots = $checkoutCartSnapshots;
         $this->customerAccounts = $customerAccounts;
+        $this->cartScopeResolver = $cartScopeResolver;
     }
 
     public function getProviderName(): string
@@ -55,6 +67,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'placeOrder', 'createOrder' => $this->placeOrder($params),
             'freezeQuote' => $this->freezeQuote($params),
             'submitV2' => $this->submitV2($params),
+            'resumePaymentV2' => $this->resumePaymentV2($params),
             default => throw new \InvalidArgumentException((string)__('结账接口不支持该操作：%{1}', $operation)),
         };
     }
@@ -82,9 +95,13 @@ class CheckoutQueryProvider implements QueryProviderInterface
 
             $scopeIdentity = $this->currentScope();
             $customerId = $this->currentCustomerId();
-            $guestToken = $customerId === null
-                ? trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE))
-                : null;
+            $guestToken = null;
+            if ($customerId === null) {
+                $guestToken = trim((string)($params['guest_token'] ?? ''));
+                if ($guestToken === '') {
+                    $guestToken = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+                }
+            }
             $cart = $this->cartSnapshots()->freeze($scopeIdentity, $guestToken, $customerId);
             $currency = strtoupper(trim((string)($cart['currency'] ?? '')));
             $runtimeCurrency = strtoupper(trim(RequestContext::getWelineUserCurrency()));
@@ -153,31 +170,46 @@ class CheckoutQueryProvider implements QueryProviderInterface
             $expectedTaxHash = \array_key_exists('expected_tax_rule_set_hash', $params)
                 ? (string)$params['expected_tax_rule_set_hash']
                 : null;
+            $idempotencyKey = trim((string)($params['idempotency_key'] ?? ''));
+            if ($idempotencyKey === '') {
+                $idempotencyKey = 'idem_' . bin2hex(random_bytes(8));
+            }
+            $quoteToken = trim((string)($params['quote_token'] ?? ''));
             $result = $this->checkoutGroupSubmitService->submit(
-                quoteToken: (string)($params['quote_token'] ?? ''),
-                idempotencyKey: (string)($params['idempotency_key'] ?? ('idem_' . bin2hex(random_bytes(8)))),
+                quoteToken: $quoteToken,
+                idempotencyKey: $idempotencyKey,
                 clientHints: $clientHints,
                 customerId: $this->currentCustomerId(),
                 expectedConfigVersion: $expectedConfig,
                 expectedTaxRuleSetHash: $expectedTaxHash,
             );
+            $payment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
+            if (!is_array($payment)) {
+                $payment = $this->payCreatedOrders(
+                    $result->orderUuids,
+                    (string)($params['payment_method'] ?? ''),
+                    $idempotencyKey,
+                    [
+                        'country_code' => (string)($params['country_code'] ?? ''),
+                        'locale' => (string)($params['locale'] ?? ''),
+                        'environment' => (string)($params['environment'] ?? 'sandbox'),
+                    ],
+                );
+                $payment = $this->recordPaymentState($quoteToken, $idempotencyKey, $payment);
+            }
 
             // The Order/CheckoutSession transaction is already committed at
             // this point. Cart cleanup is a best-effort, identity-bound
             // follow-up and must never turn a successfully created order into
             // a client-visible submit failure.
             try {
-                w_query('cart', 'clearV2');
+                w_query('cart', 'clearV2', [
+                    'guest_token' => trim((string)($params['guest_token'] ?? '')),
+                ]);
             } catch (\Throwable) {
             }
 
-            return [
-                'success' => true,
-                'checkout_group_uuid' => $result->checkoutGroupUuid,
-                'order_uuids' => $result->orderUuids,
-                'replayed' => $result->replayed,
-                'data' => $result->toArray(),
-            ];
+            return $this->createdCheckoutResponse($result, $quoteToken, $payment);
         } catch (CheckoutV2ConflictException $e) {
             return [
                 'success' => false,
@@ -209,17 +241,189 @@ class CheckoutQueryProvider implements QueryProviderInterface
         }
     }
 
+    /**
+     * Resume payment for an already-submitted quote. Replaying the original
+     * order idempotency key returns the same group; a fresh payment key only
+     * creates a new payment attempt when the order is still unpaid.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function resumePaymentV2(array $params): array
+    {
+        try {
+            $quoteToken = trim((string)($params['quote_token'] ?? ''));
+            $idempotencyKey = trim((string)($params['idempotency_key'] ?? ''));
+            $paymentIdempotencyKey = trim((string)($params['payment_idempotency_key'] ?? ''));
+            if ($quoteToken === '' || $idempotencyKey === '') {
+                throw new CheckoutV2ConflictException(
+                    CheckoutGroupSubmitService::ERROR_QUOTE_TOKEN,
+                    __('支付恢复凭据不完整，请重新进入结账流程。'),
+                );
+            }
+            if ($paymentIdempotencyKey === '' || strlen($paymentIdempotencyKey) > 128) {
+                throw new CheckoutV2ConflictException(
+                    CheckoutGroupSubmitService::ERROR_QUOTE_TOKEN,
+                    __('支付重试幂等键长度须为 1..128。'),
+                );
+            }
+
+            $result = $this->checkoutGroupSubmitService->submit(
+                quoteToken: $quoteToken,
+                idempotencyKey: $idempotencyKey,
+                customerId: $this->currentCustomerId(),
+            );
+            $existingPayment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
+            if (is_array($existingPayment) && !$this->paymentRecoveryState->canRetry($quoteToken, $idempotencyKey)) {
+                return $this->createdCheckoutResponse($result, $quoteToken, $existingPayment);
+            }
+            if (!is_array($existingPayment)) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('找不到可恢复的支付状态，请从订单列表继续。'),
+                    'error_code' => 'checkout_payment_recovery_state_missing',
+                ];
+            }
+            if (!$this->paymentRecoveryState->beginRetry(
+                $quoteToken,
+                $idempotencyKey,
+                $paymentIdempotencyKey,
+            )) {
+                $claimedPayment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
+
+                return is_array($claimedPayment)
+                    ? $this->createdCheckoutResponse($result, $quoteToken, $claimedPayment)
+                    : [
+                        'success' => false,
+                        'message' => (string)__('无法声明该支付重试，请从订单列表重试。'),
+                        'error_code' => 'checkout_payment_retry_claim_failed',
+                    ];
+            }
+            $payment = $this->payCreatedOrders(
+                $result->orderUuids,
+                (string)($params['payment_method'] ?? ''),
+                $paymentIdempotencyKey,
+                [
+                    'country_code' => (string)($params['country_code'] ?? ''),
+                    'locale' => (string)($params['locale'] ?? ''),
+                    'environment' => (string)($params['environment'] ?? 'sandbox'),
+                ],
+            );
+            $payment = $this->recordPaymentState($quoteToken, $idempotencyKey, $payment);
+
+            return $this->createdCheckoutResponse($result, $quoteToken, $payment);
+        } catch (CheckoutV2ConflictException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode(),
+                'context' => $e->context(),
+            ];
+        } catch (\Weline\Order\Api\OrderFacadeConflictException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode(),
+                'context' => $e->context(),
+            ];
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'message' => (string)__('无法恢复该支付，请从订单列表重试。'),
+                'error_code' => 'checkout_payment_resume_failed',
+            ];
+        }
+    }
+
+    /**
+     * @param list<string> $orderUuids
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function payCreatedOrders(
+        array $orderUuids,
+        string $paymentMethod,
+        string $paymentIdempotencyKey,
+        array $context,
+    ): array {
+        try {
+            return $this->checkoutOrderPaymentService->pay(
+                $orderUuids,
+                $paymentMethod,
+                $paymentIdempotencyKey,
+                $context,
+            );
+        } catch (\Throwable) {
+            return [
+                'paid' => false,
+                'outcome' => 'failed',
+                'status' => 'failed',
+                'requires_action' => false,
+                'recoverable' => true,
+                'redirect_url' => null,
+                'error_code' => 'checkout_payment_failed',
+                'message' => (string)__('订单已创建，但支付未完成。请重试支付。'),
+                'transactions' => [],
+            ];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payment
+     * @return array<string, mixed>
+     */
+    private function createdCheckoutResponse(
+        CreateCheckoutGroupResult $result,
+        string $quoteToken,
+        array $payment,
+    ): array {
+        return [
+            'success' => true,
+            'checkout_group_uuid' => $result->checkoutGroupUuid,
+            'order_uuids' => $result->orderUuids,
+            'checkout_token' => $quoteToken,
+            'replayed' => $result->replayed,
+            'payment' => $payment,
+            'data' => $result->toArray(),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payment
+     * @return array<string, mixed>
+     */
+    private function recordPaymentState(
+        string $quoteToken,
+        string $orderIdempotencyKey,
+        array $payment,
+    ): array {
+        try {
+            $this->paymentRecoveryState->record($quoteToken, $orderIdempotencyKey, $payment);
+
+            return $payment;
+        } catch (\Throwable) {
+            if (($payment['outcome'] ?? '') === 'paid') {
+                return $payment;
+            }
+            $payment['recoverable'] = false;
+            $payment['error_code'] = 'checkout_payment_recovery_state_store_failed';
+            $payment['message'] = (string)__('订单已创建，但暂时无法恢复支付，请联系支持。');
+
+            return $payment;
+        }
+    }
+
     private function currentScope(): ScopeIdentity
     {
         $scope = RequestContext::scopeIdentity();
-        if (!$scope instanceof ScopeIdentity || $scope->isGlobal()) {
-            throw new CheckoutV2ConflictException(
-                'checkout_scope_unavailable',
-                __('当前请求没有可结账的 Storefront Scope'),
-            );
+        if ($scope instanceof ScopeIdentity && !$scope->isGlobal()) {
+            return $scope;
         }
 
-        return $scope;
+        // Binary API requests may not carry the HTML request's installed
+        // RequestContext. Consume Cart's published server-owned resolver
+        // contract without coupling Checkout to Cart's concrete Service.
+        return $this->cartScopeResolver()->fromParams([]);
     }
 
     private function currentCustomerId(): ?int
@@ -241,6 +445,20 @@ class CheckoutQueryProvider implements QueryProviderInterface
             throw new \RuntimeException('checkout_cart_snapshot_provider_missing');
         }
         return $this->checkoutCartSnapshots = $resolved;
+    }
+
+    private function cartScopeResolver(): CartScopeResolverInterface
+    {
+        if ($this->cartScopeResolver instanceof CartScopeResolverInterface) {
+            return $this->cartScopeResolver;
+        }
+        $resolved = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(CartScopeResolverInterface::class);
+        if (!$resolved instanceof CartScopeResolverInterface) {
+            throw new \RuntimeException('checkout_cart_scope_resolver_missing');
+        }
+
+        return $this->cartScopeResolver = $resolved;
     }
 
     private function customerAccounts(): CustomerAccountFacadeInterface
@@ -267,7 +485,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ? $params['shipping_address']
             : [];
 
-        $cart = $this->loadCartSummary();
+        $cart = $this->loadCartSummary($params);
         $items = \is_array($cart['items'] ?? null) ? $cart['items'] : [];
         $currency = (string)($cart['currency'] ?? 'CNY');
         $shippingMethods = $this->loadShippingMethods($shippingAddress);
@@ -286,6 +504,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'customer_allowed' => !empty($identity['customer_allowed']),
                 'requires_guest_email' => !empty($identity['requires_guest_email']),
             ],
+            'default_shipping_address' => $this->customerAddressPrefill(),
             'cart' => [
                 'subtotal' => (float)($cart['subtotal'] ?? 0),
                 'grand_total' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
@@ -313,6 +532,43 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 showPrice: false,
             ),
         ]);
+    }
+
+    /**
+     * Publish the authenticated customer's default delivery address as a
+     * checkout-only projection. Missing address data must never prevent the
+     * rest of checkout from loading.
+     *
+     * @return array<string, string|int>
+     */
+    private function customerAddressPrefill(): array
+    {
+        try {
+            $identity = $this->customerAccounts()->current();
+            if ($identity === null || $identity->getId() <= 0) {
+                return [];
+            }
+
+            $address = ObjectManager::getInstance(DeliveryAddressService::class)
+                ->getDefaultByCustomer($identity->getId());
+            if (!$address instanceof DeliveryAddress) {
+                return ['email' => trim($identity->getEmail())];
+            }
+
+            return [
+                'address_id' => (int)$address->getData(DeliveryAddress::schema_fields_ID),
+                'name' => trim((string)$address->getData(DeliveryAddress::schema_fields_CONTACT_NAME)),
+                'phone' => trim((string)$address->getData(DeliveryAddress::schema_fields_CONTACT_PHONE)),
+                'email' => trim($identity->getEmail()),
+                'country_code' => strtoupper(trim((string)$address->getData(DeliveryAddress::schema_fields_COUNTRY_CODE))),
+                'province' => trim((string)$address->getData(DeliveryAddress::schema_fields_PROVINCE)),
+                'city' => trim((string)$address->getData(DeliveryAddress::schema_fields_CITY)),
+                'address1' => trim((string)$address->getData(DeliveryAddress::schema_fields_STREET)),
+                'postal_code' => trim((string)$address->getData(DeliveryAddress::schema_fields_POSTAL_CODE)),
+            ];
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function htmlRenderer(): \Weline\Checkout\Service\CheckoutHtmlRenderer
@@ -346,7 +602,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             throw new \InvalidArgumentException((string)__('请补全收货信息并选择配送和支付方式。'));
         }
 
-        $cart = $this->loadCartSummary();
+        $cart = $this->loadCartSummary($params);
         $items = \is_array($cart['items'] ?? null) ? $cart['items'] : [];
         if ($items === []) {
             throw new \RuntimeException((string)__('购物车为空，请先加入商品。'));
@@ -443,10 +699,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
     /**
      * @return array<string, mixed>
      */
-    private function loadCartSummary(): array
+    private function loadCartSummary(array $params = []): array
     {
         return ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPageViewModel::class)
-            ->currentCart();
+            ->currentCart(trim((string)($params['guest_token'] ?? '')));
     }
 
     /**
@@ -671,6 +927,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'cost' => 2,
                     'params' => [
                         'shipping_address' => ['type' => 'array', 'required' => false],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load checkout cart, shipping and payment options',
@@ -688,6 +945,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'payment_method' => ['type' => 'string', 'required' => true],
                         'guest_email' => ['type' => 'string', 'required' => false],
                         'checkout_mode' => ['type' => 'string', 'required' => false],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Create order from cart and start payment',
@@ -705,6 +963,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'payment_method' => ['type' => 'string', 'required' => true],
                         'guest_email' => ['type' => 'string', 'required' => false],
                         'checkout_mode' => ['type' => 'string', 'required' => false],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Alias of placeOrder',
@@ -720,6 +979,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'address' => ['type' => 'array', 'required' => false],
                         'service_code' => ['type' => 'string', 'required' => true, 'max_length' => 64],
                         'client_hints' => ['type' => 'array', 'required' => false],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Freeze the server-owned current Cart and create one Shipping Quote session',
@@ -733,13 +993,33 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'cost' => 5,
                     'params' => [
                         'quote_token' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'payment_method' => ['type' => 'string', 'required' => true, 'max_length' => 64],
                         'idempotency_key' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        'country_code' => ['type' => 'string', 'required' => false, 'max_length' => 8],
                         'expected_config_version' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'expected_tax_rule_set_hash' => ['type' => 'string', 'required' => false, 'max_length' => 128],
                         'client_hints' => ['type' => 'array', 'required' => false],
+                        'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Submit frozen Checkout V2 quote (config version must match)',
+                ],
+                [
+                    'name' => 'resumePaymentV2',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'quote_token' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'idempotency_key' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                        'payment_idempotency_key' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                        'payment_method' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'country_code' => ['type' => 'string', 'required' => false, 'max_length' => 8],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Retry payment for the same already-submitted Checkout V2 order group',
                 ],
             ],
         ];
