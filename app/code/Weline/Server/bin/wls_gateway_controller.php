@@ -15986,6 +15986,7 @@ final class WlsEdgeGatewayController
         string $domain,
         string $projectUuid = '',
         ?float $deadlineMonotonic = null,
+        bool $allowWallTimeMismatch = false,
     ): ?array {
         if (!$this->brokerActionsRequired()
             || (int)($certificate['snapshot_manifest_schema'] ?? 0) !== 3
@@ -16075,7 +16076,8 @@ final class WlsEdgeGatewayController
         $notBefore = (int)$facts['not_before'];
         $notAfter = (int)$facts['not_after'];
         $now = \time();
-        if ($notBefore > $now || $notAfter <= $now
+        if ((!$allowWallTimeMismatch
+                && ($notBefore > $now || $notAfter <= $now))
             || \preg_match('/\A[a-f0-9]{64}\z/D', $fingerprint) !== 1
             || !\hash_equals(
                 $fingerprint,
@@ -16363,6 +16365,7 @@ final class WlsEdgeGatewayController
         string $domain,
         string $projectUuid = '',
         ?float $deadlineMonotonic = null,
+        bool $allowWallTimeMismatch = false,
     ): ?array {
         $schema = (int)($certificate['snapshot_manifest_schema'] ?? 0);
         if ($schema === 3) {
@@ -16371,6 +16374,7 @@ final class WlsEdgeGatewayController
                 $domain,
                 $projectUuid,
                 $deadlineMonotonic,
+                $allowWallTimeMismatch,
             );
         }
         if ($this->brokerActionsRequired() || $schema !== 2) {
@@ -16414,8 +16418,8 @@ final class WlsEdgeGatewayController
             || !\hash_equals($digest, (string)($certificate['source_digest'] ?? ''))
             || \preg_match('/\A[a-f0-9]{64}\z/D', $manifestDigest) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $fingerprint) !== 1
-            || $notBefore > $now
-            || $notAfter <= $now
+            || (!$allowWallTimeMismatch
+                && ($notBefore > $now || $notAfter <= $now))
             || $names === []
             || \count($names) > 256
             || $names !== $normalized
@@ -18722,7 +18726,10 @@ final class WlsEdgeGatewayController
         $coreHealthy = ($status['running'] ?? false)
             && $this->publicPortsReachable(null, false, $probeDeadline);
         $routesHealthy = $coreHealthy
-            && $this->publicRoutesReachable(false, $probeDeadline);
+            && $this->publicRoutesReachablePreservingPublishedCertificate(
+                false,
+                $probeDeadline,
+            );
         if ($coreHealthy
             && !$routesHealthy
             && \hash_equals('deferred', $this->lastPublicProbeFailureKind)
@@ -18755,7 +18762,11 @@ final class WlsEdgeGatewayController
             } elseif (!$routesHealthy
                 && \in_array(
                     $this->lastPublicProbeFailureKind,
-                    ['backend_transport', 'backend_identity'],
+                    [
+                        'backend_transport',
+                        'backend_identity',
+                        'certificate_wall_time',
+                    ],
                     true,
                 )
             ) {
@@ -32713,10 +32724,64 @@ final class WlsEdgeGatewayController
         }
     }
 
+    /**
+     * A wall-clock discontinuity cannot be repaired by restarting Nginx. When
+     * the only strict preflight failure is the validity interval of an already
+     * published certificate, re-prove every immutable certificate fact and
+     * the live TLS fingerprint without trusting the local wall clock. The
+     * caller still receives a degraded result, but a verified serving process
+     * is not destroyed. New certificate publication continues to use the
+     * strict wall-time checks exclusively.
+     */
+    private function publicRoutesReachablePreservingPublishedCertificate(
+        bool $cooperative = false,
+        ?float $deadlineMonotonic = null,
+        ?int $httpsPort = null,
+    ): bool {
+        if ($this->publishedCertificateWallTimeMismatch()) {
+            if (!$this->publicRoutesReachable(
+                $cooperative,
+                $deadlineMonotonic,
+                $httpsPort,
+                true,
+            )) {
+                return false;
+            }
+            $this->lastPublicProbeFailureKind = 'certificate_wall_time';
+            return false;
+        }
+        return $this->publicRoutesReachable(
+            $cooperative,
+            $deadlineMonotonic,
+            $httpsPort,
+        );
+    }
+
+    private function publishedCertificateWallTimeMismatch(): bool
+    {
+        $now = \time();
+        foreach ($this->routesForActiveProbe() as $route) {
+            if (!\is_array($route)
+                || !\hash_equals('ACTIVE', (string)($route['status'] ?? ''))
+                || !$this->routeAllowedBySecurity($route)
+            ) {
+                continue;
+            }
+            $certificate = (array)($route['certificate'] ?? []);
+            $notBefore = (int)($certificate['not_before'] ?? PHP_INT_MAX);
+            $notAfter = (int)($certificate['not_after'] ?? 0);
+            if ($notBefore > $now || $notAfter <= $now) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private function publicRoutesReachable(
         bool $cooperative = false,
         ?float $deadlineMonotonic = null,
         ?int $httpsPort = null,
+        bool $allowCertificateWallTimeMismatch = false,
     ): bool
     {
         $deadlineMonotonic = $this->boundedOperationDeadline(
@@ -32769,6 +32834,7 @@ final class WlsEdgeGatewayController
                 $routeIndex,
                 $isolation,
                 $deadlineMonotonic,
+                $allowCertificateWallTimeMismatch,
             );
         }
         while ($routeIndex < $routeCount) {
@@ -32795,6 +32861,7 @@ final class WlsEdgeGatewayController
                 (string)($route['domain'] ?? ''),
                 (string)($route['project_uuid'] ?? ''),
                 $deadlineMonotonic,
+                $allowCertificateWallTimeMismatch,
             ) !== null;
             $httpOnly = (string)($route['status'] ?? '') === 'PENDING_CERTIFICATE'
                 && \hash_equals('disabled', $this->certificateLifecycleState($certificate))
@@ -32875,6 +32942,7 @@ final class WlsEdgeGatewayController
                 $deadlineMonotonic,
                 $isolation,
                 $routeProbeAttempted,
+                $certificateFacts,
             )) {
                 if ($routeProbeAttempted === false
                     && !\in_array(
@@ -32952,6 +33020,7 @@ final class WlsEdgeGatewayController
                 $routes,
                 $isolation,
                 $deadlineMonotonic,
+                $allowCertificateWallTimeMismatch,
             )) {
                 return false;
             }
@@ -32972,6 +33041,7 @@ final class WlsEdgeGatewayController
         int $routeIndex,
         bool $isolation,
         float $deadlineMonotonic,
+        bool $allowCertificateWallTimeMismatch = false,
     ): bool {
         $this->lastConcurrentProbePeak = 0;
         $routeCount = \count($routeKeys);
@@ -33044,6 +33114,7 @@ final class WlsEdgeGatewayController
                         (string)($route['domain'] ?? ''),
                         (string)($route['project_uuid'] ?? ''),
                         $deadlineMonotonic,
+                        $allowCertificateWallTimeMismatch,
                     );
                 if ($certificateFacts === null && !$httpOnly) {
                     if ((string)($route['status'] ?? '') === 'ACTIVE') {
@@ -33186,6 +33257,7 @@ final class WlsEdgeGatewayController
             $routes,
             $isolation,
             $deadlineMonotonic,
+            $allowCertificateWallTimeMismatch,
         );
     }
 
@@ -33840,6 +33912,7 @@ final class WlsEdgeGatewayController
         ?float $deadlineMonotonic = null,
         ?bool $isolation = null,
         ?bool &$probeAttempted = null,
+        ?array $certificateFacts = null,
     ): bool
     {
         // Preserve concrete certificate/route preflight failures. Only the
@@ -33854,7 +33927,7 @@ final class WlsEdgeGatewayController
         $expectation = $this->publicRouteProbeExpectation(
             $route,
             $isolation,
-            null,
+            $certificateFacts,
             $deadlineMonotonic,
         );
         if ($expectation === null) {
@@ -34529,6 +34602,7 @@ final class WlsEdgeGatewayController
         array $routes,
         bool $isolation,
         float $deadlineMonotonic,
+        bool $allowCertificateWallTimeMismatch = false,
     ): bool {
         $aggregateFailure = '';
         $nextControlServiceAt = $this->monotonicNow();
@@ -34551,6 +34625,7 @@ final class WlsEdgeGatewayController
                 (string)($route['domain'] ?? ''),
                 (string)($route['project_uuid'] ?? ''),
                 $deadlineMonotonic,
+                $allowCertificateWallTimeMismatch,
             ) === null) {
                 if (\hash_equals('ACTIVE', (string)($route['status'] ?? ''))) {
                     $aggregateFailure = 'data_plane';
@@ -34987,7 +35062,10 @@ final class WlsEdgeGatewayController
                 $deadline,
             );
             $routesHealthy = $coreHealthy
-                && $this->publicRoutesReachable(false, $deadline);
+                && $this->publicRoutesReachablePreservingPublishedCertificate(
+                    false,
+                    $deadline,
+                );
             if ($routesHealthy) {
                 $this->state['ready'] = true;
                 $this->state['health_state'] = 'HEALTHY';
@@ -34995,7 +35073,11 @@ final class WlsEdgeGatewayController
                 $this->state['recovery']['last_failure'] = '';
             } elseif ($coreHealthy && \in_array(
                 $this->lastPublicProbeFailureKind,
-                ['backend_transport', 'backend_identity'],
+                [
+                    'backend_transport',
+                    'backend_identity',
+                    'certificate_wall_time',
+                ],
                 true,
             )) {
                 $routeFailureKind = $this->lastPublicProbeFailureKind;

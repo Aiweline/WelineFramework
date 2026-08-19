@@ -9,10 +9,10 @@ use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
 /**
  * Manage the uniquely owned WLS block in a hosts file.
  *
- * This service never crosses an operating-system privilege boundary. Direct
- * writes are limited to a regular, single-link file owned by the current
- * non-root POSIX identity. System-owned files are left to the operating
- * system's trusted editor.
+ * This service never acquires operating-system authority itself. Direct
+ * writes require a regular, single-link target owned by the effective POSIX
+ * identity. The normal process is non-root; the fixed privileged editor may
+ * call the same transaction as root only after sudo has authenticated it.
  */
 class HostsFileManager
 {
@@ -107,6 +107,10 @@ class HostsFileManager
                 'ip' => $ip,
             ];
         }
+        $satisfiedStatus = self::inspectSatisfiedAddStatus($hostsFile, $domain, $ip);
+        if ($satisfiedStatus !== null) {
+            return self::addDomainSuccessResult($domain, $ip, $satisfiedStatus);
+        }
         if (!\is_writable($hostsFile)
             || !self::directWriterIdentityAllowed(
                 $status,
@@ -137,6 +141,81 @@ class HostsFileManager
 
         $mutationStatus = (string)($mutation['status'] ?? 'added');
 
+        return self::addDomainSuccessResult($domain, $ip, $mutationStatus);
+    }
+
+    /**
+     * Read-only satisfaction is intentionally evaluated before writability.
+     * A root-owned hosts file which already contains the exact mapping needs
+     * neither mutation authority nor an administrator prompt.
+     */
+    private static function inspectSatisfiedAddStatus(
+        string $hostsFile,
+        string $domain,
+        string $ip,
+    ): ?string {
+        $canonical = self::canonicalHostsTarget($hostsFile);
+        if ($canonical === null) {
+            return null;
+        }
+
+        $before = @\lstat($canonical);
+        $handle = @\fopen($canonical, 'rb');
+        if (!\is_array($before) || !\is_resource($handle)) {
+            if (\is_resource($handle)) {
+                @\fclose($handle);
+            }
+            return null;
+        }
+
+        try {
+            $opened = @\fstat($handle);
+            $pathStatus = @\lstat($canonical);
+            if (!\is_array($opened)
+                || !\is_array($pathStatus)
+                || !self::safeRegularFileStatus($opened)
+                || !self::safeRegularFileStatus($pathStatus)
+                || !self::sameFileIdentity($before, $opened)
+                || !self::sameFileIdentity($opened, $pathStatus)
+            ) {
+                return null;
+            }
+            $content = self::readHostsHandle($handle);
+            if (!\is_string($content)
+                || !self::targetSnapshotStillMatches($handle, $canonical, $opened, $content)
+            ) {
+                return null;
+            }
+
+            $plan = self::planMutation(
+                $content,
+                self::OPERATION_UPSERT,
+                $domain,
+                $ip,
+            );
+            if (!($plan['success'] ?? false)
+                || !\hash_equals($content, (string)($plan['content'] ?? ''))
+            ) {
+                return null;
+            }
+            $status = (string)($plan['status'] ?? '');
+
+            return \in_array($status, ['already_exists', 'external_satisfied'], true)
+                ? $status
+                : null;
+        } finally {
+            @\fclose($handle);
+        }
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private static function addDomainSuccessResult(
+        string $domain,
+        string $ip,
+        string $mutationStatus,
+    ): array {
         return [
             'success' => true,
             'message' => match ($mutationStatus) {
@@ -242,8 +321,8 @@ class HostsFileManager
     {
         return [
             'success' => false,
-            'message' => 'WLS did not modify the system hosts file. Add '
-                . "{$ip} {$domain} manually with the operating system's trusted hosts editor.",
+            'message' => 'Administrator authorization is required to publish '
+                . "{$ip} {$domain} through the bounded WLS hosts editor.",
             'needs_admin' => true,
             'ip' => $ip,
         ];
@@ -1177,7 +1256,7 @@ class HostsFileManager
             return '';
         }
         $effectiveUid = self::effectiveUid();
-        if ($effectiveUid <= 0) {
+        if ($effectiveUid < 0) {
             return '';
         }
         $base = @\realpath('/var/tmp');
@@ -1255,7 +1334,7 @@ class HostsFileManager
         int $effectiveUid,
     ): bool {
         return $osFamily !== 'Windows'
-            && $effectiveUid > 0
+            && $effectiveUid >= 0
             && (int)($status['uid'] ?? -1) === $effectiveUid;
     }
 
@@ -1429,7 +1508,7 @@ class HostsFileManager
     private static function safePrivateDirectoryStatus(array $status, int $effectiveUid): bool
     {
         return self::safeDirectoryStatus($status)
-            && $effectiveUid > 0
+            && $effectiveUid >= 0
             && (int)($status['uid'] ?? -1) === $effectiveUid
             && ((((int)($status['mode'] ?? 0)) & 0022) === 0);
     }

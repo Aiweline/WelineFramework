@@ -1249,13 +1249,40 @@ static int wls_upgrade_boot_id(char output[65])
                 || (value >= 'a' && value <= 'f'))) return -1;
     }
 #elif defined(__APPLE__)
-    struct timeval boot;
-    size_t size = sizeof(boot);
+    char boot_session_uuid[64];
+    size_t size = sizeof(boot_session_uuid);
+    size_t index;
     int length;
-    if (sysctlbyname("kern.boottime", &boot, &size, NULL, 0) != 0
-        || size != sizeof(boot)) return -1;
-    length = snprintf(platform_token, sizeof(platform_token), "darwin-%lld-%d",
-        (long long)boot.tv_sec, (int)boot.tv_usec);
+    if (sysctlbyname(
+            "kern.bootsessionuuid",
+            boot_session_uuid,
+            &size,
+            NULL,
+            0
+        ) != 0
+        || size != 37U
+        || boot_session_uuid[36] != '\0') return -1;
+    for (index = 0U; index < 36U; index++) {
+        char value = boot_session_uuid[index];
+        int hyphen = index == 8U || index == 13U
+            || index == 18U || index == 23U;
+        if (hyphen) {
+            if (value != '-') return -1;
+            continue;
+        }
+        if (value >= 'A' && value <= 'F') {
+            boot_session_uuid[index] = (char)(value - 'A' + 'a');
+            value = boot_session_uuid[index];
+        }
+        if (!((value >= '0' && value <= '9')
+            || (value >= 'a' && value <= 'f'))) return -1;
+    }
+    length = snprintf(
+        platform_token,
+        sizeof(platform_token),
+        "darwin-%s",
+        boot_session_uuid
+    );
     if (length <= 0 || length >= (int)sizeof(platform_token)) return -1;
 #else
     (void)output;
@@ -8503,6 +8530,12 @@ static int wls_process_attest_v2_with_topology(
     int candidate_mode;
     int written;
     const char *slot;
+#if defined(WLS_NATIVE_TEST_HOOKS)
+    const char *denied_stage = "request";
+#define WLS_PROCESS_ATTEST_STAGE(value) do { denied_stage = (value); } while (0)
+#else
+#define WLS_PROCESS_ATTEST_STAGE(value) ((void)0)
+#endif
     memset(&candidate_fence, 0, sizeof(candidate_fence));
     memset(zero_digest, '0', 64U);
     zero_digest[64] = '\0';
@@ -8529,6 +8562,7 @@ static int wls_process_attest_v2_with_topology(
                 || strcmp(candidate_phase, "ACTIVE") != 0
                 || candidate_fence_digest == NULL
                 || strcmp(candidate_fence_digest, zero_digest) != 0))) goto denied;
+    WLS_PROCESS_ATTEST_STAGE("start_identity");
     expected_start_known = strcmp(start_text, "-") != 0;
     expected_start = 0ULL;
     start_end = NULL;
@@ -8551,10 +8585,12 @@ static int wls_process_attest_v2_with_topology(
             binary_path, sizeof(binary_path)
         ) != 0) goto denied;
 #else
+    WLS_PROCESS_ATTEST_STAGE("process_identity");
     if (wls_process_identity(
             (pid_t)parsed_pid, binary_path, sizeof(binary_path), &actual_start
         ) != 0 || (expected_start_known && actual_start != expected_start)) goto denied;
 #endif
+    WLS_PROCESS_ATTEST_STAGE("expected_paths");
     if (snprintf(
             expected_binary_a, sizeof(expected_binary_a),
             "%s/slots/A/bin/nginx", home
@@ -8571,40 +8607,47 @@ static int wls_process_attest_v2_with_topology(
     if (strcmp(binary_path, expected_binary_a) == 0) slot = "A";
     else if (strcmp(binary_path, expected_binary_b) == 0) slot = "B";
     else goto denied;
+    WLS_PROCESS_ATTEST_STAGE("process_command_initial");
     if (wls_process_command_matches(
             (pid_t)parsed_pid,
             binary_path,
             expected_prefix,
             config_path
-        ) != 0
-        || wls_open_live_binary(
+        ) != 0) goto denied;
+    WLS_PROCESS_ATTEST_STAGE("live_binary_open");
+    if (wls_open_live_binary(
             (pid_t)parsed_pid, binary_path, &binary_fd
-        ) != 0
-        || wls_file_digest_fd(binary_fd, binary_digest, &binary_size) != 0
+        ) != 0) goto denied;
+    WLS_PROCESS_ATTEST_STAGE("live_binary_digest");
+    if (wls_file_digest_fd(binary_fd, binary_digest, &binary_size) != 0
         || binary_size == 0U
-        || strcmp(binary_digest, expected_binary_digest) != 0
+        || strcmp(binary_digest, expected_binary_digest) != 0) goto denied;
+    WLS_PROCESS_ATTEST_STAGE("process_identity_recheck");
 #if defined(__APPLE__)
-        || wls_process_identity(
+    if (wls_process_identity(
             (pid_t)parsed_pid, verified_binary_path,
             sizeof(verified_binary_path), &verified_start
         ) != 0
         || verified_start != actual_start
-        || strcmp(verified_binary_path, binary_path) != 0
+        || strcmp(verified_binary_path, binary_path) != 0) goto denied;
 #else
-        || !wls_nginx_listener_lease_attest_matches(
+    if (!wls_nginx_listener_lease_attest_matches(
             parsed_pid, actual_start, self_test_topology
-        )
+        )) goto denied;
 #endif
-        || wls_process_command_matches(
+    WLS_PROCESS_ATTEST_STAGE("process_command_recheck");
+    if (wls_process_command_matches(
             (pid_t)parsed_pid,
             binary_path,
             expected_prefix,
             config_path
         ) != 0) goto denied;
+    WLS_PROCESS_ATTEST_STAGE("config_path");
     wls_sha256_hex(
         (const unsigned char *)config_path, strlen(config_path), config_path_digest
     );
     if (strcmp(config_path_digest, expected_config_path_digest) != 0) goto denied;
+    WLS_PROCESS_ATTEST_STAGE("config_file");
     home_fd = wls_open_absolute_directory(home);
     if (home_fd < 0) goto denied;
     config_fd = wls_open_relative(home_fd, "runtime/conf/nginx.conf", O_RDONLY);
@@ -8626,6 +8669,7 @@ static int wls_process_attest_v2_with_topology(
         || config_size == 0U
         || strcmp(config_digest, expected_config_digest) != 0) goto denied;
     if (!candidate_mode) {
+        WLS_PROCESS_ATTEST_STAGE("active_state");
         if (wls_read_regular_at(
             home_fd, "state/gateway-state.json", WLS_MAX_REQUEST,
             &state, &state_length
@@ -8642,6 +8686,7 @@ static int wls_process_attest_v2_with_topology(
         ) != 0
         || strcmp(state_config_digest, config_digest) != 0) goto denied;
     } else {
+        WLS_PROCESS_ATTEST_STAGE("candidate_fence");
         wls_sha256_hex(
             (const unsigned char *)fencing, strlen(fencing),
             current_fencing_digest
@@ -8676,6 +8721,7 @@ static int wls_process_attest_v2_with_topology(
             ) != 0) goto denied;
         actual_publication = publication;
     }
+    WLS_PROCESS_ATTEST_STAGE("manifest_revalidation");
     if (snprintf(
             manifest_relative, sizeof(manifest_relative),
             "slots/%s/manifest.json", slot
@@ -8736,6 +8782,7 @@ static int wls_process_attest_v2_with_topology(
             expected_prefix,
             config_path
         ) != 0) goto denied;
+    WLS_PROCESS_ATTEST_STAGE("receipt_write");
     written = snprintf(
         receipt, sizeof(receipt),
         "WLS-PROCESS-ATTEST/3\npid=%lu\nstart_id=%llu\n"
@@ -8753,6 +8800,7 @@ static int wls_process_attest_v2_with_topology(
             "%s/trust/process-attestation.receipt", home
         ) >= (int)sizeof(receipt_path)
         || wls_atomic_root_write(receipt_path, receipt, (size_t)written) != 0) goto denied;
+    WLS_PROCESS_ATTEST_STAGE("reply_build");
     wls_sha256_hex((const unsigned char *)receipt, (size_t)written, receipt_digest);
     written = snprintf(
         reply, reply_capacity,
@@ -8776,6 +8824,9 @@ static int wls_process_attest_v2_with_topology(
     sodium_memzero(zero_digest, sizeof(zero_digest));
     return 0;
 denied:
+#if defined(WLS_NATIVE_TEST_HOOKS)
+    fprintf(stderr, "PROCESS_ATTEST rejected: stage=%s\n", denied_stage);
+#endif
     if (manifest != NULL) { sodium_memzero(manifest, manifest_length); free(manifest); }
     if (state != NULL) { sodium_memzero(state, state_length); free(state); }
     if (config_fd >= 0) close(config_fd);
@@ -8784,6 +8835,7 @@ denied:
     sodium_memzero(&candidate_fence, sizeof(candidate_fence));
     sodium_memzero(current_fencing_digest, sizeof(current_fencing_digest));
     sodium_memzero(zero_digest, sizeof(zero_digest));
+#undef WLS_PROCESS_ATTEST_STAGE
     return wls_security_reply_error(
         reply, reply_capacity, "PROCESS_ATTEST_FAILED", "PROCESS_ATTEST", NULL, NULL
     );
@@ -27529,6 +27581,13 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--self-test") == 0) {
         return wls_self_test();
     }
+#if defined(WLS_NATIVE_TEST_HOOKS)
+    if (argc == 2 && strcmp(argv[1], "--host-boot-identity-self-test") == 0) {
+        char boot_id[65];
+        if (wls_upgrade_boot_id(boot_id) != 0) return 1;
+        return puts(boot_id) < 0 ? 1 : 0;
+    }
+#endif
     if (argc == 2
         && strcmp(argv[1], "--nginx-inherited-listener-nonblocking-self-test") == 0) {
         if (wls_nginx_inherited_listener_nonblocking_self_test() != 0) return 1;

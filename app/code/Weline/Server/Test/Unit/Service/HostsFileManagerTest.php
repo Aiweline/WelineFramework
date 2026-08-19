@@ -60,7 +60,54 @@ HOSTS;
         self::assertSame('127.0.0.1', HostsFileManager::resolveIpForDomain('demo.local.test', '203.0.113.9'));
     }
 
-    public function testPermissionDeniedResultRequiresManualOsEditWithoutExecutableCommand(): void
+    public function testCorrectReadOnlyEntryIsSatisfiedBeforePermissionChecks(): void
+    {
+        $path = \tempnam(\sys_get_temp_dir(), 'wls-hosts-read-');
+        self::assertIsString($path);
+        try {
+            self::assertNotFalse(\file_put_contents(
+                $path,
+                "127.0.0.1 localhost\n127.0.0.1 shop-a.weline.test\n",
+            ));
+            self::assertTrue(\chmod($path, 0444));
+
+            $method = new ReflectionMethod(HostsFileManager::class, 'inspectSatisfiedAddStatus');
+            $method->setAccessible(true);
+            self::assertSame(
+                'external_satisfied',
+                $method->invoke(null, $path, 'shop-a.weline.test', '127.0.0.1'),
+            );
+
+            $add = new ReflectionMethod(HostsFileManager::class, 'addDomain');
+            $lines = \file($add->getFileName());
+            self::assertIsArray($lines);
+            $source = \implode('', \array_slice(
+                $lines,
+                $add->getStartLine() - 1,
+                $add->getEndLine() - $add->getStartLine() + 1,
+            ));
+            $inspectionAt = \strpos($source, 'inspectSatisfiedAddStatus(');
+            $permissionAt = \strpos($source, '!\\is_writable($hostsFile)');
+            self::assertIsInt($inspectionAt);
+            self::assertIsInt($permissionAt);
+            self::assertLessThan($permissionAt, $inspectionAt);
+        } finally {
+            @\chmod($path, 0600);
+            @\unlink($path);
+        }
+    }
+
+    public function testRootWriterIsRestrictedToARootOwnedPosixTarget(): void
+    {
+        $method = new ReflectionMethod(HostsFileManager::class, 'directWriterIdentityAllowed');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke(null, ['uid' => 0], 'Darwin', 0));
+        self::assertFalse($method->invoke(null, ['uid' => 501], 'Darwin', 0));
+        self::assertFalse($method->invoke(null, ['uid' => 0], 'Windows', 0));
+    }
+
+    public function testPermissionDeniedResultRequestsBoundedAdministratorAuthorization(): void
     {
         self::assertTrue(\method_exists(HostsFileManager::class, 'permissionDeniedResult'));
         $method = new ReflectionMethod(HostsFileManager::class, 'permissionDeniedResult');
@@ -72,7 +119,8 @@ HOSTS;
         self::assertTrue($result['needs_admin'] ?? false);
         self::assertArrayNotHasKey('command', $result);
         self::assertStringContainsString('127.0.0.1 shop-a.weline.test', (string)$result['message']);
-        self::assertStringContainsString('manually', \strtolower((string)$result['message']));
+        self::assertStringContainsString('administrator authorization', \strtolower((string)$result['message']));
+        self::assertStringNotContainsString('manually', \strtolower((string)$result['message']));
         self::assertStringNotContainsString('php', \strtolower((string)$result['message']));
         self::assertStringNotContainsString('bin/w', \strtolower((string)$result['message']));
     }
