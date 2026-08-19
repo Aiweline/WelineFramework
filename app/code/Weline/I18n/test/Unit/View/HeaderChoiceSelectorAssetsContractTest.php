@@ -8,6 +8,19 @@ use PHPUnit\Framework\TestCase;
 
 final class HeaderChoiceSelectorAssetsContractTest extends TestCase
 {
+    public function testPointerCanCrossFromChoiceTriggerIntoDropdownPanel(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/templates/Frontend/header-choice-selector-assets.phtml';
+        self::assertFileExists($path);
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('margin-top: 0;', $content);
+        self::assertStringNotContainsString('margin-top: 0.25rem;', $content);
+        self::assertStringContainsString('.weline-choice-switcher::after', $content);
+        self::assertStringContainsString('height: 8px;', $content);
+        self::assertStringContainsString('hoverBridge: true', $content);
+    }
+
     public function testLanguageOptionClickWritesServerCookieAndReloadsSamePath(): void
     {
         $path = dirname(__DIR__, 3) . '/view/templates/Frontend/header-choice-selector-assets.phtml';
