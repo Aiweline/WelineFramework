@@ -25,6 +25,7 @@
         $meta = [];
     }
     $pageTitle = trim((string)($this->getData('title') ?: ($meta['title'] ?? __('登录'))));
+    $this->setData('__weline_frontend_final_title', $pageTitle);
     $pageDescription = trim((string)($this->getData('description') ?: ($meta['description'] ?? '')));
     $contentTemplate = (string)($this->getData('meta.contentTemplate') ?: $this->getData('contentTemplate') ?: $meta['contentTemplate'] ?? '');
     $normalizedContentTemplate = str_replace('\\', '/', $contentTemplate);
