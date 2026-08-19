@@ -20,6 +20,7 @@ use Weline\Payment\Model\PaymentIntent;
 use Weline\Payment\Model\PaymentOutbox;
 use Weline\Payment\Model\PaymentReconciliationAudit;
 use Weline\Payment\Model\PaymentRefund;
+use Weline\Payment\Model\PaymentTransaction;
 use Weline\Payment\Model\PaymentWebhookInbox;
 use Weline\Payment\Queue\PaymentInboxConsumer;
 
@@ -46,6 +47,7 @@ final class PaymentReconciliationService
 
     public const INV_SUCCEEDED_MISSING_OUTBOX = 'succeeded_attempt_missing_effect_outbox';
     public const INV_PAID_MISSING_INVOICE = 'paid_order_missing_invoice_effect';
+    public const INV_TRANSACTION_PAYABLE_NOT_PAID = PaymentTransactionPayableStateInvariant::CODE;
     public const INV_INBOX_STALE = 'inbox_received_not_applied';
     public const INV_REFUND_SLA = 'refund_pending_unknown_over_sla';
     public const INV_LEASE_EXPIRED = 'attempt_reservation_lease_expired';
@@ -74,6 +76,7 @@ final class PaymentReconciliationService
         private readonly ObjectAuthorizationServiceInterface $authorization,
         private readonly ObjectAuthorizationAuditInterface $authorizationAudit,
         private readonly BackendUserDirectoryInterface $users,
+        private readonly PaymentTransactionPayableStateInvariant $transactionPayableInvariant,
     ) {
     }
 
@@ -322,6 +325,11 @@ final class PaymentReconciliationService
                 'repairable' => true,
             ],
             [
+                'code' => self::INV_TRANSACTION_PAYABLE_NOT_PAID,
+                'description' => (string)__('成功支付交易对应的业务单据不存在或未进入已支付状态'),
+                'repairable' => false,
+            ],
+            [
                 'code' => self::INV_INBOX_STALE,
                 'description' => (string)__('支付回调 inbox 已接收但超时未应用'),
                 'repairable' => false,
@@ -382,6 +390,11 @@ final class PaymentReconciliationService
             PaymentIntent::schema_fields_ID,
             $scope->isGlobal() ? null : [PaymentIntent::schema_fields_SCOPE, $scopeCode],
         );
+        [$transactions, $transactionsTruncated] = $this->baseRows(
+            PaymentTransaction::class,
+            PaymentTransaction::schema_fields_ID,
+            $scope->isGlobal() ? null : [PaymentTransaction::schema_fields_SCOPE, $scopeCode],
+        );
 
         $attemptCodes = $this->values($attempts, PaymentAttempt::schema_fields_ATTEMPT_CODE);
         $intentCodes = $this->values($intents, PaymentIntent::schema_fields_INTENT_CODE);
@@ -430,6 +443,18 @@ final class PaymentReconciliationService
         }
 
         $diffs = [];
+        $successfulTransactionCount = 0;
+        foreach ($transactions as $transaction) {
+            if ((string)($transaction[PaymentTransaction::schema_fields_STATUS] ?? '')
+                === PaymentTransaction::STATUS_SUCCESS
+            ) {
+                $successfulTransactionCount++;
+            }
+            $transactionDiff = $this->transactionPayableInvariant->inspect($transaction);
+            if ($transactionDiff !== null) {
+                $diffs[] = $transactionDiff;
+            }
+        }
         $now = time();
         $succeededCount = 0;
         foreach ($attempts as $attempt) {
@@ -566,17 +591,20 @@ final class PaymentReconciliationService
             'diffs' => $diffs,
             'truncated' => $attemptsTruncated
                 || $intentsTruncated
+                || $transactionsTruncated
                 || $outboxTruncated
                 || $inboxTruncated
                 || $refundsTruncated,
             'source_counts' => [
                 'attempts' => count($attempts),
                 'intents' => count($intents),
+                'transactions' => count($transactions),
                 'outbox' => count($outbox),
                 'inbox' => count($inbox),
                 'refunds' => count($refunds),
             ],
             'attempts_succeeded' => $succeededCount,
+            'transactions_succeeded' => $successfulTransactionCount,
             'outbox_rows' => $outbox,
         ];
     }
@@ -615,6 +643,7 @@ final class PaymentReconciliationService
             'scan_limit' => self::SCAN_LIMIT,
             'metrics' => [
                 'attempts_succeeded' => (int)$snapshot['attempts_succeeded'],
+                'transactions_succeeded' => (int)$snapshot['transactions_succeeded'],
                 'outbox_pending' => $outboxPending,
                 'outbox_dead' => $outboxDead,
                 'diff_total' => count($diffs),

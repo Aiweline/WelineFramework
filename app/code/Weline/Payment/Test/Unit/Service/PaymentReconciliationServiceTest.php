@@ -7,6 +7,7 @@ namespace Weline\Payment\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Payment\Service\PaymentReconciliationService;
+use Weline\Payment\Service\PaymentTransactionPayableStateInvariant;
 
 /**
  * Pure contract coverage. Durable TEST-RECON-01 evidence lives in the task's
@@ -55,5 +56,19 @@ final class PaymentReconciliationServiceTest extends TestCase
         self::assertStringNotContainsString("'--acl='", $commandSource);
         self::assertStringContainsString("'--approver-user-id='", $commandSource);
         self::assertStringContainsString("'--idempotency-key='", $commandSource);
+    }
+
+    public function testCatalogIncludesSuccessfulTransactionPayableMismatchAsReportOnly(): void
+    {
+        $service = (new \ReflectionClass(PaymentReconciliationService::class))
+            ->newInstanceWithoutConstructor();
+        $catalog = $service->invariantCatalog();
+        $byCode = [];
+        foreach ($catalog as $invariant) {
+            $byCode[(string)($invariant['code'] ?? '')] = $invariant;
+        }
+
+        self::assertArrayHasKey(PaymentTransactionPayableStateInvariant::CODE, $byCode);
+        self::assertFalse($byCode[PaymentTransactionPayableStateInvariant::CODE]['repairable']);
     }
 }
