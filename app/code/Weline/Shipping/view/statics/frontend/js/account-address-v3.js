@@ -311,6 +311,23 @@
         return payload;
     }
 
+    function normalizeAddressPayload(payload) {
+        ['id', 'address_id', 'shipping_address_id', 'delivery_address_id'].forEach(function (field) {
+            if (!Object.prototype.hasOwnProperty.call(payload, field)) {
+                return;
+            }
+            var value = text(payload[field]).trim();
+            if (value === '') {
+                delete payload[field];
+                return;
+            }
+            if (/^\d+$/.test(value)) {
+                payload[field] = Number(value);
+            }
+        });
+        return payload;
+    }
+
     function getAddressApi(panel) {
         var provider = panel.dataset.addressPanel === 'shipping' ? 'shippingAddress' : 'deliveryAddress';
         if (!apiResources[provider]) {
@@ -334,6 +351,7 @@
 
     function requestJson(panel, operation, payload) {
         var body = payload instanceof FormData ? formDataToObject(payload) : (payload || {});
+        body = normalizeAddressPayload(body);
         return getAddressApi(panel).then(function (AddressApi) {
             if (!AddressApi || typeof AddressApi[operation] !== 'function') {
                 throw new Error('Address operation is unavailable: ' + operation);
@@ -636,12 +654,7 @@
                         showMessage(panel, data.message || labels.settingFailed, 'danger');
                         return;
                     }
-                    panel.querySelectorAll('[data-address-card]').forEach(function (card) {
-                        var current = card.dataset.addressId === setDefault.dataset.id;
-                        card.classList.toggle('account-address-card--default', current);
-                        card.querySelector('[data-address-default-badge]').hidden = !current;
-                        card.querySelector('[data-address-default]').hidden = current;
-                    });
+                    upsertCard(panel, data.data || {});
                     showMessage(panel, data.message || labels.settingSuccess, 'success');
                 }).catch(function (error) {
                     showMessage(panel, error.message || labels.requestFailed, 'danger');
