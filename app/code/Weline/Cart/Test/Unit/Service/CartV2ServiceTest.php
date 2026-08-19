@@ -110,6 +110,44 @@ final class CartV2ServiceTest extends TestCase
         self::assertNotSame($scopeA->canonicalKey(), $scopeB->canonicalKey());
     }
 
+    public function testGuestCanUpdateAndRemoveOnlyItemsFromItsOwnV2Cart(): void
+    {
+        $offerUuid = '16161616-1616-4161-8161-161616161616';
+        $svc = $this->service([
+            $offerUuid => [
+                'name' => 'Mutable Offer',
+                'unit_price_minor' => 1250,
+                'currency' => 'USD',
+                'stock' => 5,
+                'sellable' => true,
+            ],
+        ]);
+        $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 16);
+        $ownerToken = $svc->issueGuestToken();
+        $otherToken = $svc->issueGuestToken();
+        $scope = $this->scopeA();
+
+        $added = $svc->add($scope, $offer, [], 3, $ownerToken);
+        $itemId = (string)$added['items'][0]['item_id'];
+
+        $updated = $svc->updateItem($scope, $itemId, 1, $ownerToken);
+        self::assertTrue($updated['success']);
+        self::assertSame(1, $updated['item_count']);
+        self::assertSame(1250, $updated['subtotal_minor']);
+
+        try {
+            $svc->updateItem($scope, $itemId, 2, $otherToken);
+            self::fail('another guest token must not mutate the owner cart');
+        } catch (CartV2ConflictException $exception) {
+            self::assertSame(CartV2Service::ERROR_NOT_FOUND, $exception->errorCode());
+        }
+        self::assertSame(1, $svc->getCart($scope, $ownerToken)['item_count']);
+
+        $removed = $svc->removeItem($scope, $itemId, $ownerToken);
+        self::assertTrue($removed['success']);
+        self::assertTrue($removed['is_empty']);
+    }
+
     public function testGuestLoginMergeSameSelectionHashAndCapStock(): void
     {
         $offerUuid = '22222222-2222-4222-8222-222222222222';

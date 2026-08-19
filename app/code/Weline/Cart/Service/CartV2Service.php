@@ -301,6 +301,96 @@ final class CartV2Service
     }
 
     /** @return array<string, mixed> */
+    public function updateItem(
+        ScopeIdentity $scope,
+        string $itemId,
+        int $qty,
+        ?string $guestToken = null,
+        ?int $customerId = null,
+    ): array {
+        $itemId = trim($itemId);
+        if ($itemId === '') {
+            throw new CartV2ConflictException(self::ERROR_NOT_FOUND, __('请选择要更新的购物车商品。'));
+        }
+
+        $key = $this->cartKey($scope, $guestToken, $customerId);
+        $cart = $this->store->get($key);
+        if ($cart === null) {
+            throw new CartV2ConflictException(self::ERROR_NOT_FOUND, __('未找到要更新的购物车商品。'));
+        }
+
+        $requestedQty = max(1, min(999, $qty));
+        $adjustedQty = $requestedQty;
+        $updated = false;
+        foreach ($cart['items'] as &$item) {
+            if ((string)($item['item_id'] ?? '') !== $itemId) {
+                continue;
+            }
+            $stock = $item['stock'] ?? null;
+            if ($stock !== null) {
+                $adjustedQty = min($adjustedQty, max(0, (int)$stock));
+            }
+            if ($adjustedQty <= 0) {
+                throw new CartV2ConflictException(self::ERROR_NOT_SELLABLE, __('该商品暂不可售'));
+            }
+            $item['qty'] = $adjustedQty;
+            $item['row_total_minor'] = $adjustedQty * (int)($item['unit_price_minor'] ?? 0);
+            $updated = true;
+            break;
+        }
+        unset($item);
+
+        if (!$updated) {
+            throw new CartV2ConflictException(self::ERROR_NOT_FOUND, __('未找到要更新的购物车商品。'));
+        }
+
+        $this->store->set($key, $cart);
+        return $this->summary(
+            $cart,
+            true,
+            $adjustedQty === $requestedQty
+                ? (string)__('购物车已更新。')
+                : (string)__('库存不足，已按当前可售数量更新购物车。'),
+            [
+                'quantity_adjusted' => $adjustedQty !== $requestedQty,
+                'requested_quantity' => $requestedQty,
+                'adjusted_quantity' => $adjustedQty,
+            ],
+        );
+    }
+
+    /** @return array<string, mixed> */
+    public function removeItem(
+        ScopeIdentity $scope,
+        string $itemId,
+        ?string $guestToken = null,
+        ?int $customerId = null,
+    ): array {
+        $itemId = trim($itemId);
+        if ($itemId === '') {
+            throw new CartV2ConflictException(self::ERROR_NOT_FOUND, __('请选择要移除的购物车商品。'));
+        }
+
+        $key = $this->cartKey($scope, $guestToken, $customerId);
+        $cart = $this->store->get($key);
+        if ($cart === null) {
+            throw new CartV2ConflictException(self::ERROR_NOT_FOUND, __('未找到要移除的购物车商品。'));
+        }
+
+        $before = count($cart['items']);
+        $cart['items'] = array_values(array_filter(
+            $cart['items'],
+            static fn(array $item): bool => (string)($item['item_id'] ?? '') !== $itemId,
+        ));
+        if (count($cart['items']) === $before) {
+            throw new CartV2ConflictException(self::ERROR_NOT_FOUND, __('未找到要移除的购物车商品。'));
+        }
+
+        $this->store->set($key, $cart);
+        return $this->summary($cart, true, (string)__('商品已从购物车移除。'));
+    }
+
+    /** @return array<string, mixed> */
     public function clearCart(
         ScopeIdentity $scope,
         ?string $guestToken = null,

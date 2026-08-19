@@ -16,7 +16,8 @@
   `CustomerAccountFacadeInterface::current()` 得到的服务端登录身份
 - Query 与登录合车 Observer 的 flat
   `website_code/store_code/channel_code/store_mode`，以及 Query 的完整
-  `scope`，统一由 `CartScopeResolver` 解析；`channel_code` 缺少
+  `scope`，统一由公开 `CartScopeResolverInterface` 解析，默认实现仍为
+  `CartScopeResolver`；`channel_code` 缺少
   `store_code` 时 fail-fast
 - 未显式传 Scope 的站内调用继承 `RequestContext::scopeIdentity()`；
   Checkout 因而与当前 Channel Cart 使用同一可信 Scope。显式 Scope
@@ -57,7 +58,7 @@
 | 类 | 路径 |
 |---|---|
 | DTOs | `Api/Data/OfferIdentity.php`、`CartItemSnapshot.php` |
-| Public boundary | `Api/CartSelectionHash.php`、`Api/CartPriceSellabilityGate.php`、`Api/CartPriceSellabilityProviderInterface.php`、`Api/CheckoutCartSnapshotInterface.php` |
+| Public boundary | `Api/CartSelectionHash.php`、`Api/CartPriceSellabilityGate.php`、`Api/CartPriceSellabilityProviderInterface.php`、`Api/CheckoutCartSnapshotInterface.php`、`Api/CartScopeResolverInterface.php` |
 | Service | `Service/CartV2Service.php` |
 | Scope / identity boundary | `Service/CartScopeResolver.php`、`CartCurrentCustomerResolver.php` |
 | Store | `Service/CartV2CacheStore.php` / `CartV2MemoryStore.php` |
@@ -82,4 +83,4 @@ php bin/w e2e:run app/code/Weline/Checkout/test/e2e/frontend/plan-p2e002-current
   --project=chromium --headless
 ```
 
-模块：`Weline_Cart` `1.2.0`；`Weline_Product` 需已发现 V2 extends。
+模块：`Weline_Cart` `1.2.1`；`Weline_Product` 需已发现 V2 extends。

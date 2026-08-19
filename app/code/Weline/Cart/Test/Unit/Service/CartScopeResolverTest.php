@@ -5,13 +5,89 @@ declare(strict_types=1);
 namespace Weline\Cart\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Cart\Api\CartScopeResolverInterface;
 use Weline\Cart\Service\CartScopeResolver;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
+use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
 
 final class CartScopeResolverTest extends TestCase
 {
+    public function testResolverPublishesStableCrossModuleInterface(): void
+    {
+        self::assertInstanceOf(CartScopeResolverInterface::class, new CartScopeResolver());
+    }
+
+    public function testMissingWorkerBindingFallsBackToServerResolvedDefaultChannel(): void
+    {
+        $trusted = ScopeIdentity::channel(
+            0,
+            'default',
+            'default',
+            'default',
+            ScopeIdentity::MODE_NORMAL,
+        );
+
+        self::assertSame(
+            $trusted->canonicalKey(),
+            (new CartScopeResolver(static fn(): ScopeIdentity => $trusted))
+                ->fromParams([])
+                ->canonicalKey(),
+        );
+    }
+
+    public function testWebsiteProjectionCannotDowngradeServerResolvedChannel(): void
+    {
+        $trusted = ScopeIdentity::channel(
+            0,
+            'default',
+            'default',
+            'default',
+            ScopeIdentity::MODE_NORMAL,
+        );
+
+        self::assertSame(
+            $trusted->canonicalKey(),
+            (new CartScopeResolver(static fn(): ScopeIdentity => $trusted))
+                ->fromParams(['scope' => ScopeIdentity::website(0, 'default')->toArray()])
+                ->canonicalKey(),
+        );
+    }
+
+    public function testMissingClientScopeUsesSignedFrontendWorkerBindingWhenRequestScopeIsNotInstalled(): void
+    {
+        Context::enter(new Context());
+        try {
+            $trusted = ScopeIdentity::channel(
+                0,
+                'default',
+                'default',
+                'default',
+                ScopeIdentity::MODE_NORMAL,
+            );
+            $binding = new FrontendWorkerScopeBinding(
+                $trusted,
+                '127.0.0.1:9514',
+                \str_repeat('a', 64),
+                \time() - 10,
+                \time() + 350,
+            );
+            RequestContext::set(
+                FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY,
+                FrontendWorkerExecutionContext::frontend($binding),
+            );
+
+            self::assertSame(
+                $trusted->canonicalKey(),
+                (new CartScopeResolver())->fromParams([])->canonicalKey(),
+            );
+        } finally {
+            Context::leave();
+        }
+    }
+
     public function testMissingClientScopeUsesCurrentTrustedRequestScope(): void
     {
         Context::enter(new Context());
