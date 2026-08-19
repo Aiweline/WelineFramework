@@ -1,6 +1,7 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
+$registerSubmitUrl = (string) ($this->getData('register_submit_url') ?? '/customer/account/register');
 $redirectUrl = (string) ($this->getData('redirect_url') ?? '');
 ?>
 <style>
@@ -582,8 +583,8 @@ html.dark .auth-form__input:focus {
         <template>Weline_Component::message.phtml</template>
     </div>
 
-    <w:form action="/customer/account/register" method="post" class="auth-form__body" csrf="off">
-        <?= $this->getFormKey('/customer/account/register') ?>
+    <w:form action="@var($registerSubmitUrl)" method="post" class="auth-form__body" data-customer-register-form csrf="off">
+        <?= $this->getFormKey($registerSubmitUrl) ?>
         <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') ?>" />
         <?php $referralCode = trim((string) ($this->getData('referral_code') ?? ($_GET['ref'] ?? ''))); ?>
         <?php if ($referralCode !== ''): ?>
@@ -756,6 +757,30 @@ html.dark .auth-form__input:focus {
 (function() {
     'use strict';
 
+    function resolveStorefrontRedirect(target, fallback) {
+        var destination = String(target || fallback || '/customer/account').trim();
+        try {
+            var parsed = new URL(destination, window.location.origin);
+            if (parsed.origin !== window.location.origin) {
+                destination = String(fallback || '/customer/account');
+            } else {
+                destination = parsed.pathname + parsed.search + parsed.hash;
+            }
+        } catch (error) {
+            destination = String(fallback || '/customer/account');
+        }
+        if (destination.charAt(0) !== '/') destination = '/' + destination;
+        var segments = window.location.pathname.split('/').filter(Boolean);
+        var customerIndex = segments.findIndex(function(segment) {
+            return segment.toLowerCase() === 'customer';
+        });
+        var prefix = customerIndex > 0 ? '/' + segments.slice(0, customerIndex).join('/') : '';
+        if (prefix && destination !== prefix && destination.indexOf(prefix + '/') !== 0) {
+            destination = prefix + destination;
+        }
+        return destination;
+    }
+
     function closest(el, selector) {
         while (el && el.nodeType === 1) {
             if (el.matches(selector)) {
@@ -833,7 +858,7 @@ html.dark .auth-form__input:focus {
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        var form = document.querySelector('form[action="/customer/account/register"]');
+        var form = document.querySelector('[data-customer-register-form]');
         var passwordEl = document.getElementById('password');
         var confirmPasswordEl = document.getElementById('confirm_password');
         var clientError = document.getElementById('registerClientError');
@@ -932,7 +957,7 @@ html.dark .auth-form__input:focus {
                 })
                 .then(function(data) {
                     if (data && data.success !== false) {
-                        window.location.href = data.redirect || '/customer/account';
+                        window.location.assign(resolveStorefrontRedirect(data.redirect, '/customer/account'));
                         return;
                     }
                     setRegisterLoading(form, false);
