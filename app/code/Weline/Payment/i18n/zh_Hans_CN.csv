@@ -1,4 +1,6 @@
-﻿"Payment query provider does not support operation: %{1}","Payment query provider does not support operation: %{1}"
+﻿本地测试支付,本地测试支付
+仅用于本地开发验证，不会产生真实扣款。,仅用于本地开发验证，不会产生真实扣款。
+"Payment query provider does not support operation: %{1}","Payment query provider does not support operation: %{1}"
 支付状态查询成功,支付状态查询成功
 支付状态查询失败,支付状态查询失败
 "已有 %{1} 个可用于结账的支付方式。","已有 %{1} 个可用于结账的支付方式。"
@@ -56,8 +58,6 @@ Webhook诊断,Webhook诊断
 支付成功,支付成功
 支付待处理,支付待处理
 支付处理中,支付处理中
-"Fake Card","Fake Card"
-"Used by browser verification only.","Used by browser verification only."
 您的订单已支付成功,您的订单已支付成功
 交易号,交易号
 支付金额,支付金额
@@ -83,6 +83,7 @@ Webhook诊断,Webhook诊断
 "Selected payment method:","Selected payment method:"
 状态,状态
 支付方式,支付方式
+"Used by browser verification only.","Used by browser verification only."
 "No payment method is available for the current payable object.","No payment method is available for the current payable object."
 支付方式当前不可用,支付方式当前不可用
 "I agree to the payment terms.","I agree to the payment terms."
@@ -211,6 +212,7 @@ More,More
 "支付方式 %{code} 不存在","支付方式 %{code} 不存在"
 "成功的支付尝试缺少后续 effect outbox","成功的支付尝试缺少后续 effect outbox"
 "已支付订单缺少发票 effect","已支付订单缺少发票 effect"
+"成功支付交易对应的业务单据不存在或未进入已支付状态","成功支付交易对应的业务单据不存在或未进入已支付状态"
 "支付回调 inbox 已接收但超时未应用","支付回调 inbox 已接收但超时未应用"
 "退款通道 pending 或 unknown 超过 24 小时","退款通道 pending 或 unknown 超过 24 小时"
 非终态支付尝试的库存预占租约已过期,非终态支付尝试的库存预占租约已过期
@@ -253,6 +255,7 @@ More,More
 "外部审批引用；审计仅保存 SHA-256","外部审批引用；审计仅保存 SHA-256"
 "8–128 位 repair 请求幂等键","8–128 位 repair 请求幂等键"
 """Payment query provider does not support operation: %{1}""","Payment query provider does not support operation: %{1}"
+"Fake Card","Fake Card"
 签名验证失败,签名验证失败
 回调数据中缺少交易号,回调数据中缺少交易号
 "交易记录不存在: %{no}","交易记录不存在: %{no}"

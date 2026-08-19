@@ -69,8 +69,8 @@ final class FakeProvider implements ProviderInterface
     public function getDisplayMetadata(): array
     {
         return [
-            'title' => 'Fake Card',
-            'description' => 'Browser verification payment provider.',
+            'title' => (string)__('本地测试支付'),
+            'description' => (string)__('仅用于本地开发验证，不会产生真实扣款。'),
             'checkout_template_code' => 'fake_card',
             'config_template_code' => 'fake_card',
         ];
