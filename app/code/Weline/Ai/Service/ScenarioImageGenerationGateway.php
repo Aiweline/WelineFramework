@@ -16,6 +16,9 @@ final class ScenarioImageGenerationGateway implements ScenarioImageGenerationInt
     /** @var array<string,true> */
     private const MEDIA_KEYS = [
         'slot_id' => true,
+        'human_instruction' => true,
+        'user_instruction' => true,
+        'instruction' => true,
         'negative_prompt' => true,
         'asset_policy' => true,
         'aspect_ratio' => true,
