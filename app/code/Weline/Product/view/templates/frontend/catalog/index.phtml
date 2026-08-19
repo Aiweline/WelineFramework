@@ -32,19 +32,38 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 $minor = max(0, (int)($offer['unit_price_minor'] ?? 0));
                 $sellable = !empty($offer['sellable']);
                 $uuid = trim((string)($offer['global_offer_uuid'] ?? ''));
+                $productId = max(0, (int)($offer['product_id'] ?? 0));
+                $productName = trim((string)($offer['name'] ?? ''));
+                $productUrl = $productId > 0 ? (string)$this->getUrl('product/' . $productId) : '';
                 ?>
                 <article class="product-storefront__card"
                          data-testid="storefront-product-card"
                          data-global-offer-uuid="<?= $escape($uuid) ?>">
-                    <div class="product-storefront__media" aria-hidden="true">
-                        <?php if (trim((string)($offer['image'] ?? '')) !== ''): ?>
-                            <img src="<?= $escape($offer['image']) ?>" alt="">
-                        <?php else: ?>
-                            <span>W</span>
-                        <?php endif; ?>
-                    </div>
+                    <?php if ($productUrl !== ''): ?>
+                        <a class="product-storefront__media-link"
+                           href="<?= $escape($productUrl) ?>"
+                           aria-label="<?= $escape($productName) ?>">
+                    <?php endif; ?>
+                        <div class="product-storefront__media"<?= $productUrl === '' ? ' aria-hidden="true"' : '' ?>>
+                            <?php if (trim((string)($offer['image'] ?? '')) !== ''): ?>
+                                <img src="<?= $escape($offer['image']) ?>" alt="<?= $escape($productName) ?>">
+                            <?php else: ?>
+                                <span>W</span>
+                            <?php endif; ?>
+                        </div>
+                    <?php if ($productUrl !== ''): ?>
+                        </a>
+                    <?php endif; ?>
                     <div class="product-storefront__body">
-                        <h2><?= $escape($offer['name'] ?? '') ?></h2>
+                        <h2>
+                            <?php if ($productUrl !== ''): ?>
+                                <a class="product-storefront__title-link" href="<?= $escape($productUrl) ?>">
+                                    <?= $escape($productName) ?>
+                                </a>
+                            <?php else: ?>
+                                <?= $escape($productName) ?>
+                            <?php endif; ?>
+                        </h2>
                         <p class="product-storefront__sku">SKU: <?= $escape($offer['sku'] ?? '') ?></p>
                         <p class="product-storefront__price">
                             <?= $escape($offer['currency'] ?? 'CNY') ?> <?= number_format($minor / 100, 2) ?>
@@ -53,7 +72,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                                 class="product-storefront__add"
                                 data-action="add-v2"
                                 data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
-                                data-product-id="<?= (int)($offer['product_id'] ?? 0) ?>"
+                                data-product-id="<?= $productId ?>"
                                 data-global-offer-uuid="<?= $escape($uuid) ?>"
                                 <?= $sellable ? '' : 'disabled' ?>>
                             <?= $sellable ? __('加入购物车') : __('暂不可售') ?>
@@ -67,7 +86,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
         </div>
     <?php endif; ?>
 
-    <a class="product-storefront__cart" href="/cart" data-testid="view-cart" hidden>
+    <a class="product-storefront__cart" href="<?= $escape($this->getUrl('cart')) ?>" data-testid="view-cart" hidden>
         <?= __('查看购物车') ?>
     </a>
 </section>
@@ -82,10 +101,13 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     .product-storefront__notice.is-error { color:#991b1b; }
     .product-storefront__grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px; }
     .product-storefront__card { overflow:hidden; border:1px solid #e5e7eb; border-radius:12px; background:#fff; }
+    .product-storefront__media-link { display:block; color:inherit; text-decoration:none; }
     .product-storefront__media { display:grid; min-height:150px; place-items:center; background:#f8fafc; color:#94a3b8; font-size:44px; font-weight:900; }
     .product-storefront__media img { width:100%; height:180px; object-fit:cover; }
     .product-storefront__body { display:grid; gap:9px; padding:18px; }
     .product-storefront__body h2,.product-storefront__body p { margin:0; }
+    .product-storefront__title-link { color:inherit; text-decoration:none; }
+    .product-storefront__title-link:hover,.product-storefront__title-link:focus-visible { color:#2563eb; }
     .product-storefront__sku { color:#64748b; font-size:13px; }
     .product-storefront__price { font-size:19px; font-weight:800; }
     .product-storefront__add,.product-storefront__cart { min-height:42px; border:0; border-radius:8px; background:#2563eb; color:#fff; font:inherit; font-weight:800; cursor:pointer; }
@@ -102,8 +124,14 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     if (!root) return;
     const message = root.querySelector('[data-testid="catalog-message"]');
     const cartLink = root.querySelector('[data-testid="view-cart"]');
+    const guestTokenStorageKey = 'weline.cart.guest_token';
     let cartApi = null;
     let guestToken = <?= json_encode($cartGuestToken, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    try {
+        guestToken = guestToken || String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
+    } catch (error) {
+        // Storage can be unavailable in privacy-restricted browser contexts.
+    }
 
     async function api() {
         if (cartApi) return cartApi;
@@ -118,8 +146,13 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
         if (guestToken) return guestToken;
         const result = await (await api()).issueGuestToken({});
         const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
-        guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '');
+        guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
         if (!guestToken) throw new Error('<?= $escape(__('无法创建游客购物车会话')) ?>');
+        try {
+            window.sessionStorage.setItem(guestTokenStorageKey, guestToken);
+        } catch (error) {
+            // The current add request still owns the token even if storage is unavailable.
+        }
         return guestToken;
     }
 

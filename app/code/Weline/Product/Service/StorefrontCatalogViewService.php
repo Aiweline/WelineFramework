@@ -91,6 +91,22 @@ final class StorefrontCatalogViewService
         return $rows;
     }
 
+    /** @return array<string, mixed>|null */
+    public function publishedOffer(int $productId): ?array
+    {
+        if ($productId <= 0) {
+            return null;
+        }
+
+        foreach ($this->publishedOffers(200) as $offer) {
+            if ((int)($offer['product_id'] ?? 0) === $productId) {
+                return $offer;
+            }
+        }
+
+        return null;
+    }
+
     private function currentScope(): ScopeIdentity
     {
         $scope = RequestContext::scopeIdentity();
