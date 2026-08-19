@@ -34,4 +34,14 @@ final class ThemePreviewGeneratorUrlTest extends TestCase
         self::assertTrue($service->themeSupportsArea($theme, ThemeContextService::AREA_FRONTEND));
         self::assertTrue($service->themeSupportsArea($theme, ThemeContextService::AREA_BACKEND));
     }
+
+    public function testHttpErrorPageCannotBeAcceptedAsAThemePreview(): void
+    {
+        $method = new \ReflectionMethod(ThemePreviewGenerator::class, 'assertSuccessfulCaptureStatus');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('502');
+
+        $method->invoke(null, 502, 'https://theme/theme/frontend/theme-preview/gateway');
+    }
 }

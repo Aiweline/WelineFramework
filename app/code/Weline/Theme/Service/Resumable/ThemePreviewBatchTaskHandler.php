@@ -151,7 +151,7 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
     }
 
     /**
-     * @param array{key:string,theme_id:int,area:string,force:bool} $target
+     * @param array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string} $target
      * @return array<string,mixed>
      */
     private function runTarget(
@@ -189,7 +189,7 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
 
     /**
      * @param array<string|int,mixed> $effectResult
-     * @param array{key:string,theme_id:int,area:string,force:bool} $target
+     * @param array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string} $target
      * @return array<string,mixed>
      */
     private function resultFromEffect(array $effectResult, array $target): array
@@ -204,7 +204,7 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
     }
 
     /**
-     * @param array{key:string,theme_id:int,area:string,force:bool} $target
+     * @param array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string} $target
      */
     private function recoveryUnsafe(
         ResumableTaskContextInterface $context,
@@ -226,9 +226,9 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
     }
 
     /**
-     * @param list<array{key:string,theme_id:int,area:string,force:bool}> $targets
+     * @param list<array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string}> $targets
      * @param array<string|int,mixed> $results
-     * @param array{key:string,theme_id:int,area:string,force:bool}|null $current
+     * @param array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string}|null $current
      * @return array<string,mixed>
      */
     private function state(array $targets, array $results, int $nextIndex, ?array $current = null): array
@@ -243,7 +243,7 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
     }
 
     /**
-     * @param list<array{key:string,theme_id:int,area:string,force:bool}> $targets
+     * @param list<array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string}> $targets
      * @param array<string|int,mixed> $results
      * @return array<string,mixed>
      */
@@ -262,7 +262,7 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
         ];
     }
 
-    /** @return list<array{key:string,theme_id:int,area:string,force:bool}> */
+    /** @return list<array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string}> */
     private function targets(mixed $value): array
     {
         if (!is_array($value) || !array_is_list($value)) {
@@ -277,8 +277,11 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
             $themeId = (int)($target['theme_id'] ?? 0);
             $area = strtolower(trim((string)($target['area'] ?? '')));
             $key = (string)($target['key'] ?? '');
+            $rawCaptureBaseUrl = trim((string)($target['capture_base_url'] ?? ''));
+            $captureBaseUrl = ThemePreviewGenerator::normalizeCaptureBaseUrl($rawCaptureBaseUrl);
             if ($themeId <= 0 || !in_array($area, ['frontend', 'backend'], true)
-                || $key !== 'theme_' . $themeId . '_' . $area) {
+                || $key !== 'theme_' . $themeId . '_' . $area
+                || ($rawCaptureBaseUrl !== '' && $captureBaseUrl === null)) {
                 throw new \InvalidArgumentException('Frozen Theme preview target is invalid.');
             }
             $targets[] = [
@@ -286,6 +289,7 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
                 'theme_id' => $themeId,
                 'area' => $area,
                 'force' => (bool)($target['force'] ?? false),
+                'capture_base_url' => $captureBaseUrl,
             ];
         }
         return $targets;
