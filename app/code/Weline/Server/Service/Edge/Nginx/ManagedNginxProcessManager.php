@@ -458,6 +458,8 @@ final class ManagedNginxProcessManager
                 && \in_array(\PHP_OS_FAMILY, ['Darwin', 'Linux'], true)
                 && \in_array((string)($terminated['reason'] ?? ''), [
                     'stable_process_handle_unavailable_on_darwin',
+                    'darwin_posix_kill_unavailable',
+                    'darwin_posix_termination_unverified',
                     'linux_pidfd_ffi_unavailable',
                     'linux_pidfd_open_unavailable',
                     'linux_pidfd_open_failed',
