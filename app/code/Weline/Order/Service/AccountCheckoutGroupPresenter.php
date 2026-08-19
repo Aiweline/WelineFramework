@@ -38,6 +38,9 @@ final class AccountCheckoutGroupPresenter
         $orders = $group['orders'] ?? [];
         $partial = $this->isPartial($orders);
         $view = $partial ? self::VIEW_PARTIAL_EXPANDED : self::VIEW_SUMMARY;
+        $currency = strtoupper(trim((string)($group['currency'] ?? 'CNY'))) ?: 'CNY';
+        $status = $this->effectiveStatus($group);
+        $orderCount = count($orders);
 
         $refundLabels = [];
         $invoiceLabels = [];
@@ -62,15 +65,20 @@ final class AccountCheckoutGroupPresenter
             'partial' => $partial,
             'group_uuid' => (string) ($group['group_uuid'] ?? ''),
             'display_number' => (string) ($group['display_number'] ?? $group['group_uuid'] ?? ''),
-            'status' => (string) ($group['status'] ?? ''),
+            'status' => $status,
+            'status_label' => $this->customerOrderStatusLabel($status),
             'grand_total_minor' => (int) ($group['grand_total_minor'] ?? 0),
-            'currency' => (string) ($group['currency'] ?? 'CNY'),
-            'order_count' => count($orders),
+            'currency' => $currency,
+            'total_label' => $this->moneyLabel((int)($group['grand_total_minor'] ?? 0), $currency),
+            'order_count' => $orderCount,
+            'order_count_label' => $orderCount . ' ' . \__('笔订单'),
             'summary_line' => $this->summaryLine($group, $partial),
             'refund_semantics' => array_values(array_unique($refundLabels)),
             'invoice_semantics' => array_values(array_unique($invoiceLabels)),
             'fulfillment_semantics' => array_values(array_unique($fulfillmentLabels)),
-            'orders' => $partial ? array_map([$this, 'mapOrder'], $orders) : [],
+            'orders' => $partial
+                ? array_map(fn (array $order): array => $this->mapOrder($order, $currency), $orders)
+                : [],
             'hook' => 'account.sidebar',
             'content_hook' => 'account.sidebar.content',
             'section' => 'orders',
@@ -137,17 +145,65 @@ final class AccountCheckoutGroupPresenter
      * @param array<string, mixed> $order
      * @return array<string, mixed>
      */
-    private function mapOrder(array $order): array
+    private function mapOrder(array $order, string $groupCurrency): array
     {
+        $status = (string)($order['status'] ?? '');
+        $currency = strtoupper(trim((string)($order['currency'] ?? $groupCurrency))) ?: 'CNY';
+
         return [
             'order_uuid' => (string) ($order['order_uuid'] ?? ''),
             'display_number' => (string) ($order['display_number'] ?? $order['order_uuid'] ?? ''),
-            'status' => (string) ($order['status'] ?? ''),
+            'status' => $status,
+            'status_label' => $this->customerOrderStatusLabel($status),
             'amount_minor' => (int) ($order['amount_minor'] ?? 0),
+            'currency' => $currency,
+            'total_label' => $this->moneyLabel((int)($order['amount_minor'] ?? 0), $currency),
             'refund_label' => $this->customerRefundLabel((string) ($order['refund_status'] ?? 'none')),
             'invoice_label' => $this->customerInvoiceLabel((string) ($order['invoice_status'] ?? 'none')),
             'fulfillment_label' => $this->customerFulfillmentLabel((string) ($order['fulfillment_status'] ?? 'none')),
         ];
+    }
+
+    /** @param array<string, mixed> $group */
+    private function effectiveStatus(array $group): string
+    {
+        $statuses = [];
+        foreach (($group['orders'] ?? []) as $order) {
+            $status = trim((string)($order['status'] ?? ''));
+            if ($status !== '') {
+                $statuses[$status] = true;
+            }
+        }
+
+        if (count($statuses) === 1) {
+            return (string)array_key_first($statuses);
+        }
+        if (count($statuses) > 1) {
+            return 'mixed';
+        }
+
+        return trim((string)($group['status'] ?? ''));
+    }
+
+    private function customerOrderStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'pending' => \__('待支付'),
+            'processing' => \__('处理中'),
+            'paid' => \__('已支付'),
+            'fulfilled', 'shipped' => \__('已发货'),
+            'completed', 'delivered' => \__('已完成'),
+            'cancelled', 'canceled' => \__('已取消'),
+            'refunded' => \__('已退款'),
+            'mixed' => \__('状态不一致'),
+            '' => \__('状态待确认'),
+            default => $status,
+        };
+    }
+
+    private function moneyLabel(int $amountMinor, string $currency): string
+    {
+        return $currency . ' ' . number_format($amountMinor / 100, 2, '.', ',');
     }
 
     private function customerRefundLabel(string $status): string

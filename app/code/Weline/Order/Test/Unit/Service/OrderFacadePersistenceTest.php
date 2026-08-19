@@ -49,6 +49,8 @@ final class OrderFacadePersistenceTest extends TestCase
             self::assertSame(OrderFacade::STATUS_PENDING, $read->status);
             self::assertSame(0, $read->websiteId);
             self::assertSame(1, $read->storeId);
+            self::assertSame('SZ', $read->shipping['address']['city'] ?? null);
+            self::assertSame('Road 1', $read->shipping['address']['address1'] ?? null);
 
             self::assertSame(1, $this->tableCount($connector, 'weline_checkout_group'));
             self::assertSame(2, $this->tableCount($connector, 'weline_order'));
@@ -191,6 +193,15 @@ final class OrderFacadePersistenceTest extends TestCase
             ],
             shippingMethod: 'flat',
             shippingAmountMinor: 50,
+            shippingAddress: [
+                'name' => 'Buyer',
+                'phone' => '13800138000',
+                'country_code' => 'CN',
+                'province' => 'GD',
+                'city' => 'SZ',
+                'address1' => 'Road 1',
+                'postal_code' => '518000',
+            ],
         );
     }
 

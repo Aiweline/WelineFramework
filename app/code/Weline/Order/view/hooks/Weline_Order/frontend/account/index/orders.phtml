@@ -15,7 +15,23 @@ use Weline\Order\Service\AccountCheckoutGroupPresenter;
 
 /** @var list<array<string, mixed>> $accountCheckoutGroups 由站点 Order 模块注入；缺省演示空态 */
 $accountCheckoutGroups = $accountCheckoutGroups ?? [];
+$accountOrderDetail = is_array($accountOrderDetail ?? null) ? $accountOrderDetail : null;
 $presenter = new AccountCheckoutGroupPresenter();
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$formatMoney = static fn(string $currency, mixed $minor): string => sprintf(
+    '%s %s',
+    $currency,
+    number_format(((int) $minor) / 100, 2, '.', ','),
+);
+$statusLabel = static function (string $status): string {
+    return match ($status) {
+        'paid' => (string) __('已支付'),
+        'pending_payment' => (string) __('待支付'),
+        'cancelled' => (string) __('已取消'),
+        'closed' => (string) __('已关闭'),
+        default => $status !== '' ? $status : (string) __('未知状态'),
+    };
+};
 ?>
 <div class="account-orders"
      data-account-orders="true"
@@ -25,12 +41,95 @@ $presenter = new AccountCheckoutGroupPresenter();
         <h2 id="account-orders-title"><?= __('我的订单') ?></h2>
         <p class="account-orders__hint"><?= __('默认按结账组汇总；部分退款或状态分叉时展开明细') ?></p>
     </header>
+<?php if ($accountOrderDetail !== null): ?>
+    <?php
+    $detailCurrency = trim((string) ($accountOrderDetail['currency'] ?? ''));
+    $detailMoney = is_array($accountOrderDetail['money'] ?? null) ? $accountOrderDetail['money'] : [];
+    $detailItems = is_array($accountOrderDetail['items'] ?? null) ? $accountOrderDetail['items'] : [];
+    $detailShipping = is_array($accountOrderDetail['shipping'] ?? null) ? $accountOrderDetail['shipping'] : [];
+    $detailAddress = is_array($detailShipping['address'] ?? null) ? $detailShipping['address'] : [];
+    $detailAddressLine = implode(' · ', array_filter([
+        trim((string)($detailAddress['country_code'] ?? '')),
+        trim((string)($detailAddress['province'] ?? '')),
+        trim((string)($detailAddress['city'] ?? '')),
+        trim((string)($detailAddress['address1'] ?? '')),
+        trim((string)($detailAddress['postal_code'] ?? '')),
+    ], static fn(string $value): bool => $value !== ''));
+    ?>
+    <section class="account-order-detail" data-account-order-detail="true" aria-labelledby="account-order-detail-title" weline-code="order.account.detail.section_1">
+        <header class="account-order-detail__header">
+            <div>
+                <p class="account-order-detail__eyebrow"><?= __('订单详情') ?></p>
+                <h3 id="account-order-detail-title"><?= $escape($accountOrderDetail['display_number'] ?? $accountOrderDetail['order_uuid'] ?? '') ?></h3>
+                <p class="account-order-detail__uuid"><?= $escape($accountOrderDetail['order_uuid'] ?? '') ?></p>
+            </div>
+            <span class="account-orders__badge" data-order-status="true" data-status="<?= $escape($accountOrderDetail['status'] ?? '') ?>">
+                <?= $escape($statusLabel((string) ($accountOrderDetail['status'] ?? ''))) ?>
+            </span>
+        </header>
+
+        <div class="account-order-detail__table-wrap">
+            <div class="account-order-detail__table" role="table" aria-label="<?= __('订单商品') ?>" data-order-item-count="<?= count($detailItems) ?>">
+                <div class="account-order-detail__row account-order-detail__row--head" role="row">
+                    <span role="columnheader"><?= __('商品') ?></span>
+                    <span role="columnheader"><?= __('SKU') ?></span>
+                    <span role="columnheader"><?= __('数量') ?></span>
+                    <span role="columnheader"><?= __('单价') ?></span>
+                    <span role="columnheader"><?= __('小计') ?></span>
+                </div>
+                <?php foreach ($detailItems as $item): ?>
+                    <?php if (!is_array($item)) { continue; } ?>
+                    <div class="account-order-detail__row" role="row">
+                        <span class="account-order-detail__cell" role="cell" data-label="<?= __('商品') ?>"><?= $escape($item['name'] ?? '') ?></span>
+                        <span class="account-order-detail__cell" role="cell" data-label="<?= __('SKU') ?>"><?= $escape($item['sku'] ?? '') ?></span>
+                        <span class="account-order-detail__cell" role="cell" data-label="<?= __('数量') ?>"><?= $escape($item['qty_minor'] ?? 0) ?></span>
+                        <span class="account-order-detail__cell" role="cell" data-label="<?= __('单价') ?>"><?= $escape($formatMoney($detailCurrency, $item['unit_price_minor'] ?? 0)) ?></span>
+                        <span class="account-order-detail__cell" role="cell" data-label="<?= __('小计') ?>"><?= $escape($formatMoney($detailCurrency, $item['row_total_minor'] ?? 0)) ?></span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <?php if ($detailAddress !== []): ?>
+        <section class="account-order-detail__shipping" data-order-shipping-address="true" aria-labelledby="account-order-shipping-title">
+            <div class="account-order-detail__shipping-header">
+                <h4 id="account-order-shipping-title"><?= __('收货信息') ?></h4>
+                <?php if (trim((string)($detailShipping['method'] ?? '')) !== ''): ?>
+                    <span><?= $escape($detailShipping['method']) ?></span>
+                <?php endif; ?>
+            </div>
+            <p class="account-order-detail__shipping-recipient">
+                <strong><?= $escape($detailAddress['name'] ?? '') ?></strong>
+                <?php if (trim((string)($detailAddress['phone'] ?? '')) !== ''): ?>
+                    <span><?= $escape($detailAddress['phone']) ?></span>
+                <?php endif; ?>
+                <?php if (trim((string)($detailAddress['email'] ?? '')) !== ''): ?>
+                    <span><?= $escape($detailAddress['email']) ?></span>
+                <?php endif; ?>
+            </p>
+            <?php if ($detailAddressLine !== ''): ?>
+                <p class="account-order-detail__shipping-address"><?= $escape($detailAddressLine) ?></p>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <div class="account-order-detail__totals">
+            <div><span><?= __('商品小计') ?></span><strong><?= $escape($formatMoney($detailCurrency, $detailMoney['subtotal_minor'] ?? 0)) ?></strong></div>
+            <div><span><?= __('运费') ?></span><strong><?= $escape($formatMoney($detailCurrency, $detailMoney['shipping_amount_minor'] ?? 0)) ?></strong></div>
+            <div><span><?= __('税费') ?></span><strong><?= $escape($formatMoney($detailCurrency, $detailMoney['tax_amount_minor'] ?? 0)) ?></strong></div>
+            <div class="account-order-detail__grand-total"><span><?= __('订单总额') ?></span><strong><?= $escape($formatMoney($detailCurrency, $detailMoney['grand_total_minor'] ?? 0)) ?></strong></div>
+        </div>
+
+        <a class="account-order-detail__back" href="<?= $escape($this->getUrl('customer/account/index') . '#orders') ?>"><?= __('返回订单列表') ?></a>
+    </section>
+<?php endif; ?>
 <?php if ($accountCheckoutGroups === []): ?>
     <p class="account-orders__empty" data-orders-empty="true" role="status"><?= __('暂无订单') ?></p>
 <?php else: ?>
     <ul class="account-orders__groups" data-orders-groups="true" role="list">
     <?php foreach ($accountCheckoutGroups as $group): ?>
         <?php $view = $presenter->present($group); ?>
+        <?php $primaryOrderUuid = trim((string)($group['orders'][0]['order_uuid'] ?? '')); ?>
         <li class="account-orders__group"
             data-group-uuid="<?= htmlspecialchars((string) $view['group_uuid'], ENT_QUOTES, 'UTF-8') ?>"
             data-view="<?= htmlspecialchars((string) $view['view'], ENT_QUOTES, 'UTF-8') ?>"
@@ -38,7 +137,16 @@ $presenter = new AccountCheckoutGroupPresenter();
             aria-label="<?= htmlspecialchars((string) $view['summary_line'], ENT_QUOTES, 'UTF-8') ?>">
             <div class="account-orders__summary" data-group-summary="true">
                 <strong><?= htmlspecialchars((string) $view['display_number'], ENT_QUOTES, 'UTF-8') ?></strong>
-                <span><?= htmlspecialchars((string) $view['summary_line'], ENT_QUOTES, 'UTF-8') ?></span>
+                <span><?= htmlspecialchars((string) $view['order_count_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="account-orders__badge"
+                      data-order-status="true"
+                      data-status="<?= htmlspecialchars((string) $view['status'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) $view['status_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="account-orders__total" data-order-total="true"><?= htmlspecialchars((string) $view['total_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                <?php if ($primaryOrderUuid !== ''): ?>
+                    <a class="account-orders__detail-link"
+                       data-order-detail-link="true"
+                       href="<?= htmlspecialchars($this->getUrl('customer/account/index', ['order_uuid' => $primaryOrderUuid]) . '#orders', ENT_QUOTES, 'UTF-8') ?>"><?= __('查看详情') ?></a>
+                <?php endif; ?>
                 <?php foreach (($view['refund_semantics'] ?? []) as $label): ?>
                     <span class="account-orders__badge" data-refund-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
                 <?php endforeach; ?>
@@ -57,6 +165,8 @@ $presenter = new AccountCheckoutGroupPresenter();
                 <?php foreach ($view['orders'] as $order): ?>
                 <li data-order-uuid="<?= htmlspecialchars((string) $order['order_uuid'], ENT_QUOTES, 'UTF-8') ?>">
                     <span><?= htmlspecialchars((string) $order['display_number'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <span data-order-status="true"><?= htmlspecialchars((string) $order['status_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <span data-order-total="true"><?= htmlspecialchars((string) $order['total_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <span data-refund-label="true"><?= htmlspecialchars((string) $order['refund_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <span data-invoice-label="true"><?= htmlspecialchars((string) $order['invoice_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <span data-fulfillment-label="true"><?= htmlspecialchars((string) $order['fulfillment_label'], ENT_QUOTES, 'UTF-8') ?></span>
