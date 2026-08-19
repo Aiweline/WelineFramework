@@ -132,7 +132,7 @@ if ($__pixel_env_json === false) {
 }
 
 if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
-    $__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)?v=20260724-section-code-1';
+    $__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)';
     ?>
 <script>
 (function () {
@@ -198,9 +198,14 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
     }
 
     function scheduleWelinePixel() {
-        // Local/dev hosts: load immediately so CTA clicks are measurable while debugging.
+        // Local/dev hosts still load early, but only after the browser yields the first paint.
+        // The capture listener below keeps CTA clicks lossless before the idle callback runs.
         if (isLocalDevHost()) {
-            loadWelinePixel('eager-dev');
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(function () { loadWelinePixel('idle-dev'); }, { timeout: 1500 });
+                return;
+            }
+            window.setTimeout(function () { loadWelinePixel('timeout-dev'); }, 500);
             return;
         }
         window.setTimeout(function () {
