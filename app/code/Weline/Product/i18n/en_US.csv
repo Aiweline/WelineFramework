@@ -68,6 +68,7 @@
 "Store 当前不可售","Store 当前不可售"
 "该 Offer 在当前 Scope 不可售","该 Offer 在当前 Scope 不可售"
 "Product shard 重复声明表 %{1}","Product shard 重复声明表 %{1}"
+"Product Storefront 接口不支持操作：%{1}","Product Storefront 接口不支持操作：%{1}"
 商品场景接口不支持该操作：%{1},商品场景接口不支持该操作：%{1}
 未触发重复注册,未触发重复注册
 "Product shard 状态接口不支持操作：%{1}","Product shard 状态接口不支持操作：%{1}"
@@ -100,6 +101,8 @@
 "参数 %{1} 须为规范整数","参数 %{1} 须为规范整数"
 "参数 %{1} 须为布尔值","参数 %{1} 须为布尔值"
 "参数 %{1} 须为数组","参数 %{1} 须为数组"
+商品不存在或当前不可用。,"The product does not exist or is currently unavailable."
+商品详情,"Product details"
 请选择要编辑的商品,请选择要编辑的商品
 编辑商品失败：%{1},编辑商品失败：%{1}
 商品不存在：%{1},商品不存在：%{1}
@@ -160,6 +163,11 @@
 加入购物车失败,加入购物车失败
 商品已加入购物车。,商品已加入购物车。
 已加入,已加入
+返回商品目录,"Back to products"
+当前网站已发布车型,"Published model for this website"
+库存,Stock
+销售状态,"Sales status"
+可购买,Available
 商品内核管理工作台,商品内核管理工作台
 网站,网站
 切换网站,"Switch website"
@@ -292,3 +300,5 @@ SKU,SKU
 """StoreProduct 写入后无法回读""","StoreProduct 写入后无法回读"
 "网站 ID","Website ID"
 商品内核只读管理视图,"Product kernel read-only management view"
+"FCDC 经销商车型","FCDC dealer model"
+商品详情暂不可用,"Product details are temporarily unavailable"
