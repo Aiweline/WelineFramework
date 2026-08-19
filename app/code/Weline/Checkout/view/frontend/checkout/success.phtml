@@ -3,45 +3,223 @@
  * 结账成功页面
  */
 $order = $this->getData('order');
+$orderV2 = $this->getData('order_v2');
+$orderV2DisplayNumber = (string)($this->getData('order_v2_display_number') ?? '');
+$orderV2Status = (string)($this->getData('order_v2_status') ?? '');
+$orderV2TotalLabel = (string)($this->getData('order_v2_total_label') ?? '');
+$orderV2StatusLabels = [
+    'pending' => (string) __('待处理'),
+    'processing' => (string) __('处理中'),
+    'paid' => (string) __('已支付'),
+    'fulfilled' => (string) __('已发货'),
+    'completed' => (string) __('已完成'),
+    'cancelled' => (string) __('已取消'),
+    'refunded' => (string) __('已退款'),
+];
+$requestOrderUuid = trim((string)$this->request->getParam('order_uuid'));
+$requestCheckoutGroupUuid = trim((string)$this->request->getParam('checkout_group_uuid'));
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+if (is_array($orderV2)) {
+    $orderV2DisplayNumber = $orderV2DisplayNumber !== ''
+        ? $orderV2DisplayNumber
+        : (string)($orderV2['display_number'] ?? $orderV2['order_uuid'] ?? '');
+    $orderV2Status = $orderV2Status !== ''
+        ? $orderV2Status
+        : (string)($orderV2['status'] ?? '');
+    if ($orderV2TotalLabel === '') {
+        $currency = (string)($orderV2['currency'] ?? '');
+        $money = is_array($orderV2['money'] ?? null) ? $orderV2['money'] : [];
+        if ($currency !== '' && array_key_exists('grand_total_minor', $money)) {
+            $orderV2TotalLabel = sprintf(
+                '%s %s',
+                $currency,
+                number_format(((int)$money['grand_total_minor']) / 100, 2, '.', ',')
+            );
+        }
+    }
+}
+$orderV2DisplayNumber = $orderV2DisplayNumber !== '' ? $orderV2DisplayNumber : $requestOrderUuid;
+$orderV2StatusLabel = $orderV2StatusLabels[$orderV2Status] ?? $orderV2Status;
+$accountOrdersUrl = $this->getUrl('customer/account/index') . '#orders';
+$accountOrderDetailUrl = $requestOrderUuid !== ''
+    ? $this->getUrl('customer/account/index', ['order_uuid' => $requestOrderUuid]) . '#orders'
+    : $accountOrdersUrl;
 ?>
-<div class="checkout-success-page">
+<section class="checkout-success-page"
+    data-testid="checkout-success"
+    data-order-uuid="<?= $escape($requestOrderUuid) ?>"
+    data-checkout-group-uuid="<?= $escape($requestCheckoutGroupUuid) ?>"
+    weline-code="checkout.checkout.success.section_1"
+>
     <div class="success-message">
+        <span class="success-message__mark" aria-hidden="true">✓</span>
         <h1><?= __('结账成功') ?></h1>
         <p><?= __('感谢您的购买！您的订单已成功创建。') ?></p>
     </div>
-    
+
+    <?php if (is_array($orderV2) || $orderV2DisplayNumber !== ''): ?>
+    <div class="order-info">
+        <h2><?= __('订单信息') ?></h2>
+        <div class="info-row">
+            <span><?= __('订单号') ?>:</span>
+            <strong><?= $escape($orderV2DisplayNumber) ?></strong>
+        </div>
+        <?php if ($orderV2Status !== ''): ?>
+        <div class="info-row">
+            <span><?= __('订单状态') ?>:</span>
+            <span><?= $escape($orderV2StatusLabel) ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($orderV2TotalLabel !== ''): ?>
+        <div class="info-row">
+            <span><?= __('订单总额') ?>:</span>
+            <strong><?= $escape($orderV2TotalLabel) ?></strong>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <?php if ($order): ?>
     <div class="order-info">
         <h2><?= __('订单信息') ?></h2>
         <div class="info-row">
             <span><?= __('订单号') ?>:</span>
-            <strong><?= $this->escapeHtml($order->getOrderNumber()) ?></strong>
+            <strong><?= $escape($order->getOrderNumber()) ?></strong>
         </div>
         <div class="info-row">
             <span><?= __('订单状态') ?>:</span>
-            <span><?= $order->getStatusText() ?></span>
+            <span><?= $escape($order->getStatusText()) ?></span>
         </div>
         <div class="info-row">
             <span><?= __('支付状态') ?>:</span>
-            <span><?= $order->getPaymentStatusText() ?></span>
+            <span><?= $escape($order->getPaymentStatusText()) ?></span>
         </div>
         <div class="info-row">
             <span><?= __('订单总额') ?>:</span>
-            <strong><?= $this->escapeHtml($order->getCurrency()) ?> <?= number_format($order->getTotalAmount(), 2) ?></strong>
+            <strong><?= $escape($order->getCurrency()) ?> <?= number_format($order->getTotalAmount(), 2) ?></strong>
         </div>
         <div class="info-row">
             <span><?= __('创建时间') ?>:</span>
-            <span><?= $this->escapeHtml($order->getCreatedTime()) ?></span>
+            <span><?= $escape($order->getCreatedTime()) ?></span>
         </div>
     </div>
-    
+    <?php endif; ?>
+
     <div class="order-actions">
-        <a href="<?= $this->getUrl('weline_checkout/frontend/order/view', ['order_id' => $order->getId()]) ?>" class="btn btn-primary">
+        <?php if ($requestOrderUuid !== ''): ?>
+        <a href="<?= $escape($accountOrderDetailUrl) ?>" class="btn btn-primary weline-pixel::view_order">
             <?= __('查看订单详情') ?>
         </a>
-        <a href="<?= $this->getUrl('weline_checkout/frontend/order/list') ?>" class="btn btn-secondary">
+        <?php endif; ?>
+        <a href="<?= $escape($accountOrdersUrl) ?>" class="btn btn-secondary weline-pixel::view_orders">
             <?= __('返回订单列表') ?>
         </a>
+        <a href="<?= $this->getUrl('products') ?>" class="btn btn-secondary weline-pixel::continue_shopping">
+            <?= __('继续购物') ?>
+        </a>
     </div>
-    <?php endif; ?>
-</div>
+</section>
+
+<style>
+    .checkout-success-page {
+        width: min(760px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: clamp(56px, 8vw, 96px) 0;
+        color: var(--weline-layout-text-primary, #111827);
+    }
+
+    .checkout-success-page .success-message,
+    .checkout-success-page .order-info {
+        border: 1px solid var(--weline-theme-border-color-subtle, #d1d5db);
+        background: var(--weline-layout-surface-primary, #fff);
+        padding: clamp(24px, 4vw, 40px);
+        box-shadow: var(--weline-theme-shadow-sm, 0 10px 24px rgba(15, 23, 42, .08));
+    }
+
+    .checkout-success-page .success-message {
+        border-top: 4px solid var(--weline-layout-link-color, #dc2626);
+    }
+
+    .checkout-success-page .success-message__mark {
+        display: inline-grid;
+        width: 52px;
+        height: 52px;
+        place-items: center;
+        margin-bottom: 20px;
+        background: var(--weline-layout-link-color, #dc2626);
+        color: #fff;
+        font-size: 28px;
+        font-weight: 900;
+    }
+
+    .checkout-success-page h1,
+    .checkout-success-page h2,
+    .checkout-success-page p {
+        color: inherit;
+    }
+
+    .checkout-success-page h1 {
+        margin: 0;
+        font-size: clamp(34px, 5vw, 58px);
+        line-height: 1.05;
+    }
+
+    .checkout-success-page .success-message p {
+        margin: 12px 0 0;
+        color: var(--weline-layout-text-secondary, #64748b);
+        font-size: 17px;
+    }
+
+    .checkout-success-page .order-info {
+        margin-top: 16px;
+    }
+
+    .checkout-success-page .order-info h2 {
+        margin: 0 0 18px;
+        font-size: 20px;
+    }
+
+    .checkout-success-page .info-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 12px 0;
+        border-top: 1px solid var(--weline-theme-border-color-subtle, #d1d5db);
+    }
+
+    .checkout-success-page .info-row span:first-child {
+        color: var(--weline-layout-text-secondary, #64748b);
+    }
+
+    .checkout-success-page .order-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 22px;
+    }
+
+    .checkout-success-page .btn {
+        display: inline-flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 20px;
+        border: 1px solid var(--weline-theme-border-color-strong, #9ca3af);
+        border-radius: 0;
+        background: var(--weline-layout-surface-primary, #fff);
+        color: var(--weline-layout-text-primary, #111827);
+        font-weight: 800;
+        text-decoration: none;
+    }
+
+    .checkout-success-page .btn-primary,
+    .checkout-success-page .btn:hover {
+        border-color: var(--weline-layout-link-color, #dc2626);
+        background: var(--weline-layout-link-color, #dc2626);
+        color: #fff;
+    }
+</style>

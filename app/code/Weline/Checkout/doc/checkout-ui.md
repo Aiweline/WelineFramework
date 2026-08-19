@@ -7,6 +7,13 @@
 - 异步刷新商品行与方式选项仍由 `CheckoutHtmlRenderer` 生成，浏览器只注入 `items_html` / `*_methods_html`
 - 浏览器 JS **只**做交互：选配送/支付、提交、`textContent` 更新合计；通过 `items_html` / `*_methods_html` 注入服务端片段
 - 业务网络 **只**走 `Weline.Api.resource('checkout')`（禁止 native fetch/XHR/axios）
+- `submitV2` 的 `payment.outcome` 是支付 UI 的唯一状态事实：`paid` 进入成功页，
+  `pending` 执行受控 Provider 跳转或显示待处理，`failed` 显示同订单恢复操作
+- 恢复状态保存在 URL fragment/浏览器会话；支付重试调用
+  `Weline.Api.resource('checkout').resumePaymentV2(...)`，不得重新 submit 订单
+- 成功页 URL 始终附带 `checkout_token`；服务端校验已提交 Session、订单归属和
+  短期能力凭证。WLS 跨 Worker 跳转尚未恢复身份时允许凭证完成成功页首屏，
+  已存在登录身份时仍拒绝其他 customer 的订单
 
 ## 入口
 
@@ -18,7 +25,7 @@
 | 模板 | `Checkout/view/frontend/checkout/index.phtml` |
 | 商品局部模板 | `Checkout/view/frontend/checkout/partials/items.phtml` |
 | Theme | `Theme/.../layouts/checkout/default.phtml`、`one-page.phtml` |
-| API | `w_query('checkout','getData'|'freezeQuote'|'submitV2')` → 含 `items_html` |
+| API | `w_query('checkout','getData'|'freezeQuote'|'submitV2'|'resumePaymentV2')` → 含 `items_html` 与结构化 `payment` |
 
 ## 验证
 
@@ -34,4 +41,4 @@ php bin/w e2e:run \
 `data-checkout-item`；`TEST-BROWSER-01` 必须从受信任 `cart.addV2` 走到
 `checkout.freezeQuote` / `checkout.submitV2`，不得因接口拒绝而跳过。
 
-模块：`Weline_Checkout` `1.4.0`；Theme 布局增量无需升版强制。
+模块：`Weline_Checkout` `1.4.4`；Theme 布局增量无需升版强制。

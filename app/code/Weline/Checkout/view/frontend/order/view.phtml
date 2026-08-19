@@ -1,97 +1,261 @@
 <?php
-/**
- * 订单详情页面
- */
+
+declare(strict_types=1);
+
+/** @var array<string, mixed>|null $order */
 $order = $this->getData('order');
-if (!$order) {
+if (!is_array($order) || $order === []) {
     return;
 }
-$items = $order->getItems();
+
+$escape = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$money = static fn (int $minor, string $currency): string => $currency . ' ' . number_format($minor / 100, 2, '.', ',');
+$statusLabel = static fn (string $status): string => match ($status) {
+    'pending' => __('待支付'),
+    'processing' => __('处理中'),
+    'paid' => __('已支付'),
+    'fulfilled', 'shipped' => __('已发货'),
+    'completed', 'delivered' => __('已完成'),
+    'cancelled', 'canceled' => __('已取消'),
+    'refunded' => __('已退款'),
+    default => $status !== '' ? $status : __('状态待确认'),
+};
+
+$items = is_array($order['items'] ?? null) ? $order['items'] : [];
+$moneyData = is_array($order['money'] ?? null) ? $order['money'] : [];
+$currency = strtoupper(trim((string)($order['currency'] ?? 'CNY'))) ?: 'CNY';
+$orderUuid = trim((string)($order['order_uuid'] ?? ''));
+$displayNumber = trim((string)($order['display_number'] ?? '')) ?: $orderUuid;
+$status = trim((string)($order['status'] ?? ''));
+$accountOrdersUrl = $this->getUrl('customer/account/index') . '#orders';
 ?>
-<div class="order-view-page">
-    <h1><?= __('订单详情') ?></h1>
-    
-    <div class="order-info-section">
-        <h2><?= __('订单信息') ?></h2>
+<main class="order-view-page" data-checkout-order-view data-order-uuid="<?= $escape($orderUuid) ?>">
+    <header class="order-view-page__header">
+        <div>
+            <p class="order-view-page__eyebrow"><?= __('订单中心') ?></p>
+            <h1><?= __('订单详情') ?></h1>
+        </div>
+        <a href="<?= $escape($accountOrdersUrl) ?>" class="order-view-page__back"><?= __('返回我的订单') ?></a>
+    </header>
+
+    <section class="order-info-section" aria-labelledby="order-info-heading" weline-code="checkout.order.view.info">
+        <h2 id="order-info-heading"><?= __('订单信息') ?></h2>
         <div class="info-grid">
             <div class="info-item">
-                <span class="label"><?= __('订单号') ?>:</span>
-                <span class="value"><?= $this->escapeHtml($order->getOrderNumber()) ?></span>
+                <span class="label"><?= __('订单号') ?></span>
+                <strong class="value"><?= $escape($displayNumber) ?></strong>
             </div>
             <div class="info-item">
-                <span class="label"><?= __('订单状态') ?>:</span>
-                <span class="value"><?= $order->getStatusText() ?></span>
+                <span class="label"><?= __('订单状态') ?></span>
+                <strong class="value order-status" data-order-status="<?= $escape($status) ?>"><?= $escape($statusLabel($status)) ?></strong>
             </div>
             <div class="info-item">
-                <span class="label"><?= __('支付状态') ?>:</span>
-                <span class="value"><?= $order->getPaymentStatusText() ?></span>
-            </div>
-            <div class="info-item">
-                <span class="label"><?= __('配送状态') ?>:</span>
-                <span class="value"><?= $order->getShippingStatusText() ?></span>
-            </div>
-            <div class="info-item">
-                <span class="label"><?= __('创建时间') ?>:</span>
-                <span class="value"><?= $this->escapeHtml($order->getCreatedTime()) ?></span>
+                <span class="label"><?= __('订单标识') ?></span>
+                <span class="value order-uuid"><?= $escape($orderUuid) ?></span>
             </div>
         </div>
-    </div>
-    
-    <div class="order-items-section">
-        <h2><?= __('订单项') ?></h2>
-        <table class="order-items-table">
-            <thead>
-                <tr>
-                    <th><?= __('产品名称') ?></th>
-                    <th><?= __('SKU') ?></th>
-                    <th><?= __('数量') ?></th>
-                    <th><?= __('单价') ?></th>
-                    <th><?= __('总价') ?></th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($items as $item): ?>
-                <tr>
-                    <td><?= $this->escapeHtml($item['product_name']) ?></td>
-                    <td><?= $this->escapeHtml($item['product_sku']) ?></td>
-                    <td><?= $this->escapeHtml($item['quantity']) ?></td>
-                    <td><?= number_format($item['price'], 2) ?></td>
-                    <td><?= number_format($item['total_price'], 2) ?></td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-    
-    <div class="order-totals-section">
-        <h2><?= __('费用明细') ?></h2>
+    </section>
+
+    <section class="order-items-section" aria-labelledby="order-items-heading" weline-code="checkout.order.view.items">
+        <h2 id="order-items-heading"><?= __('订单商品') ?></h2>
+        <?php if ($items === []): ?>
+            <p class="order-items-empty"><?= __('暂无商品明细') ?></p>
+        <?php else: ?>
+            <div class="order-items-scroll" data-order-table-scroll role="region" tabindex="0" aria-label="<?= $escape(__('订单商品明细')) ?>">
+                <table class="order-items-table">
+                    <thead>
+                    <tr>
+                        <th><?= __('产品名称') ?></th>
+                        <th><?= __('SKU') ?></th>
+                        <th><?= __('数量') ?></th>
+                        <th><?= __('单价') ?></th>
+                        <th><?= __('小计') ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($items as $item): ?>
+                        <?php
+                        $item = is_array($item) ? $item : [];
+                        $quantity = max(0, (int)($item['qty_minor'] ?? 0));
+                        $unitPriceMinor = (int)($item['unit_price_minor'] ?? 0);
+                        $rowTotalMinor = isset($item['row_total_minor'])
+                            ? (int)$item['row_total_minor']
+                            : $quantity * $unitPriceMinor;
+                        ?>
+                        <tr>
+                            <td><?= $escape($item['name'] ?? __('未命名商品')) ?></td>
+                            <td><?= $escape($item['sku'] ?? '-') ?></td>
+                            <td><?= $escape($quantity) ?></td>
+                            <td><?= $escape($money($unitPriceMinor, $currency)) ?></td>
+                            <td><?= $escape($money($rowTotalMinor, $currency)) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </section>
+
+    <section class="order-totals-section" aria-labelledby="order-totals-heading" weline-code="checkout.order.view.totals">
+        <h2 id="order-totals-heading"><?= __('费用明细') ?></h2>
         <div class="totals">
-            <div class="total-row">
-                <span><?= __('商品小计') ?>:</span>
-                <span><?= $this->escapeHtml($order->getCurrency()) ?> <?= number_format($order->getSubtotal(), 2) ?></span>
-            </div>
-            <div class="total-row">
-                <span><?= __('运费') ?>:</span>
-                <span><?= $this->escapeHtml($order->getCurrency()) ?> <?= number_format($order->getShippingAmount(), 2) ?></span>
-            </div>
-            <div class="total-row">
-                <span><?= __('税费') ?>:</span>
-                <span><?= $this->escapeHtml($order->getCurrency()) ?> <?= number_format($order->getTaxAmount(), 2) ?></span>
-            </div>
-            <div class="total-row">
-                <span><?= __('折扣') ?>:</span>
-                <span>-<?= $this->escapeHtml($order->getCurrency()) ?> <?= number_format($order->getDiscountAmount(), 2) ?></span>
-            </div>
-            <div class="total-row total">
-                <span><?= __('订单总额') ?>:</span>
-                <strong><?= $this->escapeHtml($order->getCurrency()) ?> <?= number_format($order->getTotalAmount(), 2) ?></strong>
-            </div>
+            <div class="total-row"><span><?= __('商品小计') ?></span><span><?= $escape($money((int)($moneyData['subtotal_minor'] ?? 0), $currency)) ?></span></div>
+            <div class="total-row"><span><?= __('运费') ?></span><span><?= $escape($money((int)($moneyData['shipping_amount_minor'] ?? 0), $currency)) ?></span></div>
+            <div class="total-row"><span><?= __('税费') ?></span><span><?= $escape($money((int)($moneyData['tax_amount_minor'] ?? 0), $currency)) ?></span></div>
+            <div class="total-row total"><span><?= __('订单总额') ?></span><strong><?= $escape($money((int)($moneyData['grand_total_minor'] ?? 0), $currency)) ?></strong></div>
         </div>
-    </div>
-    
-    <div class="order-actions">
-        <a href="<?= $this->getUrl('weline_checkout/frontend/order/list') ?>" class="btn btn-secondary">
-            <?= __('返回订单列表') ?>
-        </a>
-    </div>
-</div>
+    </section>
+</main>
+
+<style>
+    .order-view-page {
+        --checkout-order-text: #111827;
+        --checkout-order-muted: #5b6472;
+        --checkout-order-surface: #ffffff;
+        --checkout-order-border: #d9dde3;
+        width: min(1040px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 40px 0 64px;
+        color: var(--checkout-order-text);
+    }
+    .order-view-page__header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
+    }
+    .order-view-page__eyebrow {
+        margin: 0 0 6px;
+        color: #e31837;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+    .order-view-page h1 {
+        margin: 0;
+        color: var(--checkout-order-text);
+        font-size: clamp(28px, 4vw, 40px);
+        line-height: 1.15;
+    }
+    .order-view-page__back {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid #e31837;
+        color: #b8122a;
+        text-decoration: none;
+        font-weight: 900;
+    }
+    .order-view-page__back:hover,
+    .order-view-page__back:focus-visible {
+        background: #e31837;
+        color: #ffffff;
+    }
+    .order-view-page .order-info-section,
+    .order-view-page .order-items-section,
+    .order-view-page .order-totals-section {
+        margin-top: 16px;
+        padding: 20px;
+        border: 1px solid var(--checkout-order-border);
+        background: var(--checkout-order-surface);
+        box-shadow: var(--weline-theme-shadow-sm, 0 10px 24px rgba(15, 23, 42, .06));
+    }
+    .order-view-page h2 {
+        margin: 0 0 16px;
+        color: var(--checkout-order-text);
+        font-size: 20px;
+    }
+    .order-view-page .info-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .order-view-page .info-item {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+    }
+    .order-view-page .label {
+        color: var(--checkout-order-muted);
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .order-view-page .value {
+        overflow-wrap: anywhere;
+        color: var(--checkout-order-text);
+    }
+    .order-view-page .order-status {
+        color: #b8122a;
+    }
+    .order-view-page .order-uuid {
+        font-size: 13px;
+    }
+    .order-view-page .order-items-scroll {
+        max-width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--checkout-order-border);
+    }
+    .order-view-page .order-items-table {
+        width: 100%;
+        min-width: 620px;
+        border-collapse: collapse;
+    }
+    .order-view-page .order-items-table th,
+    .order-view-page .order-items-table td {
+        padding: 12px;
+        border-bottom: 1px solid var(--checkout-order-border);
+        color: var(--checkout-order-text);
+        text-align: left;
+    }
+    .order-view-page .order-items-table th {
+        color: var(--checkout-order-muted);
+        font-size: 13px;
+    }
+    .order-view-page .order-items-empty {
+        margin: 0;
+        color: var(--checkout-order-muted);
+    }
+    .order-view-page .totals {
+        display: grid;
+        gap: 10px;
+        margin-left: auto;
+        max-width: 440px;
+    }
+    .order-view-page .total-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--checkout-order-border);
+        color: var(--checkout-order-text);
+    }
+    .order-view-page .total-row.total {
+        border-bottom: 0;
+        color: #b8122a;
+        font-size: 18px;
+    }
+    @media (max-width: 720px) {
+        .order-view-page {
+            width: min(100% - 24px, 1040px);
+            padding: 28px 0 48px;
+        }
+        .order-view-page__header {
+            align-items: stretch;
+            flex-direction: column;
+        }
+        .order-view-page__back {
+            width: 100%;
+        }
+        .order-view-page .info-grid {
+            grid-template-columns: 1fr;
+        }
+        .order-view-page .order-info-section,
+        .order-view-page .order-items-section,
+        .order-view-page .order-totals-section {
+            padding: 16px;
+        }
+    }
+</style>
