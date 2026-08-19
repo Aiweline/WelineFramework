@@ -91,7 +91,7 @@ $statusLabel = static function (string $status): string {
         </div>
 
         <?php if ($detailAddress !== []): ?>
-        <section class="account-order-detail__shipping" data-order-shipping-address="true" aria-labelledby="account-order-shipping-title">
+        <section class="account-order-detail__shipping" data-order-shipping-address="true" aria-labelledby="account-order-shipping-title" weline-code="order-detail-shipping">
             <div class="account-order-detail__shipping-header">
                 <h4 id="account-order-shipping-title"><?= __('收货信息') ?></h4>
                 <?php if (trim((string)($detailShipping['method'] ?? '')) !== ''): ?>
