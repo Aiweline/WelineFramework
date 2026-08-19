@@ -38,8 +38,13 @@ abstract class AbstractBusinessSession
     /** 数据前缀（子类必须定义） */
     protected const PREFIX = '';
 
-    /** 底层 Session 实例 */
-    protected SessionInterface $session;
+    /**
+     * 显式注入的底层 Session。
+     *
+     * 未显式注入时不能在常驻进程中缓存请求级 Session；每次业务操作都必须
+     * 从 SessionFactory 取得当前请求/Fiber 的实例。
+     */
+    protected ?SessionInterface $session;
 
     /**
      * 构造函数
@@ -48,7 +53,7 @@ abstract class AbstractBusinessSession
      */
     public function __construct(?SessionInterface $session = null)
     {
-        $this->session = $session ?? SessionFactory::getInstance()->createSession();
+        $this->session = $session;
     }
 
     /**
@@ -59,7 +64,7 @@ abstract class AbstractBusinessSession
      */
     protected function get(string $key): mixed
     {
-        return $this->session->get(static::PREFIX . $key);
+        return $this->getSession()->get(static::PREFIX . $key);
     }
 
     /**
@@ -70,7 +75,7 @@ abstract class AbstractBusinessSession
      */
     protected function set(string $key, mixed $value): void
     {
-        $this->session->set(static::PREFIX . $key, $value);
+        $this->getSession()->set(static::PREFIX . $key, $value);
     }
 
     /**
@@ -81,7 +86,7 @@ abstract class AbstractBusinessSession
      */
     protected function has(string $key): bool
     {
-        return $this->session->get(static::PREFIX . $key) !== null;
+        return $this->getSession()->get(static::PREFIX . $key) !== null;
     }
 
     /**
@@ -91,7 +96,7 @@ abstract class AbstractBusinessSession
      */
     protected function delete(string $key): void
     {
-        $this->session->delete(static::PREFIX . $key);
+        $this->getSession()->delete(static::PREFIX . $key);
     }
 
     /**
@@ -101,7 +106,7 @@ abstract class AbstractBusinessSession
      */
     public function all(): array
     {
-        $allData = $this->session->all();
+        $allData = $this->getSession()->all();
         $prefixLen = \strlen(static::PREFIX);
         $result = [];
 
@@ -119,11 +124,12 @@ abstract class AbstractBusinessSession
      */
     public function clear(): void
     {
-        $allData = $this->session->all();
+        $session = $this->getSession();
+        $allData = $session->all();
 
         foreach (\array_keys($allData) as $key) {
             if (\str_starts_with($key, static::PREFIX)) {
-                $this->session->delete($key);
+                $session->delete($key);
             }
         }
     }
@@ -133,6 +139,6 @@ abstract class AbstractBusinessSession
      */
     public function getSession(): SessionInterface
     {
-        return $this->session;
+        return $this->session ?? SessionFactory::getInstance()->createSession();
     }
 }

@@ -1484,7 +1484,7 @@ class Env extends DataObject
         if ($key === '') {
             return self::get('system', []);
         }
-        return self::get('system.' . $key, $default);
+        return self::getInstance()->getConfig('system.' . $key, $default);
     }
     
     /**
@@ -1499,7 +1499,7 @@ class Env extends DataObject
         if ($key === '') {
             return self::get('router', []);
         }
-        return self::get('router.' . $key, $default);
+        return self::getInstance()->getConfig('router.' . $key, $default);
     }
     
     /**
@@ -1514,7 +1514,7 @@ class Env extends DataObject
         if ($key === '') {
             return self::get('dev', []);
         }
-        return self::get('dev.' . $key, $default);
+        return self::getInstance()->getConfig('dev.' . $key, $default);
     }
     
     // ==================== 区域路由配置方法 ====================

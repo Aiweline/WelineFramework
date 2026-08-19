@@ -82,6 +82,34 @@ class StateTest extends TestCore
         }
     }
 
+    public function testCurrencyRejectsStaleRouteCurrencyAndUsesAllowedWebsiteDefault(): void
+    {
+        $hadContext = Context::getCurrent() !== null;
+        $snapshot = WelineEnv::getInstance()->capture();
+
+        try {
+            WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
+                'REQUEST_METHOD' => 'GET',
+                'REQUEST_URI' => '/products/',
+                'HTTP_HOST' => 'example.test',
+                'WELINE_WEBSITE_ID' => 9514,
+                'WELINE_USER_CURRENCY' => 'CNY',
+                'WELINE_WEBSITE_CURRENCY' => 'USD',
+            ]);
+            State::resetRequestPathLocalizationCache();
+            self::seedAllowedCurrencyCodes(['USD']);
+
+            self::assertSame('USD', State::getCurrency());
+        } finally {
+            State::resetRequestPathLocalizationCache();
+            if ($hadContext) {
+                WelineEnv::getInstance()->restore($snapshot);
+            } else {
+                WelineEnv::getInstance()->reset();
+            }
+        }
+    }
+
     public function testLangAndCurrencyPreferOriginUriWhenRouterUriIsStripped(): void
     {
         $hadContext = Context::getCurrent() !== null;
@@ -216,5 +244,23 @@ class StateTest extends TestCore
             self::assertSame(0, $notArea['consumed']);
             self::assertSame([$wrongCase, 'USD', 'en_US', 'admin', 'login'], $notArea['remaining']);
         }
+    }
+
+    /** @param list<string> $codes */
+    private static function seedAllowedCurrencyCodes(array $codes): void
+    {
+        $map = [];
+        foreach ($codes as $code) {
+            $map[strtoupper($code)] = true;
+        }
+
+        $scope = (string)\w_env('website_id', '')
+            . '|' . (string)\w_env('website.code', '')
+            . '|' . (string)WelineEnv::server('WELINE_WEBSITE_ID', '');
+
+        $mapProperty = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap');
+        $mapProperty->setValue(null, $map);
+        $scopeProperty = new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope');
+        $scopeProperty->setValue(null, $scope);
     }
 }

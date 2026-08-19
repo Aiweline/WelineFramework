@@ -308,12 +308,36 @@ class App
             WelineEnv::set('area', $area, 'App applyParsedUrl');
         }
 
-        if (!empty($parse['currency'])) {
-            WelineEnv::set('user.currency', (string)$parse['currency'], 'App applyParsedUrl');
+        $parsedWebsiteId = $parse['server']['WELINE_WEBSITE_ID'] ?? null;
+        $hasParsedWebsite = $parsedWebsiteId !== null && $parsedWebsiteId !== '';
+        if ($hasParsedWebsite) {
+            WelineEnv::set('website_id', (int)$parsedWebsiteId, 'App applyParsedUrl');
+            WelineEnv::set(
+                'website_code',
+                (string)($parse['server']['WELINE_WEBSITE_CODE'] ?? ''),
+                'App applyParsedUrl'
+            );
+            WelineEnv::set(
+                'website_url',
+                (string)($parse['server']['WELINE_WEBSITE_URL'] ?? ''),
+                'App applyParsedUrl'
+            );
+            WelineEnv::set('website.currency',
+                (string)($parse['server']['WELINE_WEBSITE_CURRENCY'] ?? ''),
+                'App applyParsedUrl'
+            );
+            WelineEnv::set('website.language',
+                (string)($parse['server']['WELINE_WEBSITE_LANGUAGE'] ?? ''),
+                'App applyParsedUrl'
+            );
         }
-        if (!empty($parse['language'])) {
-            WelineEnv::set('user.lang', (string)$parse['language'], 'App applyParsedUrl');
-        }
+
+        // Url::parser may return a controller/rewrite path whose localization
+        // fields contain only defaults even though the immutable visitor URI
+        // carried /USD/en_US/ or /en_US/USD/. Freeze the validated visitor
+        // dimensions once here, before Storefront scope and every cache key.
+        State::resetRequestPathLocalizationCache();
+        $this->synchronizeParsedLocalization($parse, $rawRequestUri);
 
         $welineArea = (string)WelineEnv::get('area', 'frontend');
         $isBackend = $welineArea === 'backend' || $welineArea === 'rest_backend';
@@ -367,6 +391,11 @@ class App
             Context::current()->set('input.uri', $currentUri);
             WelineEnv::set('request.uri', $currentUri, 'App apply storefront route path');
         }
+        // The Scope provider may install Website defaults while resolving the
+        // Store/Channel identity. Re-assert the immutable visitor-path
+        // localization before freezing the one shared cache-key context.
+        State::resetRequestPathLocalizationCache();
+        $this->synchronizeParsedLocalization($parse, $rawRequestUri);
         $markApplyUrlStep('storefront_scope_install', [
             'installed' => RequestContext::scopeIdentity() instanceof ScopeIdentity,
             'route_path' => $navigationScope?->routePath,
@@ -433,6 +462,87 @@ class App
         $this->invalidateCurrentRequestUriCache();
         $markApplyUrlStep('invalidate_uri_cache');
         $flushApplyUrlProfile();
+    }
+
+    /**
+     * Synchronize the authoritative language/currency dimensions before any
+     * Storefront cache context is frozen.
+     *
+     * Path localization wins over parser query/cookie/default values. Language
+     * remains constrained by the Website language provider; an exact currency
+     * path segment is itself a route identity and therefore must not collapse
+     * merely because the Website selector does not currently advertise it.
+     * Both orders converge on one semantic variant without merging their exact
+     * visitor-facing URI cache keys.
+     *
+     * @param array<string, mixed> $parse
+     */
+    private function synchronizeParsedLocalization(array &$parse, string $rawRequestUri): void
+    {
+        if (!isset($parse['server']) || !\is_array($parse['server'])) {
+            $parse['server'] = [];
+        }
+
+        $path = (string)(\parse_url($rawRequestUri, \PHP_URL_PATH) ?: '/');
+        $websiteUrl = \trim((string)(
+            $parse['server']['WELINE_WEBSITE_URL'] ?? WelineEnv::get('website_url', '')
+        ));
+        $path = State::stripWebsitePathPrefix($path, $websiteUrl);
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        $pathLocalization = State::resolveLocalizationFromPathSegments($segments);
+
+        $pathCurrency = \strtoupper(\trim((string)($pathLocalization['currency'] ?? '')));
+        $pathLanguage = \str_replace('-', '_', \trim((string)($pathLocalization['language'] ?? '')));
+        if ($pathLanguage !== '' && !State::isAllowedLanguageCode($pathLanguage)) {
+            $pathLanguage = '';
+        }
+
+        $parsedCurrency = \strtoupper(\trim((string)(
+            $parse['currency'] ?? $parse['server']['WELINE_USER_CURRENCY'] ?? ''
+        )));
+        if ($parsedCurrency !== '' && !State::isAllowedCurrencyCode($parsedCurrency)) {
+            $parsedCurrency = '';
+        }
+        $effectiveCurrency = $pathCurrency !== '' ? $pathCurrency : $parsedCurrency;
+        if ($effectiveCurrency === '') {
+            $effectiveCurrency = \strtoupper(\trim((string)WelineEnv::get('user.currency', '')));
+        }
+        if ($pathCurrency === ''
+            && ($effectiveCurrency === '' || !State::isAllowedCurrencyCode($effectiveCurrency))
+        ) {
+            $effectiveCurrency = State::resolveWebsiteDefaultCurrency();
+        }
+
+        $parsedLanguage = \str_replace('-', '_', \trim((string)(
+            $parse['language'] ?? $parse['server']['WELINE_USER_LANG'] ?? ''
+        )));
+        if ($parsedLanguage !== '' && !State::isAllowedLanguageCode($parsedLanguage)) {
+            $parsedLanguage = '';
+        }
+        $effectiveLanguage = $pathLanguage !== '' ? $pathLanguage : $parsedLanguage;
+        if ($effectiveLanguage === '') {
+            $effectiveLanguage = \str_replace(
+                '-',
+                '_',
+                \trim((string)WelineEnv::get('user.lang', ''))
+            );
+        }
+        if ($effectiveLanguage === '' || !State::isAllowedLanguageCode($effectiveLanguage)) {
+            $effectiveLanguage = State::resolveWebsiteDefaultLanguage();
+        }
+
+        $parse['currency'] = $effectiveCurrency;
+        $parse['language'] = $effectiveLanguage;
+        $parse['server']['WELINE_USER_CURRENCY'] = $effectiveCurrency;
+        $parse['server']['WELINE_USER_LANG'] = $effectiveLanguage;
+        Context::current()->set('input.server.WELINE_USER_CURRENCY', $effectiveCurrency);
+        Context::current()->set('input.server.WELINE_USER_LANG', $effectiveLanguage);
+        WelineEnv::set('user.currency', $effectiveCurrency, 'App synchronizeParsedLocalization');
+        WelineEnv::set('user.lang', $effectiveLanguage, 'App synchronizeParsedLocalization');
+        State::resetLangLocalCache();
     }
 
     /**

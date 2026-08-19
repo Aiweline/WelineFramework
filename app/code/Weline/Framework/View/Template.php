@@ -176,6 +176,21 @@ class Template extends DataObject
 
     public static function clearStaticHookCaches(): void
     {
+        $runtimeCache = self::runtimeHookCache();
+        if ($runtimeCache !== null) {
+            try {
+                $runtimeCache->clearNamespace('theme_runtime');
+            } catch (\Throwable) {
+                // Cache invalidation is best-effort; local state must still be reset.
+            }
+
+            try {
+                $runtimeCache->disconnect();
+            } catch (\Throwable) {
+                // Do not keep a failed shared-cache connection attached to the worker.
+            }
+        }
+
         self::$staticHookOutputCache = [];
         self::$staticHookAggregateOutputCache = [];
         self::$reusableTemplateOutputCache = [];
