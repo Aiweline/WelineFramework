@@ -54,6 +54,8 @@
 
 ## doc 目录
 
+- `app/code/Weline/Websites/doc/需求.md`
+- `app/code/Weline/Websites/doc/开发日志.md`
 - `app/code/Weline/Websites/doc/README.md`
 - `app/code/Weline/Websites/doc/Scope维护门禁.md`
 - `app/code/Weline/Websites/doc/WebsiteData类使用文档.md`

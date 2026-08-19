@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Database\Connection\ConnectionInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
@@ -117,7 +118,7 @@ class DefaultWebsiteService
             Website::schema_fields_NAME => '默认网站',
             Website::schema_fields_CODE => Website::CODE_DEFAULT,
             Website::schema_fields_URL => 'http://localhost',
-            Website::schema_fields_DEFAULT_CURRENCY => 'CNY',
+            Website::schema_fields_DEFAULT_CURRENCY => $this->defaultCurrency(),
             Website::schema_fields_DEFAULT_LANGUAGE => 'zh_Hans_CN',
             Website::schema_fields_DEFAULT_TIMEZONE => 'Asia/Shanghai',
             Website::schema_fields_SCOPE => '',
@@ -246,10 +247,11 @@ class DefaultWebsiteService
     private function ensureDefaultCurrencyAndLanguage(): bool
     {
         $changed = false;
-        if (!\in_array('CNY', $this->websiteCurrency->getWebsiteCurrencyCodes(Website::ID_DEFAULT), true)) {
+        $defaultCurrency = $this->defaultCurrency();
+        if (!\in_array($defaultCurrency, $this->websiteCurrency->getWebsiteCurrencyCodes(Website::ID_DEFAULT), true)) {
             $this->websiteCurrency->clearQuery()->clearData(true)->insert([[
                 WebsiteCurrency::schema_fields_WEBSITE_ID => Website::ID_DEFAULT,
-                WebsiteCurrency::schema_fields_CURRENCY_CODE => 'CNY',
+                WebsiteCurrency::schema_fields_CURRENCY_CODE => $defaultCurrency,
             ]], WebsiteCurrency::schema_fields_WEBSITE_ID . ',' . WebsiteCurrency::schema_fields_CURRENCY_CODE)->fetch();
             $changed = true;
         }
@@ -270,6 +272,12 @@ class DefaultWebsiteService
         }
 
         return $changed;
+    }
+
+    private function defaultCurrency(): string
+    {
+        $currency = strtoupper(trim((string)Env::system('currency', 'CNY')));
+        return strlen($currency) === 3 && ctype_alpha($currency) ? $currency : 'CNY';
     }
 
     private function ensureLocalDomains(): bool
