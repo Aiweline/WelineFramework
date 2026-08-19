@@ -10,9 +10,11 @@
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. 本文件：`app/code/Weline/Shipping/doc/AI-INDEX.md`
 5. 模块说明：`app/code/Weline/Shipping/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-8. 只读取本次任务相关源码、配置和验证入口
+6. 当前需求：`app/code/Weline/Shipping/doc/需求.md`
+7. 开发记录：`app/code/Weline/Shipping/doc/开发日志.md`
+8. `app/code/Weline/Theme/doc/AI-INDEX.md`
+9. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+10. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -53,6 +55,8 @@
 
 - `app/code/Weline/Shipping/doc/API文档.md`
 - `app/code/Weline/Shipping/doc/README.md`
+- `app/code/Weline/Shipping/doc/需求.md`
+- `app/code/Weline/Shipping/doc/开发日志.md`
 - `app/code/Weline/Shipping/doc/使用指南.md`
 - `app/code/Weline/Shipping/doc/配置说明.md`
 
