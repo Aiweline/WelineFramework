@@ -187,7 +187,7 @@ final class MasterChildCredentialStore
                 ?: ((int)($left['pid'] ?? 0) <=> (int)($right['pid'] ?? 0));
         });
         $deadline = $this->runtimeIdentity->monotonicNow()
-            + \max(0.05, \min(5.0, $timeoutSeconds));
+            + \max(0.05, \min(30.0, $timeoutSeconds));
         $outcomes = [];
         foreach ($records as $record) {
             $remaining = $deadline - $this->runtimeIdentity->monotonicNow();

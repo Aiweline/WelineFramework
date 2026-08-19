@@ -123,7 +123,8 @@ final class MasterLeaseRuntimeIdentityTerminationTest extends TestCase
         self::assertStringContainsString('windowsWideCharacterBufferToUtf8(', $source);
         self::assertStringNotContainsString("\$ffi->cast('char *', \$buffer)", $source);
         self::assertStringContainsString('TerminateProcess', $source);
-        self::assertStringContainsString('stable_process_handle_unavailable_on_darwin', $source);
+        self::assertStringContainsString('darwin_posix_term_released', $source);
+        self::assertStringContainsString('darwin_posix_kill_released', $source);
     }
 
     public function testPlatformHandleDispatchRunsOnlyAfterReleasedOwnerPreflight(): void
