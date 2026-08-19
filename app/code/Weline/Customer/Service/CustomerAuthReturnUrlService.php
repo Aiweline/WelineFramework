@@ -72,7 +72,9 @@ final class CustomerAuthReturnUrlService
     {
         $target = $this->normalizeCandidate($candidate, false);
 
-        return $target !== '' ? ($target[0] === '/' ? $target : '/' . $target) : $fallback;
+        $path = $target !== '' ? ($target[0] === '/' ? $target : '/' . $target) : $fallback;
+
+        return $this->withCurrentLocalizationPrefix($path);
     }
 
     private function normalizeCandidate(string $candidate, bool $blockAuthRoutes): string
@@ -137,14 +139,14 @@ final class CustomerAuthReturnUrlService
     {
         $target = $this->normalizeTarget($candidate);
         if ($target === '') {
-            return '/customer/account';
+            return $this->formatInternalNavigation('', '/customer/account');
         }
 
         if ($target === 'customer/account/index') {
-            return '/customer/account';
+            return $this->formatInternalNavigation('/customer/account');
         }
 
-        return $target[0] === '/' ? $target : '/' . $target;
+        return $this->formatInternalNavigation($target);
     }
 
     /**
@@ -152,7 +154,7 @@ final class CustomerAuthReturnUrlService
      */
     public function buildAuthPageUrl(string $route, string $target = '', array $params = []): string
     {
-        $route = '/' . trim($route, '/');
+        $route = $this->formatInternalNavigation('/' . trim($route, '/'));
         $target = $this->normalizeTarget($target);
         if ($target !== '') {
             $params = ['redirect_url' => $target] + $params;
@@ -167,6 +169,61 @@ final class CustomerAuthReturnUrlService
         }
 
         return $route . '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function withCurrentLocalizationPrefix(string $path): string
+    {
+        $path = '/' . ltrim($path, '/');
+        $prefix = $this->currentLocalizationPrefix();
+        if ($prefix === '' || $this->hasLocalizationPrefix($path)) {
+            return $path;
+        }
+
+        return $prefix . ($path === '/' ? '' : $path);
+    }
+
+    private function currentLocalizationPrefix(): string
+    {
+        $currentUrl = (string)$this->request->getUrlBuilder()->getCurrentUrl();
+        $path = parse_url($currentUrl, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return '';
+        }
+
+        $segments = array_values(array_filter(
+            explode('/', trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        $localization = State::resolveLocalizationFromPathSegments(array_slice($segments, 0, 3));
+        $consumed = (int)($localization['consumed'] ?? 0);
+        if ($consumed <= 0) {
+            return '';
+        }
+
+        $offset = (int)($localization['area_offset'] ?? 0);
+        $prefixSegments = array_slice($segments, $offset, $consumed);
+
+        return $prefixSegments === [] ? '' : '/' . implode('/', $prefixSegments);
+    }
+
+    private function hasLocalizationPrefix(string $path): bool
+    {
+        $pathOnly = parse_url($path, PHP_URL_PATH);
+        if (!is_string($pathOnly)) {
+            return false;
+        }
+
+        $segments = array_values(array_filter(
+            explode('/', trim($pathOnly, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return false;
+        }
+
+        $localization = State::resolveLocalizationFromPathSegments(array_slice($segments, 0, 2));
+
+        return (int)($localization['consumed'] ?? 0) > 0;
     }
 
     /**

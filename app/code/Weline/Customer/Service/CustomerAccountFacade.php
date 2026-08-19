@@ -13,12 +13,13 @@ final class CustomerAccountFacade implements CustomerAccountFacadeInterface
 {
     public function __construct(
         private readonly CustomerAccountService $accounts,
+        private readonly SessionFactory $sessionFactory,
     ) {
     }
 
     public function current(): ?CustomerIdentity
     {
-        $session = SessionFactory::getInstance()->createFrontendSession();
+        $session = $this->sessionFactory->createFrontendSession();
         if (!$session->isLoggedIn()) {
             return null;
         }
@@ -85,7 +86,7 @@ final class CustomerAccountFacade implements CustomerAccountFacadeInterface
         if (!$customer->getId()) {
             throw new \RuntimeException((string)__('客户账号不存在'));
         }
-        $session = SessionFactory::getInstance()->createFrontendSession();
+        $session = $this->sessionFactory->createFrontendSession();
         \Weline\Framework\Manager\ObjectManager::getInstance(CustomerRememberDeviceService::class)
             ->issueForAuthenticatedCustomer($customer, $rememberDuration, $session);
     }

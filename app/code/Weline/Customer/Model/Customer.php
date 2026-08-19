@@ -70,13 +70,23 @@ class Customer extends Model implements AuthenticableInterface
 
     public function getUsername(): ?string
     {
+        $username = $this->getData(self::schema_fields_username);
+        if (is_string($username) && trim($username) !== '') {
+            return trim($username);
+        }
+
         $email = $this->getData(self::schema_fields_email);
         return is_string($email) && trim($email) !== '' ? $email : null;
     }
 
     public function setUsername(string $username): static
     {
-        return $this->setEmail($username);
+        $username = trim($username);
+        $this->setData(self::schema_fields_username, $username);
+        if ($this->getEmail() === '' && filter_var($username, FILTER_VALIDATE_EMAIL)) {
+            $this->setEmail($username);
+        }
+        return $this;
     }
 
     public function getEmail(): string

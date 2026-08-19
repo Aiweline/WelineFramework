@@ -35,4 +35,34 @@ class CustomerIdentityFallbackTest extends TestCase
 
         $this->assertSame('ada@example.com', $customer->getEmail());
     }
+
+    public function testStoredUsernameIsUsedAsTheEditableDisplayName(): void
+    {
+        $customer = new class extends Customer {
+            public function __construct()
+            {
+            }
+        };
+
+        $customer->setData(Customer::schema_fields_email, 'dealer@example.test');
+        $customer->setData(Customer::schema_fields_username, 'FCDC Dealer');
+
+        $this->assertSame('FCDC Dealer', $customer->getUsername());
+        $this->assertSame('dealer@example.test', $customer->getEmail());
+    }
+
+    public function testChangingDisplayUsernameDoesNotOverwriteAnExistingEmail(): void
+    {
+        $customer = new class extends Customer {
+            public function __construct()
+            {
+            }
+        };
+
+        $customer->setEmail('dealer@example.test');
+        $customer->setUsername('FCDC Dealer');
+
+        $this->assertSame('FCDC Dealer', $customer->getData(Customer::schema_fields_username));
+        $this->assertSame('dealer@example.test', $customer->getEmail());
+    }
 }
