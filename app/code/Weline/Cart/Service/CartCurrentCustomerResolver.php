@@ -7,6 +7,7 @@ namespace Weline\Cart\Service;
 use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Session\SessionFactory;
 
 /**
  * Resolves the server-owned storefront customer identity for Cart APIs.
@@ -21,10 +22,18 @@ final class CartCurrentCustomerResolver
     /** @var (\Closure(): (?int))|null */
     private readonly ?\Closure $resolver;
 
+    private readonly ?SessionFactory $sessionFactory;
+
     /** @param (callable(): (?int))|null $resolver */
-    public function __construct(?callable $resolver = null)
+    public function __construct(
+        ?callable $resolver = null,
+        ?SessionFactory $sessionFactory = null,
+    )
     {
         $this->resolver = $resolver === null ? null : \Closure::fromCallable($resolver);
+        // Do not pin the process-wide factory in a long-lived Cart service.
+        // WLS may replace the static factory baseline between requests.
+        $this->sessionFactory = $sessionFactory;
     }
 
     public function currentCustomerId(): ?int
@@ -32,6 +41,22 @@ final class CartCurrentCustomerResolver
         if ($this->resolver !== null) {
             return $this->normalize(($this->resolver)());
         }
+
+        try {
+            $session = ($this->sessionFactory ?? SessionFactory::getInstance())
+                ->createFrontendSession();
+            $isLoggedIn = $session->isLoggedIn();
+            $sessionUserId = $session->getUserId();
+            if ($isLoggedIn) {
+                $customerId = $this->normalize($sessionUserId);
+                if ($customerId !== null) {
+                    return $customerId;
+                }
+            }
+        } catch (\Throwable) {
+            // Optional facade fallback below preserves compatibility.
+        }
+
         if (!interface_exists(CustomerAccountFacadeInterface::class)) {
             return null;
         }

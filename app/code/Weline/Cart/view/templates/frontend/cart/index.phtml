@@ -5,74 +5,80 @@
  * The global shell is owned by Weline_Theme cart layouts. This template only
  * renders the cart body that the default cart layout places into its content slot.
  */
-$cart = $this->getData('cart') ?? [];
-$items = $this->getData('items') ?? [];
-$items = \is_array($items) ? $items : [];
-$currency = (string)($cart['currency'] ?? '');
-$subtotal = (float)($cart['subtotal'] ?? 0);
-$grandTotal = (float)($cart['grand_total'] ?? $subtotal);
-
-$formatMoney = static function (float $amount) use ($currency): string {
-    $prefix = $currency !== '' ? $currency . ' ' : '';
-    return $prefix . \number_format($amount, 2);
-};
+$escape = static fn(mixed $value): string => \htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$copy = [
+    'loading' => (string)__('正在加载购物车...'),
+    'emptyTitle' => (string)__('购物车是空的'),
+    'emptyMessage' => (string)__('浏览车型并选择适合您市场的产品。'),
+    'loadFailed' => (string)__('购物车加载失败，请重试。'),
+    'product' => (string)__('商品'),
+    'price' => (string)__('单价'),
+    'quantity' => (string)__('数量'),
+    'subtotal' => (string)__('小计'),
+    'update' => (string)__('更新'),
+    'remove' => (string)__('移除'),
+    'mutationFailed' => (string)__('购物车更新失败，请重试。'),
+];
 ?>
-<section class="weline-cart-shell" data-cart-content="1" weline-code="cart.cart.section_1">
+<section class="weline-cart-shell" data-cart-content="1" data-weline-cart aria-busy="true" weline-code="cart.cart.section_1">
     <div class="weline-cart-shell__header">
         <div>
             <h1><?= __('购物车') ?></h1>
             <p><?= __('检查商品数量，确认无误后进入结账。') ?></p>
         </div>
-        <a class="weline-cart-shell__continue" href="/"><?= __('继续购物') ?></a>
+        <a class="weline-cart-shell__continue" href="<?= $escape($this->getUrl('products')) ?>"><?= __('继续购物') ?></a>
     </div>
 
-    <div class="weline-cart-shell__grid">
+    <div class="weline-cart-shell__state" data-cart-state="loading" role="status" aria-live="polite">
+        <span class="weline-cart-shell__spinner" aria-hidden="true"></span>
+        <p><?= $escape($copy['loading']) ?></p>
+    </div>
+
+    <div class="weline-cart-shell__state" data-cart-state="empty" hidden>
+        <h2><?= $escape($copy['emptyTitle']) ?></h2>
+        <p><?= $escape($copy['emptyMessage']) ?></p>
+        <a class="weline-cart-shell__continue" href="<?= $escape($this->getUrl('products')) ?>"><?= __('浏览车型') ?></a>
+    </div>
+
+    <div class="weline-cart-shell__state weline-cart-shell__state--error" data-cart-state="error" role="alert" hidden>
+        <h2><?= __('暂时无法加载购物车') ?></h2>
+        <p data-cart-error><?= $escape($copy['loadFailed']) ?></p>
+        <button class="weline-cart-shell__retry" type="button" data-cart-retry><?= __('重试') ?></button>
+    </div>
+
+    <div class="weline-cart-shell__grid" data-cart-state="ready" hidden>
         <div class="weline-cart-shell__items">
+            <p class="weline-cart-shell__message" data-cart-message role="status" aria-live="polite"></p>
             <table>
                 <thead>
                 <tr>
-                    <th><?= __('商品') ?></th>
-                    <th><?= __('单价') ?></th>
-                    <th><?= __('数量') ?></th>
-                    <th><?= __('小计') ?></th>
+                    <th><?= $escape($copy['product']) ?></th>
+                    <th><?= $escape($copy['price']) ?></th>
+                    <th><?= $escape($copy['quantity']) ?></th>
+                    <th><?= $escape($copy['subtotal']) ?></th>
                 </tr>
                 </thead>
-                <tbody>
-                <?php foreach ($items as $item): ?>
-                    <?php if (!\is_array($item)) { continue; } ?>
-                    <tr>
-                        <td data-label="<?= \htmlspecialchars((string)__('商品'), ENT_QUOTES, 'UTF-8') ?>">
-                            <strong><?= \htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                            <?php if (\trim((string)($item['sku'] ?? '')) !== ''): ?>
-                                <small>SKU: <?= \htmlspecialchars((string)$item['sku'], ENT_QUOTES, 'UTF-8') ?></small>
-                            <?php endif; ?>
-                        </td>
-                        <td data-label="<?= \htmlspecialchars((string)__('单价'), ENT_QUOTES, 'UTF-8') ?>"><?= \htmlspecialchars($formatMoney((float)($item['price'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></td>
-                        <td data-label="<?= \htmlspecialchars((string)__('数量'), ENT_QUOTES, 'UTF-8') ?>"><?= (int)($item['qty'] ?? 1) ?></td>
-                        <td data-label="<?= \htmlspecialchars((string)__('小计'), ENT_QUOTES, 'UTF-8') ?>"><?= \htmlspecialchars($formatMoney((float)($item['row_total'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
+                <tbody data-cart-items></tbody>
             </table>
         </div>
 
-        <aside class="weline-cart-shell__summary" aria-label="<?= \htmlspecialchars((string)__('订单摘要'), ENT_QUOTES, 'UTF-8') ?>">
+        <aside class="weline-cart-shell__summary" aria-label="<?= $escape(__('订单摘要')) ?>">
             <h2><?= __('订单摘要') ?></h2>
             <div class="weline-cart-shell__summary-list">
                 <div class="weline-cart-shell__summary-row">
                     <span><?= __('商品数量') ?></span>
-                    <strong><?= (int)($cart['cart_count'] ?? 0) ?></strong>
+                    <strong data-cart-count>0</strong>
                 </div>
                 <div class="weline-cart-shell__summary-row">
                     <span><?= __('小计') ?></span>
-                    <strong><?= \htmlspecialchars($formatMoney($subtotal), ENT_QUOTES, 'UTF-8') ?></strong>
+                    <strong data-cart-subtotal>--</strong>
                 </div>
                 <div class="weline-cart-shell__summary-row total">
                     <span><?= __('合计') ?></span>
-                    <strong><?= \htmlspecialchars($formatMoney($grandTotal), ENT_QUOTES, 'UTF-8') ?></strong>
+                    <strong data-cart-grand-total>--</strong>
                 </div>
             </div>
-            <a class="weline-cart-shell__checkout" href="/checkout"><?= __('去结算') ?></a>
+            <a class="weline-cart-shell__checkout" href="<?= $escape($this->getUrl('checkout')) ?>"><?= __('去结算') ?></a>
         </aside>
     </div>
 </section>
@@ -122,6 +128,55 @@ $formatMoney = static function (float $amount) use ($currency): string {
         text-decoration: none;
     }
 
+    .weline-cart-shell__state {
+        min-height: 260px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 36px 20px;
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 8px;
+        background: var(--weline-layout-surface-primary, #fff);
+        text-align: center;
+    }
+
+    .weline-cart-shell__state[hidden],
+    .weline-cart-shell__grid[hidden] {
+        display: none;
+    }
+
+    .weline-cart-shell__state h2,
+    .weline-cart-shell__state p {
+        margin: 0;
+    }
+
+    .weline-cart-shell__spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-top-color: var(--weline-layout-link-color, #2563eb);
+        border-radius: 50%;
+        animation: weline-cart-spin .7s linear infinite;
+    }
+
+    .weline-cart-shell__retry {
+        min-height: 42px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--weline-layout-link-color, #2563eb);
+        color: var(--weline-theme-on-primary, #fff);
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    @keyframes weline-cart-spin {
+        to { transform: rotate(360deg); }
+    }
+
     .weline-cart-shell__grid {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 320px;
@@ -164,6 +219,60 @@ $formatMoney = static function (float $amount) use ($currency): string {
         display: block;
         margin-top: 4px;
         color: var(--weline-layout-text-secondary, #64748b);
+    }
+
+    .weline-cart-shell__message {
+        min-height: 22px;
+        padding: 12px 16px 0;
+        color: var(--weline-layout-text-secondary, #64748b);
+        font-size: 14px;
+    }
+
+    .weline-cart-shell__message.is-error {
+        color: var(--weline-theme-danger-color, #b42318);
+    }
+
+    .weline-cart-shell__quantity-controls {
+        display: flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 8px;
+    }
+
+    .weline-cart-shell__quantity-input {
+        width: 68px;
+        min-height: 38px;
+        padding: 0 8px;
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 6px;
+        background: var(--weline-layout-surface-primary, #fff);
+        color: inherit;
+        font: inherit;
+    }
+
+    .weline-cart-shell__action {
+        min-height: 38px;
+        padding: 0 12px;
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--weline-layout-link-color, #2563eb);
+        font: inherit;
+        font-weight: 700;
+        flex: 0 0 auto;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+
+    .weline-cart-shell__action--remove {
+        min-height: 32px;
+        margin-top: 10px;
+        color: var(--weline-theme-danger-color, #b42318);
+    }
+
+    .weline-cart-shell__action:disabled {
+        cursor: wait;
+        opacity: .55;
     }
 
     .weline-cart-shell__summary {
@@ -310,3 +419,222 @@ $formatMoney = static function (float $amount) use ($currency): string {
         }
     }
 </style>
+
+<script>
+(function () {
+    'use strict';
+
+    const root = document.querySelector('[data-weline-cart]');
+    if (!root) {
+        return;
+    }
+
+    const copy = <?= json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const stateNodes = Array.from(root.querySelectorAll('[data-cart-state]'));
+    const itemsNode = root.querySelector('[data-cart-items]');
+    const countNode = root.querySelector('[data-cart-count]');
+    const subtotalNode = root.querySelector('[data-cart-subtotal]');
+    const grandTotalNode = root.querySelector('[data-cart-grand-total]');
+    const errorNode = root.querySelector('[data-cart-error]');
+    const messageNode = root.querySelector('[data-cart-message]');
+    const retryButton = root.querySelector('[data-cart-retry]');
+    const guestTokenStorageKey = 'weline.cart.guest_token';
+    let cartApi = null;
+
+    function cartIdentity() {
+        try {
+            const guestToken = String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
+            return guestToken ? { guest_token: guestToken } : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function text(value) {
+        return value == null ? '' : String(value);
+    }
+
+    function setText(node, value) {
+        if (node) {
+            node.textContent = text(value);
+        }
+    }
+
+    function showState(state) {
+        stateNodes.forEach(function (node) {
+            node.hidden = node.dataset.cartState !== state;
+        });
+        root.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+    }
+
+    function amountFromMinor(item, minorKey, decimalKey) {
+        const minor = Number(item && item[minorKey]);
+        if (Number.isFinite(minor)) {
+            return minor / 100;
+        }
+        const decimal = Number(item && item[decimalKey]);
+        return Number.isFinite(decimal) ? decimal : 0;
+    }
+
+    function money(amount, currency) {
+        const numericAmount = Number(amount || 0);
+        const formattedAmount = new Intl.NumberFormat(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
+        return (text(currency).trim() || 'CNY') + ' ' + formattedAmount;
+    }
+
+    function cell(label, value) {
+        const node = document.createElement('td');
+        node.dataset.label = label;
+        node.textContent = text(value);
+        return node;
+    }
+
+    function productCell(item) {
+        const node = document.createElement('td');
+        node.dataset.label = copy.product;
+        const name = document.createElement('strong');
+        name.textContent = text(item && item.name);
+        node.appendChild(name);
+        const skuValue = text(item && item.sku).trim();
+        if (skuValue) {
+            const sku = document.createElement('small');
+            sku.textContent = 'SKU: ' + skuValue;
+            node.appendChild(sku);
+        }
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'weline-cart-shell__action weline-cart-shell__action--remove';
+        remove.dataset.cartAction = 'remove';
+        remove.dataset.itemId = text(item && item.item_id);
+        remove.textContent = copy.remove;
+        remove.setAttribute('aria-label', copy.remove + ' ' + text(item && item.name));
+        node.appendChild(remove);
+        return node;
+    }
+
+    function quantityCell(item, quantity) {
+        const node = document.createElement('td');
+        node.dataset.label = copy.quantity;
+        const controls = document.createElement('div');
+        controls.className = 'weline-cart-shell__quantity-controls';
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'weline-cart-shell__quantity-input';
+        input.min = '1';
+        input.max = String(Math.max(1, Number(item && item.stock) || 999));
+        input.value = String(quantity);
+        input.dataset.cartQuantity = text(item && item.item_id);
+        input.setAttribute('aria-label', copy.quantity + ' ' + text(item && item.name));
+        const update = document.createElement('button');
+        update.type = 'button';
+        update.className = 'weline-cart-shell__action';
+        update.dataset.cartAction = 'update';
+        update.dataset.itemId = text(item && item.item_id);
+        update.textContent = copy.update;
+        controls.appendChild(input);
+        controls.appendChild(update);
+        node.appendChild(controls);
+        return node;
+    }
+
+    function render(summary) {
+        const items = Array.isArray(summary && summary.items) ? summary.items : [];
+        if (!items.length || Boolean(summary && summary.is_empty)) {
+            showState('empty');
+            return;
+        }
+
+        itemsNode.textContent = '';
+        const currency = text(summary && summary.currency || items[0] && items[0].currency || 'CNY');
+        items.forEach(function (item) {
+            const row = document.createElement('tr');
+            const quantity = Math.max(1, Number(item && (item.qty || item.quantity)) || 1);
+            row.appendChild(productCell(item));
+            row.appendChild(cell(copy.price, money(amountFromMinor(item, 'unit_price_minor', 'price'), currency)));
+            row.appendChild(quantityCell(item, quantity));
+            row.appendChild(cell(copy.subtotal, money(amountFromMinor(item, 'row_total_minor', 'row_total'), currency)));
+            itemsNode.appendChild(row);
+        });
+
+        const count = Number(summary && (summary.cart_count ?? summary.item_count)) || 0;
+        const subtotal = amountFromMinor(summary, 'subtotal_minor', 'subtotal');
+        const grandTotal = amountFromMinor(summary, 'grand_total_minor', 'grand_total');
+        setText(countNode, count);
+        setText(subtotalNode, money(subtotal, currency));
+        setText(grandTotalNode, money(grandTotal, currency));
+        showState('ready');
+    }
+
+    async function getCartApi() {
+        if (cartApi) {
+            return cartApi;
+        }
+        if (!window.Weline || typeof Weline.load !== 'function') {
+            throw new Error(copy.loadFailed);
+        }
+        const api = await Weline.load('api');
+        cartApi = await api.resource('cart');
+        return cartApi;
+    }
+
+    async function loadCart() {
+        showState('loading');
+        try {
+            const cart = await getCartApi();
+            const result = await cart.getV2Cart(cartIdentity());
+            const summary = result && result.data && typeof result.data === 'object' ? result.data : result;
+            if (!summary || summary.success === false) {
+                throw new Error(text(summary && summary.message) || copy.loadFailed);
+            }
+            render(summary);
+        } catch (error) {
+            setText(errorNode, error && error.message ? error.message : copy.loadFailed);
+            showState('error');
+        }
+    }
+
+    if (retryButton) {
+        retryButton.addEventListener('click', loadCart);
+    }
+
+    root.addEventListener('click', async function (event) {
+        const button = event.target.closest('[data-cart-action]');
+        if (!button || button.disabled) {
+            return;
+        }
+        const itemId = text(button.dataset.itemId).trim();
+        const action = text(button.dataset.cartAction);
+        const quantityInput = root.querySelector('[data-cart-quantity="' + CSS.escape(itemId) + '"]');
+        button.disabled = true;
+        root.setAttribute('aria-busy', 'true');
+        setText(messageNode, '');
+        messageNode && messageNode.classList.remove('is-error');
+        try {
+            const cart = await getCartApi();
+            const params = Object.assign(cartIdentity(), { item_id: itemId });
+            const result = action === 'remove'
+                ? await cart.removeV2(params)
+                : await cart.updateV2(Object.assign(params, {
+                    qty: Math.max(1, Number(quantityInput && quantityInput.value) || 1),
+                }));
+            const summary = result && result.data && typeof result.data === 'object' ? result.data : result;
+            if (!summary || summary.success === false) {
+                throw new Error(text(summary && summary.message) || copy.mutationFailed);
+            }
+            setText(messageNode, text(summary.message));
+            render(summary);
+        } catch (error) {
+            setText(messageNode, error && error.message ? error.message : copy.mutationFailed);
+            messageNode && messageNode.classList.add('is-error');
+            button.disabled = false;
+        } finally {
+            root.setAttribute('aria-busy', 'false');
+        }
+    });
+
+    loadCart();
+})();
+</script>

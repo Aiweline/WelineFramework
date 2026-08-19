@@ -47,6 +47,8 @@ class CartQueryProvider implements QueryProviderInterface
             )),
             'mergeGuest' => $this->mergeGuest($params),
             'getV2Cart' => $this->getV2Cart($params),
+            'updateV2' => $this->updateV2($params),
+            'removeV2' => $this->removeV2($params),
             'clearV2' => $this->clearV2($params),
             'issueGuestToken' => $this->issueGuestToken(),
             'update' => $this->successFromSummary($this->cartService->update($params)),
@@ -138,6 +140,74 @@ class CartQueryProvider implements QueryProviderInterface
                 'success' => false,
                 'message' => $e->getMessage(),
                 'error_code' => $e instanceof CartV2ConflictException ? $e->errorCode() : 'cart_get_failed',
+            ];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function updateV2(array $params): array
+    {
+        return $this->mutateV2($params, false);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function removeV2(array $params): array
+    {
+        return $this->mutateV2($params, true);
+    }
+
+    /**
+     * Resolve owner identity on the server; browser input can never choose a customer cart.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function mutateV2(array $params, bool $remove): array
+    {
+        $v2 = $this->cartService->cartV2();
+        if ($v2 === null) {
+            return [
+                'success' => false,
+                'message' => (string)__('Cart V2 未启用'),
+                'error_code' => 'cart_v2_unavailable',
+            ];
+        }
+
+        try {
+            $scope = $this->scopeResolver->fromParams($params);
+            $customerId = $this->currentCustomer->currentCustomerId();
+            $guestToken = null;
+            if ($customerId === null) {
+                $guestToken = trim((string)($params['guest_token'] ?? ''));
+                if ($guestToken === '') {
+                    $guestToken = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+                }
+            }
+            $itemId = trim((string)($params['item_id'] ?? ''));
+            $summary = $remove
+                ? $v2->removeItem($scope, $itemId, $guestToken, $customerId)
+                : $v2->updateItem(
+                    $scope,
+                    $itemId,
+                    max(1, min(999, (int)($params['qty'] ?? 1))),
+                    $guestToken,
+                    $customerId,
+                );
+
+            return $this->successFromSummary($summary);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e instanceof CartV2ConflictException
+                    ? $e->errorCode()
+                    : ($remove ? 'cart_v2_remove_failed' : 'cart_v2_update_failed'),
             ];
         }
     }
@@ -404,6 +474,26 @@ class CartQueryProvider implements QueryProviderInterface
                     'summary' => 'Read the current guest or authenticated customer Cart V2 cart',
                 ],
                 [
+                    'name' => 'updateV2',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => $this->v2MutationParams(includeQty: true),
+                    'returns' => $commonReturns,
+                    'summary' => 'Update an item in the current trusted Cart V2',
+                ],
+                [
+                    'name' => 'removeV2',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => $this->v2MutationParams(),
+                    'returns' => $commonReturns,
+                    'summary' => 'Remove an item from the current trusted Cart V2',
+                ],
+                [
                     'name' => 'issueGuestToken',
                     'frontend' => true,
                     'mode' => 'write',
@@ -485,5 +575,24 @@ class CartQueryProvider implements QueryProviderInterface
                 ],
             ],
         ];
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function v2MutationParams(bool $includeQty = false): array
+    {
+        $params = [
+            'item_id' => ['type' => 'string', 'max_length' => 64],
+            'guest_token' => ['type' => 'string', 'max_length' => 64],
+            'website_id' => ['type' => 'int', 'min' => 0],
+            'website_code' => ['type' => 'string', 'max_length' => 64],
+            'store_code' => ['type' => 'string', 'max_length' => 64],
+            'channel_code' => ['type' => 'string', 'max_length' => 64],
+            'store_mode' => ['type' => 'string', 'max_length' => 32],
+            'scope' => ['type' => 'array', 'max_items' => 7],
+        ];
+        if ($includeQty) {
+            $params['qty'] = ['type' => 'int', 'min' => 1, 'max' => 999];
+        }
+        return $params;
     }
 }
