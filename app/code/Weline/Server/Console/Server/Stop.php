@@ -1055,7 +1055,7 @@ class Stop extends CommandAbstract
     protected function retireCredentialBoundGeneration(string $instance): array
     {
         return $this->getMasterChildCredentialStore()
-            ->retireGenerationProcesses($instance, timeoutSeconds: 2.0);
+            ->retireGenerationProcesses($instance, timeoutSeconds: 12.0);
     }
 
     /** @return array<string,mixed>|null */
