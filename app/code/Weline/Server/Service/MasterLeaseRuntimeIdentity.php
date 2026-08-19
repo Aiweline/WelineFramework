@@ -340,6 +340,7 @@ final class MasterLeaseRuntimeIdentity
                 $pid,
                 $birth,
                 $pidNamespaceId,
+                $graceSeconds,
             ),
             default => $this->terminationOutcome(
                 $pid,
@@ -372,21 +373,76 @@ final class MasterLeaseRuntimeIdentity
         int $pid,
         string $birth,
         string $pidNamespaceId,
+        float $graceSeconds = 0.5,
     ): array {
         $ownerState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
         $released = $this->releasedOwnerOutcome($pid, $ownerState);
         if ($released !== null) {
             return $released;
         }
+        if ($ownerState !== self::OWNER_MATCH) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'process_identity_unknown',
+                $ownerState,
+            );
+        }
+
+        // Darwin has no pidfd equivalent, but posix_kill after a verified birth
+        // match is safe: the libproc birth tuple (pbi_start_tvsec:tvusec) has
+        // microsecond precision which fences PID reuse within the same boot.
+        // Re-observe after each signal to confirm the *same* process exited.
+        if (!\function_exists('posix_kill')) {
+            return $this->terminationOutcome(
+                $pid,
+                false,
+                false,
+                'darwin_posix_kill_unavailable',
+                self::OWNER_MATCH,
+            );
+        }
+
+        $graceSeconds = \max(0.05, \min(2.0, $graceSeconds));
+        $pollIntervalUs = 50_000; // 50ms per poll
+        $termPolls = (int)\ceil($graceSeconds * 1_000_000 / $pollIntervalUs);
+
+        $termSent = @\posix_kill($pid, 15); // SIGTERM
+        if ($termSent) {
+            for ($wait = 0; $wait < $termPolls; ++$wait) {
+                SchedulerSystem::usleep($pollIntervalUs);
+                $postState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
+                if (\in_array($postState, [self::OWNER_MISSING, self::OWNER_MISMATCH], true)) {
+                    return $this->terminationOutcome($pid, true, true, 'darwin_posix_term_released', self::OWNER_MISSING);
+                }
+            }
+        }
+
+        $killSent = @\posix_kill($pid, 9); // SIGKILL — unconditional after SIGTERM grace window
+        if ($killSent) {
+            for ($wait = 0; $wait < 6; ++$wait) { // up to 300ms; SIGKILL should be near-instant
+                SchedulerSystem::usleep($pollIntervalUs);
+                $postState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
+                if (\in_array($postState, [self::OWNER_MISSING, self::OWNER_MISMATCH], true)) {
+                    return $this->terminationOutcome($pid, true, true, 'darwin_posix_kill_released', self::OWNER_MISSING);
+                }
+            }
+        }
+
+        // Final observation after both signals.
+        $finalState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
+        $finalReleased = $this->releasedOwnerOutcome($pid, $finalState);
+        if ($finalReleased !== null) {
+            return $finalReleased;
+        }
 
         return $this->terminationOutcome(
             $pid,
             false,
-            false,
-            $ownerState === self::OWNER_MATCH
-                ? 'stable_process_handle_unavailable_on_darwin'
-                : 'process_identity_unknown',
-            $ownerState,
+            $termSent || $killSent,
+            'darwin_posix_termination_unverified',
+            $finalState,
         );
     }
 
