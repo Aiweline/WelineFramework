@@ -6,6 +6,7 @@ namespace Weline\Order\Service;
 
 use Weline\Inventory\Api\DefaultWarehouseResolverInterface;
 use Weline\Inventory\Api\InventoryConflictException;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Api\Data\CreateCheckoutGroupCommand;
 use Weline\Order\Api\Data\CreateCheckoutGroupResult;
 use Weline\Order\Api\Data\CatalogSnapshot;
@@ -90,7 +91,10 @@ final class OrderFacade implements OrderFacadeInterface
             ? DisplayNumberAllocator::forTesting()
             : new DisplayNumberAllocator(useMemory: false));
         $this->displayLookup = $displayLookup ?? new DisplayNumberLookup($this->displayNumbers);
-        $this->postPaymentHook = $postPaymentHook ?? new NoopOrderPostPaymentHook();
+        $this->postPaymentHook = $postPaymentHook
+            ?? ($useMemory
+                ? new NoopOrderPostPaymentHook()
+                : ObjectManager::getInstance(OrderPostPaymentHookInterface::class));
         $this->writerGuard = $writerGuard ?? new OrderWriterGuard();
         $this->dbStoreInstance = $dbStore;
         $this->defaultWarehouseResolver = $defaultWarehouseResolver;
@@ -612,6 +616,9 @@ final class OrderFacade implements OrderFacadeInterface
             money: $row['money'],
             scope: $row['scope'],
             tax: $tax->toArray(),
+            shipping: is_array($row['snapshots']['shipping'] ?? null)
+                ? $row['snapshots']['shipping']
+                : [],
             isShippingChargeOwner: (bool)$row['is_shipping_charge_owner'],
             numberKind: (string)$row['number_kind'],
             displayNumber: $row['display_number'] ?? null,

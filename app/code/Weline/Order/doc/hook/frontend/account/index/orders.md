@@ -8,3 +8,8 @@ customer-safe labels from current `RefundCase`, `OrderInvoice`, and
 `FulfillmentAction` facts. Storefront overrides may change presentation, but must
 preserve the same official account host, accessibility labels, and current-source
 semantics.
+
+Under WLS, the Hook must keep all render state request-scoped. Do not use `$GLOBALS`,
+static flags, or another process-global marker to suppress duplicate rendering: a
+Worker serves multiple users and requests. Detail lookup must continue to authorize
+the requested Order/CheckoutGroup UUID against the current customer and website.
