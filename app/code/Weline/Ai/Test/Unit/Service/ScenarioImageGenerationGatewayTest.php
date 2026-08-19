@@ -50,4 +50,58 @@ final class ScenarioImageGenerationGatewayTest extends TestCase
 
         self::assertSame($reference, $aiService->capturedParams['image'] ?? '');
     }
+
+    public function testHumanRefinementAliasesSurviveTheProviderNeutralMediaBoundary(): void
+    {
+        $aiService = new class extends AiService {
+            /** @var array<string,mixed> */
+            public array $capturedParams = [];
+
+            public function __construct()
+            {
+            }
+
+            public function generateImage(
+                string $prompt,
+                ?string $modelCode = null,
+                ?string $scenarioCode = null,
+                array $params = []
+            ): array {
+                $this->capturedParams = $params;
+
+                return ['images' => [], 'model' => 'image-model'];
+            }
+        };
+        $gateway = new ScenarioImageGenerationGateway($aiService);
+
+        $gateway->generate(
+            'pagebuilder_ai_site_assets',
+            [
+                'scenario_invariants' => [],
+                'site_context' => [],
+                'task' => ['purpose' => 'Refine an existing hero image'],
+                'output_contract' => [],
+                'validation_feedback' => ['status' => 'none'],
+            ],
+            'en_IN',
+            [
+                'human_instruction' => 'Remove people and make the casino table the focal point.',
+                'user_instruction' => 'Use a cinematic cyan and magenta atmosphere.',
+                'instruction' => 'Keep all important content inside the safe crop area.',
+            ],
+        );
+
+        self::assertSame(
+            'Remove people and make the casino table the focal point.',
+            $aiService->capturedParams['human_instruction'] ?? '',
+        );
+        self::assertSame(
+            'Use a cinematic cyan and magenta atmosphere.',
+            $aiService->capturedParams['user_instruction'] ?? '',
+        );
+        self::assertSame(
+            'Keep all important content inside the safe crop area.',
+            $aiService->capturedParams['instruction'] ?? '',
+        );
+    }
 }
