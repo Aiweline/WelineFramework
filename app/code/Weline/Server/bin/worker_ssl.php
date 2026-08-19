@@ -862,6 +862,21 @@ $wlsWorkerExitTrace = static function (string $event, string $reason = '', array
         'ipc_connected' => $ipcClient !== null && $ipcClient->isConnected(),
         'memory_mb' => \round(\memory_get_usage(true) / 1048576, 2),
     ], $context);
+    $payload = [
+        'ts' => \date('c'),
+        'event' => $event,
+        'reason' => $reason,
+        'data' => $context,
+    ];
+    // Durable fallback: process log redirects can stay empty when workers die
+    // during READY gate before logger sinks flush; keep an append-only file.
+    if (\defined('BP')) {
+        @\file_put_contents(
+            BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-worker-exit-trace.log',
+            (\json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
+            FILE_APPEND
+        );
+    }
     WlsLogger::error_('[WorkerExitTrace] ' . $event . ' reason=' . $reason . ' ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
     WlsLogger::flush_(true);
 };
@@ -3107,7 +3122,8 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
     $memoryHost,
     $memoryPort,
     $memoryTokenFileName,
-    $wlsTlsSessionCacheRuntime
+    $wlsTlsSessionCacheRuntime,
+    $wlsEnv
 ): void {
     if ($readyGateWorkerBootstrapWarmupCompleted) {
         if ($runtimeError === null && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
@@ -3128,6 +3144,30 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
     }
 
     WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup start worker={$workerId}");
+    $wlsReadyGateStageEnabled = (bool)($wlsEnv['debug']['worker_startup_trace'] ?? false)
+        || \in_array(
+            \strtolower(\trim((string)(\getenv('WLS_WORKER_STARTUP_TRACE') ?: ''))),
+            ['1', 'true', 'yes', 'on'],
+            true
+        );
+    $wlsReadyGateStage = static function (string $stage, array $context = []) use ($workerId, $wlsReadyGateStageEnabled): void {
+        if (!$wlsReadyGateStageEnabled) {
+            return;
+        }
+        $row = [
+            'ts' => \date('c'),
+            'pid' => \getmypid(),
+            'worker_id' => $workerId,
+            'stage' => $stage,
+            'data' => $context,
+        ];
+        @\file_put_contents(
+            BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-ready-gate-stage.log',
+            (\json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
+            FILE_APPEND
+        );
+    };
+    $wlsReadyGateStage('pool_warmup_begin');
     $poolWarmup = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmReadyMemory(
         $workerId,
         $instanceName,
@@ -3145,28 +3185,51 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
         ]
     );
     $poolWarmupErrors = \is_array($poolWarmup['errors'] ?? null) ? $poolWarmup['errors'] : [];
+    $wlsReadyGateStage('pool_warmup_done', [
+        'errors' => $poolWarmupErrors,
+        'skipped' => $poolWarmup['skipped'] ?? null,
+    ]);
     if ($poolWarmupErrors !== []) {
         throw new \RuntimeException(
             'READY gate memory connection warmup failed: '
             . (\json_encode($poolWarmupErrors, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}')
         );
     }
+    $wlsReadyGateStage('tls_session_cache_check_begin', [
+        'runtime_present' => $wlsTlsSessionCacheRuntime !== null,
+    ]);
     if ($wlsTlsSessionCacheRuntime !== null && !$wlsTlsSessionCacheRuntime->ready()) {
         throw new \RuntimeException('READY gate TLS session-cache channel warmup failed.');
     }
+    $wlsReadyGateStage('tls_session_cache_check_done');
     $readyGateSharedRuntimeConnectionWarmupCompleted = true;
+    $wlsReadyGateStage('homepage_fpc_retry_begin');
     [$homepageFpcProof, $dynamicFirstRenderProof]
         = \Weline\Server\Service\Runtime\WorkerReadyGateRetry::run(
-            static fn (): array => [
-                $runtime->runReadyGateWorkerBootstrapWarmup(),
-                $runtime->readyGateDynamicFirstRenderProof(),
-            ],
+            static function () use ($runtime, $wlsReadyGateStage): array {
+                $wlsReadyGateStage('homepage_fpc_runtime_begin');
+                $homepage = $runtime->runReadyGateWorkerBootstrapWarmup();
+                $wlsReadyGateStage('homepage_fpc_runtime_done', [
+                    'http_status' => (int)($homepage['http_status'] ?? 0),
+                    'hit' => (bool)($homepage['hit'] ?? false),
+                    'reason' => (string)($homepage['reason'] ?? ''),
+                ]);
+                $dynamic = $runtime->readyGateDynamicFirstRenderProof();
+                $wlsReadyGateStage('dynamic_first_render_proof_done');
+                return [$homepage, $dynamic];
+            },
             $workerId,
             static function (
                 int $attempt,
                 \Throwable $throwable,
                 int $delay,
-            ) use ($workerId): void {
+            ) use ($workerId, $wlsReadyGateStage): void {
+                $wlsReadyGateStage('homepage_fpc_retry', [
+                    'attempt' => $attempt,
+                    'delay_us' => $delay,
+                    'error' => $throwable::class,
+                    'message' => $throwable->getMessage(),
+                ]);
                 WlsLogger::warning_(
                     '[WorkerWarmup] transient database contention; retrying READY gate '
                     . "worker={$workerId}, attempt={$attempt}, delay_us={$delay}, "
@@ -3174,11 +3237,16 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
                 );
             },
         );
+    $wlsReadyGateStage('homepage_fpc_retry_done', [
+        'http_status' => (int)($homepageFpcProof['http_status'] ?? 0),
+        'hit' => (bool)($homepageFpcProof['hit'] ?? false),
+    ]);
     \Weline\Server\Service\Runtime\WorkerReadinessState::markBusinessHomepageHot($homepageFpcProof);
     \Weline\Server\Service\Runtime\WorkerReadinessState::markDynamicFirstRenderProof(
         $dynamicFirstRenderProof
     );
     $readyGateWorkerBootstrapWarmupCompleted = true;
+    $wlsReadyGateStage('ready_gate_warmup_complete');
     WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup done worker={$workerId}");
 };
 $exitBecauseMasterMissingAtStartup = false;

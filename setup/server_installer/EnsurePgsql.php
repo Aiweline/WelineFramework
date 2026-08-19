@@ -428,7 +428,9 @@ final class EnsurePgsql
     {
         $suffix = DIRECTORY_SEPARATOR === '\\' ? '.exe' : '';
         $binDir = $pgsqlDir . DIRECTORY_SEPARATOR . 'bin';
-        foreach (['psql', 'initdb', 'postgres'] as $name) {
+        // Require the full server toolset. Debian/Ubuntu /usr/bin/psql is only a
+        // pg_wrapper shim and must never count as a project bindir.
+        foreach (['psql', 'initdb', 'postgres', 'pg_ctl'] as $name) {
             $path = $binDir . DIRECTORY_SEPARATOR . $name . $suffix;
             clearstatcache(true, $path);
             if (!is_file($path) || (int)@filesize($path) < 1024) {
@@ -466,25 +468,147 @@ final class EnsurePgsql
         $cmd = 'brew install postgresql@' . $version . ' 2>/dev/null || brew install postgresql';
         echo "Running: $cmd\n";
         passthru($cmd, $code);
-        return $code === 0;
+        return $code === 0 && $this->linkUnixProjectBinaries($version);
     }
 
     private function installLinux(string $version): bool
     {
+        // Packages may already be present from install.bash / the host image.
+        // Prefer repairing the project bindir link before invoking the package manager.
+        if ($this->linkUnixProjectBinaries($version)) {
+            echo "Linked existing system PostgreSQL binaries into extend/server/pgsql.\n";
+            return true;
+        }
+
         if (is_file('/etc/debian_version')) {
-            $cmd = 'apt-get update -qq && apt-get install -y postgresql-' . $version . ' postgresql-client-' . $version . ' 2>/dev/null';
-        } elseif (is_file('/etc/redhat-release')) {
-            $cmd = 'dnf install -y postgresql' . $version . '-server postgresql' . $version . ' 2>/dev/null';
+            $primary = 'apt-get update -qq && apt-get install -y postgresql-'
+                . $version . ' postgresql-client-' . $version;
+            $fallback = 'apt-get install -y postgresql postgresql-client';
+        } elseif (is_file('/etc/redhat-release') || is_file('/etc/rocky-release') || is_file('/etc/almalinux-release')) {
+            $primary = 'dnf install -y postgresql' . $version . '-server postgresql' . $version;
+            $fallback = 'dnf install -y postgresql-server postgresql';
         } else {
-            echo "Linux: install PostgreSQL manually, e.g. sudo apt install postgresql-" . $version . " or extract to extend/server/pgsql\n";
+            echo "Linux: install PostgreSQL manually, e.g. sudo apt install postgresql-"
+                . $version . " or extract to extend/server/pgsql\n";
             return false;
         }
+
+        $cmd = $this->privilegedShell($primary);
         echo "Running: $cmd\n";
         passthru($cmd, $code);
         if ($code !== 0) {
-            echo "If permission denied, run with sudo or install manually.\n";
+            echo "Primary package install failed; trying distribution default PostgreSQL...\n";
+            $cmd = $this->privilegedShell($fallback);
+            echo "Running: $cmd\n";
+            passthru($cmd, $code);
         }
-        return $code === 0;
+        if ($code !== 0) {
+            echo "If permission denied, ensure passwordless sudo is available or install PostgreSQL manually.\n";
+            return false;
+        }
+
+        if (!$this->linkUnixProjectBinaries($version)) {
+            echo "PostgreSQL packages installed, but a complete bindir (initdb/postgres/psql/pg_ctl) was not found.\n";
+            echo "On Debian/Ubuntu expect /usr/lib/postgresql/<ver>/bin, not /usr/bin.\n";
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Point extend/server/pgsql/bin at a complete PostgreSQL tool directory.
+     * Never link Debian/Ubuntu /usr/bin wrappers.
+     */
+    private function linkUnixProjectBinaries(string $version): bool
+    {
+        $pgsqlDir = $this->serverDir . DIRECTORY_SEPARATOR . 'pgsql';
+        $candidates = [
+            '/usr/lib/postgresql/' . $version . '/bin',
+            '/usr/pgsql-' . $version . '/bin',
+        ];
+        if (is_dir('/usr/lib/postgresql')) {
+            $entries = @scandir('/usr/lib/postgresql') ?: [];
+            rsort($entries, SORT_NATURAL);
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                $candidates[] = '/usr/lib/postgresql/' . $entry . '/bin';
+            }
+        }
+        $brewPrefix = trim((string)@shell_exec(
+            'command -v brew >/dev/null 2>&1 && brew --prefix '
+            . escapeshellarg('postgresql@' . $version)
+            . ' 2>/dev/null'
+        ));
+        if ($brewPrefix === '') {
+            $brewPrefix = trim((string)@shell_exec(
+                'command -v brew >/dev/null 2>&1 && brew --prefix postgresql 2>/dev/null'
+            ));
+        }
+        if ($brewPrefix !== '') {
+            $candidates[] = rtrim($brewPrefix, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'bin';
+        }
+
+        $source = null;
+        foreach ($candidates as $candidate) {
+            if ($this->isCompleteUnixBindir($candidate)) {
+                $source = $candidate;
+                break;
+            }
+        }
+        if ($source === null) {
+            return false;
+        }
+
+        if (!is_dir($pgsqlDir) && !@mkdir($pgsqlDir, 0755, true) && !is_dir($pgsqlDir)) {
+            echo "Unable to create $pgsqlDir\n";
+            return false;
+        }
+        $binLink = $pgsqlDir . DIRECTORY_SEPARATOR . 'bin';
+        if (is_link($binLink) || is_file($binLink)) {
+            @unlink($binLink);
+        } elseif (is_dir($binLink)) {
+            $this->rmdirRecursive($binLink);
+        }
+        if (!@symlink($source, $binLink)) {
+            echo "Unable to symlink $binLink -> $source\n";
+            return false;
+        }
+        clearstatcache(true, $binLink);
+        if (!$this->hasValidPgsqlInstall($pgsqlDir)) {
+            echo "Linked $binLink -> $source but validation still failed.\n";
+            return false;
+        }
+        echo "Linked project PostgreSQL binaries: $binLink -> $source\n";
+        return true;
+    }
+
+    private function isCompleteUnixBindir(string $dir): bool
+    {
+        if ($dir === '' || $dir === '/usr/bin' || $dir === '/bin') {
+            return false;
+        }
+        foreach (['psql', 'initdb', 'postgres', 'pg_ctl'] as $name) {
+            $path = $dir . DIRECTORY_SEPARATOR . $name;
+            clearstatcache(true, $path);
+            if (!is_file($path) || (int)@filesize($path) < 1024) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function privilegedShell(string $cmd): string
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            return $cmd;
+        }
+        if ($this->commandExists('sudo')) {
+            // Non-interactive installer path: never block on a password prompt.
+            return 'sudo -n ' . $cmd;
+        }
+        return $cmd;
     }
 
     private function commandExists(string $cmd): bool

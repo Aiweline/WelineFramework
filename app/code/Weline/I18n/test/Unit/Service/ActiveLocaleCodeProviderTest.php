@@ -47,4 +47,33 @@ class ActiveLocaleCodeProviderTest extends TestCase
         );
         self::assertSame(['zh_Hans_CN', 'en_US'], $provider->getInstalledActiveCodes());
     }
+
+    public function testResetClearsMemoizedCodes(): void
+    {
+        $locals = $this->getMockBuilder(Locals::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['clearQuery', 'where', 'select', 'fetchArray'])
+            ->getMock();
+        $locals->expects($this->exactly(2))
+            ->method('clearQuery')
+            ->willReturnSelf();
+        $locals->expects($this->exactly(4))
+            ->method('where')
+            ->willReturnSelf();
+        $locals->expects($this->exactly(2))
+            ->method('select')
+            ->with('code')
+            ->willReturnSelf();
+        $locals->expects($this->exactly(2))
+            ->method('fetchArray')
+            ->willReturnOnConsecutiveCalls(
+                [['code' => 'zh_Hans_CN']],
+                [['code' => 'en_US'], ['code' => 'zh_Hans_CN']]
+            );
+
+        $provider = new ActiveLocaleCodeProvider($locals);
+        self::assertSame(['zh_Hans_CN'], $provider->getInstalledActiveCodes());
+        $provider->reset();
+        self::assertSame(['en_US', 'zh_Hans_CN'], $provider->getInstalledActiveCodes());
+    }
 }

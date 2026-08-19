@@ -19,22 +19,14 @@ class Checker
 
     /**
      * 检查依赖关系是否存在。
-     * 如果存在则返回对应的值。如果不存在，则返回false。
-     * 可以返回任何东西，但请尽可能说明状态，以便向其他者说：你好！这个依赖于我，谁能证明它是你的？
-     *
-     * @param string $name 要检查的依赖项的名称
-     *
-     * @return bool 是否存在
+     * 已注册返回 true；模块表为空或依赖缺失返回 false。
      */
-    static public function hasDependency(string $dependency_module): bool|string
+    static public function hasDependency(string $dependency_module): bool
     {
         $dependencies = Env::getInstance()->getModuleList();
-        if (empty($dependencies)) {
+        if ($dependencies === [] || $dependencies === null) {
             return false;
         }
-        if (!isset($dependencies[$dependency_module])) {
-            return $dependency_module;
-        }
-        return true;
+        return isset($dependencies[$dependency_module]);
     }
 }
