@@ -51,14 +51,9 @@ final class GatewayHostBootIdentity
         }
 
         if (\PHP_OS_FAMILY === 'Darwin') {
-            $bootTime = self::readDarwinBootTime();
-            if (\preg_match(
-                '/\A\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}\z/D',
-                $bootTime,
-                $matches,
-            ) === 1
-            ) {
-                return 'darwin-' . (int)$matches[1] . '-' . (int)$matches[2];
+            $bootSessionUuid = self::readDarwinBootSessionUuid();
+            if ($bootSessionUuid !== '') {
+                return 'darwin-' . $bootSessionUuid;
             }
             throw new \RuntimeException('macOS boot identity is unavailable.');
         }
@@ -164,69 +159,42 @@ CDEF,
         return $contents;
     }
 
-    /**
-     * Read kern.boottime.
-     *
-     * Prefer in-process FFI sysctlbyname: Master may inherit many FDs, and the
-     * bounded process-group helper can then return a polluted or mismatched
-     * payload that still looks like a timeval. A wrong host_boot_id baked into
-     * the Master lease makes every Worker fail closed with "another host boot".
-     * Subprocess probes are fallbacks only for builds without FFI, and must
-     * agree across two independent reads before they may mint lease identity.
-     */
-    private static function readDarwinBootTime(): string
+    private static function readDarwinBootSessionUuid(): string
     {
-        $pattern = '/\A\{\s*sec\s*=\s*\d+,\s*usec\s*=\s*\d+\s*\}\z/D';
-        $viaFfi = self::readDarwinBootTimeViaFfi();
-        if ($viaFfi !== '' && \preg_match($pattern, $viaFfi) === 1) {
+        $viaFfi = self::normalizeDarwinBootSessionUuid(
+            self::readDarwinBootSessionUuidViaFfi(),
+        );
+        if ($viaFfi !== '') {
             return $viaFfi;
         }
 
-        $first = self::readDarwinBootTimeBounded();
-        $second = self::readDarwinBootTimeBounded();
-        $firstToken = self::normalizeDarwinBootTimeToken($first);
-        $secondToken = self::normalizeDarwinBootTimeToken($second);
-        if ($firstToken !== ''
-            && $secondToken !== ''
-            && \hash_equals($firstToken, $secondToken)
+        $first = self::normalizeDarwinBootSessionUuid(
+            self::readDarwinBootSessionUuidBounded(),
+        );
+        $second = self::normalizeDarwinBootSessionUuid(
+            self::readDarwinBootSessionUuidBounded(),
+        );
+        if ($first !== ''
+            && $second !== ''
+            && \hash_equals($first, $second)
         ) {
-            return $second;
+            return $first;
         }
 
-        // Single-source subprocess evidence is not lease-safe under Master FD
-        // inheritance. Fail closed so callers restart instead of baking a
-        // polluted host_boot_id that permanently rejects every Worker.
         return '';
     }
 
-    /**
-     * Collapse one exact `{ sec = N, usec = M }` record to a comparable token.
-     */
-    private static function normalizeDarwinBootTimeToken(string $bootTime): string
+    private static function normalizeDarwinBootSessionUuid(string $uuid): string
     {
-        if ($bootTime === ''
-            || \preg_match(
-                '/\A\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}\z/D',
-                $bootTime,
-                $matches,
-            ) !== 1
-        ) {
-            return '';
-        }
+        $uuid = \strtolower(\trim($uuid));
 
-        $seconds = (int)$matches[1];
-        $microseconds = (int)$matches[2];
-        if ($seconds < 1 || $microseconds < 0 || $microseconds > 999_999) {
-            return '';
-        }
-
-        return 'darwin-' . $seconds . '-' . $microseconds;
+        return \preg_match(
+            '/\A[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\z/D',
+            $uuid,
+        ) === 1 ? $uuid : '';
     }
 
-    /**
-     * In-process kern.boottime via libc sysctlbyname (no child process).
-     */
-    private static function readDarwinBootTimeViaFfi(): string
+    private static function readDarwinBootSessionUuidViaFfi(): string
     {
         if (!\extension_loaded('FFI')
             || !\class_exists(\FFI::class)
@@ -241,53 +209,32 @@ CDEF,
         try {
             $ffi = \FFI::cdef(
                 <<<'CDEF'
-typedef long time_t;
-typedef int suseconds_t;
 typedef unsigned long size_t;
-struct timeval {
-    time_t tv_sec;
-    suseconds_t tv_usec;
-};
 int sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen);
 CDEF,
                 'libc.dylib',
             );
-            $timeval = $ffi->new('struct timeval');
+            $uuid = $ffi->new('char[64]');
             $length = $ffi->new('size_t');
-            $length->cdata = \FFI::sizeof($timeval);
+            $length->cdata = \FFI::sizeof($uuid);
             $status = $ffi->sysctlbyname(
-                'kern.boottime',
-                \FFI::addr($timeval),
+                'kern.bootsessionuuid',
+                $uuid,
                 \FFI::addr($length),
                 null,
                 0,
             );
-            $status = self::ffiScalarInt($status);
-            $seconds = self::ffiScalarInt($timeval->tv_sec);
-            $microseconds = self::ffiScalarInt($timeval->tv_usec);
-            if ($status !== 0 || $seconds < 1 || $microseconds < 0 || $microseconds > 999_999) {
+            if ((int)$status !== 0 || (int)$length->cdata !== 37) {
                 return '';
             }
 
-            return '{ sec = ' . $seconds . ', usec = ' . $microseconds . ' }';
+            return \FFI::string($uuid);
         } catch (\Throwable) {
             return '';
         }
     }
 
-    private static function ffiScalarInt(mixed $value): int
-    {
-        if (\is_int($value)) {
-            return $value;
-        }
-        if ($value instanceof \FFI\CData) {
-            return (int)$value->cdata;
-        }
-
-        return (int)$value;
-    }
-
-    private static function readDarwinBootTimeBounded(): string
+    private static function readDarwinBootSessionUuidBounded(): string
     {
         if (!\is_file('/usr/sbin/sysctl')
             || !\is_executable('/usr/sbin/sysctl')
@@ -298,7 +245,7 @@ CDEF,
             $result = GatewayBoundedCommandRunner::run([
                 '/usr/sbin/sysctl',
                 '-n',
-                'kern.boottime',
+                'kern.bootsessionuuid',
             ], 3.0);
             if (($result['truncated'] ?? true) === true
                 || !\in_array((int)($result['code'] ?? 1), [0, 125], true)
@@ -306,26 +253,11 @@ CDEF,
                 return '';
             }
             $stdout = \trim((string)($result['stdout'] ?? ''));
-            if (\strlen($stdout) > 4096
-                || \preg_match(
-                    '/\A\{\s*sec\s*=\s*([0-9]+),\s*usec\s*=\s*([0-9]+)\s*\}'
-                        . '(?:[ \t]+[A-Z][a-z]{2}[ \t]+[A-Z][a-z]{2}[ \t]+'
-                        . '[0-9]{1,2}[ \t]+[0-9]{2}:[0-9]{2}:[0-9]{2}[ \t]+'
-                        . '[0-9]{4})?\z/D',
-                    $stdout,
-                    $matches,
-                ) !== 1
-            ) {
+            if (\strlen($stdout) > 64) {
                 return '';
             }
-            // macOS appends ctime(3) text to kern.boottime on some releases.
-            // Validate that suffix exactly, then return only the canonical
-            // timeval so the two-read comparison cannot absorb pipe noise.
-            $canonical = '{ sec = ' . (string)$matches[1]
-                . ', usec = ' . (string)$matches[2] . ' }';
-            return self::normalizeDarwinBootTimeToken($canonical) !== ''
-                ? $canonical
-                : '';
+
+            return $stdout;
         } catch (\Throwable) {
             return '';
         }

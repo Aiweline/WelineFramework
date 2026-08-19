@@ -3263,17 +3263,39 @@ static int wls_boot_id(char output[65])
                 || (value >= 'a' && value <= 'f'))) return -1;
     }
 #elif defined(__APPLE__)
-    struct timeval boot;
-    size_t length = sizeof(boot);
+    char boot_session_uuid[64];
+    size_t length = sizeof(boot_session_uuid);
+    size_t index;
     int written;
-    if (sysctlbyname("kern.boottime", &boot, &length, NULL, 0) != 0
-        || length != sizeof(boot)) return -1;
+    if (sysctlbyname(
+            "kern.bootsessionuuid",
+            boot_session_uuid,
+            &length,
+            NULL,
+            0
+        ) != 0
+        || length != 37U
+        || boot_session_uuid[36] != '\0') return -1;
+    for (index = 0U; index < 36U; index++) {
+        char value = boot_session_uuid[index];
+        int hyphen = index == 8U || index == 13U
+            || index == 18U || index == 23U;
+        if (hyphen) {
+            if (value != '-') return -1;
+            continue;
+        }
+        if (value >= 'A' && value <= 'F') {
+            boot_session_uuid[index] = (char)(value - 'A' + 'a');
+            value = boot_session_uuid[index];
+        }
+        if (!((value >= '0' && value <= '9')
+            || (value >= 'a' && value <= 'f'))) return -1;
+    }
     written = snprintf(
         platform_token,
         sizeof(platform_token),
-        "darwin-%lld-%d",
-        (long long)boot.tv_sec,
-        (int)boot.tv_usec
+        "darwin-%s",
+        boot_session_uuid
     );
     if (written <= 0 || written >= (int)sizeof(platform_token)) return -1;
 #else

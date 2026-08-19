@@ -817,6 +817,24 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame(0, $probe->localCertificateCalls);
         self::assertSame(0, $probe->managedWildcardCertificateCalls);
         self::assertSame(0, $probe->certificateMapCalls);
+        self::assertSame(0, $probe->localCaTrustCalls);
+    }
+
+    public function testWls2ManagedLocalHostStillSyncsDevelopmentCaTrust(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $probe = new StartConfigProbe(null, [], $sslService);
+
+        $probe->completeCertificatePreparation('wls2-local', [
+            'host' => 'p05113ef3.weline.test',
+            'public_host' => 'p05113ef3.weline.test',
+            'edge_mode' => 'auto',
+        ], false, 'p05113ef3.weline.test');
+
+        self::assertSame(0, $probe->localCertificateCalls);
+        self::assertSame(0, $probe->managedWildcardCertificateCalls);
+        self::assertSame(0, $probe->certificateMapCalls);
+        self::assertSame(1, $probe->localCaTrustCalls);
     }
 
     public function testPureWlsMissingCertificateAttemptsPostgresqlRestoreBeforeFailingClosed(): void
@@ -1222,6 +1240,11 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertIsInt($configAt);
         self::assertIsInt($hostAt);
         self::assertIsInt($manifestAt);
+        self::assertSame(
+            1,
+            \substr_count($source, '$this->getServerConfig('),
+            'One start invocation must resolve configuration and hosts side effects exactly once.',
+        );
         self::assertLessThan(
             $manifestAt,
             $hostAt,
@@ -1350,6 +1373,7 @@ final class StartConfigProbe extends Start
     public int $localCertificateCalls = 0;
     public int $certificateMapCalls = 0;
     public int $gatewayBackendLeaseCalls = 0;
+    public int $localCaTrustCalls = 0;
 
     public function __construct(
         private readonly ?array $savedConfig = null,
@@ -1543,6 +1567,12 @@ final class StartConfigProbe extends Start
     protected function generateCertificateMap(): void
     {
         $this->certificateMapCalls++;
+    }
+
+    protected function ensureLocalDevelopmentCaTrusted(SslCertificateService $sslService): void
+    {
+        unset($sslService);
+        $this->localCaTrustCalls++;
     }
 
     protected function calculateWorkerCount($workerCount, string $mode): int

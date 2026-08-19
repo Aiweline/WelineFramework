@@ -89,7 +89,9 @@ class SslCertificateService
     private const MAX_CERTIFICATE_DIRECTORY_ENTRIES = 32;
     private const MAX_INSTANCE_JSON_FILES = 512;
     private const MAX_TRUST_COMMAND_OUTPUT_BYTES = 262_144;
-    private const MAX_TRUST_COMMAND_TIMEOUT_MS = 30_000;
+    private const DEFAULT_TRUST_COMMAND_TIMEOUT_MS = 5_000;
+    private const MAX_TRUST_COMMAND_TIMEOUT_MS = 120_000;
+    private const MACOS_TRUST_MUTATION_TIMEOUT_MS = 120_000;
     private const MAX_ACME_HTTP_HEADER_BYTES = 65_536;
     private const MAX_ACME_HTTP_RESPONSE_BYTES = 4_194_304;
     
@@ -126,6 +128,10 @@ class SslCertificateService
      * @var array<string,array{success:bool,trusted:bool,message:string}>
      */
     protected array $localCaTrustResultCache = [];
+
+    private ?AdministratorAuthorizationSession $administratorAuthorizationSession = null;
+
+    private int $trustCommandTimeoutMs = self::DEFAULT_TRUST_COMMAND_TIMEOUT_MS;
     
     /**
      * ACME 目录缓存
@@ -233,6 +239,14 @@ class SslCertificateService
             );
         }
         $this->operationDeadlineMonotonic = $deadlineMonotonic;
+        return $this;
+    }
+
+    public function setAdministratorAuthorizationSession(
+        AdministratorAuthorizationSession $session,
+    ): self {
+        $this->administratorAuthorizationSession = $session;
+
         return $this;
     }
 
@@ -3110,10 +3124,13 @@ CNF;
         }
 
         $configuredTimeout = \getenv('WLS_SSL_TRUST_COMMAND_TIMEOUT_MS');
-        $timeoutMs = \is_string($configuredTimeout)
+        $timeoutMs = $this->trustCommandTimeoutMs;
+        if (\is_string($configuredTimeout)
             && \preg_match('/\A[0-9]{1,8}\z/D', $configuredTimeout) === 1
-                ? (int)$configuredTimeout
-                : 5000;
+            && $this->trustCommandTimeoutMs === self::DEFAULT_TRUST_COMMAND_TIMEOUT_MS
+        ) {
+            $timeoutMs = (int)$configuredTimeout;
+        }
         $timeoutMs = \max(500, \min(self::MAX_TRUST_COMMAND_TIMEOUT_MS, $timeoutMs));
         // Trust mutation is intentionally non-interactive. The shared runner
         // owns an isolated POSIX process group or the signed Windows Job helper,
@@ -3171,6 +3188,61 @@ CNF;
         // Automatic trust mutation never inherits a terminal. If elevation is
         // not already authorized, the caller reports the explicit manual path.
         return $this->runTrustCommand($command, $exitCode, false);
+    }
+
+    /** @param list<string> $command */
+    protected function runTrustMutationCommand(
+        array $command,
+        ?int &$exitCode = null,
+    ): string
+    {
+        $previousTimeout = $this->trustCommandTimeoutMs;
+        $this->trustCommandTimeoutMs = self::MACOS_TRUST_MUTATION_TIMEOUT_MS;
+        try {
+            return $this->runTrustCommand($command, $exitCode, false);
+        } finally {
+            $this->trustCommandTimeoutMs = $previousTimeout;
+        }
+    }
+
+    /**
+     * Reuse the process-local sudo ticket from server:start when mutating the
+     * System Keychain. A private `sudo -n` argv would skip `sudo -v` and inherit
+     * the 5s read-only trust-probe timeout.
+     *
+     * @param list<string> $command
+     */
+    protected function runPrivilegedTrustMutation(
+        array $command,
+        ?int &$exitCode = null,
+    ): string
+    {
+        if ($this->isRootUser()) {
+            return $this->runTrustMutationCommand($command, $exitCode);
+        }
+
+        if ($this->administratorAuthorizationSession !== null) {
+            $ok = $this->administratorAuthorizationSession->runPrivileged($command);
+            $exitCode = $ok ? 0 : 1;
+
+            return $ok
+                ? ''
+                : 'Administrator authorization or privileged trust mutation failed.';
+        }
+
+        if ($this->commandExists('sudo')) {
+            return $this->runTrustMutationCommand(
+                $this->buildSudoCommand(
+                    $command,
+                    '[WLS] sudo password for CA trust: ',
+                ),
+                $exitCode,
+            );
+        }
+
+        $exitCode = 1;
+
+        return 'sudo is unavailable for privileged trust mutation.';
     }
 
     protected function canUseInteractivePrivilegePrompt(): bool
@@ -3334,27 +3406,36 @@ CNF;
             return false;
         }
 
-        if (!$this->isMacosCaRootTrustedForSsl($caCertPath)) {
+        $installed = $this->isLocalCertificateAuthorityInstalledInMacosSystemKeychain($caCertPath)
+            || $this->isLocalCertificateAuthorityInstalledInMacosLoginKeychain($caCertPath);
+
+        $leafPath = $this->resolveLocalDevelopmentProbeLeafPath();
+        $leafTrusted = $leafPath === '' || $this->isMacosLeafCertificateTrustedBySystemStore($leafPath);
+        $chainValid = $leafPath === ''
+            || $this->isLocalDevelopmentSslChainCryptographicallyValid($caCertPath, $leafPath);
+
+        return $installed && $leafTrusted && $chainValid;
+    }
+
+    /**
+     * Verify the current site leaf through the macOS trust store.
+     * Verifying the self-signed root file itself is a false positive: a stale
+     * same-CN CA already marked trustRoot can make `security verify-cert -c root`
+     * report "No error" while Chrome still rejects the live leaf.
+     */
+    protected function isMacosLeafCertificateTrustedBySystemStore(string $leafPath): bool
+    {
+        if (self::readRegularFileNoFollow($leafPath) === null) {
             return false;
         }
 
-        $leafPath = $this->resolveLocalDevelopmentProbeLeafPath();
-        if ($leafPath === '') {
-            return true;
-        }
-
-        return $this->isLocalDevelopmentSslChainCryptographicallyValid($caCertPath, $leafPath);
-    }
-
-    protected function isMacosCaRootTrustedForSsl(string $caCertPath): bool
-    {
         $security = $this->resolveTrustExecutable('security');
         if ($security === '') {
             return false;
         }
         $exitCode = 1;
         $output = $this->runTrustCommand(
-            [$security, 'verify-cert', '-c', $caCertPath, '-p', 'ssl'],
+            [$security, 'verify-cert', '-c', $leafPath, '-p', 'ssl'],
             $exitCode
         );
 
@@ -3362,14 +3443,26 @@ CNF;
             return false;
         }
 
-        // macOS may return a non-zero status when Certificate Transparency
-        // metadata is unavailable for a local development root, while the
-        // actual trust result is still "No error".
         if (\preg_match('/Cert Verify Result:\s*No error/i', (string) $output)) {
             return true;
         }
 
         return $exitCode === 0 && !\preg_match('/error/i', (string) $output);
+    }
+
+    /**
+     * @deprecated Use isMacosLeafCertificateTrustedBySystemStore(); kept for
+     *             subclass overrides that still probe the CA file.
+     */
+    protected function isMacosCaRootTrustedForSsl(string $caCertPath): bool
+    {
+        unset($caCertPath);
+        $leafPath = $this->resolveLocalDevelopmentProbeLeafPath();
+        if ($leafPath === '') {
+            return false;
+        }
+
+        return $this->isMacosLeafCertificateTrustedBySystemStore($leafPath);
     }
 
     /**
@@ -3379,18 +3472,11 @@ CNF;
     protected function isLocalDevelopmentSslChainTrustedOnMacos(): bool
     {
         $caPath = $this->getLocalCaCertPath();
-        if (self::readRegularFileNoFollow($caPath) === null
-            || !$this->isMacosCaRootTrustedForSsl($caPath)
-        ) {
+        if (self::readRegularFileNoFollow($caPath) === null) {
             return false;
         }
 
-        $leafPath = $this->resolveLocalDevelopmentProbeLeafPath();
-        if ($leafPath === '') {
-            return true;
-        }
-
-        return $this->isLocalDevelopmentSslChainCryptographicallyValid($caPath, $leafPath);
+        return $this->isLocalCertificateAuthorityTrustedOnMacos($caPath);
     }
 
     protected function isLocalDevelopmentSslChainCryptographicallyValid(string $caCertPath, string $leafPath): bool
@@ -3660,54 +3746,54 @@ CNF;
             ];
         }
 
-        $installedInSystemKeychain = $this->isLocalCertificateAuthorityInstalledInMacosSystemKeychain($caCertPath);
-        $installedInLoginKeychain = $this->isLocalCertificateAuthorityInstalledInMacosLoginKeychain($caCertPath);
-        if ($this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)
-            && ($installedInSystemKeychain || $installedInLoginKeychain)) {
+        $currentFingerprint = $this->getCertificateSha1Fingerprint($caCertPath);
+        if ($this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
             return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by macOS Keychain')];
         }
 
         $output = '';
         $manual = 'sudo /usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain '
             . \escapeshellarg($caCertPath);
-
-        // Safari / Chrome 主要读取系统钥匙串；优先写入 System，再回退 login。
-        if ($this->commandExists('sudo')) {
-            $systemCommand = $this->buildSudoCommand(
-                [
-                    $security,
-                    'add-trusted-cert',
-                    '-d',
-                    '-r',
-                    'trustRoot',
-                    '-p',
-                    'ssl',
-                    '-p',
-                    'basic',
-                    '-k',
-                    '/Library/Keychains/System.keychain',
-                    $caCertPath,
-                ],
-                '[WLS] sudo password for macOS CA trust: ',
-            );
-            $systemExitCode = 1;
-            $systemOutput = $this->runInteractiveTrustCommand($systemCommand, $systemExitCode);
-            if ($systemExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
-                return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS System Keychain')];
-            }
-            $output = \trim($systemOutput);
-        }
-
         $loginKeychain = $this->resolveMacosLoginKeychain();
+
         $staleLoginCaOutput = $this->removeStaleLocalCertificateAuthoritiesFromMacosKeychain(
             $loginKeychain,
-            $this->getCertificateSha1Fingerprint($caCertPath)
+            $currentFingerprint
         );
         if ($staleLoginCaOutput !== '') {
             $output = \trim($output . "\n" . $staleLoginCaOutput);
         }
+        $staleSystemCaOutput = $this->removeStaleLocalCertificateAuthoritiesFromMacosKeychain(
+            '/Library/Keychains/System.keychain',
+            $currentFingerprint,
+            true
+        );
+        if ($staleSystemCaOutput !== '') {
+            $output = \trim($output . "\n" . $staleSystemCaOutput);
+        }
 
-        if (!$installedInLoginKeychain) {
+        $systemCommand = [
+            $security,
+            'add-trusted-cert',
+            '-d',
+            '-r',
+            'trustRoot',
+            '-p',
+            'ssl',
+            '-p',
+            'basic',
+            '-k',
+            '/Library/Keychains/System.keychain',
+            $caCertPath,
+        ];
+        $systemExitCode = 1;
+        $systemOutput = $this->runPrivilegedTrustMutation($systemCommand, $systemExitCode);
+        if ($systemExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+            return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS System Keychain')];
+        }
+        $output = \trim($output . "\n" . $systemOutput);
+
+        if (!$this->isLocalCertificateAuthorityInstalledInMacosLoginKeychain($caCertPath)) {
             $loginCommand = [
                 $security,
                 'add-trusted-cert',
@@ -3723,14 +3809,15 @@ CNF;
                 $caCertPath,
             ];
             $loginExitCode = 1;
-            $loginOutput = $this->runInteractiveTrustCommand($loginCommand, $loginExitCode);
+            $loginOutput = $this->runTrustMutationCommand($loginCommand, $loginExitCode);
             if ($loginExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
                 return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
             }
             $output = \trim($output . "\n" . $loginOutput);
         }
 
-        $hint = !$this->canUseInteractivePrivilegePrompt()
+        $hint = $this->administratorAuthorizationSession === null
+            && !$this->canUseInteractivePrivilegePrompt()
             ? __('macOS System Keychain trust needs an interactive Terminal approval; WLS has already tried the user login Keychain. Run the command below from Terminal if a browser still rejects the certificate.')
             : __('Run the command below to approve Keychain trust.');
 
@@ -3741,7 +3828,11 @@ CNF;
         ];
     }
 
-    protected function removeStaleLocalCertificateAuthoritiesFromMacosKeychain(string $keychainPath, string $currentFingerprint): string
+    protected function removeStaleLocalCertificateAuthoritiesFromMacosKeychain(
+        string $keychainPath,
+        string $currentFingerprint,
+        bool $privilegedDelete = false,
+    ): string
     {
         $currentFingerprint = $this->normalizeCertificateFingerprint($currentFingerprint);
         $security = $this->resolveTrustExecutable('security');
@@ -3766,24 +3857,60 @@ CNF;
         }
 
         $messages = [];
-        if (\preg_match_all('/SHA-1 hash:\s*([A-F0-9]+)/i', $output, $matches)) {
-            foreach ($matches[1] as $fingerprint) {
-                $fingerprint = $this->normalizeCertificateFingerprint((string) $fingerprint);
-                if ($fingerprint === '' || $fingerprint === $currentFingerprint) {
-                    continue;
-                }
-
-                $deleteOutput = $this->runTrustCommand(
-                    [$security, 'delete-certificate', '-Z', $fingerprint, $keychainPath],
-                    $deleteExitCode
-                );
-                $messages[] = $deleteExitCode === 0
-                    ? 'Removed stale Weline Local Development CA from macOS keychain: ' . $fingerprint
-                    : 'Failed to remove stale Weline Local Development CA ' . $fingerprint . ': ' . \trim($deleteOutput);
+        foreach ($this->parseMacosKeychainCertificateFingerprints($output) as $fingerprint) {
+            if ($fingerprint === $currentFingerprint) {
+                continue;
             }
+
+            $deleteCommand = [$security, 'delete-certificate', '-Z', $fingerprint, $keychainPath];
+            $deleteExitCode = 1;
+            $deleteOutput = $privilegedDelete
+                ? $this->runPrivilegedTrustMutation($deleteCommand, $deleteExitCode)
+                : $this->runTrustCommand($deleteCommand, $deleteExitCode);
+            $messages[] = $deleteExitCode === 0
+                ? 'Removed stale Weline Local Development CA from macOS keychain: ' . $fingerprint
+                : 'Failed to remove stale Weline Local Development CA ' . $fingerprint . ': ' . \trim($deleteOutput);
         }
 
         return \implode("\n", $messages);
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function parseMacosKeychainCertificateFingerprints(string $output): array
+    {
+        if (\preg_match_all('/SHA-1 hash:\s*([A-F0-9]+)/i', $output, $matches) < 1) {
+            return [];
+        }
+
+        $fingerprints = [];
+        foreach ($matches[1] as $fingerprint) {
+            $normalized = $this->normalizeCertificateFingerprint((string) $fingerprint);
+            if ($normalized === '') {
+                continue;
+            }
+            $fingerprints[$normalized] = $normalized;
+        }
+
+        return \array_values($fingerprints);
+    }
+
+    protected function macosKeychainOutputContainsCertificateFingerprint(
+        string $output,
+        string $fingerprint,
+    ): bool
+    {
+        $fingerprint = $this->normalizeCertificateFingerprint($fingerprint);
+        if ($fingerprint === '') {
+            return false;
+        }
+
+        return \in_array(
+            $fingerprint,
+            $this->parseMacosKeychainCertificateFingerprints($output),
+            true,
+        );
     }
 
     protected function isLocalCertificateAuthorityInstalledInMacosSystemKeychain(string $caCertPath): bool
@@ -3810,7 +3937,7 @@ CNF;
             return false;
         }
 
-        return \str_contains($this->normalizeCertificateFingerprint($output), $fingerprint);
+        return $this->macosKeychainOutputContainsCertificateFingerprint($output, $fingerprint);
     }
 
     protected function isLocalCertificateAuthorityInstalledInMacosLoginKeychain(string $caCertPath): bool
@@ -3845,7 +3972,7 @@ CNF;
             return false;
         }
 
-        return \str_contains($this->normalizeCertificateFingerprint($output), $fingerprint);
+        return $this->macosKeychainOutputContainsCertificateFingerprint($output, $fingerprint);
     }
 
     protected function trustLocalCertificateAuthority(string $caCertPath): array
@@ -3865,7 +3992,7 @@ CNF;
                 'trusted' => (bool)($result['trusted'] ?? false),
                 'message' => (string)($result['message'] ?? ''),
             ];
-            if ($cacheKey !== '') {
+            if ($cacheKey !== '' && $normalized['trusted']) {
                 $this->localCaTrustResultCache[$cacheKey] = $normalized;
             }
 
