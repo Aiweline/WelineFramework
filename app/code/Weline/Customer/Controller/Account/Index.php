@@ -46,6 +46,8 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         }
         $loginMs = $this->elapsedMs($loginStartedAt);
         $this->prepareAccountI18nModules();
+        $this->request->setGet('theme_page_title', (string)__('个人中心'));
+        $this->assign('page_title', __('个人中心'));
 
         // 获取登录用户
         $userStartedAt = microtime(true);
@@ -163,6 +165,9 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
     public function getSidebarContent(): string
     {
         $requestStartedAt = microtime(true);
+        $this->request->getResponse()
+            ->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+            ->setHeader('Pragma', 'no-cache');
         $loginStartedAt = $requestStartedAt;
         if (!$this->isLoggedIn()) {
             $this->setAccountTimingHeaders([
@@ -206,9 +211,11 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
 
         $startedAt = microtime(true);
         AccountSidebarContentGate::setRequestedSection($section);
+        AccountSidebarContentGate::setRequestParams((array)$this->request->getParams());
         try {
             $html = (string)$this->getTemplate()->getHook('account.sidebar.content');
         } finally {
+            AccountSidebarContentGate::setRequestParams(null);
             AccountSidebarContentGate::setRequestedSection(null);
         }
         $durationMs = (microtime(true) - $startedAt) * 1000;
@@ -325,6 +332,17 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
 
         /** @var Customer $user */
         $user = $this->getLoginUser();
+
+        $username = trim((string)$this->request->getPost('username'));
+        if ($username !== '') {
+            if (mb_strlen($username) > 100) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('用户名不能超过100个字符。')
+                ]);
+            }
+            $user->setUsername($username);
+        }
 
         $avatar = $this->request->getPost('avatar');
         if ($avatar) {

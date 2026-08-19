@@ -52,6 +52,25 @@ final class AccountQueryProviderCaptchaTest extends TestCase
         );
     }
 
+    public function testProfileDescriptorAcceptsAnEditableUsername(): void
+    {
+        /** @var AccountQueryProvider $provider */
+        $provider = (new \ReflectionClass(AccountQueryProvider::class))->newInstanceWithoutConstructor();
+        $profile = null;
+        foreach ($provider->getDescriptor()['operations'] as $operation) {
+            if (($operation['name'] ?? '') === 'updateProfile') {
+                $profile = $operation;
+                break;
+            }
+        }
+
+        self::assertIsArray($profile);
+        self::assertSame(
+            ['type' => 'string', 'max_length' => 100],
+            $profile['params']['username'] ?? null,
+        );
+    }
+
     public function testRejectedCaptchaStopsWorkerAuthentication(): void
     {
         $submission = [

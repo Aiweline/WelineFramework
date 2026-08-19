@@ -270,11 +270,12 @@
                 return sidebarContentLoading[sectionName];
             }
 
+            var sidebarPayload = Object.assign({ section: sectionName }, parseAccountHash().query);
             sidebarContentLoading[sectionName] = (window.Weline && window.Weline.load
                 ? window.Weline.load('api')
                 : Promise.resolve(window.Weline && window.Weline.Api)
             ).then(function(api) {
-                return api.resource('account').getSidebarSection({ section: sectionName });
+                return api.resource('account').getSidebarSection(sidebarPayload);
             }).then(function(payload) {
                 if (!payload || payload.success === false) {
                     if (payload && payload.redirect) {
@@ -341,7 +342,16 @@
         }
 
         function parseAccountHash() {
-            return parseHash(window.location.hash || '');
+            var state = parseHash(window.location.hash || '');
+            try {
+                var search = new URLSearchParams(window.location.search || '');
+                search.forEach(function(value, key) {
+                    if (!(key in state.query)) {
+                        state.query[String(key)] = String(value);
+                    }
+                });
+            } catch (err) {}
+            return state;
         }
 
         function getNavTarget(link) {

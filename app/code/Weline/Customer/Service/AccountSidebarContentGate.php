@@ -12,6 +12,7 @@ use Weline\Framework\Runtime\RequestContext;
 final class AccountSidebarContentGate
 {
     public const REQUEST_CONTEXT_KEY = 'weline_customer.account_sidebar_content.section';
+    public const REQUEST_PARAMS_CONTEXT_KEY = 'weline_customer.account_sidebar_content.params';
 
     public static function setRequestedSection(?string $section): void
     {
@@ -32,6 +33,30 @@ final class AccountSidebarContentGate
         }
 
         return '';
+    }
+
+    /** @param array<string, mixed>|null $params */
+    public static function setRequestParams(?array $params): void
+    {
+        if ($params === null || $params === []) {
+            RequestContext::remove(self::REQUEST_PARAMS_CONTEXT_KEY);
+            return;
+        }
+
+        RequestContext::set(self::REQUEST_PARAMS_CONTEXT_KEY, $params);
+    }
+
+    /** @return array<string, mixed> */
+    public static function requestParams(): array
+    {
+        $params = RequestContext::get(self::REQUEST_PARAMS_CONTEXT_KEY);
+        return is_array($params) ? $params : [];
+    }
+
+    public static function requestParam(string $key, mixed $default = null): mixed
+    {
+        $params = self::requestParams();
+        return array_key_exists($key, $params) ? $params[$key] : $default;
     }
 
     public static function accepts(string ...$sections): bool

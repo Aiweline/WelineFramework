@@ -58,6 +58,14 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             'register_url',
             $this->authReturnUrlService->buildAuthPageUrl('customer/account/register', $redirectUrl)
         );
+        $this->assign(
+            'forgot_password_url',
+            $this->authReturnUrlService->buildAuthPageUrl('customer/account/forgot-password', $redirectUrl)
+        );
+        $this->assign(
+            'login_submit_url',
+            $this->authReturnUrlService->buildAuthPageUrl('customer/account/login', $redirectUrl)
+        );
         $this->assign('title', __('登录'));
         $this->assign('meta', [
             'showHeader' => false,
