@@ -12,7 +12,9 @@ class Index extends FrontendController
     public function index(): string
     {
         // 默认允许匿名结账：未登录也直接渲染结账页，身份由 CheckoutIdentityService 处理。
+        $this->request->setGet('theme_page_title', (string)__('结账'));
         $this->assign('page_title', __('结账'));
+        $this->assign('title', __('结账'));
         $this->layoutType = 'checkout';
 
         /** @var \Weline\Checkout\Service\CheckoutPageViewModel $viewModel */

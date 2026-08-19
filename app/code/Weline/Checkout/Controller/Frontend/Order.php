@@ -13,22 +13,15 @@ namespace Weline\Checkout\Controller\Frontend;
 
 use Weline\Checkout\Service\OrderService;
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 前端订单控制器
  */
 class Order extends FrontendController
 {
-    private const LOGIN_PATH = '/customer/account/login';
-    private const ORDER_LIST_PATH = '/weline_checkout/frontend/order/list';
-    private const ORDER_VIEW_PATH = '/weline_checkout/frontend/order/view';
-
     private OrderService $orderService;
 
-    public function __construct(
-        OrderService $orderService
-    ) {
+    public function __construct(OrderService $orderService) {
         $this->orderService = $orderService;
     }
 
@@ -39,23 +32,7 @@ class Order extends FrontendController
      */
     public function list(): string
     {
-        if (!$this->isLoggedIn()) {
-            return $this->redirectToLogin(self::ORDER_LIST_PATH);
-        }
-
-        $customerId = $this->getLoginUserId();
-        $page = max(1, (int)$this->request->getParam('page', 1));
-        $pageSize = 20;
-
-        $orders = $this->orderService->getCustomerOrders($customerId, $page, $pageSize);
-
-        $this->assign('page_title', __('我的订单'));
-        $this->assign('orders', $orders);
-        $this->assign('page', $page);
-        $this->assign('page_size', $pageSize);
-        $this->layoutType = 'account';
-        
-        return $this->fetch('Weline_Checkout::frontend/order/list.phtml');
+        return $this->redirect($this->getUrl('customer/account/index') . '#orders');
     }
 
     /**
@@ -65,39 +42,9 @@ class Order extends FrontendController
      */
     public function view(): string
     {
-        $orderId = (int)$this->request->getParam('order_id');
-        $orderNumber = $this->request->getParam('order_number', '');
+        $orderUuid = trim((string)$this->request->getParam('order_uuid', ''));
 
-        if (!$this->isLoggedIn()) {
-            return $this->redirectToLogin($this->orderViewPath($orderId, $orderNumber));
-        }
-
-        if (!$orderId && !$orderNumber) {
-            return $this->redirect($this->getUrl('weline_checkout/frontend/order/list'));
-        }
-
-        $order = null;
-        if ($orderId) {
-            $order = $this->orderService->getOrder($orderId);
-        } elseif ($orderNumber) {
-            $order = $this->orderService->getOrderByNumber($orderNumber);
-        }
-
-        if (!$order) {
-            return $this->redirect($this->getUrl('weline_checkout/frontend/order/list'));
-        }
-
-        // 验证订单所有权
-        $customerId = $this->getLoginUserId();
-        if ($order->getCustomerId() != $customerId) {
-            return $this->redirect($this->getUrl('weline_checkout/frontend/order/list'));
-        }
-
-        $this->assign('page_title', __('订单详情'));
-        $this->assign('order', $order);
-        $this->layoutType = 'account';
-        
-        return $this->fetch('Weline_Checkout::frontend/order/view.phtml');
+        return $this->redirectToAccountOrders($orderUuid);
     }
 
     /**
@@ -150,22 +97,13 @@ class Order extends FrontendController
         }
     }
 
-    private function redirectToLogin(string $targetPath): string
+    private function redirectToAccountOrders(string $orderUuid = ''): string
     {
-        return $this->redirect(self::LOGIN_PATH, ['redirect_url' => $targetPath]);
-    }
-
-    private function orderViewPath(int $orderId, string $orderNumber): string
-    {
-        if ($orderId > 0) {
-            return self::ORDER_VIEW_PATH . '?order_id=' . $orderId;
+        $hash = '#orders';
+        if ($orderUuid !== '') {
+            $hash .= '?order_uuid=' . rawurlencode($orderUuid);
         }
 
-        $orderNumber = trim($orderNumber);
-        if ($orderNumber !== '') {
-            return self::ORDER_VIEW_PATH . '?order_number=' . $orderNumber;
-        }
-
-        return self::ORDER_LIST_PATH;
+        return $this->redirect($this->getUrl('customer/account/index') . $hash);
     }
 }

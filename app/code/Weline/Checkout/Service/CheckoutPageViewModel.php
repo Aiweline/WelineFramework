@@ -14,10 +14,12 @@ final class CheckoutPageViewModel
     /**
      * @return array{items:list<array<string,mixed>>,currency:string,is_empty:bool,item_count:int,subtotal:float,grand_total:float}
      */
-    public function currentCart(): array
+    public function currentCart(?string $guestToken = null): array
     {
+        $guestToken = trim((string)$guestToken);
+        $v2Params = $guestToken !== '' ? ['guest_token' => $guestToken] : [];
         try {
-            $v2Result = w_query('cart', 'getV2Cart');
+            $v2Result = w_query('cart', 'getV2Cart', $v2Params);
         } catch (\Throwable) {
             $v2Result = null;
         }
