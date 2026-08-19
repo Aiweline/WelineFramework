@@ -115,4 +115,35 @@ class PixelStickyUtmJsContractTest extends TestCore
             self::assertStringContainsString($needle, $phtml);
         }
     }
+
+    public function testPixelBootstrapUsesTheCanonicalStaticAssetVersion(): void
+    {
+        $hook = (string)\file_get_contents(
+            BP . '/app/code/Weline/Visitor/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml'
+        );
+
+        self::assertStringContainsString(
+            "\$__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)';",
+            $hook
+        );
+        self::assertStringNotContainsString('@static(Weline_Visitor::js/pixel.js)?v=', $hook);
+    }
+
+    public function testLocalDevelopmentDefersThePixelBundleUntilIdle(): void
+    {
+        $hook = (string)\file_get_contents(
+            BP . '/app/code/Weline/Visitor/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml'
+        );
+
+        self::assertStringNotContainsString("loadWelinePixel('eager-dev');", $hook);
+        self::assertStringContainsString(
+            "window.requestIdleCallback(function () { loadWelinePixel('idle-dev'); }, { timeout: 1500 });",
+            $hook
+        );
+        self::assertStringContainsString(
+            "window.setTimeout(function () { loadWelinePixel('timeout-dev'); }, 500);",
+            $hook
+        );
+        self::assertStringContainsString("loadWelinePixel('cta-click');", $hook);
+    }
 }
