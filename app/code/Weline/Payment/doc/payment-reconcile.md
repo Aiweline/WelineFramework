@@ -16,13 +16,14 @@ correlation 链为：
 |---|---|---|
 | `succeeded_attempt_missing_effect_outbox` | succeeded Attempt 缺后续 effect outbox | 是 |
 | `paid_order_missing_invoice_effect` | paid Intent 缺 invoice effect | 是 |
+| `successful_transaction_payable_not_paid` | 成功的兼容 Transaction 对应 Payable 不存在或未进入 paid | 否 |
 | `inbox_received_not_applied` | inbox received 超时未 applied | 否 |
 | `refund_pending_unknown_over_sla` | Refund pending/unknown 超 24 小时 | 否 |
 | `attempt_reservation_lease_expired` | 非终态 Attempt 的库存预占租约已过期 | 否 |
 | `outbox_pending_stale` | outbox pending 超时未处理 | 否 |
 | `outbox_dead` | outbox 已进入 dead 终态 | 否 |
 
-repair 只补 `invoice`、`fulfillment`、`notification` 三类确定性 effect。其余异常只报告、告警，由人工或对应业务流程处理。
+repair 只补 `invoice`、`fulfillment`、`notification` 三类确定性 effect。其余异常只报告、告警，由人工或对应业务流程处理。成功 Transaction 与 Payable 的一致性检查通过 `PayableResolverRegistry` 读取已发布快照；只有快照显式发布权威 `payment_status` 时才判定未支付，避免将无持久支付状态的通用 Payable 误报。Payment 不直接依赖 Order 具体类，也不会从对账流程推进业务单据状态。
 
 ## CLI
 
