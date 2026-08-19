@@ -32,8 +32,16 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('id="orders-section"', $content);
         $this->assertStringContainsString('Weline_Order::frontend::account::index::orders', $content);
         $this->assertStringContainsString('AccountCheckoutGroupLoader', $content);
+        $this->assertStringContainsString('AccountOrderDetailResolver', $content);
+        $this->assertStringContainsString('AccountSidebarContentGate::requestParam(', $content);
+        $this->assertStringContainsString("'order_uuid',", $content);
+        $this->assertStringContainsString("getParam('order_uuid'", $content);
+        $this->assertStringContainsString('data-requested-order-uuid=', $content);
+        $this->assertStringContainsString('data-order-detail-resolved=', $content);
         $this->assertStringContainsString('AccountSidebarProjectionProviderInterface', $content);
         $this->assertStringContainsString("assign('accountCheckoutGroups'", $content);
+        $this->assertStringContainsString("assign('accountOrderDetail'", $content);
+        $this->assertStringNotContainsString('$GLOBALS', $content);
         $this->assertStringNotContainsString('Weline_Customer::frontend::account::index::orders', $content);
 
         $ordersPanel = $moduleRoot . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
@@ -41,6 +49,8 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $orders = (string) file_get_contents($ordersPanel);
         $this->assertStringContainsString('data-account-layout="customer-sidebar"', $orders);
         $this->assertStringContainsString('data-group-summary="true"', $orders);
+        $this->assertStringContainsString('data-order-status="true"', $orders);
+        $this->assertStringContainsString('data-order-total="true"', $orders);
         $this->assertStringContainsString('data-partial-expanded="true"', $orders);
         $this->assertStringContainsString('AccountCheckoutGroupPresenter', $orders);
         $this->assertStringNotContainsString('fetch(', $orders);
