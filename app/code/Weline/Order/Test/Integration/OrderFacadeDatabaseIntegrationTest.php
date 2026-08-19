@@ -34,10 +34,9 @@ final class OrderFacadeDatabaseIntegrationTest extends TestCase
 {
     public function testPublishedInterfaceResolvesToFacade(): void
     {
-        self::assertInstanceOf(
-            OrderFacade::class,
-            ObjectManager::getInstance(OrderFacadeInterface::class),
-        );
+        $facade = ObjectManager::getInstance(OrderFacadeInterface::class);
+        self::assertInstanceOf(OrderFacade::class, $facade);
+        self::assertInstanceOf(OrderPaidStateHook::class, $facade->postPaymentHook());
         self::assertInstanceOf(
             OrderPaidStateHook::class,
             ObjectManager::getInstance(OrderPostPaymentHookInterface::class),
