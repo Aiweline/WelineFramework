@@ -23,7 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
 class Checkout extends FrontendController
 {
     private const CART_PATH = '/cart';
-    private const ORDER_LIST_PATH = '/weline_checkout/frontend/order/list';
+    private const ORDER_LIST_PATH = '/checkout/frontend/order/list';
 
     private CheckoutService $checkoutService;
     private PaymentService $paymentService;
@@ -47,7 +47,9 @@ class Checkout extends FrontendController
     public function index(): string
     {
         // 默认允许匿名结账：未登录也直接渲染结账页。
+        $this->request->setGet('theme_page_title', (string)__('结账'));
         $this->assign('page_title', __('结账'));
+        $this->assign('title', __('结账'));
         $this->layoutType = 'checkout';
 
         /** @var \Weline\Checkout\Service\CheckoutPageViewModel $viewModel */
@@ -165,7 +167,9 @@ class Checkout extends FrontendController
             }
         }
 
+        $this->request->setGet('theme_page_title', (string)__('结账成功'));
         $this->assign('page_title', __('结账成功'));
+        $this->assign('title', __('结账成功'));
         $this->assign('order', $order);
         $this->layoutType = 'checkout';
         

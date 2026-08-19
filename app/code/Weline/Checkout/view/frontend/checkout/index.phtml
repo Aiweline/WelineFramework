@@ -6,11 +6,18 @@ $copy = [
     'empty_cart' => (string)__('购物车为空，请先加入商品。'),
     'submit' => (string)__('提交订单'),
     'submitting' => (string)__('正在提交订单...'),
-    'payment_redirect' => (string)__('订单已创建，正在打开结果页面。'),
-    'payment_pending' => (string)__('订单已创建。'),
+    'payment_redirect' => (string)__('订单已创建，正在继续支付。'),
+    'payment_pending' => (string)__('订单已创建，支付仍在处理中。'),
+    'payment_failed' => (string)__('订单已创建，但支付未完成。您可以重试支付，不会重复下单。'),
+    'retry_payment' => (string)__('重试支付'),
+    'continue_payment' => (string)__('继续支付'),
+    'retrying_payment' => (string)__('正在重试支付...'),
+    'order_reference' => (string)__('订单编号'),
     'required' => (string)__('请补全收货信息并选择配送和支付方式。'),
     'api_missing' => (string)__('Weline.Api 尚未就绪，请刷新页面后重试。'),
 ];
+$successPageUrl = $this->getUrl('checkout/success-page');
+$productsUrl = $this->getUrl('products');
 ?>
 <section class="weline-checkout" data-weline-checkout data-testid="checkout-form-page" weline-code="checkout.checkout.index.section_1">
     <header class="weline-checkout__header">
@@ -24,7 +31,33 @@ $copy = [
 
     <div class="weline-checkout__notice" data-checkout-message aria-live="polite"><?= htmlspecialchars($copy['loading'], ENT_QUOTES, 'UTF-8') ?></div>
 
-    <w:form class="weline-checkout__grid" data-checkout-form>
+    <section class="weline-checkout__empty-state" data-checkout-empty hidden weline-code="checkout.checkout.empty.section_1">
+        <p class="weline-checkout__eyebrow"><?= __('暂时无法结账') ?></p>
+        <h2><?= __('购物车是空的') ?></h2>
+        <p><?= __('先选择需要采购的商品，再回来完成配送与支付。') ?></p>
+        <div class="weline-checkout__empty-actions">
+            <a class="weline-checkout__empty-primary" href="<?= $productsUrl ?>"><?= __('返回选购') ?></a>
+            <a class="weline-checkout__empty-secondary" href="<?= $this->getUrl('cart') ?>"><?= __('查看购物车') ?></a>
+        </div>
+    </section>
+
+    <section class="weline-checkout__payment-recovery" data-checkout-payment-recovery hidden weline-code="checkout.checkout.payment_recovery.section_1">
+        <p class="weline-checkout__eyebrow"><?= __('订单已创建') ?></p>
+        <h2 data-payment-recovery-title><?= __('支付状态待确认') ?></h2>
+        <p data-payment-recovery-detail><?= htmlspecialchars($copy['payment_pending'], ENT_QUOTES, 'UTF-8') ?></p>
+        <p class="weline-checkout__payment-reference">
+            <span><?= htmlspecialchars($copy['order_reference'], ENT_QUOTES, 'UTF-8') ?>:</span>
+            <strong data-payment-order-reference></strong>
+        </p>
+        <div class="weline-checkout__empty-actions">
+            <button type="button" class="weline-checkout__empty-primary" data-payment-retry>
+                <?= htmlspecialchars($copy['retry_payment'], ENT_QUOTES, 'UTF-8') ?>
+            </button>
+            <a class="weline-checkout__empty-secondary" href="<?= $productsUrl ?>"><?= __('继续购物') ?></a>
+        </div>
+    </section>
+
+    <w:form class="weline-checkout__grid" data-checkout-form hidden>
         <div class="weline-checkout__main">
             <section class="weline-checkout__panel" weline-code="checkout.checkout.index.section_2">
                 <h2><?= __('收货信息') ?></h2>
@@ -92,20 +125,20 @@ $copy = [
                 <w:hook>Weline_Checkout::frontend::partials::checkout::cart-items</w:hook>
             </div>
             <w:hook>Weline_Checkout::frontend::layouts::checkout::review-after</w:hook>
-            <dl class="weline-checkout__totals">
-                <div>
-                    <dt><?= __('商品小计') ?></dt>
-                    <dd data-subtotal>--</dd>
+            <div class="weline-checkout__totals" role="list">
+                <div role="listitem">
+                    <span><?= __('商品小计') ?></span>
+                    <strong data-subtotal="">0.00</strong>
                 </div>
-                <div>
-                    <dt><?= __('运费') ?></dt>
-                    <dd data-shipping-amount>--</dd>
+                <div role="listitem">
+                    <span><?= __('运费') ?></span>
+                    <strong data-shipping-amount="">0.00</strong>
                 </div>
-                <div class="weline-checkout__grand">
-                    <dt><?= __('应付合计') ?></dt>
-                    <dd data-grand-total>--</dd>
+                <div class="weline-checkout__grand" role="listitem">
+                    <span><?= __('应付合计') ?></span>
+                    <strong data-grand-total="">0.00</strong>
                 </div>
-            </dl>
+            </div>
             <button class="weline-checkout__submit" type="submit" data-submit>
                 <?= htmlspecialchars($copy['submit'], ENT_QUOTES, 'UTF-8') ?>
             </button>
@@ -142,6 +175,7 @@ $copy = [
         margin: 0;
     }
     .weline-checkout h1 {
+        color: var(--weline-checkout-heading-color, #111827);
         font-size: 32px;
         line-height: 1.2;
     }
@@ -179,6 +213,89 @@ $copy = [
         border-color: #bbf7d0;
         background: #f0fdf4;
         color: #166534;
+    }
+    .weline-checkout__empty-state,
+    .weline-checkout__payment-recovery {
+        padding: clamp(28px, 6vw, 56px);
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 8px;
+        background: var(--weline-layout-surface-primary, #fff);
+        box-shadow: var(--weline-theme-shadow-sm, 0 10px 24px rgba(15, 23, 42, .06));
+        text-align: center;
+    }
+    .weline-checkout__empty-state[hidden],
+    .weline-checkout__payment-recovery[hidden],
+    .weline-checkout__grid[hidden],
+    .weline-checkout__notice[hidden] {
+        display: none;
+    }
+    .weline-checkout__empty-state h2 {
+        margin-top: 4px;
+        color: var(--weline-layout-text-primary, #111827);
+        font-size: clamp(24px, 4vw, 34px);
+    }
+    .weline-checkout__payment-recovery h2 {
+        margin-top: 4px;
+        color: var(--weline-layout-text-primary, #111827);
+        font-size: clamp(24px, 4vw, 34px);
+    }
+    .weline-checkout__empty-state > p:not(.weline-checkout__eyebrow) {
+        margin-top: 12px;
+        color: var(--weline-layout-text-primary, #111827);
+        opacity: .72;
+    }
+    .weline-checkout__payment-recovery > p:not(.weline-checkout__eyebrow) {
+        margin-top: 12px;
+        color: var(--weline-layout-text-primary, #111827);
+        opacity: .78;
+    }
+    .weline-checkout__payment-reference {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        overflow-wrap: anywhere;
+    }
+    .weline-checkout__empty-actions {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+    }
+    .weline-checkout__empty-actions a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 18px;
+        border: 1px solid var(--weline-layout-link-color, #2563eb);
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 900;
+    }
+    .weline-checkout__empty-actions button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 18px;
+        border: 1px solid var(--weline-layout-link-color, #2563eb);
+        border-radius: 8px;
+        font: inherit;
+        font-weight: 900;
+        cursor: pointer;
+    }
+    .weline-checkout__empty-actions button:disabled {
+        opacity: .55;
+        cursor: wait;
+    }
+    .weline-checkout__empty-primary {
+        background: var(--weline-layout-link-color, #2563eb);
+        color: var(--weline-theme-on-primary, #fff);
+    }
+    .weline-checkout__empty-secondary {
+        background: transparent;
+        color: var(--weline-layout-link-color, #2563eb);
     }
     .weline-checkout__grid {
         display: grid;
@@ -339,6 +456,7 @@ $copy = [
     'use strict';
 
     const copy = <?= json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const successPageUrl = <?= json_encode($successPageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const root = document.querySelector('[data-weline-checkout]');
     if (!root) {
         return;
@@ -346,6 +464,12 @@ $copy = [
 
     const form = root.querySelector('[data-checkout-form]');
     const message = root.querySelector('[data-checkout-message]');
+    const emptyState = root.querySelector('[data-checkout-empty]');
+    const paymentRecovery = root.querySelector('[data-checkout-payment-recovery]');
+    const paymentRecoveryTitle = root.querySelector('[data-payment-recovery-title]');
+    const paymentRecoveryDetail = root.querySelector('[data-payment-recovery-detail]');
+    const paymentOrderReference = root.querySelector('[data-payment-order-reference]');
+    const paymentRetryButton = root.querySelector('[data-payment-retry]');
     const submitButton = root.querySelector('[data-submit]');
     const shippingBox = root.querySelector('[data-shipping-methods]');
     const paymentBox = root.querySelector('[data-payment-methods]');
@@ -355,6 +479,9 @@ $copy = [
     const grandTotalNode = root.querySelector('[data-grand-total]');
 
     let checkoutApi = null;
+    let activePaymentRecovery = null;
+    let customerAddressPrefilled = false;
+    const guestTokenStorageKey = 'weline.cart.guest_token';
     let checkoutState = {
         currency: 'CNY',
         cart: {},
@@ -389,7 +516,12 @@ $copy = [
 
     function money(amount) {
         const currency = checkoutState.currency || 'CNY';
-        return currency + ' ' + Number(amount || 0).toFixed(2);
+        const numericAmount = Number(amount || 0);
+        const formattedAmount = new Intl.NumberFormat(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
+        return currency + ' ' + formattedAmount;
     }
 
     function formAddress() {
@@ -406,9 +538,163 @@ $copy = [
         };
     }
 
+    function applyDefaultShippingAddress(address) {
+        if (customerAddressPrefilled || !form || !address || typeof address !== 'object') {
+            return;
+        }
+        const fields = ['name', 'phone', 'email', 'country_code', 'province', 'city', 'address1', 'postal_code'];
+        let applied = false;
+        fields.forEach(function (field) {
+            const input = form.querySelector('[name="' + field + '"]');
+            const value = text(address[field]).trim();
+            if (!input || !value || text(input.value).trim()) {
+                return;
+            }
+            input.value = value;
+            applied = true;
+        });
+        customerAddressPrefilled = applied;
+    }
+
     function selectedValue(name) {
         const checked = form.querySelector('input[name="' + name + '"]:checked');
         return checked ? checked.value : '';
+    }
+
+    function guestToken() {
+        try {
+            return text(window.sessionStorage.getItem(guestTokenStorageKey)).trim();
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function newIdempotencyKey(prefix) {
+        return prefix + (
+            window.crypto && typeof window.crypto.randomUUID === 'function'
+                ? window.crypto.randomUUID()
+                : Date.now().toString(36) + Math.random().toString(36).slice(2)
+        );
+    }
+
+    function paymentRecoveryFromLocation() {
+        const prefix = '#payment-recovery?';
+        if (!window.location.hash.startsWith(prefix)) {
+            return null;
+        }
+        const params = new URLSearchParams(window.location.hash.slice(prefix.length));
+        const state = {
+            quote_token: text(params.get('quote_token')).trim(),
+            idempotency_key: text(params.get('idempotency_key')).trim(),
+            payment_method: text(params.get('payment_method')).trim(),
+            country_code: text(params.get('country_code')).trim(),
+            order_uuid: text(params.get('order_uuid')).trim(),
+            checkout_group_uuid: text(params.get('checkout_group_uuid')).trim(),
+            outcome: text(params.get('outcome')).trim(),
+            redirect_url: text(params.get('redirect_url')).trim(),
+            recoverable: params.get('recoverable') !== '0',
+        };
+        return state.quote_token && state.idempotency_key && state.payment_method && state.order_uuid
+            ? state
+            : null;
+    }
+
+    function persistPaymentRecovery(state) {
+        const params = new URLSearchParams();
+        Object.keys(state).forEach(function (key) {
+            const value = typeof state[key] === 'boolean'
+                ? (state[key] ? '1' : '0')
+                : text(state[key]).trim();
+            if (value) {
+                params.set(key, value);
+            }
+        });
+        window.history.replaceState(
+            null,
+            '',
+            window.location.pathname + window.location.search + '#payment-recovery?' + params.toString()
+        );
+    }
+
+    function safePaymentRedirect(value) {
+        const raw = text(value).trim();
+        if (!raw) {
+            return '';
+        }
+        try {
+            const url = new URL(raw, window.location.origin);
+            return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function showPaymentRecovery(state) {
+        activePaymentRecovery = state;
+        if (form) {
+            form.hidden = true;
+        }
+        if (emptyState) {
+            emptyState.hidden = true;
+        }
+        if (paymentRecovery) {
+            paymentRecovery.hidden = false;
+        }
+        if (message) {
+            message.hidden = false;
+        }
+        const pending = state.outcome === 'pending';
+        setText(paymentRecoveryTitle, pending ? copy.payment_pending : copy.payment_failed);
+        setText(paymentRecoveryDetail, pending ? copy.payment_pending : copy.payment_failed);
+        setText(paymentOrderReference, state.order_uuid);
+        if (paymentRetryButton) {
+            const canContinue = Boolean(safePaymentRedirect(state.redirect_url));
+            paymentRetryButton.hidden = pending ? !canContinue : !state.recoverable;
+            paymentRetryButton.disabled = false;
+            setText(paymentRetryButton, canContinue ? copy.continue_payment : copy.retry_payment);
+        }
+        setMessage(pending ? copy.payment_pending : copy.payment_failed, pending ? 'success' : 'error');
+    }
+
+    function navigateToSuccess(state) {
+        const successUrl = new URL(successPageUrl, window.location.origin);
+        successUrl.searchParams.set('order_uuid', state.order_uuid);
+        successUrl.searchParams.set('checkout_group_uuid', state.checkout_group_uuid);
+        const checkoutToken = text(state.quote_token).trim();
+        successUrl.searchParams.set('checkout_token', checkoutToken);
+        window.location.assign(successUrl.toString());
+    }
+
+    function handlePaymentResult(result, state) {
+        const data = result.data && typeof result.data === 'object' ? result.data : result;
+        const orderUuids = Array.isArray(result.order_uuids)
+            ? result.order_uuids
+            : (Array.isArray(data.order_uuids) ? data.order_uuids : []);
+        state.order_uuid = text(orderUuids[0] || state.order_uuid);
+        state.checkout_group_uuid = text(
+            result.checkout_group_uuid || data.checkout_group_uuid || state.checkout_group_uuid
+        );
+        state.quote_token = text(result.checkout_token || state.quote_token);
+        if (!state.order_uuid || !state.checkout_group_uuid || !state.quote_token) {
+            throw new Error(copy.load_failed);
+        }
+
+        const payment = result.payment && typeof result.payment === 'object' ? result.payment : {};
+        const outcome = text(payment.outcome || (payment.paid ? 'paid' : payment.status)).toLowerCase();
+        if (outcome === 'paid' || payment.paid) {
+            navigateToSuccess(state);
+            return;
+        }
+
+        state.outcome = outcome === 'failed' ? 'failed' : 'pending';
+        state.redirect_url = safePaymentRedirect(payment.redirect_url || state.redirect_url);
+        state.recoverable = payment.recoverable !== false;
+        persistPaymentRecovery(state);
+        showPaymentRecovery(state);
+        if (state.outcome === 'pending' && state.redirect_url) {
+            setMessage(copy.payment_redirect, 'success');
+            window.location.assign(state.redirect_url);
+        }
     }
 
     function selectedShippingAmount() {
@@ -438,6 +724,7 @@ $copy = [
     }
 
     function render(data) {
+        applyDefaultShippingAddress(data.default_shipping_address);
         checkoutState.currency = text(data.currency || data.cart && data.cart.currency || 'CNY') || 'CNY';
         checkoutState.cart = data.cart || {};
         checkoutState.shippingMethods = Array.isArray(data.shipping_methods) ? data.shipping_methods : [];
@@ -448,6 +735,16 @@ $copy = [
             guest_allowed: true,
             requires_guest_email: true,
         };
+        const cartIsEmpty = Boolean(checkoutState.cart.is_empty);
+        if (form) {
+            form.hidden = cartIsEmpty;
+        }
+        if (emptyState) {
+            emptyState.hidden = !cartIsEmpty;
+        }
+        if (message) {
+            message.hidden = cartIsEmpty;
+        }
         const emailInput = form ? form.querySelector('input[name="email"]') : null;
         if (emailInput) {
             emailInput.required = Boolean(checkoutState.identity.is_guest_checkout);
@@ -457,9 +754,9 @@ $copy = [
         applyServerHtml(paymentBox, data.payment_methods_html);
         renderTotals();
         if (submitButton) {
-            submitButton.disabled = Boolean(checkoutState.cart.is_empty) || !checkoutState.shippingMethods.length || !checkoutState.paymentMethods.length;
+            submitButton.disabled = cartIsEmpty || !checkoutState.shippingMethods.length || !checkoutState.paymentMethods.length;
         }
-        if (checkoutState.cart.is_empty) {
+        if (cartIsEmpty) {
             setMessage(copy.empty_cart, 'error');
         } else {
             setMessage('<?= __('请确认收货信息、配送方式和支付方式。') ?>', 'success');
@@ -479,7 +776,10 @@ $copy = [
 
     async function loadCheckout() {
         const api = await getApi();
-        const data = await api.getData({ shipping_address: formAddress() });
+        const data = await api.getData({
+            shipping_address: formAddress(),
+            guest_token: guestToken(),
+        });
         render(data || {});
     }
 
@@ -527,6 +827,7 @@ $copy = [
                 const frozen = await api.freezeQuote({
                     address: address,
                     service_code: shippingMethod,
+                    guest_token: guestToken(),
                 });
                 if (!frozen || frozen.success === false) {
                     throw new Error(text(frozen && frozen.message) || copy.load_failed);
@@ -535,30 +836,28 @@ $copy = [
                 if (!quoteToken) {
                     throw new Error(copy.load_failed);
                 }
-                const idempotencyKey = 'checkout_ui_' + (
-                    window.crypto && typeof window.crypto.randomUUID === 'function'
-                        ? window.crypto.randomUUID()
-                        : Date.now().toString(36) + Math.random().toString(36).slice(2)
-                );
+                const idempotencyKey = newIdempotencyKey('checkout_ui_');
                 const result = await api.submitV2({
                     quote_token: quoteToken,
+                    payment_method: paymentMethod,
                     idempotency_key: idempotencyKey,
+                    country_code: address.country_code,
+                    guest_token: guestToken(),
                 });
                 if (!result || result.success === false) {
                     throw new Error(text(result && result.message) || copy.load_failed);
                 }
-                const data = result.data && typeof result.data === 'object' ? result.data : result;
-                const groupUuid = text(result.checkout_group_uuid || data.checkout_group_uuid);
-                const orderUuids = Array.isArray(result.order_uuids)
-                    ? result.order_uuids
-                    : (Array.isArray(data.order_uuids) ? data.order_uuids : []);
-                const orderUuid = text(orderUuids[0]);
-                if (!groupUuid || !orderUuid) {
-                    throw new Error(copy.load_failed);
-                }
-                setMessage(copy.payment_pending, 'success');
-                window.location.href = '/checkout/success-page?order_uuid=' + encodeURIComponent(orderUuid)
-                    + '&checkout_group_uuid=' + encodeURIComponent(groupUuid);
+                handlePaymentResult(result, {
+                    quote_token: quoteToken,
+                    idempotency_key: idempotencyKey,
+                    payment_method: paymentMethod,
+                    country_code: address.country_code,
+                    order_uuid: '',
+                    checkout_group_uuid: '',
+                    outcome: '',
+                    redirect_url: '',
+                    recoverable: true,
+                });
             } catch (error) {
                 setMessage(error.message || copy.load_failed, 'error');
                 if (submitButton) {
@@ -573,11 +872,50 @@ $copy = [
         shippingBox.addEventListener('change', renderTotals);
     }
 
-    loadCheckout().catch(function (error) {
-        setMessage(error.message || copy.load_failed, 'error');
-        if (submitButton) {
-            submitButton.disabled = true;
-        }
-    });
+    if (paymentRetryButton) {
+        paymentRetryButton.addEventListener('click', async function () {
+            if (!activePaymentRecovery) {
+                return;
+            }
+            const redirectUrl = safePaymentRedirect(activePaymentRecovery.redirect_url);
+            if (activePaymentRecovery.outcome === 'pending' && redirectUrl) {
+                window.location.assign(redirectUrl);
+                return;
+            }
+            paymentRetryButton.disabled = true;
+            setText(paymentRetryButton, copy.retrying_payment);
+            setMessage(copy.retrying_payment, '');
+            try {
+                const api = await getApi();
+                const result = await api.resumePaymentV2({
+                    quote_token: activePaymentRecovery.quote_token,
+                    idempotency_key: activePaymentRecovery.idempotency_key,
+                    payment_idempotency_key: newIdempotencyKey('checkout_payment_retry_'),
+                    payment_method: activePaymentRecovery.payment_method,
+                    country_code: activePaymentRecovery.country_code,
+                });
+                if (!result || result.success === false) {
+                    throw new Error(text(result && result.message) || copy.load_failed);
+                }
+                handlePaymentResult(result, activePaymentRecovery);
+            } catch (error) {
+                setMessage(error.message || copy.payment_failed, 'error');
+                paymentRetryButton.disabled = false;
+                setText(paymentRetryButton, copy.retry_payment);
+            }
+        });
+    }
+
+    const initialPaymentRecovery = paymentRecoveryFromLocation();
+    if (initialPaymentRecovery) {
+        showPaymentRecovery(initialPaymentRecovery);
+    } else {
+        loadCheckout().catch(function (error) {
+            setMessage(error.message || copy.load_failed, 'error');
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+        });
+    }
 })();
 </script>
