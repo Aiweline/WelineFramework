@@ -1840,6 +1840,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             if (($last['state'] ?? '') === 'FAILED') {
                 self::fail(
                     'Gateway publication failed: ' . \json_encode($last)
+                        . "\nBroker: " . $this->processLog('broker')
                         . "\nController: " . $this->processLog('controller-primary')
                         . "\nNginx: " . (string)@\file_get_contents(
                             $this->home . DIRECTORY_SEPARATOR . 'runtime/logs/error.log',
@@ -1860,7 +1861,11 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             }
             \usleep(100_000);
         } while (\microtime(true) < $deadline);
-        self::fail('Gateway operation did not commit: ' . \json_encode($last));
+        self::fail(
+            'Gateway operation did not commit: ' . \json_encode($last)
+                . "\nBroker: " . $this->processLog('broker')
+                . "\nController: " . $this->processLog('controller-primary'),
+        );
     }
 
     /**
@@ -2421,6 +2426,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         }
         return (string)\json_encode([
             'controller' => $controller,
+            'controller_process' => $this->processStatus($controller),
             'wall_offset' => $offset,
             'iteration' => $iteration,
             'domain' => $domain,
@@ -2429,11 +2435,18 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             'state' => [
                 'health_state' => $state['health_state'] ?? null,
                 'ready' => $state['ready'] ?? null,
+                'active_slot' => $state['active_slot'] ?? null,
+                'previous_slot' => $state['previous_slot'] ?? null,
                 'recovery' => $state['recovery'] ?? null,
                 'generation' => $state['generation'] ?? null,
                 'active_config_generation' => $state['active_config_generation'] ?? null,
                 'routes' => $routes,
             ],
+            'nginx_pid' => $this->nginxPid(),
+            'nginx_log' => (string)@\file_get_contents(
+                $this->home . DIRECTORY_SEPARATOR . 'runtime/logs/error.log',
+            ),
+            'broker_log' => $this->processLog('broker'),
             'controller_log' => $this->processLog($controller),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }

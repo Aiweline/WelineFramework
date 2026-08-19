@@ -4000,7 +4000,10 @@ final class ProjectServingManifestStore
     /** @param array<string,mixed> $expected @param array<string,mixed> $actual */
     private function assertSameFileFact(array $expected, array $actual, string $label): void
     {
-        foreach (['path', 'sha256', 'size', 'dev', 'ino', 'uid', 'gid', 'mode', 'nlink'] as $field) {
+        // st_dev is a kernel mount identifier and may be reassigned across an
+        // operating-system reboot. Stable reads still bind dev+ino within one
+        // observation; the persisted authority uses reboot-stable file facts.
+        foreach (['path', 'sha256', 'size', 'ino', 'uid', 'gid', 'mode', 'nlink'] as $field) {
             if ((string)($expected[$field] ?? '') !== (string)($actual[$field] ?? '')) {
                 throw new \RuntimeException(
                     'WLS serving ' . $label . ' identity changed: '

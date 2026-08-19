@@ -301,6 +301,57 @@ final class ProjectServingManifestStartupRecoveryTest extends TestCase
         self::assertStringContainsString('disappeared or rolled back', $failure->getMessage());
     }
 
+    public function testPersistentCertificateFactAllowsOnlyBootScopedDeviceDrift(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $method = new \ReflectionMethod($store, 'assertSameFileFact');
+        $expected = [
+            'path' => '/immutable/fullchain.pem',
+            'sha256' => \str_repeat('a', 64),
+            'size' => 8906,
+            'dev' => 16777232,
+            'ino' => 85082290,
+            'uid' => 501,
+            'gid' => 20,
+            'mode' => 33152,
+            'nlink' => 1,
+        ];
+
+        $method->invoke(
+            $store,
+            $expected,
+            \array_replace($expected, ['dev' => 16777233]),
+            'certificate',
+        );
+        self::addToAssertionCount(1);
+
+        $changes = [
+            'path' => '/immutable/replaced.pem',
+            'sha256' => \str_repeat('b', 64),
+            'size' => 8907,
+            'ino' => 85082291,
+            'uid' => 0,
+            'gid' => 0,
+            'mode' => 33188,
+            'nlink' => 2,
+        ];
+        foreach ($changes as $field => $value) {
+            $failure = $this->captureOrdinaryFailure(
+                fn (): mixed => $method->invoke(
+                    $store,
+                    $expected,
+                    \array_replace($expected, ['dev' => 16777233, $field => $value]),
+                    'certificate',
+                ),
+            );
+            self::assertStringContainsString(
+                'WLS serving certificate identity changed',
+                $failure->getMessage(),
+                $field,
+            );
+        }
+    }
+
     /** @return array<string,mixed> */
     private function activate(
         ProjectCertificateGenerationStore $store,

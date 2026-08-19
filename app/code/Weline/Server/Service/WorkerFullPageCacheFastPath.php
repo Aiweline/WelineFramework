@@ -102,32 +102,49 @@ final class WorkerFullPageCacheFastPath
         $fullUri = $scheme . '://' . $host . $requestUri;
 
         try {
-            $cached = $this->coordinator->getFormattedCachedResponseForFullUri(
-                $fullUri,
-                $decision->method,
-                (string)($headers['accept'] ?? ''),
-                (string)($headers['accept-encoding'] ?? ''),
-                (string)($headers['cookie'] ?? ''),
-                $decision->keepAlive(),
-                $this->processOnly || !$decision->fpcSharedCacheEnabled(),
-            );
-
             // READY warms the homepage under an exact locale/currency receipt.
             // Anonymous requests intentionally carry no cookies, so reuse that
-            // already-validated identity instead of rebuilding a second FPC
-            // variant or entering Router/Controller on every root request.
-            if ($cached === null && $this->runtime instanceof WlsRuntime && $requestUri === '/') {
-                $identity = $this->runtime->resolveHomepageFastPathIdentity(
+            // exact receipt instead of the generic raw-request lookup. A
+            // receipt mismatch or exact Process L1 miss returns to Framework;
+            // it never reconstructs Store/Channel scope or probes Shared L2.
+            if ($this->runtime instanceof WlsRuntime && $requestUri === '/') {
+                $receipt = $this->runtime->resolveHomepageFastPathReceipt(
                     $fullUri,
                     (string)($headers['cookie'] ?? ''),
                 );
-                if (\is_array($identity)) {
-                    $cached = $this->coordinator->getFormattedCachedResponseForFullUri(
-                        $identity['full_uri'],
+                if (\is_array($receipt)) {
+                    $cached = $this->coordinator->getFormattedProcessCachedResponseForInternalReceipt(
+                        $receipt,
+                        $decision->keepAlive(),
                         $decision->method,
                         (string)($headers['accept'] ?? ''),
                         (string)($headers['accept-encoding'] ?? ''),
-                        $identity['cookie_header'],
+                    );
+                } else {
+                    $cached = null;
+                }
+            } else {
+                $localizedReceipt = $this->coordinator->resolveLocalizedHomepageProcessReceipt(
+                    $fullUri,
+                    (string)($headers['cookie'] ?? ''),
+                );
+                if (\is_array($localizedReceipt)) {
+                    $cached = $this->coordinator->getFormattedProcessCachedResponseForInternalReceipt(
+                        $localizedReceipt,
+                        $decision->keepAlive(),
+                        $decision->method,
+                        (string)($headers['accept'] ?? ''),
+                        (string)($headers['accept-encoding'] ?? ''),
+                    );
+                } elseif ($this->coordinator->isLocalizedHomepageFullUri($fullUri)) {
+                    $cached = null;
+                } else {
+                    $cached = $this->coordinator->getFormattedCachedResponseForFullUri(
+                        $fullUri,
+                        $decision->method,
+                        (string)($headers['accept'] ?? ''),
+                        (string)($headers['accept-encoding'] ?? ''),
+                        (string)($headers['cookie'] ?? ''),
                         $decision->keepAlive(),
                         $this->processOnly || !$decision->fpcSharedCacheEnabled(),
                     );
