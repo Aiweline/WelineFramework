@@ -44,4 +44,24 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
         $this->assertStringContainsString('const modal = ensureBindModal();', $content);
         $this->assertStringContainsString("const emailInput = modal.querySelector('#cs-bind-email');", $content);
     }
+
+    public function testWidgetStylesheetReliesOnTheCanonicalStaticAssetVersion(): void
+    {
+        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+
+        $this->assertFileExists($hookFile);
+        $content = (string) file_get_contents($hookFile);
+
+        $this->assertStringContainsString(
+            'href="@static(Weline_CustomerService::css/customer-service.css)"',
+            $content
+        );
+        $this->assertStringContainsString(
+            "var customerServiceScriptUrl = '@static(Weline_CustomerService::js/customer-service.js)';",
+            $content
+        );
+        $this->assertStringNotContainsString('customerServiceAssetVersion', $content);
+        $this->assertStringNotContainsString('customer-service.css)?v=', $content);
+        $this->assertStringNotContainsString('customer-service.js)?v=', $content);
+    }
 }

@@ -96,9 +96,8 @@ $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales
     'zh_Hans_CN',
 ]);
 
-$customerServiceAssetVersion = '20260619-security-hardening';
 ?>
-<link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)?v=<?= $customerServiceAssetVersion ?>">
+<link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)">
 <div id="customer-service-widget" class="customer-service-widget" data-editor-interactive>
     <div id="cs-chat-button" class="cs-chat-button" data-cs-toggle-chat>
         <svg class="cs-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
@@ -186,6 +185,7 @@ $customerServiceAssetVersion = '20260619-security-hardening';
 </div>
 
 <?php
+// 用户发送客服消息后再创建真实弹窗节点，避免首屏承担未使用的交互 DOM。
 $bindModalHtml = <<<'BIND_MODAL_HTML'
 <div id="cs-bind-modal" class="cs-modal" style="display: none;" data-editor-interactive>
     <div class="cs-modal-content">
@@ -258,7 +258,7 @@ function initCustomerServiceWidget() {
 (function () {
     'use strict';
 
-    var customerServiceScriptUrl = '@static(Weline_CustomerService::js/customer-service.js)?v=<?= $customerServiceAssetVersion ?>';
+    var customerServiceScriptUrl = '@static(Weline_CustomerService::js/customer-service.js)';
     var customerServiceScriptLoading = false;
     var customerServiceOpenAfterLoad = false;
 
