@@ -7,10 +7,13 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Weline\Framework\App;
 use Weline\Framework\App\Env as AppEnv;
+use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Runtime\RequestContext;
+
+require_once APP_CODE_PATH . 'Weline/Framework/Common/functions.php';
 
 final class AppRequestRuntimeContextTest extends TestCase
 {
@@ -143,6 +146,91 @@ final class AppRequestRuntimeContextTest extends TestCase
         $method->invoke($app);
 
         self::assertSame([], HeaderCollector::getInstance()->getCookies());
+    }
+
+    public function testLocalizedHomepageSynchronizesUnifiedCacheDimensionsFromEitherPrefixOrder(): void
+    {
+        $currencyMap = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap');
+        $currencyScope = new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope');
+        $languageMap = new \ReflectionProperty(State::class, 'allowedLanguageCodeMap');
+        $languageScope = new \ReflectionProperty(State::class, 'allowedLanguageCodeScope');
+        $original = [
+            $currencyMap->getValue(),
+            $currencyScope->getValue(),
+            $languageMap->getValue(),
+            $languageScope->getValue(),
+        ];
+
+        try {
+            $method = new ReflectionMethod(App::class, 'synchronizeParsedLocalization');
+            $method->setAccessible(true);
+
+            foreach ([
+                ['/USD/', '', 'zh_Hans_CN', 'USD'],
+                ['/en_US/', '', 'en_US', 'CNY'],
+                ['/USD/en_US/', '', 'en_US', 'USD'],
+                ['/en_US/USD/', '', 'en_US', 'USD'],
+                ['/site/en_US/USD/', 'https://example.test/site', 'en_US', 'USD'],
+                ['/site/USD/en_US/catalog', 'https://example.test/site', 'en_US', 'USD'],
+            ] as [$uri, $websiteUrl, $expectedLanguage, $expectedCurrency]) {
+                RequestContext::cleanup();
+                Context::leave();
+                Context::enter(new Context([
+                    'meta' => ['type' => 'request', 'mode' => 'wls'],
+                    'input' => [
+                        'uri' => '/',
+                        'origin_request_uri' => $uri,
+                        'server' => [
+                            'REQUEST_URI' => '/',
+                            'WELINE_ORIGIN_REQUEST_URI' => $uri,
+                            'WELINE_WEBSITE_ID' => '0',
+                            'WELINE_WEBSITE_CODE' => 'default',
+                        ],
+                    ],
+                    'route' => [
+                        'website_id' => 0,
+                        'website_code' => 'default',
+                        'language' => 'zh_Hans_CN',
+                        'currency' => 'CNY',
+                    ],
+                ]));
+                RequestContext::init();
+
+                $scope = (string)WelineEnv::get('website_id', '')
+                    . '|' . (string)WelineEnv::get('website.code', '')
+                    . '|' . (string)WelineEnv::server('WELINE_WEBSITE_ID', '');
+                // URL currency is an authoritative route dimension even when
+                // the current Website selector only exposes its default CNY.
+                // It must not collapse /USD/... onto the CNY cache context.
+                $currencyMap->setValue(null, ['CNY' => true]);
+                $currencyScope->setValue(null, $scope);
+                $languageMap->setValue(null, ['zh_hans_cn' => true, 'en_us' => true]);
+                $languageScope->setValue(null, $scope);
+
+                $parse = [
+                    'currency' => 'CNY',
+                    'language' => 'zh_Hans_CN',
+                    'server' => [
+                        'WELINE_USER_CURRENCY' => 'CNY',
+                        'WELINE_USER_LANG' => 'zh_Hans_CN',
+                        'WELINE_WEBSITE_URL' => $websiteUrl,
+                    ],
+                ];
+                $method->invokeArgs(new App(), [&$parse, $uri]);
+
+                self::assertSame($expectedCurrency, RequestContext::getWelineUserCurrency(), $uri);
+                self::assertSame($expectedLanguage, RequestContext::getWelineUserLang(), $uri);
+                self::assertSame($expectedCurrency, $parse['currency'], $uri);
+                self::assertSame($expectedLanguage, $parse['language'], $uri);
+                self::assertSame($expectedCurrency, $parse['server']['WELINE_USER_CURRENCY'], $uri);
+                self::assertSame($expectedLanguage, $parse['server']['WELINE_USER_LANG'], $uri);
+            }
+        } finally {
+            $currencyMap->setValue(null, $original[0]);
+            $currencyScope->setValue(null, $original[1]);
+            $languageMap->setValue(null, $original[2]);
+            $languageScope->setValue(null, $original[3]);
+        }
     }
 
     private function createAppForRequest(string $uri, array $server = []): App

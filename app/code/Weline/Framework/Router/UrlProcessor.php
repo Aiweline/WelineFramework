@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Router;
 
+use Weline\Framework\App\State;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
@@ -73,6 +74,15 @@ class UrlProcessor
         
         // 去除首尾斜杠
         $url = trim($url, self::URL_PATH_SPLIT);
+
+        if ($url !== '') {
+            $segments = array_values(array_filter(
+                explode(self::URL_PATH_SPLIT, $url),
+                static fn(string $segment): bool => $segment !== ''
+            ));
+            $localized = State::resolveLocalizationFromPathSegments($segments);
+            $url = implode(self::URL_PATH_SPLIT, $localized['remaining']);
+        }
         
         // 移除尾部的 'index'
         $url = $this->removeTrailingIndex($url);

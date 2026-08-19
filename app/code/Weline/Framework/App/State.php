@@ -124,7 +124,7 @@ class State extends DataObject
 
     /**
      * 获取当前货币
-     * 优先级：URL 路径解析的变量 > Cookie > 默认值
+     * 优先级：URL 路径解析的变量 > 有效用户偏好 > 网站默认货币
      *
      * @return string
      */
@@ -136,16 +136,18 @@ class State extends DataObject
             return $currency;
         }
 
-        $currency = \w_env('user.currency');
-        // 如果 w_env 中没有，从 Cookie 读取
-        if (empty($currency)) {
-            $currency = Cookie::get('WELINE_USER_CURRENCY');
+        $candidates = [
+            \w_env('user.currency'),
+            Cookie::get('WELINE_USER_CURRENCY'),
+        ];
+        foreach ($candidates as $candidate) {
+            $currency = strtoupper(trim((string)$candidate));
+            if ($currency !== '' && self::isAllowedCurrencyCode($currency)) {
+                return $currency;
+            }
         }
-        // 默认网站货币
-        if (empty($currency)) {
-            $currency = Cookie::get('WELINE_WEBSITE_CURRENCY', 'CNY');
-        }
-        return $currency;
+
+        return self::resolveWebsiteDefaultCurrency();
     }
 
     /**
@@ -294,6 +296,46 @@ class State extends DataObject
     }
 
     /**
+     * Remove only the exact configured Website path prefix before the shared
+     * localization parser runs. Keeping this boundary in State prevents App,
+     * Router and FPC from deriving different language/currency dimensions for
+     * `/site/USD/en_US/` and `/site/en_US/USD/`.
+     */
+    public static function stripWebsitePathPrefix(string $path, string $websiteUrl): string
+    {
+        $path = \trim($path);
+        if ($path === '') {
+            $path = '/';
+        } elseif (!\str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+
+        $websiteUrl = \trim($websiteUrl);
+        if ($websiteUrl === '') {
+            return $path;
+        }
+
+        try {
+            $websitePath = \trim((string)(\parse_url($websiteUrl, \PHP_URL_PATH) ?: ''), '/');
+        } catch (\ValueError) {
+            return $path;
+        }
+        if ($websitePath === '') {
+            return $path;
+        }
+
+        $requestPath = \trim($path, '/');
+        if ($requestPath === $websitePath) {
+            return '/';
+        }
+        if (!\str_starts_with($requestPath, $websitePath . '/')) {
+            return $path;
+        }
+
+        return '/' . \substr($requestPath, \strlen($websitePath) + 1);
+    }
+
+    /**
      * @return array{
      *     currency: string,
      *     language: string,
@@ -397,6 +439,62 @@ class State extends DataObject
         }
 
         return 'zh_Hans_CN';
+    }
+
+    /**
+     * 网站默认货币：website.currency / WELINE_WEBSITE_CURRENCY / WebsiteData / app env，
+     * 再回落到站点允许货币列表首项。
+     */
+    public static function resolveWebsiteDefaultCurrency(): string
+    {
+        $candidates = [];
+        try {
+            $candidates[] = trim((string)\w_env('website.currency', ''));
+        } catch (\Throwable) {
+        }
+        try {
+            $candidates[] = trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CURRENCY', ''));
+        } catch (\Throwable) {
+        }
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $candidates[] = trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultCurrency() ?? ''));
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            $candidates[] = trim((string)Env::system('currency', ''));
+        } catch (\Throwable) {
+        }
+
+        $allowedMap = self::resolveAllowedCurrencyCodeMap();
+        foreach ($candidates as $candidate) {
+            $code = strtoupper(trim((string)$candidate));
+            if (!self::isCurrencySegmentCandidate($code)) {
+                continue;
+            }
+            if ($allowedMap !== [] && !isset($allowedMap[$code])) {
+                continue;
+            }
+
+            return $code;
+        }
+
+        try {
+            $codes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredCurrencyCodes();
+            foreach (self::normalizeCurrencyCodeList($codes) as $code) {
+                if ($allowedMap === [] || isset($allowedMap[$code])) {
+                    return $code;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        if ($allowedMap !== []) {
+            return (string)array_key_first($allowedMap);
+        }
+
+        return 'CNY';
     }
 
     /**

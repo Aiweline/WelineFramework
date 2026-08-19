@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Router\Test;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App\State;
 use Weline\Framework\Cache\Adapter\WlsMemoryAdapter;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
@@ -24,6 +25,8 @@ use Weline\Framework\Session\SessionCookieNameResolver;
 final class FullPageCacheCoordinatorTest extends TestCase
 {
     private array $originalServer = [];
+    private ?array $originalAllowedCurrencyCodeMap = null;
+    private ?string $originalAllowedCurrencyCodeScope = null;
 
     protected function setUp(): void
     {
@@ -64,10 +67,22 @@ final class FullPageCacheCoordinatorTest extends TestCase
         WelineEnv::set('is_backend', false, 'unit-test');
         WelineEnv::set('is_static_file', false, 'unit-test');
         WelineEnv::set('response.from_cache', false, 'unit-test');
+        $currencyMap = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap');
+        $currencyScope = new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope');
+        $this->originalAllowedCurrencyCodeMap = $currencyMap->getValue();
+        $this->originalAllowedCurrencyCodeScope = $currencyScope->getValue();
+        $currencyMap->setValue(null, ['CNY' => true, 'USD' => true]);
+        $currencyScope->setValue(null, (string)\w_env('website_id', '')
+            . '|' . (string)\w_env('website.code', '')
+            . '|' . (string)WelineEnv::server('WELINE_WEBSITE_ID', ''));
     }
 
     protected function tearDown(): void
     {
+        (new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap'))
+            ->setValue(null, $this->originalAllowedCurrencyCodeMap);
+        (new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope'))
+            ->setValue(null, $this->originalAllowedCurrencyCodeScope);
         WelineEnv::getInstance()->reset();
         FullPageCacheCoordinator::clearProcessCache();
         Runtime::resetModeCache();
@@ -338,6 +353,197 @@ final class FullPageCacheCoordinatorTest extends TestCase
         }
     }
 
+    public function testLocalizedHomepageReceiptsPreserveEveryRouteFormAndUnifiedVariant(): void
+    {
+        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        // A path currency is a route identity, not a Website selector option.
+        // Keep only CNY in the presentation allowlist and prove /USD/... still
+        // receives its own USD variant through the central path parser.
+        (new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap'))
+            ->setValue(null, ['CNY' => true]);
+        $cases = [
+            '/USD/' => ['language' => 'zh_Hans_CN', 'currency' => 'USD', 'website_url' => ''],
+            '/en_US/' => ['language' => 'en_US', 'currency' => 'CNY', 'website_url' => ''],
+            '/USD/en_US/' => ['language' => 'en_US', 'currency' => 'USD', 'website_url' => ''],
+            '/en_US/USD/' => ['language' => 'en_US', 'currency' => 'USD', 'website_url' => ''],
+            '/site/USD/en_US/' => [
+                'language' => 'en_US',
+                'currency' => 'USD',
+                'website_url' => 'https://example.test/site',
+            ],
+            '/site/en_US/USD/' => [
+                'language' => 'en_US',
+                'currency' => 'USD',
+                'website_url' => 'https://example.test/site',
+            ],
+        ];
+        $receipts = [];
+        $variantTokens = [];
+
+        foreach ($cases as $path => $expected) {
+            $fullUri = 'https://example.test' . $path;
+            WelineEnv::set('website_url', $expected['website_url'], 'unit-test');
+            $this->setFrozenLocaleCurrency($expected['language'], $expected['currency']);
+            self::assertSame($expected['language'], StorefrontCacheKeyContext::current()?->lang, $path);
+            self::assertSame($expected['currency'], StorefrontCacheKeyContext::current()?->currency, $path);
+            $this->setCurrentFpcUri($fullUri, $path);
+            $variantMethod = new \ReflectionMethod($coordinator, 'buildCurrentFpcVariant');
+            $currentVariant = $variantMethod->invoke($coordinator);
+            self::assertSame($expected['language'], $currentVariant['lang'] ?? null, $path);
+            self::assertSame($expected['currency'], $currentVariant['currency'] ?? null, $path);
+            $variantTokens[$path] = (string)(new \ReflectionMethod(
+                $coordinator,
+                'variantDebugToken',
+            ))->invoke($coordinator, $currentVariant);
+            self::assertSame($fullUri, (string)\w_env('full_request_uri', ''), $path);
+            $coordinator->publishResponse(
+                Response::html('<html><body>localized ' . $path . '</body></html>')
+                    ->setHeader('Cache-Control', 'public, max-age=60'),
+                $path,
+                ['id' => 'home'],
+                ['module' => 'Test_Module'],
+                [],
+                'GET',
+            );
+
+            $receipt = $coordinator->resolveLocalizedHomepageProcessReceipt($fullUri);
+            self::assertIsArray($receipt, $path);
+            self::assertSame($fullUri, $receipt['full_uri'], $path);
+            self::assertSame(hash('sha256', $receipt['cache_key']), $receipt['identity_digest'], $path);
+
+            $payloads = (new \ReflectionProperty(
+                FullPageCacheCoordinator::class,
+                'processFpcPayloadCache',
+            ))->getValue();
+            self::assertIsArray($payloads);
+            $payload = $payloads[$receipt['cache_key']] ?? null;
+            self::assertIsArray($payload, $path);
+            self::assertSame($expected['language'], $payload['fpc_variant']['lang'] ?? null, $path);
+            self::assertSame($expected['currency'], $payload['fpc_variant']['currency'] ?? null, $path);
+            $receipts[$path] = $receipt;
+        }
+
+        self::assertNotSame(
+            $receipts['/USD/en_US/']['cache_key'],
+            $receipts['/en_US/USD/']['cache_key'],
+            'Equivalent locale dimensions must not merge distinct visitor-facing URI orders.',
+        );
+        self::assertNotSame(
+            $variantTokens['/en_US/'],
+            $variantTokens['/USD/en_US/'],
+            'A URL currency dimension must survive final cache-key serialization.',
+        );
+        self::assertSame(
+            $variantTokens['/USD/en_US/'],
+            $variantTokens['/en_US/USD/'],
+            'Equivalent language/currency dimensions must share one semantic variant token.',
+        );
+        self::assertSame(
+            $variantTokens['/site/USD/en_US/'],
+            $variantTokens['/site/en_US/USD/'],
+            'Website-prefixed routes must preserve the same semantic language/currency dimensions.',
+        );
+
+        $catalogFullUri = 'https://example.test/site/USD/en_US/catalog';
+        WelineEnv::set('website_url', 'https://example.test/site', 'unit-test');
+        $this->setFrozenLocaleCurrency('en_US', 'USD');
+        $this->setCurrentFpcUri($catalogFullUri, '/catalog');
+        $catalogVariant = $variantMethod->invoke($coordinator);
+        self::assertSame('en_US', $catalogVariant['lang'] ?? null);
+        self::assertSame('USD', $catalogVariant['currency'] ?? null);
+        self::assertFalse(
+            $coordinator->isLocalizedHomepageFullUri($catalogFullUri),
+            'A localized business route keeps its variant but must not enter the homepage-only receipt path.',
+        );
+    }
+
+    public function testLocalizedContextUpgradeRetiresFreshAndSchemaNeutralLegacyPayloads(): void
+    {
+        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $fullUri = 'https://example.test/USD/en_US/';
+        $this->setFrozenLocaleCurrency('en_US', 'USD');
+        $this->setCurrentFpcUri($fullUri, '/USD/en_US/');
+
+        $variant = (new \ReflectionMethod($coordinator, 'buildCurrentFpcVariant'))->invoke($coordinator);
+        self::assertIsArray($variant);
+        $suffixWithoutSchema = (string)(new \ReflectionMethod(
+            $coordinator,
+            'variantSuffixWithoutSchema',
+        ))->invoke($coordinator, $variant);
+        $decorate = new \ReflectionMethod($coordinator, 'decorateFpcLogicalKey');
+
+        $legacyFresh = KeyBuilder::build('router', (string)$decorate->invoke(
+            $coordinator,
+            'unified-fpc:' . $fullUri . ':' . $suffixWithoutSchema
+                . '|schema=20260722-scope-variant-v2:GET',
+            $fullUri,
+        ));
+        $legacyV4Fresh = KeyBuilder::build('router', (string)$decorate->invoke(
+            $coordinator,
+            'unified-fpc:' . $fullUri . ':' . $suffixWithoutSchema
+                . '|schema=20260818-localization-context-v4:GET',
+            $fullUri,
+        ));
+        $currentFresh = (string)(new \ReflectionMethod(
+            $coordinator,
+            'buildUnifiedFpcCacheKey',
+        ))->invoke($coordinator, $fullUri, 'GET', $variant);
+
+        $legacySchemaNeutral = KeyBuilder::build('router', (string)$decorate->invoke(
+            $coordinator,
+            'unified-fpc-schema-neutral-stale:' . $fullUri . ':' . $suffixWithoutSchema . ':GET',
+            $fullUri,
+        ));
+        $legacyV4SchemaNeutral = KeyBuilder::build('router', (string)$decorate->invoke(
+            $coordinator,
+            'unified-fpc-schema-neutral-stale:20260818-localization-context-v4:'
+                . $fullUri . ':' . $suffixWithoutSchema . ':GET',
+            $fullUri,
+        ));
+        $currentSchemaNeutral = (string)(new \ReflectionMethod(
+            $coordinator,
+            'buildSchemaNeutralStaleCacheKey',
+        ))->invoke($coordinator, $fullUri, 'GET', $variant);
+
+        self::assertNotSame($legacyFresh, $currentFresh);
+        self::assertNotSame($legacyV4Fresh, $currentFresh);
+        self::assertNotSame($legacySchemaNeutral, $currentSchemaNeutral);
+        self::assertNotSame($legacyV4SchemaNeutral, $currentSchemaNeutral);
+    }
+
+    public function testLocalizedHomepageReceiptRejectsAuthorityCookiesAndEvictedPayload(): void
+    {
+        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $fullUri = 'https://example.test:8443/USD/en_US/';
+        $this->setCurrentFpcUri($fullUri, '/USD/en_US/');
+        $coordinator->publishResponse(
+            Response::html('<html><body>isolated localized homepage</body></html>')
+                ->setHeader('Cache-Control', 'public, max-age=60'),
+            '/USD/en_US/',
+            ['id' => 'home'],
+            ['module' => 'Test_Module'],
+            [],
+            'GET',
+        );
+
+        $receipt = $coordinator->resolveLocalizedHomepageProcessReceipt($fullUri);
+        self::assertIsArray($receipt);
+        self::assertNull($coordinator->resolveLocalizedHomepageProcessReceipt(
+            'https://example.test/USD/en_US/',
+        ));
+        self::assertNull($coordinator->resolveLocalizedHomepageProcessReceipt(
+            $fullUri,
+            'WELINE_USER_CURRENCY=USD',
+        ));
+        self::assertNull($coordinator->resolveLocalizedHomepageProcessReceipt(
+            'https://example.test:8443/USD/en_US/catalog',
+        ));
+
+        $deletePayload = new \ReflectionMethod($coordinator, 'deleteProcessCachedPayload');
+        $deletePayload->invoke($coordinator, $receipt['cache_key']);
+        self::assertNull($coordinator->resolveLocalizedHomepageProcessReceipt($fullUri));
+    }
+
     private function buildCurrentUnifiedFpcCacheKey(FullPageCacheCoordinator $coordinator, string $method): string
     {
         $variantMethod = new \ReflectionMethod($coordinator, 'buildCurrentFpcVariant');
@@ -350,6 +556,30 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $keyMethod->setAccessible(true);
 
         return (string)$keyMethod->invoke($coordinator, 'https://example.test/', $method, $variant);
+    }
+
+    private function setCurrentFpcUri(string $fullUri, string $requestUri): void
+    {
+        WelineEnv::set('full_request_uri', $fullUri, 'unit-test');
+        WelineEnv::setServer('WELINE_FULL_REQUEST_URI', $fullUri, 'unit-test');
+        WelineEnv::set('request.uri', $requestUri, 'unit-test');
+        Context::current()?->set('input.server.REQUEST_URI', $requestUri);
+    }
+
+    private function setFrozenLocaleCurrency(string $language, string $currency): void
+    {
+        $identity = RequestContext::scopeIdentity();
+        self::assertInstanceOf(ScopeIdentity::class, $identity);
+        RequestContext::setWelineUserLang($language);
+        RequestContext::setWelineUserCurrency($currency);
+        StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
+            $identity,
+            $language,
+            $currency,
+            str_repeat('b', 64),
+            str_repeat('b', 64),
+            true,
+        ));
     }
 
     private function setKnownLoggedInSession(string $sessionId): void

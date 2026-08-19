@@ -54,6 +54,36 @@ final class RequestPipelineDispatchOnceTest extends TestCase
         self::assertLessThan($fpcFastPath, $scopeGate);
     }
 
+    public function testParsedLocalizationIsSynchronizedBeforeStorefrontCacheContext(): void
+    {
+        $source = $this->methodSource(App::class, 'applyParsedUrl');
+        $websiteContext = strpos($source, "WelineEnv::set('website.currency'");
+        $provisionalLocalization = strpos(
+            $source,
+            '$this->synchronizeParsedLocalization($parse, $rawRequestUri);',
+        );
+        $authoritativeLocalization = strrpos(
+            $source,
+            '$this->synchronizeParsedLocalization($parse, $rawRequestUri);',
+        );
+        $scopeInstall = strpos($source, '$this->installStorefrontNavigationScope(');
+        $cacheContext = strpos($source, 'StorefrontCacheKeyContextResolver::class');
+        $contextRebuild = strpos($source, 'self::syncCurrentContextFromGlobals();');
+
+        self::assertIsInt($websiteContext);
+        self::assertIsInt($provisionalLocalization);
+        self::assertIsInt($authoritativeLocalization);
+        self::assertNotSame($provisionalLocalization, $authoritativeLocalization);
+        self::assertIsInt($scopeInstall);
+        self::assertIsInt($cacheContext);
+        self::assertIsInt($contextRebuild);
+        self::assertGreaterThan($websiteContext, $provisionalLocalization);
+        self::assertGreaterThan($provisionalLocalization, $scopeInstall);
+        self::assertGreaterThan($scopeInstall, $authoritativeLocalization);
+        self::assertGreaterThan($authoritativeLocalization, $cacheContext);
+        self::assertGreaterThan($cacheContext, $contextRebuild);
+    }
+
     private function methodSource(string $class, string $method): string
     {
         $reflection = new \ReflectionMethod($class, $method);

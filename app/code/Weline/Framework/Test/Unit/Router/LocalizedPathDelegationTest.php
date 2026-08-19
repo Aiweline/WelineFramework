@@ -7,6 +7,7 @@ namespace Weline\Framework\Test\Unit\Router;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Controller\Data\DataInterface as ControllerDataInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
@@ -92,6 +93,28 @@ final class LocalizedPathDelegationTest extends TestCase
         self::assertSame('admin/login', $this->coreStrip($backendPrefix . '/en_US/USD/admin/login'));
         self::assertSame('USD/catalog', $this->coreStrip('CNY/USD/catalog'));
         self::assertSame('zh_Hans_CN/catalog', $this->coreStrip('en_US/zh_Hans_CN/catalog'));
+    }
+
+    public function testWebsitePathPrefixUsesAnExactSegmentBoundaryBeforeLocalization(): void
+    {
+        $stripped = State::stripWebsitePathPrefix(
+            '/site/en_US/USD/catalog',
+            'https://example.test/site',
+        );
+        self::assertSame('/en_US/USD/catalog', $stripped);
+        self::assertSame(
+            ['currency' => 'USD', 'language' => 'en_US'],
+            \array_intersect_key(
+                State::resolveLocalizationFromPathSegments(['en_US', 'USD', 'catalog']),
+                ['currency' => true, 'language' => true],
+            ),
+        );
+        self::assertSame('/', State::stripWebsitePathPrefix('/site/', '/site'));
+        self::assertSame(
+            '/site-x/USD/en_US/',
+            State::stripWebsitePathPrefix('/site-x/USD/en_US/', '/site'),
+            'A similarly prefixed business route must not be consumed as a Website prefix.',
+        );
     }
 
     private function observe(string $path): string

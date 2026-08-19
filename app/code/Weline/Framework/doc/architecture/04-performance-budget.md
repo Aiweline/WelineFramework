@@ -249,7 +249,7 @@ WLS 禁止在 Worker READY 或普通请求阶段加载某个 locale 的全模块
 
 ## 2026-07-13 匿名首页 READY receipt 快路径
 
-冷重载后发现，首页虽显示 Process FPC HIT，但匿名请求不携带默认语言/货币 Cookie，Worker 重构的身份与 READY 发布 receipt 不同，因此每次仍进入 Framework FPC 管线，QPS 只有 300–500。修复后仅同 scheme/host 的无 Cookie 根路径复用已验证 receipt；两拓扑的外部响应均显示 `UrlParser=0 / UrlParserApply=0`。
+冷重载后发现，首页虽显示 Process FPC HIT，但匿名请求不携带默认语言/货币 Cookie，Worker 重构的身份与 READY 发布 receipt 不同，因此每次仍进入 Framework FPC 管线，QPS 只有 300–500。修复后仅同 scheme/host/effective-port 的无 Cookie 根路径复用已验证 receipt；两拓扑的外部响应均显示 `UrlParser=0 / UrlParserApply=0`。
 
 | 拓扑 / 并发 / 请求 | 成功 | QPS | p95 | p99 | max |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -257,3 +257,26 @@ WLS 禁止在 Worker READY 或普通请求阶段加载某个 locale 的全模块
 | Dispatcher / 32 / 10,000 | 10,000 | 3,930.59 | 16.449ms | 37.335ms | 148.435ms |
 
 Direct QPS 相对提升 20.26%，两组 0 错误。默认策略恢复后，裸 `/admin/login` 两拓扑均为 404，正确 backend key 为 200，语言/货币两种顺序都进入规范化 302。当时主机 load average 超过 9，所以这组证据用于确认快路径和拓扑相对 QPS，不替代低噪声五轮中位数。
+
+## 2026-08-17 READY receipt 证明字段丢失回归
+
+当前 Storefront 隔离合同正确禁止原始 Worker 在没有请求级 generation vector 时重建通用 FPC 变体。回归原因是匿名首页分支只传递 `full_uri/cookie_header`，丢弃 READY receipt 的 `cache_key/identity_digest`，因此页面虽然最终报 Process FPC HIT，每次仍稳定进入 Router。修复后 Worker 只在同 origin、无 Cookie 根路径上优先消费完整 receipt，且仅读 Process L1；通用 pre-router 门禁和 Shared L2 边界不变。
+
+| 当前机器 / HTTP/2 / 4 lanes / c32 / gzip / `/` | 成功 | 失败 | QPS | p50 | p95 | p99 | max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 修复前默认实例 / 10,000 | 10,000 | 0 | 55.77 | 378.297ms | 1522.522ms | 2337.615ms | 5532.969ms |
+| 修复后 `ai-test-homepage-fastpath-20260817:9857` / 10,000 | 10,000 | 0 | 2506.25 | 11.283ms | 16.329ms | 20.757ms | 239.049ms |
+
+同机同请求几何下 QPS 为修复前的 44.94 倍，p95 降低约 93.2 倍。修复后响应明确为 `X-Weline-FPC: HIT`、`source=process`、`UrlParser=0`、`UrlParserApply=0`；Master PID 47742 与 4 个 READY Worker PID 54766–54769 压测前后不变，quality gate 通过。修复前报告 SHA-256 为 `7f40866a96c40160c52333feb92c703db531d79202c44bd18fb95b959aa28886`；最终修复报告为 `var/log/wls/benchmark_report_20260817_151121_715681_root_pid14916.json`，SHA-256 `92f2bb4db013843de2c3cbd27b4beef745fc1b2e057adb246cafb64e7858ba23`。
+
+这一轮只作为真实首页 10,000 请求性能回归，不替代 WLS 2.0 底层正确性的百万请求门禁，也不把单机结果写成跨机 SLA。
+
+## 2026-08-18 本地化首页统一键与精确 Process receipt
+
+App、Router、FPC 共用 `State::stripWebsitePathPrefix()` 与 `State::resolveLocalizationFromPathSegments()`。路径货币是精确 URI 权威维度，不会在最终 key 序列化时被 Website 选择器允许集折叠；语言、Website、Store、Channel、scope mode、context/cache version 与 namespace fingerprint 仍全部保留。`/USD/en_US/` 与 `/en_US/USD/` 共享语义变体 token，但精确完整 URI 使两者仍是不同统一 FPC key。带业务剩余段的本地化路由不进入首页快路径。
+
+| 当前机器 / Direct / HTTP/2 / 4 lanes / c32 / gzip | 成功 | 失败 | QPS | p50 | p95 | p99 | max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/USD/en_US/` 完整首页 / 10,000 | 10,000 | 0 | 2554.41 | 8.009ms | 20.033ms | 102.479ms | 428.402ms |
+
+报告证明 `cache_source=fpc:process`、HTTP/2、gzip 29,495B / 逻辑页面 134,682B，Master 与 4/4 READY Worker 的权威 IPC lease 指纹前后一致。报告：`var/log/wls/benchmark_report_20260817_171307_196793_usd-en-us_pid67962.json`，SHA-256 `642b2332946a55d836aaa54171d363cf39101a7d0b81d85923b2f392593455c9`。

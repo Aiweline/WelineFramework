@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Router\Observer;
 
-use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -50,40 +50,13 @@ class StripCurrencyLocalePrefix implements ObserverInterface
             explode('/', $path),
             static fn(string $segment): bool => $segment !== ''
         ));
-        $stripCount = 0;
-        $hasCurrency = false;
-        $hasLanguage = false;
-        foreach (array_slice($segments, 0, 2) as $segment) {
-            if (!$hasCurrency && self::isCurrencySegment($segment)) {
-                $stripCount++;
-                $hasCurrency = true;
-                continue;
+        $localized = State::resolveLocalizationFromPathSegments($segments);
+        if ((int)$localized['consumed'] > 0) {
+            $remaining = $localized['remaining'];
+            if ((int)$localized['area_offset'] === 1) {
+                array_unshift($remaining, $segments[0]);
             }
-            if (!$hasLanguage && self::isLocaleSegment($segment)) {
-                $stripCount++;
-                $hasLanguage = true;
-                continue;
-            }
-            break;
+            $data->setData('path', implode('/', $remaining));
         }
-
-        if ($stripCount > 0) {
-            $data->setData('path', implode('/', array_slice($segments, $stripCount)));
-        }
-    }
-
-    private static function isCurrencySegment(string $segment): bool
-    {
-        return strlen($segment) === 3
-            && $segment === strtoupper($segment)
-            && ctype_alpha($segment)
-            && !Env::isAreaRoutePathSegment($segment);
-    }
-
-    private static function isLocaleSegment(string $segment): bool
-    {
-        $segment = str_replace('-', '_', $segment);
-
-        return preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(?:_[A-Z]{2})?$/', $segment) === 1;
     }
 }
