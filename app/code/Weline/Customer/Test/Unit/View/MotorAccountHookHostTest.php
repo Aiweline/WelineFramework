@@ -22,7 +22,9 @@ final class MotorAccountHookHostTest extends TestCase
         $this->assertStringContainsString('<w:hook name="account.sidebar"/>', $sidebar);
         $this->assertStringContainsString('data-account-nav-link="true"', $sidebar);
 
-        $this->assertStringContainsString('<w:hook name="account.sidebar.content"/>', $index);
+        $this->assertStringNotContainsString('<w:hook name="account.sidebar.content"/>', $index);
+        $this->assertStringContainsString('data-account-sidebar-content-mount', $index);
+        $this->assertStringContainsString("api.resource('account').getSidebarSection(sidebarPayload)", $index);
         $this->assertStringContainsString('data-account-section="overview"', $index);
         $this->assertStringContainsString('data-account-section="profile"', $index);
         $this->assertStringContainsString('data-account-section="security"', $index);

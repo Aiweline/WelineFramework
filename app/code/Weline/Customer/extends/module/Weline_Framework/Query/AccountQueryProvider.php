@@ -93,10 +93,13 @@ class AccountQueryProvider implements QueryProviderInterface
 
         /** @var Template $template */
         $template = ObjectManager::getInstance(Template::class);
+        $template->setData('user', $user);
         AccountSidebarContentGate::setRequestedSection($section);
+        AccountSidebarContentGate::setRequestParams($params);
         try {
             $html = (string)$template->getHook('account.sidebar.content');
         } finally {
+            AccountSidebarContentGate::setRequestParams(null);
             AccountSidebarContentGate::setRequestedSection(null);
         }
 
@@ -212,6 +215,8 @@ class AccountQueryProvider implements QueryProviderInterface
             'user' => $user,
             'request' => $this->request,
             'session' => $session,
+            'guest_token' => trim((string)($params['guest_token'] ?? '')),
+            'scope' => is_array($params['scope'] ?? null) ? $params['scope'] : [],
         ]);
         $this->eventsManager->dispatch('Weline_Customer_Account_Login::login_after', $loginEvent);
 
@@ -287,12 +292,22 @@ class AccountQueryProvider implements QueryProviderInterface
     private function updateProfile(array $params): array
     {
         $user = $this->requireCustomer();
+        if (array_key_exists('username', $params)) {
+            $username = trim((string)$params['username']);
+            if ($username === '') {
+                return $this->failure('请输入用户名。');
+            }
+            if (mb_strlen($username) > 100) {
+                return $this->failure('用户名不能超过100个字符。');
+            }
+            $user->setUsername($username);
+        }
         if (array_key_exists('avatar', $params)) {
             $user->setAvatar(trim((string)$params['avatar']));
         }
         $user->save();
 
-        return $this->success('Profile updated successfully.', [
+        return $this->success('个人资料已更新。', [
             'user' => $this->customerPayload($user),
         ]);
     }
@@ -494,12 +509,12 @@ class AccountQueryProvider implements QueryProviderInterface
 
     private function success(string $message, array $data = []): array
     {
-        return ['success' => true, 'message' => $message, 'data' => $data] + $data;
+        return ['success' => true, 'message' => (string)\__($message), 'data' => $data] + $data;
     }
 
     private function failure(string $message, array $data = []): array
     {
-        return ['success' => false, 'message' => $message, 'data' => $data] + $data;
+        return ['success' => false, 'message' => (string)\__($message), 'data' => $data] + $data;
     }
 
     public function getDescriptor(): array
@@ -540,6 +555,8 @@ class AccountQueryProvider implements QueryProviderInterface
                         'captcha_provider' => ['type' => 'string', 'max_length' => 64],
                         'captcha_token' => ['type' => 'string', 'max_length' => 128],
                         'captcha_response' => ['type' => 'string', 'max_length' => 8192],
+                        'guest_token' => ['type' => 'string', 'max_length' => 128],
+                        'scope' => ['type' => 'array', 'max_items' => 7],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Sign in storefront customer',
@@ -582,6 +599,7 @@ class AccountQueryProvider implements QueryProviderInterface
                     'cost' => 3,
                     'auth' => 'customer',
                     'params' => [
+                        'username' => ['type' => 'string', 'max_length' => 100],
                         'avatar' => ['type' => 'string', 'max_length' => 512],
                     ],
                     'returns' => ['type' => 'array'],
@@ -652,9 +670,11 @@ class AccountQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 2,
+                    'cache_ttl' => 0,
                     'auth' => 'customer',
                     'params' => [
                         'section' => ['type' => 'string', 'max_length' => 64],
+                        'order_uuid' => ['type' => 'string', 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load one account sidebar content section via Hook as JSON',

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Customer\Controller\Account;
 
 use Weline\Customer\Service\PasswordResetService;
+use Weline\Customer\Service\CustomerAuthReturnUrlService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 
 class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
@@ -13,9 +15,14 @@ class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
 
     public function __construct(
         private readonly Template $template,
-        private readonly PasswordResetService $passwordResetService
+        private readonly PasswordResetService $passwordResetService,
+        ?CustomerAuthReturnUrlService $authReturnUrlService = null,
     ) {
+        $this->authReturnUrlService = $authReturnUrlService
+            ?? ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
     }
+
+    private readonly CustomerAuthReturnUrlService $authReturnUrlService;
 
     public function getIndex(): string
     {
@@ -35,8 +42,10 @@ class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
 
         $this->assign('reset_token', $token);
         $this->assign('is_reset_mode', $resetRecord !== null);
-        $this->assign('login_url', '/customer/account/login');
-        $this->assign('register_url', '/customer/account/register');
+        $this->assign('forgot_password_url', $this->authReturnUrlService->buildAuthPageUrl('customer/account/forgot-password'));
+        $this->assign('reset_password_url', $this->authReturnUrlService->buildAuthPageUrl('customer/account/forgot-password/reset-password'));
+        $this->assign('login_url', $this->authReturnUrlService->buildAuthPageUrl('customer/account/login'));
+        $this->assign('register_url', $this->authReturnUrlService->buildAuthPageUrl('customer/account/register'));
         $this->assign('title', $resetRecord ? __('重置密码') : __('忘记密码'));
 
         return $this->fetch('Weline_Customer::templates/frontend/account/forgot-password.phtml');

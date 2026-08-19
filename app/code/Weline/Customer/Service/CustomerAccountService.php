@@ -73,8 +73,15 @@ class CustomerAccountService
         ]);
         $this->eventsManager()->dispatch('Weline_Frontend_Account_Register::register_before', $beforePayload);
 
+        $displayName = trim(implode(' ', array_filter([
+            trim((string)($profileData['first_name'] ?? $profileData['firstname'] ?? '')),
+            trim((string)($profileData['last_name'] ?? $profileData['lastname'] ?? '')),
+        ])));
         $customer = $this->customerModel->reset()->clearData();
-        $customer->setEmail($email)->setUsername($email)->setPassword($password)->save();
+        $customer->setEmail($email)
+            ->setUsername($displayName !== '' ? $displayName : $email)
+            ->setPassword($password)
+            ->save();
 
         $afterPayload = new DataObject([
             'user' => $customer,
