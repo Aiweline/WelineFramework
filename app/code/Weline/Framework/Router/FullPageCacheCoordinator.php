@@ -45,12 +45,14 @@ final class FullPageCacheCoordinator
     private const GZIP_CACHE_MIN_BODY_BYTES = 1024;
     private const FAST_HTTP_GZIP_KEEPALIVE_SUFFIX = ':http:gzip:keepalive:v1';
     private const STALE_CACHE_SUFFIX = ':stale:v1';
-    private const SCHEMA_NEUTRAL_STALE_CACHE_PREFIX = 'unified-fpc-schema-neutral-stale:';
+    private const SCHEMA_NEUTRAL_STALE_CACHE_PREFIX =
+        'unified-fpc-schema-neutral-stale:20260818-localization-context-v5:';
     private const DEFAULT_STALE_TTL_SECONDS = 86400;
     private const DEFAULT_PRIVATE_SESSION_TTL_SECONDS = 300;
     private const PROCESS_FPC_TTL_SECONDS = 3600;
     private const PROCESS_FPC_MAX_ITEMS = 128;
     private const PROCESS_FPC_MAX_BYTES = 33554432;
+    private const PROCESS_LOCALIZED_HOMEPAGE_RECEIPT_MAX_ITEMS = 128;
     private const PROCESS_FORMATTED_FPC_MAX_ITEMS = 192;
     private const PROCESS_FORMATTED_FPC_MAX_BYTES = 16777216;
     private const FRONTEND_LOGIN_SESSION_POSITIVE_TTL_SECONDS = 1.0;
@@ -59,7 +61,7 @@ final class FullPageCacheCoordinator
     private const DEFAULT_LANG = 'zh_Hans_CN';
     private const DEFAULT_CURRENCY = 'CNY';
     private const VARIANT_PAYLOAD_KEY = 'fpc_variant';
-    private const FPC_CACHE_SCHEMA_VERSION = '20260722-scope-variant-v2';
+    private const FPC_CACHE_SCHEMA_VERSION = '20260818-localization-context-v5';
 
     /**
      * @var array<string, bool>
@@ -140,6 +142,9 @@ final class FullPageCacheCoordinator
     private static array $processFpcPayloadBytes = [];
 
     private static int $processFpcPayloadTotalBytes = 0;
+
+    /** @var array<string, array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}> */
+    private static array $processLocalizedHomepageReceipts = [];
 
     /** @var array<string, string> */
     private static array $processFormattedFpcCache = [];
@@ -406,6 +411,7 @@ final class FullPageCacheCoordinator
             );
         }
         $this->setProcessCachedPayload($unifiedCacheKey, $payload);
+        $this->registerLocalizedHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
         if (InternalHomepagePrime::isCurrentRequest()) {
             RequestContext::set(
                 self::INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY,
@@ -634,6 +640,7 @@ final class FullPageCacheCoordinator
         self::$processFpcPayloadExpiresAt = [];
         self::$processFpcPayloadBytes = [];
         self::$processFpcPayloadTotalBytes = 0;
+        self::$processLocalizedHomepageReceipts = [];
         self::$processFormattedFpcCache = [];
         self::$processFormattedFpcExpiresAt = [];
         self::$processFormattedFpcBytes = [];
@@ -833,8 +840,20 @@ final class FullPageCacheCoordinator
      */
     public function getFormattedProcessCachedResponseForInternalReceipt(
         array $receipt,
-        bool $keepAlive = false
+        bool $keepAlive = false,
+        string $requestMethod = 'GET',
+        string $acceptHeader = '',
+        string $acceptEncoding = ''
     ): ?array {
+        $requestMethod = \strtoupper(\trim($requestMethod) ?: 'GET');
+        if (($requestMethod !== 'GET' && $requestMethod !== 'HEAD')
+            || !$this->acceptHeaderAllowsHtml($acceptHeader)
+            || \stripos($acceptHeader, 'text/event-stream') !== false
+        ) {
+            return null;
+        }
+        $acceptsGzip = $this->acceptEncodingAllowsGzip($acceptEncoding);
+
         $cacheKey = $this->internalHomepageReceiptCacheKey($receipt);
         if ($cacheKey === null) {
             return null;
@@ -857,9 +876,40 @@ final class FullPageCacheCoordinator
         if (!\is_array($variant)) {
             return null;
         }
+
+        if ($requestMethod === 'GET' && $acceptsGzip) {
+            $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey);
+            $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
+            if ($formatted === null) {
+                $formatted = $this->buildFormattedGzipKeepAliveResponse($cached, 'process');
+                if ($formatted !== null) {
+                    $this->setProcessCachedFormattedResponse(
+                        $formattedKey,
+                        $formatted,
+                        $this->payloadRemainingTtlSeconds($cached),
+                    );
+                }
+            }
+            if ($formatted !== null) {
+                return [
+                    'response' => $this->withFormattedResponseConnection($formatted, $keepAlive),
+                    'source' => 'process-formatted',
+                    'bytes' => \strlen($formatted),
+                ];
+            }
+        }
+
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
-        $response = Response::fromContent($body, $statusCode, 'text/html; charset=utf-8');
+        $gzipBody = $this->resolveCachedGzipBody($cached);
+        $useGzipBody = $gzipBody !== null && $acceptsGzip;
+        $responseBody = $useGzipBody ? $gzipBody : $body;
+        $response = Response::fromContent($responseBody, $statusCode, 'text/html; charset=utf-8');
         $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
+        if ($useGzipBody) {
+            $response->setHeader('Content-Encoding', 'gzip');
+            $response->setHeader('Content-Length', (string)\strlen($gzipBody));
+            $this->ensureVaryAcceptEncoding($response);
+        }
         $response->setHeader('X-Weline-FPC', 'HIT');
         $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
         $response->setHeader('X-Wls-Performance-Fpc-Source', 'process');
@@ -869,11 +919,86 @@ final class FullPageCacheCoordinator
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
 
+        $http = $response->toHttpString($keepAlive);
+        if ($requestMethod === 'HEAD') {
+            $headerEnd = \strpos($http, "\r\n\r\n");
+            if ($headerEnd !== false) {
+                $http = \substr($http, 0, $headerEnd + 4);
+            }
+        }
+
         return [
-            'response' => $response->toHttpString($keepAlive),
+            'response' => $http,
             'source' => 'process',
-            'bytes' => \strlen($body),
+            'bytes' => \strlen($responseBody),
         ];
+    }
+
+    public function isLocalizedHomepageFullUri(string $fullUri): bool
+    {
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($fullUri));
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)
+            || $this->isEditorOrPreviewRequest($fullUri)
+        ) {
+            return false;
+        }
+
+        try {
+            $path = (string)(\parse_url($fullUri, \PHP_URL_PATH) ?: '/');
+        } catch (\ValueError) {
+            return false;
+        }
+        $path = State::stripWebsitePathPrefix($path, $this->currentWebsiteUrlForPathVariant());
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($path, '/')),
+            static fn(string $segment): bool => $segment !== '',
+        ));
+        $localized = State::resolveLocalizationFromPathSegments($segments);
+
+        return (int)$localized['area_offset'] === 0
+            && (int)$localized['consumed'] > 0
+            && $localized['remaining'] === []
+            && ((string)$localized['language'] !== '' || (string)$localized['currency'] !== '');
+    }
+
+    /**
+     * Resolve only an exact anonymous localized-homepage identity already
+     * captured after Framework froze every Storefront cache-key dimension.
+     * This method never reconstructs scope and never reads Shared L2.
+     *
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
+     */
+    public function resolveLocalizedHomepageProcessReceipt(
+        string $requestFullUri,
+        string $cookieHeader = ''
+    ): ?array {
+        if (\trim($cookieHeader) !== '') {
+            return null;
+        }
+
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($requestFullUri));
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+            return null;
+        }
+
+        $receiptIndex = \hash('sha256', $fullUri);
+        $receipt = self::$processLocalizedHomepageReceipts[$receiptIndex] ?? null;
+        if (!\is_array($receipt)
+            || !\hash_equals((string)($receipt['full_uri'] ?? ''), $fullUri)
+        ) {
+            return null;
+        }
+
+        $cacheKey = $this->internalHomepageReceiptCacheKey($receipt);
+        if ($cacheKey === null || $this->getProcessCachedPayload($cacheKey) === null) {
+            unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+            return null;
+        }
+
+        unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+        self::$processLocalizedHomepageReceipts[$receiptIndex] = $receipt;
+
+        return $receipt;
     }
 
     /**
@@ -950,6 +1075,34 @@ final class FullPageCacheCoordinator
         ];
     }
 
+    /** @param array<string, mixed> $variant */
+    private function registerLocalizedHomepageProcessReceipt(
+        string $fullUri,
+        array $variant,
+        string $cacheKey
+    ): void {
+        $fullUri = $this->canonicalizeFullUriForCacheKey($fullUri);
+        if (!$this->isLocalizedHomepageFullUri($fullUri)
+            || $this->getProcessCachedPayload($cacheKey) === null
+        ) {
+            return;
+        }
+
+        $receipt = $this->buildInternalHomepageWarmupReceipt($fullUri, $variant, $cacheKey);
+        if ($receipt === null) {
+            return;
+        }
+
+        $receiptIndex = \hash('sha256', $fullUri);
+        unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+        self::$processLocalizedHomepageReceipts[$receiptIndex] = $receipt;
+        while (\count(self::$processLocalizedHomepageReceipts)
+            > self::PROCESS_LOCALIZED_HOMEPAGE_RECEIPT_MAX_ITEMS
+        ) {
+            \array_shift(self::$processLocalizedHomepageReceipts);
+        }
+    }
+
     /**
      * @param array<string, mixed> $receipt
      */
@@ -1019,6 +1172,7 @@ final class FullPageCacheCoordinator
         if (\stripos($acceptHeader, 'text/event-stream') !== false) {
             return null;
         }
+        $acceptsGzip = $this->acceptEncodingAllowsGzip($acceptEncoding);
         $loggedInFrontendSession = $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri);
         $privateSessionToken = '';
         if ($loggedInFrontendSession || !$this->legacyPreRouterFpcAllowed()) {
@@ -1038,7 +1192,7 @@ final class FullPageCacheCoordinator
                 return null;
             }
 
-            if ($method === 'GET' && \stripos($acceptEncoding, 'gzip') !== false) {
+            if ($method === 'GET' && $acceptsGzip) {
                 $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey);
                 $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
                 if ($formatted !== null) {
@@ -1112,7 +1266,7 @@ final class FullPageCacheCoordinator
         }
         if ($source === 'shared') {
             $this->setProcessCachedPayload($cacheKey, $cached);
-            if ($method === 'GET' && \stripos($acceptEncoding, 'gzip') !== false) {
+            if ($method === 'GET' && $acceptsGzip) {
                 $formatted = $this->buildFormattedGzipKeepAliveResponse($cached, 'shared');
                 if ($formatted !== null) {
                     $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey);
@@ -1124,7 +1278,7 @@ final class FullPageCacheCoordinator
             }
         } elseif ($source === 'stale-shared') {
             $this->setProcessCachedPayload($payloadCacheKey, $cached);
-            if ($method === 'GET' && \stripos($acceptEncoding, 'gzip') !== false) {
+            if ($method === 'GET' && $acceptsGzip) {
                 $formatted = $this->buildFormattedGzipKeepAliveResponse($cached, 'stale-shared');
                 if ($formatted !== null) {
                     $formattedKey = $this->buildFormattedFastHttpCacheKey($payloadCacheKey);
@@ -1136,7 +1290,7 @@ final class FullPageCacheCoordinator
             }
         }
 
-        if ($method === 'GET' && \stripos($acceptEncoding, 'gzip') !== false) {
+        if ($method === 'GET' && $acceptsGzip) {
             $formattedKey = $this->buildFormattedFastHttpCacheKey($payloadCacheKey);
             $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
             if ($formatted === null) {
@@ -1157,7 +1311,7 @@ final class FullPageCacheCoordinator
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
         $gzipBody = $this->resolveCachedGzipBody($cached);
-        $useGzipBody = $gzipBody !== null && \stripos($acceptEncoding, 'gzip') !== false;
+        $useGzipBody = $gzipBody !== null && $acceptsGzip;
         $responseBody = $useGzipBody ? $gzipBody : $body;
 
         $response = Response::fromContent($responseBody, $statusCode, 'text/html; charset=utf-8');
@@ -1366,27 +1520,13 @@ final class FullPageCacheCoordinator
         $segments = \array_values(\array_filter(\explode('/', \trim($path, '/')), static function (string $segment): bool {
             return $segment !== '';
         }));
-        while ($segments !== []) {
-            $segment = (string)$segments[0];
-            if ($this->isLocalePrefix($segment) || $this->isCurrencyPrefix($segment)) {
-                \array_shift($segments);
-                continue;
-            }
-
-            break;
+        $localized = State::resolveLocalizationFromPathSegments($segments);
+        if ((int)$localized['area_offset'] !== 0) {
+            return $segments === [] ? '/' : '/' . \implode('/', $segments);
         }
 
-        return $segments === [] ? '/' : '/' . \implode('/', $segments);
-    }
-
-    private function isLocalePrefix(string $segment): bool
-    {
-        return (bool)\preg_match('/^[a-z]{2}(?:[-_][a-z0-9]{2,5}){1,2}$/i', $segment);
-    }
-
-    private function isCurrencyPrefix(string $segment): bool
-    {
-        return State::isAllowedCurrencyCode($segment);
+        $remaining = $localized['remaining'];
+        return $remaining === [] ? '/' : '/' . \implode('/', $remaining);
     }
 
     private function requestHasSseAcceptHeader(): bool
@@ -1404,10 +1544,54 @@ final class FullPageCacheCoordinator
     private function acceptHeaderAllowsHtml(string $accept): bool
     {
         $accept = \strtolower(\trim($accept));
-        return $accept === ''
-            || $accept === '*/*'
-            || \str_contains($accept, 'text/html')
-            || \str_contains($accept, 'application/xhtml+xml');
+        if ($accept === '') {
+            return true;
+        }
+
+        $accepted = [
+            'text/html' => ['specificity' => -1, 'quality' => 0.0],
+            'application/xhtml+xml' => ['specificity' => -1, 'quality' => 0.0],
+        ];
+        foreach (\explode(',', $accept) as $range) {
+            $parts = \array_map('trim', \explode(';', $range));
+            $mediaRange = (string)\array_shift($parts);
+            if ($mediaRange === '') {
+                continue;
+            }
+
+            $quality = 1.0;
+            foreach ($parts as $parameter) {
+                if (\preg_match('/^q\s*=\s*(.*)$/D', $parameter, $matches) !== 1) {
+                    continue;
+                }
+                $qValue = (string)($matches[1] ?? '');
+                $quality = \preg_match('/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?|\.\d{1,3})$/D', $qValue) === 1
+                    ? (float)$qValue
+                    : 0.0;
+                break;
+            }
+
+            foreach (\array_keys($accepted) as $target) {
+                $targetType = (string)\strstr($target, '/', true);
+                $specificity = $mediaRange === $target
+                    ? 2
+                    : ($mediaRange === $targetType . '/*' ? 1 : ($mediaRange === '*/*' ? 0 : -1));
+                if ($specificity < 0 || $specificity < $accepted[$target]['specificity']) {
+                    continue;
+                }
+                if ($specificity > $accepted[$target]['specificity']) {
+                    $accepted[$target] = ['specificity' => $specificity, 'quality' => $quality];
+                    continue;
+                }
+                $accepted[$target]['quality'] = \max($accepted[$target]['quality'], $quality);
+            }
+        }
+
+        if ($accepted['text/html']['specificity'] >= 0) {
+            return $accepted['text/html']['quality'] > 0.0;
+        }
+
+        return $accepted['application/xhtml+xml']['quality'] > 0.0;
     }
 
     private function hasLoggedInFrontendSession(): bool
@@ -1627,6 +1811,14 @@ final class FullPageCacheCoordinator
         }
         if ($cachePayloadFetched || $cachePayloadUpdated) {
             $this->setProcessCachedPayload($cacheKey, $cached);
+        }
+        $cachedVariant = $cached[self::VARIANT_PAYLOAD_KEY] ?? null;
+        if (\is_array($cachedVariant)) {
+            $this->registerLocalizedHomepageProcessReceipt(
+                $this->getCacheKeyFullUri(),
+                $cachedVariant,
+                $cacheKey,
+            );
         }
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
@@ -1861,7 +2053,47 @@ final class FullPageCacheCoordinator
             ?: WelineEnv::get('server.http_accept_encoding', '')
         );
 
-        return \stripos($acceptEncoding, 'gzip') !== false;
+        return $this->acceptEncodingAllowsGzip($acceptEncoding);
+    }
+
+    private function acceptEncodingAllowsGzip(string $acceptEncoding): bool
+    {
+        $acceptEncoding = \strtolower(\trim($acceptEncoding));
+        if ($acceptEncoding === '') {
+            return false;
+        }
+
+        $specificity = -1;
+        $quality = 0.0;
+        foreach (\explode(',', $acceptEncoding) as $range) {
+            $parts = \array_map('trim', \explode(';', $range));
+            $coding = (string)\array_shift($parts);
+            $candidateSpecificity = $coding === 'gzip' ? 1 : ($coding === '*' ? 0 : -1);
+            if ($candidateSpecificity < 0 || $candidateSpecificity < $specificity) {
+                continue;
+            }
+
+            $candidateQuality = 1.0;
+            foreach ($parts as $parameter) {
+                if (\preg_match('/^q\s*=\s*(.*)$/D', $parameter, $matches) !== 1) {
+                    continue;
+                }
+                $qValue = (string)($matches[1] ?? '');
+                $candidateQuality = \preg_match('/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?|\.\d{1,3})$/D', $qValue) === 1
+                    ? (float)$qValue
+                    : 0.0;
+                break;
+            }
+
+            if ($candidateSpecificity > $specificity) {
+                $specificity = $candidateSpecificity;
+                $quality = $candidateQuality;
+                continue;
+            }
+            $quality = \max($quality, $candidateQuality);
+        }
+
+        return $quality > 0.0;
     }
 
     private function ensureVaryAcceptEncoding(Response $response): void
@@ -2045,8 +2277,24 @@ final class FullPageCacheCoordinator
         self::$processFpcPayloadTotalBytes += $bytes;
     }
 
+    private function deleteProcessCachedFormattedResponsesForPayload(string $cacheKey): void
+    {
+        $prefix = $cacheKey . self::FAST_HTTP_GZIP_KEEPALIVE_SUFFIX . ':';
+        foreach (\array_keys(self::$processFormattedFpcCache) as $formattedKey) {
+            if (\str_starts_with((string)$formattedKey, $prefix)) {
+                $this->deleteProcessCachedFormattedResponse((string)$formattedKey);
+            }
+        }
+    }
+
     private function deleteProcessCachedPayload(string $cacheKey): void
     {
+        $this->deleteProcessCachedFormattedResponsesForPayload($cacheKey);
+        foreach (self::$processLocalizedHomepageReceipts as $receiptIndex => $receipt) {
+            if (\hash_equals((string)($receipt['cache_key'] ?? ''), $cacheKey)) {
+                unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+            }
+        }
         if (!isset(self::$processFpcPayloadCache[$cacheKey])) {
             return;
         }
@@ -2490,10 +2738,10 @@ final class FullPageCacheCoordinator
         if (!$context->cacheable) {
             throw new \LogicException(__('Storefront 缓存上下文尚未完成版本冻结'));
         }
-        return $this->variantFromStorefrontContext($context, [
+        return $this->mergePathVariant($this->variantFromStorefrontContext($context, [
             'lang' => $this->normalizeVariantLang($context->lang),
             'currency' => $this->normalizeVariantCurrency($context->currency),
-        ]);
+        ]), $this->getCacheKeyFullUri());
     }
 
     /**
@@ -2585,7 +2833,7 @@ final class FullPageCacheCoordinator
     private function variantSuffixWithoutSchema(array $variant): string
     {
         $suffix = 'lang=' . $this->normalizeVariantLang((string)($variant['lang'] ?? ''))
-            . '|currency=' . $this->normalizeVariantCurrency((string)($variant['currency'] ?? ''));
+            . '|currency=' . $this->normalizeResolvedVariantCurrency((string)($variant['currency'] ?? ''));
         foreach ([
             'scope_state',
             'scope_kind',
@@ -2730,6 +2978,28 @@ final class FullPageCacheCoordinator
         return $currency;
     }
 
+    private function normalizePathVariantCurrency(string $currency): string
+    {
+        $currency = \strtoupper(\trim($currency));
+        return \preg_match('/^[A-Z]{3}$/D', $currency) === 1
+            && !Env::isAreaRoutePathSegment($currency)
+            ? $currency
+            : '';
+    }
+
+    /**
+     * Variant builders have already validated cookie/default currencies and
+     * promoted an exact URL currency route when present. Final serialization
+     * must preserve that route identity even when the Website selector does
+     * not currently advertise it; applying the selector allowlist again here
+     * would collapse `/USD/en_US/` onto `/en_US/`.
+     */
+    private function normalizeResolvedVariantCurrency(string $currency): string
+    {
+        $currency = $this->normalizePathVariantCurrency($currency);
+        return $currency !== '' ? $currency : self::DEFAULT_CURRENCY;
+    }
+
     /**
      * @param array<string, string> $variant
      * @return array<string, string>
@@ -2749,7 +3019,10 @@ final class FullPageCacheCoordinator
             }
         }
         if (($pathVariant['currency'] ?? '') !== '') {
-            $variant['currency'] = $this->normalizeVariantCurrency((string)$pathVariant['currency']);
+            $pathCurrency = $this->normalizePathVariantCurrency((string)$pathVariant['currency']);
+            if ($pathCurrency !== '') {
+                $variant['currency'] = $pathCurrency;
+            }
         }
 
         return $variant;
@@ -2784,27 +3057,35 @@ final class FullPageCacheCoordinator
      */
     private function extractPathVariant(string $fullUri): array
     {
-        $path = (string)(\parse_url($fullUri, \PHP_URL_PATH) ?: '');
+        try {
+            $path = (string)(\parse_url($fullUri, \PHP_URL_PATH) ?: '');
+        } catch (\ValueError) {
+            return ['lang' => '', 'currency' => ''];
+        }
         if ($path === '') {
             return ['lang' => '', 'currency' => ''];
         }
+        $path = State::stripWebsitePathPrefix($path, $this->currentWebsiteUrlForPathVariant());
 
         $segments = \array_values(\array_filter(\explode('/', \trim($path, '/')), static function (string $segment): bool {
             return $segment !== '';
         }));
-        $variant = ['lang' => '', 'currency' => ''];
-        foreach (\array_slice($segments, 0, 3) as $segment) {
-            $segment = (string)$segment;
-            if ($variant['lang'] === '' && $this->isLocalePrefix($segment)) {
-                $variant['lang'] = $segment;
-                continue;
-            }
-            if ($variant['currency'] === '' && $this->isCurrencyPrefix($segment)) {
-                $variant['currency'] = $segment;
-            }
+        $localized = State::resolveLocalizationFromPathSegments($segments);
+
+        return [
+            'lang' => (string)$localized['language'],
+            'currency' => (string)$localized['currency'],
+        ];
+    }
+
+    private function currentWebsiteUrlForPathVariant(): string
+    {
+        $websiteUrl = \trim((string)WelineEnv::get('website_url', ''));
+        if ($websiteUrl !== '') {
+            return $websiteUrl;
         }
 
-        return $variant;
+        return \trim((string)WelineEnv::server('WELINE_WEBSITE_URL', ''));
     }
 
     /**
