@@ -807,18 +807,18 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * Return the exact immutable homepage identity proven during READY.
+     * Return the exact immutable homepage receipt proven during READY.
      *
      * The public request can omit the default language/currency cookies while
      * the warmup receipt intentionally carries them. Reconstructing that
      * identity in a transport adapter creates a different FPC variant and
      * forces every otherwise-hot homepage request back through Framework.
-     * Only an anonymous root request for the same scheme and host may reuse
-     * the receipt; all personalized/non-root requests retain their own facts.
+     * Only an anonymous root request for the same origin may reuse the
+     * receipt; all personalized/non-root requests retain their own facts.
      *
-     * @return array{full_uri:string,cookie_header:string}|null
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
      */
-    public function resolveHomepageFastPathIdentity(
+    public function resolveHomepageFastPathReceipt(
         string $requestFullUri,
         string $cookieHeader = ''
     ): ?array {
@@ -827,7 +827,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         $receipt = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
-        if ($receipt === []) {
+        if ($receipt === [] || !isset($receipt['cache_key'])) {
             return null;
         }
 
@@ -843,11 +843,35 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $requestPath = (string)($request['path'] ?? '/');
         $warmedPath = (string)($warmed['path'] ?? '/');
+        $requestScheme = \strtolower((string)($request['scheme'] ?? ''));
+        $warmedScheme = \strtolower((string)($warmed['scheme'] ?? ''));
+        $requestPort = (int)($request['port'] ?? ($requestScheme === 'https' ? 443 : 80));
+        $warmedPort = (int)($warmed['port'] ?? ($warmedScheme === 'https' ? 443 : 80));
         if (($requestPath === '' ? '/' : $requestPath) !== '/'
             || ($warmedPath === '' ? '/' : $warmedPath) !== '/'
-            || \strtolower((string)($request['scheme'] ?? '')) !== \strtolower((string)($warmed['scheme'] ?? ''))
+            || $requestScheme !== $warmedScheme
             || \strtolower((string)($request['host'] ?? '')) !== \strtolower((string)($warmed['host'] ?? ''))
+            || $requestPort !== $warmedPort
         ) {
+            return null;
+        }
+
+        return $receipt;
+    }
+
+    /**
+     * Compatibility view for callers that only need the warmed request
+     * identity. Worker FPC must consume resolveHomepageFastPathReceipt() so
+     * the cache key remains bound to its READY identity digest.
+     *
+     * @return array{full_uri:string,cookie_header:string}|null
+     */
+    public function resolveHomepageFastPathIdentity(
+        string $requestFullUri,
+        string $cookieHeader = ''
+    ): ?array {
+        $receipt = $this->resolveHomepageFastPathReceipt($requestFullUri, $cookieHeader);
+        if ($receipt === null) {
             return null;
         }
 
