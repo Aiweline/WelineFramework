@@ -123,6 +123,20 @@ final class NativeGatewayBrokerTest extends TestCase
         }
     }
 
+    public function testNativeHostBootIdentityMatchesThePhpRuntime(): void
+    {
+        $result = $this->runCommand([
+            $this->broker,
+            '--host-boot-identity-self-test',
+        ]);
+
+        self::assertSame(0, $result['code'], $result['output']);
+        self::assertSame(
+            GatewayHostBootIdentity::current(),
+            \trim($result['output']),
+        );
+    }
+
     public function testNginxTestChildReceivesThePreparedListenerDescriptors(): void
     {
         $result = $this->runCommand([

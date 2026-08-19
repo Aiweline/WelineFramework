@@ -186,6 +186,8 @@ class Start extends CommandAbstract
      * 可用的进程控制函数
      */
     protected array $availableFunctions = [];
+
+    private ?\Weline\Server\Service\AdministratorAuthorizationSession $administratorAuthorizationSession = null;
     
     /**
      * 使用的启动方式
@@ -399,7 +401,8 @@ class Start extends CommandAbstract
         $instanceName = $this->parseInstanceName($args);
         $runtimeResolver = new RuntimeStrategyResolver();
         try {
-            $runtimeResolver->resolveTopologyIntent($this->getServerConfig($instanceName, $args), $args);
+            $config = $this->getServerConfig($instanceName, $args);
+            $runtimeResolver->resolveTopologyIntent($config, $args);
         } catch (\RuntimeException $exception) {
             $this->printer->error($exception->getMessage());
             return 1;
@@ -603,7 +606,6 @@ class Start extends CommandAbstract
         // 获取配置（命令行参数 > 已保存实例配置 > env配置 > 默认值）
         $this->beginStartupListenerStateDeadline();
         $this->traceStartupPhase($instanceName, 'config:before');
-        $config = $this->getServerConfig($instanceName, $args);
         $host = $config['host'];
         $portExplicit = ($config['port_explicit'] ?? false) === true;
         $configuredEdgeMode = \strtolower(\trim((string)(
@@ -6961,7 +6963,13 @@ class Start extends CommandAbstract
      */
     protected function createSslCertificateService(bool $deferCertificateStorage = false): SslCertificateService
     {
-        return new SslCertificateService($deferCertificateStorage);
+        $service = new SslCertificateService($deferCertificateStorage);
+        $service->setAdministratorAuthorizationSession(
+            $this->administratorAuthorizationSession
+                ??= new \Weline\Server\Service\AdministratorAuthorizationSession(),
+        );
+
+        return $service;
     }
 
     /**
@@ -6987,6 +6995,7 @@ class Start extends CommandAbstract
                 $instanceName,
                 'certificate-preparation:skipped-wls2-serving-manifest',
             );
+            $this->syncLocalDevelopmentCaTrustForManagedHost($publicHost);
             return;
         }
 
@@ -8312,13 +8321,7 @@ class Start extends CommandAbstract
      */
     protected function ensureHostsFileConfigured(string $host): void
     {
-        // 只处理需要 hosts 的本地域名
-        if (!LocalDomainPolicy::requiresHostsEntry($host)) {
-            return;
-        }
-
-        // 跳过 localhost
-        if ($host === 'localhost') {
+        if (!LocalDomainPolicy::requiresHostsEntry($host) || $host === 'localhost') {
             return;
         }
 
@@ -8346,30 +8349,94 @@ class Start extends CommandAbstract
             return;
         }
 
-        $result = \Weline\Server\Service\HostsFileManager::addDomain($host);
+        $result = $this->addHostsDomain($host);
+        if (!($result['success'] ?? false) && ($result['needs_admin'] ?? false)) {
+            $this->printer->note(__(
+                'hosts 记录缺失，WLS 将请求一次管理员授权；密码仅由操作系统 sudo 读取并由其会话票据复用。'
+            ));
+            $result = $this->configureHostsWithAdministratorAuthorization($host);
+        }
 
-        if ($result['success']) {
+        if ($result['success'] ?? false) {
             if (($result['repaired'] ?? false) === true) {
                 $this->printer->note(__('已将 %{1} 的 hosts 记录纠正为 127.0.0.1', [$host]));
             } elseif (!($result['already_exists'] ?? false)) {
                 $this->printer->note(__('已将 %{1} 添加到 hosts 文件', [$host]));
             }
-        } elseif ($result['needs_admin'] ?? false) {
-            $this->printer->warning(__('无法自动配置 hosts 文件（需要管理员权限）'));
-            if (!empty($result['message'])) {
-                $this->printer->note((string)$result['message']);
-            }
-            $this->printer->note(__('请手动添加以下内容到 hosts 文件：'));
-            $this->printer->note("  127.0.0.1 {$host}");
-
-            if (PHP_OS_FAMILY === 'Windows') {
-                $this->printer->note(__('Windows hosts 文件位置：'));
-                $this->printer->note('  C:\\Windows\\System32\\drivers\\etc\\hosts');
-            }
-        } else {
-            $this->printer->warning(__('配置 hosts 文件失败: %{1}', [$result['message'] ?? '未知错误']));
+            return;
         }
+
+        if ($result['needs_admin'] ?? false) {
+            $this->printer->warning(__('hosts 配置未完成：管理员授权被取消、不可用或未能安全写入。'));
+            $this->printer->note(__('请在交互式终端重新执行当前 server:start 命令完成系统授权。'));
+            return;
+        }
+
+        $this->printer->warning(__('配置 hosts 文件失败: %{1}', [$result['message'] ?? '未知错误']));
     }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function addHostsDomain(string $host): array
+    {
+        return \Weline\Server\Service\HostsFileManager::addDomain($host);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function configureHostsWithAdministratorAuthorization(string $host): array
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return [
+                'success' => false,
+                'needs_admin' => true,
+                'message' => 'Interactive POSIX administrator authorization is unavailable.',
+            ];
+        }
+
+        $phpBinary = @\realpath(PHP_BINARY);
+        $editorCandidate = \dirname(__DIR__, 2)
+            . DIRECTORY_SEPARATOR
+            . 'bin'
+            . DIRECTORY_SEPARATOR
+            . 'wls_hosts_privileged_editor.php';
+        $editor = @\realpath($editorCandidate);
+        if (!\is_string($phpBinary)
+            || $phpBinary === ''
+            || !\is_file($phpBinary)
+            || !\is_executable($phpBinary)
+            || !\is_string($editor)
+            || $editor === ''
+            || !\is_file($editor)
+            || \is_link($editorCandidate)
+        ) {
+            return [
+                'success' => false,
+                'needs_admin' => true,
+                'message' => 'The bounded privileged hosts editor is unavailable.',
+            ];
+        }
+
+        $session = $this->administratorAuthorizationSession
+            ??= new \Weline\Server\Service\AdministratorAuthorizationSession();
+        if (!$session->runPrivileged([
+            $phpBinary,
+            '-n',
+            $editor,
+            '--domain=' . $host,
+        ])) {
+            return [
+                'success' => false,
+                'needs_admin' => true,
+                'message' => 'Administrator authorization or privileged hosts publication failed.',
+            ];
+        }
+
+        return $this->addHostsDomain($host);
+    }
+
 
     /**
      * 开发环境自动准备 *.weline.test 泛域名证书，并确保本地 CA 被系统信任。
@@ -8447,10 +8514,26 @@ class Start extends CommandAbstract
 
     protected function ensureLocalDevelopmentCaTrusted(SslCertificateService $sslService): void
     {
+        $sslService->setAdministratorAuthorizationSession(
+            $this->administratorAuthorizationSession
+                ??= new \Weline\Server\Service\AdministratorAuthorizationSession(),
+        );
         $trust = $sslService->ensureLocalDevelopmentCaTrusted();
         if (($trust['trusted'] ?? false) !== true && !empty($trust['message'])) {
             $this->printer->warning((string) $trust['message']);
         }
+    }
+
+    protected function syncLocalDevelopmentCaTrustForManagedHost(string $publicHost): void
+    {
+        $publicHost = LocalDomainPolicy::normalizeDomain($publicHost);
+        if ($publicHost === '' || !LocalDomainPolicy::isManagedLocalDomain($publicHost)) {
+            return;
+        }
+
+        $sslService = $this->deferredCertificatePreparationService
+            ?? $this->createSslCertificateService(true);
+        $this->ensureLocalDevelopmentCaTrusted($sslService);
     }
 
     /**

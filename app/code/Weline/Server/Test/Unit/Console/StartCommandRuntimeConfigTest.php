@@ -89,6 +89,55 @@ class StartCommandRuntimeConfigTest extends TestCase
         self::assertSame('https://new-reused.weline.test', $config['public_origin'] ?? null);
     }
 
+    public function testHostsPermissionUsesOneAdministratorBoundaryWithoutManualFallback(): void
+    {
+        $start = new class extends Start {
+            public int $directCalls = 0;
+            public int $administratorCalls = 0;
+
+            public function ensureHost(string $host): void
+            {
+                $this->ensureHostsFileConfigured($host);
+            }
+
+            protected function addHostsDomain(string $host): array
+            {
+                ++$this->directCalls;
+
+                return [
+                    'success' => false,
+                    'needs_admin' => true,
+                    'message' => 'authorization required',
+                ];
+            }
+
+            protected function configureHostsWithAdministratorAuthorization(string $host): array
+            {
+                ++$this->administratorCalls;
+
+                return [
+                    'success' => true,
+                    'already_exists' => true,
+                    'status' => 'external_satisfied',
+                ];
+            }
+        };
+        $start->__init();
+
+        \ob_start();
+        try {
+            $start->ensureHost('shop-a.weline.test');
+            $output = (string)\ob_get_contents();
+        } finally {
+            \ob_end_clean();
+        }
+
+        self::assertSame(1, $start->directCalls);
+        self::assertSame(1, $start->administratorCalls);
+        self::assertStringNotContainsString('请手动添加', $output);
+        self::assertStringNotContainsString('无法自动配置 hosts 文件', $output);
+    }
+
     public function testConfigureMasterRuntimeKeepsFrontendWorkerTopology(): void
     {
         $start = new Start();
