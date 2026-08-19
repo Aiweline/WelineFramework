@@ -95,6 +95,9 @@ class Locales extends BaseController
         $query_copy = clone $this->locale;
         $locales_result = $this->locale
             ->fields('main_table.*')
+            ->order('main_table.' . Locale::schema_fields_IS_ACTIVE, 'DESC')
+            ->order('main_table.' . Locale::schema_fields_IS_INSTALL, 'DESC')
+            ->order('main_table.' . Locale::schema_fields_CODE, 'ASC')
             ->pagination()
             ->select()
             ->fetch();
@@ -107,6 +110,9 @@ class Locales extends BaseController
             // 重新查询
             $locales_result = $query_copy
                 ->fields('main_table.*')
+                ->order('main_table.' . Locale::schema_fields_IS_ACTIVE, 'DESC')
+                ->order('main_table.' . Locale::schema_fields_IS_INSTALL, 'DESC')
+                ->order('main_table.' . Locale::schema_fields_CODE, 'ASC')
                 ->pagination()
                 ->select()
                 ->fetch();
@@ -227,7 +233,7 @@ class Locales extends BaseController
         $isJsonRequest = $this->isJsonRequest();
         try {
             $summary = $this->lifecycle->installLocale($code);
-            $message = (string)__('区域已安装！区域代码：%{1}', $code);
+            $message = (string)__('区域已安装并激活！区域代码：%{1}', $code);
             if ($isJsonRequest) {
                 return $this->jsonActionResponse(true, $message, $summary);
             }
