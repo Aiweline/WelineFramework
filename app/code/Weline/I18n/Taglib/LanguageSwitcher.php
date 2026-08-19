@@ -30,6 +30,15 @@ class LanguageSwitcher implements TaglibInterface
      */
     private static array $languageCache = [];
 
+    /**
+     * Drop process-local language/html memo so lifecycle changes take effect immediately.
+     */
+    public static function clearProcessCaches(): void
+    {
+        self::$htmlCache = [];
+        self::$languageCache = [];
+    }
+
     public static function name(): string
     {
         return 'i18n:language:switcher';
