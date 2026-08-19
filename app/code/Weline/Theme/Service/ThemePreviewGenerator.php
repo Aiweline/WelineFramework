@@ -215,9 +215,20 @@ class ThemePreviewGenerator
             return null;
         }
 
-        $previewUrl = self::getPreviewUrl($themeId, $area);
+        $previewUrl = self::getPreviewUrl(
+            $themeId,
+            $area,
+            isset($task['capture_base_url']) ? (string)$task['capture_base_url'] : null,
+        );
         $timestamp = time();
         $fullUrl = $previewUrl . (str_contains($previewUrl, '?') ? '&' : '?') . 't=' . $timestamp;
+
+        try {
+            self::assertPreviewUrlReachable($fullUrl);
+        } catch (\Throwable $throwable) {
+            Env::log_error('theme_preview', __('主题预览地址不可用：%{1}', [$throwable->getMessage()]));
+            return null;
+        }
 
         $command = self::buildChromeCommand($chromePath, $previewPath, $fullUrl);
 
@@ -468,6 +479,8 @@ class ThemePreviewGenerator
         $timestamp = \time();
         $fullUrl = $url . (\str_contains($url, '?') ? '&' : '?') . 't=' . $timestamp;
 
+        self::assertPreviewUrlReachable($fullUrl);
+
         $result = self::runScreenshotCommand(
             $chromePath,
             $savePath,
@@ -493,6 +506,47 @@ class ThemePreviewGenerator
 
         self::optimizeImage($savePath);
         return $savePath;
+    }
+
+    private static function assertPreviewUrlReachable(string $url): void
+    {
+        $handle = \curl_init($url);
+        if ($handle === false) {
+            throw new \RuntimeException('Unable to initialize the Theme preview HTTP probe.');
+        }
+
+        \curl_setopt_array($handle, [
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_NOSIGNAL => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_USERAGENT => 'WelineThemePreview/1.0',
+            CURLOPT_HEADER => false,
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_WRITEFUNCTION => static fn($curl, string $chunk): int => \strlen($chunk),
+        ]);
+
+        $success = \curl_exec($handle);
+        $error = $success === false ? \curl_error($handle) : '';
+        $status = (int)\curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $effectiveUrl = (string)\curl_getinfo($handle, CURLINFO_EFFECTIVE_URL);
+        \curl_close($handle);
+
+        if ($success === false) {
+            throw new \RuntimeException('Theme preview HTTP probe failed: ' . ($error !== '' ? $error : 'unknown error'));
+        }
+
+        self::assertSuccessfulCaptureStatus($status, $effectiveUrl !== '' ? $effectiveUrl : $url);
+    }
+
+    private static function assertSuccessfulCaptureStatus(int $status, string $url): void
+    {
+        if ($status < 200 || $status >= 300) {
+            throw new \RuntimeException('Theme preview URL returned HTTP ' . $status . ': ' . $url);
+        }
     }
 
     /**

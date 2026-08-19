@@ -52,6 +52,7 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
         $this->assertStringContainsString('body class="account-auth-layout"', $content);
+        $this->assertStringContainsString("\$this->setData('__weline_frontend_final_title', \$pageTitle);", $content);
         $this->assertStringNotContainsString('$meta[\'showHeader\'] = true;', $content);
         $this->assertStringNotContainsString('$meta[\'showFooter\'] = true;', $content);
         $this->assertStringNotContainsString('Weline_Frontend::templates/public/header.phtml', $content);
@@ -73,6 +74,19 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         $this->assertStringContainsString('margin: 0 auto;', $content);
         $this->assertStringContainsString('<main class="account-main-content', $content);
         $this->assertStringNotContainsString('.account-dashboard__body {', $content);
+    }
+
+    public function testAccountDashboardRendersTheControllerOwnedDocumentTitle(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account/dashboard.phtml';
+
+        $this->assertFileExists($path);
+        $content = (string) file_get_contents($path);
+
+        $this->assertStringContainsString("\$this->getData('page_title')", $content);
+        $this->assertStringContainsString("\$this->setData('__weline_frontend_final_title', \$pageTitle);", $content);
+        $this->assertStringContainsString("<title><?= htmlspecialchars(\$pageTitle", $content);
+        $this->assertStringContainsString("__('个人中心')", $content);
     }
 
     public function testAccountLayoutsDoNotRenderBreadcrumb(): void

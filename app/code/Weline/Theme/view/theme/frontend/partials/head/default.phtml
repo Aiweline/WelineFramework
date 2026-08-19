@@ -28,9 +28,9 @@ $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $htmlDir = (string)($this->getData('htmlDir') ?: 'ltr');
 $htmlDir = $htmlDir === 'rtl' ? 'rtl' : 'ltr';
 $jsonEncodeFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
-$currentCurrency = \w_env('user.currency', 'CNY');
+$currentCurrency = \Weline\Framework\App\State::getCurrency();
 $defaultLang = \w_env('website.language', '') ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN';
-$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
+$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::system('currency', 'CNY') ?: 'CNY';
 $availableCurrencies = [];
 try {
     if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
@@ -47,10 +47,6 @@ try {
 $defaultCurrency = strtoupper(trim((string)$defaultCurrency)) ?: 'CNY';
 $availableCurrencies[] = $defaultCurrency;
 $availableCurrencies = array_values(array_unique($availableCurrencies));
-$currentCurrency = strtoupper(trim((string)$currentCurrency));
-if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
-    $currentCurrency = $defaultCurrency;
-}
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
 
 $modulesConfigUrl = $isDev
