@@ -13,15 +13,18 @@ class Index extends FrontendController
     public function index(): string
     {
         $cart = $this->cartService()->storefrontSummary();
-        $isEmpty = (bool)($cart['is_empty'] ?? true);
 
-        $this->layoutType = $isEmpty ? 'cart.empty' : 'cart.default';
+        // The authoritative storefront cart is hydrated through QueryBin. The
+        // HTML request can carry a different WLS session, so it must not select
+        // an empty-only layout before the browser has read Cart V2.
+        $this->layoutType = 'cart.default';
         $this->request->setGet('page_type', 'cart');
         $this->request->setGet('layout_type', 'cart');
-        $this->request->setGet('layout_option', $isEmpty ? 'empty' : 'default');
+        $this->request->setGet('layout_option', 'default');
         $this->request->setGet('theme_public_route', 'cart');
         $this->request->setGet('theme_page_title', (string)__('购物车'));
 
+        $this->assign('page_title', __('购物车'));
         $this->assign('title', __('购物车'));
         $this->assign('cart', $cart);
         $this->assign('items', $cart['items'] ?? []);

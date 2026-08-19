@@ -29,18 +29,52 @@ final class CartQueryProviderV2SecurityTest extends TestCase
             $operations[(string)$operation['name']] = $operation;
         }
 
-        foreach (['add', 'addV2', 'mergeGuest', 'getV2Cart'] as $operationName) {
+        foreach (['add', 'addV2', 'mergeGuest', 'getV2Cart', 'updateV2', 'removeV2'] as $operationName) {
             self::assertArrayNotHasKey(
                 'customer_id',
                 $operations[$operationName]['params'],
                 $operationName . ' must not expose customer_id to the browser',
             );
         }
-        foreach (['addV2', 'mergeGuest', 'getV2Cart'] as $operationName) {
+        foreach (['addV2', 'mergeGuest', 'getV2Cart', 'updateV2', 'removeV2'] as $operationName) {
             self::assertArrayHasKey('store_code', $operations[$operationName]['params']);
             self::assertArrayHasKey('channel_code', $operations[$operationName]['params']);
             self::assertArrayHasKey('scope', $operations[$operationName]['params']);
         }
+        self::assertSame('write', $operations['updateV2']['mode']);
+        self::assertSame('write', $operations['removeV2']['mode']);
+    }
+
+    public function testV2MutationUsesTrustedGuestIdentityAndScope(): void
+    {
+        [$v2, $offer] = $this->service();
+        $scope = $this->channelScope();
+        $guestToken = $v2->issueGuestToken();
+        $added = $v2->add($scope, $offer, [], 3, $guestToken);
+        $itemId = (string)$added['items'][0]['item_id'];
+
+        $cartService = $this->createMock(CartService::class);
+        $cartService->method('cartV2')->willReturn($v2);
+        $query = new CartQueryProvider(
+            $cartService,
+            new CartScopeResolver(),
+            new CartCurrentCustomerResolver(static fn(): ?int => null),
+        );
+        $params = $this->flatScopeParams() + [
+            'guest_token' => $guestToken,
+            'item_id' => $itemId,
+            'qty' => 1,
+            'customer_id' => 999,
+        ];
+
+        $updated = $query->execute('updateV2', $params);
+        self::assertTrue($updated['success']);
+        self::assertSame(1, $updated['item_count']);
+        self::assertSame(CartV2Service::OWNER_GUEST, $updated['owner_kind']);
+
+        $removed = $query->execute('removeV2', $params);
+        self::assertTrue($removed['success']);
+        self::assertTrue($removed['is_empty']);
     }
 
     public function testAddV2ReplacesBrowserCustomerIdWithAuthenticatedIdentity(): void
