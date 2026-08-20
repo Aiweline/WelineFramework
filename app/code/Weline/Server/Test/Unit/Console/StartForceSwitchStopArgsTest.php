@@ -125,13 +125,13 @@ final class StartForceSwitchStopArgsTest extends TestCase
         );
     }
 
-    public function testHelpMentionsMaintenanceForForceSwitch(): void
+    public function testHelpMentionsForceFullRestartSemantics(): void
     {
         $start = new Start();
         $help = (string) $start->help();
 
-        self::assertStringContainsString('维护模式', $help);
-        self::assertStringContainsString('停机型更新', $help);
+        self::assertStringContainsString('强制完整重启', $help);
+        self::assertStringContainsString('跳过排水', $help);
         self::assertStringContainsString('-r -f', $help);
     }
 

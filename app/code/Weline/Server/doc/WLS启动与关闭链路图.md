@@ -31,7 +31,9 @@ flowchart TB
     E4 --> F
     E5 --> F
     F{"是否需要先清旧实例?"}
-    F -->|是: -r 或端口/实例冲突| G["停止前固化旧代实际监听端口<br/>stopExistingServer() 委托 server:stop"]
+    F -->|是: -r 无参数变更| F0["委托 server:reload<br/>滚动排水重启，Master 保持"]
+    F -->|是: -r -f 或启动参数变更| G["停止前固化旧代实际监听端口<br/>stopExistingServer() 委托 server:stop"]
+    F -->|是: 端口/实例冲突| G
     F -->|否| H["检查 loopback H1、control、Dispatcher/Worker 与托管 Nginx 端口"]
     G --> G1["Restart handoff fence<br/>Windows 正常重启最多 30s；POSIX 12s；fast 6s<br/>等目标端口无监听 + scoped 进程全退出"]
     G1 --> H
@@ -110,7 +112,8 @@ flowchart TB
 - `server:stop` 可接收多个空格分隔的实例名，例如 `php bin/w server:stop api worker`；名称按输入顺序去重，逐个获取实例级 stop lock 并执行完整单实例关闭链路。某个实例锁被占用时只跳过该实例，继续处理后续名称。
 - 新启动在停止旧实例之前产生不可变 `RuntimeSelection`，并以 endpoint schema v4 写入嵌套 `runtime_selection`。`--master-only` 只接受这一个事实源；旧 endpoint、缺失/未知字段或根级 topology/listener/event/SSL 投影都在绑定端口前拒绝，不重新推导或升级。
 - 内部拓扑的 `auto` 在所有平台固定为 Direct：Linux 优先经能力验证的 `reuseport`，不可用时回退 Master-owned `shared_fd`；macOS 使用 `shared_fd`；Windows 为 Nginx 均衡的独立 `worker_ports`。所有平台仍允许显式 Dispatcher；已删除的 independent/遗留模式、配置键和命令行别名没有兼容读取入口。
-- `server:start -r` 在创建新代前冻结旧代端口与 edge decision。共享宿主 Gateway
+- `server:start -r`（无 `-f`、无端口/拓扑/Worker/SSL 等启动参数变更）委托 `server:reload`，由 Orchestrator **分批次**排水替换 Worker（Worker 数 ≥7 时默认三批，小池按 min_ready 自动拆批），**Master 保持运行**。仅 `-r -f` 或启动参数变更时才完整停 Master 并创建新代。
+- `server:start -r -f` 或带启动参数变更的 `-r` 在创建新代前冻结旧代端口与 edge decision。共享宿主 Gateway
   不属于项目进程树，重启/停止项目只能 drain/unregister 本实例租约，不能停止宿主
   Controller 或 Nginx。legacy 项目 Nginx 仍按原 scoped owner 清理。
 - Gateway Agent 只有在网关状态同时匹配当前 `project_uuid`、当前实例名并明确为
@@ -119,7 +122,7 @@ flowchart TB
   关闭。其他项目或同项目其他实例的 `DRAINING` 不得影响当前实例，真实数据面故障仍
   保持 90 秒启用、恢复健康 30 秒后排空、排空 300 秒后关闭的生命周期。
 - 重启交接超时时，端口 owner/scope 只用于诊断；`Start` 不杀 unknown/foreign 进程、不换端口、不跳过栅栏，而是中止新 Master 启动并返回非零。正常重启清理总预算在 Windows 为 30 秒、macOS/Linux 为 12 秒，fast-local 为 6 秒；Windows 的较长预算只覆盖已退出 PID 的 LISTEN 表延迟，不放宽 owner/scope 栅栏。
-- `-r` 和 `-r -f` 都会在停止旧代前保存 `app/etc/env.php` 中的原始 `system.maintenance` 值；平滑 `-r` 随后才临时开启维护态。无论新 Master 成功、超时、端口栅栏失败或中途 return/fatal，启动事务都恢复该原值：原来已开启则保持开启，原来关闭则恢复关闭。
+- `-r` 和 `-r -f` 完整代际重启路径都会在停止旧代前保存 `app/etc/env.php` 中的原始 `system.maintenance` 值；完整代际 `-r`（参数变更或 `-r -f`）随后才临时开启维护态。滚动 `-r` 由 Reload/Orchestrator 自动管理维护模式。无论新 Master 成功、超时、端口栅栏失败或中途 return/fatal，启动事务都恢复该原值：原来已开启则保持开启，原来关闭则恢复关闭。
 - 后台重启只有在新 Master 已进入 `running` 后才提交维护事务：启动进程绕过实例列表缓存，按显式实例 endpoint 直连控制面，保留本次命令的 `operation_id`，并在一个 monotonic 总 deadline 内等待该操作退出 `active/queued` 且 `maintenance_mode` 等于快照值。该恢复与确认必须发生在生成/启动 Nginx 候选和公网 health/protocol gate **之前**；否则门禁请求仍可能落到临时维护路由。Direct Master 只会在全部 READY Worker 完成维护门禁 ACK 后提交该状态；缺失 `maintenance_mode/control_operation` 字段、endpoint 不可控或超时都属于启动失败，禁止打印“维护模式已关闭”。
 - 后台 `server:start` 只有在 Master/Worker `running`、托管 Nginx owner/config generation 接管、证书指纹绑定的 TLS 1.3 握手，以及 H2/H1 fresh 请求分别真实到达 owner 绑定的 `/_wls/health?detail=1`、匹配 WLS backend identity/config generation 后才返回 `0`；配置或 ALPN 不能单独写成 `runtime_verified`。H3 还要求 HTTP/3-only fresh QUIC 请求穿过 Nginx 到达同一真实 health；Nginx 本地响应或边缘缓存不算，客户端 verifier 不可用时明确保持 pending。失败门禁按事务规则返回非零并回滚候选配置；旧 generation 无法重新证明时停止 Nginx 并保留恢复证据。
 - Nginx shared session cache/tickets 已启用。TLS 恢复门禁固定使用 `fresh-share-two-connection-pair-v1`：每对新建 SSL share，仅含 fresh issuer 与 fresh-TCP probe；有效 probe ≥ 8、`failed=0`、恢复握手 P95 ≤ 50ms。多 Worker 必须在各对 issuer/probe PID 上同时证明 same/cross，单 Worker cross 为 `not_applicable`；HTTP/3/QUIC Session Resumption 仍未验证。

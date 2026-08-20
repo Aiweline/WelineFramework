@@ -27,6 +27,7 @@ use Weline\Server\Service\ServerInstanceManager;
  */
 class Restart extends CommandAbstract
 {
+    use StartupChangingArgsInspector;
     /**
      * @inheritDoc
      */
@@ -122,25 +123,6 @@ class Restart extends CommandAbstract
         return false;
     }
 
-    protected function hasStartupChangingArgs(array $args): bool
-    {
-        $keys = [
-            'p', 'port', 'host', 'h', 'count', 'c',
-            'no-ssl', 'no_ssl', 'ssl-cert', 'ssl-key',
-            'direct', 'dispatcher',
-            'runtime-strategy', 'runtime_strategy',
-            'event-loop', 'event_loop', 'loop-driver', 'loop_driver',
-            'worker-memory-limit', 'worker_memory_limit', 'dispatcher-memory-limit', 'dispatcher_memory_limit',
-        ];
-        foreach ($keys as $key) {
-            if (isset($args[$key])) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-    
     /**
      * 获取实例管理器
      */
@@ -196,7 +178,9 @@ class Restart extends CommandAbstract
                 '-c, --count <n>' => __('Worker 进程数（默认：4）'),
                 '--help' => __('显示帮助信息'),
             ],
-            [],
+            [
+                __('与 server:start -r -f 区别') => __('server:restart -r -f 仅单批次重载 Worker 且 Master 保持；server:start -r -f 会停 Master 做完整代际重启'),
+            ],
             [
                 __('确保服务器运行') => 'php bin/w server:restart',
                 __('强制重启服务器') => 'php bin/w server:restart -r',
