@@ -128,7 +128,7 @@ flowchart TB
 - Nginx shared session cache/tickets 已启用。TLS 恢复门禁固定使用 `fresh-share-two-connection-pair-v1`：每对新建 SSL share，仅含 fresh issuer 与 fresh-TCP probe；有效 probe ≥ 8、`failed=0`、恢复握手 P95 ≤ 50ms。多 Worker 必须在各对 issuer/probe PID 上同时证明 same/cross，单 Worker cross 为 `not_applicable`；HTTP/3/QUIC Session Resumption 仍未验证。
 - gateway/legacy 模式仍拒绝会阻断后续 edge live gate 的 `--foreground`；纯 WLS
   可以按自己的 listener 契约运行。
-- `server:start -r -f` 属于停机型切换，旧实例不会走平滑排水等待，而是更快进入本地清理。
+- `server:start -r -f` 属于停机型切换：先按 `server:stop -f` 跳过排水完整停止旧实例（Master 退出），确认端口与 scoped 进程已释放后再拉起新代。仅 Redirect 残留无 Master IPC 时才走 fast-local。
 - `server:stop -f` 仍然优先走 IPC STOP，但会把 Orchestrator 切到 `skipDrain=true`，也就是跳过关闭阶段 1/2，直接进入统一终止、校验和关闭 IPC。
 - 如果 CLI 侧等待 IPC 进度超时，且判断停机流并未继续推进，`Stop` 会强杀 Master 并执行本地 residual cleanup。
 - 如果本地 residual cleanup 后仍检测到残留进程，`Stop` 不会立刻删除 `var/server/instances/{instance}.json`，而是保留元数据，避免失去后续恢复和继续清理的控制线索。
