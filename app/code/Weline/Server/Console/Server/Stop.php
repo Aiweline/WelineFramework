@@ -1521,6 +1521,14 @@ class Stop extends CommandAbstract
             return;
         }
 
+        $blockingPorts = $this->collectFastLocalBlockingRecoverablePorts($name, $info);
+        if ($blockingPorts !== []) {
+            $this->printer->warning(__('  Fast-local cleanup still has recoverable ports listening: %{1}', [
+                \implode(',', $blockingPorts),
+            ]));
+            return;
+        }
+
         $this->cleanupStaleRecoverableProcessPidFilesForPids($candidatePids);
 
         if ($killed > 0) {
@@ -1529,6 +1537,25 @@ class Stop extends CommandAbstract
             $this->printer->note(__('  Fast-local cleanup found no verified residual processes.'));
         }
         $this->lastResidualCleanupComplete = true;
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function collectFastLocalBlockingRecoverablePorts(
+        string $name,
+        ServerInstanceInfo $info
+    ): array {
+        $blocking = [];
+        foreach ($this->collectRemainingRecoverableWlsPorts($name, $info, false) as $port) {
+            if (Processer::isPortFreeByBindProbe($port)) {
+                Processer::clearPortCache($port);
+                continue;
+            }
+            $blocking[] = $port;
+        }
+
+        return $blocking;
     }
 
     /**

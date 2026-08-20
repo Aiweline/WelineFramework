@@ -63,6 +63,38 @@ final class StartForceSwitchStopArgsTest extends TestCase
         self::assertGreaterThanOrEqual(2, $start->checks);
     }
 
+    public function testRestartHandoffIgnoresStalePortRowWhenBindProbeSucceeds(): void
+    {
+        $start = new class extends Start {
+            public function blocked(int $port): bool
+            {
+                $this->restartHandoffPorts = [$port];
+
+                return $this->isRestartHandoffPortBlocked($port);
+            }
+        };
+
+        $port = 9986;
+        $socket = @\stream_socket_server(
+            'tcp://127.0.0.1:' . $port,
+            $errno,
+            $errstr,
+            \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN
+        );
+        if (!\is_resource($socket)) {
+            self::markTestSkipped('Unable to bind the restart handoff test port: ' . $errstr);
+        }
+
+        try {
+            self::assertTrue($start->blocked($port));
+        } finally {
+            @\fclose($socket);
+            \Weline\Framework\System\Process\Processer::clearPortCache($port);
+        }
+
+        self::assertFalse($start->blocked($port));
+    }
+
     public function testMaintenanceModeHelpersSyncFrameworkAndWlsForTargetInstance(): void
     {
         $start = new class extends Start {
