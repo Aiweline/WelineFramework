@@ -78,6 +78,8 @@ use Weline\Server\Service\Provider\RuntimeTaskWatchdogProvider;
  */
 class Start extends CommandAbstract
 {
+    use StartupChangingArgsInspector;
+
     /** Exact one-release cleanup fence for the retired protocol sidecar. */
 
     /**
@@ -1723,6 +1725,28 @@ class Start extends CommandAbstract
             return;
         }
 
+        if ($instanceRunning
+            && $forceRestart
+            && !$forceSwitch
+            && !$this->hasStartupChangingArgs($args)
+        ) {
+            $this->wlsStartupProcessHandoffDone = true;
+            $this->releaseStartLock();
+            $this->printer->note(__('检测到服务器已运行，执行滚动重启（Master 保持运行）...'));
+            $reloadCommand = ObjectManager::getInstance(Reload::class);
+
+            return $reloadCommand->execute($args, $data);
+        }
+
+        if ($instanceRunning
+            && $forceRestart
+            && !$forceSwitch
+            && $this->hasStartupChangingArgs($args)
+        ) {
+            $this->printer->warning(__('检测到端口/拓扑/Worker/SSL 等启动参数变更，start -r 将自动切换为完整重启。'));
+            $this->printer->note(__('将先执行平滑停机，再使用新启动参数重新拉起实例。'));
+        }
+
         // Only a confirmed fresh start or explicit restart may publish a new
         // compiled generation. This gate still runs before stopping the old
         // instance, so compile/registry failures cannot manufacture downtime.
@@ -1811,7 +1835,7 @@ class Start extends CommandAbstract
                     'skipped' => true,
                 ]);
             } else {
-                $this->printer->warning(__('检测到服务器已运行，平滑重启：先开启维护模式并等待全部 Worker 请求排空...'));
+                $this->printer->warning(__('检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...'));
                 $this->beginRestartMaintenanceTransaction($instanceName);
                 $this->enableMaintenanceMode($instanceName);
                 $maintenanceEnabledByUs = true;
@@ -12680,8 +12704,8 @@ PHP;
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
                 '--win' => __('Windows 子进程使用可见控制台窗口'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
-                '-r, --restart' => __('平滑重启：开维护模式，并在全部 READY Worker 确认请求排空后切换'),
-                '-f' => __('与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）'),
+                '-r, --restart' => __('滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）'),
+                '-f' => __('与 -r 同用时强制完整重启（停 Master，跳过排水等待）'),
                 '--ssl-cert <path>' => __('公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--ssl-key <path>' => __('公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--certificate-profile <profile>' => __('WLS 2.0 证书信任范围：production（默认）或显式 test；域名后缀不会自动启用 test'),
@@ -12730,8 +12754,8 @@ PHP;
                 __('Dispatcher 模式') => 'php bin/w server:start dispatcher -p 9983 --dispatcher',
                 __('显式安装依赖后启动') => 'php bin/w server:start deps -p 9984 --install-deps',
                 __('Windows 可见窗口') => 'php bin/w server:start win -p 9985 --win',
-                __('平滑重启') => 'php bin/w server:start api -r',
-                __('强制重启（停机型更新）') => 'php bin/w server:start api -r -f',
+                __('滚动排水重启') => 'php bin/w server:start api -r',
+                __('强制完整重启') => 'php bin/w server:start api -r -f',
                 __('指定 Nginx TLS 证书') => 'php bin/w server:start api --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
                 __('设置 Worker 内存') => 'php bin/w server:start api --worker-memory-limit=512M',
                 __('查看所有实例状态') => 'php bin/w server:status --all',
