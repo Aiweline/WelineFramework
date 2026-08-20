@@ -16,7 +16,6 @@
 事务控制语句执行失败,事务控制语句执行失败
 保存点作用域的事务深度不平衡,保存点作用域的事务深度不平衡
 事务已标记为仅回滚，无法提交,事务已标记为仅回滚，无法提交
-"SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}","SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}"
 "SQLite database directory is not writable: %{1}","SQLite database directory is not writable: %{1}"
 "SQLite 鐗堟湰鏍￠獙鏈€氳繃锛堣繛鎺ュ凡寤虹珛锛屽崌绾у彲缁х画锛夛細%{1}","SQLite 鐗堟湰鏍￠獙鏈€氳繃锛堣繛鎺ュ凡寤虹珛锛屽崌绾у彲缁х画锛夛細%{1}"
 "SQLite 表 %{1} 已存在列 %{2}","SQLite 表 %{1} 已存在列 %{2}"
@@ -52,16 +51,12 @@
 没有要更新的字段,没有要更新的字段
 "Where查询异常：%{1},%{2},%{3}","Where查询异常：%{1},%{2},%{3}"
 "当前错误的条件操作符：%{1} ,当前的条件数组：%{2}, 允许的条件符：%{3}","当前错误的条件操作符：%{1} ,当前的条件数组：%{2}, 允许的条件符：%{3}"
-"驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。","驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。"
 "MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}","MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}"
 更新表注释错误：%{1},更新表注释错误：%{1}
 创建时间,创建时间
 更新时间,更新时间
 "MySQL 单条 SQL 绑定参数数量 %{1} 超过安全阈值 %{2}","MySQL 单条 SQL 绑定参数数量 %{1} 超过安全阈值 %{2}"
 "MySQL 单条 SQL 绑定参数数量（%{1}）超过方言安全阈值（%{2}）。请减少单次批量写入的记录数或改为分批写入。","MySQL 单条 SQL 绑定参数数量（%{1}）超过方言安全阈值（%{2}）。请减少单次批量写入的记录数或改为分批写入。"
-"不支持的清理类型：%{1} 支持的初始化类型：%{2}","不支持的清理类型：%{1} 支持的初始化类型：%{2}"
-"Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini.","Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini."
-"PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。","PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。"
 "PostgreSQL 版本校验未通过（连接已建立，升级可继续）：%{1}","PostgreSQL 版本校验未通过（连接已建立，升级可继续）：%{1}"
 数据库连接未初始化,数据库连接未初始化
 "PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列","PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列"
@@ -81,11 +76,13 @@
 "检测打算要更新依据字段不匹配，请检查! 打算更新字段：%{1}，实际字段: %{2}","检测打算要更新依据字段不匹配，请检查! 打算更新字段：%{1}，实际字段: %{2}"
 "IN 条件无法匹配空值数组。数组值：[]","IN 条件无法匹配空值数组。数组值：[]"
 "子查询 %{1} 不存在","子查询 %{1} 不存在"
+"不支持的清理类型：%{1} 支持的初始化类型：%{2}","不支持的清理类型：%{1} 支持的初始化类型：%{2}"
 "无法回退到普通插入：SQL 准备失败","无法回退到普通插入：SQL 准备失败"
 执行信息：,执行信息：
 "fetchIterator 不支持多语句 SQL，请使用单条 SELECT","fetchIterator 不支持多语句 SQL，请使用单条 SELECT"
 "检测到重复数据！根据更新依赖字段 [%{1}] 检测到重复记录：%{2}","检测到重复数据！根据更新依赖字段 [%{1}] 检测到重复记录：%{2}"
 分页超过每页限制大小！限制每页大小：%{1},分页超过每页限制大小！限制每页大小：%{1}
+数据库语句执行失败：%{1},数据库语句执行失败：%{1}
 "错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%{1}","错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%{1}"
 "Failed to prepare SQL for fetchIterator: {1}","Failed to prepare SQL for fetchIterator: {1}"
 "数据库连接未设置，请先调用 setConnector() 或 setConnection()。","数据库连接未设置，请先调用 setConnector() 或 setConnection()。"
@@ -830,6 +827,10 @@ dev=true,dev=true
 "执行 composer dump-autoload 时发生错误: %{1}","执行 composer dump-autoload 时发生错误: %{1}"
 "✓ generated/code 目录已清理。","✓ generated/code 目录已清理。"
 "清理 generated/code 目录时发生错误: %{1}，将继续执行。","清理 generated/code 目录时发生错误: %{1}，将继续执行。"
+无法创建缓存目录：%{1},无法创建缓存目录：%{1}
+无法清理缓存路径：%{1},无法清理缓存路径：%{1}
+缓存目录属主未能对齐到项目根（%{1}），但当前进程可写，已继续。,缓存目录属主未能对齐到项目根（%{1}），但当前进程可写，已继续。
+无法恢复缓存目录所有权：%{1},无法恢复缓存目录所有权：%{1}
 系统升级过程中发生错误：%{1},系统升级过程中发生错误：%{1}
 "WLS 实例 %{1} 已跳过维护同步：%{2}","WLS 实例 %{1} 已跳过维护同步：%{2}"
 "WLS 维护模式已同步：%{1}","WLS 维护模式已同步：%{1}"
@@ -1149,6 +1150,7 @@ edit,edit
 framework,framework
 "BinQuery Connect Query Call Graph","BinQuery Connect Query Call Graph"
 "Connect, inspect, call and graph through /bin/query","Connect, inspect, call and graph through /bin/query"
+后台页面凭证已失效，请刷新页面后重试。,后台页面凭证已失效，请刷新页面后重试。
 "Frontend JSON query is deprecated. Use the Weline frontend worker API.","Frontend JSON query is deprecated. Use the Weline frontend worker API."
 环境初始化检测中...,环境初始化检测中...
 未设置环境需求,未设置环境需求
@@ -1311,7 +1313,8 @@ framework,framework
 "推荐项 - 未安装: %{fail} 项（可选，不影响运行）","推荐项 - 未安装: %{fail} 项（可选，不影响运行）"
 "推荐项 - 已跳过: %{skip} 项（之前已尝试，使用 --force 强制重试）","推荐项 - 已跳过: %{skip} 项（之前已尝试，使用 --force 强制重试）"
 "php.ini 不可写且无 sudo 权限: %{path}","php.ini 不可写且无 sudo 权限: %{path}"
-"已通过 sudo 修改 php.ini","已通过 sudo 修改 php.ini"
+"已更新: %{path}","已更新: %{path}"
+"已通过 sudo 修改 php.ini: %{path}","已通过 sudo 修改 php.ini: %{path}"
 "DLL 不存在: %{path}","DLL 不存在: %{path}"
 "找到 DLL: %{path}","找到 DLL: %{path}"
 "无法获取 php.ini 路径","无法获取 php.ini 路径"
@@ -1322,8 +1325,10 @@ framework,framework
 "写入 php.ini 失败","写入 php.ini 失败"
 "php.ini 已更新: %{path}","php.ini 已更新: %{path}"
 "注意: CLI 模式已生效，Web 服务（Apache/Nginx+FPM）需要重启才能生效","注意: CLI 模式已生效，Web 服务（Apache/Nginx+FPM）需要重启才能生效"
-"当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php","当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php"
-"当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}","当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}"
+"当前 PHP 来自 WLS 自编译 (extend/server/php)，正在尝试重编以加入扩展 %{ext}...","当前 PHP 来自 WLS 自编译 (extend/server/php)，正在尝试重编以加入扩展 %{ext}..."
+"重编后扩展 %{ext} 已可用 ✔","重编后扩展 %{ext} 已可用 ✔"
+"重编完成但仍未加载 %{ext}，请检查 compile flags / 系统依赖","重编完成但仍未加载 %{ext}，请检查 compile flags / 系统依赖"
+"自动重编未成功。可手动执行: bash bin/install.sh --rebuild-php php","自动重编未成功。可手动执行: bash bin/install.sh --rebuild-php php"
 "当前平台: %{platform}，优先尝试: %{pkg}","当前平台: %{platform}，优先尝试: %{pkg}"
 "Homebrew/PECL 将以当前用户非交互执行（不使用 sudo）","Homebrew/PECL 将以当前用户非交互执行（不使用 sudo）"
 "将使用 sudo 执行安装命令","将使用 sudo 执行安装命令"
@@ -1334,6 +1339,7 @@ framework,framework
 "可能原因: 包名与当前 PHP 版本不匹配(RHEL/Amazon 需 php81-exif 等)、当前使用宝塔/自编译 PHP(apt/dnf 对其无效，需在宝塔面板启用)","可能原因: 包名与当前 PHP 版本不匹配(RHEL/Amazon 需 php81-exif 等)、当前使用宝塔/自编译 PHP(apt/dnf 对其无效，需在宝塔面板启用)"
 "输出: %{output}","输出: %{output}"
 当前平台优先方式未成功，继续检查当前平台安全回退策略...,当前平台优先方式未成功，继续检查当前平台安全回退策略...
+"已 reload PHP-FPM","已 reload PHP-FPM"
 "已通过 sudo 写入扩展配置: %{path}","已通过 sudo 写入扩展配置: %{path}"
 "添加有序扩展配置: %{path}","添加有序扩展配置: %{path}"
 "添加配置: extension=%{ext}","添加配置: extension=%{ext}"
@@ -1835,7 +1841,6 @@ Transport,Transport
 后台实时流证明无效，请刷新页面后重试。,后台实时流证明无效，请刷新页面后重试。
 后台实时流暂未启用，请使用普通后台请求。,后台实时流暂未启用，请使用普通后台请求。
 "商城 Scope 已过期，请刷新页面后重试","商城 Scope 已过期，请刷新页面后重试"
-后台页面凭证已失效，请刷新页面后重试。,后台页面凭证已失效，请刷新页面后重试。
 后台权限服务暂不可用。,后台权限服务暂不可用。
 后台页面凭证服务暂不可用。,后台页面凭证服务暂不可用。
 "Operation authorization requirements are not satisfied.","Operation authorization requirements are not satisfied."
@@ -2248,6 +2253,13 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,路由路径
 HTTP方法,HTTP方法
 控制器,控制器
+"已通过 sudo 修改 php.ini","已通过 sudo 修改 php.ini"
+"当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php","当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php"
+"当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}","当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}"
+"SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}","SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}"
+"驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。","驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。"
+"Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini.","Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini."
+"PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。","PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。"
 "Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}","Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}"
 璇峰厛鐧诲綍,璇峰厛鐧诲綍
 "使用指定的 Session ID: %{1}...","使用指定的 Session ID: %{1}..."
@@ -2538,6 +2550,3 @@ env.php中的服务器信息:,env.php中的服务器信息:
 "「UI 测试」开启后，总览直跑 / 详情运行都会以 headed 启动；偏好保存在系统配置。服务器无图形界面时请关闭。","「UI 测试」开启后，总览直跑 / 详情运行都会以 headed 启动；偏好保存在系统配置。服务器无图形界面时请关闭。"
 "已保存：UI 测试开启","已保存：UI 测试开启"
 "已保存：UI 测试关闭","已保存：UI 测试关闭"
-无法创建缓存目录：%{1},无法创建缓存目录：%{1}
-无法清理缓存路径：%{1},无法清理缓存路径：%{1}
-无法恢复缓存目录所有权：%{1},无法恢复缓存目录所有权：%{1}

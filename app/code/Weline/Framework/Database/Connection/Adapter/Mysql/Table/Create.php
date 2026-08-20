@@ -94,32 +94,42 @@ class Create extends AbstractTable implements CreateInterface
         if (is_string($column)) {
             $column = explode(',', $column);
         }
+        $quotedParts = [];
         foreach ($column as $item) {
-            if (str_contains($item, '`')) {
-                $column[$item] = str_replace('`', '', $item);
+            $clean = trim(str_replace('`', '', (string)$item));
+            if ($clean === '') {
+                continue;
             }
+            $prefix = '';
+            if (preg_match('/^(.+)\((\d+)\)\s*$/', $clean, $m)) {
+                $clean = $m[1];
+                $prefix = '(' . $m[2] . ')';
+            } elseif ($this->mysqlNeedsTextIndexPrefix($clean)) {
+                $prefix = '(191)';
+            }
+            $quotedParts[] = '`' . $clean . '`' . $prefix;
         }
-        $column = implode('`,`', $column);
+        $columnSql = implode(',', $quotedParts);
         switch ($type) {
             case self::index_type_DEFAULT:
             case 'INDEX': // 兼容旧的调用方式
-                $this->indexes[] = "INDEX `{$name}`(`{$column}`) {$index_method} {$comment}";
+                $this->indexes[] = "INDEX `{$name}`({$columnSql}) {$index_method} {$comment}";
 
                 break;
             case self::index_type_FULLTEXT:
-                $this->indexes[] = "FULLTEXT INDEX `{$name}`(`{$column}`) {$index_method} {$comment}";
+                $this->indexes[] = "FULLTEXT INDEX `{$name}`({$columnSql}) {$index_method} {$comment}";
 
                 break;
             case self::index_type_UNIQUE:
-                $this->indexes[] = "UNIQUE INDEX `{$name}`(`{$column}`) {$index_method} {$comment}";
+                $this->indexes[] = "UNIQUE INDEX `{$name}`({$columnSql}) {$index_method} {$comment}";
 
                 break;
             case self::index_type_SPATIAL:
-                $this->indexes[] = "SPATIAL INDEX `{$name}`(`{$column}`) {$index_method} {$comment}";
+                $this->indexes[] = "SPATIAL INDEX `{$name}`({$columnSql}) {$index_method} {$comment}";
 
                 break;
             case self::index_type_KEY:
-                $this->indexes[] = "KEY `{$name}`(`{$column}`) {$index_method} {$comment}";
+                $this->indexes[] = "KEY `{$name}`({$columnSql}) {$index_method} {$comment}";
 
                 break;
             case self::index_type_MULTI:
@@ -229,5 +239,15 @@ createSQL;
             throw new Exception(__('创建表失败，' . PHP_EOL . PHP_EOL . 'SQL：%{1} ' . PHP_EOL . PHP_EOL . 'ERROR：%{2}', [$sql, $exception->getMessage()]));
         }
         return $result;
+    }
+
+    private function mysqlNeedsTextIndexPrefix(string $column): bool
+    {
+        $fieldSql = (string)($this->fields[$column] ?? $this->fields['`' . $column . '`'] ?? '');
+        if ($fieldSql === '') {
+            return false;
+        }
+        return preg_match('/\b(tiny|medium|long)?(text|blob)\b/i', $fieldSql) === 1
+            || preg_match('/\bjson\b/i', $fieldSql) === 1;
     }
 }

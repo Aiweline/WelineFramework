@@ -283,18 +283,18 @@ class Alter extends AbstractTable implements AlterInterface
                 }
             }
 
-            # 是否修改表名
+            # 是否修改表名（仅在有新表名时执行；无字段变更时 $sql 可能未赋值）
             if ($this->new_table_name) {
                 $sql = "ALTER TABLE {$this->table} RENAME TO {$this->new_table_name}";
-            }
-            try {
-                if ($dump_sql) {
-                    $dump_sqls[] = $sql;
-                } else {
-                    $this->query($sql)->fetch();
+                try {
+                    if ($dump_sql) {
+                        $dump_sqls[] = $sql;
+                    } else {
+                        $this->query($sql)->fetch();
+                    }
+                } catch (\Exception $exception) {
+                    exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%{1}', $sql) . PHP_EOL);
                 }
-            } catch (\Exception $exception) {
-                exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%{1}', $sql) . PHP_EOL);
             }
         } catch (\Exception $exception) {
             exit($exception->getMessage());

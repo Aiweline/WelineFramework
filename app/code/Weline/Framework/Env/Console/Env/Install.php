@@ -758,16 +758,56 @@ class Install extends CommandAbstract
     }
 
     /**
-     * 尝试解禁函数
+     * 尝试解禁函数（写入当前 loaded php.ini，并覆盖同版本并列 php.ini（如 FPM/CLI））
      */
     private function tryUnblockFunctions(array $functions): bool
     {
-        $phpIniPath = php_ini_loaded_file();
-        if (!$phpIniPath) {
+        $iniPaths = [];
+        $loaded = php_ini_loaded_file();
+        if (is_string($loaded) && $loaded !== '' && is_file($loaded)) {
+            $iniPaths[] = $loaded;
+        }
+        $phpBin = (string)(PHP_BINARY ?? '');
+        // Bundled WLS PHP: prefix/php.ini + conf.d
+        if (str_contains($phpBin, 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php')
+            || str_contains($phpBin, 'extend/server/php')) {
+            $phpHome = dirname(dirname($phpBin));
+            foreach ([$phpHome . '/php.ini', $phpHome . '/etc/php.ini'] as $candidate) {
+                if (is_file($candidate)) {
+                    $iniPaths[] = $candidate;
+                }
+            }
+        }
+        if (preg_match('#(/www/server/php/\d+)/#', $phpBin . ' ' . (string)$loaded, $m) === 1) {
+            foreach (['/etc/php.ini', '/etc/php-cli.ini', '/etc/php-fpm.ini'] as $rel) {
+                $candidate = $m[1] . $rel;
+                if (is_file($candidate)) {
+                    $iniPaths[] = $candidate;
+                }
+            }
+        }
+        $iniPaths = array_values(array_unique($iniPaths));
+        if ($iniPaths === []) {
             return false;
         }
 
-        // 检查是否可写（直接或通过 sudo）
+        $anyOk = false;
+        foreach ($iniPaths as $phpIniPath) {
+            if ($this->unblockFunctionsInIniFile($phpIniPath, $functions)) {
+                $anyOk = true;
+            }
+        }
+        if ($anyOk) {
+            $this->tryReloadPhpFpmService();
+        }
+        return $anyOk;
+    }
+
+    /**
+     * @param list<string> $functions
+     */
+    private function unblockFunctionsInIniFile(string $phpIniPath, array $functions): bool
+    {
         $canWrite = is_writable($phpIniPath);
         $needSudo = !$canWrite && $this->hasSudo && !$this->isRoot;
 
@@ -781,14 +821,16 @@ class Install extends CommandAbstract
             return false;
         }
 
-        // 查找 disable_functions
         $pattern = '/^(disable_functions\s*=\s*)(.*)$/m';
         if (!preg_match($pattern, $content, $matches)) {
-            return false;
+            return true;
         }
 
         $currentDisabled = array_map('trim', explode(',', $matches[2]));
-        $newDisabled = array_diff($currentDisabled, $functions);
+        $newDisabled = array_values(array_diff($currentDisabled, $functions));
+        if ($newDisabled === $currentDisabled) {
+            return true;
+        }
         $newLine = 'disable_functions = ' . implode(',', array_filter($newDisabled));
 
         $newContent = preg_replace($pattern, $newLine, $content);
@@ -797,27 +839,31 @@ class Install extends CommandAbstract
         }
 
         if ($canWrite) {
-            return file_put_contents($phpIniPath, $newContent) !== false;
+            $ok = file_put_contents($phpIniPath, $newContent) !== false;
+            if ($ok) {
+                $this->printer->note(__('  已更新: %{path}', ['path' => $phpIniPath]));
+            }
+            return $ok;
         }
 
-        // 使用 sudo 写入
-        $tempFile = sys_get_temp_dir() . '/php_ini_temp_' . uniqid() . '.ini';
+        $tempFile = sys_get_temp_dir() . '/php_ini_temp_' . uniqid('', true) . '.ini';
         if (file_put_contents($tempFile, $newContent) === false) {
             return false;
         }
 
-        $cmd = $this->getSudoCommand("cp '$tempFile' '$phpIniPath'");
+        $cmd = $this->getSudoCommand('cp ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($phpIniPath));
         $output = [];
         @exec($cmd . ' 2>&1', $output, $code);
         @unlink($tempFile);
 
         if ($code === 0) {
-            $this->printer->note(__('  已通过 sudo 修改 php.ini'));
+            $this->printer->note(__('  已通过 sudo 修改 php.ini: %{path}', ['path' => $phpIniPath]));
             return true;
         }
 
         return false;
     }
+
 
     /**
      * 尝试安装/启用 PHP 扩展
@@ -941,17 +987,20 @@ class Install extends CommandAbstract
     private function tryInstallExtensionLinux(string $ext): bool
     {
         $phpBin = (string) (PHP_BINARY ?? '');
-        // 项目自编译 PHP（extend/server/php）：apt/dnf 对其无效，扩展应在编译时已加入
-        if (str_contains($phpBin, 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php')) {
-            $this->printer->note(__('    当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php'));
-            if ($this->tryEnableExtensionInIniLinux($ext)) {
-                return true;
+        // 项目自编译 PHP（extend/server/php）：apt/dnf 无效，缺失扩展必须重编进二进制
+        if (str_contains($phpBin, 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php')
+            || str_contains($phpBin, 'extend/server/php')) {
+            $this->printer->note(__('    当前 PHP 来自 WLS 自编译 (extend/server/php)，正在尝试重编以加入扩展 %{ext}...', ['ext' => $ext]));
+            if ($this->tryRebuildProjectPhp()) {
+                if ($this->isExtensionLoadedInCurrentPhp($ext)) {
+                    $this->printer->success(__('    重编后扩展 %{ext} 已可用 ✔', ['ext' => $ext]));
+                    return true;
+                }
+                $this->printer->warning(__('    重编完成但仍未加载 %{ext}，请检查 compile flags / 系统依赖', ['ext' => $ext]));
+            } else {
+                $this->printer->note(__('    自动重编未成功。可手动执行: bash bin/install.sh --rebuild-php php'));
             }
-            return false;
-        }
-        // 宝塔 PHP（/www/server/php/）：apt/dnf 对其无效，需在宝塔面板启用
-        if (str_contains($phpBin, '/www/server/php/')) {
-            $this->printer->note(__('    当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}', ['ext' => $ext]));
+            // 共享扩展若已作为 .so 存在，仍尝试 ini 启用
             if ($this->tryEnableExtensionInIniLinux($ext)) {
                 return true;
             }
@@ -1039,6 +1088,36 @@ class Install extends CommandAbstract
         }
 
         return false;
+    }
+
+
+    /**
+     * Reload PHP-FPM after php.ini / extension changes (best-effort).
+     */
+    private function tryReloadPhpFpmService(): void
+    {
+        $phpBin = (string)(PHP_BINARY ?? '');
+        $ini = (string)(php_ini_loaded_file() ?: '');
+        $ver = '';
+        if (preg_match('#/www/server/php/(\d+)/#', $phpBin . ' ' . $ini, $m) === 1) {
+            $ver = $m[1];
+        }
+        $candidates = [];
+        if ($ver !== '') {
+            $candidates[] = '/etc/init.d/php-fpm-' . $ver . ' reload';
+            $candidates[] = 'systemctl reload php-fpm-' . $ver;
+        }
+        $candidates[] = 'systemctl reload php-fpm';
+        foreach ($candidates as $cmd) {
+            $output = [];
+            $code = 1;
+            // nosemgrep: php.lang.security.exec-use.exec-use
+            @exec($this->getSudoCommand($cmd) . ' 2>&1', $output, $code);
+            if ($code === 0) {
+                $this->printer->note(__('    已 reload PHP-FPM'));
+                return;
+            }
+        }
     }
 
     /**

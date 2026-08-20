@@ -194,15 +194,24 @@ class Migration extends Model implements ModelInterface
             ->update($values)
             ->fetch();
 
-        $fresh = (clone $this)->reset()->setConnection($connection)
-            ->where(self::schema_fields_ID, $migrationId);
-        $fresh->additional('FOR UPDATE');
-        $fresh->find()->fetch();
-        if ((int)$fresh->getData(self::schema_fields_ID) !== $migrationId
-            || $fresh->getData(self::schema_fields_STATUS) !== $newStatus
-            || (string)$fresh->getData(self::schema_fields_OPERATION_ID) !== $expectedOperationId) {
+        // DDL（尤其 MySQL ALTER）可能破坏共用 Query/事务状态，Model find 回读不可靠。
+        // CAS 验收改为 connector 直连读一行。
+        $connector = $connection->getConnector();
+        $table = $connector->getConfigProvider()->getPrefix() . self::schema_table;
+        $sql = 'SELECT `' . self::schema_fields_ID . '`, `' . self::schema_fields_STATUS . '`, `'
+            . self::schema_fields_OPERATION_ID . '` FROM `' . str_replace('`', '``', $table)
+            . '` WHERE `' . self::schema_fields_ID . '` = ? LIMIT 1';
+        $statement = $connector->getWrappedConnection()->prepare($sql);
+        $statement->execute([$migrationId]);
+        $row = $statement->fetch(\PDO::FETCH_ASSOC) ?: [];
+        if ((int)($row[self::schema_fields_ID] ?? 0) !== $migrationId
+            || (string)($row[self::schema_fields_STATUS] ?? '') !== $newStatus
+            || (string)($row[self::schema_fields_OPERATION_ID] ?? '') !== $expectedOperationId) {
             throw new \RuntimeException(
                 "migration status CAS persistence failed: migration_id={$migrationId}"
+                . ' got=' . json_encode($row, JSON_UNESCAPED_UNICODE)
+                . ' expected_status=' . $newStatus
+                . ' expected_operation_id=' . $expectedOperationId
             );
         }
     }
