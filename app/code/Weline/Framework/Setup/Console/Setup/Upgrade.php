@@ -473,6 +473,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      *
      * setup:upgrade 可能由 root 执行，而 Web/WLS 通常由项目运行用户执行。
      * 删除整个 var/cache 会让后续重建目录继承 CLI 用户，导致运行时无法创建锁文件。
+     *
+     * 部署 webhook 常以 www 运行，而 BP 属主可能是部署账号（如 weline）：此时无法
+     * chown 到 BP 属主。只要目录对当前进程可写，就不应让升级失败。
      */
     private function clearCacheContentsPreservingRuntimeOwner(): void
     {
@@ -492,6 +495,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $removed = $item->isLink() || !$item->isDir()
                 ? @unlink($path)
                 : @rmdir($path);
+            if (!$removed && (file_exists($path) || is_link($path))) {
+                @chmod($path, $item->isDir() ? 0775 : 0664);
+                $removed = $item->isLink() || !$item->isDir()
+                    ? @unlink($path)
+                    : @rmdir($path);
+            }
             if (!$removed && (file_exists($path) || is_link($path))) {
                 throw new \RuntimeException((string)__('无法清理缓存路径：%{1}', [$path]));
             }
@@ -513,11 +522,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         clearstatcache(true, $cacheDir);
 
         foreach ([$varDir, $cacheDir] as $runtimeDir) {
-            if (($runtimeOwner !== false && @fileowner($runtimeDir) !== $runtimeOwner)
-                || ($runtimeGroup !== false && @filegroup($runtimeDir) !== $runtimeGroup)
-            ) {
-                throw new \RuntimeException((string)__('无法恢复缓存目录所有权：%{1}', [$runtimeDir]));
+            $ownerMatch = $runtimeOwner === false || @fileowner($runtimeDir) === $runtimeOwner;
+            $groupMatch = $runtimeGroup === false || @filegroup($runtimeDir) === $runtimeGroup;
+            if ($ownerMatch && $groupMatch) {
+                continue;
             }
+            // www 跑 POST_DEPLOY 时无法把属主改回 BP（常为 weline）；可写即满足运行时。
+            if (is_writable($runtimeDir)) {
+                $this->printing->warning(__(
+                    '缓存目录属主未能对齐到项目根（%{1}），但当前进程可写，已继续。',
+                    [$runtimeDir]
+                ));
+                continue;
+            }
+            throw new \RuntimeException((string)__('无法恢复缓存目录所有权：%{1}', [$runtimeDir]));
         }
     }
 

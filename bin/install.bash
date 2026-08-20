@@ -852,6 +852,32 @@ get_installed_php_major_minor() {
   fi
 }
 
+
+# 配置 WLS 自带 PHP 的 php.ini：启用框架扩展声明、清空运行所需 disable_functions
+configure_wls_php_ini() {
+  local php_home="$1"
+  local php_bin=""
+  [[ -x "$php_home/bin/php" ]] && php_bin="$php_home/bin/php"
+  [[ -z "$php_bin" && -x "$php_home/php" ]] && php_bin="$php_home/php"
+  [[ -z "$php_bin" ]] && return 0
+  local bootstrap="$ROOT/setup/server_installer/bootstrap_php_ini.php"
+  if [[ -f "$bootstrap" ]]; then
+    echo "Configuring WLS PHP ini (extensions + disable_functions) at $php_home ..."
+    "$php_bin" -d opcache.enable=0 -d opcache.enable_cli=0 "$bootstrap" || {
+      echo "WARNING: configure_wls_php_ini via bootstrap_php_ini failed" >&2
+      return 0
+    }
+    return 0
+  fi
+  local cfg="$ROOT/setup/server_installer/ConfigurePhpIni.php"
+  if [[ -f "$cfg" ]]; then
+    echo "Configuring WLS PHP ini via ConfigurePhpIni at $php_home ..."
+    "$php_bin" -r 'require $argv[1]; (new ConfigurePhpIni($argv[2], $argv[3]))->apply([]);' \
+      "$cfg" "$ROOT" "$php_home" || echo "WARNING: ConfigurePhpIni apply failed" >&2
+  fi
+  return 0
+}
+
 # 检测 PHP 是否包含框架所需扩展（含 pdo_pgsql），避免重复编译
 php_has_required_extensions() {
   local exe="$1"
@@ -958,6 +984,7 @@ install_php() {
       mkdir -p "$dest/bin" || return 1
       safe_ln_sf "$php_exe" "$dest/bin/php" || return 1
     fi
+    configure_wls_php_ini "$dest"
     add_to_path "$dest"
     [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
     return 0
@@ -983,6 +1010,7 @@ install_php() {
   echo "Installing PHP $PHP_VERSION from php-src into $dest ..."
   install_php_system_deps || return 1
   install_php_from_source "$dest" || return 1
+  configure_wls_php_ini "$dest"
   add_to_path "$dest"
   [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
   return 0
@@ -1422,7 +1450,7 @@ enable_php_ext_via_ini() {
 # 在首次运行 php（run.php）前，确保 Framework 所需 PHP 扩展已安装
 # 扩展列表含 composer.json 与 requirements.php 所需；composer 依赖 exif、fileinfo
 ensure_framework_php_extensions() {
-  local -a needed=(PDO json iconv fileinfo exif dom libxml simplexml intl mbstring sockets)
+  local -a needed=(PDO json iconv fileinfo exif xsl dom libxml simplexml intl mbstring sockets openssl curl zip bcmath)
   local -a missing=()
   local ext
   for ext in "${needed[@]}"; do
@@ -1436,9 +1464,20 @@ ensure_framework_php_extensions() {
   local server_php_abs
   server_php_abs="$(cd "$ROOT" 2>/dev/null && cd "$SERVER_DIR/php" 2>/dev/null && pwd 2>/dev/null)" || true
   if [[ -n "$server_php_abs" ]] && [[ -n "$php_exe_abs" ]] && [[ "$php_exe_abs" == "$server_php_abs"* ]]; then
-    echo "WARNING: Framework requires PHP extensions that are missing in built PHP: ${missing[*]}." >&2
-    echo "  This PHP is from extend/server/php (built from source). apt install will not affect it." >&2
-    echo "  Install build deps and rebuild PHP: sudo apt install -y libxml2-dev libssl-dev ... then run: $0 --rebuild-php" >&2
+    echo "WARNING: WLS PHP (extend/server/php) missing extensions: ${missing[*]}." >&2
+    echo "  apt/dnf cannot fix bundled PHP. Rebuilding with required configure flags..." >&2
+    if [[ "${WELINE_PHP_REBUILD_ATTEMPTED:-0}" != "1" ]]; then
+      export WELINE_PHP_REBUILD_ATTEMPTED=1
+      REBUILD_PHP=true
+      install_php || true
+      configure_wls_php_ini "$SERVER_DIR/php"
+      missing=()
+      for ext in "${needed[@]}"; do
+        "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
+      done
+      [[ ${#missing[@]} -eq 0 ]] && return 0
+    fi
+    echo "  Still missing after rebuild: ${missing[*]}. Install build deps then: $0 --rebuild-php php" >&2
     return 0
   fi
 

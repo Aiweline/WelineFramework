@@ -533,7 +533,7 @@ if (!$fromStep5b) {
     $composerArgs = ' install -n --no-interaction';
     if (!extension_loaded('exif') || !extension_loaded('fileinfo')) {
         $composerArgs .= ' --ignore-platform-req=ext-exif --ignore-platform-req=ext-fileinfo';
-        echo "exif/fileinfo 扩展未安装，composer 将忽略平台要求以继续安装。建议在宝塔面板中安装：软件商店 -> PHP -> 安装扩展 -> exif、fileinfo\n";
+        echo "exif/fileinfo 扩展未安装，composer 将忽略平台要求以继续安装。若使用 WLS 自带 PHP，请执行: bash bin/install.sh --rebuild-php php\n";
     }
     $composerPharQuoted = EnsureComposer::quotedPharPath($projectRoot);
     $code = $composerPharQuoted !== null

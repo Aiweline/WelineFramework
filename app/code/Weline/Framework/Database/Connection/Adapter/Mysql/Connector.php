@@ -18,9 +18,12 @@ use PDO;
 use PDOException;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Alter;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Create;
+use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalTableSnapshotInterface;
 use Weline\Framework\Database\Compiler\Dialect\MysqlDialect;
 use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Connection\PdoConnection;
@@ -37,7 +40,12 @@ use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Database\Helper\Standar;
 use Weline\Framework\Manager\ObjectManager;
 
-final class Connector extends Query implements ConnectorInterface, PhysicalTableMetadataInterface
+final class Connector extends Query implements
+    ConnectorInterface,
+    PhysicalTableMetadataInterface,
+    AtomicPhysicalTableChangeInterface,
+    PhysicalTableIdentityProviderInterface,
+    PhysicalTableSnapshotInterface
 {
     use CreatesTableFromSchemaTrait;
 
@@ -68,6 +76,18 @@ final class Connector extends Query implements ConnectorInterface, PhysicalTable
     private ?ConnectionLease $lease = null;
 
     private ?MysqlDialect $dialect = null;
+
+    /**
+     * In-process nest depth for MySQL GET_LOCK names held by this connector.
+     * Cross-process serialization still uses GET_LOCK; this only avoids re-entering
+     * GET_LOCK on the same Connector instance (nested backup/DDL).
+     *
+     * @var array<string, int>
+     */
+    private array $physicalTableAdvisoryLockDepth = [];
+
+    /** Seconds to wait for a free user-level lock during SchemaDiff / backup. */
+    private const PHYSICAL_TABLE_LOCK_WAIT_SECONDS = 300;
 
     private function getDialect(): MysqlDialect
     {
@@ -150,6 +170,12 @@ final class Connector extends Query implements ConnectorInterface, PhysicalTable
 
     public function close(): void
     {
+        // User-level locks survive lease release into the pool; discard if still held.
+        if ($this->physicalTableAdvisoryLockDepth !== []) {
+            $this->physicalTableAdvisoryLockDepth = [];
+            $this->discardCurrentConnection();
+            return;
+        }
         $lease = $this->detachCurrentConnection();
         $lease?->release();
     }
@@ -381,6 +407,245 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function dropPhysicalTableIfExists(PhysicalTableIdentity $identity): void
     {
         $this->query('DROP TABLE IF EXISTS ' . $this->quotePhysicalTable($identity))->fetch();
+    }
+
+    public function resolvePhysicalTableIdentity(string $logicalName): PhysicalTableIdentity
+    {
+        [$schema, $table] = $this->resolveMetadataTable($logicalName);
+        return new PhysicalTableIdentity($schema, $table);
+    }
+
+    public function capturePhysicalTableSnapshot(PhysicalTableIdentity $identity): array
+    {
+        if (!$this->physicalTableExists($identity)) {
+            return [
+                'format' => 'weline.mysql.table_snapshot.v1',
+                'existed' => false,
+                'ddl' => '',
+                'columns' => [],
+                'auto_increment' => null,
+            ];
+        }
+
+        $columns = [];
+        foreach ($this->getPhysicalTableColumns($identity) as $column) {
+            if (!is_array($column)) {
+                continue;
+            }
+            $name = (string)($column['COLUMN_NAME'] ?? $column['Field'] ?? $column['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $columns[] = [
+                'name' => $name,
+                'type' => (string)($column['COLUMN_TYPE'] ?? $column['Type'] ?? $column['type'] ?? ''),
+                'nullable' => strtoupper((string)($column['IS_NULLABLE'] ?? $column['Null'] ?? 'YES')) !== 'NO',
+                'extra' => (string)($column['EXTRA'] ?? $column['Extra'] ?? ''),
+                'key' => (string)($column['COLUMN_KEY'] ?? $column['Key'] ?? ''),
+            ];
+        }
+
+        $autoIncrement = null;
+        $status = $this->getWrappedConnection()->prepare(
+            'SELECT AUTO_INCREMENT FROM information_schema.tables '
+            . 'WHERE table_schema = :schema AND table_name = :table'
+        );
+        $status->execute([
+            ':schema' => $identity->namespace(),
+            ':table' => $identity->table(),
+        ]);
+        $autoRaw = $status->fetchColumn();
+        if ($autoRaw !== false && $autoRaw !== null && $autoRaw !== '') {
+            $autoIncrement = (int)$autoRaw;
+        }
+
+        return [
+            'format' => 'weline.mysql.table_snapshot.v1',
+            'existed' => true,
+            'ddl' => $this->getPhysicalCreateTableSql($identity),
+            'columns' => $columns,
+            'auto_increment' => $autoIncrement,
+        ];
+    }
+
+    public function restorePhysicalTableSnapshot(
+        PhysicalTableIdentity $identity,
+        array $snapshot,
+    ): void {
+        if (($snapshot['format'] ?? null) !== 'weline.mysql.table_snapshot.v1'
+            || ($snapshot['existed'] ?? null) !== true
+            || trim((string)($snapshot['ddl'] ?? '')) === '') {
+            throw new \RuntimeException('physical table snapshot payload is invalid');
+        }
+        if ($this->physicalTableExists($identity)) {
+            throw new \RuntimeException('physical table snapshot target already exists');
+        }
+        $this->query((string)$snapshot['ddl'])->fetch();
+        if (!$this->physicalTableExists($identity)) {
+            throw new \RuntimeException('physical table snapshot restore did not create target');
+        }
+    }
+
+    public function insertPhysicalTableSnapshotRows(
+        PhysicalTableIdentity $identity,
+        array $rows,
+        array $snapshot,
+    ): void {
+        if (($snapshot['format'] ?? null) !== 'weline.mysql.table_snapshot.v1') {
+            throw new \RuntimeException('physical table snapshot payload is invalid');
+        }
+        if ($rows === []) {
+            return;
+        }
+        $table = $this->quotePhysicalTable($identity);
+        foreach ($rows as $row) {
+            if (!is_array($row) || $row === []) {
+                continue;
+            }
+            $columns = array_keys($row);
+            $quoted = array_map(fn(string $c): string => $this->quoteIdentifier($c), $columns);
+            $placeholders = array_fill(0, count($columns), '?');
+            $sql = 'INSERT INTO ' . $table
+                . ' (' . implode(', ', $quoted) . ') VALUES (' . implode(', ', $placeholders) . ')';
+            $statement = $this->getWrappedConnection()->prepare($sql);
+            $statement->execute(array_values($row));
+        }
+    }
+
+    public function finalizePhysicalTableSnapshotRestore(
+        PhysicalTableIdentity $identity,
+        array $snapshot,
+    ): void {
+        if (($snapshot['format'] ?? null) !== 'weline.mysql.table_snapshot.v1') {
+            throw new \RuntimeException('physical table snapshot payload is invalid');
+        }
+        $autoIncrement = $snapshot['auto_increment'] ?? null;
+        if ($autoIncrement === null || $autoIncrement === '') {
+            return;
+        }
+        $this->query(
+            'ALTER TABLE ' . $this->quotePhysicalTable($identity)
+            . ' AUTO_INCREMENT = ' . (int)$autoIncrement
+        )->fetch();
+    }
+
+    public function physicalTableCatalogFingerprint(PhysicalTableIdentity $identity): string
+    {
+        $snapshot = $this->capturePhysicalTableSnapshot($identity);
+        // AUTO_INCREMENT 当前值不参与指纹，避免纯写入导致破坏性 DDL 门禁误判。
+        unset($snapshot['auto_increment']);
+        return hash('sha256', $this->canonicalSnapshotJson($snapshot));
+    }
+
+    public function atomicPhysicalTableChange(
+        PhysicalTableIdentity $identity,
+        callable $callback,
+    ): mixed {
+        $lockName = $this->physicalTableAdvisoryLockName($identity);
+
+        // Nested call on the same Connector: MySQL GET_LOCK is reentrant per
+        // connection, but pool/reconnect can change PDO mid-callback. Track depth
+        // in-process and only acquire/release once around the outermost call.
+        if (($this->physicalTableAdvisoryLockDepth[$lockName] ?? 0) > 0) {
+            $this->physicalTableAdvisoryLockDepth[$lockName]++;
+            try {
+                return $callback($this);
+            } finally {
+                $this->physicalTableAdvisoryLockDepth[$lockName]--;
+                if ($this->physicalTableAdvisoryLockDepth[$lockName] <= 0) {
+                    unset($this->physicalTableAdvisoryLockDepth[$lockName]);
+                }
+            }
+        }
+
+        // Pin the PDO that owns the lock so RELEASE_LOCK cannot run on a
+        // swapped pooled connection (which would leak the lock into the pool).
+        $pdo = $this->getLink();
+        $lock = $pdo->prepare('SELECT GET_LOCK(?, ?)');
+        $lock->execute([$lockName, self::PHYSICAL_TABLE_LOCK_WAIT_SECONDS]);
+        $got = $lock->fetchColumn();
+        if ($got === false || $got === null) {
+            throw new \RuntimeException(
+                'atomic physical table lock failed (GET_LOCK returned NULL) for '
+                . $identity->canonical()
+                . ' lock=' . $lockName,
+            );
+        }
+        if ((int)$got !== 1) {
+            $holder = null;
+            try {
+                $holderStmt = $pdo->prepare('SELECT IS_USED_LOCK(?)');
+                $holderStmt->execute([$lockName]);
+                $holder = $holderStmt->fetchColumn();
+            } catch (\Throwable) {
+                $holder = null;
+            }
+            throw new \RuntimeException(
+                'atomic physical table lock acquisition timed out for '
+                . $identity->canonical()
+                . ' (wait=' . self::PHYSICAL_TABLE_LOCK_WAIT_SECONDS . 's'
+                . ($holder !== null && $holder !== false ? ', holder_connection_id=' . $holder : '')
+                . ', lock=' . $lockName . ')',
+            );
+        }
+
+        $this->physicalTableAdvisoryLockDepth[$lockName] = 1;
+        try {
+            // MySQL DDL（ALTER/DROP 等）会隐式提交事务，无法像 PostgreSQL 那样把
+            // 备份+DDL+CAS 包进同一物理事务。这里用命名锁串行化同表破坏性变更。
+            return $callback($this);
+        } finally {
+            unset($this->physicalTableAdvisoryLockDepth[$lockName]);
+            try {
+                $release = $pdo->prepare('SELECT RELEASE_LOCK(?)');
+                $release->execute([$lockName]);
+            } catch (\Throwable $releaseFailure) {
+                // Do not return a lock-holding connection to the pool.
+                try {
+                    $this->discardCurrentConnection();
+                } catch (\Throwable) {
+                }
+                throw new \RuntimeException(
+                    'atomic physical table lock release failed for ' . $identity->canonical(),
+                    0,
+                    $releaseFailure,
+                );
+            }
+        }
+    }
+
+    /**
+     * MySQL/MariaDB user-level lock names must be ≤ 64 characters (error 3057).
+     * Never prefix a full sha256 hash — that alone is already 64 chars.
+     */
+    private function physicalTableAdvisoryLockName(PhysicalTableIdentity $identity): string
+    {
+        $raw = 'weline:table:' . $identity->canonical();
+        if (strlen($raw) <= 64) {
+            return $raw;
+        }
+
+        return substr(hash('sha256', $raw), 0, 64);
+    }
+
+    private function canonicalSnapshotJson(array $value): string
+    {
+        $normalize = function (mixed $item) use (&$normalize): mixed {
+            if (!is_array($item)) {
+                return $item;
+            }
+            if (!array_is_list($item)) {
+                ksort($item, SORT_STRING);
+            }
+            foreach ($item as $key => $child) {
+                $item[$key] = $normalize($child);
+            }
+            return $item;
+        };
+        return (string)json_encode(
+            $normalize($value),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
     }
 
     public function tableExist(string $table_name): bool
@@ -751,10 +1016,13 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             $opts[] = 'NOT NULL';
         }
         if (isset($col['default']) && $col['default'] !== null) {
-            $d = $col['default'];
-            $opts[] = is_string($d) && strtoupper($d) === 'CURRENT_TIMESTAMP'
-                ? 'DEFAULT CURRENT_TIMESTAMP'
-                : (is_string($d) ? "DEFAULT '" . str_replace("'", "''", $d) . "'" : "DEFAULT {$d}");
+            $forbidDefault = preg_match('/\b(text|blob|json|geometry|point|linestring|polygon)\b/', $type) === 1;
+            if (!$forbidDefault) {
+                $d = $col['default'];
+                $opts[] = is_string($d) && strtoupper($d) === 'CURRENT_TIMESTAMP'
+                    ? 'DEFAULT CURRENT_TIMESTAMP'
+                    : (is_string($d) ? "DEFAULT '" . str_replace("'", "''", $d) . "'" : "DEFAULT {$d}");
+            }
         }
         $optStr = implode(' ', $opts);
         $comment = isset($col['comment']) && $col['comment'] !== ''
