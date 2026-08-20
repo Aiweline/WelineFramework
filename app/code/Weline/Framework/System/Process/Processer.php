@@ -11102,6 +11102,54 @@ POWERSHELL;
             self::$orphanWelinePortHintCache = [];
         }
     }
+
+    /**
+     * Prove a TCP port is bindable on the local loopback interface.
+     *
+     * Used after stop/restart when netstat/lsof can briefly disagree with the
+     * kernel about whether a listener is still live.
+     */
+    public static function isPortFreeByBindProbe(int $port, string $host = '127.0.0.1'): bool
+    {
+        if ($port <= 0 || $port > 65535) {
+            return true;
+        }
+
+        $socketHost = \strcasecmp($host, 'localhost') === 0 ? '127.0.0.1' : $host;
+        if (\extension_loaded('sockets')
+            && \function_exists('socket_create')
+            && \function_exists('socket_bind')
+        ) {
+            $family = \str_contains($socketHost, ':') ? \AF_INET6 : \AF_INET;
+            $socket = @\socket_create($family, \SOCK_STREAM, \SOL_TCP);
+            if ($socket !== false) {
+                @\socket_set_option($socket, \SOL_SOCKET, \SO_REUSEADDR, 1);
+                $bound = @\socket_bind($socket, $socketHost, $port);
+                @\socket_close($socket);
+                if ($bound) {
+                    return true;
+                }
+            }
+        }
+
+        $addressHost = \str_contains($host, ':') && !\str_starts_with($host, '[')
+            ? '[' . $host . ']'
+            : $host;
+        $errno = 0;
+        $errstr = '';
+        $socket = @\stream_socket_server(
+            'tcp://' . $addressHost . ':' . $port,
+            $errno,
+            $errstr,
+            \STREAM_SERVER_BIND
+        );
+        if (\is_resource($socket)) {
+            @\fclose($socket);
+            return true;
+        }
+
+        return false;
+    }
     
     /**
      * 查找可用端口

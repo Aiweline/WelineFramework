@@ -127,6 +127,75 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertSame(0, $stop->sharedPortInspections);
     }
 
+    public function testFastLocalBlockingRecoverablePortsUsesBindProbe(): void
+    {
+        $socket = @\stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errno,
+            $errstr,
+            \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN
+        );
+        if (!\is_resource($socket)) {
+            self::markTestSkipped('Unable to bind the fast-local port verification test socket.');
+        }
+        $address = (string)\stream_socket_get_name($socket, false);
+        if (!\preg_match('/:(\d+)$/', $address, $matches)) {
+            @\fclose($socket);
+            self::markTestSkipped('Unable to resolve the fast-local port verification test socket.');
+        }
+        $port = (int)$matches[1];
+
+        $stop = new class extends Stop {
+            private int $port = 0;
+
+            public function configurePort(int $port): void
+            {
+                $this->port = $port;
+            }
+
+            public function blockingPorts(string $name, ServerInstanceInfo $info): array
+            {
+                return $this->collectFastLocalBlockingRecoverablePorts($name, $info);
+            }
+
+            protected function collectRemainingRecoverableWlsPorts(
+                string $name,
+                ServerInstanceInfo $info,
+                bool $includeSharedState = false
+            ): array {
+                unset($name, $info, $includeSharedState);
+
+                return [$this->port];
+            }
+        };
+
+        $info = new ServerInstanceInfo(
+            'default',
+            0,
+            19982,
+            '127.0.0.1',
+            $port,
+            true,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(true),
+            1,
+            10000,
+            0,
+            '2026-04-06 12:00:00',
+            1775448000,
+            []
+        );
+        $stop->configurePort($port);
+
+        try {
+            self::assertSame([$port], $stop->blockingPorts('default', $info));
+        } finally {
+            @\fclose($socket);
+            \Weline\Framework\System\Process\Processer::clearPortCache($port);
+        }
+
+        self::assertSame([], $stop->blockingPorts('default', $info));
+    }
+
     public function testFastLocalCleanupSkipsIpcAndRunsLocalCleanupFlow(): void
     {
         $manager = new class extends ServerInstanceManager {
