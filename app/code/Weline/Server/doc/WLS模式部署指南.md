@@ -531,7 +531,8 @@ curl -k --http3-only https://example.com/
 | `php bin/w server:nginx:install\|start\|stop\|reload\|status` | 项目托管 Nginx 生命周期命令（`managed=true`） |
 | `php bin/w server:doctor` | 按实例模式报告 Nginx 或纯 WLS 的 TLS/H2/H1、H3 readiness 与会话恢复边界 |
 | `php bin/w server:stop [name ...]` | 停止一个或多个 WLS 实例；Nginx 实例会停止本项目托管 Nginx，纯 WLS 实例不会触碰它 |
-| `php bin/w server:start -r` | 平滑重启 |
+| `php bin/w server:start -r` | 滚动排水重启（Master 保持，分批次排水替换 Worker，默认三批） |
+| `php bin/w server:start -r -f` | 强制完整重启（停 Master，跳过排水） |
 
 ## 7. 故障排查
 

@@ -500,7 +500,7 @@ class Reload extends CommandAbstract
         if ($forceMode) {
             $this->printer->note(__('Orchestrator 将批量杀死所有 Worker 后重新启动'));
         } else {
-            $this->printer->note(__('Orchestrator 将编排滚动重启，Worker 逐个优雅重启'));
+            $this->printer->note(__('Orchestrator 将编排滚动重启，按批次排水替换 Worker（默认三批）'));
         }
 
         return 0;
