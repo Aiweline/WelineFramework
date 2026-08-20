@@ -10121,12 +10121,10 @@ class Start extends CommandAbstract
         }
 
         // 交接期间任一目标端口仍在 LISTEN 都必须 fail closed。
-        // owner/scope 不参与放行判断，否则 unknown/orphan/foreign 会被误判为“已清理”。
+        // owner/scope 不参与放行判断；仅当 bind 探针证明端口仍可绑定时，
+        // 才把 netstat/lsof 的 stale LISTEN 行视为已释放。
         foreach ($this->restartHandoffPorts as $handoffPort) {
-            if ($this->currentStartupListenerProofForPort($handoffPort) !== null) {
-                continue;
-            }
-            if (Processer::isPortInUse($handoffPort)) {
+            if ($this->isRestartHandoffPortBlocked($handoffPort)) {
                 return true;
             }
         }
@@ -10142,6 +10140,23 @@ class Start extends CommandAbstract
         }
 
         return false;
+    }
+
+    protected function isRestartHandoffPortBlocked(int $port): bool
+    {
+        if ($this->currentStartupListenerProofForPort($port) !== null) {
+            return false;
+        }
+        if (!Processer::isPortInUse($port)) {
+            return false;
+        }
+        if (Processer::isPortFreeByBindProbe($port)) {
+            Processer::clearPortCache($port);
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
