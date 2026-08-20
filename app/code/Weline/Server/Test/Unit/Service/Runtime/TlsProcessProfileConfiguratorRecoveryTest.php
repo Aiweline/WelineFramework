@@ -62,6 +62,25 @@ final class TlsProcessProfileConfiguratorRecoveryTest extends TestCase
         }
     }
 
+    public function testRepairsGroupWritableIntermediateRuntimeDirectory(): void
+    {
+        $var = $this->root . DIRECTORY_SEPARATOR . 'var';
+        self::assertTrue(\mkdir($var, 0775));
+        $server = $var . DIRECTORY_SEPARATOR . 'server';
+        self::assertTrue(\mkdir($server, 0755));
+        $tls = $server . DIRECTORY_SEPARATOR . 'tls';
+        self::assertTrue(\mkdir($tls, 0755));
+
+        $result = $this->runConfigurator();
+
+        self::assertTrue($result['ok'] ?? false, (string)($result['message'] ?? ''));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            $varStatus = \stat($var);
+            self::assertIsArray($varStatus);
+            self::assertSame(0755, (int)$varStatus['mode'] & 0777);
+        }
+    }
+
     public function testValidTargetCollectsEveryValidatedOrphan(): void
     {
         $target = $this->target();

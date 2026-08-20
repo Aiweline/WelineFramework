@@ -368,6 +368,11 @@ CONF;
             if (!\is_array($status)) {
                 throw new \RuntimeException('WLS OpenSSL runtime directory is missing.');
             }
+            $hardened = $this->hardenOwnedDirectory($directory, $status, $ownerUid);
+            if (((int)$hardened['mode'] & 0777) !== ((int)$status['mode'] & 0777)) {
+                GatewayProjectStateFilesystem::syncDirectory($parent);
+                $status = $hardened;
+            }
             $this->assertOwnedDirectoryStatus($directory, $status, $ownerUid);
             if ($created) {
                 GatewayProjectStateFilesystem::syncDirectory($parent);
@@ -375,6 +380,31 @@ CONF;
         }
 
         return ['directory' => $directory, 'uid' => $ownerUid];
+    }
+
+    /**
+     * Existing project trees often ship a group-writable var/ directory.
+     * Harden only owner-matched directories before the strict TLS runtime
+     * proof runs, mirroring the 0755 mode used on first creation.
+     *
+     * @param array<string|int,mixed> $status
+     * @return array<string|int,mixed>
+     */
+    private function hardenOwnedDirectory(string $path, array $status, int $ownerUid): array
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || \is_link($path)
+            || ((((int)$status['mode']) & 0170000) !== 0040000)
+            || (int)$status['uid'] !== $ownerUid
+            || ((((int)$status['mode']) & 0022) === 0)
+        ) {
+            return $status;
+        }
+        if (!@\chmod($path, 0755)) {
+            return $status;
+        }
+        $after = @\lstat($path);
+        return \is_array($after) ? $after : $status;
     }
 
     private function adoptCreatedPathOwner(string $path, int $ownerUid): void
