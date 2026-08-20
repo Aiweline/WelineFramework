@@ -51,7 +51,12 @@ abstract class AbstractCompiler implements CompilerInterface
             }
             unset($where);
         }
-        $wheres = $this->buildWheres($whereAst, $ast);
+        // INSERT 不消费 WHERE。共用 Query 若残留 where（例如 exists 检查抛错未 clearQuery），
+        // 仍调用 buildWheres 会把参数写进 bindings，而 SQL 无对应占位符 → PDO HY093。
+        $wheres = '';
+        if ($action !== 'insert') {
+            $wheres = $this->buildWheres($whereAst, $ast);
+        }
         $order = $this->buildOrder($ast['order'] ?? []);
         $groupBy = $this->buildGroupBy((string)($ast['group'] ?? ''));
         $having = !empty($ast['having']) ? 'HAVING ' . $ast['having'] : '';

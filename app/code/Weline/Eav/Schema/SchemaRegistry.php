@@ -401,26 +401,13 @@ class SchemaRegistry
             return false;
         }
 
-        $connector = $connection->getConnector();
-        if ($this->isPgsqlConnector($connector)) {
-            return $this->initialDataRowExistsByPdo($connector, $tableName, $uniqueFields, $row);
-        }
-
-        $query = $connection->getQuery();
-        $query->table($tableName);
-
-        foreach ($uniqueFields as $field) {
-            if (!array_key_exists($field, $row)) {
-                return false;
-            }
-            $query->where($field, $row[$field]);
-        }
-
-        try {
-            return !empty($query->limit(1)->select('1')->fetch());
-        } catch (\Exception) {
-            return false;
-        }
+        // 统一走 PDO：避免共用 Query 残留 where，以及 MySQL AST insert 与 exists 互相污染。
+        return $this->initialDataRowExistsByPdo(
+            $connection->getConnector(),
+            $tableName,
+            $uniqueFields,
+            $row
+        );
     }
 
     private function initialDataRowExistsByPdo(ConnectorInterface $connector, string $tableName, array $uniqueFields, array $row): bool
@@ -458,34 +445,21 @@ class SchemaRegistry
     private function insertInitialDataRow($connection, string $tableName, string|array $uniqueKey, array $row): void
     {
         $connector = $connection->getConnector();
-        if ($this->isPgsqlConnector($connector)) {
-            $columns = array_keys($row);
-            if (empty($columns)) {
-                return;
-            }
-
-            $quotedColumns = array_map(
-                static fn(string $column): string => $connector->quoteIdentifier($column),
-                $columns
-            );
-            $placeholders = array_fill(0, count($columns), '?');
-            $sql = 'INSERT INTO ' . $connector->quoteTable($tableName)
-                . ' (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', $placeholders) . ')';
-
-            $statement = $connector->getWrappedConnection()->prepare($sql);
-            $statement->execute(array_values($row));
+        $columns = array_keys($row);
+        if (empty($columns)) {
             return;
         }
 
-        $query = $connection->getQuery();
-        $query->table($tableName)
-            ->insert([$row], $uniqueKey)
-            ->fetch();
-    }
+        $quotedColumns = array_map(
+            static fn(string $column): string => $connector->quoteIdentifier($column),
+            $columns
+        );
+        $placeholders = array_fill(0, count($columns), '?');
+        $sql = 'INSERT INTO ' . $connector->quoteTable($tableName)
+            . ' (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', $placeholders) . ')';
 
-    private function isPgsqlConnector(ConnectorInterface $connector): bool
-    {
-        return strtolower((string)$connector->getConfigProvider()->getDbType()) === 'pgsql';
+        $statement = $connector->getWrappedConnection()->prepare($sql);
+        $statement->execute(array_values($row));
     }
 
     private function tableExists(ConnectorInterface $connector, string $tableName): bool
