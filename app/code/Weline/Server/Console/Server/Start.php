@@ -1808,13 +1808,18 @@ class Start extends CommandAbstract
                 if ($instanceRedirectResidue) {
                     $this->printer->warning(__('检测到旧实例仅残留 HTTP Redirect 子进程，先执行本地快速清场...'));
                 } else {
-                    $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
+                    $this->printer->warning(__('检测到服务器已运行，-f 强制完整重启：先停止实例再启动...'));
                 }
-                $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
+                $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
                 $this->beginRestartMaintenanceTransaction($instanceName);
                 $forceSwitchStopStart = self::monotonicSeconds();
                 $this->traceStartupPhase($instanceName, 'force-switch-stop:before');
-                if (!$this->stopExistingServer($instanceName, $port, $count, true, 0, true)) {
+                // Running instance: same contract as `server:stop -f` (IPC skip-drain).
+                // Redirect residue has no Master IPC, so keep fast-local cleanup.
+                $forceStopOk = $instanceRedirectResidue
+                    ? $this->stopExistingServer($instanceName, $port, $count, true, 0, true)
+                    : $this->stopExistingServer($instanceName, $port, $count, false, 0, true, true);
+                if (!$forceStopOk) {
                     $this->rollbackRestartMaintenanceTransactionIfPending();
                     return 1;
                 }
@@ -9968,7 +9973,8 @@ class Start extends CommandAbstract
         int $count,
         bool $fastLocal = false,
         int $workerPort = 0,
-        bool $restartCleanup = false
+        bool $restartCleanup = false,
+        bool $force = false
     ): bool
     {
         // endpoint/IPC 可能在 Stop 完成时被删除，因此必须先固化旧代实际监听集。
@@ -9981,7 +9987,10 @@ class Start extends CommandAbstract
         );
         $this->restartHandoffCaptured = true;
         $mainStop = ObjectManager::getInstance(MainStop::class);
-        $mainStop->execute($this->buildStopExistingServerArgs($instanceName, $fastLocal, $restartCleanup), []);
+        $mainStop->execute(
+            $this->buildStopExistingServerArgs($instanceName, $fastLocal, $restartCleanup, $force),
+            [],
+        );
         if ($this->waitForRestartCleanupComplete($instanceName, $port, $count, $workerPort, $fastLocal)) {
             return true;
         }
@@ -10247,13 +10256,16 @@ class Start extends CommandAbstract
     protected function buildStopExistingServerArgs(
         string $instanceName,
         bool $fastLocal = false,
-        bool $restartCleanup = false
+        bool $restartCleanup = false,
+        bool $force = false
     ): array
     {
         $args = [0 => 'server:stop', 1 => $instanceName];
-        if ($fastLocal) {
+        if ($force || $fastLocal) {
             $args['force'] = true;
             $args['f'] = true;
+        }
+        if ($fastLocal) {
             $args['fast-local'] = true;
         }
         if ($restartCleanup) {
