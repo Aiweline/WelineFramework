@@ -18,10 +18,23 @@ final class ConfigurePhpIni
     private string $projectRoot;
     private string $phpDir;
 
-    /** @var string[] */
+    /**
+     * Functions the installer removes from disable_functions after PHP is installed.
+     * Keep in sync with Framework Env unblock_functions.php / env/requirements.php.
+     *
+     * @var string[]
+     */
     private array $defaultFunctions = [
-        'exec', 'putenv', 'proc_open', 'proc_get_status', 'shell_exec',
-        'passthru', 'system', 'popen', 'pcntl_fork', 'pcntl_signal',
+        // process / shell (deploy webhook, WLS, CLI)
+        'exec', 'putenv', 'proc_open', 'proc_close', 'proc_get_status',
+        'shell_exec', 'passthru', 'system', 'popen',
+        // filesystem ownership (Env.php atomic write, deploy checkout)
+        'chown', 'chmod', 'chgrp',
+        // symlink helpers used by installer / static publish
+        'symlink', 'link', 'readlink',
+        // WLS multi-process (Linux/macOS)
+        'pcntl_fork', 'pcntl_signal', 'pcntl_signal_dispatch', 'pcntl_wait',
+        'pcntl_waitpid', 'pcntl_async_signals', 'pcntl_alarm',
     ];
 
     public function __construct(string $projectRoot, string $phpDir)
@@ -37,7 +50,11 @@ final class ConfigurePhpIni
      */
     public static function getFrameworkRequiredExtensions(): array
     {
-        return ['PDO', 'openssl', 'curl', 'mbstring', 'exif', 'fileinfo', 'xsl', 'pdo_pgsql', 'pgsql', 'sockets'];
+        return [
+            'PDO', 'openssl', 'curl', 'mbstring', 'exif', 'fileinfo', 'xsl',
+            'intl', 'dom', 'libxml', 'simplexml', 'iconv', 'json',
+            'pdo_pgsql', 'pgsql', 'pdo_mysql', 'mysqli', 'sockets', 'zip', 'bcmath',
+        ];
     }
 
     /**

@@ -111,13 +111,25 @@ trait CreatesTableFromSchemaTrait
             $opts[] = 'NOT NULL';
         }
         if (array_key_exists('default', $col) && $col['default'] !== null) {
-            $default = $col['default'];
-            if (is_string($default) && strtoupper($default) === 'CURRENT_TIMESTAMP') {
-                $opts[] = 'DEFAULT CURRENT_TIMESTAMP';
-            } elseif (is_string($default)) {
-                $opts[] = "DEFAULT '" . str_replace("'", "''", $default) . "'";
-            } else {
-                $opts[] = 'DEFAULT ' . $default;
+            $type = strtolower((string)($col['type'] ?? ''));
+            $dbType = '';
+            try {
+                $dbType = strtolower((string)$this->getConfigProvider()->getDbType());
+            } catch (\Throwable) {
+                $dbType = '';
+            }
+            // MySQL/MariaDB：TEXT/BLOB/JSON/GEOMETRY 不允许（非 NULL）DEFAULT。
+            $forbidDefault = $dbType === 'mysql'
+                && preg_match('/\b(text|blob|json|geometry|point|linestring|polygon)\b/', $type) === 1;
+            if (!$forbidDefault) {
+                $default = $col['default'];
+                if (is_string($default) && strtoupper($default) === 'CURRENT_TIMESTAMP') {
+                    $opts[] = 'DEFAULT CURRENT_TIMESTAMP';
+                } elseif (is_string($default)) {
+                    $opts[] = "DEFAULT '" . str_replace("'", "''", $default) . "'";
+                } else {
+                    $opts[] = 'DEFAULT ' . $default;
+                }
             }
         }
         if (!empty($col['unique']) && empty($col['primaryKey'])) {

@@ -44,6 +44,10 @@ return [
         'proc_close',
         'proc_get_status',
         'shell_exec',
+        'exec',
+        'putenv',
+        'chown',
+        'chmod',
     ],
 
     // ==================== 推荐项（可选，尝试安装，失败只提示不阻塞）====================
