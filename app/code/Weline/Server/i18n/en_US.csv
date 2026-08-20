@@ -2835,7 +2835,7 @@ proc_open不可用，使用传统方式启动后台进程,"proc_open is not avai
 "WLS 运行时策略不支持当前拓扑：%{1}","WLS 运行时策略不支持当前拓扑：%{1}"
 "Direct 不会静默忽略关键策略；请修复策略能力，或显式使用 --dispatcher。","Direct 不会静默忽略关键策略；请修复策略能力，或显式使用 --dispatcher。"
 "检测到旧实例仅残留 HTTP Redirect 子进程，先执行本地快速清场...","Detected that only the HTTP Redirect child process remains from the old instance, performing local quick cleanup first..."
-"检测到服务器已运行，-f 直接切换（不等待）...","Detected that the server is already running, -f direct switch (no waiting)..."
+"检测到服务器已运行，-f 强制完整重启：先停止实例再启动...","Detected that the server is already running; -f force full restart: stop the instance first, then start it..."
 "注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。","Note: -f force switch is a downtime update and will not automatically wait for request draining; for external upgrades, please confirm maintenance mode is enabled first. Rolling mode does not require this."
 "检测到服务器已运行，平滑重启：先开启维护模式并等待全部 Worker 请求排空...","检测到服务器已运行，平滑重启：先开启维护模式并等待全部 Worker 请求排空..."
 "全部 READY Worker 已完成维护门禁与请求排水，开始切换...","全部 READY Worker 已完成维护门禁与请求排水，开始切换..."

@@ -24,6 +24,19 @@ final class StartForceSwitchStopArgsTest extends TestCase
         self::assertSame('default', $args[1] ?? null);
     }
 
+    public function testBuildStopExistingServerArgsAddsForceWithoutFastLocal(): void
+    {
+        $start = new Start();
+
+        $args = $this->invokeProtected($start, 'buildStopExistingServerArgs', 'default', false, true, true);
+
+        self::assertTrue((bool) ($args['force'] ?? false));
+        self::assertTrue((bool) ($args['f'] ?? false));
+        self::assertTrue((bool) ($args['restart-cleanup'] ?? false));
+        self::assertArrayNotHasKey('fast-local', $args);
+        self::assertSame('default', $args[1] ?? null);
+    }
+
     public function testBuildStopExistingServerArgsKeepsDefaultStopCallForNormalRestart(): void
     {
         $start = new Start();
