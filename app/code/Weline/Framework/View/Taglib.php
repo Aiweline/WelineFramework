@@ -2120,34 +2120,47 @@ class Taglib
             ],
             'js' => [
                 'tag' => 1,
+                'attr' => ['type' => 0, 'async' => 0, 'defer' => 0, 'crossorigin' => 0, 'integrity' => 0, 'nomodule' => 0, 'id' => 0, 'class' => 0, 'data-*' => 0],
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
-                        // 过滤掉包含 :: 的非标准属性（开发模式调试信息）
+                        $raw1 = trim((string)($tag_data[1] ?? ''));
+                        $raw2 = trim((string)($tag_data[2] ?? ''));
+                        // 若 [1] 是路径（含 :: 或 /），不能当 HTML 属性；属性优先用 $attributes
+                        $looksLikePath = $raw1 !== '' && (str_contains($raw1, '::') || str_contains($raw1, '/'));
                         $filteredAttrs = '';
-                        if (!empty($tag_data[1])) {
-                            $rawAttrs = $tag_data[1];
-                            // 移除包含 :: 的属性（非标准属性名）- 改进正则以匹配完整路径
-                            $filteredAttrs = preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', $rawAttrs);
-                            // 清理多余的空格
-                            $filteredAttrs = trim($filteredAttrs);
-                            
-                            if ($filteredAttrs !== '') {
-                                $filteredAttrs = ' ' . $filteredAttrs;
-                            }
+                        if (!$looksLikePath && $raw1 !== '') {
+                            $filteredAttrs = preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', $raw1);
+                            $filteredAttrs = trim((string)$filteredAttrs);
                         }
-                        // 成对标签 <js>path</js>：编译期 tag_data[1]=rawContent（路径）、tag_data[2]=编译后子内容；运行时 tag_data[1]=rawAttributes、tag_data[2]=content（路径）
-                        $path = trim($tag_data[1] ?? '') ?: trim($tag_data[2] ?? '');
+                        if ($filteredAttrs === '' && is_array($attributes) && $attributes !== []) {
+                            $parts = [];
+                            foreach ($attributes as $attrName => $attrValue) {
+                                $name = trim((string)$attrName);
+                                if ($name === '' || !preg_match('/^[a-zA-Z_:][\w:.-]*$/', $name)) {
+                                    continue;
+                                }
+                                if ($attrValue === true || $attrValue === '' || $attrValue === null) {
+                                    $parts[] = $name;
+                                    continue;
+                                }
+                                $parts[] = $name . '="' . htmlspecialchars((string)$attrValue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+                            }
+                            $filteredAttrs = implode(' ', $parts);
+                        }
+                        if ($filteredAttrs !== '') {
+                            $filteredAttrs = ' ' . $filteredAttrs;
+                        }
+                        // 成对标签：编译期 [1]=路径或属性，[2]=内容路径；取有路径语义的一方
+                        $path = ($looksLikePath ? $raw1 : '') ?: ($raw2 !== '' ? $raw2 : $raw1);
+                        $path = trim($path);
                         if ($path === '' && defined('DEV') && DEV) {
-                            throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签路径不能为空，示例：%{1}', ['<js>Vendor_Module::assets/js/app.js</js>']));
+                            throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签路径不能为空，示例：%{1}', ['<js type="module">Vendor_Module::assets/js/app.js</js>']));
                         }
                         $url = $template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, $path);
                         if (defined('DEV') && DEV && preg_match('#/view/statics/\s*[\'"]?\s*$#', $url)) {
                             throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签解析后 URL 无文件名，路径：%{1}，请检查模块与路径是否正确', [$path]));
                         }
-                        return match ($tag_key) {
-                            'tag' => "<script{$filteredAttrs} src='{$url}'></script>",
-                            default => "<script{$filteredAttrs} src='{$url}'></script>"
-                        };
+                        return "<script{$filteredAttrs} src='{$url}'></script>";
                     }
             ],
             // 注意：本项为内置 css 标签（仅处理 STATICS：<css>Module::statics/.../file.css</css>）。

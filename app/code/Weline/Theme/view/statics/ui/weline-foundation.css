@@ -1,4 +1,3 @@
-/* Weline UI source: css/foundation.css */
 @layer reset, tokens, base, layout, components, utilities, page;
 
 @layer tokens {
@@ -30,6 +29,19 @@
         --weline-theme-shadow-sm: 0 1px 2px rgba(9, 16, 29, 0.08);
         --weline-theme-shadow-md: 0 10px 28px rgba(9, 16, 29, 0.14);
         --weline-theme-shadow-lg: 0 24px 64px rgba(9, 16, 29, 0.2);
+        /* Legacy aliases used by pages that predate UI 2.0 token rename. */
+        --weline-theme-surface-canvas: var(--weline-theme-canvas);
+        --weline-theme-text-secondary: var(--weline-theme-text-muted);
+        --weline-theme-border-color: var(--weline-theme-border);
+        --weline-theme-focus-outline: var(--weline-theme-focus);
+        --weline-theme-success-subtle: var(--weline-theme-success-surface);
+        --weline-theme-danger-subtle: var(--weline-theme-danger-surface);
+        --weline-theme-warning-subtle: var(--weline-theme-warning-surface);
+        --weline-theme-info-subtle: var(--weline-theme-info-surface);
+        --weline-theme-primary-subtle: color-mix(in srgb, var(--weline-theme-primary) 14%, transparent);
+        --weline-theme-primary-text-emphasis: var(--weline-theme-primary-hover);
+        --weline-theme-primary-border-subtle: color-mix(in srgb, var(--weline-theme-primary) 34%, transparent);
+        --weline-theme-danger-border-subtle: color-mix(in srgb, var(--weline-theme-danger) 34%, transparent);
         --weline-font-sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
         --weline-font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
         --weline-font-size-xs: 0.75rem;
@@ -89,6 +101,18 @@
         --weline-theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
         --weline-theme-shadow-md: 0 12px 30px rgba(0, 0, 0, 0.34);
         --weline-theme-shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.44);
+        --weline-theme-surface-canvas: var(--weline-theme-canvas);
+        --weline-theme-text-secondary: var(--weline-theme-text-muted);
+        --weline-theme-border-color: var(--weline-theme-border);
+        --weline-theme-focus-outline: var(--weline-theme-focus);
+        --weline-theme-success-subtle: var(--weline-theme-success-surface);
+        --weline-theme-danger-subtle: var(--weline-theme-danger-surface);
+        --weline-theme-warning-subtle: var(--weline-theme-warning-surface);
+        --weline-theme-info-subtle: var(--weline-theme-info-surface);
+        --weline-theme-primary-subtle: color-mix(in srgb, var(--weline-theme-primary) 18%, transparent);
+        --weline-theme-primary-text-emphasis: var(--weline-theme-primary-hover);
+        --weline-theme-primary-border-subtle: color-mix(in srgb, var(--weline-theme-primary) 42%, transparent);
+        --weline-theme-danger-border-subtle: color-mix(in srgb, var(--weline-theme-danger) 42%, transparent);
     }
 
     @media (prefers-color-scheme: dark) {
@@ -120,6 +144,18 @@
             --weline-theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
             --weline-theme-shadow-md: 0 12px 30px rgba(0, 0, 0, 0.34);
             --weline-theme-shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.44);
+            --weline-theme-surface-canvas: var(--weline-theme-canvas);
+            --weline-theme-text-secondary: var(--weline-theme-text-muted);
+            --weline-theme-border-color: var(--weline-theme-border);
+            --weline-theme-focus-outline: var(--weline-theme-focus);
+            --weline-theme-success-subtle: var(--weline-theme-success-surface);
+            --weline-theme-danger-subtle: var(--weline-theme-danger-surface);
+            --weline-theme-warning-subtle: var(--weline-theme-warning-surface);
+            --weline-theme-info-subtle: var(--weline-theme-info-surface);
+            --weline-theme-primary-subtle: color-mix(in srgb, var(--weline-theme-primary) 18%, transparent);
+            --weline-theme-primary-text-emphasis: var(--weline-theme-primary-hover);
+            --weline-theme-primary-border-subtle: color-mix(in srgb, var(--weline-theme-primary) 42%, transparent);
+            --weline-theme-danger-border-subtle: color-mix(in srgb, var(--weline-theme-danger) 42%, transparent);
         }
     }
 
@@ -492,6 +528,10 @@
     .w-alert[data-tone="warning"] { background: var(--weline-theme-warning-surface); color: var(--weline-theme-warning); }
     .w-alert[data-tone="danger"] { background: var(--weline-theme-danger-surface); color: var(--weline-theme-danger); }
     .w-alert[data-tone="info"] { background: var(--weline-theme-info-surface); color: var(--weline-theme-info); }
+    .w-messages { display: grid; gap: var(--weline-space-3); inline-size: 100%; }
+    .w-messages:empty, .w-messages__content:empty { display: none; }
+    .w-alert__content { display: grid; gap: var(--weline-space-1); min-inline-size: 0; }
+    .w-alert__title { font-weight: var(--weline-font-weight-semibold); }
 
     .w-pagination, .w-breadcrumb, .w-list-group { display: flex; align-items: center; gap: var(--weline-space-1); margin: 0; padding: 0; list-style: none; }
     .w-pagination__link { display: grid; min-inline-size: var(--weline-control-height-sm); min-block-size: var(--weline-control-height-sm); place-items: center; padding-inline: var(--weline-space-2); border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-sm); background: var(--weline-theme-surface); color: var(--weline-theme-text); text-decoration: none; }

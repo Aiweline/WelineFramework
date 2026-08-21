@@ -248,7 +248,7 @@ class LanguageSwitcher implements TaglibInterface
                 \array_keys($welineLanguages)
             ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
                 . '|navigation=' . $navigation
-                . '|markup=weline-ui-2'
+                . '|markup=weline-ui-2-lang-native-path-nav-11'
                 . '|mount=' . $websiteMount;
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
@@ -256,6 +256,11 @@ class LanguageSwitcher implements TaglibInterface
             }
             unset(self::$htmlCache[$htmlCacheKey]);
 
+            $i18nRuntimeFile = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'I18n' . DS
+                . 'view' . DS . 'statics' . DS . 'js' . DS . 'i18n.js';
+            $i18nRuntimeVersion = \is_file($i18nRuntimeFile)
+                ? (string)(\filemtime($i18nRuntimeFile) ?: 0)
+                : '0';
             $safeSwitcherId = htmlspecialchars($switcherId, ENT_QUOTES, 'UTF-8');
             $safeToggleId = htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8');
             $safePanelId = htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8');
@@ -342,6 +347,42 @@ class LanguageSwitcher implements TaglibInterface
 
             $html[] = '    </div>';
             $html[] = '</div>';
+            // Theme UI owns open/close; this runtime writes language preference and
+            // forces same-path reload when switching back to the default locale
+            // (authoritative href often omits the default language segment).
+            $html[] = '<script src="/Weline/I18n/view/statics/js/i18n.js?v='
+                . htmlspecialchars($i18nRuntimeVersion, ENT_QUOTES, 'UTF-8')
+                . '" data-weline-i18n-runtime="1"></script>';
+            $html[] = '<script>(function(){';
+            $html[] = 'var currentScript=document.currentScript;var root=null;';
+            $html[] = 'if(currentScript){var node=currentScript.previousElementSibling;while(node&&!(node.getAttribute&&node.getAttribute("data-i18n-switcher-id"))){node=node.previousElementSibling;}root=node;}';
+            $html[] = 'if(!root&&document.querySelector){root=document.querySelector(\'[data-i18n-switcher-id="' . $safeSwitcherId . '"]\');}';
+            $html[] = 'if(!root||root.dataset.welineI18nNative==="1"){return;}root.dataset.welineI18nNative="1";';
+            $html[] = 'var navigation=String(root.getAttribute("data-i18n-navigation")||"path").toLowerCase();';
+            $html[] = 'var panel=root.querySelector("[data-w-menu-panel]")||root;';
+            $html[] = 'panel.querySelectorAll("[data-language-option]").forEach(function(opt){';
+            $html[] = 'var code=opt.getAttribute("data-lang")||"";if(!code){return;}';
+            $html[] = 'if(opt.dataset.welineLangBound==="1"){return;}opt.dataset.welineLangBound="1";';
+            $html[] = 'opt.addEventListener("click",function(event){';
+            $html[] = 'var href=opt.getAttribute("href")||"";var i18n=window.WelineI18n;';
+            $html[] = 'if(navigation==="emit"){';
+            $html[] = 'event.preventDefault();';
+            $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
+            $html[] = 'panel.querySelectorAll("[data-language-option]").forEach(function(node){var active=(node.getAttribute("data-lang")||"")===code;node.setAttribute("aria-checked",active?"true":"false");node.setAttribute("data-state",active?"active":"idle");});';
+            $html[] = 'var currentEl=root.querySelector(".current-language");if(currentEl){var parts=String(code).split("_");var short=parts.length>=2?(parts[0].toUpperCase()==="ZH"?(String(parts[1]).toUpperCase()==="HANT"?"TW":"ZH"):parts[0].substring(0,2).toUpperCase()):String(code).substring(0,2).toUpperCase();currentEl.textContent=short;}';
+            $html[] = 'try{root.dispatchEvent(new CustomEvent("weline:i18n:locale-change",{bubbles:true,detail:{locale:code}}));}catch(err){}';
+            $html[] = 'return;}';
+            // Path/LIVE mode: write the language cookie then let the browser follow
+            // the authoritative <a href>. preventDefault + location.assign races
+            // into an empty document in Chromium/Electron (200 + decodedBodySize 0).
+            $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
+            $html[] = 'if(i18n&&typeof i18n.writeLanguagePreference==="function"){i18n.writeLanguagePreference(code);}';
+            $html[] = 'try{var target=new URL(href||"#",window.location.origin);var samePath=target.pathname===(window.location.pathname||"/")&&target.search===(window.location.search||"")&&target.hash===(window.location.hash||"");if(samePath){event.preventDefault();if(i18n&&typeof i18n.switchLang==="function"){i18n.switchLang(code,href);}else{window.location.reload();}return;}}catch(err){}';
+            $html[] = 'if(!href||href==="#"){event.preventDefault();if(i18n&&typeof i18n.switchLang==="function"){i18n.switchLang(code,href);}return;}';
+            // Native navigation — do not preventDefault.
+            $html[] = '});';
+            $html[] = '});';
+            $html[] = '})();</script>';
             $output = \implode("\n", $html);
             self::$htmlCache[$htmlCacheKey] = [
                 'expires' => $now + self::SWITCHER_HTML_CACHE_TTL,
@@ -384,6 +425,10 @@ class LanguageSwitcher implements TaglibInterface
                 ) {
                     return true;
                 }
+                // Live HTTP request is authoritative. ThemeData area can remain
+                // "backend" after worker chrome warmup and must not force backend
+                // language hrefs on frontend pages.
+                return false;
             }
         } catch (\Throwable) {
         }

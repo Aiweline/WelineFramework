@@ -114,8 +114,8 @@ $seoTitle = 'WelineFramework - PHP 模块化开发框架与 WLS 常驻运行时'
 $seoDescription = 'WelineFramework 提供 PHP 模块化开发、自动路由、ORM 模型迁移、QueryProvider API、多语言多站点与 WLS 常驻运行时，适合快速构建后台、前台和接口项目。';
 $seoImage = '/Weline/Index/view/statics/images/weline-og.svg';
 $seoImageAlt = 'WelineFramework - PHP 模块化开发框架与 WLS 常驻运行时分享图';
-$seoFaviconSvg = '/Weline/Index/view/statics/images/weline-favicon.svg';
-$seoFaviconPng = '/Weline/Theme/view/theme/frontend/assets/images/theme/icon.png';
+// Theme 默认站点图标（与 SiteBrand::DEFAULT_ICON_STATIC / favicon 同源）
+$siteIconUrl = '/Weline/Theme/view/theme/frontend/assets/images/theme/icon.png';
 $seoContentCategory = 'framework';
 $seoKeywords = [
     'WelineFramework',
@@ -257,52 +257,53 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
-    <link rel="icon" type="image/svg+xml" href="<?= $escapeRaw($seoFaviconSvg) ?>">
-    <link rel="icon" type="image/png" sizes="32x32" href="<?= $escapeRaw($seoFaviconPng) ?>">
-    <link rel="apple-touch-icon" sizes="180x180" href="<?= $escapeRaw($seoFaviconPng) ?>">
     <w:hook>seo::head</w:hook>
     <style>
         :root {
-            --wf-bg: var(--weline-theme-surface-canvas);
-            --wf-surface: var(--weline-theme-surface);
-            --wf-surface-soft: var(--weline-theme-surface-subtle);
-            --wf-text: var(--weline-theme-text);
-            --wf-muted: var(--weline-theme-text-secondary);
-            --wf-border: var(--weline-theme-border-color);
-            --wf-blue: var(--weline-theme-primary);
-            --wf-red: var(--weline-theme-danger);
-            --wf-green: var(--weline-theme-success);
-            --wf-ink: var(--weline-theme-text);
-            --wf-brand-bg: var(--weline-theme-primary);
-            --wf-brand-text: var(--weline-theme-on-primary);
-            --wf-primary-bg: var(--weline-theme-primary);
-            --wf-primary-bg-hover: var(--weline-theme-primary-hover);
-            --wf-primary-text: var(--weline-theme-on-primary);
-            --wf-secondary-bg: var(--weline-theme-surface);
-            --wf-secondary-bg-hover: var(--weline-theme-primary-subtle);
-            --wf-secondary-text: var(--weline-theme-text);
-            --wf-secondary-text-hover: var(--weline-theme-primary-text-emphasis);
-            --wf-code-bg: var(--weline-theme-surface-muted);
-            --wf-code-text: var(--weline-theme-text);
+            --wf-bg: var(--weline-theme-canvas, var(--weline-theme-surface-canvas, #f4f6fa));
+            --wf-surface: var(--weline-theme-surface, #ffffff);
+            --wf-surface-soft: var(--weline-theme-surface-muted, #eef1f6);
+            --wf-text: var(--weline-theme-text, #182230);
+            --wf-muted: var(--weline-theme-text-muted, var(--weline-theme-text-secondary, #637083));
+            --wf-border: var(--weline-theme-border, var(--weline-theme-border-color, #d7dde7));
+            --wf-blue: var(--weline-theme-primary, #315ee7);
+            --wf-red: var(--weline-theme-danger, #b42338);
+            --wf-green: var(--weline-theme-success, #167a4d);
+            --wf-ink: var(--weline-theme-text, #182230);
+            --wf-brand-bg: var(--weline-theme-primary, #315ee7);
+            --wf-brand-text: var(--weline-theme-on-primary, #ffffff);
+            --wf-primary-bg: var(--weline-theme-primary, #315ee7);
+            --wf-primary-bg-hover: var(--weline-theme-primary-hover, #244bc4);
+            --wf-primary-text: var(--weline-theme-on-primary, #ffffff);
+            --wf-secondary-bg: var(--weline-theme-surface, #ffffff);
+            --wf-secondary-bg-hover: var(--weline-theme-primary-subtle, color-mix(in srgb, var(--weline-theme-primary, #315ee7) 14%, transparent));
+            --wf-secondary-text: var(--weline-theme-text, #182230);
+            --wf-secondary-text-hover: var(--weline-theme-primary-text-emphasis, var(--weline-theme-primary-hover, #244bc4));
+            --wf-code-bg: var(--weline-theme-surface-muted, #eef1f6);
+            --wf-code-text: var(--weline-theme-text, #182230);
             --wf-shadow: var(--weline-theme-shadow-lg);
             --wf-shadow-hover: var(--weline-theme-shadow-md);
             --wf-shadow-control: var(--weline-theme-shadow-sm);
-            --wf-focus-outline: var(--weline-theme-focus-outline);
-            --wf-primary-wash: var(--weline-theme-primary-subtle);
-            --wf-danger-wash: var(--weline-theme-danger-subtle);
-            --wf-success-wash: var(--weline-theme-success-subtle);
-            --wf-hover-border: var(--weline-theme-primary-border-subtle);
-            --wf-danger-border: var(--weline-theme-danger-border-subtle);
+            --wf-focus-outline: var(--weline-theme-focus, var(--weline-theme-focus-outline, #315ee7));
+            --wf-primary-wash: var(--weline-theme-primary-subtle, color-mix(in srgb, var(--weline-theme-primary, #315ee7) 14%, transparent));
+            --wf-danger-wash: var(--weline-theme-danger-surface, var(--weline-theme-danger-subtle, #fdecef));
+            --wf-success-wash: var(--weline-theme-success-surface, var(--weline-theme-success-subtle, #e8f7ef));
+            --wf-warning: var(--weline-theme-warning, #8a5a00);
+            --wf-warning-wash: var(--weline-theme-warning-surface, #fff5d6);
+            --wf-hover-border: var(--weline-theme-primary-border-subtle, color-mix(in srgb, var(--weline-theme-primary, #315ee7) 34%, transparent));
+            --wf-danger-border: var(--weline-theme-danger-border-subtle, color-mix(in srgb, var(--weline-theme-danger, #b42338) 34%, transparent));
             --wf-radius: 8px;
             --wf-radius-sm: 6px;
         }
 
-        * {
-            box-sizing: border-box;
+        html {
+            background: var(--wf-bg);
+            color-scheme: light dark;
+            scroll-behavior: smooth;
         }
 
-        html {
-            scroll-behavior: smooth;
+        * {
+            box-sizing: border-box;
         }
 
         body {
@@ -359,15 +360,12 @@ try {
         }
 
         .wf-brand__mark {
-            display: grid;
-            place-items: center;
+            display: block;
             width: 38px;
             height: 38px;
             border-radius: var(--wf-radius-sm);
-            background: var(--wf-brand-bg);
-            color: var(--wf-brand-text);
-            font-family: Consolas, "JetBrains Mono", monospace;
-            font-weight: 800;
+            object-fit: contain;
+            background: transparent;
         }
 
         .wf-nav__links {
@@ -545,18 +543,123 @@ try {
 
         .wf-status__figure {
             margin: 0 0 16px;
-            overflow: hidden;
+            overflow: visible;
             border: 1px solid var(--wf-border);
             border-radius: var(--wf-radius-sm);
-            background: var(--wf-surface);
+            background: var(--wf-surface-soft);
+            padding: 12px;
         }
 
-        .wf-status__figure img {
-            display: block;
+        .wf-og-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-sizing: border-box;
             width: 100%;
-            height: auto;
-            aspect-ratio: 1200 / 630;
-            object-fit: cover;
+            min-height: 0;
+            padding: 20px 20px 18px;
+            border: 1px solid var(--wf-border);
+            border-radius: 18px;
+            background: var(--wf-surface);
+            color: var(--wf-ink);
+            box-shadow: var(--wf-shadow-control);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .wf-og-card__brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .wf-og-card__mark {
+            display: block;
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            object-fit: contain;
+            background: transparent;
+        }
+
+        .wf-og-card__brand-text {
+            min-width: 0;
+        }
+
+        .wf-og-card__name {
+            margin: 0;
+            color: var(--wf-ink);
+            font-size: clamp(1rem, 2.8vw, 1.35rem);
+            font-weight: 800;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
+        }
+
+        .wf-og-card__tagline {
+            margin: 4px 0 0;
+            color: var(--wf-blue);
+            font-size: clamp(0.75rem, 2vw, 0.9rem);
+            font-weight: 700;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+
+        .wf-og-card__headline {
+            margin: 4px 0 0;
+            color: var(--wf-ink);
+            font-size: clamp(0.92rem, 2.6vw, 1.1rem);
+            font-weight: 800;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+
+        .wf-og-card__features {
+            margin: 0;
+            color: var(--wf-muted);
+            font-size: clamp(0.72rem, 2vw, 0.82rem);
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        .wf-og-card__pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 4px;
+            padding-bottom: 2px;
+        }
+
+        .wf-og-card__pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 28px;
+            padding: 4px 12px;
+            border: 1px solid transparent;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .wf-og-card__pill--docs {
+            border-color: var(--wf-hover-border);
+            background: var(--wf-primary-wash);
+            color: var(--wf-blue);
+        }
+
+        .wf-og-card__pill--wls {
+            border-color: color-mix(in srgb, var(--wf-green) 28%, transparent);
+            background: var(--wf-success-wash);
+            color: var(--wf-green);
+        }
+
+        .wf-og-card__pill--api {
+            border-color: color-mix(in srgb, var(--wf-warning) 32%, transparent);
+            background: var(--wf-warning-wash);
+            color: var(--wf-warning);
         }
 
         .wf-status__grid {
@@ -882,7 +985,7 @@ try {
 <div class="wf-home">
     <header class="wf-home__shell wf-nav" aria-label="<?= $escape('首页导航') ?>">
         <a class="wf-brand" href="#top" aria-label="<?= $escape('WelineFramework 首页') ?>" data-pixel-event="nav_home">
-            <span class="wf-brand__mark" aria-hidden="true">W</span>
+            <img class="wf-brand__mark" src="<?= $escapeRaw($siteIconUrl) ?>" alt="" width="38" height="38" decoding="async">
             <span>WelineFramework</span>
         </a>
         <nav class="wf-nav__links" aria-label="<?= $escape('快捷入口') ?>">
@@ -913,12 +1016,22 @@ try {
 
             <aside class="wf-status" aria-label="<?= $escape('当前开发入口') ?>">
                 <figure class="wf-status__figure">
-                    <img src="<?= $escapeRaw($seoImage) ?>"
-                         alt="<?= $escape('WelineFramework PHP 模块化开发框架与 WLS 常驻运行时架构概览') ?>"
-                         width="1200"
-                         height="630"
-                         loading="eager"
-                         decoding="async">
+                    <div class="wf-og-card" role="img" aria-label="<?= $escape('WelineFramework PHP 模块化开发框架与 WLS 常驻运行时架构概览') ?>">
+                        <div class="wf-og-card__brand">
+                            <img class="wf-og-card__mark" src="<?= $escapeRaw($siteIconUrl) ?>" alt="" width="44" height="44" decoding="async">
+                            <div class="wf-og-card__brand-text">
+                                <p class="wf-og-card__name">WelineFramework</p>
+                                <p class="wf-og-card__tagline">PHP modular framework and WLS runtime</p>
+                            </div>
+                        </div>
+                        <p class="wf-og-card__headline">Build modules, APIs, admin tools, storefronts, and multilingual sites</p>
+                        <p class="wf-og-card__features">Auto routing / ORM migrations / QueryProvider API / Persistent HTTPS server</p>
+                        <div class="wf-og-card__pills" aria-hidden="true">
+                            <span class="wf-og-card__pill wf-og-card__pill--docs">Documents</span>
+                            <span class="wf-og-card__pill wf-og-card__pill--wls">WLS</span>
+                            <span class="wf-og-card__pill wf-og-card__pill--api">REST API</span>
+                        </div>
+                    </div>
                 </figure>
                 <h2 class="wf-status__title"><?= $escape('当前开发入口') ?></h2>
                 <div class="wf-status__grid">
