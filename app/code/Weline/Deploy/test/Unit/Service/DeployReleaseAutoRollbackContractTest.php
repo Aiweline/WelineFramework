@@ -22,6 +22,8 @@ final class DeployReleaseAutoRollbackContractTest extends TestCase
         self::assertStringContainsString('restoreLocalCommit', $source);
         self::assertStringContainsString('$gitUpdateStarted = true', $source);
         self::assertStringContainsString('$versionStampWritten = true', $source);
+        self::assertStringContainsString('isProductionDeploy', $source);
+        self::assertStringContainsString('开发环境跳过发布失败自动回滚', $source);
     }
 
     public function testGitMetadataSupportsLocalRestoreWithoutFetch(): void
