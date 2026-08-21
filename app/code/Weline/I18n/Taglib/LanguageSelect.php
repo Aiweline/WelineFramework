@@ -1650,7 +1650,7 @@ DOC;
         return $items;
     }
 
-    private static function buildDisplayName(string $localizedName, string $referenceName, string $selfName, string $code): string
+    public static function buildDisplayName(string $localizedName, string $referenceName, string $selfName, string $code): string
     {
         $localizedName = \trim($localizedName);
         $referenceName = \trim($referenceName);
@@ -1675,7 +1675,7 @@ DOC;
         return $locatorName !== '' ? $localizedName . ' (' . $locatorName . ')' : $localizedName;
     }
 
-    private static function buildTagLabel(string $localizedName, string $selfName, string $referenceName, string $code): string
+    public static function buildTagLabel(string $localizedName, string $selfName, string $referenceName, string $code): string
     {
         foreach ([$localizedName, $selfName, $referenceName, $code] as $candidate) {
             $candidate = \trim((string)$candidate);
