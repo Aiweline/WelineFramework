@@ -18,7 +18,7 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 
-        self::assertStringContainsString('|markup=v2-lang-native-path-nav-4', $content);
+        self::assertStringContainsString('|markup=v2-lang-native-path-nav-8', $content);
         self::assertStringContainsString('if(navigation==="emit"){', $content);
         self::assertStringContainsString('writeLanguagePreference(code)', $content);
         self::assertStringContainsString('// Native navigation — do not preventDefault.', $content);
