@@ -19,6 +19,8 @@ Universal AI entry index for WelineFramework development. This file only routes 
 - **功能闭环（顺藤摸瓜）**：做一个功能就立刻测；主路径每个分支通透，不通先记下→修→测通→再回主流程；闭环后建议用户做 E2E 固化。权威：`global-constraints.md` §5 Feature closed-loop / §10.1。
 - **Model 字段 → 模块版本**：改 Model Schema 声明（`#[Col]`/`#[Table]`/索引等）必须同步上调该模块 `etc/module.php` 的 `"version"`，再 `setup:upgrade`。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/module-version-on-model-schema.mdc`。
 - **核心框架改动 → 提示合并**：凡改 `app/code/Weline/**`，结案前必须向用户提示跨仓对齐，附决策表（文件→建议码→理由），确认后再合入。**每次只合本会话改过的文件**，禁止把会话外/全树漂移当候选。权威：`global-constraints.md` §7；Cursor：`.cursor/rules/core-project-sync.mdc`。
+- **回灌**：精确口令「回灌」= 已给框架仓时可修核→合入推送→`update:core` 回当前站→验证；未给框架仓或未说「回灌」禁止。权威：`global-constraints.md` §7；技能：`CI发布工程师-回灌验证`；Cursor：`.cursor/rules/huiguan-core-update.mdc`。
+- **禁止 PHP 超全局**：业务代码不得直接读写 `$_GET`/`$_POST`/`$_REQUEST`/`$_COOKIE`/`$_FILES`/`$_SERVER`；用 `Request` / `WelineEnv`。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/no-php-superglobals.mdc`。
 - **跨模块 → Event 解耦**：禁止模块间强制引用对方具体类；通知/副作用用 Event/Observer，读取用 Interface 或 `w_query()`。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/cross-module-event-decoupling.mdc`。
 - **Framework 核心 → 抽象 + 事件**：`app/code/Weline/Framework/**` 只做平台抽象并提供中立事件/契约；禁止非框架业务语义进入核心；模块接入靠 Observer。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/framework-core-abstraction-events.mdc`。
 - **部署默认 pre**：用户说「部署」默认只部署预发 `/home/weline-test`；生产 `/home/weline` 须明示。权威：`global-constraints.md` §12；Cursor：`.cursor/rules/ssh-mcp-deploy.mdc`。
