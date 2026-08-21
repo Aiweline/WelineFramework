@@ -1677,14 +1677,19 @@ DOC;
 
     public static function buildTagLabel(string $localizedName, string $selfName, string $referenceName, string $code): string
     {
-        foreach ([$localizedName, $selfName, $referenceName, $code] as $candidate) {
+        // Topbar / compact triggers: prefer endonym, then strip trailing region parenthetical.
+        foreach ([$selfName, $localizedName, $referenceName] as $candidate) {
             $candidate = \trim((string)$candidate);
-            if ($candidate !== '') {
-                return $candidate;
+            if ($candidate === '') {
+                continue;
             }
+            $compact = \preg_replace('/\s*[\(（][^）\)]+[）\)]\s*$/u', '', $candidate);
+            $compact = \trim((string)$compact);
+
+            return $compact !== '' ? $compact : $candidate;
         }
 
-        return $code;
+        return \trim($code) !== '' ? \trim($code) : $code;
     }
 
     /**
