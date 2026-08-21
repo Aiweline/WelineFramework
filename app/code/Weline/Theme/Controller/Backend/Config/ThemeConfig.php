@@ -342,26 +342,8 @@ class ThemeConfig extends BackendController
             $themeConfigBlock = ObjectManager::getInstance(BackendThemeConfigInterface::class);
             $themeConfigBlock->reloadForCurrentUser();
 
-            // Normalize the complete data map once so the legacy endpoint has
-            // the same persistence contract as the current settings endpoint.
-            $layouts = $themeConfigBlock->getThemeConfig('layouts') ?: [];
-            if (!is_array($layouts)) {
-                $layouts = [];
-            }
-            $layouts['data-theme-preference'] = $mode;
-            if ($mode === 'light' || $mode === 'dark') {
-                $layouts['data-topbar'] = $mode;
-                $layouts['data-sidebar'] = $mode;
-                $layouts['data-theme-mode'] = $mode;
-                $layouts['data-layout-mode'] = $mode;
-            } else {
-                unset($layouts['data-topbar'], $layouts['data-sidebar'], $layouts['data-theme-mode'], $layouts['data-layout-mode']);
-            }
             $themeConfigBlock->setThemeConfig([
                 'theme-mode-switch' => $mode,
-                'dark-mode-switch' => $mode === 'dark',
-                'light-mode-switch' => $mode === 'light',
-                'layouts' => $layouts,
             ]);
 
             return $this->fetchJson(['code' => 200, 'msg' => __('同步成功')]);

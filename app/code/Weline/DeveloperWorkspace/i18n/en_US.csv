@@ -47,38 +47,35 @@ WelineFramework插件功能,"WelineFramework Plugin Features"
 未知,Unknown
 获取成功,"Get successful"
 开发文档管理,开发文档管理
-"fa fa-list-alt","fa fa-list-alt"
+list,list
 管理开发文档,"Manage developer documents"
 文档列表,文档列表
-"mdi mdi-translate","mdi mdi-translate"
+language,language
 保存文档管理配置,保存文档管理配置
-"mdi mdi-content-save","mdi mdi-content-save"
+save,save
 扫描文档翻译适配器,扫描文档翻译适配器
-"mdi mdi-magnify-scan","mdi mdi-magnify-scan"
+search,search
 执行文档翻译任务,执行文档翻译任务
-"mdi mdi-play","mdi mdi-play"
+play,play
 重试失败文档翻译任务,重试失败文档翻译任务
-"mdi mdi-replay","mdi mdi-replay"
 测试文档翻译适配器,测试文档翻译适配器
-"mdi mdi-test-tube","mdi mdi-test-tube"
+circle,circle
 文档删除,文档删除
-"fa fa-delete","fa fa-delete"
+trash,trash
 文档编辑,文档编辑
-"fa fa-edit","fa fa-edit"
+edit,edit
 文档添加,文档添加
-"fa fa-plus","fa fa-plus"
+plus,plus
 文档保存,文档保存
-"fa fa-save","fa fa-save"
 id,id
 content,content
 文档成功！ID:,文档成功！ID:
 dev/tool/admin/document,dev/tool/admin/document
 文档上传,文档上传
-"fa fa-upload","fa fa-upload"
+upload,upload
 文档查看,文档查看
-"fa fa-eye","fa fa-eye"
+eye,eye
 文档列表API,文档列表API
-"fa fa-list","fa fa-list"
 分类ID不能为空,"Category ID cannot be empty"
 分类不存在,"Category does not exist"
 系统分类不允许删除,"System categories cannot be deleted"
@@ -99,12 +96,16 @@ dev-document-catalog-manager,dev-document-catalog-manager
 "fa fa-book-o","fa fa-book-o"
 文档分类管理器,文档分类管理器
 dev-document-manager,dev-document-manager
+"fa fa-list-alt","fa fa-list-alt"
 文档分类列表,文档分类列表
 文档分类树,文档分类树
+"fa fa-delete","fa fa-delete"
 文档分类删除,文档分类删除
+"fa fa-save","fa fa-save"
 文档分类保存,文档分类保存
 "fa fa-sort","fa fa-sort"
 文档分类排序,文档分类排序
+"fa fa-eye","fa fa-eye"
 文档分类查看,文档分类查看
 无效的请求方法,"Invalid request method"
 启动Key错误,"Invalid startup key"
@@ -114,7 +115,7 @@ dev-document-manager,dev-document-manager
 沙盒启动Key设置成功,"Sandbox startup key saved"
 沙盒环境已关闭,"Sandbox mode is off"
 沙盒管理,沙盒管理
-"fa fa-database","fa fa-database"
+database,database
 加载Debug配置失败：%{1},"Failed to load debug config: %{1}"
 保存成功,"Saved successfully"
 保存失败：%{1},"Save failed: %{1}"
@@ -123,10 +124,12 @@ Debug配置,"Debug Config"
 保存Debug配置,保存Debug配置
 加载沙盒配置失败：%{1},"Failed to load sandbox config: %{1}"
 沙盒配置,"Sandbox Config"
+check,check
 查看沙盒配置,查看沙盒配置
 保存沙盒配置,保存沙盒配置
 加载开发面板配置失败：%{1},"Failed to load developer panel config: %{1}"
 开发面板配置,"Developer Panel Config"
+grid,grid
 查看开发面板配置,查看开发面板配置
 保存开发面板配置,保存开发面板配置
 WelineFramework开发文档,"WelineFramework Developer Docs"
@@ -163,13 +166,6 @@ Completion,Completion
 分类,Category
 文章内容,"Article Content"
 文章内容不能为空,"Article content cannot be empty"
-粗体,Bold
-红色文字,"Red Text"
-红色标题,"Red Title"
-示例1,Example1
-示例2,Example2
-表格样式,"Table Style"
-表格行1,"Table Row 1"
 开发文档分类管理,"Developer Document Category Management"
 左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动,"Click a category on the left to edit it on the right. Drag nodes to adjust order and hierarchy. Hold and drag blank space to pan horizontally."
 添加顶级分类,"Add Top-level Category"
@@ -395,3 +391,21 @@ AI运行时提供器不可用。,"AI runtime provider is unavailable."
 "API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API document import complete: scanned %{scanned}, new %{new}, updated %{updated}"
 "API文档导入失败: %{error}","API document import failed: %{error}"
 """API 文档收集后""","API 文档收集后"
+"mdi mdi-translate","mdi mdi-translate"
+"mdi mdi-content-save","mdi mdi-content-save"
+"mdi mdi-magnify-scan","mdi mdi-magnify-scan"
+"mdi mdi-play","mdi mdi-play"
+"mdi mdi-replay","mdi mdi-replay"
+"mdi mdi-test-tube","mdi mdi-test-tube"
+"fa fa-edit","fa fa-edit"
+"fa fa-plus","fa fa-plus"
+"fa fa-upload","fa fa-upload"
+"fa fa-list","fa fa-list"
+"fa fa-database","fa fa-database"
+粗体,Bold
+红色文字,"Red Text"
+红色标题,"Red Title"
+示例1,Example1
+示例2,Example2
+表格样式,"Table Style"
+表格行1,"Table Row 1"

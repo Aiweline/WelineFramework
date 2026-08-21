@@ -8,14 +8,14 @@
 <div class="content-header">
     <h1><?= __('Feed管理') ?></h1>
     <div class="action-bar">
-        <a href="<?= $this->getUrl('geo/backend/feed/edit') ?>" class="btn btn-primary">
-            <i class="mdi mdi-plus"></i> <?= __('添加Feed') ?>
+        <a href="<?= $this->getUrl('geo/backend/feed/edit') ?>" class="w-button" data-tone="primary">
+            <w:icon name="plus" size="sm"></w:icon> <?= __('添加Feed') ?>
         </a>
     </div>
 </div>
 
 <div class="content-body">
-    <table class="table table-striped">
+    <table class="w-table">
         <thead>
             <tr>
                 <th><?= __('ID') ?></th>
@@ -32,7 +32,7 @@
         <tbody>
             <?php if (empty($feeds)): ?>
                 <tr>
-                    <td colspan="9" class="text-center"><?= __('暂无数据') ?></td>
+                    <td colspan="9" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
                 </tr>
             <?php else: ?>
                 <?php foreach ($feeds as $feed): ?>
@@ -44,22 +44,22 @@
                         <td><?= htmlspecialchars($feed['update_frequency']) ?></td>
                         <td>
                             <?php if ($feed['is_auto_push']): ?>
-                                <span class="badge badge-info"><?= __('是') ?></span>
+                                <span class="w-badge" data-tone="info"><?= __('是') ?></span>
                             <?php else: ?>
-                                <span class="badge badge-secondary"><?= __('否') ?></span>
+                                <span class="w-badge" data-tone="muted"><?= __('否') ?></span>
                             <?php endif; ?>
                         </td>
                         <td>
                             <?php if ($feed['is_enabled']): ?>
-                                <span class="badge badge-success"><?= __('启用') ?></span>
+                                <span class="w-badge" data-tone="success"><?= __('启用') ?></span>
                             <?php else: ?>
-                                <span class="badge badge-secondary"><?= __('禁用') ?></span>
+                                <span class="w-badge" data-tone="muted"><?= __('禁用') ?></span>
                             <?php endif; ?>
                         </td>
                         <td><?= $feed['last_generated_at'] ? date('Y-m-d H:i:s', $feed['last_generated_at']) : '-' ?></td>
                         <td>
-                            <a href="<?= $this->getUrl('geo/backend/feed/edit', ['id' => $feed['id']]) ?>" class="btn btn-sm btn-primary">
-                                <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                            <a href="<?= $this->getUrl('geo/backend/feed/edit', ['id' => $feed['id']]) ?>" class="w-button" data-tone="primary" data-size="sm">
+                                <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                             </a>
                         </td>
                     </tr>
@@ -69,7 +69,7 @@
     </table>
 
     <?php if ($pagination && $pagination->getTotalPages() > 1): ?>
-        <div class="pagination">
+        <div class="w-pagination">
             <?= $this->getPaginationHtml($pagination) ?>
         </div>
     <?php endif; ?>

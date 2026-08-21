@@ -45,11 +45,11 @@ $pageSize = $this->getData('page_size') ?: 20;
                 </div>
                 
                 <div class="order-actions">
-                    <a href="<?= $this->getUrl('checkout/frontend/order/view', ['order_id' => $order['order_id']]) ?>" class="btn btn-sm btn-primary">
+                    <a href="<?= $this->getUrl('checkout/frontend/order/view', ['order_id' => $order['order_id']]) ?>" class="w-button" data-tone="primary" data-size="sm">
                         <?= __('查看详情') ?>
                     </a>
                     <?php if ($order['status'] === 'pending' || $order['status'] === 'processing'): ?>
-                    <button type="button" class="btn btn-sm btn-danger cancel-order" data-order-id="<?= $order['order_id'] ?>">
+                    <button type="button" class="w-button cancel-order" data-order-id="<?= $order['order_id'] ?>" data-tone="danger" data-size="sm">
                         <?= __('取消订单') ?>
                     </button>
                     <?php endif; ?>
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showOrderMessage(type, message) {
-        var toast = window.FrontendToast || window.BackendToast || null;
+        var toast = window.FrontendToast || window.Weline.UI.toast || null;
         if (toast && typeof toast[type] === 'function') {
             toast[type](message);
             return;
@@ -242,9 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function confirmCancelOrder(button, message) {
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            return window.BackendConfirm.show(message);
-        }
+        return Weline.UI.dialog.confirm(message);
 
         return new Promise(function(resolve) {
             var existing = document.querySelector('.cancel-order-confirm');

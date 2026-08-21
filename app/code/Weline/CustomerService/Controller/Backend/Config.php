@@ -19,13 +19,13 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * 客服配置管理控制器
  */
-#[Acl('Weline_CustomerService::config', '客服配置', 'mdi-cog', '客服配置管理', 'Weline_CustomerService::customer_service')]
+#[Acl('Weline_CustomerService::config', '客服配置', 'settings', '客服配置管理', 'Weline_CustomerService::customer_service')]
 class Config extends BackendController
 {
     /**
      * 配置页面
      */
-    #[Acl('Weline_CustomerService::config_index', '查看客服配置', 'mdi-cog', '查看客服配置')]
+    #[Acl('Weline_CustomerService::config_index', '查看客服配置', 'settings', '查看客服配置')]
     public function index(): string
     {
         try {
@@ -57,7 +57,7 @@ class Config extends BackendController
      * 保存配置
      * POST /customerservice/backend/config/save
      */
-    #[Acl('Weline_CustomerService::config_save', '保存客服配置', 'mdi-content-save', '保存客服配置')]
+    #[Acl('Weline_CustomerService::config_save', '保存客服配置', 'save', '保存客服配置')]
     public function postSave(): string
     {
         try {

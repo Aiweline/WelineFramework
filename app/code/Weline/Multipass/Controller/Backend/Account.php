@@ -17,7 +17,7 @@ use Weline\Multipass\Model\MultipassSite;
 use Weline\Multipass\Service\AccountFacadeResolver;
 use Weline\Multipass\Service\MultipassService;
 
-#[\Weline\Framework\Acl\Acl('Weline_Multipass::account_management', 'Multipass账户管理', 'mdi mdi-account-key', '生成和管理Multipass登录令牌', 'Weline_Multipass::menu_multipass_management')]
+#[\Weline\Framework\Acl\Acl('Weline_Multipass::account_management', 'Multipass账户管理', 'user', '生成和管理Multipass登录令牌', 'Weline_Multipass::menu_multipass_management')]
 class Account extends BackendController
 {
     private MultipassSite $multipassSite;
@@ -34,7 +34,7 @@ class Account extends BackendController
     /**
      * 账户管理首页
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Multipass::account_index', '账户管理首页', 'mdi mdi-view-dashboard', '查看Multipass账户管理首页', 'Weline_Multipass::account_management')]
+    #[\Weline\Framework\Acl\Acl('Weline_Multipass::account_index', '账户管理首页', 'grid', '查看Multipass账户管理首页', 'Weline_Multipass::account_management')]
     public function index()
     {
         $userType = $this->request->getParam('user_type', 'backend');
@@ -61,7 +61,7 @@ class Account extends BackendController
     /**
      * 前端账户列表
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Multipass::account_frontend', '前端账户列表', 'mdi mdi-account', '查看前端账户列表', 'Weline_Multipass::account_management')]
+    #[\Weline\Framework\Acl\Acl('Weline_Multipass::account_frontend', '前端账户列表', 'user', '查看前端账户列表', 'Weline_Multipass::account_management')]
     public function getFrontend()
     {
         $userType = 'frontend';
@@ -88,7 +88,7 @@ class Account extends BackendController
     /**
      * 后端账户列表
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Multipass::account_backend', '后端账户列表', 'mdi mdi-account-cog', '查看后端账户列表', 'Weline_Multipass::account_management')]
+    #[\Weline\Framework\Acl\Acl('Weline_Multipass::account_backend', '后端账户列表', 'user', '查看后端账户列表', 'Weline_Multipass::account_management')]
     public function getBackend()
     {
         $userType = 'backend';

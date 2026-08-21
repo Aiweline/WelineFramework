@@ -141,19 +141,19 @@
 </style>
 
 <!-- start page message -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 <!-- end message -->
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card weline-queue-type-detail'>
-            <div class='card-body'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card weline-queue-type-detail">
+            <div class="w-card__body">
                 <!-- Header -->
                 <div class="weline-queue-type-detail-header">
                     <div class="weline-queue-type-detail-icon">
-                        <i class="mdi mdi-cog-sync-outline"></i>
+                        <w:icon name="settings" size="sm"></w:icon>
                     </div>
                     <div class="weline-queue-type-detail-title">
                         <h4>{{type.name}}</h4>
@@ -161,12 +161,12 @@
                     </div>
                     <if condition="type.enable == 1">
                         <span class="weline-queue-type-detail-status weline-queue-type-detail-status--enabled">
-                            <i class="mdi mdi-check-circle"></i>
+                            <w:icon name="check" size="sm"></w:icon>
                             <lang>已启用</lang>
                         </span>
                     <else/>
                         <span class="weline-queue-type-detail-status weline-queue-type-detail-status--disabled">
-                            <i class="mdi mdi-close-circle"></i>
+                            <w:icon name="close" size="sm"></w:icon>
                             <lang>已禁用</lang>
                         </span>
                     </if>
@@ -176,7 +176,7 @@
                 <div class="weline-queue-type-detail-info">
                     <div class="weline-queue-type-detail-row">
                         <div class="weline-queue-type-detail-label">
-                            <i class="mdi mdi-identifier"></i>
+                            <w:icon name="tag" size="sm"></w:icon>
                             <lang>类型 ID</lang>
                         </div>
                         <div class="weline-queue-type-detail-value">
@@ -186,7 +186,7 @@
                     
                     <div class="weline-queue-type-detail-row">
                         <div class="weline-queue-type-detail-label">
-                            <i class="mdi mdi-tag-outline"></i>
+                            <w:icon name="refresh" size="sm"></w:icon>
                             <lang>类型名称</lang>
                         </div>
                         <div class="weline-queue-type-detail-value">
@@ -196,12 +196,12 @@
                     
                     <div class="weline-queue-type-detail-row">
                         <div class="weline-queue-type-detail-label">
-                            <i class="mdi mdi-package-variant-closed"></i>
+                            <w:icon name="close" size="sm"></w:icon>
                             <lang>所属模块</lang>
                         </div>
                         <div class="weline-queue-type-detail-value">
                             <span class="weline-queue-type-detail-module">
-                                <i class="mdi mdi-puzzle"></i>
+                                <w:icon name="puzzle" size="sm"></w:icon>
                                 {{type.module_name}}
                             </span>
                         </div>
@@ -209,7 +209,7 @@
                     
                     <div class="weline-queue-type-detail-row">
                         <div class="weline-queue-type-detail-label">
-                            <i class="mdi mdi-code-braces"></i>
+                            <w:icon name="code" size="sm"></w:icon>
                             <lang>执行类</lang>
                         </div>
                         <div class="weline-queue-type-detail-value">
@@ -219,7 +219,7 @@
                     
                     <div class="weline-queue-type-detail-row">
                         <div class="weline-queue-type-detail-label">
-                            <i class="mdi mdi-clock-outline"></i>
+                            <w:icon name="clock" size="sm"></w:icon>
                             <lang>创建时间</lang>
                         </div>
                         <div class="weline-queue-type-detail-value">
@@ -229,7 +229,7 @@
                     
                     <div class="weline-queue-type-detail-row">
                         <div class="weline-queue-type-detail-label">
-                            <i class="mdi mdi-update"></i>
+                            <w:icon name="refresh" size="sm"></w:icon>
                             <lang>更新时间</lang>
                         </div>
                         <div class="weline-queue-type-detail-value">
@@ -240,9 +240,9 @@
                 
                 <!-- Tip Section -->
                 <notempty name="type.tip">
-                    <div class="weline-queue-type-detail-tip mt-4">
+                    <div class="weline-queue-type-detail-tip" style="--w-mt:var(--weline-space-6);">
                         <div class="weline-queue-type-detail-tip-title">
-                            <i class="mdi mdi-information-outline"></i>
+                            <w:icon name="info" size="sm"></w:icon>
                             <lang>执行注意事项</lang>
                         </div>
                         <div>{{type.tip}}</div>

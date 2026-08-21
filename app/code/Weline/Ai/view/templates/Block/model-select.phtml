@@ -42,20 +42,20 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 .weline-ai-model-select-item.active{background-color:rgba(85,110,230,.18);color:#556ee6;}
 .weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-item.active{color:#8ea2ff;}
 </style>
-<div class="position-relative weline-ai-model-select <?= htmlspecialchars($class ?? '') ?>" style="<?= htmlspecialchars($style ?? '') ?>">
-    <button type="button" class="btn btn-outline-secondary w-100 text-start" id="<?= htmlspecialchars($id) ?>_trigger" style="height: 38px;">
+<div class="weline-ai-model-select <?= htmlspecialchars($class ?? '') ?>" style="<?= htmlspecialchars($style ?? '') ?>" data-w-position="relative">
+    <button type="button" class="w-button w-text" id="<?= htmlspecialchars($id) ?>_trigger" style="height: 38px;" data-w-width="full" data-align="start" data-tone="neutral" data-variant="outline">
         <span id="<?= htmlspecialchars($id) ?>_display"><?= !empty($display) ? htmlspecialchars($display) : '<lang>' . __('使用默认模型') . '</lang>' ?></span>
     </button>
     <div id="<?= htmlspecialchars($id) ?>_container" class="weline-ai-model-select-dropdown">
-        <select class="form-select form-select-sm weline-ai-model-select-supplier" id="<?= htmlspecialchars($id) ?>_supplier" aria-label="<?= htmlspecialchars((string)__('供应商筛选')) ?>">
+        <select class="w-select weline-ai-model-select-supplier" id="<?= htmlspecialchars($id) ?>_supplier" aria-label="<?= htmlspecialchars((string)__('供应商筛选')) ?>" data-size="sm">
             <option value=""><?= htmlspecialchars((string)__('全部供应商')) ?></option>
         </select>
-        <input type="text" class="form-control weline-ai-model-select-search" id="<?= htmlspecialchars($id) ?>_search" placeholder="<?= htmlspecialchars($placeholder ?? '') ?>" autocomplete="off">
+        <input type="text" class="w-input weline-ai-model-select-search" id="<?= htmlspecialchars($id) ?>_search" placeholder="<?= htmlspecialchars($placeholder ?? '') ?>" autocomplete="off">
         <input type="hidden" id="<?= htmlspecialchars($id) ?>_code" name="<?= htmlspecialchars($name ?? '') ?>" value="<?= htmlspecialchars($value ?? '') ?>">
         <div id="<?= htmlspecialchars($id) ?>_loading" style="padding:1rem; text-align:center; display:none;"></div>
         <div id="<?= htmlspecialchars($id) ?>_list" class="weline-ai-model-select-list" style="padding:0.25rem;"></div>
     </div>
-    <small class="text-muted d-block mt-1"><lang><?= __('提示：先选供应商，再搜索并点击选择模型') ?></lang></small>
+    <small class="w-text" data-w-display="block" data-tone="muted" style="--w-mt:var(--weline-space-1);"><lang><?= __('提示：先选供应商，再搜索并点击选择模型') ?></lang></small>
 </div>
 <script>(function(){
   const id = <?= json_encode($id, $jsonForScriptFlags) ?>;
@@ -196,10 +196,10 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
   function isDarkTheme(){
     const root = document.documentElement;
     const body = document.body;
-    return root.getAttribute('data-bs-theme') === 'dark'
+    return root.getAttribute('data-theme') === 'dark'
       || root.getAttribute('data-theme-mode') === 'dark'
       || root.getAttribute('data-layout-mode') === 'dark'
-      || (body && (body.getAttribute('data-bs-theme') === 'dark' || body.getAttribute('data-layout-mode') === 'dark'));
+      || (body && (body.getAttribute('data-theme') === 'dark' || body.getAttribute('data-layout-mode') === 'dark'));
   }
   function paintShell(){
     const dark = isDarkTheme();

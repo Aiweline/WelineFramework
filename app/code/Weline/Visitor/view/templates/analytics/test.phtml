@@ -17,7 +17,7 @@
         window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
         window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
     </script>
-    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2"></script>
+    <theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
     <style>
         * {
             margin: 0;
@@ -137,7 +137,7 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="w-container">
         <h1>像素数据分析API测试</h1>
         
         <!-- 商业价值分析 -->
@@ -154,7 +154,7 @@
                 </select>
                 <input type="date" id="business-startDate" placeholder="开始日期 (可选)">
                 <input type="date" id="business-endDate" placeholder="结束日期 (可选)">
-                <button class="btn" data-visitor-test-action="test-business-value">测试</button>
+                <button class="w-button" data-visitor-test-action="test-business-value">测试</button>
             </div>
             <div id="business-result" class="result" style="display:none;"></div>
         </div>
@@ -169,7 +169,7 @@
                     <option value="30">30分钟</option>
                 </select>
                 <input type="number" id="dashboard-hours" placeholder="最近N小时" value="24" min="1" max="168">
-                <button class="btn" data-visitor-test-action="test-dashboard">测试</button>
+                <button class="w-button" data-visitor-test-action="test-dashboard">测试</button>
             </div>
             <div id="dashboard-result" class="result" style="display:none;"></div>
         </div>
@@ -184,7 +184,7 @@
                     <option value="30">30分钟</option>
                 </select>
                 <input type="number" id="change-hours" placeholder="最近N小时" value="24" min="1" max="168">
-                <button class="btn" data-visitor-test-action="test-change-percentage">测试</button>
+                <button class="w-button" data-visitor-test-action="test-change-percentage">测试</button>
             </div>
             <div id="change-result" class="result" style="display:none;"></div>
         </div>
@@ -195,7 +195,7 @@
             <div class="test-form">
                 <input type="text" id="daily-websiteId" placeholder="站点ID (可选)" value="">
                 <input type="number" id="daily-days" placeholder="最近N天" value="7" min="1" max="30">
-                <button class="btn" data-visitor-test-action="test-daily-comparison">测试</button>
+                <button class="w-button" data-visitor-test-action="test-daily-comparison">测试</button>
             </div>
             <div id="daily-result" class="result" style="display:none;"></div>
         </div>
@@ -211,16 +211,12 @@
                     <option value="A">变体A</option>
                     <option value="B">变体B</option>
                 </select>
-                <button class="btn" data-visitor-test-action="test-abtest">测试</button>
+                <button class="w-button" data-visitor-test-action="test-abtest">测试</button>
             </div>
             <div id="abtest-result" class="result" style="display:none;"></div>
         </div>
     </div>
 
-    <!-- SweetAlert2 CSS -->
-    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <!-- SweetAlert2 JS -->
-    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         // 获取基础URL
         function getBaseUrl() {
@@ -421,16 +417,12 @@
             const variant = document.getElementById('abtest-variant').value;
 
             if (!testId) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请输入测试ID') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('请输入测试ID');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'warning',
+                    title: '<?= __('提示') ?>',
+                    message: '<?= __('请输入测试ID') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 return;
             }
 

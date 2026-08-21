@@ -43,10 +43,10 @@ $widgetId = 'breadcrumb-' . uniqid();
 <nav class="widget-breadcrumb" id="<?= $widgetId ?>" aria-label="<?= __('面包屑导航') ?>">
     <ol class="breadcrumb-list">
         <?php if ($showHome): ?>
-            <li class="breadcrumb-item">
+            <li class="w-breadcrumb__item">
                 <a href="/" class="breadcrumb-link">
                     <?php if ($homeIcon): ?>
-                        <i class="ri-home-line"></i>
+                        <w:icon name="home" size="sm"></w:icon>
                     <?php endif; ?>
                     <span><?= htmlspecialchars($homeText) ?></span>
                 </a>
@@ -60,7 +60,7 @@ $widgetId = 'breadcrumb-' . uniqid();
         ?>
             <?php if ($isLast && !$showCurrent) continue; ?>
             
-            <li class="breadcrumb-item <?= $isLast ? 'active' : '' ?>">
+            <li class="w-breadcrumb__item <?= $isLast ? 'active' : '' ?>">
                 <?php if ($hasUrl && !$isLast): ?>
                     <a href="<?= htmlspecialchars($crumb['url']) ?>" class="breadcrumb-link">
                         <?= htmlspecialchars($crumb['label']) ?>

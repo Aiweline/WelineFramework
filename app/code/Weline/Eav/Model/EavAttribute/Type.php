@@ -405,9 +405,9 @@ class Type extends \Weline\Framework\Database\Model
         $name = __($attribute->getName());
         $typeCode = $type->getCode();
         $attributeCode = $attribute->getCode();
-        $dependence = $attribute->getDependence() ? '<br>' . __('依赖：') . '<span class="text-info">' . $attribute->getDependence() . '</span>' : '';
+        $dependence = $attribute->getDependence() ? '<br>' . __('依赖：') . '<span class="w-text" data-tone="info">' . $attribute->getDependence() . '</span>' : '';
         $label = <<<LABEL
-<label title="$attributeCode-$name" data-type-code="$typeCode" class="$label_class">$required $name <span class="text-primary">$attributeCode</span>$dependence</label>
+<label title="$attributeCode-$name" data-type-code="$typeCode" class="$label_class">$required $name <span class="w-text" data-tone="primary">$attributeCode</span>$dependence</label>
 LABEL;
         $html = $label . $html;
     }

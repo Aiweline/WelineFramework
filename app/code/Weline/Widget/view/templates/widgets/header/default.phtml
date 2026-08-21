@@ -6,22 +6,22 @@ $showSearch = $this->getData('show_search') ?? true;
 $navItems = $this->getData('nav_items') ?? [];
 ?>
 <header class="widget-header widget-header-default">
-    <div class="container">
-        <div class="row align-items-center py-3">
-            <div class="col-auto">
+    <div class="w-container">
+        <div class="w-grid" data-align="center" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+            <div>
                 <?php if ($logo): ?>
                     <img src="<?= htmlspecialchars($logo) ?>" alt="<?= htmlspecialchars($title) ?>" class="logo" style="max-height: 50px;">
                 <?php else: ?>
-                    <h4 class="mb-0"><?= htmlspecialchars($title) ?></h4>
+                    <h4 style="--w-mb:0;"><?= htmlspecialchars($title) ?></h4>
                 <?php endif; ?>
             </div>
-            <div class="col">
+            <div>
                 <?php if (!empty($navItems)): ?>
                 <nav class="main-nav">
                     <ul class="nav">
                         <?php foreach ($navItems as $item): ?>
-                        <li class="nav-item">
-                            <a class="nav-link" href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
+                        <li>
+                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
                                 <?= htmlspecialchars($item['label'] ?? '') ?>
                             </a>
                         </li>
@@ -31,11 +31,11 @@ $navItems = $this->getData('nav_items') ?? [];
                 <?php endif; ?>
             </div>
             <?php if ($showSearch): ?>
-            <div class="col-auto">
-                <w:form class="search-form d-flex">
-                    <input type="search" class="form-control" placeholder="搜索...">
-                    <button type="submit" class="btn btn-primary ms-2">
-                        <i class="ri-search-line"></i>
+            <div>
+                <w:form class="search-form w-cluster">
+                    <input type="search" class="w-input" placeholder="搜索...">
+                    <button type="submit" class="w-button ms-2" data-tone="primary">
+                        <w:icon name="search" size="sm"></w:icon>
                     </button>
                 </w:form>
             </div>

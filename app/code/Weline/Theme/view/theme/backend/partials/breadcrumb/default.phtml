@@ -51,7 +51,7 @@ if ($showHome && !empty($items)) {
         <?php if (empty($items)): ?>
             <!-- 如果没有提供items，显示默认首页 -->
             <?php if ($showHome): ?>
-                <li class="breadcrumb-item">
+                <li class="w-breadcrumb__item">
                     <a href="<?= htmlspecialchars($homeUrl) ?>">
                         <?= htmlspecialchars($homeText) ?>
                     </a>
@@ -59,8 +59,7 @@ if ($showHome && !empty($items)) {
             <?php endif; ?>
         <?php else: ?>
             <?php foreach ($items as $index => $item): ?>
-                <li class="breadcrumb-item <?= empty($item['url']) || $index === count($items) - 1 ? 'active' : '' ?>" 
-                    <?= $index === count($items) - 1 ? 'aria-current="page"' : '' ?>>
+                <li class="w-breadcrumb__item <?= empty($item['url']) || $index === count($items) - 1 ? 'active' : '' ?>" <?= $index === count($items) - 1 ? 'aria-current="page"' : '' ?>>
                     <?php if (!empty($item['url']) && $index < count($items) - 1): ?>
                         <a href="<?= htmlspecialchars($item['url']) ?>">
                             <?= htmlspecialchars($item['text'] ?? '') ?>

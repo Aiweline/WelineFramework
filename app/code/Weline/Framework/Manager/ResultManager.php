@@ -8,7 +8,7 @@ use Weline\Framework\Runtime\StateManager;
 
 /**
  * 控制器结果管理器
- * 用于 success/error/info/warning 与 redirect 配合，在 iframe 时自动跳转到结果桥接页显示 BackendToast。
+ * 用于 success/error/info/warning 与 redirect 配合，在 iframe 时自动跳转到结果桥接页显示 Weline.UI.toast。
  * 结果桥接页地址通过事件 Weline_Framework_Manager::result_bridge_url 由组件返回（如 Component Offcanvas getResult）。
  * 请求级数据，WLS 下由 StateManager 每请求重置。
  */

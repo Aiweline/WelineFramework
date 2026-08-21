@@ -3,9 +3,9 @@
 ?>
 <header id="page-topbar">
     <div class="navbar-header">
-        <div class="d-flex">
+        <div class="w-cluster">
             <!-- LOGO -->
-            <div class="navbar-brand-box text-center">
+            <div class="navbar-brand-box w-text" data-align="center">
                 <a href="@admin-url('admin')" class="logo logo-dark">
                                 <span class="logo-sm">
                                     <img src="@static(Weline_Admin::assets/images/logo-sm.png)" alt="logo-sm-dark"
@@ -29,35 +29,33 @@
                 </a>
             </div>
 
-            <button type="button" class="btn btn-sm px-3 font-size-24 header-item waves-effect" id="vertical-menu-btn">
-                <i class="ri-menu-2-line align-middle"></i>
+            <button type="button" class="w-button w-text header-item" id="vertical-menu-btn" data-size="sm" style="--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-font-size:1.5rem;">
+                <w:icon name="menu" size="sm"></w:icon>
             </button>
 
             <!-- App Search-->
-            <w:form class="app-search d-none d-lg-block">
-                <div class="position-relative">
-                    <input type="text" class="form-control" placeholder="<?= __('搜索 ...') ?>">
-                    <span class="ri-search-line"></span>
+            <w:form class="app-search" data-w-display="block" data-w-visible-from="lg">
+                <div data-w-position="relative">
+                    <input type="text" class="w-input" placeholder="<?= __('搜索 ...') ?>">
+                    <w:icon name="search" size="sm"></w:icon>
                 </div>
             </w:form>
         </div>
 
-        <div class="d-flex">
+        <div class="w-cluster">
 
-            <div class="dropdown d-inline-block d-lg-none ms-2">
-                <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-search-dropdown"
-                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <i class="ri-search-line"></i>
+            <div class="w-menu-root ms-2" data-w-display="inline-block" data-w-hidden-from="lg" data-w-component="menu">
+                <button type="button" class="w-button header-item noti-icon" id="page-header-search-dropdown" aria-haspopup="true" aria-expanded="false" data-w-menu-trigger>
+                    <w:icon name="search" size="sm"></w:icon>
                 </button>
-                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
-                     aria-labelledby="page-header-search-dropdown">
+                <div class="w-menu dropdown-menu-lg dropdown-menu-end" aria-labelledby="page-header-search-dropdown" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;" data-w-menu-panel role="menu" hidden>
 
-                    <w:form class="p-3">
-                        <div class="mb-3 m-0">
-                            <div class="input-group">
-                                <input type="text" class="form-control" placeholder="<?= __('搜索 ...') ?>">
+                    <w:form style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                        <div style="--w-mb:0;--w-mt:0;--w-me:0;--w-ms:0;">
+                            <div class="w-field__control">
+                                <input type="text" class="w-input" placeholder="<?= __('搜索 ...') ?>">
                                 <div class="input-group-append">
-                                    <button class="btn btn-primary" type="submit"><i class="ri-search-line"></i>
+                                    <button class="w-button" type="submit" data-tone="primary"><w:icon name="search" size="sm"></w:icon>
                                     </button>
                                 </div>
                             </div>
@@ -66,66 +64,64 @@
                 </div>
             </div>
 
-            <div class="dropdown d-none d-sm-inline-block">
-                <button type="button" class="btn header-item waves-effect"
-                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            <div class="w-menu-root" data-w-display="inline-block" data-w-visible-from="sm" data-w-component="menu">
+                <button type="button" class="w-button header-item" aria-haspopup="true" aria-expanded="false" data-w-menu-trigger>
                     <img class="" src="@static(Weline_Admin::assets/images/flags/zh_CN.jfif)" alt="<?= __('头部语言') ?>"
                          height="16">
                 </button>
-                <div class="dropdown-menu dropdown-menu-end">
+                <div class="w-menu dropdown-menu-end" data-w-menu-panel role="menu" hidden>
                     <!-- item-->
-                    <button type="button" class='dropdown-item notify-item'>
+                    <button type="button" class="w-menu__item notify-item" role="menuitem" tabindex="-1">
                         <img src='@static(Weline_Admin::assets/images/flags/zh_CN.jfif)' alt='user-image' class='me-1'
-                             height='12'> <span class='align-middle'><?= __('中国') ?></span>
+                             height='12'> <span data-w-vertical="middle"><?= __('中国') ?></span>
                     </button>
                     <!-- item-->
-                    <button type="button" class="dropdown-item notify-item">
+                    <button type="button" class="w-menu__item notify-item" role="menuitem" tabindex="-1">
                         <img src="@static(Weline_Admin::assets/images/flags/spain.jpg)" alt="user-image" class="me-1"
-                             height="12"> <span class="align-middle">Spanish</span>
+                             height="12"> <span data-w-vertical="middle">Spanish</span>
                     </button>
 
                     <!-- item-->
-                    <button type="button" class="dropdown-item notify-item">
+                    <button type="button" class="w-menu__item notify-item" role="menuitem" tabindex="-1">
                         <img src="@static(Weline_Admin::assets/images/flags/germany.jpg)" alt="user-image" class="me-1"
-                             height="12"> <span class="align-middle">German</span>
+                             height="12"> <span data-w-vertical="middle">German</span>
                     </button>
 
                     <!-- item-->
-                    <button type="button" class="dropdown-item notify-item">
+                    <button type="button" class="w-menu__item notify-item" role="menuitem" tabindex="-1">
                         <img src="@static(Weline_Admin::assets/images/flags/italy.jpg)" alt="user-image" class="me-1"
-                             height="12"> <span class="align-middle">Italian</span>
+                             height="12"> <span data-w-vertical="middle">Italian</span>
                     </button>
 
                     <!-- item-->
-                    <button type="button" class="dropdown-item notify-item">
+                    <button type="button" class="w-menu__item notify-item" role="menuitem" tabindex="-1">
                         <img src="@static(Weline_Admin::assets/images/flags/russia.jpg)" alt="user-image" class="me-1"
-                             height="12"> <span class="align-middle">Russian</span>
+                             height="12"> <span data-w-vertical="middle">Russian</span>
                     </button>
                 </div>
             </div>
 
-            <div class="dropdown d-none d-lg-inline-block ms-1">
-                <button type="button" class="btn header-item noti-icon waves-effect"
-                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <i class="ri-apps-2-line"></i>
+            <div class="w-menu-root ms-1" data-w-display="inline-block" data-w-visible-from="lg" data-w-component="menu">
+                <button type="button" class="w-button header-item noti-icon" aria-haspopup="true" aria-expanded="false" data-w-menu-trigger>
+                    <w:icon name="grid" size="sm"></w:icon>
                 </button>
-                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
-                    <div class="px-lg-2">
-                        <div class="row g-0">
-                            <div class="col">
+                <div class="w-menu dropdown-menu-lg dropdown-menu-end" data-w-menu-panel role="menu" hidden>
+                    <div style="--w-ps-lg:var(--weline-space-2);--w-pe-lg:var(--weline-space-2);">
+                        <div class="w-grid" style="--w-gap:0;">
+                            <div>
                                 <a class="dropdown-icon-item" href="#">
                                     <img src="@static(Weline_Admin::assets/images/brands/github.png)" alt="Github">
                                     <span>GitHub</span>
                                 </a>
                             </div>
-                            <div class="col">
+                            <div>
                                 <a class="dropdown-icon-item" href="#">
                                     <img src="@static(Weline_Admin::assets/images/brands/bitbucket.png)"
                                          alt="bitbucket">
                                     <span>Bitbucket</span>
                                 </a>
                             </div>
-                            <div class="col">
+                            <div>
                                 <a class="dropdown-icon-item" href="#">
                                     <img src="@static(Weline_Admin::assets/images/brands/dribbble.png)" alt="dribbble">
                                     <span>Dribbble</span>
@@ -133,21 +129,21 @@
                             </div>
                         </div>
 
-                        <div class="row g-0">
-                            <div class="col">
+                        <div class="w-grid" style="--w-gap:0;">
+                            <div>
                                 <a class="dropdown-icon-item" href="#">
                                     <img src="@static(Weline_Admin::assets/images/brands/dropbox.png)" alt="dropbox">
                                     <span>Dropbox</span>
                                 </a>
                             </div>
-                            <div class="col">
+                            <div>
                                 <a class="dropdown-icon-item" href="#">
                                     <img src="@static(Weline_Admin::assets/images/brands/mail_chimp.png)"
                                          alt="mail_chimp">
                                     <span>Mail Chimp</span>
                                 </a>
                             </div>
-                            <div class="col">
+                            <div>
                                 <a class="dropdown-icon-item" href="#">
                                     <img src="@static(Weline_Admin::assets/images/brands/slack.png)" alt="slack">
                                     <span>Slack</span>
@@ -158,9 +154,9 @@
                 </div>
             </div>
 
-            <div class="dropdown d-none d-lg-inline-block ms-1">
-                <button type="button" class="btn header-item noti-icon waves-effect" data-toggle="fullscreen">
-                    <i class="ri-fullscreen-line"></i>
+            <div class="w-menu-root ms-1" data-w-display="inline-block" data-w-visible-from="lg" data-w-component="menu">
+                <button type="button" class="w-button header-item noti-icon" data-toggle="fullscreen">
+                    <w:icon name="circle" size="sm"></w:icon>
                 </button>
             </div>
             <!--通知 开始-->
@@ -169,37 +165,30 @@
 
             <!--通知 结束-->
 
-            <div class="dropdown d-inline-block user-dropdown">
+            <div class="w-menu-root user-dropdown" data-w-display="inline-block" data-w-component="menu">
                 <?php
                 /**@var \Weline\Admin\Block\Backend\Page\Topbar $topbar */
                 $topbar = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Admin\Block\Backend\Page\Topbar::class);
                 ?>
-                <button type="button" class="btn header-item waves-effect" id="page-header-user-dropdown"
-                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <img class="rounded-circle header-profile-user"
-                         src="<?= $topbar->getAvatar() ?>"
-                         alt="<?= __('头像') ?>">
-                    <span class="d-none d-xl-inline-block ms-1"><?= $topbar->getUser()->getUsername() ?></span>
-                    <i class="mdi mdi-chevron-down d-none d-xl-inline-block"></i>
+                <button type="button" class="w-button header-item" id="page-header-user-dropdown" aria-haspopup="true" aria-expanded="false" data-w-menu-trigger>
+                    <img class="header-profile-user" src="<?= $topbar->getAvatar() ?>" alt="<?= __('头像') ?>" data-w-radius="round">
+                    <span class="ms-1" data-w-display="inline-block" data-w-visible-from="xl"><?= $topbar->getUser()->getUsername() ?></span>
+                    <w:icon name="chevron-down" size="sm"></w:icon>
                 </button>
-                <div class="dropdown-menu dropdown-menu-end">
+                <div class="w-menu dropdown-menu-end" data-w-menu-panel role="menu" hidden>
                     <!-- item-->
-                    <a class="dropdown-item" href="#"><i class="ri-user-line align-middle me-1"></i><?= __('资料') ?></a>
-                    <a class="dropdown-item" href="#"><i
-                                class="ri-wallet-2-line align-middle me-1"></i> <?= __('我的钱包') ?></a>
-                    <a class="dropdown-item d-block" href="#"><span class="badge bg-success float-end mt-1">11</span><i
-                                class="ri-settings-2-line align-middle me-1"></i> <?= __('设置') ?></a>
-                    <a class="dropdown-item" href="#"><i
-                                class="ri-lock-unlock-line align-middle me-1"></i> <?= __('锁定屏幕') ?></a>
-                    <div class="dropdown-divider"></div>
-                    <a class="dropdown-item text-danger" href="<?= $this->getBackendUrl('admin/login/logout') ?>"><i
-                                class="ri-shut-down-line align-middle me-1 text-danger"></i> <?= __('退出') ?></a>
+                    <a class="w-menu__item" href="#" role="menuitem" tabindex="-1"><w:icon name="user" size="sm"></w:icon><?= __('资料') ?></a>
+                    <a class="w-menu__item" href="#" role="menuitem" tabindex="-1"><w:icon name="circle" size="sm"></w:icon> <?= __('我的钱包') ?></a>
+                    <a class="w-menu__item" href="#" data-w-display="block" role="menuitem" tabindex="-1"><span class="w-badge" data-w-background="success" style="--w-mt:var(--weline-space-1);">11</span><w:icon name="settings" size="sm"></w:icon> <?= __('设置') ?></a>
+                    <a class="w-menu__item" href="#" role="menuitem" tabindex="-1"><w:icon name="unlock" size="sm"></w:icon> <?= __('锁定屏幕') ?></a>
+                    <div class="w-menu__divider"></div>
+                    <a class="w-menu__item w-text" href="<?= $this->getBackendUrl('admin/login/logout') ?>" data-tone="danger" role="menuitem" tabindex="-1"><w:icon name="circle" size="sm"></w:icon> <?= __('退出') ?></a>
                 </div>
             </div>
 
-            <div class="dropdown d-inline-block">
-                <button type="button" class="btn header-item noti-icon right-bar-toggle waves-effect">
-                    <i class="mdi mdi-cog"></i>
+            <div class="w-menu-root" data-w-display="inline-block" data-w-component="menu">
+                <button type="button" class="w-button header-item noti-icon right-bar-toggle">
+                    <w:icon name="settings" size="sm"></w:icon>
                 </button>
             </div>
 

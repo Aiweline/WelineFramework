@@ -10,82 +10,82 @@ $certificates = $certificates ?? [];
 $stats = $stats ?? [];
 ?>
 
-<div class="container-fluid py-4">
+<div class="w-container" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
     <!-- 页面标题 -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">
-            <i class="bi bi-shield-lock me-2"></i>
+    <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-6);">
+        <h4 style="--w-mb:0;">
+            <w:icon name="lock" size="sm"></w:icon>
             <?= __('SSL 证书管理') ?>
         </h4>
         <div>
-            <button type="button" class="btn btn-outline-secondary me-2" data-ssl-action="sync-domains">
-                <i class="bi bi-arrow-repeat me-1"></i>
+            <button type="button" class="w-button me-2" data-ssl-action="sync-domains" data-tone="neutral" data-variant="outline">
+                <w:icon name="circle" size="sm"></w:icon>
                 <?= __('同步域名') ?>
             </button>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#requestModal">
-                <i class="bi bi-plus-lg me-1"></i>
+            <button type="button" class="w-button" data-w-target="#requestModal" data-w-action="dialog.open" data-tone="primary">
+                <w:icon name="plus" size="sm"></w:icon>
                 <?= __('申请证书') ?>
             </button>
         </div>
     </div>
     
     <!-- 统计卡片 -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0 bg-primary bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-file-earmark-lock fs-4 text-primary"></i>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-6);">
+        <div style="--w-span-md:3;">
+            <div class="w-card" data-w-border="none" data-w-shadow="sm">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-align="center">
+                        <div class="bg-opacity-10" data-shrink="false" data-w-background="primary" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <w:icon name="lock" size="sm"></w:icon>
                         </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h3 class="mb-0"><?= $stats['total'] ?? 0 ?></h3>
-                            <small class="text-muted"><?= __('证书总数') ?></small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0 bg-success bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-check-circle fs-4 text-success"></i>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h3 class="mb-0"><?= $stats['https_enabled'] ?? 0 ?></h3>
-                            <small class="text-muted"><?= __('HTTPS 启用') ?></small>
+                        <div class="ms-3" data-grow="true">
+                            <h3 style="--w-mb:0;"><?= $stats['total'] ?? 0 ?></h3>
+                            <small class="w-text" data-tone="muted"><?= __('证书总数') ?></small>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0 bg-warning bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-exclamation-triangle fs-4 text-warning"></i>
+        <div style="--w-span-md:3;">
+            <div class="w-card" data-w-border="none" data-w-shadow="sm">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-align="center">
+                        <div class="bg-opacity-10" data-shrink="false" data-w-background="success" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <w:icon name="check" size="sm"></w:icon>
                         </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h3 class="mb-0"><?= $stats['expiring_soon'] ?? 0 ?></h3>
-                            <small class="text-muted"><?= __('即将过期') ?></small>
+                        <div class="ms-3" data-grow="true">
+                            <h3 style="--w-mb:0;"><?= $stats['https_enabled'] ?? 0 ?></h3>
+                            <small class="w-text" data-tone="muted"><?= __('HTTPS 启用') ?></small>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0 bg-danger bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-x-circle fs-4 text-danger"></i>
+        <div style="--w-span-md:3;">
+            <div class="w-card" data-w-border="none" data-w-shadow="sm">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-align="center">
+                        <div class="bg-opacity-10" data-shrink="false" data-w-background="warning" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <w:icon name="warning" size="sm"></w:icon>
                         </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h3 class="mb-0"><?= $stats['expired'] ?? 0 ?></h3>
-                            <small class="text-muted"><?= __('已过期') ?></small>
+                        <div class="ms-3" data-grow="true">
+                            <h3 style="--w-mb:0;"><?= $stats['expiring_soon'] ?? 0 ?></h3>
+                            <small class="w-text" data-tone="muted"><?= __('即将过期') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="--w-span-md:3;">
+            <div class="w-card" data-w-border="none" data-w-shadow="sm">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-align="center">
+                        <div class="bg-opacity-10" data-shrink="false" data-w-background="danger" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <w:icon name="circle" size="sm"></w:icon>
+                        </div>
+                        <div class="ms-3" data-grow="true">
+                            <h3 style="--w-mb:0;"><?= $stats['expired'] ?? 0 ?></h3>
+                            <small class="w-text" data-tone="muted"><?= __('已过期') ?></small>
                         </div>
                     </div>
                 </div>
@@ -95,42 +95,41 @@ $stats = $stats ?? [];
     
     <!-- 批量操作工具栏 -->
     <div id="sslCertBatchBar" class="ssl-cert-batch-bar" style="display:none;">
-        <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div class="w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-4);">
             <span class="ssl-cert-batch-count">
                 <?= __('已选择') ?> <strong id="sslCertSelectedCount">0</strong> <?= __('项') ?>
             </span>
-            <button type="button" class="btn btn-sm btn-outline-primary" data-ssl-action="batch-renew">
-                <i class="bi bi-arrow-repeat me-1"></i><?= __('批量续签') ?>
+            <button type="button" class="w-button" data-ssl-action="batch-renew" data-tone="primary" data-variant="outline" data-size="sm">
+                <w:icon name="circle" size="sm"></w:icon><?= __('批量续签') ?>
             </button>
-            <button type="button" class="btn btn-sm btn-outline-danger" data-ssl-action="batch-delete">
-                <i class="bi bi-trash me-1"></i><?= __('批量删除') ?>
+            <button type="button" class="w-button" data-ssl-action="batch-delete" data-tone="danger" data-variant="outline" data-size="sm">
+                <w:icon name="trash" size="sm"></w:icon><?= __('批量删除') ?>
             </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-ssl-action="clear-selection">
-                <i class="bi bi-x-lg me-1"></i><?= __('取消选择') ?>
+            <button type="button" class="w-button" data-ssl-action="clear-selection" data-tone="neutral" data-variant="outline" data-size="sm">
+                <w:icon name="circle" size="sm"></w:icon><?= __('取消选择') ?>
             </button>
         </div>
     </div>
 
     <!-- 证书列表 -->
-    <div class="card border-0 shadow-sm">
-        <div class="card-header bg-transparent">
-            <h5 class="mb-0"><?= __('证书列表') ?></h5>
+    <div class="w-card" data-w-border="none" data-w-shadow="sm">
+        <div class="w-card__header">
+            <h5 style="--w-mb:0;"><?= __('证书列表') ?></h5>
         </div>
-        <div class="card-body p-0">
+        <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
             <?php if (empty($certificates)): ?>
-                <div class="text-center py-5">
-                    <i class="bi bi-inbox fs-1 text-muted"></i>
-                    <p class="text-muted mt-2"><?= __('暂无证书记录') ?></p>
-                    <p class="text-muted small"><?= __('点击"申请证书"开始为您的域名申请 SSL 证书') ?></p>
+                <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                    <w:icon name="box" size="sm"></w:icon>
+                    <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);"><?= __('暂无证书记录') ?></p>
+                    <p class="w-text" data-tone="muted" data-size="sm"><?= __('点击"申请证书"开始为您的域名申请 SSL 证书') ?></p>
                 </div>
             <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0" id="sslCertTable">
-                        <thead class="table-light">
+                <div class="w-table-wrap">
+                    <table class="w-table" id="sslCertTable" style="--w-mb:0;">
+                        <thead>
                             <tr>
                                 <th style="width:40px;">
-                                    <input class="form-check-input" type="checkbox" id="sslCertSelectAll"
-                                           data-ssl-change="toggle-all">
+                                    <input type="checkbox" id="sslCertSelectAll" data-ssl-change="toggle-all">
                                 </th>
                                 <th><?= __('域名') ?></th>
                                 <th><?= __('状态') ?></th>
@@ -140,7 +139,7 @@ $stats = $stats ?? [];
                                 <th><?= __('到期时间') ?></th>
                                 <th><?= __('颁发机构') ?></th>
                                 <th><?= __('服务商') ?></th>
-                                <th class="text-end"><?= __('操作') ?></th>
+                                <th class="w-text" data-align="end"><?= __('操作') ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -178,50 +177,36 @@ $stats = $stats ?? [];
                                 ?>
                                 <tr>
                                     <td>
-                                        <input class="form-check-input ssl-cert-row-check" type="checkbox"
-                                               data-domain="<?= $domainAttr ?>"
-                                               data-protected="<?= $isProtectedDomain ? '1' : '0' ?>"
-                                               data-ssl-change="update-selection">
+                                        <input class="ssl-cert-row-check" type="checkbox" data-domain="<?= $domainAttr ?>" data-protected="<?= $isProtectedDomain ? '1' : '0' ?>" data-ssl-change="update-selection">
                                     </td>
                                     <td>
                                         <strong><?= htmlspecialchars($domain) ?></strong>
                                         <?php if ($isProtectedDomain): ?>
-                                            <span class="badge bg-secondary ms-1" style="font-size:0.65em;"><?= __('本地') ?></span>
+                                            <span class="w-badge ms-1" style="font-size:0.65em;" data-w-background="muted"><?= __('本地') ?></span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <span class="badge <?= $statusBadge ?>"><?= $statusText ?></span>
+                                        <span class="w-badge <?= $statusBadge ?>"><?= $statusText ?></span>
                                     </td>
                                     <td>
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox" 
-                                                   id="https_<?= md5($domain) ?>"
-                                                   <?= $httpsEnabled ? 'checked' : '' ?>
-                                                   <?= $status !== 'active' ? 'disabled' : '' ?>
-                                                   data-ssl-change="toggle-https"
-                                                   data-domain="<?= $domainAttr ?>">
+                                        <div class="w-switch">
+                                            <input type="checkbox" id="https_<?= md5($domain) ?>" <?= $httpsEnabled ? 'checked' : '' ?>
+ <?= $status !== 'active' ? 'disabled' : '' ?>
+ data-ssl-change="toggle-https" data-domain="<?= $domainAttr ?>">
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox"
-                                                   id="force_https_<?= $certId ?>"
-                                                   <?= $forceHttps ? 'checked' : '' ?>
-                                                   <?= $status !== 'active' ? 'disabled' : '' ?>
-                                                   data-ssl-change="update-policy"
-                                                   data-cert-id="<?= $certId ?>"
-                                                   data-field="force_https">
+                                        <div class="w-switch">
+                                            <input type="checkbox" id="force_https_<?= $certId ?>" <?= $forceHttps ? 'checked' : '' ?>
+ <?= $status !== 'active' ? 'disabled' : '' ?>
+ data-ssl-change="update-policy" data-cert-id="<?= $certId ?>" data-field="force_https">
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox"
-                                                   id="force_www_<?= $certId ?>"
-                                                   <?= $forceRootToWww ? 'checked' : '' ?>
-                                                   <?= $status !== 'active' ? 'disabled' : '' ?>
-                                                   data-ssl-change="update-policy"
-                                                   data-cert-id="<?= $certId ?>"
-                                                   data-field="force_root_to_www">
+                                        <div class="w-switch">
+                                            <input type="checkbox" id="force_www_<?= $certId ?>" <?= $forceRootToWww ? 'checked' : '' ?>
+ <?= $status !== 'active' ? 'disabled' : '' ?>
+ data-ssl-change="update-policy" data-cert-id="<?= $certId ?>" data-field="force_root_to_www">
                                         </div>
                                     </td>
                                     <td>
@@ -231,12 +216,12 @@ $stats = $stats ?? [];
                                             </span>
                                             <?php if ($daysLeft !== null): ?>
                                                 <br>
-                                                <small class="text-muted">
+                                                <small class="w-text" data-tone="muted">
                                                     <?= $daysLeft > 0 ? __('剩余 %{1} 天', [$daysLeft]) : __('已过期') ?>
                                                 </small>
                                             <?php endif; ?>
                                         <?php else: ?>
-                                            <span class="text-muted">-</span>
+                                            <span class="w-text" data-tone="muted">-</span>
                                         <?php endif; ?>
                                     </td>
                                     <td><?= htmlspecialchars($issuer ?: '-') ?></td>
@@ -251,29 +236,21 @@ $stats = $stats ?? [];
                                         ?>
                                         <?= htmlspecialchars($providerLabel) ?>
                                     </td>
-                                    <td class="text-end">
-                                        <div class="btn-group btn-group-sm">
+                                    <td class="w-text" data-align="end">
+                                        <div class="w-button-group">
                                             <?php if ($status === 'pending' || $status === 'error'): ?>
-                                                <button type="button" class="btn btn-outline-primary"
-                                                        data-ssl-action="request-certificate"
-                                                        data-domain="<?= $domainAttr ?>">
-                                                    <i class="bi bi-download"></i> <?= __('申请') ?>
+                                                <button type="button" class="w-button" data-ssl-action="request-certificate" data-domain="<?= $domainAttr ?>" data-tone="primary" data-variant="outline">
+                                                    <w:icon name="download" size="sm"></w:icon> <?= __('申请') ?>
                                                 </button>
                                             <?php else: ?>
-                                                <button type="button" class="btn btn-outline-primary"
-                                                        data-ssl-action="renew-certificate"
-                                                        data-domain="<?= $domainAttr ?>">
-                                                    <i class="bi bi-arrow-repeat"></i> <?= __('续签') ?>
+                                                <button type="button" class="w-button" data-ssl-action="renew-certificate" data-domain="<?= $domainAttr ?>" data-tone="primary" data-variant="outline">
+                                                    <w:icon name="circle" size="sm"></w:icon> <?= __('续签') ?>
                                                 </button>
                                             <?php endif; ?>
-                                            <button type="button" class="btn btn-outline-danger<?= $isProtectedDomain ? ' disabled' : '' ?>" 
-                                                    title="<?= $isProtectedDomain ? __('本地域名证书不允许删除') : __('删除') ?>"
-                                                    <?= $isProtectedDomain ? 'disabled' : '' ?>
-                                                    <?php if (!$isProtectedDomain): ?>
-                                                        data-ssl-action="delete-certificate"
-                                                        data-domain="<?= $domainAttr ?>"
-                                                    <?php endif; ?>>
-                                                <i class="bi bi-trash me-1"></i><?= __('删除') ?>
+                                            <button type="button" class="w-button btn-outline-danger<?= $isProtectedDomain ? ' disabled' : '' ?>" title="<?= $isProtectedDomain ? __('本地域名证书不允许删除') : __('删除') ?>" <?= $isProtectedDomain ? 'disabled' : '' ?>
+ <?php if (!$isProtectedDomain): ?>
+ data-ssl-action="delete-certificate" data-domain="<?= $domainAttr ?>" <?php endif; ?>>
+                                                <w:icon name="trash" size="sm"></w:icon><?= __('删除') ?>
                                             </button>
                                         </div>
                                     </td>
@@ -287,15 +264,15 @@ $stats = $stats ?? [];
     </div>
     
     <!-- 帮助说明 -->
-    <div class="card border-0 shadow-sm mt-4">
-        <div class="card-header bg-transparent">
-            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i><?= __('使用说明') ?></h5>
+    <div class="w-card" data-w-border="none" data-w-shadow="sm" style="--w-mt:var(--weline-space-6);">
+        <div class="w-card__header">
+            <h5 style="--w-mb:0;"><w:icon name="info" size="sm"></w:icon><?= __('使用说明') ?></h5>
         </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
+        <div class="w-card__body">
+            <div class="w-grid">
+                <div style="--w-span-md:6;">
                     <h6><?= __('命令行操作') ?></h6>
-                    <pre class="bg-light p-3 rounded"><code># <?= __('查看证书状态') ?>
+                    <pre data-w-background="muted" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);"><code># <?= __('查看证书状态') ?>
 php bin/w ssl:auto
 
 # <?= __('申请新证书') ?>
@@ -307,11 +284,11 @@ php bin/w ssl:auto renew
 # <?= __('同步网站域名') ?>
 php bin/w ssl:auto sync -e admin@example.com</code></pre>
                 </div>
-                <div class="col-md-6">
+                <div style="--w-span-md:6;">
                     <h6><?= __('证书存储位置') ?></h6>
-                    <p class="text-muted"><?= __('证书文件存储在：') ?></p>
+                    <p class="w-text" data-tone="muted"><?= __('证书文件存储在：') ?></p>
                     <code>app/etc/ssl/{domain}/</code>
-                    <ul class="mt-2 text-muted small">
+                    <ul class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
                         <li><code>fullchain.pem</code> - <?= __('证书链') ?></li>
                         <li><code>privkey.pem</code> - <?= __('私钥') ?></li>
                         <li><code>chain.pem</code> - <?= __('中间证书') ?></li>
@@ -323,41 +300,39 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
 </div>
 
 <!-- 申请证书模态框 -->
-<div class="modal fade" id="requestModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><?= __('申请 SSL 证书') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="w-dialog" id="requestModal" tabindex="-1" data-w-component="dialog" data-state="closed" hidden aria-hidden="true">
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><?= __('申请 SSL 证书') ?></h5>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <w:form id="requestForm">
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('域名') ?> <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="domain" required 
-                               placeholder="example.com">
-                        <small class="text-muted"><?= __('请确保域名已正确解析到本服务器') ?></small>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('域名') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="text" class="w-input" name="domain" required placeholder="example.com">
+                        <small class="w-text" data-tone="muted"><?= __('请确保域名已正确解析到本服务器') ?></small>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('联系邮箱') ?> <span class="text-danger">*</span></label>
-                        <input type="email" class="form-control" name="email" required 
-                               placeholder="admin@example.com">
-                        <small class="text-muted"><?= __("Let's Encrypt 要求提供联系邮箱") ?></small>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('联系邮箱') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="email" class="w-input" name="email" required placeholder="admin@example.com">
+                        <small class="w-text" data-tone="muted"><?= __("Let's Encrypt 要求提供联系邮箱") ?></small>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('证书提供商') ?> <span class="text-danger">*</span></label>
-                        <select class="form-select" name="provider" required>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('证书提供商') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <select class="w-select" name="provider" required>
                             <option value="letsencrypt"><?= __("Let's Encrypt") ?></option>
                             <option value="litessl"><?= __('LiteSSL') ?></option>
                         </select>
-                        <small class="text-muted"><?= __('默认使用 Let\'s Encrypt，LiteSSL 可用于特定合规场景') ?></small>
+                        <small class="w-text" data-tone="muted"><?= __('默认使用 Let\'s Encrypt，LiteSSL 可用于特定合规场景') ?></small>
                     </div>
                 </w:form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" data-ssl-action="submit-request">
-                    <i class="bi bi-download me-1"></i><?= __('申请证书') ?>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" data-ssl-action="submit-request" data-tone="primary">
+                    <w:icon name="download" size="sm"></w:icon><?= __('申请证书') ?>
                 </button>
             </div>
         </div>
@@ -509,17 +484,17 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
             });
             var result = await response.json();
             if (result.success) {
-                BackendToast.success(result.message);
+                Weline.UI.toast.success(result.message);
                 if (enabled) {
-                    BackendToast.warning('<?= __('请重启服务器使配置生效') ?>');
+                    Weline.UI.toast.warning('<?= __('请重启服务器使配置生效') ?>');
                 }
             } else {
-                BackendToast.error(result.message);
+                Weline.UI.toast.error(result.message);
                 var el = document.getElementById('https_' + btoa(domain).replace(/[^a-zA-Z0-9]/g, ''));
                 if (el) el.checked = !enabled;
             }
         } catch (e) {
-            BackendToast.error(e.message);
+            Weline.UI.toast.error(e.message);
         }
     };
 
@@ -532,25 +507,31 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
             });
             var result = await response.json();
             if (result.success) {
-                BackendToast.success(result.message);
-                BackendToast.warning('<?= __('请重启或热重载服务器使策略生效') ?>');
+                Weline.UI.toast.success(result.message);
+                Weline.UI.toast.warning('<?= __('请重启或热重载服务器使策略生效') ?>');
             } else {
-                BackendToast.error(result.message);
+                Weline.UI.toast.error(result.message);
                 var el = document.getElementById(field === 'force_https' ? 'force_https_' + certId : 'force_www_' + certId);
                 if (el) el.checked = !enabled;
             }
         } catch (e) {
-            BackendToast.error(e.message);
+            Weline.UI.toast.error(e.message);
         }
     };
 
     window.requestCertificate = async function(domain) {
-        BackendConfirm.show('<?= __('确定要为此域名申请证书吗？') ?>').then(function(confirmed) {
+        Weline.UI.dialog.confirm('<?= __('确定要为此域名申请证书吗？') ?>').then(function(confirmed) {
             if (!confirmed) return;
-            BackendConfirm.showInput('<?= __('请输入联系邮箱') ?>', {defaultValue: 'admin@' + domain}).then(async function(email) {
+            Weline.UI.dialog.request({
+                title: '<?= __('请输入联系邮箱') ?>',
+                cancelable: true,
+                field: {type: 'email', value: 'admin@' + domain, required: true}
+            }).then(async function(promptResult) {
+                if (!promptResult.confirmed) return;
+                var email = promptResult.value;
                 if (!email) return;
                 var provider = getSelectedProvider();
-                BackendToast.info('<?= __('正在申请证书，请稍候...') ?>');
+                Weline.UI.toast.info('<?= __('正在申请证书，请稍候...') ?>');
                 try {
                     var response = await bqAdmin['server'](baseUrl + 'request', {
                         method: 'POST',
@@ -559,22 +540,22 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
                     });
                     var result = await response.json();
                     if (result.success) {
-                        BackendToast.success(result.message);
+                        Weline.UI.toast.success(result.message);
                         setTimeout(function() { location.reload(); }, 1500);
                     } else {
-                        BackendToast.error(result.message);
+                        Weline.UI.toast.error(result.message);
                     }
                 } catch (e) {
-                    BackendToast.error(e.message);
+                    Weline.UI.toast.error(e.message);
                 }
             });
         });
     };
 
     window.renewCertificate = async function(domain) {
-        BackendConfirm.show('<?= __('确定要续签此证书吗？') ?>').then(async function(confirmed) {
+        Weline.UI.dialog.confirm('<?= __('确定要续签此证书吗？') ?>').then(async function(confirmed) {
             if (!confirmed) return;
-            BackendToast.info('<?= __('正在续签证书，请稍候...') ?>');
+            Weline.UI.toast.info('<?= __('正在续签证书，请稍候...') ?>');
             try {
                 var response = await bqAdmin['server'](baseUrl + 'renew', {
                     method: 'POST',
@@ -583,19 +564,19 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
                 });
                 var result = await response.json();
                 if (result.success) {
-                    BackendToast.success(result.message);
+                    Weline.UI.toast.success(result.message);
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
-                    BackendToast.error(result.message);
+                    Weline.UI.toast.error(result.message);
                 }
             } catch (e) {
-                BackendToast.error(e.message);
+                Weline.UI.toast.error(e.message);
             }
         });
     };
 
     window.deleteCertificate = async function(domain) {
-        BackendConfirm.show('<?= __('确定要删除此证书吗？此操作不可恢复！') ?>').then(async function(confirmed) {
+        Weline.UI.dialog.confirm('<?= __('确定要删除此证书吗？此操作不可恢复！') ?>').then(async function(confirmed) {
             if (!confirmed) return;
             try {
                 var response = await bqAdmin['server'](baseUrl + 'delete', {
@@ -605,19 +586,25 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
                 });
                 var result = await response.json();
                 if (result.success) {
-                    BackendToast.success(result.message);
+                    Weline.UI.toast.success(result.message);
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
-                    BackendToast.error(result.message);
+                    Weline.UI.toast.error(result.message);
                 }
             } catch (e) {
-                BackendToast.error(e.message);
+                Weline.UI.toast.error(e.message);
             }
         });
     };
 
     window.syncDomains = function() {
-        BackendConfirm.showInput('<?= __('请输入联系邮箱（用于申请证书）') ?>', {defaultValue: 'admin@localhost'}).then(async function(email) {
+        Weline.UI.dialog.request({
+            title: '<?= __('请输入联系邮箱（用于申请证书）') ?>',
+            cancelable: true,
+            field: {type: 'email', value: 'admin@localhost', required: true}
+        }).then(async function(promptResult) {
+            if (!promptResult.confirmed) return;
+            var email = promptResult.value;
             if (!email) return;
             try {
                 var response = await bqAdmin['server'](baseUrl + 'sync', {
@@ -627,13 +614,13 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
                 });
                 var result = await response.json();
                 if (result.success) {
-                    BackendToast.success(result.message);
+                    Weline.UI.toast.success(result.message);
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
-                    BackendToast.error(result.message);
+                    Weline.UI.toast.error(result.message);
                 }
             } catch (e) {
-                BackendToast.error(e.message);
+                Weline.UI.toast.error(e.message);
             }
         });
     };
@@ -641,7 +628,7 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
     window.submitRequest = async function() {
         var form = document.getElementById('requestForm');
         var formData = new FormData(form);
-        BackendToast.info('<?= __('正在申请证书，请稍候...') ?>');
+        Weline.UI.toast.info('<?= __('正在申请证书，请稍候...') ?>');
         try {
             var response = await bqAdmin['server'](baseUrl + 'request', {
                 method: 'POST',
@@ -649,14 +636,14 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
             });
             var result = await response.json();
             if (result.success) {
-                BackendToast.success(result.message);
+                Weline.UI.toast.success(result.message);
                 hideRequestModal();
                 setTimeout(function() { location.reload(); }, 1500);
             } else {
-                BackendToast.error(result.message);
+                Weline.UI.toast.error(result.message);
             }
         } catch (e) {
-            BackendToast.error(e.message);
+            Weline.UI.toast.error(e.message);
         }
     };
 
@@ -720,9 +707,9 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
 
         if (domains.length === 0) {
             if (protectedCount > 0) {
-                BackendToast.warning('<?= __('所选证书均为本地域名证书，不允许删除') ?>');
+                Weline.UI.toast.warning('<?= __('所选证书均为本地域名证书，不允许删除') ?>');
             } else {
-                BackendToast.warning('<?= __('请先选择要删除的证书') ?>');
+                Weline.UI.toast.warning('<?= __('请先选择要删除的证书') ?>');
             }
             return;
         }
@@ -732,9 +719,9 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
             msg += '\n<?= __('（本地域名证书将被自动跳过）') ?>';
         }
 
-        BackendConfirm.show(msg).then(async function(confirmed) {
+        Weline.UI.dialog.confirm(msg).then(async function(confirmed) {
             if (!confirmed) return;
-            BackendToast.info('<?= __('正在批量删除，请稍候...') ?>');
+            Weline.UI.toast.info('<?= __('正在批量删除，请稍候...') ?>');
             try {
                 var body = new URLSearchParams();
                 domains.forEach(function(d) { body.append('domains[]', d); });
@@ -744,13 +731,13 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
                 });
                 var result = await response.json();
                 if (result.success) {
-                    BackendToast.success(result.message);
+                    Weline.UI.toast.success(result.message);
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
-                    BackendToast.error(result.message);
+                    Weline.UI.toast.error(result.message);
                 }
             } catch (e) {
-                BackendToast.error(e.message);
+                Weline.UI.toast.error(e.message);
             }
         });
     };
@@ -758,13 +745,13 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
     SslCertBatch.batchRenew = function() {
         var domains = getAllCheckedDomains();
         if (domains.length === 0) {
-            BackendToast.warning('<?= __('请先选择要续签的证书') ?>');
+            Weline.UI.toast.warning('<?= __('请先选择要续签的证书') ?>');
             return;
         }
 
-        BackendConfirm.show('<?= __('确定要批量续签选中的 ') ?>' + domains.length + ' <?= __(' 个证书吗？') ?>').then(async function(confirmed) {
+        Weline.UI.dialog.confirm('<?= __('确定要批量续签选中的 ') ?>' + domains.length + ' <?= __(' 个证书吗？') ?>').then(async function(confirmed) {
             if (!confirmed) return;
-            BackendToast.info('<?= __('正在批量续签，请稍候...') ?>');
+            Weline.UI.toast.info('<?= __('正在批量续签，请稍候...') ?>');
             try {
                 var body = new URLSearchParams();
                 domains.forEach(function(d) { body.append('domains[]', d); });
@@ -774,16 +761,16 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
                 });
                 var result = await response.json();
                 if (result.success) {
-                    BackendToast.success(result.message);
+                    Weline.UI.toast.success(result.message);
                 } else {
-                    BackendToast.warning(result.message);
+                    Weline.UI.toast.warning(result.message);
                 }
                 if (result.errors && result.errors.length > 0) {
-                    result.errors.forEach(function(err) { BackendToast.error(err); });
+                    result.errors.forEach(function(err) { Weline.UI.toast.error(err); });
                 }
                 setTimeout(function() { location.reload(); }, 2000);
             } catch (e) {
-                BackendToast.error(e.message);
+                Weline.UI.toast.error(e.message);
             }
         });
     };

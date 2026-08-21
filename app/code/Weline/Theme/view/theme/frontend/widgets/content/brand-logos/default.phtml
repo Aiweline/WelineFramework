@@ -58,7 +58,7 @@ $widgetId = 'brand-logos-' . uniqid();
     <div class="brands-container layout-<?= htmlspecialchars($layout) ?>">
         <?php if ($layout === 'carousel'): ?>
             <button class="carousel-arrow carousel-prev" type="button">
-                <i class="ri-arrow-left-s-line"></i>
+                <w:icon name="arrow-left" size="sm"></w:icon>
             </button>
         <?php endif; ?>
         
@@ -79,7 +79,7 @@ $widgetId = 'brand-logos-' . uniqid();
         
         <?php if ($layout === 'carousel'): ?>
             <button class="carousel-arrow carousel-next" type="button">
-                <i class="ri-arrow-right-s-line"></i>
+                <w:icon name="arrow-right" size="sm"></w:icon>
             </button>
         <?php endif; ?>
     </div>

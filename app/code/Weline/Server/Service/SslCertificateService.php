@@ -6342,7 +6342,7 @@ CNF;
             // 发送系统通知
             w_msg('ssl_cert_expired', 'error', $title, $content, [
                 'priority' => 9,
-                'icon' => 'ri-shield-keyhole-line',
+                'icon' => 'shield',
                 'metadata' => [
                     'domain' => $domain,
                     'cert_id' => $cert['cert_id'],

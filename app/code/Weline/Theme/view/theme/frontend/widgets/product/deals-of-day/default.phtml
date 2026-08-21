@@ -60,7 +60,7 @@ $widgetId = 'deals-of-day-' . uniqid();
         <div class="header-left">
             <?php if ($title): ?>
                 <h2 class="widget-title">
-                    <i class="ri-flashlight-fill" style="color: #ffc107;"></i>
+                    <w:icon name="bolt" size="sm"></w:icon>
                     <?= htmlspecialchars($title) ?>
                 </h2>
             <?php endif; ?>
@@ -118,10 +118,10 @@ $widgetId = 'deals-of-day-' . uniqid();
                         
                         <div class="product-actions">
                             <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
-                                <i class="ri-heart-line"></i>
+                                <w:icon name="heart" size="sm"></w:icon>
                             </button>
                             <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
-                                <i class="ri-eye-line"></i>
+                                <w:icon name="eye" size="sm"></w:icon>
                             </button>
                         </div>
                     </div>
@@ -136,7 +136,7 @@ $widgetId = 'deals-of-day-' . uniqid();
                         <div class="product-rating">
                             <div class="stars">
                                 <?php for ($s = 1; $s <= 5; $s++): ?>
-                                    <i class="ri-star-<?= $s <= floor($product['rating']) ? 'fill' : 'line' ?>"></i>
+                                    <span class="w-rating-star" data-state="<?= $s <= floor($product['rating']) ? 'filled' : 'empty' ?>"><w:icon name="star" size="sm"></w:icon></span>
                                 <?php endfor; ?>
                             </div>
                             <span class="review-count">(<?= $product['review_count'] ?>)</span>
@@ -149,7 +149,7 @@ $widgetId = 'deals-of-day-' . uniqid();
                         
                         <?php if ($showStockBar): ?>
                             <div class="stock-progress">
-                                <div class="progress-bar">
+                                <div class="w-progress__bar">
                                     <div class="progress-fill" style="width: <?= ($product['stock_sold'] / $product['stock_total']) * 100 ?>%;"></div>
                                 </div>
                                 <div class="stock-info">
@@ -160,7 +160,7 @@ $widgetId = 'deals-of-day-' . uniqid();
                         <?php endif; ?>
                         
                         <button class="btn-add-to-cart btn-deal" data-product-id="<?= $product['id'] ?>">
-                            <i class="ri-flashlight-fill"></i>
+                            <w:icon name="bolt" size="sm"></w:icon>
                             <span><?= __('立即抢购') ?></span>
                         </button>
                     </div>
@@ -300,11 +300,11 @@ $widgetId = 'deals-of-day-' . uniqid();
     background: linear-gradient(135deg, #ee5253, #dc3545);
 }
 
-.widget-deals-of-day .product-rating .stars i {
+.widget-deals-of-day .product-rating .stars .w-rating-star {
     color: #ffc107;
 }
 
-.widget-deals-of-day .product-rating .stars i.ri-star-line {
+.widget-deals-of-day .product-rating .stars .w-rating-star[data-state="empty"] {
     color: #ddd;
 }
 

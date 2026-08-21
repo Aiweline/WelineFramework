@@ -7,13 +7,13 @@
          title="API集成"
          action="api/backend/integration/index"
          parent="Weline_Backend::system_service_group"
-         icon="mdi mdi-api"
+         icon="code"
          order="30550">
         <menu source="Weline_Api::api_user_management"
              name="api_user_management"
              title="API管理"
              action="api/backend/user"
-             icon="mdi mdi-account-key"
+             icon="user"
              order="10"/>
     </menu>
 </menus>

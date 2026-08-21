@@ -17,7 +17,7 @@ final class OperationsDiagnostics extends BackendController
     #[Acl(
         'Weline_Backend::commerce:operations:migration-diagnostics',
         '迁移诊断',
-        'mdi-database-search-outline',
+        'search',
         '只读查看迁移克隆与检查点状态',
         'Weline_Backend::commerce:operations:group',
     )]
@@ -31,7 +31,7 @@ final class OperationsDiagnostics extends BackendController
     #[Acl(
         'Weline_Backend::commerce:operations:release-diagnostics',
         '发布诊断',
-        'mdi-rocket-launch-outline',
+        'circle',
         '只读查看发布环境与当前标记',
         'Weline_Backend::commerce:operations:group',
     )]

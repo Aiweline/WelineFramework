@@ -22,12 +22,12 @@ $statusLabels = [
     'purged' => __('已清理'),
 ];
 ?>
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Trash::item" order_field="order" name_field="title"></breadcrumb></h4>
-            <a class="btn btn-outline-secondary" href="<?= $this->getBackendUrl('trash/backend/item/listing') ?>">
-                <i class="mdi mdi-arrow-left"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Trash::item" order_field="order" name_field="title"></breadcrumb></h4>
+            <a class="w-button" href="<?= $this->getBackendUrl('trash/backend/item/listing') ?>" data-tone="neutral" data-variant="outline">
+                <w:icon name="arrow-left" size="sm"></w:icon>
                 <?= __('返回列表') ?>
             </a>
         </div>
@@ -45,10 +45,10 @@ $statusLabels = [
 }
 html[data-theme-mode="dark"] .trash-detail,
 html[data-layout-mode="dark"] .trash-detail,
-html[data-bs-theme="dark"] .trash-detail,
+html[data-theme="dark"] .trash-detail,
 body[data-theme-mode="dark"] .trash-detail,
 body[data-layout-mode="dark"] .trash-detail,
-body[data-bs-theme="dark"] .trash-detail {
+body[data-theme="dark"] .trash-detail {
     --trash-surface: rgba(15, 23, 42, 0.94);
     --trash-soft: rgba(17, 24, 39, 0.96);
     --trash-border: rgba(148, 163, 184, 0.22);
@@ -111,10 +111,10 @@ body[data-bs-theme="dark"] .trash-detail {
 </style>
 
 <div class="trash-detail">
-    <div class="trash-panel mb-3">
-        <div class="trash-panel__head d-flex align-items-center justify-content-between gap-2">
+    <div class="trash-panel" style="--w-mb:var(--weline-space-4);">
+        <div class="trash-panel__head w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
             <span><?= $esc((string)($item['label'] ?? '')) ?></span>
-            <span class="badge bg-secondary"><?= $esc($statusLabels[$status] ?? $status) ?></span>
+            <span class="w-badge" data-w-background="muted"><?= $esc($statusLabels[$status] ?? $status) ?></span>
         </div>
         <div class="trash-panel__body">
             <div class="trash-meta">
@@ -137,23 +137,23 @@ body[data-bs-theme="dark"] .trash-detail {
                 </div>
             </div>
             <?php if (!empty($item['last_error'])): ?>
-                <div class="alert alert-danger mt-3 mb-0">
+                <div class="w-alert" data-tone="danger" style="--w-mt:var(--weline-space-4);--w-mb:0;">
                     <?= $esc((string)$item['last_error']) ?>
                 </div>
             <?php endif; ?>
             <?php if ($open): ?>
-                <div class="d-flex flex-wrap gap-2 mt-3">
+                <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-4);">
                     <w:form method="post" action="@var($this->getBackendUrl('trash/backend/item/restore'))">
                         <input type="hidden" name="trash_id" value="<?= $trashId ?>">
-                        <button class="btn btn-success" type="submit">
-                            <i class="mdi mdi-restore"></i>
+                        <button class="w-button" type="submit" data-tone="success">
+                            <w:icon name="store" size="sm"></w:icon>
                             <?= __('恢复') ?>
                         </button>
                     </w:form>
                     <w:form method="post" action="@var($this->getBackendUrl('trash/backend/item/purge'))">
                         <input type="hidden" name="trash_id" value="<?= $trashId ?>">
-                        <button class="btn btn-outline-danger" type="submit">
-                            <i class="mdi mdi-delete-forever-outline"></i>
+                        <button class="w-button" type="submit" data-tone="danger" data-variant="outline">
+                            <w:icon name="trash" size="sm"></w:icon>
                             <?= __('永久清理') ?>
                         </button>
                     </w:form>
@@ -162,17 +162,17 @@ body[data-bs-theme="dark"] .trash-detail {
         </div>
     </div>
 
-    <div class="trash-panel mb-3">
+    <div class="trash-panel" style="--w-mb:var(--weline-space-4);">
         <div class="trash-panel__head"><?= __('摘要数据') ?></div>
         <div class="trash-panel__body"><pre><?= $json($item['summary'] ?? null) ?></pre></div>
     </div>
 
-    <div class="trash-panel mb-3">
+    <div class="trash-panel" style="--w-mb:var(--weline-space-4);">
         <div class="trash-panel__head"><?= __('原始存储形态') ?></div>
         <div class="trash-panel__body"><pre><?= $json($item['raw_data'] ?? null) ?></pre></div>
     </div>
 
-    <div class="trash-panel mb-3">
+    <div class="trash-panel" style="--w-mb:var(--weline-space-4);">
         <div class="trash-panel__head"><?= __('作用域与上下文') ?></div>
         <div class="trash-panel__body"><pre><?= $json([
             'scope' => $item['scope'] ?? null,
@@ -181,7 +181,7 @@ body[data-bs-theme="dark"] .trash-detail {
     </div>
 
     <?php if (!empty($item['last_error_detail'])): ?>
-        <div class="trash-panel mb-3">
+        <div class="trash-panel" style="--w-mb:var(--weline-space-4);">
             <div class="trash-panel__head"><?= __('错误详情') ?></div>
             <div class="trash-panel__body"><pre><?= $json($item['last_error_detail']) ?></pre></div>
         </div>

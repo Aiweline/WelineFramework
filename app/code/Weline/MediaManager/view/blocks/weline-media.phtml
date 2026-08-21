@@ -2,8 +2,7 @@
 @template(Weline_FileManager::image-preview/template-v3.phtml)
 
 <!-- 触发按钮 -->
-<button type="button" class="btn btn-primary btn-sm waves-effect waves-light"
-        data-wm-open="{{target}}">{{title}}</button>
+<button type="button" class="w-button waves-light" data-wm-open="{{target}}" data-tone="primary" data-size="sm">{{title}}</button>
 <if condition="ext !== '*'"><br><span>@lang{允许的文件类型：}({{ext}})</span></if>
 <br>
 <span>@lang{允许的文件大小：}{{size_alias}}</span>
@@ -189,8 +188,8 @@ body.wm-media-manager-open .file-target-preview * {
         var overlay = document.getElementById(targetId + '-modal-overlay');
         var iframe = document.getElementById(targetId + '-file-manager-iframe');
         if (!overlay) {
-            if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-                window.BackendToast.error('<?= __('媒体选择器初始化失败，请刷新页面后重试。') ?>');
+            if (window.Weline.UI.toast && typeof window.Weline.UI.toast.error === 'function') {
+                window.Weline.UI.toast.error('<?= __('媒体选择器初始化失败，请刷新页面后重试。') ?>');
             } else {
                 console.error('Media modal not found');
             }

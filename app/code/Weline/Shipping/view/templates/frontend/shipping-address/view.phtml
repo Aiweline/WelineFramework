@@ -4,14 +4,14 @@ $address = $this->getData('address');
 $frontendUrl = $this->getUrl('');
 ?>
 <div class="shipping-address-view">
-    <div class="page-header mb-4">
+    <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h2><?= __('发货地址详情') ?></h2>
         <div>
-            <a href="<?= $frontendUrl ?>shipping/address/form?id=<?= $address->getId() ?>" class="btn btn-primary">
-                <i class="ri-edit-line"></i> <?= __('编辑') ?>
+            <a href="<?= $frontendUrl ?>shipping/address/form?id=<?= $address->getId() ?>" class="w-button" data-tone="primary">
+                <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
             </a>
-            <a href="<?= $frontendUrl ?>shipping/address/index" class="btn btn-secondary">
-                <i class="ri-arrow-left-line"></i> <?= __('返回列表') ?>
+            <a href="<?= $frontendUrl ?>shipping/address/index" class="w-button" data-tone="neutral">
+                <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
             </a>
         </div>
     </div>
@@ -21,7 +21,7 @@ $frontendUrl = $this->getUrl('');
             <div class="detail-header">
                 <h3><?= htmlspecialchars($address->getData('name')) ?></h3>
                 <?php if ($address->isDefault()): ?>
-                    <span class="badge bg-primary"><?= __('默认地址') ?></span>
+                    <span class="w-badge" data-w-background="primary"><?= __('默认地址') ?></span>
                 <?php endif; ?>
             </div>
             <div class="detail-content">
@@ -76,7 +76,7 @@ $frontendUrl = $this->getUrl('');
             </div>
         </div>
     <?php else: ?>
-        <div class="alert alert-warning">
+        <div class="w-alert" data-tone="warning">
             <?= __('地址不存在') ?>
         </div>
     <?php endif; ?>

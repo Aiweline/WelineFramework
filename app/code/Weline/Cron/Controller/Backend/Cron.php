@@ -31,13 +31,13 @@ use Weline\Framework\Setup\Lock\SetupDatabaseAccessLock;
 #[Acl(
     'Weline_Cron::cron_pc_root',
     '计划任务接口',
-    'mdi mdi-clock-outline',
+    'clock',
     '计划任务后台（列表、锁定、手动运行等）',
     'Weline_Cron::system_cron'
 )]
 class Cron extends \Weline\Framework\App\Controller\BackendController
 {
-    #[Acl('Weline_Cron::cron_listing', '计划任务列表', 'mdi mdi-format-list-bulleted', '查看计划任务列表')]
+    #[Acl('Weline_Cron::cron_listing', '计划任务列表', 'list', '查看计划任务列表')]
     public function listing()
     {
         /** @var CronTask $cronTask */
@@ -190,7 +190,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         return $byName->getId() ? $byName : null;
     }
 
-    #[Acl('Weline_Cron::cron_lock', '锁定计划任务', 'mdi mdi-lock', '锁定定时任务')]
+    #[Acl('Weline_Cron::cron_lock', '锁定计划任务', 'lock', '锁定定时任务')]
     public function lock(): string
     {
         $task_id = $this->request->getPost('task_id');
@@ -219,7 +219,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    #[Acl('Weline_Cron::cron_unlock', '解锁计划任务', 'mdi mdi-lock-open', '解锁定时任务')]
+    #[Acl('Weline_Cron::cron_unlock', '解锁计划任务', 'lock', '解锁定时任务')]
     public function unlock(): string
     {
         $task_id = $this->request->getPost('task_id');
@@ -297,7 +297,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         return $task;
     }
 
-    #[Acl('Weline_Cron::cron_run_help', '手动运行帮助', 'mdi mdi-help-circle-outline', '计划任务 SSE 手动运行说明 JSON')]
+    #[Acl('Weline_Cron::cron_run_help', '手动运行帮助', 'help', '计划任务 SSE 手动运行说明 JSON')]
     public function getRunHelp(): string
     {
         $this->layoutType = null;
@@ -310,13 +310,13 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         );
     }
 
-    #[Acl('Weline_Cron::cron_run_stream_get', '手动运行SSE（GET）', 'mdi mdi-play-network', '计划任务真实执行 SSE 流（GET 兼容入口）')]
+    #[Acl('Weline_Cron::cron_run_stream_get', '手动运行SSE（GET）', 'play', '计划任务真实执行 SSE 流（GET 兼容入口）')]
     public function getRunStream(): void
     {
         $this->streamManualRun();
     }
 
-    #[Acl('Weline_Cron::cron_run_stream', '手动运行SSE', 'mdi mdi-play-network', '计划任务真实执行 SSE 流')]
+    #[Acl('Weline_Cron::cron_run_stream', '手动运行SSE', 'play', '计划任务真实执行 SSE 流')]
     public function postRunStream(): void
     {
         $this->streamManualRun();
@@ -384,7 +384,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $streamer->stream($executeName, $suffix, new SseWriter());
     }
 
-    #[Acl('Weline_Cron::cron_run_log_list', '运行日志列表', 'mdi mdi-history', '计划任务调度日志历史与当前文件信息', 'Weline_Cron::cron_pc_root')]
+    #[Acl('Weline_Cron::cron_run_log_list', '运行日志列表', 'history', '计划任务调度日志历史与当前文件信息', 'Weline_Cron::cron_pc_root')]
     public function runLogList(): string
     {
         $this->layoutType = null;
@@ -397,7 +397,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         );
     }
 
-    #[Acl('Weline_Cron::cron_run_log_content', '运行日志内容', 'mdi mdi-file-document-outline', '读取单次调度归档日志全文', 'Weline_Cron::cron_pc_root')]
+    #[Acl('Weline_Cron::cron_run_log_content', '运行日志内容', 'file', '读取单次调度归档日志全文', 'Weline_Cron::cron_pc_root')]
     public function runLogContent(): string
     {
         $this->layoutType = null;
@@ -425,13 +425,13 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         return (string)\json_encode($result['data'], JSON_UNESCAPED_UNICODE);
     }
 
-    #[Acl('Weline_Cron::cron_run_log_stream_get', '运行日志SSE（GET）', 'mdi mdi-access-point', '当前调度日志实时尾随（GET 兼容入口）', 'Weline_Cron::cron_pc_root')]
+    #[Acl('Weline_Cron::cron_run_log_stream_get', '运行日志SSE（GET）', 'wifi', '当前调度日志实时尾随（GET 兼容入口）', 'Weline_Cron::cron_pc_root')]
     public function getRunLogStream(): void
     {
         $this->streamRunLog();
     }
 
-    #[Acl('Weline_Cron::cron_run_log', '运行日志SSE', 'mdi mdi-access-point', '当前调度日志实时尾随（SSE）', 'Weline_Cron::cron_pc_root')]
+    #[Acl('Weline_Cron::cron_run_log', '运行日志SSE', 'wifi', '当前调度日志实时尾随（SSE）', 'Weline_Cron::cron_pc_root')]
     public function postRunLogStream(): void
     {
         $this->streamRunLog();

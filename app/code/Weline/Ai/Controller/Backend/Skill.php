@@ -16,10 +16,10 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Ai::ai_skill_list', 'AI skill governance', 'mdi-shape-outline', 'AI skill list and governance', 'Weline_Backend::ai_group')]
+#[Acl('Weline_Ai::ai_skill_list', 'AI skill governance', 'circle', 'AI skill list and governance', 'Weline_Backend::ai_group')]
 class Skill extends BackendController
 {
-    #[Acl('Weline_Ai::ai_skill_index', 'AI skill list', 'mdi-view-list', 'View AI skills')]
+    #[Acl('Weline_Ai::ai_skill_index', 'AI skill list', 'list', 'View AI skills')]
     public function index(): string
     {
         if ($this->request->getGet('embed') === '1') {
@@ -33,19 +33,19 @@ class Skill extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Ai::ai_skill_view', 'AI skill catalog', 'mdi-tag-multiple', 'View AI skill catalog')]
+    #[Acl('Weline_Ai::ai_skill_view', 'AI skill catalog', 'tag', 'View AI skill catalog')]
     public function getCatalog(): string
     {
         return $this->catalogResponse(false);
     }
 
-    #[Acl('Weline_Ai::ai_skill_view', 'AI skill catalog', 'mdi-tag-multiple', 'View AI skill catalog')]
+    #[Acl('Weline_Ai::ai_skill_view', 'AI skill catalog', 'tag', 'View AI skill catalog')]
     public function postCatalog(): string
     {
         return $this->catalogResponse(true);
     }
 
-    #[Acl('Weline_Ai::ai_skill_view', 'AI adapter catalog', 'mdi-vector-link', 'View AI scenario adapters')]
+    #[Acl('Weline_Ai::ai_skill_view', 'AI adapter catalog', 'link', 'View AI scenario adapters')]
     public function postAdapters(): string
     {
         return $this->jsonResponse([
@@ -54,7 +54,7 @@ class Skill extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Ai::ai_skill_save', 'Save AI skill', 'mdi-content-save', 'Save AI custom skill')]
+    #[Acl('Weline_Ai::ai_skill_save', 'Save AI skill', 'save', 'Save AI custom skill')]
     public function postSave(): string
     {
         $code = (string)$this->bodyValue('code', '');
@@ -101,7 +101,7 @@ class Skill extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_skill_save', 'Set AI skill status', 'mdi-toggle-switch', 'Enable, pend, or disable AI skill')]
+    #[Acl('Weline_Ai::ai_skill_save', 'Set AI skill status', 'switch', 'Enable, pend, or disable AI skill')]
     public function postSetStatus(): string
     {
         $code = \trim((string)$this->bodyValue('code', ''));
@@ -138,7 +138,7 @@ class Skill extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_skill_disable', 'Disable AI skill', 'mdi-close-circle-outline', 'Disable AI custom/imported skill')]
+    #[Acl('Weline_Ai::ai_skill_disable', 'Disable AI skill', 'close', 'Disable AI custom/imported skill')]
     public function postDisable(): string
     {
         $code = \trim((string)$this->bodyValue('code', ''));
@@ -165,7 +165,7 @@ class Skill extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_skill_import', 'Import AI skill', 'mdi-import', 'Import AI skill from URL')]
+    #[Acl('Weline_Ai::ai_skill_import', 'Import AI skill', 'import', 'Import AI skill from URL')]
     public function postImportUrl(): string
     {
         $url = \trim((string)$this->bodyValue('url', ''));
@@ -188,7 +188,7 @@ class Skill extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_skill_export', 'Export AI skill', 'mdi-export', 'Export AI skill package')]
+    #[Acl('Weline_Ai::ai_skill_export', 'Export AI skill', 'export', 'Export AI skill package')]
     public function getExport(): string
     {
         $code = \trim((string)$this->request->getGet('code', ''));
@@ -202,7 +202,7 @@ class Skill extends BackendController
         return \json_encode($this->exporter()->exportPackage($skill), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    #[Acl('Weline_Ai::ai_adapter_skill_manage', 'Manage adapter skills', 'mdi-link-variant', 'Manage manual adapter skill bindings')]
+    #[Acl('Weline_Ai::ai_adapter_skill_manage', 'Manage adapter skills', 'link', 'Manage manual adapter skill bindings')]
     public function postBindAdapterSkill(): string
     {
         $adapterCode = \trim((string)$this->bodyValue('adapter_code', ''));
@@ -227,7 +227,7 @@ class Skill extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_adapter_skill_manage', 'Manage adapter skills', 'mdi-link-variant-off', 'Manage manual adapter skill bindings')]
+    #[Acl('Weline_Ai::ai_adapter_skill_manage', 'Manage adapter skills', 'link', 'Manage manual adapter skill bindings')]
     public function postUnbindAdapterSkill(): string
     {
         $adapterCode = \trim((string)$this->bodyValue('adapter_code', ''));

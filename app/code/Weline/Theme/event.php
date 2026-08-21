@@ -24,4 +24,8 @@ return [
         'description' => __('Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result.'),
         'doc' => 'theme_editor_result_after.md',
     ],
+    'Weline_Theme_Font::warmup_collect' => [
+        'name' => __('字体子集预热收集'),
+        'description' => __('系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。'),
+    ],
 ];

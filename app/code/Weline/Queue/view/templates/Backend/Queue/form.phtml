@@ -36,7 +36,6 @@ if (!is_string($queueFormBootJson)) {
     $queueFormBootJson = '{"dir":"","module":"","params":{"queue_id":"","type_id":"","attributes":[],"name":"","biz_key":""},"active_name":"progress-select-queueData","queue_types":[]}';
 }
 ?>
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <w:js>Weline_Backend::/backend/lib/vue/vue2.6.11.js</w:js>
 <w:css>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.css</w:css>
 <style>
@@ -218,26 +217,21 @@ span.required {
 </style>
 
 <div class="weline-queue-form" id="QueuePage">
-    <div class='card'>
-        <div class='card-body overflow-hidden'>
+    <div class="w-card">
+        <div class="w-card__body" data-w-overflow="hidden">
             <div id='progress-wizard' class='twitter-bs-wizard'>
                 <ul class='twitter-bs-wizard-nav nav-justified'>
-                    <li class='nav-item nav-link' :class="{active:activeName=='progress-select-queueData'}"
-                        @click="changeNav('progress-select-queueData')" scope="queue" name="progress"
-                        value="progress-select-queueData">
+                    <li :class="{active:activeName=='progress-select-queueData'}" scope="queue" name="progress" value="progress-select-queueData">
                         <span class='step-number'>01</span>
                         <span class='step-title'>
                                 <lang>选择队列类型</lang>
                             </span>
                         <span class='help-block' v-if="params.type_id !== ''">
                                 <lang>你选择了</lang>
-                                <span class='text-primary'
-                                      v-text="'('+ findLabel(queue_types,params.type_id,'type_id','name')+')'"></span>
+                                <span class="w-text" v-text="'('+ findLabel(queue_types,params.type_id,'type_id','name')+')'" data-tone="primary"></span>
                             </span>
                     </li>
-                    <li class='nav-item nav-link' :class="{active:activeName=='progress-params'}"
-                        @click="changeNav('progress-params')" scope="queue" name="progress"
-                        value="progress-params">
+                    <li :class="{active:activeName=='progress-params'}" scope="queue" name="progress" value="progress-params">
                         <span class='step-number'>02</span>
                         <span class='step-title'>
                                 <lang>设置队列参数</lang>
@@ -246,9 +240,7 @@ span.required {
                                 <lang>请设置队列属性</lang>
                             </span>
                     </li>
-                    <li class='nav-item nav-link' :class="{active:activeName=='progress-confirm'}"
-                        @click="changeNav('progress-confirm')"
-                        value="progress-confirm">
+                    <li :class="{active:activeName=='progress-confirm'}" value="progress-confirm">
                         <span class='step-number'>03</span>
                         <span class='step-title'>
                                 <lang>确认队列</lang>
@@ -259,41 +251,28 @@ span.required {
                     </li>
                 </ul>
 
-                <div id='bar' class='progress mt-5'>
-                    <div class='progress-bar bg-success progress-bar-striped progress-bar-animated'
-                         role='progressbar'
-                         :aria-valuenow='progressPercent'
-                         aria-valuemin='0'
-                         aria-valuemax='100'
-                         :style="{width: progressPercent + '%'}"></div>
+                <div id='bar' class="w-progress" style="--w-mt:var(--weline-space-12);">
+                    <div class="w-progress__bar progress-bar-striped progress-bar-animated" role='progressbar' :aria-valuenow='progressPercent' aria-valuemin='0' aria-valuemax='100' :style="{width: progressPercent + '%'}" data-w-background="success"></div>
                 </div>
-                <div class='tab-content twitter-bs-wizard-tab-content'>
-                    <div class='tab-pane' :class="{active:activeName=='progress-select-queueData'}">
+                <div class="w-tabs__content twitter-bs-wizard-tab-content">
+                    <div class="w-tabs__panel" :class="{active:activeName=='progress-select-queueData'}" role="tabpanel" hidden>
                         <input type='hidden' name='progress' value='progress-select-queueData'>
                         <input type='hidden' name='next_progress' value='progress-params'>
-                        <div class='row'>
-                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
-                                <div class='input-group'>
-                                    <input type='search' class='form-control rounded' id='search-queueData'
-                                           placeholder='@lang{请输入要查找的队列类型名或者队列类型代码}'
-                                           aria-label='@lang{请输入要查找的队列类型名或者队列类型代码}'
-                                           v-model="QueueTypesSearchVal"
-                                           @input="renderSearchQueueTypes()"
-                                           aria-describedby='search-addon'/>
-                                    <button type='button' class='btn btn-outline-primary'
-                                            :disabled='isSearchingTypes'
-                                            :aria-busy="isSearchingTypes ? 'true' : 'false'"
-                                            @click='renderSearchQueueTypes()'>
-                                        <i v-if='isSearchingTypes' class='mdi mdi-loading mdi-spin me-1' aria-hidden='true'></i>
+                        <div class="w-grid">
+                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
+                                <div class="w-field__control">
+                                    <input type='search' class="w-input" id='search-queueData' placeholder='@lang{请输入要查找的队列类型名或者队列类型代码}' aria-label='@lang{请输入要查找的队列类型名或者队列类型代码}' v-model="QueueTypesSearchVal" aria-describedby='search-addon' data-w-radius="md" />
+                                    <button type='button' class="w-button" :disabled='isSearchingTypes' :aria-busy="isSearchingTypes ? 'true' : 'false'" data-tone="primary" data-variant="outline">
+                                        <w:icon name="circle" size="sm"></w:icon>
                                         <lang>搜索队列类型</lang>
                                     </button>
                                 </div>
                             </div>
                         </div>
-                        <div class='row'>
-                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
-                                <div class='input-group'>
-                                    <p class='text-info m-0 text-break'>
+                        <div class="w-grid">
+                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
+                                <div class="w-field__control">
+                                    <p class="w-text" data-w-text-wrap="break" data-tone="info" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
                                         <if condition='module or dir'>
                                             <b>
                                                 <lang>来源:</lang>
@@ -317,15 +296,8 @@ span.required {
                                 <b>
                                     <lang>请选择任务类型：</lang>
                                 </b>
-                                <div class='input-group'>
-                                    <select id='search-queueData-result'
-                                            scope='queue'
-                                            class='form-select form-control rounded' size='30' name='type_id'
-                                            data-style='btn-primary' data-width='fit'
-                                            aria-label='@lang{搜索【队列类型】结果}'
-                                            v-model='params.type_id'
-                                            @change='handleTypeSelection'
-                                            aria-describedby='search-addon' required>
+                                <div class="w-field__control">
+                                    <select id='search-queueData-result' scope='queue' class="w-select w-input" size='30' name='type_id' data-style='btn-primary' data-width='fit' aria-label='@lang{搜索【队列类型】结果}' v-model='params.type_id' aria-describedby='search-addon' required data-w-radius="md">
                                         <option v-for='v in queue_types' :value='v.type_id' :label='v.name' :tip='v.tip'
                                                 v-bind:selected='v.type_id == params.type_id'
                                                 @click="changeTypeTip(v)">
@@ -333,69 +305,59 @@ span.required {
                                     </select>
                                 </div>
                             </div>
-                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
+                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
                                 <b>
                                     <lang>队列类型提醒：</lang>
                                 </b>
-                                <div class='input-group'>
+                                <div class="w-field__control">
                                     <p v-html="tip"></p>
                                 </div>
                             </div>
                         </div>
-                        <div class='row'>
-                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
-                                <button type='button' class='btn btn-outline-primary pull-right'
-                                        :disabled="params.type_id === '' || isLoadingAttributes"
-                                        @click='changeNav("progress-params")'>
+                        <div class="w-grid">
+                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
+                                <button type='button' class="w-button" :disabled="params.type_id === '' || isLoadingAttributes" data-tone="primary" data-variant="outline">
                                     <lang>下一步</lang>
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <div class='tab-pane' :class="{active:activeName=='progress-params'}">
-                        <div class="row">
-                            <div class='mx-auto col-md-4 mb-3'>
-                                <div class='input-group gap-2 required'>
-                                    <label for='queueName' class='control-label'><span class='text-danger'>*</span>
+                    <div class="w-tabs__panel" :class="{active:activeName=='progress-params'}" role="tabpanel" hidden>
+                        <div class="w-grid">
+                            <div style="--w-ms:auto;--w-me:auto;--w-span-md:4;--w-mb:var(--weline-space-4);">
+                                <div class="w-field__control required" style="--w-gap:var(--weline-space-2);">
+                                    <label for='queueName' class='control-label'><span class="w-text" data-tone="danger">*</span>
                                         <lang>队列名称</lang>
                                     </label>
-                                    <input type='text' v-model='params.name' class='w-100 form-control' id='queueName'
-                                           required scope='queue' name='name'>
+                                    <input type='text' v-model='params.name' class="w-input" id='queueName' required scope='queue' name='name' data-w-width="full">
                                 </div>
                             </div>
                         </div>
-                        <div v-if='isLoadingAttributes' class='text-center py-4' aria-live='polite'>
-                            <i class='mdi mdi-loading mdi-spin me-1' aria-hidden='true'></i>
+                        <div v-if='isLoadingAttributes' class="w-text" aria-live='polite' data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                            <w:icon name="circle" size="sm"></w:icon>
                             <lang>正在执行...</lang>
                         </div>
-                        <div v-if='unresolvedDependenceCodes.length > 0'
-                             class='alert alert-danger d-flex align-items-center justify-content-between gap-2'
-                             role='alert' aria-live='assertive'>
+                        <div v-if='unresolvedDependenceCodes.length > 0' class="w-alert w-cluster" role='alert' aria-live='assertive' data-align="center" data-justify="between" data-tone="danger" style="--w-gap:var(--weline-space-2);">
                             <span><lang>部分依赖属性更新失败，请重试后再继续。</lang></span>
-                            <button type='button' class='btn btn-sm btn-outline-danger'
-                                    :disabled='isLoadingAttributes || pendingDependenceRequests > 0'
-                                    @click='retryDependenceResolution'>
+                            <button type='button' class="w-button" :disabled='isLoadingAttributes || pendingDependenceRequests > 0' data-tone="danger" data-variant="outline" data-size="sm">
                                 <lang>重试</lang>
                             </button>
                         </div>
-                        <div class='row' id="queueParamsForm" :aria-busy="isLoadingAttributes ? 'true' : 'false'">
+                        <div class="w-grid" id="queueParamsForm" :aria-busy="isLoadingAttributes ? 'true' : 'false'">
                         </div>
-                        <div class='row'>
-                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
-                                <button type='button' class='btn btn-outline-primary pull-left'
-                                        @click='changeNav("progress-select-queueData")'>
+                        <div class="w-grid">
+                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
+                                <button type='button' class="w-button" data-tone="primary" data-variant="outline">
                                     <lang>上一步</lang>
                                 </button>
-                                <button type='button' class='btn btn-outline-primary pull-right'
-                                        :disabled='isLoadingAttributes || pendingDependenceRequests > 0 || unresolvedDependenceCodes.length > 0 || !clickedParamsProcess'
-                                        @click='changeNav("progress-confirm")'>
+                                <button type='button' class="w-button" :disabled='isLoadingAttributes || pendingDependenceRequests > 0 || unresolvedDependenceCodes.length > 0 || !clickedParamsProcess' data-tone="primary" data-variant="outline">
                                     <lang>下一步</lang>
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <div class='tab-pane' :class="{active:activeName=='progress-confirm'}">
-                        <div class='row'>
+                    <div class="w-tabs__panel" :class="{active:activeName=='progress-confirm'}" role="tabpanel" hidden>
+                        <div class="w-grid">
                             <b>
                                 <h2>
                                     <lang>队列信息总览：</lang>
@@ -418,12 +380,11 @@ span.required {
                                 <label>
                                     <lang>执行类：</lang>
                                 </label>
-                                <span class="text-primary"
-                                      v-text="findLabel(queue_types,params.type_id,'type_id','class')"></span>
+                                <span class="w-text" v-text="findLabel(queue_types,params.type_id,'type_id','class')" data-tone="primary"></span>
                             </p>
                             <hr>
                             <p>
-                                <b class="font-size-18">
+                                <b class="w-text" style="--w-font-size:1.125rem;">
                                     <lang>参数信息：</lang>
                                 </b>
                                 <br>
@@ -433,19 +394,14 @@ span.required {
                             </div>
                             </p>
                         </div>
-                        <div class='row'>
-                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
-                                <button type='button' class='btn btn-outline-primary pull-left'
-                                        @click='changeNav("progress-params",false)'>
+                        <div class="w-grid">
+                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
+                                <button type='button' class="w-button" data-tone="primary" data-variant="outline">
                                     <lang>上一步</lang>
                                 </button>
                                 <div v-if="(activeName=='progress-confirm')">
-                                    <button type='button'
-                                            class='btn btn-primary pull-right'
-                                            :disabled='!canSubmitQueue'
-                                            :aria-busy="isSubmitting ? 'true' : 'false'"
-                                            @click='submitQueue'>
-                                        <i v-if='isSubmitting' class='mdi mdi-loading mdi-spin me-1' aria-hidden='true'></i>
+                                    <button type='button' class="w-button" :disabled='!canSubmitQueue' :aria-busy="isSubmitting ? 'true' : 'false'" data-tone="primary">
+                                        <w:icon name="circle" size="sm"></w:icon>
                                         <lang>提交</lang>
                                     </button>
                                 </div>
@@ -458,8 +414,6 @@ span.required {
     </div>
 </div>
 
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
 <w:js>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.js</w:js>
 <js:part name="debounce"/>
 <script>
@@ -527,15 +481,15 @@ span.required {
 
     function notifyError(message) {
         var text = String(message || queueText.apiUnavailable);
-        if (typeof BackendToast !== 'undefined') {
-            BackendToast.error(text);
+        if (typeof Weline.UI.toast !== 'undefined') {
+            Weline.UI.toast.error(text);
             return;
         }
-        Swal.fire({
+        Weline.UI.dialog.request({
             title: queueText.warningTitle,
-            text: text,
-            icon: 'error',
-            confirmButtonText: queueText.confirmText
+            message: text,
+            tone: 'danger',
+            confirmLabel: queueText.confirmText
         });
     }
 
@@ -930,11 +884,11 @@ span.required {
                     return false;
                 }
                 if (!this.params.type_id) {
-                    Swal.fire({
+                    Weline.UI.dialog.request({
                         title: queueText.typeRequiredTitle,
-                        text: queueText.typeRequiredText,
-                        icon: 'warning',
-                        confirmButtonText: queueText.confirmText
+                        message: queueText.typeRequiredText,
+                        tone: 'warning',
+                        confirmLabel: queueText.confirmText
                     });
                     return false;
                 }
@@ -962,23 +916,23 @@ span.required {
                             this.params.queue_id = String(savedQueueId);
                         }
                         if (window.hideLoading) hideLoading();
-                        await Swal.fire({
+                        await Weline.UI.dialog.request({
                             title: res.msg,
-                            text: Array.isArray(res.warnings) ? res.warnings.join(' ') : '',
-                            icon: 'success',
-                            confirmButtonText: queueText.confirmText,
-                            allowEscapeKey: false,
-                            allowOutsideClick: false
+                            message: Array.isArray(res.warnings) ? res.warnings.join(' ') : '',
+                            tone: 'success',
+                            confirmLabel: queueText.confirmText,
+                            dismissible: false,
+                            dismissible: false
                         });
                         if (window.showLoading) showLoading();
                         window.parent.location.reload();
                         return true;
                     } else {
-                        Swal.fire({
+                        Weline.UI.dialog.request({
                             title: queueText.saveFailed,
-                            text: String((res && res.msg) || queueText.apiUnavailable),
-                            icon: 'error',
-                            confirmButtonText: queueText.confirmText
+                            message: String((res && res.msg) || queueText.apiUnavailable),
+                            tone: 'danger',
+                            confirmLabel: queueText.confirmText
                         });
                     }
                 } catch (error) {
@@ -1018,11 +972,11 @@ span.required {
                 }
                 var typeId = parseInt(String(this.params.type_id), 10);
                 if (!Number.isFinite(typeId) || typeId <= 0) {
-                    Swal.fire({
+                    Weline.UI.dialog.request({
                         title: queueText.typeRequiredTitle,
-                        text: queueText.typeRequiredText,
-                        icon: 'warning',
-                        confirmButtonText: queueText.confirmText
+                        message: queueText.typeRequiredText,
+                        tone: 'warning',
+                        confirmLabel: queueText.confirmText
                     });
                     return false;
                 }
@@ -1044,11 +998,11 @@ span.required {
                     }
                     if (!res || !res.success) {
                         this.clickedParamsProcess = false;
-                        Swal.fire({
+                        Weline.UI.dialog.request({
                             title: queueText.warningTitle,
-                            text: String((res && res.msg) || queueText.apiUnavailable),
-                            icon: 'error',
-                            confirmButtonText: queueText.confirmText
+                            message: String((res && res.msg) || queueText.apiUnavailable),
+                            tone: 'danger',
+                            confirmLabel: queueText.confirmText
                         });
                         return false;
                     }
@@ -1167,11 +1121,11 @@ span.required {
             },
             changeNav: function(name, reload) {
                 if (name !== 'progress-select-queueData' && !this.params.type_id) {
-                    Swal.fire({
+                    Weline.UI.dialog.request({
                         title: queueText.typeRequiredTitle,
-                        text: queueText.typeRequiredText,
-                        icon: 'warning',
-                        confirmButtonText: queueText.confirmText
+                        message: queueText.typeRequiredText,
+                        tone: 'warning',
+                        confirmLabel: queueText.confirmText
                     });
                     this.activeName = 'progress-select-queueData';
                     return false;
@@ -1207,14 +1161,14 @@ span.required {
                     if (collected.invalidElement) {
                         this.changeNav('progress-params', false);
                         this.focusInvalidElement(collected.invalidElement);
-                        Swal.fire({
+                        Weline.UI.dialog.request({
                             title: queueText.warningTitle,
-                            text: queueText.requiredField.replace(
+                            message: queueText.requiredField.replace(
                                 '%{1}',
                                 collected.invalidElement.getAttribute('title') || ''
                             ),
-                            icon: 'error',
-                            confirmButtonText: queueText.confirmText
+                            tone: 'danger',
+                            confirmLabel: queueText.confirmText
                         });
                         return false;
                     }

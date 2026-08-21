@@ -9,49 +9,49 @@
          title="CDN管理" 
          action=""
          parent="Weline_Backend::business_operations" 
-         icon="mdi mdi-cloud" 
+         icon="cloud" 
          order="20000">
         <!-- 账户管理子菜单 -->
         <menu source="Weline_Cdn::cdn_account_manager" 
              name="cdn_account_manager" 
              title="账户管理" 
              action="cdn/backend/account/index"
-             icon="mdi mdi-account-circle" 
+             icon="user" 
              order="10"/>
         <!-- 域名管理子菜单 -->
         <menu source="Weline_Cdn::cdn_domain_manager" 
              name="cdn_domain_manager" 
              title="域名管理" 
              action="cdn/backend/domain/index"
-             icon="mdi mdi-web" 
+             icon="globe" 
              order="20"/>
         <!-- 规则管理子菜单 -->
         <menu source="Weline_Cdn::cdn_rules_manager" 
              name="cdn_rules_manager" 
              title="规则管理" 
              action="cdn/backend/rules/index"
-             icon="mdi mdi-file-document-edit" 
+             icon="edit" 
              order="30"/>
         <!-- API规则管理子菜单 -->
         <menu source="Weline_Cdn::cdn_api_rules_manager" 
              name="cdn_api_rules_manager" 
              title="API规则管理" 
              action="cdn/backend/api-rules/index"
-             icon="mdi mdi-code-tags" 
+             icon="code" 
              order="35"/>
         <!-- 预热管理子菜单 -->
         <menu source="Weline_Cdn::cdn_warmup_manager" 
              name="cdn_warmup_manager" 
              title="预热管理" 
              action="cdn/backend/warmup/index"
-             icon="mdi mdi-fire" 
+             icon="fire" 
              order="40"/>
         <!-- 攻击日志子菜单 -->
         <menu source="Weline_Cdn::cdn_attack_log_manager" 
              name="cdn_attack_log_manager" 
              title="攻击日志" 
              action="cdn/backend/attacklog/index"
-             icon="mdi mdi-shield-alert" 
+             icon="warning" 
              order="50"/>
     </menu>
 </menus>

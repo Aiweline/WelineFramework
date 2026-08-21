@@ -86,13 +86,13 @@ $esc = function ($v) {
             <?php foreach ($testimonials as $testimonial): ?>
                 <div class="testimonial-card">
                     <div class="testimonial-quote">
-                        <i class="ri-double-quotes-l"></i>
+                        <w:icon name="circle" size="sm"></w:icon>
                     </div>
                     
                     <?php if ($showRating && isset($testimonial['rating'])): ?>
                         <div class="testimonial-rating">
                             <?php for ($i = 1; $i <= 5; $i++): ?>
-                                <i class="ri-star-<?= $i <= $testimonial['rating'] ? 'fill' : 'line' ?>"></i>
+                                <span class="w-rating-star" data-state="<?= $i <= $testimonial['rating'] ? 'filled' : 'empty' ?>"><w:icon name="star" size="sm"></w:icon></span>
                             <?php endfor; ?>
                         </div>
                     <?php endif; ?>
@@ -182,7 +182,7 @@ $esc = function ($v) {
     font-size: 16px;
 }
 
-.widget-testimonials .testimonial-rating i.ri-star-line {
+.widget-testimonials .testimonial-rating .w-rating-star[data-state="empty"] {
     color: #ddd;
 }
 

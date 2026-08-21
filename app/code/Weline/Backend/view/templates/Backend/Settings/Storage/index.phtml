@@ -11,26 +11,26 @@
 $settings = $settings ?? [];
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>存储设置</lang></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>存储设置</lang></h4>
         </div>
     </div>
 </div>
 
 <!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 提示信息 -->
-<div class="row">
-    <div class="col-12">
-        <div class="alert alert-info">
-            <i class="mdi mdi-information me-2"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-alert" data-tone="info">
+            <w:icon name="info" size="sm"></w:icon>
             <strong><lang>提示</lang>:</strong> <lang>存储设置功能正在开发中，敬请期待。</lang>
         </div>
     </div>

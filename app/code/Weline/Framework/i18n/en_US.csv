@@ -51,7 +51,6 @@
 没有要更新的字段,"No fields to update"
 "Where查询异常：%{1},%{2},%{3}","Where query exception: %{1}, %{2}, %{3}"
 "当前错误的条件操作符：%{1} ,当前的条件数组：%{2}, 允许的条件符：%{3}","Current error condition operator: %{1}, current condition array: %{2}, allowed condition operators: %{3}"
-"MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}","MySQL version verification failed (the connection has been established, the upgrade can continue): %{1}"
 更新表注释错误：%{1},"Update table comment error: %{1}"
 创建时间,"Create time"
 更新时间,"Update time"
@@ -407,10 +406,16 @@ ACL分发,"ACL distribution"
 在处理HTTP请求区域时触发，允许其他模块自定义区域处理逻辑。,"Triggered when processing HTTP request areas, allowing other modules to customize area processing logic."
 响应无路由前,"Response has no route"
 在响应无路由请求前触发，允许其他模块处理无路由请求。,"Triggered before responding to a request without a route, allowing other modules to handle unrouted requests."
+"HTTP 状态回执页渲染","HTTP 状态回执页渲染"
+"渲染 403/404/429/500/503 等状态页前触发；观察者可写入 data[""html""] 整页覆盖，或改写 page_title/page_lead/page_hint。","渲染 403/404/429/500/503 等状态页前触发；观察者可写入 data[""html""] 整页覆盖，或改写 page_title/page_lead/page_hint。"
+错误页资源贡献,错误页资源贡献
+"内置错误页组装样式前触发。中立字段 font_face_css 可由其他模块写入 @font-face CSS；核心不硬绑主题字体实现。","内置错误页组装样式前触发。中立字段 font_face_css 可由其他模块写入 @font-face CSS；核心不硬绑主题字体实现。"
+静态资源发布变换,静态资源发布变换
+"deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。","deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。"
 响应重定向前,"Pre-Redirect Response"
 在HTTP响应重定向前触发，允许其他模块修改重定向URL。,"Triggered before HTTP response redirection, allowing other modules to modify the redirect URL."
 结果桥接页地址,"Result bridge page URL"
-"获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 BackendToast。","Get the success/error/info/warning result bridge page URL. The observer returns the address via data[""bridge_url""] for the iframe to redirect and display BackendToast."
+"获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 Weline.UI.toast。","获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 Weline.UI.toast。"
 资源编译器,"Resource compiler"
 在编译资源文件时触发，允许其他模块监听并处理资源编译过程。事件数据包含区域、类型、资源列表等信息。,"Triggered when compiling resource files, allowing other modules to listen to and process the resource compilation process. Event data includes region, type, resource list, etc."
 资源编译后,"Resource compiled"
@@ -1102,7 +1107,7 @@ dev=true,dev=true
 消息,Message
 数据,Data
 异步事件死信运维,异步事件死信运维
-"mdi mdi-email-alert-outline","mdi mdi-email-alert-outline"
+mail,mail
 "查看当前网站范围内的异步事件 Delivery","查看当前网站范围内的异步事件 Delivery"
 未知,Unknown
 环境管理,"Environment Manager"
@@ -1122,29 +1127,27 @@ dev=true,dev=true
 模块测试：%{1},模块测试：%{1}
 未指定,未指定
 "测试运行 #%{1}","测试运行 #%{1}"
-"mdi mdi-flask-outline","mdi mdi-flask-outline"
+circle,circle
 "收集并运行各模块 E2E / 单元测试","收集并运行各模块 E2E / 单元测试"
 查看测试目录,查看测试目录
-"mdi mdi-file-tree","mdi mdi-file-tree"
+file,file
 查看各模块测试用例目录,查看各模块测试用例目录
 "查看 E2E 用例","查看 E2E 用例"
-"mdi mdi-monitor-screenshot","mdi mdi-monitor-screenshot"
+monitor,monitor
 "查看模块 E2E 用例并准备运行","查看模块 E2E 用例并准备运行"
 查看测试运行历史,查看测试运行历史
-"mdi mdi-history","mdi mdi-history"
+history,history
 查看测试运行进度、日志与历史,查看测试运行进度、日志与历史
 "运行 E2E 测试","运行 E2E 测试"
-"mdi mdi-play","mdi mdi-play"
+play,play
 "异步运行模块 E2E 测试","异步运行模块 E2E 测试"
 查看单元测试用例,查看单元测试用例
-"mdi mdi-code-tags","mdi mdi-code-tags"
+code,code
 查看模块单元/集成测试用例,查看模块单元/集成测试用例
 运行单元测试,运行单元测试
-"mdi mdi-play-circle-outline","mdi mdi-play-circle-outline"
 查询成功,"Query succeeded"
 查询失败：%{1},"Query failed: %{1}"
 "BinQuery Gateway","BinQuery Gateway"
-"bi bi-diagram-3","bi bi-diagram-3"
 "External BinQuery binary gateway","External BinQuery binary gateway"
 edit,edit
 framework,framework
@@ -2194,11 +2197,11 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 不存在的编译资源类型：%{1}，支持的资源类型：%{2},"Non-existent compiled resource type: %{1}, supported resource type: %{2}"
 开始编译静态资源...,"Start compiling static resources..."
 编译中...,Compiling...
+静态资源编译失败：%{1},静态资源编译失败：%{1}
 静态资源编译完成！,"Static resource compilation complete!"
 "%{1} 资源编译器必须实现 CompilerInterface","%{1} 资源编译器必须实现 CompilerInterface"
 "%{1} 编译完成","%{1} Compilation completed"
 "未找到资源类型 %{1} 的编译器","Compiler for resource type %{1} not found"
-"编译 %{1} 时出错：%{2}","Error compiling %{1}: %{2}"
 "编译 weline.modules.js 模块配置文件","Compile weline.modules.js Module Configuration File"
 "编译 Less 样式文件","Compile Less Style Files"
 "编译 %{1} 资源","编译 %{1} 资源"
@@ -2232,9 +2235,9 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 基本用法,"Basic Usage"
 详细模式,"Detailed mode"
 认证设备登记失败。,"Authenticated device registration failed."
-认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。,"Authenticated device registration failed: device table is not ready. Run setup:upgrade first."
 认证登录状态保存失败。,"Failed to persist authentication session state."
 认证设备服务不可用。,"Authenticated device service is unavailable."
+"认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。","Authenticated device registration failed: device table is not ready. Run setup:upgrade first."
 "当前 Session 尚未建立。","当前 Session 尚未建立。"
 "FPC 命中响应装饰器返回了无效响应","FPC 命中响应装饰器返回了无效响应"
 "Storefront 缓存上下文尚未完成版本冻结","Storefront 缓存上下文尚未完成版本冻结"
@@ -2254,6 +2257,18 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,"Route path"
 HTTP方法,"HTTP method"
 控制器,Controller
+"MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}","MySQL version verification failed (the connection has been established, the upgrade can continue): %{1}"
+"获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 BackendToast。","Get the success/error/info/warning result bridge page URL. The observer returns the address via data[""bridge_url""] for the iframe to redirect and display BackendToast."
+"mdi mdi-email-alert-outline","mdi mdi-email-alert-outline"
+"mdi mdi-flask-outline","mdi mdi-flask-outline"
+"mdi mdi-file-tree","mdi mdi-file-tree"
+"mdi mdi-monitor-screenshot","mdi mdi-monitor-screenshot"
+"mdi mdi-history","mdi mdi-history"
+"mdi mdi-play","mdi mdi-play"
+"mdi mdi-code-tags","mdi mdi-code-tags"
+"mdi mdi-play-circle-outline","mdi mdi-play-circle-outline"
+"bi bi-diagram-3","bi bi-diagram-3"
+"编译 %{1} 时出错：%{2}","Error compiling %{1}: %{2}"
 "已通过 sudo 修改 php.ini","Modified php.ini via sudo"
 "当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php","Current PHP is from project self-compilation (extend/server/php), apt/dnf installation is invalid. If extension is missing, run: bash bin/install.sh --rebuild-php php"
 "当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}","Current PHP is from Baota panel, apt/dnf installation is invalid. Please enable %{ext} in Baota → Software Store → PHP → Install Extensions"

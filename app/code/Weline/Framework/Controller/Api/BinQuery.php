@@ -16,7 +16,7 @@ use Weline\Framework\Service\Query\FrontendQueryException;
 #[Acl(
     source_id: 'Weline_Framework::binquery',
     source_name: 'BinQuery Gateway',
-    icon: 'bi bi-diagram-3',
+    icon: 'circle',
     document: 'External BinQuery binary gateway',
     parent_source: 'Weline_Framework::system_service_group',
     accessMode: 'edit',
@@ -34,7 +34,7 @@ class BinQuery extends FrontendRestController
     #[Acl(
         source_id: 'Weline_Framework::binquery::post',
         source_name: 'BinQuery Connect Query Call Graph',
-        icon: 'bi bi-diagram-3',
+        icon: 'circle',
         document: 'Connect, inspect, call and graph through /bin/query',
         parent_source: 'Weline_Framework::binquery',
         accessMode: 'edit',

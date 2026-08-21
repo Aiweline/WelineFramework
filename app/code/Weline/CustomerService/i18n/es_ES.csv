@@ -48,10 +48,14 @@
 获取成功,"Obtenido exitosamente"
 获取统计数据失败：%{1},"Error al obtener estadísticas: %{1}"
 客服人员,客服人员
+user,user
 查看客服人员,查看客服人员
 保存客服人员,保存客服人员
+save,save
 删除客服人员,删除客服人员
+trash,trash
 查看客服统计,查看客服统计
+chart,chart
 会话管理,"Gestión de sesiones"
 加载会话失败：%{1},"Error al cargar sesiones: %{1}"
 会话不存在,"La sesión no existe"
@@ -59,11 +63,15 @@
 加载会话详情失败：%{1},"Error al cargar detalles de sesión: %{1}"
 会话已关闭,"Sesión cerrada"
 关闭会话失败：%{1},"Error al cerrar sesión: %{1}"
+message,message
 查看会话,查看会话
 查看会话详情,查看会话详情
+eye,eye
 关闭会话,"Cerrar sesión"
+close,close
 客服配置,"Configuración del servicio"
 加载配置失败：%{1},"Error al cargar configuración: %{1}"
+settings,settings
 客服配置管理,客服配置管理
 查看客服配置,查看客服配置
 保存客服配置,保存客服配置

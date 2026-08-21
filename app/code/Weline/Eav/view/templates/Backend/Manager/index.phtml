@@ -37,16 +37,16 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>EAV管理</lang>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><lang>系统配置</lang></span></li>
-                    <li class='breadcrumb-item active'><lang>EAV管理</lang></li>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>系统配置</lang></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>EAV管理</lang></li>
                 </ol>
             </div>
         </div>
@@ -60,36 +60,34 @@
     <div class="eav-tree-panel">
         <div class="eav-tree-header">
             <div class="eav-tree-search">
-                <i class="mdi mdi-magnify search-icon"></i>
-                <input type="text" class="form-control form-control-sm" 
-                       id="tree-search" placeholder="<?= __('搜索实体、属性集、属性...') ?>">
+                <w:icon name="search" size="sm"></w:icon>
+                <input type="text" class="w-input" id="tree-search" placeholder="<?= __('搜索实体、属性集、属性...') ?>" data-size="sm">
             </div>
         </div>
         <div class="eav-tree-content" id="eav-tree">
             <div class="tree-loading">
-                <i class="mdi mdi-loading mdi-spin me-2"></i>
+                <w:icon name="circle" size="sm"></w:icon>
                 <lang>加载中...</lang>
             </div>
         </div>
         <div class="eav-tree-actions">
             <div class="dropup">
-                <button class="btn btn-primary btn-sm dropdown-toggle w-100" type="button" 
-                        id="addNewDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="mdi mdi-plus me-1"></i>
+                <button class="w-button dropdown-toggle" type="button" id="addNewDropdown" aria-expanded="false" data-w-menu-trigger data-w-width="full" data-tone="primary" data-size="sm" aria-haspopup="menu">
+                    <w:icon name="plus" size="sm"></w:icon>
                     <lang>新建</lang>
                 </button>
-                <ul class="dropdown-menu w-100" aria-labelledby="addNewDropdown">
-                    <li><a class="dropdown-item" href="#" id="add-entity-btn">
-                        <i class="mdi mdi-cube-outline me-2"></i><lang>新建实体</lang>
+                <ul class="w-menu" aria-labelledby="addNewDropdown" data-w-width="full" data-w-menu-panel role="menu" hidden>
+                    <li><a class="w-menu__item" href="#" id="add-entity-btn" role="menuitem" tabindex="-1">
+                        <w:icon name="box" size="sm"></w:icon><lang>新建实体</lang>
                     </a></li>
-                    <li><a class="dropdown-item" href="#" id="add-set-btn">
-                        <i class="mdi mdi-folder-outline me-2"></i><lang>新建属性集</lang>
+                    <li><a class="w-menu__item" href="#" id="add-set-btn" role="menuitem" tabindex="-1">
+                        <w:icon name="folder" size="sm"></w:icon><lang>新建属性集</lang>
                     </a></li>
-                    <li><a class="dropdown-item" href="#" id="add-group-btn">
-                        <i class="mdi mdi-folder-multiple-outline me-2"></i><lang>新建属性组</lang>
+                    <li><a class="w-menu__item" href="#" id="add-group-btn" role="menuitem" tabindex="-1">
+                        <w:icon name="folder" size="sm"></w:icon><lang>新建属性组</lang>
                     </a></li>
-                    <li><a class="dropdown-item" href="#" id="add-attribute-btn">
-                        <i class="mdi mdi-tag-outline me-2"></i><lang>新建属性</lang>
+                    <li><a class="w-menu__item" href="#" id="add-attribute-btn" role="menuitem" tabindex="-1">
+                        <w:icon name="tag" size="sm"></w:icon><lang>新建属性</lang>
                     </a></li>
                 </ul>
             </div>
@@ -100,21 +98,21 @@
     <div class="eav-detail-panel">
         <div class="eav-detail-header" id="detail-header" style="display: none;">
             <div>
-                <h5 class="mb-0" id="detail-title"></h5>
-                <small class="text-muted" id="detail-subtitle"></small>
+                <h5 id="detail-title" style="--w-mb:0;"></h5>
+                <small class="w-text" id="detail-subtitle" data-tone="muted"></small>
             </div>
-            <div class="btn-group">
-                <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete" style="display: none;">
-                    <i class="mdi mdi-delete"></i>
+            <div class="w-button-group">
+                <button type="button" class="w-button" id="btn-delete" style="display: none;" data-tone="danger" data-variant="outline" data-size="sm">
+                    <w:icon name="trash" size="sm"></w:icon>
                 </button>
             </div>
         </div>
         <div class="eav-detail-content" id="detail-content">
             <!-- 占位提示 -->
             <div class="eav-detail-placeholder" id="detail-placeholder">
-                <i class="mdi mdi-cursor-default-click-outline"></i>
+                <w:icon name="circle" size="sm"></w:icon>
                 <h5><lang>选择左侧节点查看详情</lang></h5>
-                <p class="text-muted"><lang>点击左侧树形导航中的节点，在此处查看和编辑详情</lang></p>
+                <p class="w-text" data-tone="muted"><lang>点击左侧树形导航中的节点，在此处查看和编辑详情</lang></p>
             </div>
             <!-- 表单容器 -->
             <div id="detail-form" style="display: none;"></div>
@@ -382,24 +380,24 @@
         loadTree: function() {
             var self = this;
             var container = $(this.config.treeContainer);
-            container.html('<div class="tree-loading"><i class="mdi mdi-loading mdi-spin me-2"></i>加载中...</div>');
+            container.html('<div class="tree-loading"><w:icon name="circle" size="sm"></w:icon>加载中...</div>');
             var req = bqAdmin['eav_admin'](this.config.apiBase + '/tree', { silent: true });
             req.then(function(res) {
                 var data = res && res.data;
                 if (res && res.ok && data && (data.code === 0 || data.items)) {
                     self.renderTree(data.items || data.data || []);
                 } else {
-                    container.html('<div class="text-danger p-3">加载失败</div>');
+                    container.html('<div class="w-text" data-tone="danger" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">加载失败</div>');
                 }
             }).catch(function() {
-                container.html('<div class="text-danger p-3">加载失败</div>');
+                container.html('<div class="w-text" data-tone="danger" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">加载失败</div>');
             });
         },
         
         renderTree: function(data) {
             var container = $(this.config.treeContainer);
             if (!data || data.length === 0) {
-                container.html('<div class="text-muted p-3 text-center">暂无数据</div>');
+                container.html('<div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">暂无数据</div>');
                 return;
             }
             var html = this.buildTreeHtml(data);
@@ -420,7 +418,7 @@
                 html += '<div class="' + nodeClass + '" data-type="' + item.type + '" data-id="' + item.id + '">';
                 html += '<span class="' + toggleClass + '">';
                 if (hasChildren) {
-                    html += '<i class="mdi mdi-chevron-right"></i>';
+                    html += '<w:icon name="chevron-right" size="sm"></w:icon>';
                 }
                 html += '</span>';
                 html += '<i class="tree-node-icon ' + icon + '"></i>';
@@ -442,12 +440,12 @@
         
         getNodeIcon: function(type) {
             var icons = {
-                'entity': 'mdi mdi-cube-outline',
-                'set': 'mdi mdi-folder-outline',
-                'group': 'mdi mdi-folder-multiple-outline',
-                'attribute': 'mdi mdi-tag-outline'
+                'entity': 'box',
+                'set': 'folder',
+                'group': 'folder',
+                'attribute': 'tag'
             };
-            return icons[type] || 'mdi mdi-file-outline';
+            return icons[type] || 'file';
         },
         
         bindEvents: function() {
@@ -516,7 +514,7 @@
         loadDetail: function(type, id) {
             var self = this;
             $('#detail-placeholder').hide();
-            $('#detail-form').show().html('<div class="text-center p-5"><i class="mdi mdi-loading mdi-spin fs-3"></i></div>');
+            $('#detail-form').show().html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pe:var(--weline-space-12);--w-pb:var(--weline-space-12);--w-ps:var(--weline-space-12);"><w:icon name="circle" size="sm"></w:icon></div>');
             $('#detail-header').show();
             var url = this.config.apiBase + '/detail?type=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id);
             var req = bqAdmin['eav_admin'](url, { silent: true });
@@ -525,26 +523,26 @@
                 if (res && res.ok && data && (data.code === 0 || data.data)) {
                     self.renderDetail(data.data || data || {});
                 } else {
-                    $('#detail-form').html('<div class="text-danger p-3">加载失败</div>');
+                    $('#detail-form').html('<div class="w-text" data-tone="danger" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">加载失败</div>');
                 }
             }).catch(function() {
-                $('#detail-form').html('<div class="text-danger p-3">加载失败</div>');
+                $('#detail-form').html('<div class="w-text" data-tone="danger" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">加载失败</div>');
             });
         },
         
         renderDetail: function(data) {
             $('#detail-title').text(data.name || '详情');
             $('#detail-subtitle').text(data.code || '');
-            $('#detail-form').html(data.html || '<div class="text-muted">暂无详情</div>');
+            $('#detail-form').html(data.html || '<div class="w-text" data-tone="muted">暂无详情</div>');
         },
         
         addNode: function(type) {
             console.log('Add node:', type);
-            Swal.fire({
+            Weline.UI.dialog.request({
                 title: '新建' + this.getTypeName(type),
-                text: '即将打开新建表单',
-                icon: 'info',
-                confirmButtonText: '确定'
+                message: '即将打开新建表单',
+                tone: 'info',
+                confirmLabel: '确定'
             });
         },
         

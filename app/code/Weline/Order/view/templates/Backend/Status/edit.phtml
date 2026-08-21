@@ -8,10 +8,10 @@ $translations = $this->getData('translations') ?? [];
 $isNew = !$status || !$status->getId();
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box">
-            <h4 class="page-title">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading">
+            <h4 class="w-backend-page__title">
                 <i class="mdi mdi-<?= $isNew ? 'plus' : 'pencil' ?> me-2"></i>
                 <?= $isNew ? __('新建状态') : __('编辑状态') ?>
             </h4>
@@ -20,51 +20,44 @@ $isNew = !$status || !$status->getId();
 </div>
 
 <!-- 消息 -->
-<div class="row">
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 编辑表单 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <w:form id="weline-order-status-form" data-testid="order-status-form" method="post" action="@var($this->getBackendUrl('weline_order/backend/status/save'))">
                     <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                     <?php if ($status && $status->getId()): ?>
                         <input type="hidden" name="id" value="<?= $status->getId() ?>">
                     <?php endif; ?>
                     
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><?= __('状态代码') ?> <span class="text-danger">*</span></label>
-                                <input type="text" name="code" class="form-control" 
-                                       value="<?= htmlspecialchars($status->getData('code') ?? '') ?>" 
-                                       required
-                                       <?= $status && $status->isSystem() ? 'readonly' : '' ?>
-                                       pattern="[a-z_]+"
-                                       placeholder="pending, processing, paid">
-                                <small class="form-text text-muted"><?= __('只能包含小写字母和下划线，如：pending, processing') ?></small>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><?= __('状态代码') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" name="code" class="w-input" value="<?= htmlspecialchars($status->getData('code') ?? '') ?>" required <?= $status && $status->isSystem() ? 'readonly' : '' ?>
+ pattern="[a-z_]+" placeholder="pending, processing, paid">
+                                <small class="w-field__hint w-text" data-tone="muted"><?= __('只能包含小写字母和下划线，如：pending, processing') ?></small>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><?= __('状态名称') ?> <span class="text-danger">*</span></label>
-                                <input type="text" name="name" class="form-control" 
-                                       value="<?= htmlspecialchars($status->getData('name') ?? '') ?>" 
-                                       required
-                                       placeholder="<?= __('待处理') ?>">
-                                <small class="form-text text-muted"><?= __('默认语言（中文）的状态名称') ?></small>
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><?= __('状态名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" name="name" class="w-input" value="<?= htmlspecialchars($status->getData('name') ?? '') ?>" required placeholder="<?= __('待处理') ?>">
+                                <small class="w-field__hint w-text" data-tone="muted"><?= __('默认语言（中文）的状态名称') ?></small>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><?= __('状态颜色') ?></label>
-                                <select name="color" class="form-select">
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><?= __('状态颜色') ?></label>
+                                <select name="color" class="w-select">
                                     <option value="primary" <?= ($status->getData('color') ?? 'secondary') === 'primary' ? 'selected' : '' ?>>Primary (蓝色)</option>
                                     <option value="success" <?= ($status->getData('color') ?? 'secondary') === 'success' ? 'selected' : '' ?>>Success (绿色)</option>
                                     <option value="warning" <?= ($status->getData('color') ?? 'secondary') === 'warning' ? 'selected' : '' ?>>Warning (黄色)</option>
@@ -74,84 +67,76 @@ $isNew = !$status || !$status->getId();
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><?= __('状态图标') ?></label>
-                                <input type="text" name="icon" class="form-control" 
-                                       value="<?= htmlspecialchars($status->getData('icon') ?? '') ?>" 
-                                       placeholder="mdi-check-circle">
-                                <small class="form-text text-muted"><?= __('Material Design Icons 类名，如：mdi-check-circle') ?></small>
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><?= __('状态图标') ?></label>
+                                <input type="text" name="icon" class="w-input" value="<?= htmlspecialchars($status->getData('icon') ?? '') ?>" placeholder="check">
+                                <small class="w-field__hint w-text" data-tone="muted"><?= __('Material Design Icons 类名，如：check') ?></small>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('状态描述') ?></label>
-                        <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($status->getData('description') ?? '') ?></textarea>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('状态描述') ?></label>
+                        <textarea name="description" class="w-textarea" rows="3"><?= htmlspecialchars($status->getData('description') ?? '') ?></textarea>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label class="form-label"><?= __('是否启用') ?></label>
-                                <select name="is_active" class="form-select">
+                    <div class="w-grid">
+                        <div style="--w-span-md:4;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><?= __('是否启用') ?></label>
+                                <select name="is_active" class="w-select">
                                     <option value="1" <?= ($status->getData('is_active') ?? 1) ? 'selected' : '' ?>><?= __('启用') ?></option>
                                     <option value="0" <?= !($status->getData('is_active') ?? 1) ? 'selected' : '' ?>><?= __('禁用') ?></option>
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label class="form-label"><?= __('排序') ?></label>
-                                <input type="number" name="sort_order" class="form-control" 
-                                       value="<?= htmlspecialchars($status->getData('sort_order') ?? 0) ?>" 
-                                       min="0">
+                        <div style="--w-span-md:4;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><?= __('排序') ?></label>
+                                <input type="number" name="sort_order" class="w-input" value="<?= htmlspecialchars($status->getData('sort_order') ?? 0) ?>" min="0">
                             </div>
                         </div>
                         <?php if ($status && $status->isSystem()): ?>
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('是否系统状态') ?></label>
-                                    <input type="text" class="form-control" value="<?= __('系统') ?>" readonly>
-                                    <small class="form-text text-muted"><?= __('系统状态不能删除') ?></small>
+                            <div style="--w-span-md:4;">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><?= __('是否系统状态') ?></label>
+                                    <input type="text" class="w-input" value="<?= __('系统') ?>" readonly>
+                                    <small class="w-field__hint w-text" data-tone="muted"><?= __('系统状态不能删除') ?></small>
                                 </div>
                             </div>
                         <?php endif; ?>
                     </div>
                     
                     <!-- 多语言翻译 -->
-                    <div class="mb-3">
+                    <div style="--w-mb:var(--weline-space-4);">
                         <h5><?= __('多语言翻译') ?></h5>
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('英文 (en_US)') ?></label>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <input type="text" name="translations[en_US][name]" class="form-control" 
-                                                   value="<?= htmlspecialchars(isset($translations['en_US']) && is_object($translations['en_US']) ? $translations['en_US']->getData('name') : '') ?>" 
-                                                   placeholder="<?= __('英文状态名称') ?>">
+                        <div class="w-card">
+                            <div class="w-card__body">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><?= __('英文 (en_US)') ?></label>
+                                    <div class="w-grid">
+                                        <div style="--w-span-md:6;">
+                                            <input type="text" name="translations[en_US][name]" class="w-input" value="<?= htmlspecialchars(isset($translations['en_US']) && is_object($translations['en_US']) ? $translations['en_US']->getData('name') : '') ?>" placeholder="<?= __('英文状态名称') ?>">
                                         </div>
-                                        <div class="col-md-6">
-                                            <input type="text" name="translations[en_US][description]" class="form-control" 
-                                                   value="<?= htmlspecialchars(isset($translations['en_US']) && is_object($translations['en_US']) ? $translations['en_US']->getData('description') : '') ?>" 
-                                                   placeholder="<?= __('英文状态描述') ?>">
+                                        <div style="--w-span-md:6;">
+                                            <input type="text" name="translations[en_US][description]" class="w-input" value="<?= htmlspecialchars(isset($translations['en_US']) && is_object($translations['en_US']) ? $translations['en_US']->getData('description') : '') ?>" placeholder="<?= __('英文状态描述') ?>">
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <small class="form-text text-muted">
+                        <small class="w-field__hint w-text" data-tone="muted">
                             <?= __('状态名称会通过翻译系统自动翻译。如果在此处填写了翻译，将优先使用数据库中的翻译；否则使用翻译文件中的翻译。') ?>
                         </small>
                     </div>
                     
-                    <div class="mt-3">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="mdi mdi-content-save me-2"></i><?= __('保存') ?>
+                    <div style="--w-mt:var(--weline-space-4);">
+                        <button type="submit" class="w-button" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon><?= __('保存') ?>
                         </button>
-                        <a href="<?= $this->getBackendUrl('weline_order/backend/status/index') ?>" class="btn btn-secondary">
-                            <i class="mdi mdi-arrow-left me-2"></i><?= __('返回') ?>
+                        <a href="<?= $this->getBackendUrl('weline_order/backend/status/index') ?>" class="w-button" data-tone="neutral">
+                            <w:icon name="arrow-left" size="sm"></w:icon><?= __('返回') ?>
                         </a>
                     </div>
                 </w:form>
@@ -187,22 +172,22 @@ $isNew = !$status || !$status->getId();
             })
             .then(function(data) {
                 if (data.success) {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.success(data.message || '<?= __('保存成功') ?>');
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.success(data.message || '<?= __('保存成功') ?>');
                     }
                     setTimeout(function() {
                         location.href = '<?= $this->getBackendUrl("weline_order/backend/status/index") ?>';
                     }, 1500);
                 } else {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.error(data.message || '<?= __('保存失败') ?>');
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.error(data.message || '<?= __('保存失败') ?>');
                     }
                 }
             })
             .catch(function(error) {
                 console.error('Error:', error);
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error('<?= __('保存失败，请重试') ?>');
+                if (typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.error('<?= __('保存失败，请重试') ?>');
                 }
             });
         });

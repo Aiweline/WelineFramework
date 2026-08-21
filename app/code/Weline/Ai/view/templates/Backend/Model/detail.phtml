@@ -9,12 +9,12 @@
 /**@var \Weline\Framework\View\Template $this */
 ?>
 <div class="weline-ai-model-detail-container">
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('基本信息') ?></h5>
         </div>
-        <div class="card-body">
-            <table class="table table-bordered">
+        <div class="w-card__body">
+            <table class="w-table">
                 <tr>
                     <th width="200"><?= __('模型ID') ?></th>
                     <td><?= $model->getId() ?></td>
@@ -39,9 +39,9 @@
                     <th><?= __('状态') ?></th>
                     <td>
                         <?php if ($model->isActive()): ?>
-                            <span class="badge badge-success"><?= __('激活') ?></span>
+                            <span class="w-badge" data-tone="success"><?= __('激活') ?></span>
                         <?php else: ?>
-                            <span class="badge badge-secondary"><?= __('未激活') ?></span>
+                            <span class="w-badge" data-tone="muted"><?= __('未激活') ?></span>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -49,9 +49,9 @@
                     <th><?= __('默认模型') ?></th>
                     <td>
                         <?php if ($model->isDefault()): ?>
-                            <span class="badge badge-primary"><?= __('是') ?></span>
+                            <span class="w-badge" data-tone="primary"><?= __('是') ?></span>
                         <?php else: ?>
-                            <span class="badge badge-secondary"><?= __('否') ?></span>
+                            <span class="w-badge" data-tone="muted"><?= __('否') ?></span>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -59,12 +59,12 @@
         </div>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('定价信息') ?></h5>
         </div>
-        <div class="card-body">
-            <table class="table table-bordered">
+        <div class="w-card__body">
+            <table class="w-table">
                 <tr>
                     <th width="200"><?= __('输入Token价格') ?></th>
                     <td><?= $model->getData('token_price_input') ?> / 1K tokens</td>
@@ -78,33 +78,33 @@
     </div>
 
     <?php if (!empty($config)): ?>
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('模型配置') ?></h5>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <pre class="weline-ai-model-config-pre"><?= json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
         </div>
     </div>
     <?php endif; ?>
 
     <?php if (!empty($proxyInfo)): ?>
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('代理配置') ?></h5>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <pre class="weline-ai-model-config-pre"><?= json_encode($proxyInfo, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
         </div>
     </div>
     <?php endif; ?>
 
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('时间信息') ?></h5>
         </div>
-        <div class="card-body">
-            <table class="table table-bordered">
+        <div class="w-card__body">
+            <table class="w-table">
                 <tr>
                     <th width="200"><?= __('创建时间') ?></th>
                     <td><?= date('Y-m-d H:i:s', $model->getData('created_time')) ?></td>
@@ -117,10 +117,10 @@
         </div>
     </div>
     
-    <div class="card mb-3">
-        <div class="card-body text-center">
-            <button type="button" class="btn btn-primary" data-ai-model-detail-action="test-connection">
-                <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__body w-text" data-align="center">
+            <button type="button" class="w-button" data-ai-model-detail-action="test-connection" data-tone="primary">
+                <w:icon name="link" size="sm"></w:icon> <?= __('测试连接') ?>
             </button>
         </div>
     </div>
@@ -156,22 +156,18 @@
 }
 </style>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
 <script>
 (function() {
     'use strict';
 
     window.testConnection = function(button) {
-        BackendConfirm.show('<?= __('确定要测试此模型的连接吗？') ?>').then(function(confirmed) {
+        Weline.UI.dialog.confirm('<?= __('确定要测试此模型的连接吗？') ?>').then(function(confirmed) {
             if (!confirmed) return;
         var btn = button;
         if (!btn) return;
         btn.disabled = true;
-        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
+        btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon> <?= __('测试中...') ?>';
 
         var url = '<?= $this->getBackendUrl('*/backend/model/testConnection') ?>';
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_code: '<?= addslashes((string)$model->getModelCode()) ?>' }) };
@@ -189,19 +185,50 @@
                 if (Array.isArray(data && data.images)) collected = collected.concat(data.images);
                 return collected;
             };
-            var renderImagesHtml = function(images) {
-                if (!Array.isArray(images) || !images.length) return '';
-                var pieces = images.map(function(image) {
-                    var src = (image && image.url)
-                        ? image.url
-                        : (image && image.b64_json ? ('data:' + ((image.mime_type) || 'image/png') + ';base64,' + image.b64_json) : '');
-                    if (!src) return '';
-                    var safeSrc = String(src).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    return '<a href="' + safeSrc + '" target="_blank" rel="noopener" class="d-inline-block me-2 mb-2">'
-                        + '<img src="' + safeSrc + '" class="img-fluid rounded border" style="max-height: 240px; object-fit: contain; background: #fff;" alt="test image">'
-                        + '</a>';
-                }).join('');
-                return pieces ? '<div class="mt-3"><div class="fw-bold mb-2"><i class="mdi mdi-image-multiple me-1"></i><?= __('返回的测试图片') ?></div>' + pieces + '</div>' : '';
+            var normalizeImageUrl = function(image) {
+                var source = (image && image.url)
+                    ? String(image.url)
+                    : (image && image.b64_json ? ('data:' + ((image.mime_type) || 'image/png') + ';base64,' + image.b64_json) : '');
+                if (/^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(source)) return source;
+                try {
+                    var parsed = new URL(source, window.location.origin);
+                    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+                } catch (_error) {
+                    return '';
+                }
+            };
+            var buildResultContent = function(parts, images) {
+                var content = document.createElement('div');
+                content.className = 'w-stack';
+                var summary = document.createElement('div');
+                (parts.length ? parts : [String((data && data.message) || '')]).forEach(function(text) {
+                    var line = document.createElement('div');
+                    line.textContent = text;
+                    summary.appendChild(line);
+                });
+                content.appendChild(summary);
+                if (!Array.isArray(images) || !images.length) return content;
+                var title = document.createElement('strong');
+                title.textContent = '<?= __('返回的测试图片') ?>';
+                var gallery = document.createElement('div');
+                gallery.className = 'w-grid';
+                images.forEach(function(image) {
+                    var source = normalizeImageUrl(image);
+                    if (!source) return;
+                    var link = document.createElement('a');
+                    link.href = source;
+                    link.target = '_blank';
+                    link.rel = 'noopener';
+                    link.style.setProperty('--w-span', '6');
+                    var preview = document.createElement('img');
+                    preview.src = source;
+                    preview.alt = '<?= __('测试返回图片') ?>';
+                    preview.className = 'w-ai-test-image';
+                    link.appendChild(preview);
+                    gallery.appendChild(link);
+                });
+                content.append(title, gallery);
+                return content;
             };
             var images = collectImages();
             var summaryParts = [];
@@ -211,48 +238,35 @@
                 if (s.tested) summaryParts.push('<?= __('自配置') ?>: ' + (s.success ? '<?= __('成功') ?>' : '<?= __('失败') ?>') + (s.message ? ' (' + s.message + ')' : ''));
                 if (p.tested) summaryParts.push('<?= __('供应商账户') ?>: ' + (p.success ? '<?= __('成功') ?>' : '<?= __('失败') ?>') + (p.message ? ' (' + p.message + ')' : ''));
             }
-            var summaryHtml = summaryParts.length ? summaryParts.map(function(t) { return '<div>' + t + '</div>'; }).join('') : ((data && data.message) || '');
+            var resultContent = buildResultContent(summaryParts, images);
             if (data && data.success) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('连接测试成功') ?>',
-                        html: summaryHtml + renderImagesHtml(images),
-                        confirmButtonText: '<?= __('确定') ?>',
-                        width: images.length ? '720px' : '600px'
-                    });
-                } else {
-                    console.log('<?= __('连接测试成功！') ?>\n\n' + summaryParts.join('\n'));
-                }
+                Weline.UI.dialog.request({
+                    tone: 'success',
+                    title: '<?= __('连接测试成功') ?>',
+                    message: resultContent,
+                    confirmLabel: '<?= __('确定') ?>',
+                    size: images.length ? 'lg' : 'sm'
+                });
             } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('连接测试失败') ?>',
-                        html: summaryHtml || ((data && data.message) || ''),
-                        confirmButtonText: '<?= __('确定') ?>',
-                        width: '600px'
-                    });
-                } else {
-                    console.error('<?= __('连接测试失败：') ?>' + (data && data.message));
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('连接测试失败') ?>',
+                    message: resultContent,
+                    confirmLabel: '<?= __('确定') ?>'
+                });
             }
         })
         .catch(function(err) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('请求失败') ?>',
-                    text: (err && err.message) || '<?= __('请重试') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('请求失败：') ?>' + error.message);
-            }
+            Weline.UI.dialog.request({
+                tone: 'danger',
+                title: '<?= __('请求失败') ?>',
+                message: (err && err.message) || '<?= __('请重试') ?>',
+                confirmLabel: '<?= __('确定') ?>'
+            });
         })
         .finally(() => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="mdi mdi-connection"></i> <?= __('测试连接') ?>';
+            btn.innerHTML = '<w:icon name="link" size="sm"></w:icon> <?= __('测试连接') ?>';
         });
         });
     };

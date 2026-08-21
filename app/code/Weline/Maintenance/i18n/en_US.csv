@@ -13,10 +13,15 @@
 备份删除失败,"Failed to delete backup"
 删除失败：%{1},"Deletion failed: %{1}"
 备份管理,"Backup Management"
+store,store
 查看备份列表,查看备份列表
+list,list
 创建备份,"Create Backup"
+save,save
 下载备份,下载备份
+download,download
 删除备份,删除备份
+trash,trash
 网站维护,"Site Maintenance"
 系统升级维护中,"System Upgrade in Progress"
 网站正在维护中...,"The site is currently under maintenance..."

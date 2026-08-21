@@ -9,10 +9,10 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Cart::cart_workspace', '购物车工作台', 'mdi-cart-search', '购物车检查', 'Weline_Backend::order_group')]
+#[Acl('Weline_Cart::cart_workspace', '购物车工作台', 'search', '购物车检查', 'Weline_Backend::order_group')]
 final class Inspection extends BackendController
 {
-    #[Acl('Weline_Cart::cart_inspection', '购物车检查', 'mdi-cart-search', '按 Scope 检查真实 Cart V2 持久缓存')]
+    #[Acl('Weline_Cart::cart_inspection', '购物车检查', 'search', '按 Scope 检查真实 Cart V2 持久缓存')]
     public function index(): string
     {
         $scopeKey = trim((string)$this->request->getParam('scope_key', ''));

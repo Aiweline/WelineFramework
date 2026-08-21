@@ -20,7 +20,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 
-#[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role', '管理权限', 'mdi mdi-security', '访问控制权限管理', 'Weline_Acl::acl')]
+#[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role', '管理权限', 'shield', '访问控制权限管理', 'Weline_Acl::acl')]
 class Role extends \Weline\Framework\App\Controller\BackendPageController
 {
     private \Weline\Acl\Model\Role $role;

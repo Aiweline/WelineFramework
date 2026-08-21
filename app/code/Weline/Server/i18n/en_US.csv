@@ -46,6 +46,12 @@
 "Ping memory service","Ping memory service"
 "Get memory stats","Get memory stats"
 "Get memory runtime","Get memory runtime"
+"不支持的 WLS 面板生命周期操作：%{1}","不支持的 WLS 面板生命周期操作：%{1}"
+"WLS 面板生命周期","WLS 面板生命周期"
+"在后台权限与项目边界内控制 WLS 重载和重启","在后台权限与项目边界内控制 WLS 重载和重启"
+请先登录后台,"Please log in to backend first"
+后台操作员不可用,后台操作员不可用
+"无权执行 WLS 面板生命周期操作","无权执行 WLS 面板生命周期操作"
 "Server 查询器不支持的操作：%{1}","Operation not supported by Server query: %{1}"
 "Server 查询","Server query"
 "提供 SSL 证书申请等能力","Provides SSL certificate application and other capabilities"
@@ -126,7 +132,6 @@
 "Failed to ensure the managed local wildcard certificate","Failed to ensure the managed local wildcard certificate"
 维护模式已启用,"Maintenance mode is enabled"
 维护模式已禁用,"Maintenance mode is disabled"
-请先登录后台,"Please log in to backend first"
 "Managed project context is empty.","Managed project context is empty."
 "Managed project was not found.","Managed project was not found."
 "Managed project context resolved.","Managed project context resolved."
@@ -191,6 +196,7 @@
 续签失败,"Renewal failed"
 "续签完成：成功 %{1} 个，失败 %{2} 个","Renewal complete: %{1} succeeded, %{2} failed"
 "Legacy WLS Plugin Marketplace Redirect","Legacy WLS Plugin Marketplace Redirect"
+store,store
 "Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace.","Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace."
 "WLS 面板","WLS 面板"
 "WLS 项目","WLS 项目"
@@ -216,6 +222,12 @@
 "查看 WLS 面板仪表盘","查看 WLS 面板仪表盘"
 "查看 WLS 面板项目","查看 WLS 面板项目"
 "查看 WLS 面板托管项目","查看 WLS 面板托管项目"
+"查看 WLS 项目运行状态","查看 WLS 项目运行状态"
+"查看项目 WLS 实例和 Ready 状态","查看项目 WLS 实例和 Ready 状态"
+"重载 WLS 项目","重载 WLS 项目"
+"滚动重载项目 WLS 工作进程","滚动重载项目 WLS 工作进程"
+"重启 WLS 项目","重启 WLS 项目"
+"保持 Master 在线并重建项目全部 WLS 工作进程","保持 Master 在线并重建项目全部 WLS 工作进程"
 "查看 WLS 面板网关","查看 WLS 面板网关"
 "查看 WLS 面板插件","查看 WLS 面板插件"
 "查看 WLS 面板插件页面","查看 WLS 面板插件页面"
@@ -880,17 +892,46 @@ IP,IP
 "搜索 WLS 实例","搜索 WLS 实例"
 搜索名称、域名、路径或状态,搜索名称、域名、路径或状态
 每页行数,每页行数
+WLS,WLS
 可编辑运行时档案,可编辑运行时档案
 点击配置档案,点击配置档案
+不可控制,不可控制
+"当前项目无法从此面板控制 WLS。","当前项目无法从此面板控制 WLS。"
 托管,托管
+实例：%{1},实例：%{1}
+未绑定实例,未绑定实例
 详情,Details
+重载,重载
 数据库,数据库
 PHP,PHP
+"WLS 生命周期控制","WLS 生命周期控制"
+"WLS 生命周期","WLS 生命周期"
+"重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。","重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。"
+"Worker 代际","Worker 代际"
+"Ready Worker","Ready Worker"
+重载项目,重载项目
+重启工作进程,重启工作进程
+打开项目面板,打开项目面板
 "PHP 配置","PHP 配置"
 数据库配置,数据库配置
 文件,文件
 部署,部署
 编辑,Edit
+高风险操作,高风险操作
+"重启 WLS 工作进程","重启 WLS 工作进程"
+"重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。","重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。"
+输入项目名称以确认,输入项目名称以确认
+输入上方项目名称,输入上方项目名称
+确认重启,确认重启
+"WLS 后台业务 API 尚未加载。","WLS 后台业务 API 尚未加载。"
+"WLS 生命周期操作失败。","WLS 生命周期操作失败。"
+正在提交项目重载…,正在提交项目重载…
+正在提交项目重启…,正在提交项目重启…
+"操作已提交，正在等待实例恢复到 Ready…","操作已提交，正在等待实例恢复到 Ready…"
+"项目重载完成，实例已恢复到 Ready。","项目重载完成，实例已恢复到 Ready。"
+"项目重启完成，Master 保持在线且工作进程已恢复到 Ready。","项目重启完成，Master 保持在线且工作进程已恢复到 Ready。"
+"操作已提交，但等待 Ready 超时；请继续查看实例状态。","操作已提交，但等待 Ready 超时；请继续查看实例状态。"
+输入的项目名称不匹配。,输入的项目名称不匹配。
 "运行中 Workers","Running Workers"
 总连接数,"Total Connections"
 总请求数,"Total Request Count"
@@ -1376,6 +1417,28 @@ URI,URI
 "proc_open 函数已启用","proc_open function enabled"
 "从 disable_functions 中移除 proc_open","Remove proc_open from disable_functions"
 "找到 disable_functions 行，删除 proc_open","Found disable_functions line, removing proc_open"
+"当前项目不支持从此面板控制 WLS。","当前项目不支持从此面板控制 WLS。"
+"WLS Master 控制通道不可用。","WLS Master 控制通道不可用。"
+Ready,Ready
+重载中,重载中
+恢复中,恢复中
+"WLS 实例已就绪。","WLS 实例已就绪。"
+"WLS 正在重载，请等待恢复到 Ready。","WLS 正在重载，请等待恢复到 Ready。"
+"WLS 尚未完全就绪。","WLS 尚未完全就绪。"
+该项目不可控制。,该项目不可控制。
+"WLS Master 未运行，无法提交操作。","WLS Master 未运行，无法提交操作。"
+该实例已有生命周期操作正在执行。,该实例已有生命周期操作正在执行。
+项目名称确认不匹配，已取消重启。,项目名称确认不匹配，已取消重启。
+该实例的生命周期操作正在提交，请稍后重试。,该实例的生命周期操作正在提交，请稍后重试。
+"WLS 重启已提交；Master 保持在线，正在重建全部工作进程。","WLS 重启已提交；Master 保持在线，正在重建全部工作进程。"
+"WLS 重载已提交，正在滚动更新工作进程。","WLS 重载已提交，正在滚动更新工作进程。"
+"WLS 生命周期操作提交失败。","WLS 生命周期操作提交失败。"
+"Current Project","Current Project"
+"WLS 项目标识无效。","WLS 项目标识无效。"
+托管项目不存在。,托管项目不存在。
+"托管项目已停用，不能执行 WLS 生命周期操作。","托管项目已停用，不能执行 WLS 生命周期操作。"
+"该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。","该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。"
+"无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。","无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。"
 缓存命名空间失效帧包含未知字段。,"The cache namespace invalidation frame contains an unknown field."
 缓存命名空间失效帧不完整。,"The cache namespace invalidation frame is incomplete."
 不支持该缓存命名空间失效协议版本。,"The cache namespace invalidation protocol version is unsupported."
@@ -1496,7 +1559,6 @@ Disabled,Disabled
 "WLS Panel","WLS Panel"
 Configured,Configured
 "%{1} entries","%{1} entries"
-"Current Project","Current Project"
 Local,Local
 Path,Path
 请求处理错误：%{1},"Request processing error: %{1}"
@@ -1564,7 +1626,6 @@ Installed,Installed
 "All WLS operation plugins are installed.","All WLS operation plugins are installed."
 "%{1} WLS operation plugins need installation.","%{1} WLS operation plugins need installation."
 "Security Scope","Security Scope"
-Ready,Ready
 Review,Review
 "Policy and attack-log links can be scoped safely.","Policy and attack-log links can be scoped safely."
 "Security links need project identity first.","Security links need project identity first."
@@ -1805,6 +1866,7 @@ Webroot：%{1},"Webroot: %{1}"
 "已发送终止信号 %{1} 个已知子进程","已发送终止信号 %{1} 个已知子进程"
 "精确身份清理仍有 %{1} 项未确认释放：%{2}","精确身份清理仍有 %{1} 项未确认释放：%{2}"
 "Fast-local cleanup still has residual process ids: %{1}","Fast-local cleanup still has residual process ids: %{1}"
+"Fast-local cleanup still has recoverable ports listening: %{1}","Fast-local cleanup still has recoverable ports listening: %{1}"
 "Fast-local cleanup terminated %{1} residual processes.","Fast-local cleanup terminated %{1} residual processes."
 "Fast-local cleanup found no verified residual processes.","Fast-local cleanup found no verified residual processes."
 "STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。","If the STOP command is not acknowledged within the ACK timeout (no Stopping is seen), local cleanup is performed."
@@ -1954,8 +2016,10 @@ pending,pending
 "连接实例控制端口并发送 status，输出耗时与占用 PID","Connect to instance control port and send status, output elapsed time and occupied PID"
 "实例名（默认 default）","Instance name (default default)"
 探测默认实例,"Probe default instance"
-"Session Server %{1}","Session Server %{1}"
-"Memory Service %{1}","Memory Service %{1}"
+"Session Server stopped","Session Server stopped"
+"Session Server stop was not confirmed; runtime identity was retained for retry/repair.","Session Server stop was not confirmed; runtime identity was retained for retry/repair."
+"Memory Service stopped","Memory Service stopped"
+"Memory Service stop was not confirmed; runtime identity was retained for retry/repair.","Memory Service stop was not confirmed; runtime identity was retained for retry/repair."
 "Memory Service disabled by configuration.","Memory Service disabled by configuration."
 "停止全局共享 Session/Memory 服务","Stop global shared Session/Memory service"
 停止共享服务,"Stop shared service"
@@ -2016,6 +2080,8 @@ pending,pending
 "公网域名或展示主机；WLS 回源始终监听 127.0.0.1","Public domain or display host; the WLS upstream always listens on 127.0.0.1"
 "WLS 明文 HTTP/1.1 回源端口；Nginx 公网端口由 wls.edge.nginx 配置","WLS plaintext HTTP/1.1 upstream port; Nginx public ports are configured by wls.edge.nginx"
 "Worker 进程数（默认：4）","Worker count (default: 4)"
+"与 server:start -r -f 区别","与 server:start -r -f 区别"
+"server:restart -r -f 仅单批次重载 Worker 且 Master 保持；server:start -r -f 会停 Master 做完整代际重启","server:restart -r -f 仅单批次重载 Worker 且 Master 保持；server:start -r -f 会停 Master 做完整代际重启"
 确保服务器运行,"Ensure the server is running"
 强制重启服务器,"Force Restart Server"
 强制单批次重启,"Force single batch restart"
@@ -2350,7 +2416,6 @@ Digest：%{1},Digest：%{1}
 "WLS 运行时策略回滚已受理。","WLS 运行时策略回滚已受理。"
 "回滚 WLS 运行时策略","回滚 WLS 运行时策略"
 "WLS 运行时策略状态","WLS 运行时策略状态"
-实例：%{1},实例：%{1}
 Active：%{1},Active：%{1}
 Staged：%{1},Staged：%{1}
 Previous：%{1},Previous：%{1}
@@ -2568,6 +2633,8 @@ Previous：%{1},Previous：%{1}
 无法证明受管代次时拒绝发送任何终止信号,无法证明受管代次时拒绝发送任何终止信号
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","已退役：console:server:start 不再启动 PHP 内置 Web Server。"
 "已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
+"Session Server %{1}","Session Server %{1}"
+"Memory Service %{1}","Memory Service %{1}"
 请输入后端主机,"Enter backend host"
 "端口必须在 1-65535 范围内","Port must be in the range 1-65535"
 连接成功,"Connection Successful"
@@ -3272,62 +3339,9 @@ Nginx-only,Nginx-only
 "默认由 Nginx 终结；--no-nginx 时由纯 WLS 默认启用 TLS 1.3","Terminated by Nginx by default; with --no-nginx, pure WLS enables TLS 1.3 by default"
 "公网访问由宿主级 WLS 2.0 Gateway 提供。","Public access is provided by the host-level WLS 2.0 Gateway."
 "公网访问必须经过项目托管 Nginx。","All public access must pass through the project-managed Nginx."
-"不支持的 WLS 面板生命周期操作：%{1}","不支持的 WLS 面板生命周期操作：%{1}"
-"WLS 面板生命周期","WLS 面板生命周期"
-"在后台权限与项目边界内控制 WLS 重载和重启","在后台权限与项目边界内控制 WLS 重载和重启"
-后台操作员不可用,后台操作员不可用
-"无权执行 WLS 面板生命周期操作","无权执行 WLS 面板生命周期操作"
-WLS,WLS
-不可控制,不可控制
-"当前项目无法从此面板控制 WLS。","当前项目无法从此面板控制 WLS。"
-未绑定实例,未绑定实例
-重载,重载
-"WLS 生命周期控制","WLS 生命周期控制"
-"WLS 生命周期","WLS 生命周期"
-"重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。","重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。"
-"Worker 代际","Worker 代际"
-"Ready Worker","Ready Worker"
-重载项目,重载项目
-重启工作进程,重启工作进程
-打开项目面板,打开项目面板
-高风险操作,高风险操作
-"重启 WLS 工作进程","重启 WLS 工作进程"
-"重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。","重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。"
-输入项目名称以确认,输入项目名称以确认
-输入上方项目名称,输入上方项目名称
-确认重启,确认重启
-"WLS 后台业务 API 尚未加载。","WLS 后台业务 API 尚未加载。"
-"WLS 生命周期操作失败。","WLS 生命周期操作失败。"
-正在提交项目重载…,正在提交项目重载…
-正在提交项目重启…,正在提交项目重启…
-"操作已提交，正在等待实例恢复到 Ready…","操作已提交，正在等待实例恢复到 Ready…"
-"项目重载完成，实例已恢复到 Ready。","项目重载完成，实例已恢复到 Ready。"
-"项目重启完成，Master 保持在线且工作进程已恢复到 Ready。","项目重启完成，Master 保持在线且工作进程已恢复到 Ready。"
-"操作已提交，但等待 Ready 超时；请继续查看实例状态。","操作已提交，但等待 Ready 超时；请继续查看实例状态。"
-输入的项目名称不匹配。,输入的项目名称不匹配。
-"当前项目不支持从此面板控制 WLS。","当前项目不支持从此面板控制 WLS。"
-"WLS Master 控制通道不可用。","WLS Master 控制通道不可用。"
-重载中,重载中
-恢复中,恢复中
-"WLS 实例已就绪。","WLS 实例已就绪。"
-"WLS 正在重载，请等待恢复到 Ready。","WLS 正在重载，请等待恢复到 Ready。"
-"WLS 尚未完全就绪。","WLS 尚未完全就绪。"
-该项目不可控制。,该项目不可控制。
-"WLS Master 未运行，无法提交操作。","WLS Master 未运行，无法提交操作。"
-该实例已有生命周期操作正在执行。,该实例已有生命周期操作正在执行。
-项目名称确认不匹配，已取消重启。,项目名称确认不匹配，已取消重启。
-该实例的生命周期操作正在提交，请稍后重试。,该实例的生命周期操作正在提交，请稍后重试。
-"WLS 重启已提交；Master 保持在线，正在重建全部工作进程。","WLS 重启已提交；Master 保持在线，正在重建全部工作进程。"
-"WLS 重载已提交，正在滚动更新工作进程。","WLS 重载已提交，正在滚动更新工作进程。"
-"WLS 生命周期操作提交失败。","WLS 生命周期操作提交失败。"
-"WLS 项目标识无效。","WLS 项目标识无效。"
-托管项目不存在。,托管项目不存在。
-"托管项目已停用，不能执行 WLS 生命周期操作。","托管项目已停用，不能执行 WLS 生命周期操作。"
-"该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。","该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。"
-"无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。","无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。"
 "滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）","Rolling drain restart: Master stays running; Orchestrator replaces Workers in batches (default three batches)"
 "与 -r 同用时强制完整重启（停 Master，跳过排水等待）","With -r: force full restart (stop Master, skip drain wait)"
 "检测到端口/拓扑/Worker/SSL 等启动参数变更，start -r 将自动切换为完整重启。","Startup args changed (port/topology/worker/SSL); start -r will perform a full generation restart."
 "检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...","Server already running; full generation restart: enable maintenance and drain all Workers before switching..."
-"滚动排水重启","Rolling drain restart"
-"强制完整重启","Force full restart"
+滚动排水重启,"Rolling drain restart"
+强制完整重启,"Force full restart"

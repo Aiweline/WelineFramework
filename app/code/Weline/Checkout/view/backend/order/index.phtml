@@ -42,7 +42,7 @@ $keyword = $this->getData('keyword') ?: '';
                 <input type="text" name="keyword" value="<?= $this->escapeHtml($keyword) ?>" placeholder="<?= __('请输入订单号') ?>">
             </div>
             
-            <button type="submit" class="btn btn-primary"><?= __('搜索') ?></button>
+            <button type="submit" class="w-button" data-tone="primary"><?= __('搜索') ?></button>
         </w:form>
     </div>
     
@@ -62,7 +62,7 @@ $keyword = $this->getData('keyword') ?: '';
             <tbody>
                 <?php if (empty($orders)): ?>
                 <tr>
-                    <td colspan="7" class="text-center"><?= __('暂无订单') ?></td>
+                    <td colspan="7" class="w-text" data-align="center"><?= __('暂无订单') ?></td>
                 </tr>
                 <?php else: ?>
                 <?php foreach ($orders as $order): ?>
@@ -82,7 +82,7 @@ $keyword = $this->getData('keyword') ?: '';
                     <td><?= $this->escapeHtml($order['currency']) ?> <?= number_format($order['total_amount'], 2) ?></td>
                     <td><?= $this->escapeHtml($order['created_time']) ?></td>
                     <td>
-                        <a href="<?= $this->getBackendUrl('checkout/backend/order/view', ['order_id' => $order['order_id']]) ?>" class="btn btn-sm btn-primary">
+                        <a href="<?= $this->getBackendUrl('checkout/backend/order/view', ['order_id' => $order['order_id']]) ?>" class="w-button" data-tone="primary" data-size="sm">
                             <?= __('查看') ?>
                         </a>
                     </td>
@@ -94,10 +94,9 @@ $keyword = $this->getData('keyword') ?: '';
     </div>
     
     <?php if ($totalPages > 1): ?>
-    <div class="pagination">
+    <div class="w-pagination">
         <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <a href="<?= $this->getBackendUrl('checkout/backend/order/index', ['page' => $i]) ?>" 
-           class="page-link <?= $i === $page ? 'active' : '' ?>">
+        <a href="<?= $this->getBackendUrl('checkout/backend/order/index', ['page' => $i]) ?>" class="w-pagination__link <?= $i === $page ? 'active' : '' ?>">
             <?= $i ?>
         </a>
         <?php endfor; ?>

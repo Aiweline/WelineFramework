@@ -452,15 +452,7 @@ class ThemeEditor extends BackendController
             }
         }
 
-        $legacyTargetType = strtolower(trim((string)$this->request->getParam('target_type', '')));
-        $legacyTargetIdRaw = trim((string)$this->request->getParam('target_id', ''));
-        return $legacyTargetIdRaw !== ''
-            && $legacyTargetType !== ''
-            && !in_array($legacyTargetType, [
-                PreviewContextService::TARGET_TYPE_LAYOUT,
-                PreviewContextService::TARGET_TYPE_PAGE,
-                PreviewContextService::TARGET_TYPE_PATH,
-            ], true);
+        return false;
     }
 
     /**
@@ -484,102 +476,6 @@ class ThemeEditor extends BackendController
         }
 
         return $context;
-    }
-
-    public function legacyIndex()
-    {
-        $this->useFullscreenEditorLayout();
-
-        $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
-        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
-        $editorArea = $editorArea === 'backend' ? 'backend' : 'frontend';
-        
-        // 获取主题列表页面 URL（用于重定向）
-        $themeListUrl = $this->_url->getBackendUrl('theme/backend');
-
-        // 如果明确传入了 theme_id，必须验证其存在性
-        if ($requestedThemeId > 0) {
-            $this->welineTheme->reset()->load($requestedThemeId);
-            if (!$this->welineTheme->getId()) {
-                // 传入的主题 ID 不存在，报错并重定向到主题列表
-                $this->getMessageManager()->addError(__('主题 ID %{1} 不存在！请选择有效的主题。', $requestedThemeId));
-                return $this->redirect($themeListUrl);
-            }
-            $themeId = $requestedThemeId;
-        } else {
-            // 没有指定主题，尝试使用当前激活的主题
-            $activeTheme = $this->welineTheme->getActiveTheme($editorArea);
-            if ($activeTheme && $activeTheme->getId()) {
-                $themeId = (int)$activeTheme->getId();
-                $this->welineTheme->reset()->load($themeId);
-            } else {
-                // 没有激活的主题，报错并重定向到主题列表
-                $this->getMessageManager()->addError(__('系统没有激活的主题！请先选择或激活一个主题。'));
-                return $this->redirect($themeListUrl);
-            }
-        }
-        
-        // 双重检查：确保加载的主题有效
-        if (!$this->welineTheme->getId()) {
-            $this->getMessageManager()->addError(__('无法加载主题！请检查主题配置。'));
-            return $this->redirect($themeListUrl);
-        }
-        
-        // 获取所有主题列表（按 id 去重，避免重复显示）
-        $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
-        $themesById = [];
-        foreach ($themesCollection as $themeItem) {
-            $data = is_object($themeItem) ? $themeItem->getData() : (is_array($themeItem) ? $themeItem : []);
-            $tid = (int)($data['id'] ?? 0);
-            if ($tid && !isset($themesById[$tid])) {
-                $themesById[$tid] = $data;
-            }
-        }
-        $themes = array_values($themesById);
-
-        // 获取布局数据（编辑器读取草稿数据）
-        $layout = [];
-        $hasDraft = false;
-        if ($themeId) {
-            // 检查是否有草稿，如果没有则从已发布数据初始化草稿
-            $hasDraft = $this->layoutService->hasDraft($themeId, $pageType);
-            if (!$hasDraft && !$this->hasEmptyCurrentRestoreVersion($themeId, $pageType)) {
-                // 首次编辑，从已发布数据初始化草稿
-                $this->layoutService->initDraftFromPublished($themeId, $pageType);
-            }
-            // 读取草稿布局
-            $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType);
-        }
-
-        // 页面类型列表
-        $pageTypes = ThemeLayout::getPageTypes();
-
-        // 区域列表
-        $areas = ThemeLayout::getAreas();
-
-        // 编辑区域：默认前端；若主题目录无 backend 则仅前端
-        $themeHasBackend = $this->themeHasBackendDir($this->welineTheme);
-        if (!$themeHasBackend || ($editorArea !== 'frontend' && $editorArea !== 'backend')) {
-            $editorArea = 'frontend';
-        }
-
-        // 部件库改为前端异步加载，首屏不再同步渲染全部部件预览。
-        $availableWidgets = [];
-
-        $this->assign('theme_id', $themeId);
-        $this->assign('theme', $this->welineTheme);
-        $this->assign('themes', $themes);
-        $this->assign('page_type', $pageType);
-        $this->assign('page_types', $pageTypes);
-        $this->assign('areas', $areas);
-        $this->assign('editor_area', $editorArea);
-        $this->assign('theme_has_backend', $themeHasBackend);
-        $this->assign('layout', $layout);
-        $this->assign('available_widgets', $availableWidgets);
-        $this->assign('has_draft', $hasDraft);
-
-        return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/index.phtml');
     }
 
     /**
@@ -1569,17 +1465,6 @@ class ThemeEditor extends BackendController
         ]);
     }
 
-    /**
-     * 恢复原始布局（旧 API - 已废弃，保留兼容性）
-     * 
-     * @deprecated 使用 postRestoreOriginal() 代替，支持版本控制和自动备份
-     */
-    public function postRestoreLayout()
-    {
-        // 委托给新的恢复原始布局 API
-        return $this->postRestoreOriginal();
-    }
-
     public function postPublish()
     {
         $themeId = (int)$this->request->getParam('theme_id');
@@ -1662,30 +1547,6 @@ class ThemeEditor extends BackendController
                 'message' => $e->getMessage(),
             ]);
         }
-    }
-
-    /**
-     * 预览页面 - 读取草稿数据进行预览
-     */
-    public function preview()
-    {
-        $themeId = (int)$this->request->getParam('theme_id');
-        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-        if (!$themeId) {
-            return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/preview-empty.phtml');
-        }
-
-        // 获取草稿布局数据
-        $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType);
-
-        $this->assign('theme_id', $themeId);
-        $this->assign('page_type', $pageType);
-        $this->assign('layout', $layout);
-        $this->assign('areas', ThemeLayout::getAreas());
-        $this->assign('preview_mode', true); // 标记为预览模式
-
-        return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/preview.phtml');
     }
 
     /**
@@ -2449,90 +2310,11 @@ class ThemeEditor extends BackendController
         }
     }
 
-    public function legacyGetCompileLayout()
-    {
-        return $this->getCompileLayout();
-    }
-/*
-        $themeId = (int)$this->request->getParam('theme_id');
-        $layoutType = $this->request->getParam('layout_type', 'homepage');
-        $layoutOption = $this->request->getParam('layout_option', 'default');
-
-        if (!$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少主题ID'),
-            ]);
-        }
-
-        // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
-        // 注意：必须使用 ObjectManager::getInstance(Session::class) 与 Observer 保持一致
-        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-        $session->setData('preview_theme_id', $themeId);
-        $session->setData('preview_theme_area', 'frontend');
-
-        try {
-            // 获取主题信息
-            $this->welineTheme->load($themeId);
-            if (!$this->welineTheme->getId()) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('主题不存在'),
-                ]);
-            }
-
-            // 构建布局模板路径
-            $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
-
-            // 编译模板并获取 HTML
-            // 设置编辑模式标记
-            $this->assign('editor_mode', true);
-            $this->assign('theme_id', $themeId);
-            $this->assign('layout_type', $layoutType);
-            $this->assign('meta', [
-                'showHeader' => true,
-                'showFooter' => true,
-                'showStatistics' => true,
-                'showFeatures' => true,
-                'showProducts' => true,
-                'showTestimonials' => true,
-                'showNews' => true,
-                'showPartners' => true,
-            ]);
-
-            $this->welineTheme->load($themeId);
-            $html = $this->renderUnifiedLayoutPreview($themeId, (string)$layoutType, (string)$layoutOption, 'frontend');
-
-            // 提取所有插槽信息
-            $slots = $this->extractSlots($html);
-
-            return $this->fetchJson([
-                'success' => true,
-                'html' => $html,
-                'slots' => $slots,
-                'layout' => [
-                    'type' => $layoutType,
-                    'option' => $layoutOption,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * 从 HTML 中提取插槽信息
-     * 同时支持旧格式（widget-slot-area + data-slot-id）和新格式（data-wslot），
-     * 否则 footer/header 等仅使用 data-wslot 的插槽不会被返回，导致 footer 布局异常。
-     */
+    /** 从 HTML 中提取 Weline 插槽信息。 */
     private function extractSlots(string $html): array
     {
         $slots = [];
 
-        // 1. 新格式：data-wslot（header、footer 及子插槽 footer-links 等均用此格式）
         if (strpos($html, 'data-wslot') !== false) {
             $doc = new \DOMDocument();
             libxml_use_internal_errors(true);
@@ -2548,43 +2330,15 @@ class ThemeEditor extends BackendController
                 if ($slotId === '') {
                     continue;
                 }
-                $acceptAttr = $element->getAttribute('data-wslot-accept') ?: $element->getAttribute('data-slot-accept') ?: '';
+                $acceptAttr = $element->getAttribute('data-wslot-accept');
                 $slots[$slotId] = [
                     'id' => $slotId,
-                    'name' => $element->getAttribute('data-wslot-name') ?: $element->getAttribute('data-slot-name') ?: $slotId,
+                    'name' => $element->getAttribute('data-wslot-name') ?: $slotId,
                     'accept' => array_values(array_filter(array_map('trim', explode(',', $acceptAttr)))),
-                    'exclusive' => ($element->getAttribute('data-wslot-exclusive') ?: $element->getAttribute('data-slot-exclusive')) === 'true',
-                    'multiple' => ($element->getAttribute('data-wslot-multiple') ?: $element->getAttribute('data-slot-multiple')) !== 'false',
-                    'position' => $element->getAttribute('data-wslot-position') ?: $element->getAttribute('data-slot-position') ?: '',
+                    'exclusive' => $element->getAttribute('data-wslot-exclusive') === 'true',
+                    'multiple' => $element->getAttribute('data-wslot-multiple') !== 'false',
+                    'position' => $element->getAttribute('data-wslot-position'),
                 ];
-            }
-        }
-
-        // 2. 旧格式：widget-slot-area + data-slot-id（不覆盖已从 data-wslot 提取的插槽）
-        $pattern = '/<[^>]+class="[^"]*widget-slot-area[^"]*"[^>]*data-slot-id="([^"]+)"[^>]*>/i';
-        if (preg_match_all($pattern, $html, $matches, PREG_SET_ORDER)) {
-            foreach ($matches as $match) {
-                $fullTag = $match[0];
-                $slotId = $match[1];
-                if (isset($slots[$slotId])) {
-                    continue;
-                }
-                $slot = ['id' => $slotId];
-                if (preg_match('/data-slot-name="([^"]+)"/', $fullTag, $m)) {
-                    $slot['name'] = $m[1];
-                }
-                if (preg_match('/data-slot-accept="([^"]+)"/', $fullTag, $m)) {
-                    $slot['accept'] = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
-                } else {
-                    $slot['accept'] = [];
-                }
-                if (preg_match('/data-slot-position="([^"]+)"/', $fullTag, $m)) {
-                    $slot['position'] = $m[1];
-                }
-                if (preg_match('/data-slot-multiple="([^"]+)"/', $fullTag, $m)) {
-                    $slot['multiple'] = $m[1] === 'true';
-                }
-                $slots[$slotId] = $slot;
             }
         }
 
@@ -3093,32 +2847,7 @@ class ThemeEditor extends BackendController
             return $config;
         }
 
-        $legacyIdentify = $this->legacySlotAreaWidgetInstanceIdentify($identify, $slotArea, $themeArea);
-        if ($legacyIdentify !== '') {
-            $config = ThemeData::mergeTranslatedPaths($config, $params, $legacyIdentify, $locale);
-        }
-
         return ThemeData::mergeTranslatedPaths($config, $params, $identify, $locale);
-    }
-
-    private function legacySlotAreaWidgetInstanceIdentify(string $identify, string $slotArea, string $themeArea): string
-    {
-        $themeArea = $this->normalizeThemeConfigArea($themeArea);
-        $slotArea = strtolower(trim($slotArea));
-        if ($slotArea === '' || $slotArea === $themeArea || $slotArea === PreviewContextService::AREA_FRONTEND || $slotArea === PreviewContextService::AREA_BACKEND) {
-            return '';
-        }
-
-        if (!preg_match('/^theme\.(frontend|backend)\.widget_instances\.([^\\s]+)$/', $identify, $matches)) {
-            return '';
-        }
-
-        $slotArea = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $slotArea) ?: '';
-        if ($slotArea === '') {
-            return '';
-        }
-
-        return 'theme.' . $matches[1] . '.' . $slotArea . '.widget_instances.' . $matches[2];
     }
 
     private function buildWidgetPreviewDefaultConfig(string $widgetCode): array
@@ -3128,7 +2857,7 @@ class ThemeEditor extends BackendController
                 'type' => 'info',
                 'title' => __('系统提示'),
                 'message' => __('这是一条状态提示信息。'),
-                'icon' => 'ri-information-line',
+                'icon' => 'info',
                 'dismissible' => false,
             ],
             'badge' => [
@@ -3139,7 +2868,7 @@ class ThemeEditor extends BackendController
                 'text' => __('主要操作'),
                 'type' => 'primary',
                 'size' => 'md',
-                'icon' => 'ri-flashlight-line',
+                'icon' => 'bolt',
             ],
             'card' => [
                 'title' => __('数据卡片'),
@@ -3151,10 +2880,10 @@ class ThemeEditor extends BackendController
                 'id' => 'component-preview-dropdown',
                 'trigger' => __('选择操作'),
                 'items' => [
-                    ['text' => __('查看详情'), 'icon' => 'ri-eye-line', 'url' => '#'],
-                    ['text' => __('复制视图'), 'icon' => 'ri-file-copy-line', 'url' => '#'],
+                    ['text' => __('查看详情'), 'icon' => 'eye', 'url' => '#'],
+                    ['text' => __('复制视图'), 'icon' => 'copy', 'url' => '#'],
                     ['divider' => true],
-                    ['text' => __('归档'), 'icon' => 'ri-archive-line', 'url' => '#'],
+                    ['text' => __('归档'), 'icon' => 'archive', 'url' => '#'],
                 ],
             ],
             'form-group' => [
@@ -3208,62 +2937,63 @@ class ThemeEditor extends BackendController
     {
         $code = $this->normalizeWidgetPreviewCode($widgetCode);
         $name = htmlspecialchars($widgetName !== '' ? $widgetName : $widgetCode, ENT_QUOTES, 'UTF-8');
+        $icons = ObjectManager::getInstance(\Weline\Theme\Service\Ui\IconRegistry::class);
 
         return match ($code) {
             'alert' => '<div class="te-component-preview te-component-preview-alert">'
-                . '<div class="w-alert w-alert-info" role="alert">'
-                . '<i class="ri-information-line me-2"></i>'
+                . '<div class="w-alert" data-tone="info" role="alert">'
+                . $icons->render('info', 'sm')
                 . '<strong>' . htmlspecialchars((string)__('系统提示'), ENT_QUOTES, 'UTF-8') . '</strong>'
                 . '<span>' . htmlspecialchars((string)__('这是一条状态提示信息。'), ENT_QUOTES, 'UTF-8') . '</span>'
                 . '</div></div>',
             'badge' => '<div class="te-component-preview te-component-preview-badge">'
-                . '<span class="w-badge w-badge-success">' . htmlspecialchars((string)__('已启用'), ENT_QUOTES, 'UTF-8') . '</span>'
-                . '<span class="w-badge w-badge-info">' . htmlspecialchars((string)__('后台'), ENT_QUOTES, 'UTF-8') . '</span>'
+                . '<span class="w-badge" data-tone="success">' . htmlspecialchars((string)__('已启用'), ENT_QUOTES, 'UTF-8') . '</span>'
+                . '<span class="w-badge" data-tone="info">' . htmlspecialchars((string)__('后台'), ENT_QUOTES, 'UTF-8') . '</span>'
                 . '</div>',
             'button' => '<div class="te-component-preview te-component-preview-button">'
-                . '<button type="button" class="w-btn w-btn-primary w-btn-md"><i class="ri-flashlight-line"></i> '
+                . '<button type="button" class="w-button">' . $icons->render('bolt', 'sm') . ' '
                 . htmlspecialchars((string)__('主要操作'), ENT_QUOTES, 'UTF-8') . '</button>'
-                . '<button type="button" class="w-btn w-btn-secondary w-btn-sm">' . htmlspecialchars((string)__('次要'), ENT_QUOTES, 'UTF-8') . '</button>'
+                . '<button type="button" class="w-button" data-tone="neutral" data-size="sm">' . htmlspecialchars((string)__('次要'), ENT_QUOTES, 'UTF-8') . '</button>'
                 . '</div>',
             'card' => '<div class="te-component-preview te-component-preview-card">'
-                . '<div class="w-card"><div class="w-card-header"><h3 class="w-card-title">' . htmlspecialchars((string)__('数据卡片'), ENT_QUOTES, 'UTF-8') . '</h3>'
-                . '<p class="w-card-subtitle">' . htmlspecialchars((string)__('用于组织内容'), ENT_QUOTES, 'UTF-8') . '</p></div>'
-                . '<div class="w-card-body">' . htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') . '</div></div>'
+                . '<article class="w-card"><header class="w-card__header"><h3 class="w-card__title">' . htmlspecialchars((string)__('数据卡片'), ENT_QUOTES, 'UTF-8') . '</h3>'
+                . '<small>' . htmlspecialchars((string)__('用于组织内容'), ENT_QUOTES, 'UTF-8') . '</small></header>'
+                . '<div class="w-card__body">' . htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') . '</div></article>'
                 . '</div>',
             'dropdown' => '<div class="te-component-preview te-component-preview-dropdown">'
-                . '<div class="w-dropdown dropdown"><button type="button" class="w-btn w-btn-secondary w-dropdown-toggle dropdown-toggle">'
+                . '<div class="w-menu-root" data-w-component="menu"><button type="button" class="w-button" data-tone="neutral" data-w-menu-trigger aria-haspopup="menu" aria-expanded="true">'
                 . htmlspecialchars((string)__('选择操作'), ENT_QUOTES, 'UTF-8') . '</button>'
-                . '<div class="w-dropdown-menu dropdown-menu show">'
-                . '<a class="w-dropdown-item dropdown-item" href="#">' . htmlspecialchars((string)__('查看详情'), ENT_QUOTES, 'UTF-8') . '</a>'
-                . '<a class="w-dropdown-item dropdown-item" href="#">' . htmlspecialchars((string)__('复制视图'), ENT_QUOTES, 'UTF-8') . '</a>'
+                . '<div class="w-menu" data-w-menu-panel role="menu">'
+                . '<a class="w-menu__item" role="menuitem" href="#">' . htmlspecialchars((string)__('查看详情'), ENT_QUOTES, 'UTF-8') . '</a>'
+                . '<a class="w-menu__item" role="menuitem" href="#">' . htmlspecialchars((string)__('复制视图'), ENT_QUOTES, 'UTF-8') . '</a>'
                 . '</div></div></div>',
             'form-group' => '<div class="te-component-preview te-component-preview-form-group">'
-                . '<label class="w-form-label">' . htmlspecialchars((string)__('字段名称'), ENT_QUOTES, 'UTF-8') . '</label>'
-                . '<input class="w-form-control" type="text" value="' . htmlspecialchars((string)__('管理员'), ENT_QUOTES, 'UTF-8') . '" placeholder="' . htmlspecialchars((string)__('请输入内容'), ENT_QUOTES, 'UTF-8') . '">'
+                . '<label class="w-field__label">' . htmlspecialchars((string)__('字段名称'), ENT_QUOTES, 'UTF-8') . '</label>'
+                . '<input class="w-input" type="text" value="' . htmlspecialchars((string)__('管理员'), ENT_QUOTES, 'UTF-8') . '" placeholder="' . htmlspecialchars((string)__('请输入内容'), ENT_QUOTES, 'UTF-8') . '">'
                 . '</div>',
             'loading' => '<div class="te-component-preview te-component-preview-loading">'
-                . '<span class="w-loading-spinner"></span><span>' . htmlspecialchars((string)__('正在同步数据'), ENT_QUOTES, 'UTF-8') . '</span>'
+                . '<span class="w-spinner" aria-hidden="true"></span><span>' . htmlspecialchars((string)__('正在同步数据'), ENT_QUOTES, 'UTF-8') . '</span>'
                 . '</div>',
             'message' => '<div class="te-component-preview te-component-preview-message">'
-                . '<div class="w-message w-message-success"><i class="ri-checkbox-circle-line"></i><div><strong>' . htmlspecialchars((string)__('操作完成'), ENT_QUOTES, 'UTF-8') . '</strong>'
+                . '<div class="w-alert" data-tone="success">' . $icons->render('check', 'sm') . '<div><strong>' . htmlspecialchars((string)__('操作完成'), ENT_QUOTES, 'UTF-8') . '</strong>'
                 . '<span>' . htmlspecialchars((string)__('数据已保存，可以继续编辑。'), ENT_QUOTES, 'UTF-8') . '</span></div></div>'
                 . '</div>',
             'modal' => '<div class="te-component-preview te-component-preview-modal">'
-                . '<div class="w-modal-preview"><div class="w-modal-header"><strong>' . htmlspecialchars((string)__('确认发布'), ENT_QUOTES, 'UTF-8') . '</strong><span aria-hidden="true">×</span></div>'
-                . '<div class="w-modal-body">' . htmlspecialchars((string)__('公开后同站点后台用户可见。'), ENT_QUOTES, 'UTF-8') . '</div>'
-                . '<div class="w-modal-footer"><button type="button" class="w-btn w-btn-secondary w-btn-sm">' . htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') . '</button>'
-                . '<button type="button" class="w-btn w-btn-primary w-btn-sm">' . htmlspecialchars((string)__('确认'), ENT_QUOTES, 'UTF-8') . '</button></div></div>'
+                . '<div class="w-card"><header class="w-card__header"><strong>' . htmlspecialchars((string)__('确认发布'), ENT_QUOTES, 'UTF-8') . '</strong></header>'
+                . '<div class="w-card__body">' . htmlspecialchars((string)__('公开后同站点后台用户可见。'), ENT_QUOTES, 'UTF-8') . '</div>'
+                . '<footer class="w-card__footer"><button type="button" class="w-button" data-tone="neutral" data-size="sm">' . htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') . '</button>'
+                . '<button type="button" class="w-button" data-size="sm">' . htmlspecialchars((string)__('确认'), ENT_QUOTES, 'UTF-8') . '</button></footer></div>'
                 . '</div>',
             'pagination' => '<div class="te-component-preview te-component-preview-pagination">'
-                . '<nav class="w-pagination"><a href="#">' . htmlspecialchars((string)__('上一页'), ENT_QUOTES, 'UTF-8') . '</a><a href="#">1</a><a class="active" href="#">2</a><a href="#">3</a><a href="#">' . htmlspecialchars((string)__('下一页'), ENT_QUOTES, 'UTF-8') . '</a></nav>'
+                . '<nav aria-label="' . htmlspecialchars((string)__('分页'), ENT_QUOTES, 'UTF-8') . '"><ul class="w-pagination"><li class="w-pagination__item"><a class="w-pagination__link" href="#">' . htmlspecialchars((string)__('上一页'), ENT_QUOTES, 'UTF-8') . '</a></li><li class="w-pagination__item"><a class="w-pagination__link" href="#">1</a></li><li class="w-pagination__item"><a class="w-pagination__link" aria-current="page" href="#">2</a></li><li class="w-pagination__item"><a class="w-pagination__link" href="#">3</a></li><li class="w-pagination__item"><a class="w-pagination__link" href="#">' . htmlspecialchars((string)__('下一页'), ENT_QUOTES, 'UTF-8') . '</a></li></ul></nav>'
                 . '</div>',
             'table' => '<div class="te-component-preview te-component-preview-table">'
-                . '<table class="w-table w-table-striped"><thead><tr><th>' . htmlspecialchars((string)__('指标'), ENT_QUOTES, 'UTF-8') . '</th><th>' . htmlspecialchars((string)__('状态'), ENT_QUOTES, 'UTF-8') . '</th><th>' . htmlspecialchars((string)__('趋势'), ENT_QUOTES, 'UTF-8') . '</th></tr></thead>'
+                . '<table class="w-table"><thead><tr><th>' . htmlspecialchars((string)__('指标'), ENT_QUOTES, 'UTF-8') . '</th><th>' . htmlspecialchars((string)__('状态'), ENT_QUOTES, 'UTF-8') . '</th><th>' . htmlspecialchars((string)__('趋势'), ENT_QUOTES, 'UTF-8') . '</th></tr></thead>'
                 . '<tbody><tr><td>' . htmlspecialchars((string)__('订单'), ENT_QUOTES, 'UTF-8') . '</td><td>' . htmlspecialchars((string)__('正常'), ENT_QUOTES, 'UTF-8') . '</td><td>+12%</td></tr>'
                 . '<tr><td>' . htmlspecialchars((string)__('支付'), ENT_QUOTES, 'UTF-8') . '</td><td>' . htmlspecialchars((string)__('稳定'), ENT_QUOTES, 'UTF-8') . '</td><td>+4%</td></tr></tbody></table></div>',
             'tabs' => '<div class="te-component-preview te-component-preview-tabs">'
-                . '<div class="w-tabs"><div class="w-tab-list"><button type="button" class="active">' . htmlspecialchars((string)__('概览'), ENT_QUOTES, 'UTF-8') . '</button><button type="button">' . htmlspecialchars((string)__('设置'), ENT_QUOTES, 'UTF-8') . '</button></div>'
-                . '<div class="w-tab-panel">' . htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') . '</div></div>'
+                . '<div class="w-tabs__list" role="tablist"><button type="button" class="w-tabs__tab" role="tab" aria-selected="true">' . htmlspecialchars((string)__('概览'), ENT_QUOTES, 'UTF-8') . '</button><button type="button" class="w-tabs__tab" role="tab" aria-selected="false">' . htmlspecialchars((string)__('设置'), ENT_QUOTES, 'UTF-8') . '</button></div>'
+                . '<div class="w-tabs__panel" role="tabpanel">' . htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') . '</div>'
                 . '</div>',
             default => '<div class="te-component-preview te-component-preview-generic"><strong>' . $name . '</strong><span>' . htmlspecialchars($widgetCode, ENT_QUOTES, 'UTF-8') . '</span></div>',
         };
@@ -3638,198 +3368,23 @@ class ThemeEditor extends BackendController
         );
     }
 
-    public function legacyGetLayoutPreview()
-    {
-        return $this->getLayoutPreview();
-    }
-/*
-        $this->layoutType = null; // 禁用后端布局，iframe 仅渲染前端内容
-
-        $themeId = (int)$this->request->getParam('theme_id');
-        $layoutType = $this->request->getParam('layout_type', 'homepage');
-        $layoutOption = $this->request->getParam('layout_option', 'default');
-        $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
-        if ($editorArea !== 'backend') {
-            $editorArea = 'frontend';
-        }
-
-        // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
-        // 这是主题编辑器切换主题后实时生效的关键
-        // 注意：必须使用 ObjectManager::getInstance(Session::class) 与 Observer 保持一致
-        if ($themeId) {
-            $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-            $session->setData('preview_theme_id', $themeId);
-            $session->setData('preview_theme_area', $editorArea);
-        }
-        // 强制本次请求内 fetch 走 fetchFile 并触发 fetch_file（避免 view 缓存命中导致观察者不执行）
-        $this->request->setData('skip_view_file_cache', true);
-
-        // 主题编辑器预览：禁用一切相关缓存，确保每次解析到当前 theme_id 对应的主题目录
-        try {
-            w_cache('view')->clear();
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-            \Weline\Theme\Helper\ThemeData::clearCache();
-        } catch (\Throwable $e) {
-            // 忽略单类缓存清理失败，继续渲染
-        }
-
-        // 检查布局模板文件是否存在（按区域：frontend/backend）
-        $relativePath = "theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
-        $templateFile = BP . "app/code/Weline/Theme/view/{$relativePath}";
-        
-        if (!file_exists($templateFile)) {
-            // 布局文件不存在，返回错误页面
-            return $this->renderLayoutNotFoundError($layoutType, $layoutOption);
-        }
-
-        // 设置编辑/预览模式
-        $this->assign('editor_mode', true);
-        $this->assign('preview_mode', true); // 标记为预览模式，Observer 会读取草稿数据
-        $this->assign('theme_id', $themeId);
-        $this->assign('layout_type', $layoutType);
-        $this->assign('meta', [
-            'showHeader' => true,
-            'showFooter' => true,
-            'showStatistics' => true,
-            'showFeatures' => true,
-            'showProducts' => true,
-            'showTestimonials' => true,
-            'showNews' => true,
-            'showPartners' => true,
-        ]);
-
-        // 返回编译后的布局（在 iframe 中渲染，按 editor_area 使用前端或后端布局）
-        $templatePath = "Weline_Theme::theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
-        // 强制本次 fetch 走 fetchFile 并触发 fetch_file：删除该布局在 view 缓存中的键（与 Template 中 key 一致）
-        try {
-            $modulePath = $this->request->getRouterData('module_path');
-            if ($modulePath) {
-                $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
-                $layoutRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . $layoutType . DS . $layoutOption . '.phtml';
-                $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
-                $templateContextKey = \Weline\Framework\Cache\KeyBuilder::environmentHash(['scope' => 'template-file-map']);
-                w_cache('view')->delete($viewDir . $layoutRel . $langLocal);
-                w_cache('view')->delete($viewDir . $templatePath . '_tplFile' . $langLocal);
-                w_cache('view')->delete($viewDir . $templatePath . '_comFileName' . $langLocal);
-                w_cache('view')->delete($viewDir . $templatePath . '_tplFile|' . $templateContextKey);
-                w_cache('view')->delete($viewDir . $templatePath . '_comFileName|' . $templateContextKey);
-            }
-        } catch (\Throwable $e) {
-            // 忽略，继续 fetch
-        }
-
-        // 两阶段渲染：若布局模板依赖 base（setLayout('base')），先渲染内容再套 base，否则只渲染当前布局
-        $contentHtml = $this->fetch($templatePath);
-        $basePath = "Weline_Theme::theme/{$editorArea}/layouts/base.phtml";
-        $baseExists = $this->resolveThemeLayoutExists($themeId, $editorArea, 'base', 'default');
-        if ($baseExists) {
-            $this->getTemplate()->setData('child_html', ['content' => $contentHtml]);
-            try {
-                if ($modulePath = $this->request->getRouterData('module_path')) {
-                    $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
-                    $baseRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . 'base.phtml';
-                    $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
-                    $templateContextKey = \Weline\Framework\Cache\KeyBuilder::environmentHash(['scope' => 'template-file-map']);
-                    w_cache('view')->delete($viewDir . $baseRel . $langLocal);
-                    w_cache('view')->delete($viewDir . $basePath . '_tplFile' . $langLocal);
-                    w_cache('view')->delete($viewDir . $basePath . '_comFileName' . $langLocal);
-                    w_cache('view')->delete($viewDir . $basePath . '_tplFile|' . $templateContextKey);
-                    w_cache('view')->delete($viewDir . $basePath . '_comFileName|' . $templateContextKey);
-                }
-            } catch (\Throwable $e) {
-                // 忽略
-            }
-            $html = $this->fetch($basePath);
-        } else {
-            $html = $contentHtml;
-        }
-
-        // 注入编辑模式的 CSS 和 JS
-        $html = $this->injectEditorModeAssets($html);
-
-        return $html;
-    }
-    
     /**
      * 注入编辑模式的 CSS 和 JS 到 HTML 中
      */
     private function injectEditorModeAssets(string $html): string
     {
-        // 使用框架的静态资源获取方法
-        $cssSrc = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
-        $cssUrl = $cssSrc . '?v=20260712-backend-real-preview';
-        $jsSrc = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
-        $jsUrl = $jsSrc . '?v=20260712-backend-real-preview';
-        $previewExitUrl = htmlspecialchars(
+        $injector = ObjectManager::getInstance(\Weline\Theme\Service\EditorModeAssetInjector::class);
+        return $injector->inject(
+            $html,
             (string)($this->getTemplate()->getData('preview_exit_url') ?? ''),
-            ENT_QUOTES,
-            'UTF-8'
         );
-        $previewModeLabel = htmlspecialchars((string)__('预览模式'), ENT_QUOTES, 'UTF-8');
-        $previewModeHint = htmlspecialchars(
-            (string)__('当前正在预览后台主题，页面操作不会离开主题编辑流程。'),
-            ENT_QUOTES,
-            'UTF-8'
-        );
-        $exitPreviewLabel = htmlspecialchars((string)__('退出预览'), ENT_QUOTES, 'UTF-8');
-
-        // 编辑模式 CSS
-        $editorCss = <<<HTML
-<!-- Theme Editor Mode CSS -->
-<link rel="stylesheet" href="{$cssUrl}">
-HTML;
-        
-        // 编辑模式 JS
-        $editorJs = <<<HTML
-<!-- Theme Editor Mode JS -->
-<script src="{$jsUrl}"></script>
-HTML;
-
-        $previewNotice = $previewExitUrl !== '' ? <<<HTML
-<!-- Theme Preview Mode Notice -->
-<aside class="theme-preview-mode-notice" data-editor-interactive aria-label="{$previewModeLabel}">
-    <span class="theme-preview-mode-notice__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path fill="currentColor" d="M12 5c5.5 0 9.5 5.1 9.5 7s-4 7-9.5 7S2.5 13.9 2.5 12 6.5 5 12 5Zm0 2C8.2 7 5.1 10.1 4.5 12c.6 1.9 3.7 5 7.5 5s6.9-3.1 7.5-5c-.6-1.9-3.7-5-7.5-5Zm0 2.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z"/></svg>
-    </span>
-    <span class="theme-preview-mode-notice__copy">
-        <strong>{$previewModeLabel}</strong>
-        <small>{$previewModeHint}</small>
-    </span>
-    <a class="theme-preview-mode-notice__exit" href="{$previewExitUrl}" target="_top">
-        {$exitPreviewLabel}
-        <svg viewBox="0 0 24 24" width="16" height="16" focusable="false" aria-hidden="true"><path fill="currentColor" d="M13 5 20 12l-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6L13 5Z"/></svg>
-    </a>
-</aside>
-HTML : '';
-        
-        // 在 </head> 前注入 CSS
-        if (stripos($html, '</head>') !== false) {
-            $html = str_ireplace('</head>', $editorCss . "\n</head>", $html);
-        } else {
-            // 如果没有 </head>，在开头添加
-            $html = $editorCss . "\n" . $html;
-        }
-        
-        // 在 </body> 前注入 JS
-        if (stripos($html, '</body>') !== false) {
-            $html = str_ireplace('</body>', $previewNotice . "\n" . $editorJs . "\n</body>", $html);
-        } else {
-            // 如果没有 </body>，在末尾添加
-            $html .= "\n" . $previewNotice . "\n" . $editorJs;
-        }
-        
-        return $html;
     }
 
     private function injectBackendStructuralSlots(string $html): string
     {
         if ($html === ''
-            || (stripos($html, 'data-theme-area="backend"') === false
-                && stripos($html, "data-theme-area='backend'") === false
-                // Old custom layouts remain discoverable during the transition,
-                // but no canonical Weline output uses data-theme as an area flag.
-                && stripos($html, 'data-theme="backend"') === false
-                && stripos($html, "data-theme='backend'") === false)
+            || (stripos($html, 'data-w-area="backend"') === false
+                && stripos($html, "data-w-area='backend'") === false)
         ) {
             return $html;
         }
@@ -3895,66 +3450,30 @@ HTML : '';
             return '';
         }
 
-        $themeAssetBaseUrl = defined('DEV') && DEV
-            ? '/Weline/Theme/view/theme/'
-            : '/static/Weline/Theme/theme/';
-        $themeAssetVersion = '20260810-color-mode';
         $themePreference = $this->resolveBackendPreviewThemePreference();
         $resolvedThemeMode = $themePreference === 'dark' ? 'dark' : 'light';
+        $foundationUrl = $this->resolveUiAssetUrl('weline-foundation.css');
+        $backendUrl = $this->resolveUiAssetUrl('weline-backend.css');
+        $previewCssUrl = $this->resolveUiAssetUrl('pages/weline-theme-preview.css');
+        $uiUrl = $this->resolveUiAssetUrl('weline-ui.js');
+        $previewJsUrl = $this->resolveUiAssetUrl('pages/weline-theme-preview.js');
+        $title = htmlspecialchars((string)__('后台仪表盘预览'), ENT_QUOTES, 'UTF-8');
 
         return <<<HTML
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="{$resolvedThemeMode}" data-bs-theme="{$resolvedThemeMode}" data-theme-preference="{$themePreference}" data-theme-mode="{$resolvedThemeMode}" data-layout-mode="{$resolvedThemeMode}" data-theme-area="backend">
+<html lang="zh-CN" data-w-area="backend" data-theme-preference="{$themePreference}" data-theme="{$resolvedThemeMode}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Preview</title>
-    <script>(function(root){var preference=root.getAttribute('data-theme-preference')||'system';var media=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var mode=preference==='dark'||(preference==='system'&&media&&media.matches)?'dark':'light';root.setAttribute('data-theme',mode);root.setAttribute('data-bs-theme',mode);root.setAttribute('data-theme-mode',mode);root.setAttribute('data-layout-mode',mode);root.style.colorScheme=mode;})(document.documentElement);</script>
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_colors.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_typography.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_spacing.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_borders.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_shadows.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_light.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_dark.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/assets/css/theme.css?v={$themeAssetVersion}">
-    <script defer src="{$themeAssetBaseUrl}backend/assets/js/theme.js?v={$themeAssetVersion}"></script>
-    <style>
-        body { margin: 0; background: var(--backend-theme-surface-canvas); color: var(--backend-theme-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-        .dashboard-layout-wrapper { padding: 18px; box-sizing: border-box; min-height: 100vh; }
-        .w-dashboard-layout-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; align-items: start; }
-        .w-dashboard-region { min-width: 0; border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); background: var(--backend-theme-surface); padding: 14px; }
-        .w-dashboard-region-summary { grid-column: 1 / span 4; }
-        .w-dashboard-region-analysis { grid-column: 5 / span 5; }
-        .w-dashboard-region-side { grid-column: 10 / span 3; grid-row: 1 / span 2; }
-        .w-dashboard-region-detail { grid-column: 1 / span 9; }
-        .w-dashboard-region-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-        .w-dashboard-region-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
-        .w-dashboard-region-head p, .w-dashboard-region-head span { margin: 3px 0 0; color: var(--backend-theme-text-secondary); font-size: 12px; line-height: 1.35; }
-        .w-dashboard-slot-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-        .w-dashboard-slot-summary > .w-dashboard-region-head, .w-dashboard-slot-summary > .widget-wrapper[data-widget-code="overview_kpi"] { grid-column: 1 / -1; }
-        .w-dashboard-slot-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-        .widget-wrapper { min-width: 0; }
-        .dashboard-widget { height: 100%; min-width: 0; border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); background: var(--backend-theme-surface); padding: 14px; box-sizing: border-box; overflow: hidden; }
-        .dashboard-widget header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-        .dashboard-widget h3 { margin: 0; font-size: 16px; font-weight: 700; }
-        .dashboard-widget header span, .dashboard-widget small { color: var(--backend-theme-text-secondary); font-size: 12px; white-space: nowrap; }
-        .w-dashboard-empty { min-height: 96px; border: var(--backend-theme-border-width) dashed var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; color: var(--backend-theme-text-secondary); text-align: center; }
-        .dashboard-widget-detail-snapshot table { width: 100%; border-collapse: collapse; }
-        .dashboard-widget-detail-snapshot th, .dashboard-widget-detail-snapshot td { border-bottom: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); padding: 10px 0; text-align: left; font-size: 13px; line-height: 1.35; vertical-align: top; }
-        @media (max-width: 980px) {
-            .w-dashboard-layout-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
-            .w-dashboard-region-summary, .w-dashboard-region-analysis, .w-dashboard-region-detail { grid-column: 1 / span 5; }
-            .w-dashboard-region-side { grid-column: 6 / -1; grid-row: 1 / span 3; }
-        }
-        @media (max-width: 640px) {
-            .w-dashboard-layout-grid { grid-template-columns: minmax(0, 1fr); }
-            .w-dashboard-region-summary, .w-dashboard-region-analysis, .w-dashboard-region-side, .w-dashboard-region-detail { grid-column: 1 / -1; grid-row: auto; }
-        }
-    </style>
+    <title>{$title}</title>
+    <link rel="stylesheet" href="{$foundationUrl}">
+    <link rel="stylesheet" href="{$backendUrl}">
+    <link rel="stylesheet" href="{$previewCssUrl}" data-w-editor-preview-asset="style">
+    <script type="module" src="{$uiUrl}"></script>
+    <script type="module" src="{$previewJsUrl}" data-w-editor-preview-asset="script"></script>
 </head>
 <body>
-    <main class="dashboard-layout-wrapper">{$content}</main>
+    <main class="w-dashboard-preview">{$content}</main>
 </body>
 </html>
 HTML;
@@ -4942,33 +4461,17 @@ HTML;
             $data['theme_layout_target_id']
             ?? $data['theme_layout_source_target_id']
             ?? $data['virtual_target_id']
-            ?? $data['target_id']
             ?? $this->request->getParam(
                 'theme_layout_target_id',
                 $this->request->getParam(
                     'theme_layout_source_target_id',
                     $this->request->getParam(
                         'virtual_target_id',
-                        $this->request->getParam('target_id', 0)
+                        $this->request->getParam('layout_lock_target_id', 0)
                     )
                 )
             )
         );
-        if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
-            $legacyTargetType = trim((string)($data['target_type'] ?? $this->request->getParam('target_type', '')));
-            $legacyTargetIdExplicit = array_key_exists('target_id', $data)
-                || trim((string)$this->request->getParam('target_id', '')) !== '';
-            if (($targetId > 0 || $legacyTargetIdExplicit)
-                && $legacyTargetType !== ''
-                && !in_array($legacyTargetType, [
-                    PreviewContextService::TARGET_TYPE_LAYOUT,
-                    PreviewContextService::TARGET_TYPE_PAGE,
-                    PreviewContextService::TARGET_TYPE_PATH,
-                ], true)
-            ) {
-                $targetType = $legacyTargetType;
-            }
-        }
 
         return [
             'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
@@ -5317,94 +4820,65 @@ HTML;
      */
     private function renderLayoutNotFoundError(string $layoutType, string $layoutOption): string
     {
-        $themeAssetBaseUrl = defined('DEV') && DEV
-            ? '/Weline/Theme/view/theme/'
-            : '/static/Weline/Theme/theme/';
-        $themeAssetVersion = '20260810-color-mode';
         $themePreference = $this->resolveBackendPreviewThemePreference();
         $resolvedThemeMode = $themePreference === 'dark' ? 'dark' : 'light';
         $safeLayoutType = htmlspecialchars($layoutType, ENT_QUOTES, 'UTF-8');
         $safeLayoutOption = htmlspecialchars($layoutOption, ENT_QUOTES, 'UTF-8');
+        $foundationUrl = $this->resolveUiAssetUrl('weline-foundation.css');
+        $backendUrl = $this->resolveUiAssetUrl('weline-backend.css');
+        $previewCssUrl = $this->resolveUiAssetUrl('pages/weline-theme-preview.css');
+        $uiUrl = $this->resolveUiAssetUrl('weline-ui.js');
+        $icons = ObjectManager::getInstance(\Weline\Theme\Service\Ui\IconRegistry::class);
+        $warningIcon = $icons->render('warning', 'xl', (string)__('警告'));
+        $title = htmlspecialchars((string)__('布局不存在'), ENT_QUOTES, 'UTF-8');
+        $description = htmlspecialchars((string)__('请求的布局模板文件未找到，请选择其他布局类型。'), ENT_QUOTES, 'UTF-8');
+        $typeLabel = htmlspecialchars((string)__('布局类型'), ENT_QUOTES, 'UTF-8');
+        $optionLabel = htmlspecialchars((string)__('布局选项'), ENT_QUOTES, 'UTF-8');
+        $hint = htmlspecialchars((string)__('请在主题编辑器中选择有效的布局。'), ENT_QUOTES, 'UTF-8');
         $html = <<<HTML
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="{$resolvedThemeMode}" data-bs-theme="{$resolvedThemeMode}" data-theme-preference="{$themePreference}" data-theme-mode="{$resolvedThemeMode}" data-layout-mode="{$resolvedThemeMode}" data-theme-area="backend">
+<html lang="zh-CN" data-w-area="backend" data-theme-preference="{$themePreference}" data-theme="{$resolvedThemeMode}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>布局不存在</title>
-    <script>(function(root){var preference=root.getAttribute('data-theme-preference')||'system';var media=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var mode=preference==='dark'||(preference==='system'&&media&&media.matches)?'dark':'light';root.setAttribute('data-theme',mode);root.setAttribute('data-bs-theme',mode);root.setAttribute('data-theme-mode',mode);root.setAttribute('data-layout-mode',mode);root.style.colorScheme=mode;})(document.documentElement);</script>
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_colors.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_typography.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_spacing.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_borders.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_shadows.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_light.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_dark.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/assets/css/theme.css?v={$themeAssetVersion}">
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: var(--backend-theme-surface-canvas);
-            color: var(--backend-theme-text);
-        }
-        .error-container {
-            text-align: center;
-            padding: 40px;
-            background: var(--backend-component-surface);
-            border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-component-border);
-            border-radius: var(--backend-theme-radius-lg);
-            box-shadow: var(--backend-component-shadow-lg);
-            max-width: 500px;
-        }
-        .error-icon {
-            font-size: 64px;
-            color: var(--backend-theme-danger);
-            margin-bottom: 20px;
-        }
-        h1 {
-            margin: 0 0 10px;
-            color: var(--backend-theme-text);
-            font-size: 24px;
-        }
-        p {
-            color: var(--backend-theme-text-secondary);
-            margin: 0 0 20px;
-            line-height: 1.6;
-        }
-        .layout-info {
-            background: var(--backend-component-surface-subtle);
-            padding: 10px 15px;
-            border-radius: var(--backend-theme-radius-md);
-            font-family: monospace;
-            color: var(--backend-theme-text);
-            margin-bottom: 20px;
-        }
-        .hint {
-            font-size: 14px;
-            color: var(--backend-theme-text-muted);
-        }
-    </style>
+    <title>{$title}</title>
+    <link rel="stylesheet" href="{$foundationUrl}">
+    <link rel="stylesheet" href="{$backendUrl}">
+    <link rel="stylesheet" href="{$previewCssUrl}">
+    <script type="module" src="{$uiUrl}"></script>
 </head>
 <body>
-    <div class="error-container">
-        <div class="error-icon">⚠️</div>
-        <h1>布局文件不存在</h1>
-        <p>请求的布局模板文件未找到，请选择其他布局类型。</p>
-        <div class="layout-info">
-            布局类型: {$safeLayoutType}<br>
-            布局选项: {$safeLayoutOption}
-        </div>
-        <p class="hint">请在左侧面板选择一个有效的布局类型</p>
-    </div>
+    <main class="w-theme-preview-error-shell">
+        <article class="w-card w-theme-preview-error" role="alert">
+            <div class="w-card__body">
+                <span class="w-theme-preview-error__icon">{$warningIcon}</span>
+                <h1 class="w-card__title">{$title}</h1>
+                <p>{$description}</p>
+                <div class="w-theme-preview-error__identity">
+                    <strong>{$typeLabel}:</strong> {$safeLayoutType}<br>
+                    <strong>{$optionLabel}:</strong> {$safeLayoutOption}
+                </div>
+                <p>{$hint}</p>
+            </div>
+        </article>
+    </main>
 </body>
 </html>
 HTML;
         return $html;
+    }
+
+    private function resolveUiAssetUrl(string $relative): string
+    {
+        if (preg_match('#^[a-z0-9][a-z0-9/.-]+$#', $relative) !== 1 || str_contains($relative, '..')) {
+            throw new \InvalidArgumentException(__('Weline UI 资源路径无效'));
+        }
+
+        return htmlspecialchars(
+            $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::ui/' . $relative),
+            ENT_QUOTES,
+            'UTF-8',
+        );
     }
 
     /**
@@ -5536,7 +5010,7 @@ HTML;
             
             // 查找插槽元素
             $xpath = new \DOMXPath($dom);
-            $slotNodes = $xpath->query("//*[@data-wslot='{$slotId}' or @data-slot='{$slotId}']");
+            $slotNodes = $xpath->query("//*[@data-wslot='{$slotId}']");
             
             if ($slotNodes->length === 0) {
                 return '';
@@ -6038,78 +5512,6 @@ HTML;
         ]);
     }
 
-    public function legacyPostStartPreview()
-    {
-        return $this->postStartPreview();
-    }
-/*
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $versionId = isset($data['version_id']) ? (int)$data['version_id'] : null;
-
-        if (!$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少主题ID'),
-            ]);
-        }
-
-        try {
-            // 生成预览 Token
-            $token = $this->previewTokenService->generateToken($themeId, $pageType, $versionId);
-            
-            // 构建前端预览 URL
-            // 触发 hook 允许其他模块（如多站点模块）修改基础 URL
-            // 使用 getBaseHost() 获取仅主机部分（如 http://127.0.0.1:9981）
-            $baseUrl = $this->request->getBaseHost();
-            
-            // 分发事件获取自定义预览 URL
-            $eventData = [
-                'base_url' => $baseUrl,
-                'theme_id' => $themeId,
-                'page_type' => $pageType,
-            ];
-            $this->getEventManager()->dispatch('Weline_Theme::build_preview_url', $eventData);
-            
-            // 如果事件修改了 base_url，使用修改后的值
-            if (isset($eventData['base_url']) && $eventData['base_url'] !== $baseUrl) {
-                $baseUrl = $eventData['base_url'];
-            }
-            
-            // 根据页面类型构建预览路径
-            $previewPath = $this->getPreviewPathByPageType($pageType);
-            
-            // 构建完整预览 URL，携带 token 参数
-            $previewUrl = rtrim($baseUrl, '/') . $previewPath;
-            $previewUrl .= (strpos($previewUrl, '?') !== false ? '&' : '?') 
-                        . PreviewTokenService::TOKEN_KEY . '=' . urlencode($token);
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('预览已启动'),
-                'data' => [
-                    'token' => $token,
-                    'preview_url' => $previewUrl,
-                    'expires_in' => 3600, // 1 小时
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
     /**
      * 退出前端预览 (Query)
      * 路由: /backend/theme-editor/exit-preview (POST)
@@ -6172,64 +5574,6 @@ HTML;
                 'data' => [
                     'editor_url' => $this->buildEditorShellUrl($editorContext, $pageType),
                     'context' => $editorContext,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    public function legacyPostExitPreview()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $token = $data['token'] ?? $this->request->getParam('token', '');
-
-        // 如果没有传入 token，尝试从请求中获取
-        if (empty($token)) {
-            $token = $this->previewTokenService->getTokenFromRequest();
-        }
-
-        if (empty($token)) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少预览 Token'),
-            ]);
-        }
-
-        try {
-            // 获取 token 数据用于返回编辑器 URL
-            $tokenData = $this->previewTokenService->validateToken($token);
-            
-            // 删除 token
-            $result = $this->previewTokenService->deleteToken($token);
-            PreviewManager::clearPreviewConfig();
-            $this->session->delete('preview_auto_login');
-
-            // 构建编辑器返回 URL
-            $editorUrl = $this->_url->getBackendUrl('theme-editor/index');
-            if ($tokenData) {
-                $editorUrl = $this->_url->getBackendUrl('theme-editor/index', [
-                    'theme_id' => $tokenData['theme_id'] ?? 0,
-                    'page_type' => $tokenData['page_type'] ?? 'homepage',
-                ]);
-            }
-
-            return $this->fetchJson([
-                'success' => $result,
-                'message' => $result ? __('已退出预览模式') : __('退出预览失败'),
-                'data' => [
-                    'editor_url' => $editorUrl,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -6338,92 +5682,6 @@ HTML;
                     ),
                     'editor_url' => $this->buildEditorShellUrl($editorContext, $pageType),
                     'context' => $editorContext,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    public function legacyPostPublishAndExit()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $token = $data['token'] ?? $this->request->getParam('token', '');
-
-        // 如果没有传入 token，尝试从请求中获取
-        if (empty($token)) {
-            $token = $this->previewTokenService->getTokenFromRequest();
-        }
-
-        if (empty($token)) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少预览 Token'),
-            ]);
-        }
-
-        try {
-            // 验证 token 并获取数据
-            $tokenData = $this->previewTokenService->validateToken($token);
-            
-            if (!$tokenData) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('预览 Token 已过期或无效'),
-                ]);
-            }
-
-            $themeId = (int)($tokenData['theme_id'] ?? 0);
-            $pageType = $tokenData['page_type'] ?? ThemeLayout::PAGE_TYPE_HOME;
-
-            if (!$themeId) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('Token 中缺少主题信息'),
-                ]);
-            }
-
-            // 1. 发布布局
-            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, [], true);
-            if (!$publishResult) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('发布布局失败'),
-                ]);
-            }
-            $previewContext = \is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
-            $this->publishEditorPreviewScope($themeId, PreviewContextService::DEFAULT_SCOPE, $previewContext);
-
-            // 2. 清除并重建缓存
-            $this->cacheGenerator->clearCache($themeId);
-            $this->cacheGenerator->generate($themeId);
-            
-            $this->flushFullPageCache();
-
-            // 3. 删除预览 token
-            $this->previewTokenService->deleteToken($token);
-            PreviewManager::clearPreviewConfig();
-            $this->session->delete('preview_auto_login');
-
-            // 4. 获取前端首页 URL（非预览模式）
-            $frontendUrl = $this->request->getBaseHost() . '/';
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('主题已发布'),
-                'data' => [
-                    'redirect_url' => $frontendUrl,
                 ],
             ]);
         } catch (\Exception $e) {

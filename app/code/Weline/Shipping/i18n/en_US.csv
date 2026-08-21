@@ -24,17 +24,26 @@
 启用成功,"Enabled successfully"
 禁用成功,"Disabled successfully"
 发货地址管理,"Shipping Address Management"
+pin,pin
 查看发货地址,查看发货地址
+list,list
 查看发货地址列表,查看发货地址列表
 编辑发货地址,"Edit Shipping Address"
+edit,edit
 保存发货地址,保存发货地址
+save,save
 删除发货地址,删除发货地址
+trash,trash
 设置默认发货地址,设置默认发货地址
+star,star
 启用发货地址,启用发货地址
+check,check
 禁用发货地址,禁用发货地址
+close,close
 "仅允许 POST 请求。","仅允许 POST 请求。"
 配送服务创建成功。,配送服务创建成功。
 配送服务管理,配送服务管理
+truck,truck
 查看配送服务,查看配送服务
 查看配送服务列表,查看配送服务列表
 保存配送服务,保存配送服务
@@ -50,6 +59,7 @@
 保存地区,保存地区
 创建地区,创建地区
 同步国家数据,同步国家数据
+globe,globe
 从i18n同步国家数据,从i18n同步国家数据
 快递公司不存在,"Courier company does not exist"
 快递公司代码不能为空,"Carrier code cannot be empty"
@@ -64,6 +74,7 @@ API配置JSON格式错误,"API configuration JSON format error"
 保存快递公司,保存快递公司
 删除快递公司,删除快递公司
 切换快递公司状态,切换快递公司状态
+circle,circle
 切换快递公司启用/禁用状态,切换快递公司启用/禁用状态
 费用模板创建成功。,费用模板创建成功。
 费用模板管理,费用模板管理
@@ -72,6 +83,7 @@ API配置JSON格式错误,"API configuration JSON format error"
 保存费用模板,保存费用模板
 创建费用模板,创建费用模板
 物流跟踪管理,物流跟踪管理
+search,search
 查看物流跟踪,查看物流跟踪
 查看物流跟踪记录,查看物流跟踪记录
 免邮规则创建成功。,免邮规则创建成功。
@@ -83,6 +95,7 @@ API配置JSON格式错误,"API configuration JSON format error"
 配送系统,"Shipping System"
 配送系统管理聚合页,配送系统管理聚合页
 查看配送系统,查看配送系统
+grid,grid
 查看配送系统聚合页,查看配送系统聚合页
 配送区域创建成功。,配送区域创建成功。
 配送区域管理,配送区域管理

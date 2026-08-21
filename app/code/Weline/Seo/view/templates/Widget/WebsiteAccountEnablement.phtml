@@ -65,7 +65,7 @@ $crawlOptions = [
     SeoWebsiteAccount::CRAWL_NEVER => __('从不'),
 ];
 ?>
-<script src="@static(Weline_Seo::js/seo-admin.js)" defer></script>
+<js>Weline_Seo::js/seo-admin.js</js>
 <div
     id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
     class="seo-website-account-widget seo-website-account-widget--<?= htmlspecialchars($mode, ENT_QUOTES, 'UTF-8') ?>"
@@ -298,8 +298,8 @@ $crawlOptions = [
                 </div>
             </div>
             <?php if ($manageUrl !== ''): ?>
-                <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($manageUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" aria-label="<?= htmlspecialchars(__('打开 SEO 账户管理'), ENT_QUOTES, 'UTF-8') ?>">
-                    <i class="mdi mdi-account-cog-outline me-1"></i>
+                <a class="w-button" href="<?= htmlspecialchars($manageUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" aria-label="<?= htmlspecialchars(__('打开 SEO 账户管理'), ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                    <w:icon name="user" size="sm"></w:icon>
                     <lang>账户管理</lang>
                 </a>
             <?php endif; ?>
@@ -309,11 +309,11 @@ $crawlOptions = [
 
             <?php if ($accounts === []): ?>
                 <div class="seo-empty">
-                    <div class="mb-2">
+                    <div style="--w-mb:var(--weline-space-2);">
                         <?= $visual->renderIcon('seo', 'SEO', '#94A3B8', 40) ?>
                     </div>
-                    <div class="fw-semibold"><lang>暂无可启用的搜索引擎账户</lang></div>
-                    <div class="small mt-1"><lang>先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。</lang></div>
+                    <div class="w-text" data-weight="strong"><lang>暂无可启用的搜索引擎账户</lang></div>
+                    <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><lang>先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。</lang></div>
                 </div>
             <?php else: ?>
                 <input type="hidden" name="<?= htmlspecialchars($fieldName('account_ids', true), ENT_QUOTES, 'UTF-8') ?>" value="">
@@ -348,14 +348,7 @@ $crawlOptions = [
                         ?>
                         <div class="seo-engine-card<?= $isSelected ? ' is-selected' : '' ?><?= !$isActive ? ' is-inactive' : '' ?>" data-account-card="<?= $accountId ?>" style="--seo-platform-color: <?= htmlspecialchars($platformColor, ENT_QUOTES, 'UTF-8') ?>;">
                             <div class="seo-engine-main">
-                                <input
-                                    class="form-check-input seo-engine-check"
-                                    type="checkbox"
-                                    id="<?= htmlspecialchars($checkboxId, ENT_QUOTES, 'UTF-8') ?>"
-                                    name="<?= htmlspecialchars($fieldName('account_ids', true), ENT_QUOTES, 'UTF-8') ?>"
-                                    value="<?= $accountId ?>"
-                                    data-account-checkbox="<?= $accountId ?>"
-                                    <?= $isSelected ? 'checked' : '' ?>>
+                                <input class="seo-engine-check" type="checkbox" id="<?= htmlspecialchars($checkboxId, ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('account_ids', true), ENT_QUOTES, 'UTF-8') ?>" value="<?= $accountId ?>" data-account-checkbox="<?= $accountId ?>" <?= $isSelected ? 'checked' : '' ?>>
                                 <div>
                                     <label class="seo-engine-title" for="<?= htmlspecialchars($checkboxId, ENT_QUOTES, 'UTF-8') ?>">
                                         <?= $visual->renderIcon($platform, $platformName, $platformColor, 32, 'seo-platform-icon') ?>
@@ -373,7 +366,7 @@ $crawlOptions = [
                                         <?php if ($supportsStats): ?><span class="seo-chip is-on"><lang>数据同步</lang></span><?php endif; ?>
                                     </div>
                                 </div>
-                                <i class="mdi mdi-chevron-down text-muted mt-1" aria-hidden="true"></i>
+                                <w:icon name="chevron-down" size="sm"></w:icon>
                             </div>
 
                             <div class="seo-engine-config">
@@ -381,7 +374,7 @@ $crawlOptions = [
                                     <div class="seo-config-grid">
                                         <div>
                                             <label for="<?= htmlspecialchars($checkboxId . '_sitemap', ENT_QUOTES, 'UTF-8') ?>"><lang>Sitemap 频率</lang></label>
-                                            <select class="form-select form-select-sm" id="<?= htmlspecialchars($checkboxId . '_sitemap', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.sitemap_frequency'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <select class="w-select" id="<?= htmlspecialchars($checkboxId . '_sitemap', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.sitemap_frequency'), ENT_QUOTES, 'UTF-8') ?>" data-size="sm">
                                                 <?php foreach ($sitemapOptions as $value => $label): ?>
                                                     <option value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" <?= $currentSitemapFrequency === $value ? 'selected' : '' ?>><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
                                                 <?php endforeach; ?>
@@ -389,7 +382,7 @@ $crawlOptions = [
                                         </div>
                                         <div>
                                             <label for="<?= htmlspecialchars($checkboxId . '_crawl', ENT_QUOTES, 'UTF-8') ?>"><lang>抓取频率</lang></label>
-                                            <select class="form-select form-select-sm" id="<?= htmlspecialchars($checkboxId . '_crawl', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.crawl_frequency'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <select class="w-select" id="<?= htmlspecialchars($checkboxId . '_crawl', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.crawl_frequency'), ENT_QUOTES, 'UTF-8') ?>" data-size="sm">
                                                 <?php foreach ($crawlOptions as $value => $label): ?>
                                                     <option value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" <?= $currentCrawlFrequency === $value ? 'selected' : '' ?>><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
                                                 <?php endforeach; ?>
@@ -397,21 +390,21 @@ $crawlOptions = [
                                         </div>
                                         <div>
                                             <label for="<?= htmlspecialchars($checkboxId . '_priority', ENT_QUOTES, 'UTF-8') ?>"><lang>URL 优先级</lang></label>
-                                            <input class="form-control form-control-sm" id="<?= htmlspecialchars($checkboxId . '_priority', ENT_QUOTES, 'UTF-8') ?>" type="number" min="0" max="1" step="0.1" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.priority'), ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($currentPriority, ENT_QUOTES, 'UTF-8') ?>">
+                                            <input class="w-input" id="<?= htmlspecialchars($checkboxId . '_priority', ENT_QUOTES, 'UTF-8') ?>" type="number" min="0" max="1" step="0.1" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.priority'), ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($currentPriority, ENT_QUOTES, 'UTF-8') ?>" data-size="sm">
                                         </div>
                                     </div>
                                     <div class="seo-auto-submit">
                                         <input type="hidden" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.is_auto_submit'), ENT_QUOTES, 'UTF-8') ?>" value="0">
-                                        <div class="form-check form-switch mb-0">
-                                            <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($checkboxId . '_auto', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.is_auto_submit'), ENT_QUOTES, 'UTF-8') ?>" value="1" <?= $currentAutoSubmit ? 'checked' : '' ?>>
-                                            <label class="form-check-label" for="<?= htmlspecialchars($checkboxId . '_auto', ENT_QUOTES, 'UTF-8') ?>">
+                                        <div class="w-switch" style="--w-mb:0;">
+                                            <input type="checkbox" id="<?= htmlspecialchars($checkboxId . '_auto', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.is_auto_submit'), ENT_QUOTES, 'UTF-8') ?>" value="1" <?= $currentAutoSubmit ? 'checked' : '' ?>>
+                                            <label for="<?= htmlspecialchars($checkboxId . '_auto', ENT_QUOTES, 'UTF-8') ?>">
                                                 <lang>启用该账户的网站自动提交</lang>
                                             </label>
                                         </div>
                                         <input type="hidden" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.enable_url_push'), ENT_QUOTES, 'UTF-8') ?>" value="0">
-                                        <div class="form-check form-switch mt-2 mb-0">
-                                            <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($checkboxId . '_url_push', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.enable_url_push'), ENT_QUOTES, 'UTF-8') ?>" value="1" <?= $currentUrlPush ? 'checked' : '' ?> <?= !$supportsUrlPush ? 'disabled' : '' ?>>
-                                            <label class="form-check-label" for="<?= htmlspecialchars($checkboxId . '_url_push', ENT_QUOTES, 'UTF-8') ?>">
+                                        <div class="w-switch" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                                            <input type="checkbox" id="<?= htmlspecialchars($checkboxId . '_url_push', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.enable_url_push'), ENT_QUOTES, 'UTF-8') ?>" value="1" <?= $currentUrlPush ? 'checked' : '' ?> <?= !$supportsUrlPush ? 'disabled' : '' ?>>
+                                            <label for="<?= htmlspecialchars($checkboxId . '_url_push', ENT_QUOTES, 'UTF-8') ?>">
                                                 <lang>启用该账户的 URL rewrite 推送</lang>
                                             </label>
                                         </div>
@@ -425,12 +418,12 @@ $crawlOptions = [
 
             <?php if ($showSubmit): ?>
                 <div class="seo-widget-footer">
-                    <div class="text-muted small">
-                        <i class="mdi mdi-shield-check-outline me-1"></i>
+                    <div class="w-text" data-tone="muted" data-size="sm">
+                        <w:icon name="check" size="sm"></w:icon>
                         <lang>保存后立即更新该网站的搜索引擎账户启用状态。</lang>
                     </div>
-                    <button type="submit" class="btn btn-primary" data-role="seo-submit" aria-label="<?= htmlspecialchars(__('保存搜索引擎账户启用状态'), ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="mdi mdi-content-save-outline me-1"></i>
+                    <button type="submit" class="w-button" data-role="seo-submit" aria-label="<?= htmlspecialchars(__('保存搜索引擎账户启用状态'), ENT_QUOTES, 'UTF-8') ?>" data-tone="primary">
+                        <w:icon name="save" size="sm"></w:icon>
                         <lang>保存启用状态</lang>
                     </button>
                 </div>

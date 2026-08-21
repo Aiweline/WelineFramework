@@ -253,19 +253,19 @@ small.text-muted {
 </script>
 
 <!-- 页面标题 -->
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center">
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
+    <div style="--w-span:12;">
+        <div class="w-cluster" data-justify="between" data-align="center">
             <div>
-                <h4 class="mb-1"><?=__('开发文档分类管理')?></h4>
-                <p class="text-muted mb-0"><?=__('左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动')?></p>
+                <h4 style="--w-mb:var(--weline-space-1);"><?=__('开发文档分类管理')?></h4>
+                <p class="w-text" data-tone="muted" style="--w-mb:0;"><?=__('左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动')?></p>
             </div>
             <div>
-                <button type="button" class="btn btn-primary" id="btn-add-top-level">
-                    <i class="mdi mdi-plus"></i> <?=__('添加顶级分类')?>
+                <button type="button" class="w-button" id="btn-add-top-level" data-tone="primary">
+                    <w:icon name="plus" size="sm"></w:icon> <?=__('添加顶级分类')?>
                 </button>
-                <a href="@admin-url('dev/tool/admin/document')" class="btn btn-secondary">
-                    <i class="mdi mdi-arrow-left"></i> <?=__('返回')?>
+                <a href="@admin-url('dev/tool/admin/document')" class="w-button" data-tone="neutral">
+                    <w:icon name="arrow-left" size="sm"></w:icon> <?=__('返回')?>
                 </a>
             </div>
         </div>
@@ -276,28 +276,28 @@ small.text-muted {
 <template>Weline_Component::message.phtml</template>
 
 <!-- AJAX消息提示容器 -->
-<div id="ajax-message-container" class="row mb-3" style="display: none;">
-    <div class="col-12"></div>
+<div id="ajax-message-container" class="w-grid" style="display: none;">
+    <div style="--w-span:12;"></div>
 </div>
 
 <!-- 左右分栏布局 -->
-<div class="row">
+<div class="w-grid">
     <!-- 左侧分类树 -->
-    <div class="col-md-5 col-lg-4 col-xl-3">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="mdi mdi-folder-tree me-2"></i>
+    <div style="--w-span-md:5;--w-span-lg:3;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h5 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="folder" size="sm"></w:icon>
                     <?=__('分类树')?>
                 </h5>
             </div>
-            <div class="card-body p-0">
+            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                 <div id="catalog-tree-container" style="min-height: 500px; overflow-x: auto; overflow-y: auto;">
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden"><?=__('加载中...')?></span>
+                    <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                        <div class="w-spinner w-text" role="status" data-tone="primary">
+                            <span class="w-visually-hidden"><?=__('加载中...')?></span>
                         </div>
-                        <p class="mt-2 text-muted"><?=__('正在加载分类树...')?></p>
+                        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);"><?=__('正在加载分类树...')?></p>
                     </div>
                 </div>
             </div>
@@ -305,19 +305,19 @@ small.text-muted {
     </div>
 
     <!-- 右侧编辑面板 -->
-    <div class="col-md-7 col-lg-8 col-xl-9">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0" id="catalog-edit-title">
-                    <i class="mdi mdi-folder-edit me-2"></i>
+    <div style="--w-span-md:7;--w-span-lg:9;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h5 class="w-card__title" id="catalog-edit-title" style="--w-mb:0;">
+                    <w:icon name="edit" size="sm"></w:icon>
                     <?=__('分类信息')?>
                 </h5>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
                 <div id="catalog-edit-container">
-                    <div class="text-center py-5">
-                        <i class="mdi mdi-folder-outline" style="font-size: 4rem; color: var(--backend-color-text-secondary, #6c757d); opacity: 0.5;"></i>
-                        <p class="mt-3 text-muted"><?=__('请从左侧选择一个分类进行编辑')?></p>
+                    <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                        <w:icon name="folder" size="sm"></w:icon>
+                        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);"><?=__('请从左侧选择一个分类进行编辑')?></p>
                     </div>
                 </div>
             </div>
@@ -426,7 +426,7 @@ small.text-muted {
             dataType: 'json'
         }).done(function(data) {
             if (!data || data.length === 0) {
-                $('#catalog-tree-container').html('<div class="text-center py-5"><p class="text-muted">' + i18n.noCategories + '</p></div>');
+                $('#catalog-tree-container').html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><p class="w-text" data-tone="muted">' + i18n.noCategories + '</p></div>');
                 return;
             }
             
@@ -500,7 +500,7 @@ small.text-muted {
                         
                         var hasSystemChildren = nodeData && nodeData.id ? hasSystemChild(nodeData.id) : false;
                         items['delete'] = {
-                            'label': '<i class="mdi mdi-delete"></i> ' + i18n.delete,
+                            'label': '<w:icon name="trash" size="sm"></w:icon> ' + i18n.delete,
                             'action': function(data) {
                                 if (isSystem || hasSystemChildren) {
                                     return false;
@@ -514,7 +514,7 @@ small.text-muted {
                         };
                         
                         items['add_child'] = {
-                            'label': '<i class="mdi mdi-plus"></i> ' + i18n.addSubCategoryMenu,
+                            'label': '<w:icon name="plus" size="sm"></w:icon> ' + i18n.addSubCategoryMenu,
                             'action': function(data) {
                                 handleAddChildNode(data.reference);
                             },
@@ -555,7 +555,7 @@ small.text-muted {
                 }, 500);
             });
         }).fail(function(xhr, status, error) {
-            $('#catalog-tree-container').html('<div class="alert alert-danger">' + i18n.loadCatalogTreeFailed + error + '</div>');
+            $('#catalog-tree-container').html('<div class="w-alert" data-tone="danger">' + i18n.loadCatalogTreeFailed + error + '</div>');
         });
     }
     
@@ -621,17 +621,17 @@ small.text-muted {
             
             var iconHtml = '';
             if (!isActive) {
-                iconHtml = '<i class="mdi mdi-folder-off text-muted me-2"></i>';
+                iconHtml = '<w:icon name="folder" size="sm"></w:icon>';
             } else if (isSystem) {
-                iconHtml = '<i class="mdi mdi-folder-cog text-primary me-2"></i>';
+                iconHtml = '<w:icon name="settings" size="sm"></w:icon>';
             } else {
-                iconHtml = '<i class="mdi mdi-folder text-success me-2"></i>';
+                iconHtml = '<w:icon name="folder" size="sm"></w:icon>';
             }
             
             var node = {
                 id: item.id.toString(),
-                text: iconHtml + item.name + (item.description ? ' <small class="text-muted ms-2">(' + (item.description.length > 30 ? item.description.substring(0, 30) + '...' : item.description) + ')</small>' : '') + 
-                      (isSystem ? ' <span class="badge bg-primary system-badge ms-2"><i class="mdi mdi-shield-check me-1"></i>' + i18n.systemCategory + '</span>' : ''),
+                text: iconHtml + item.name + (item.description ? ' <small class="w-text ms-2" data-tone="muted">(' + (item.description.length > 30 ? item.description.substring(0, 30) + '...' : item.description) + ')</small>' : '') + 
+                      (isSystem ? ' <span class="w-badge system-badge ms-2" data-w-background="primary"><w:icon name="check" size="sm"></w:icon>' + i18n.systemCategory + '</span>' : ''),
                 data: {
                     id: item.id,
                     name: item.name || '',
@@ -664,7 +664,7 @@ small.text-muted {
     function loadCatalogForEdit(catalogId) {
         currentCatalogId = catalogId;
         
-        $('#catalog-edit-container').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">' + i18n.loading + '</span></div></div>');
+        $('#catalog-edit-container').html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><div class="w-spinner w-text" role="status" data-tone="primary"><span class="w-visually-hidden">' + i18n.loading + '</span></div></div>');
         
         bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
             url: '@admin-url("dev/tool/admin/document/catalog/view")',
@@ -675,11 +675,11 @@ small.text-muted {
                 if (response.code === 200 && response.data) {
                     renderCatalogEditForm(response.data);
                 } else {
-                    $('#catalog-edit-container').html('<div class="alert alert-danger"><i class="mdi mdi-alert-circle me-2"></i>' + (response.msg || i18n.loadDocumentFailed) + '</div>');
+                    $('#catalog-edit-container').html('<div class="w-alert" data-tone="danger"><w:icon name="warning" size="sm"></w:icon>' + (response.msg || i18n.loadDocumentFailed) + '</div>');
                 }
             },
             error: function() {
-                $('#catalog-edit-container').html('<div class="alert alert-danger"><i class="mdi mdi-alert-circle me-2"></i>' + i18n.loadDocumentFailedRefresh + '</div>');
+                $('#catalog-edit-container').html('<div class="w-alert" data-tone="danger"><w:icon name="warning" size="sm"></w:icon>' + i18n.loadDocumentFailedRefresh + '</div>');
             }
         });
     }
@@ -693,20 +693,20 @@ small.text-muted {
         var html = '<form id="catalog-edit-form" data-weline-form="1" data-weline-form-intent="developer.catalog.edit" data-weline-form-captcha="auto">' +
             '<input type="hidden" name="id" id="catalog_id" value="' + escapeHtmlAttribute(catalogId) + '">' +
             '<input type="hidden" name="pid" id="catalog_pid" value="' + escapeHtmlAttribute(catalog.pid ? String(catalog.pid) : '0') + '">' +
-            '<div class="mb-3"><label for="catalog_name" class="form-label">' + i18n.categoryName + ' <span class="text-danger">*</span></label>' +
-            '<input type="text" class="form-control" id="catalog_name" name="name" value="' + escapeHtmlAttribute(catalogName) + '" required placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryName) + '"' + (isReadonly ? ' readonly' : '') + '>' +
-            (isReadonly ? '<small class="text-muted"><i class="mdi mdi-information-outline me-1"></i>' + i18n.systemCategoryCannotEditName + '</small>' : '') + '</div>' +
-            '<div class="mb-3"><label for="catalog_description" class="form-label">' + i18n.categoryDescription + '</label>' +
-            '<textarea class="form-control" id="catalog_description" name="description" rows="3" placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryDescription) + '"' + (isReadonly ? ' readonly' : '') + '>' + escapeHtml(catalog.description || '') + '</textarea></div>' +
-            '<div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="catalog_is_active" name="is_active" value="1"' + (catalog.is_active == 1 ? ' checked' : '') + (isReadonly ? ' disabled' : '') + '><label class="form-check-label" for="catalog_is_active">' + i18n.enableCategory + '</label></div></div>' +
-            '<div class="mb-3"><label class="form-label">' + i18n.category + '</label><div class="form-control-plaintext"><span class="badge bg-info">' + escapeHtml(catalog.parent_name || i18n.topLevelCategory) + '</span></div></div>' +
-            '<div class="mb-3"><label class="form-label">' + i18n.level + '</label><div class="form-control-plaintext"><span class="badge bg-secondary">' + escapeHtml(catalog.level || 1) + '</span></div></div>' +
-            (isSystem ? '<div class="alert alert-info"><i class="mdi mdi-information-outline me-2"></i>' + i18n.systemCategoryCannotEdit + '</div>' : '') +
-            '<div class="d-flex justify-content-between align-items-center"><div>' +
-            (!isSystem && catalogId ? '<button type="button" class="btn btn-danger btn-delete-catalog" data-catalog-action="delete" data-catalog-id="' + escapeHtmlAttribute(catalogId) + '" data-catalog-name="' + escapeHtmlAttribute(catalogName) + '"><i class="mdi mdi-delete"></i> ' + i18n.delete + '</button>' : '') +
-            '</div><div class="d-flex gap-2"><button type="button" class="btn btn-secondary" data-catalog-action="clear-edit">' + i18n.cancel + '</button><button type="submit" class="btn btn-primary"' + (isReadonly ? ' disabled' : '') + '>' + i18n.save + '</button></div></div></form>';
+            '<div style="--w-mb:var(--weline-space-4);"><label for="catalog_name" class="w-field__label">' + i18n.categoryName + ' <span class="w-text" data-tone="danger">*</span></label>' +
+            '<input type="text" class="w-input" id="catalog_name" name="name" value="' + escapeHtmlAttribute(catalogName) + '" required placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryName) + '" readonly :>' +
+            (isReadonly ? '<small class="w-text" data-tone="muted"><w:icon name="info" size="sm"></w:icon>' + i18n.systemCategoryCannotEditName + '</small>' : '') + '</div>' +
+            '<div style="--w-mb:var(--weline-space-4);"><label for="catalog_description" class="w-field__label">' + i18n.categoryDescription + '</label>' +
+            '<textarea class="w-textarea" id="catalog_description" name="description" rows="3" placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryDescription) + '" readonly :>' + escapeHtml(catalog.description || '') + '</textarea></div>' +
+            '<div style="--w-mb:var(--weline-space-4);"><div class="w-switch"><input type="checkbox" id="catalog_is_active" name="is_active" value="1" checked : disabled><label for="catalog_is_active">' + i18n.enableCategory + '</label></div></div>' +
+            '<div style="--w-mb:var(--weline-space-4);"><label class="w-field__label">' + i18n.category + '</label><div class="w-input"><span class="w-badge" data-w-background="info">' + escapeHtml(catalog.parent_name || i18n.topLevelCategory) + '</span></div></div>' +
+            '<div style="--w-mb:var(--weline-space-4);"><label class="w-field__label">' + i18n.level + '</label><div class="w-input"><span class="w-badge" data-w-background="muted">' + escapeHtml(catalog.level || 1) + '</span></div></div>' +
+            (isSystem ? '<div class="w-alert" data-tone="info"><w:icon name="info" size="sm"></w:icon>' + i18n.systemCategoryCannotEdit + '</div>' : '') +
+            '<div class="w-cluster" data-justify="between" data-align="center"><div>' +
+            (!isSystem && catalogId ? '<button type="button" class="w-button btn-delete-catalog" data-catalog-action="delete" data-catalog-id="' + escapeHtmlAttribute(catalogId) + '" data-catalog-name="' + escapeHtmlAttribute(catalogName) + '" data-tone="danger"><w:icon name="trash" size="sm"></w:icon> ' + i18n.delete + '</button>' : '') +
+            '</div><div class="w-cluster" style="--w-gap:var(--weline-space-2);"><button type="button" class="w-button" data-catalog-action="clear-edit" data-tone="neutral">' + i18n.cancel + '</button><button type="submit" class="w-button" disabled : data-tone="primary">' + i18n.save + '</button></div></div></form>';
         
-        $('#catalog-edit-title').html('<i class="mdi mdi-folder-edit me-2"></i>' + i18n.editCategory + ': ' + escapeHtml(catalogName));
+        $('#catalog-edit-title').html('<w:icon name="edit" size="sm"></w:icon>' + i18n.editCategory + ': ' + escapeHtml(catalogName));
         $('#catalog-edit-container').html(html);
     }
     
@@ -724,21 +724,21 @@ small.text-muted {
         var html = '<form id="catalog-edit-form" data-weline-form="1" data-weline-form-intent="developer.catalog.create" data-weline-form-captcha="auto">' +
             '<input type="hidden" name="id" id="catalog_id" value="">' +
             '<input type="hidden" name="pid" id="catalog_pid" value="' + escapeHtmlAttribute(parentId || '0') + '">' +
-            '<div class="mb-3"><label for="catalog_name" class="form-label">' + i18n.categoryName + ' <span class="text-danger">*</span></label>' +
-            '<input type="text" class="form-control" id="catalog_name" name="name" required placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryName) + '"></div>' +
-            '<div class="mb-3"><label for="catalog_description" class="form-label">' + i18n.categoryDescription + '</label>' +
-            '<textarea class="form-control" id="catalog_description" name="description" rows="3" placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryDescription) + '"></textarea></div>' +
-            '<div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="catalog_is_active" name="is_active" value="1" checked><label class="form-check-label" for="catalog_is_active">' + i18n.enableCategory + '</label></div></div>' +
-            '<div class="mb-3"><label class="form-label">' + i18n.category + '</label><div class="form-control-plaintext"><span class="badge bg-info">' + escapeHtml(parentName) + '</span></div></div>' +
-            '<div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-secondary" data-catalog-action="clear-edit">' + i18n.cancel + '</button><button type="submit" class="btn btn-primary">' + i18n.save + '</button></div></form>';
+            '<div style="--w-mb:var(--weline-space-4);"><label for="catalog_name" class="w-field__label">' + i18n.categoryName + ' <span class="w-text" data-tone="danger">*</span></label>' +
+            '<input type="text" class="w-input" id="catalog_name" name="name" required placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryName) + '"></div>' +
+            '<div style="--w-mb:var(--weline-space-4);"><label for="catalog_description" class="w-field__label">' + i18n.categoryDescription + '</label>' +
+            '<textarea class="w-textarea" id="catalog_description" name="description" rows="3" placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryDescription) + '"></textarea></div>' +
+            '<div style="--w-mb:var(--weline-space-4);"><div class="w-switch"><input type="checkbox" id="catalog_is_active" name="is_active" value="1" checked><label for="catalog_is_active">' + i18n.enableCategory + '</label></div></div>' +
+            '<div style="--w-mb:var(--weline-space-4);"><label class="w-field__label">' + i18n.category + '</label><div class="w-input"><span class="w-badge" data-w-background="info">' + escapeHtml(parentName) + '</span></div></div>' +
+            '<div class="w-cluster" data-justify="end" style="--w-gap:var(--weline-space-2);"><button type="button" class="w-button" data-catalog-action="clear-edit" data-tone="neutral">' + i18n.cancel + '</button><button type="submit" class="w-button" data-tone="primary">' + i18n.save + '</button></div></form>';
         
-        $('#catalog-edit-title').html('<i class="mdi mdi-folder-plus me-2"></i>' + (parentId ? i18n.addSubCategory : i18n.addTopLevelCategory));
+        $('#catalog-edit-title').html('<w:icon name="plus" size="sm"></w:icon>' + (parentId ? i18n.addSubCategory : i18n.addTopLevelCategory));
         $('#catalog-edit-container').html(html);
     }
     
     function clearCatalogEditForm() {
-        $('#catalog-edit-container').html('<div class="text-center py-5"><i class="mdi mdi-folder-outline" style="font-size: 4rem; color: var(--backend-color-text-secondary, #6c757d); opacity: 0.5;"></i><p class="mt-3 text-muted">' + i18n.pleaseSelectCategory + '</p></div>');
-        $('#catalog-edit-title').html('<i class="mdi mdi-folder-edit me-2"></i>' + i18n.categoryInfo);
+        $('#catalog-edit-container').html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="folder" size="sm"></w:icon><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);">' + i18n.pleaseSelectCategory + '</p></div>');
+        $('#catalog-edit-title').html('<w:icon name="edit" size="sm"></w:icon>' + i18n.categoryInfo);
         currentCatalogId = null;
         if (catalogTree) {
             catalogTree.jstree('deselect_all');
@@ -808,43 +808,21 @@ small.text-muted {
         });
     }
 
-    function getCatalogConfirmDialog() {
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            return window.BackendConfirm;
-        }
-        if (window.AdminConfirm && typeof window.AdminConfirm.show === 'function') {
-            return window.AdminConfirm;
-        }
-        return null;
-    }
-
     function buildDeleteCategoryMessage(categoryName) {
         var displayName = categoryName || i18n.unnamedCategory;
         return i18n.confirmDeleteCategory + ' "' + displayName + '"\n\n' + i18n.deleteWarning + '\n' + i18n.deleteWarning2;
     }
 
     function requestDeleteCategoryApproval(categoryName, onApproved) {
-        var confirmDialog = getCatalogConfirmDialog();
-        if (!confirmDialog) {
-            showNotification(i18n.confirmDialogUnavailable, 'warning');
-            return;
-        }
-
-        try {
-            Promise.resolve(confirmDialog.show(buildDeleteCategoryMessage(categoryName), {
-                title: i18n.confirmDeleteQuestion,
-                type: 'danger',
-                confirmText: i18n.delete,
-                cancelText: i18n.cancel
-            })).then(function(approved) {
-                if (approved) {
-                    onApproved();
-                }
-            });
-        } catch (e) {
-            console.error('确认组件调用失败:', e);
-            showNotification(i18n.confirmDialogUnavailable, 'warning');
-        }
+        Weline.UI.dialog.confirm(buildDeleteCategoryMessage(categoryName), {
+            title: i18n.confirmDeleteQuestion,
+            tone: 'danger',
+            dangerous: true,
+            confirmLabel: i18n.delete,
+            cancelLabel: i18n.cancel
+        }).then(function(approved) {
+            if (approved) onApproved();
+        });
     }
     
     function handleDeleteNode(nodeId) {
@@ -1152,8 +1130,8 @@ small.text-muted {
     }
     
     function showNotification(message, type) {
-        if (typeof BackendToast !== 'undefined') {
-            BackendToast[type] ? BackendToast[type](message) : BackendToast.info(message);
+        if (typeof Weline.UI.toast !== 'undefined') {
+            Weline.UI.toast[type] ? Weline.UI.toast[type](message) : Weline.UI.toast.info(message);
         } else {
             showPageMessage(message, type);
         }
@@ -1163,11 +1141,11 @@ small.text-muted {
         type = type || 'success';
         var container = $('#ajax-message-container .col-12');
         var alertClass = type === 'success' ? 'success' : type === 'error' ? 'danger' : type === 'warning' ? 'warning' : 'info';
-        var iconClass = type === 'success' ? 'mdi-check-circle' : type === 'error' ? 'mdi-alert-circle' : type === 'warning' ? 'mdi-alert' : 'mdi-information';
+        var iconClass = type === 'success' ? 'check' : type === 'error' ? 'warning' : type === 'warning' ? 'warning' : 'info';
         
         container.empty();
         
-        var messageHtml = '<div class="alert alert-' + alertClass + ' alert-dismissible fade show" role="alert"><i class="mdi ' + iconClass + ' me-2"></i> ' + message + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+        var messageHtml = '<div class="w-alert alert-' + alertClass ' alert-dismissible" role="alert"><i class="mdi ' + iconClass + ' me-2"></i> ' + message + '<button type="button" class="w-button" aria-label="Close" data-w-action="element.remove" data-w-close="" data-tone="quiet" data-size="sm"></button></div>';
         
         container.html(messageHtml);
         $('#ajax-message-container').slideDown(300);

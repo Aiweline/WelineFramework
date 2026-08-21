@@ -356,7 +356,7 @@
             }
         }
     </style>
-    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet" type="text/css">
+    <css>Weline_Frontend::assets/css/icons.min.css</css>
     <!-- 加载i18n.js以支持语言切换 -->
     
 <script>
@@ -416,22 +416,22 @@
                         ?>
                         <div class="language-switcher" role="button" tabindex="0">
                             <span class="action-line-2">
-                                <i class="mdi mdi-web" aria-hidden="true"></i>
+                                <w:icon name="globe" size="sm"></w:icon>
                                 <span class="current-language"><?= $langDisplay ?></span>
-                                <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
+                                <w:icon name="chevron-down" size="sm"></w:icon>
                             </span>
                             <div class="language-options" role="menu">
                                 <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
                                     <span>简体中文</span>
-                                    <i class="mdi mdi-check" aria-hidden="true"></i>
+                                    <w:icon name="check" size="sm"></w:icon>
                                 </a>
                                 <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
                                     <span>English</span>
-                                    <i class="mdi mdi-check" aria-hidden="true"></i>
+                                    <w:icon name="check" size="sm"></w:icon>
                                 </a>
                                 <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
                                     <span>繁體中文</span>
-                                    <i class="mdi mdi-check" aria-hidden="true"></i>
+                                    <w:icon name="check" size="sm"></w:icon>
                                 </a>
                             </div>
                         </div>
@@ -447,22 +447,22 @@
                     ?>
                     <div class="language-switcher" role="button" tabindex="0">
                         <span class="action-line-2">
-                            <i class="mdi mdi-web" aria-hidden="true"></i>
+                            <w:icon name="globe" size="sm"></w:icon>
                             <span class="current-language"><?= $langDisplay ?></span>
-                            <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
+                            <w:icon name="chevron-down" size="sm"></w:icon>
                         </span>
                         <div class="language-options" role="menu">
                             <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
                                 <span>简体中文</span>
-                                <i class="mdi mdi-check" aria-hidden="true"></i>
+                                <w:icon name="check" size="sm"></w:icon>
                             </a>
                             <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
                                 <span>English</span>
-                                <i class="mdi mdi-check" aria-hidden="true"></i>
+                                <w:icon name="check" size="sm"></w:icon>
                             </a>
                             <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
                                 <span>繁體中文</span>
-                                <i class="mdi mdi-check" aria-hidden="true"></i>
+                                <w:icon name="check" size="sm"></w:icon>
                             </a>
                         </div>
                     </div>
@@ -471,7 +471,7 @@
                 ?>
             </div>
         </div>
-        <div class="container">
+        <div class="w-container">
             <div class="icon-container">
                 <?php if (!empty($maintenance_logo_url)): ?>
                     <img src="<?= htmlspecialchars($maintenance_logo_url) ?>" alt="Logo" class="maintenance-logo" style="max-width:80px;max-height:80px;object-fit:contain">
@@ -484,26 +484,26 @@
             <p class="subtitle"><?= $message1 ?? __('网站正在维护中...') ?><br><?= $message2 ?? __('请稍等片刻') ?></p>
             
             <div class="progress-container">
-                <div class="progress">
-                    <div class="progress-bar"></div>
+                <div class="w-progress">
+                    <div class="w-progress__bar"></div>
                 </div>
             </div>
             <p class="recovery-notice" aria-live="polite"><?= $recoveryNotice ?? __('系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。') ?></p>
             
             <div class="info-cards">
-                <div class="card">
+                <div class="w-card">
                     <div class="card-icon">🤔</div>
                     <h3><?= $whyTitle ?? __('为什么网站会处于维护模式？') ?></h3>
                     <p><?= $whyContent ?? __('网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。') ?></p>
                 </div>
                 
-                <div class="card">
+                <div class="w-card">
                     <div class="card-icon">⏱️</div>
                     <h3><?= $howLongTitle ?? __('多久能够恢复？') ?></h3>
                     <p><?= $howLongContent ?? __('大部分的网站升级活动都只有几分钟甚至几秒钟的时间。') ?></p>
                 </div>
                 
-                <div class="card">
+                <div class="w-card">
                     <div class="card-icon">💬</div>
                     <h3><?= $helpTitle ?? __('需要帮助吗？') ?></h3>
                     <p><?= $helpContent ?? __('如果你长期看到这个页面，对网站存在疑惑，请联系：') ?> <a href="mailto:<?= $contactEmail ?? 'support@example.com' ?>"><?= $contactEmail ?? 'support@example.com' ?></a></p>

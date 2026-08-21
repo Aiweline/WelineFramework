@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 支持全系统备份
  */
-#[Acl('Weline_Backend::system_backup', '系统备份', 'mdi-backup-restore', '系统备份', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_Backend::system_backup', '系统备份', 'store', '系统备份', 'Weline_Backend::system_maintenance')]
 class Backup extends BackendController
 {
     /**
@@ -21,7 +21,7 @@ class Backup extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::system_backup_index', '查看系统备份', 'mdi-backup-restore', '查看系统备份')]
+    #[Acl('Weline_Backend::system_backup_index', '查看系统备份', 'store', '查看系统备份')]
     public function index(): string
     {
         try {
@@ -43,7 +43,7 @@ class Backup extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::system_backup_create', '创建系统备份', 'mdi-content-save', '创建系统备份')]
+    #[Acl('Weline_Backend::system_backup_create', '创建系统备份', 'save', '创建系统备份')]
     public function create(): string
     {
         if (!$this->isPost()) {

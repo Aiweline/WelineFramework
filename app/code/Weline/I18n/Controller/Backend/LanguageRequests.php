@@ -8,7 +8,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\I18n\Api\LanguageRequest\LanguageSupportRequestDirectoryInterface;
 
-#[Acl('Weline_I18n::i18n_language_requests', '语言申请', 'mdi mdi-translate-variant', '国际化')]
+#[Acl('Weline_I18n::i18n_language_requests', '语言申请', 'language', '国际化')]
 final class LanguageRequests extends BackendController
 {
     public function __construct(private readonly LanguageSupportRequestDirectoryInterface $directory)

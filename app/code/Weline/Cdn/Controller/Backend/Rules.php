@@ -24,7 +24,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_rules_manager', 'CDN规则管理', 'mdi-file-document-edit', 'CDN规则管理', 'Weline_Cdn::cdn_manager')]
+#[AclAttribute('Weline_Cdn::cdn_rules_manager', 'CDN规则管理', 'edit', 'CDN规则管理', 'Weline_Cdn::cdn_manager')]
 class Rules extends BackendController
 {
     /**
@@ -48,7 +48,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_list', '查看规则列表', 'mdi-view-list', '查看CDN规则列表')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_list', '查看规则列表', 'list', '查看CDN规则列表')]
     public function index(): string
     {
         try {
@@ -84,7 +84,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_global_edit', '编辑全局规则', 'mdi-cog', '编辑全局默认规则')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_global_edit', '编辑全局规则', 'settings', '编辑全局默认规则')]
     public function getGlobalRules(): string
     {
         try {
@@ -106,7 +106,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_global_save', '保存全局规则', 'mdi-content-save', '保存全局默认规则')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_global_save', '保存全局规则', 'save', '保存全局默认规则')]
     public function saveGlobalRules(): string
     {
         if (!$this->request->isPost()) {
@@ -154,7 +154,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_domain_edit', '编辑域名规则', 'mdi-file-edit', '编辑域名规则覆盖')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_domain_edit', '编辑域名规则', 'edit', '编辑域名规则覆盖')]
     public function getDomainRules(): string
     {
         $id = (int)$this->request->getGet('id') ?: (int)$this->request->getGet('domain_id');
@@ -201,7 +201,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_domain_save', '保存域名规则', 'mdi-content-save', '保存域名规则覆盖')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_domain_save', '保存域名规则', 'save', '保存域名规则覆盖')]
     public function saveDomainRules(): string
     {
         if (!$this->request->isPost()) {
@@ -264,7 +264,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_import_form', '导入规则表单', 'mdi-download', '从CDN导入规则表单')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_import_form', '导入规则表单', 'download', '从CDN导入规则表单')]
     public function import(): string
     {
         $id = (int)$this->request->getGet('id');
@@ -295,7 +295,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_import_do', '执行规则导入', 'mdi-download', '从CDN导入规则')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_import_do', '执行规则导入', 'download', '从CDN导入规则')]
     public function doImport(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -350,7 +350,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_list', '获取域名列表', 'mdi-view-list', '获取所有启用的域名列表')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_list', '获取域名列表', 'list', '获取所有启用的域名列表')]
     public function getDomains(): string
     {
         try {
@@ -386,7 +386,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_push', '推送规则', 'mdi-upload', '推送规则到CDN')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_push', '推送规则', 'upload', '推送规则到CDN')]
     public function push(): string
     {
         // 支持 JSON 和表单数据
@@ -461,7 +461,7 @@ class Rules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_rules_push_all', '推送所有域名', 'mdi-upload-multiple', '推送规则到所有域名')]
+    #[AclAttribute('Weline_Cdn::cdn_rules_push_all', '推送所有域名', 'upload', '推送规则到所有域名')]
     public function pushAll(): string
     {
         try {

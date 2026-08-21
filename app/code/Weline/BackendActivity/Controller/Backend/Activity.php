@@ -17,7 +17,7 @@ use Weline\BackendActivity\Model\BackendActivityLog;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 
-#[Acl('Weline_BackendActivity::activity_controller', '后台活动管理', 'fas fa-history', '查看管理员在后台的操作', 'Weline_BackendActivity::main')]
+#[Acl('Weline_BackendActivity::activity_controller', '后台活动管理', 'history', '查看管理员在后台的操作', 'Weline_BackendActivity::main')]
 class Activity extends BackendController
 {
     private const SEARCH_FIELDS = 'name,main_table.user_id,request_id,request_method,request_params,request_data,host,path,module,url,ip,user_agent,response,response_code,business_module,business_entity_type,business_entity_id,business_action,business_title,business_payload';
@@ -34,7 +34,7 @@ class Activity extends BackendController
         $this->backendUsers = $backendUsers;
     }
 
-    #[Acl('Weline_BackendActivity::listing', '后台活动历史', 'fas fa-history', '查看后台活动历史')]
+    #[Acl('Weline_BackendActivity::listing', '后台活动历史', 'history', '查看后台活动历史')]
     function getListing()
     {
         $search = $this->request->getGet('search');
@@ -98,7 +98,7 @@ class Activity extends BackendController
         return $logs;
     }
 
-    #[Acl('Weline_BackendActivity::delete', '删除日志', 'fas fa-trash', '删除日志')]
+    #[Acl('Weline_BackendActivity::delete', '删除日志', 'trash', '删除日志')]
     function getDelete()
     {
         $id = $this->request->getGet('id');
@@ -113,7 +113,7 @@ class Activity extends BackendController
         return $this->redirect('*/backend/activity/listing');
     }
 
-    #[Acl('Weline_BackendActivity::show', '后台活动详情', 'fas fa-eye', '查看后台活动详情')]
+    #[Acl('Weline_BackendActivity::show', '后台活动详情', 'eye', '查看后台活动详情')]
     function getShow()
     {
         $type   = $this->request->getGet('type');

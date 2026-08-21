@@ -160,7 +160,7 @@
                 class="checkout-failer-container">
             <div class="checkout-failer-content">
                 <div class="failer-icon">
-                    <i class="ri-close-line"></i>
+                    <w:icon name="close" size="sm"></w:icon>
                 </div>
                 <h1 class="failer-title"><?= htmlspecialchars($meta['title'] ?? __('订单提交失败')) ?></h1>
                 
@@ -177,15 +177,15 @@
                 <div class="failer-actions">
                     <if condition="meta.retryUrl">
                         <a href="<?= htmlspecialchars($meta['retryUrl'] ?? '') ?>" class="w-btn w-btn-primary">
-                            <i class="ri-refresh-line"></i> <?= __('重试提交') ?>
+                            <w:icon name="refresh" size="sm"></w:icon> <?= __('重试提交') ?>
                         </a>
                     </if>
                     <a href="<?= htmlspecialchars($meta['backToCart'] ?? '/cart') ?>" class="w-btn w-btn-secondary">
-                        <i class="ri-shopping-cart-2-line"></i> <?= __('返回购物车') ?>
+                        <w:icon name="pin" size="sm"></w:icon> <?= __('返回购物车') ?>
                     </a>
                     <if condition="meta.contactSupport">
                         <a href="<?= htmlspecialchars($meta['contactSupport'] ?? '') ?>" class="w-btn w-btn-outline">
-                            <i class="ri-customer-service-2-line"></i> <?= __('联系客服') ?>
+                            <w:icon name="circle" size="sm"></w:icon> <?= __('联系客服') ?>
                         </a>
                     </if>
                 </div>

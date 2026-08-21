@@ -177,7 +177,7 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
     <?php
 };
 ?>
-<section class="account-hook-section account-index__section d-none motor-account-section" id="shipping-address-section" data-account-section="shipping-address" hidden weline-code="shipping.account_sidebar_content.shipping_address_section">
+<section class="account-hook-section account-index__section motor-account-section" id="shipping-address-section" data-account-section="shipping-address" hidden weline-code="shipping.account_sidebar_content.shipping_address_section">
     <div class="account-card account-address-panel" data-address-panel="shipping" data-id-field="shipping_address_id">
         <textarea hidden readonly data-address-seed><?= $json($shippingPayloads) ?></textarea>
         <header class="account-card__header account-address-panel__header">
@@ -206,7 +206,7 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
     </div>
 </section>
 
-<section class="account-hook-section account-index__section d-none motor-account-section" id="delivery-address-section" data-account-section="delivery-address" hidden weline-code="shipping.account_sidebar_content.delivery_address_section">
+<section class="account-hook-section account-index__section motor-account-section" id="delivery-address-section" data-account-section="delivery-address" hidden weline-code="shipping.account_sidebar_content.delivery_address_section">
     <div class="account-card account-address-panel" data-address-panel="delivery" data-id-field="delivery_address_id">
         <textarea hidden readonly data-address-seed><?= $json($deliveryPayloads) ?></textarea>
         <header class="account-card__header account-address-panel__header">
@@ -235,5 +235,5 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
     </div>
 </section>
 
-<link rel="stylesheet" href="@static(Weline_Shipping::frontend/css/account-address.css)?v=20260817-address-css-1">
-<script src="@static(Weline_Shipping::frontend/js/account-address-v3.js)?v=20260817-address-id-types-2"></script>
+<css>Weline_Shipping::frontend/css/account-address.css</css>
+<js>Weline_Shipping::frontend/js/account-address-v3.js</js>

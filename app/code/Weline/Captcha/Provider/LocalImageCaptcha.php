@@ -39,11 +39,10 @@ final class LocalImageCaptcha implements VerificationProviderInterface
         return '<div class="weline-captcha weline-captcha-local" data-weline-captcha-provider="local_image">'
             . '<input type="hidden" name="captcha_provider" value="local_image">'
             . '<input type="hidden" name="captcha_token" value="' . \htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">'
-            . '<label class="form-label">' . $label . '</label>'
+            . '<label class="w-field__label">' . $label . '</label>'
             . '<div class="weline-captcha-row">'
             . $image
-            . '<input class="form-control" type="text" name="captcha_response" required maxlength="6" '
-            . 'autocomplete="off" autocapitalize="characters" aria-label="' . $label . '">'
+            . '<input class="w-input" type="text" name="captcha_response" required maxlength="6" autocapitalize="characters" aria-label="' . $label . '">'
             . '</div></div>'
             . '<style>.weline-captcha{margin-top:1rem}.weline-captcha-row{display:flex;align-items:center;gap:.75rem}.weline-captcha-image{display:block;flex:0 0 168px;border:1px solid #cbd5e1;border-radius:.5rem;background:#f8fafc}.weline-captcha-row input{min-width:0;flex:1}</style>';
     }

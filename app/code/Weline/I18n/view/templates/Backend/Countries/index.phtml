@@ -46,95 +46,91 @@ $renderHiddenFields = static function (array $fields): string {
 <link rel="stylesheet" href="@static(Weline_I18n::css/backend-admin.css)">
 <script src="@static(Weline_I18n::js/backend-admin.js)?v=<?= htmlspecialchars($backendAdminJsVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 <div class="i18n-admin-page">
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('i18n国际化>国家') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><?= __('系统配置') ?></li>
-                    <li class="breadcrumb-item"><?= __('i18n国际化') ?></li>
-                    <li class="breadcrumb-item active"><?= __('国家') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('i18n国际化>国家') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><?= __('系统配置') ?></li>
+                    <li class="w-breadcrumb__item"><?= __('i18n国际化') ?></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('国家') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="row g-2 g-md-3 mb-3 mb-md-4 i18n-admin-stat-tiles">
-    <div class="col-6 col-xl-3">
-        <div class="card h-100 shadow-sm border-0">
-            <div class="card-body">
-                <div class="text-muted small"><?= __('国家') ?></div>
-                <div class="fs-3 fw-semibold"><?= (int)($stats['total'] ?? 0) ?></div>
+<div class="w-grid i18n-admin-stat-tiles" style="--w-gap:var(--weline-space-2);--w-gap-md:var(--weline-space-4);--w-mb:var(--weline-space-4);--w-mb-md:var(--weline-space-6);">
+    <div style="--w-span:6;--w-span-lg:3;">
+        <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
+            <div class="w-card__body">
+                <div class="w-text" data-tone="muted" data-size="sm"><?= __('国家') ?></div>
+                <div class="fs-3 w-text" data-weight="strong"><?= (int)($stats['total'] ?? 0) ?></div>
             </div>
         </div>
     </div>
-    <div class="col-6 col-xl-3">
-        <div class="card h-100 shadow-sm border-0">
-            <div class="card-body">
-                <div class="text-muted small"><?= __('已安装') ?></div>
-                <div class="fs-3 fw-semibold text-primary"><?= (int)($stats['installed'] ?? 0) ?></div>
+    <div style="--w-span:6;--w-span-lg:3;">
+        <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
+            <div class="w-card__body">
+                <div class="w-text" data-tone="muted" data-size="sm"><?= __('已安装') ?></div>
+                <div class="fs-3 w-text" data-weight="strong" data-tone="primary"><?= (int)($stats['installed'] ?? 0) ?></div>
             </div>
         </div>
     </div>
-    <div class="col-6 col-xl-3">
-        <div class="card h-100 shadow-sm border-0">
-            <div class="card-body">
-                <div class="text-muted small"><?= __('已激活') ?></div>
-                <div class="fs-3 fw-semibold text-success"><?= (int)($stats['active'] ?? 0) ?></div>
+    <div style="--w-span:6;--w-span-lg:3;">
+        <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
+            <div class="w-card__body">
+                <div class="w-text" data-tone="muted" data-size="sm"><?= __('已激活') ?></div>
+                <div class="fs-3 w-text" data-weight="strong" data-tone="success"><?= (int)($stats['active'] ?? 0) ?></div>
             </div>
         </div>
     </div>
-    <div class="col-6 col-xl-3">
-        <div class="card h-100 shadow-sm border-0">
-            <div class="card-body">
-                <div class="text-muted small"><?= __('未安装') ?></div>
-                <div class="fs-3 fw-semibold text-secondary"><?= (int)($stats['uninstalled'] ?? 0) ?></div>
+    <div style="--w-span:6;--w-span-lg:3;">
+        <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
+            <div class="w-card__body">
+                <div class="w-text" data-tone="muted" data-size="sm"><?= __('未安装') ?></div>
+                <div class="fs-3 w-text" data-weight="strong" data-tone="muted"><?= (int)($stats['uninstalled'] ?? 0) ?></div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-body">
-        <div class="d-flex flex-wrap gap-2 mb-3">
-            <a href="@backend-url('*/backend/countries')?filter=active" class="btn <?= $currentFilter === 'active' ? 'btn-primary' : 'btn-outline-primary' ?>">
+<div class="w-card" data-w-shadow="sm" data-w-border="none" style="--w-mb:var(--weline-space-6);">
+    <div class="w-card__body">
+        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+            <a href="@backend-url('*/backend/countries')?filter=active" class="w-button <?= $currentFilter === 'active' ? 'btn-primary' : 'btn-outline-primary' ?>">
                 <?= __('已激活') ?>
             </a>
-            <a href="@backend-url('*/backend/countries')?filter=inactive" class="btn <?= $currentFilter === 'inactive' ? 'btn-primary' : 'btn-outline-primary' ?>">
+            <a href="@backend-url('*/backend/countries')?filter=inactive" class="w-button <?= $currentFilter === 'inactive' ? 'btn-primary' : 'btn-outline-primary' ?>">
                 <?= __('已安装未激活') ?>
             </a>
-            <a href="@backend-url('*/backend/countries')?filter=installed" class="btn <?= $currentFilter === 'installed' ? 'btn-primary' : 'btn-outline-primary' ?>">
+            <a href="@backend-url('*/backend/countries')?filter=installed" class="w-button <?= $currentFilter === 'installed' ? 'btn-primary' : 'btn-outline-primary' ?>">
                 <?= __('已安装') ?>
             </a>
-            <a href="@backend-url('*/backend/countries')?filter=uninstalled" class="btn <?= $currentFilter === 'uninstalled' ? 'btn-primary' : 'btn-outline-primary' ?>">
+            <a href="@backend-url('*/backend/countries')?filter=uninstalled" class="w-button <?= $currentFilter === 'uninstalled' ? 'btn-primary' : 'btn-outline-primary' ?>">
                 <?= __('未安装') ?>
             </a>
-            <a href="@backend-url('*/backend/countries')?filter=all" class="btn <?= $currentFilter === 'all' ? 'btn-primary' : 'btn-outline-primary' ?>">
+            <a href="@backend-url('*/backend/countries')?filter=all" class="w-button <?= $currentFilter === 'all' ? 'btn-primary' : 'btn-outline-primary' ?>">
                 <?= __('全部') ?>
             </a>
         </div>
 
-        <w:form method="get" action="@backend-url('*/backend/countries')" class="row g-3 align-items-end">
-            <div class="col-lg-5 col-md-6">
-                <label class="form-label mb-1"><?= __('搜索国家') ?></label>
-                <input type="text"
-                       name="search"
-                       class="form-control"
-                       value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
-                       placeholder="<?= __('输入国家名称或代码，例如：印度 / IN') ?>">
-                <div class="form-text"><?= __('搜索会自动包含全部状态，未安装的国家可直接安装。') ?></div>
+        <w:form method="get" action="@backend-url('*/backend/countries')" class="w-grid" data-align="end" style="--w-gap:var(--weline-space-4);">
+            <div style="--w-span-lg:5;--w-span-md:6;">
+                <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('搜索国家') ?></label>
+                <input type="text" name="search" class="w-input" value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('输入国家名称或代码，例如：印度 / IN') ?>">
+                <div class="w-field__hint"><?= __('搜索会自动包含全部状态，未安装的国家可直接安装。') ?></div>
             </div>
-            <div class="col-lg-3 col-md-6">
-                <label class="form-label mb-1"><?= __('状态') ?></label>
-                <select name="filter" class="form-select">
+            <div style="--w-span-lg:3;--w-span-md:6;">
+                <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('状态') ?></label>
+                <select name="filter" class="w-select">
                     <option value="all" <?= $currentFilter === 'all' ? 'selected' : '' ?>><?= __('全部') ?></option>
                     <option value="active" <?= $currentFilter === 'active' ? 'selected' : '' ?>><?= __('已激活') ?></option>
                     <option value="inactive" <?= $currentFilter === 'inactive' ? 'selected' : '' ?>><?= __('已安装未激活') ?></option>
@@ -142,83 +138,63 @@ $renderHiddenFields = static function (array $fields): string {
                     <option value="uninstalled" <?= $currentFilter === 'uninstalled' ? 'selected' : '' ?>><?= __('未安装') ?></option>
                 </select>
             </div>
-            <div class="col-lg-4">
-                <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
-                    <button type="submit" class="btn btn-primary"><?= __('查找国家') ?></button>
-                    <a href="@backend-url('*/backend/countries')" class="btn btn-outline-secondary"><?= __('重置') ?></a>
-                    <a href="@backend-url('*/backend/countries/update')"
-                       data-async-href="@backend-url('*/backend/countries/update')"
-                       data-async-action="country-sync"
-                       data-async-success-message="<?= htmlspecialchars(__('全球国家数据已同步，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>"
-                       class="btn btn-outline-success"><?= __('更新全球数据') ?></a>
+            <div style="--w-span-lg:4;">
+                <div class="justify-content-lg-end w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                    <button type="submit" class="w-button" data-tone="primary"><?= __('查找国家') ?></button>
+                    <a href="@backend-url('*/backend/countries')" class="w-button" data-tone="neutral" data-variant="outline"><?= __('重置') ?></a>
+                    <a href="@backend-url('*/backend/countries/update')" data-async-href="@backend-url('*/backend/countries/update')" data-async-action="country-sync" data-async-success-message="<?= htmlspecialchars(__('全球国家数据已同步，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>" class="w-button" data-tone="success" data-variant="outline"><?= __('更新全球数据') ?></a>
                 </div>
             </div>
         </w:form>
     </div>
 </div>
 
-<w:form id="country-batch-install-form" method="post" action="@backend-url('*/backend/countries/batchInstall')" class="d-none" data-async-action="country-batch-install">
+<w:form id="country-batch-install-form" method="post" action="@backend-url('*/backend/countries/batchInstall')" data-async-action="country-batch-install" hidden>
     <?= $renderHiddenFields($preserve) ?>
 </w:form>
-<w:form id="country-batch-activate-form" method="post" action="@backend-url('*/backend/countries/batchActive')" class="d-none" data-async-action="country-batch-activate">
+<w:form id="country-batch-activate-form" method="post" action="@backend-url('*/backend/countries/batchActive')" data-async-action="country-batch-activate" hidden>
     <?= $renderHiddenFields($preserve) ?>
 </w:form>
-<w:form id="country-batch-disable-form" method="post" action="@backend-url('*/backend/countries/batchDisable')" class="d-none" data-async-action="country-batch-disable">
+<w:form id="country-batch-disable-form" method="post" action="@backend-url('*/backend/countries/batchDisable')" data-async-action="country-batch-disable" hidden>
     <?= $renderHiddenFields($preserve) ?>
 </w:form>
-<w:form id="country-batch-uninstall-form" method="post" action="@backend-url('*/backend/countries/batchUninstall')" class="d-none" data-async-action="country-batch-uninstall">
+<w:form id="country-batch-uninstall-form" method="post" action="@backend-url('*/backend/countries/batchUninstall')" data-async-action="country-batch-uninstall" hidden>
     <?= $renderHiddenFields($preserve) ?>
 </w:form>
 
-<div class="card shadow-sm border-0">
-    <div class="card-body">
-        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-            <div class="text-muted small"><?= __('操作：') ?></div>
-            <div class="d-flex flex-wrap gap-2">
-                <button type="button"
-                        class="btn btn-outline-primary"
-                        data-country-batch-form="country-batch-install-form"
-                        data-country-batch-message="<?= htmlspecialchars(__('确定批量安装所选国家吗？'), ENT_QUOTES, 'UTF-8') ?>"
-                        data-country-batch-type="info">
+<div class="w-card" data-w-shadow="sm" data-w-border="none">
+    <div class="w-card__body">
+        <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('操作：') ?></div>
+            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                <button type="button" class="w-button" data-country-batch-form="country-batch-install-form" data-country-batch-message="<?= htmlspecialchars(__('确定批量安装所选国家吗？'), ENT_QUOTES, 'UTF-8') ?>" data-country-batch-type="info" data-tone="primary" data-variant="outline">
                     <?= __('安装') ?>
                 </button>
-                <button type="button"
-                        class="btn btn-outline-success"
-                        data-country-batch-form="country-batch-activate-form"
-                        data-country-batch-message="<?= htmlspecialchars(__('确定批量启用所选国家吗？'), ENT_QUOTES, 'UTF-8') ?>"
-                        data-country-batch-type="success">
+                <button type="button" class="w-button" data-country-batch-form="country-batch-activate-form" data-country-batch-message="<?= htmlspecialchars(__('确定批量启用所选国家吗？'), ENT_QUOTES, 'UTF-8') ?>" data-country-batch-type="success" data-tone="success" data-variant="outline">
                     <?= __('激活') ?>
                 </button>
-                <button type="button"
-                        class="btn btn-outline-warning"
-                        data-country-batch-form="country-batch-disable-form"
-                        data-country-batch-message="<?= htmlspecialchars(__('确定批量停用所选国家吗？'), ENT_QUOTES, 'UTF-8') ?>"
-                        data-country-batch-type="warning">
+                <button type="button" class="w-button" data-country-batch-form="country-batch-disable-form" data-country-batch-message="<?= htmlspecialchars(__('确定批量停用所选国家吗？'), ENT_QUOTES, 'UTF-8') ?>" data-country-batch-type="warning" data-tone="warning" data-variant="outline">
                     <?= __('停用') ?>
                 </button>
-                <button type="button"
-                        class="btn btn-outline-danger"
-                        data-country-batch-form="country-batch-uninstall-form"
-                        data-country-batch-message="<?= htmlspecialchars(__('确定批量卸载所选国家吗？相关地区也会同步卸载。'), ENT_QUOTES, 'UTF-8') ?>"
-                        data-country-batch-type="danger">
+                <button type="button" class="w-button" data-country-batch-form="country-batch-uninstall-form" data-country-batch-message="<?= htmlspecialchars(__('确定批量卸载所选国家吗？相关地区也会同步卸载。'), ENT_QUOTES, 'UTF-8') ?>" data-country-batch-type="danger" data-tone="danger" data-variant="outline">
                     <?= __('卸载') ?>
                 </button>
             </div>
         </div>
 
-        <div class="table-responsive">
-            <table class="table align-middle table-hover mb-0">
-                <thead class="table-light">
+        <div class="w-table-wrap">
+            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
+                <thead>
                 <tr>
-                    <th class="text-center" style="width: 48px;">
-                        <input type="checkbox" class="form-check-input" id="country-select-all">
+                    <th class="w-text" style="width: 48px;" data-align="center">
+                        <input type="checkbox" id="country-select-all">
                     </th>
                     <th style="width: 90px;"><?= __('代码') ?></th>
-                    <th style="width: 72px;" class="text-center"><?= __('国旗') ?></th>
+                    <th style="width: 72px;" class="w-text" data-align="center"><?= __('国旗') ?></th>
                     <th><?= __('国家名称') ?></th>
-                    <th style="width: 120px;" class="text-center"><?= __('状态') ?></th>
-                    <th style="width: 120px;" class="text-center"><?= __('是否安装') ?></th>
-                    <th style="width: 280px;" class="text-center"><?= __('操作') ?></th>
+                    <th style="width: 120px;" class="w-text" data-align="center"><?= __('状态') ?></th>
+                    <th style="width: 120px;" class="w-text" data-align="center"><?= __('是否安装') ?></th>
+                    <th style="width: 280px;" class="w-text" data-align="center"><?= __('操作') ?></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -234,17 +210,17 @@ $renderHiddenFields = static function (array $fields): string {
                         $isActive = (int)$readValue($country, 'is_active', 0) === 1;
                         ?>
                         <tr>
-                            <td class="text-center">
-                                <input type="checkbox" class="form-check-input country-checkbox" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                            <td class="w-text" data-align="center">
+                                <input type="checkbox" class="country-checkbox" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                             </td>
                             <td>
-                                <span class="badge bg-primary-subtle text-primary"><?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="w-badge w-text" data-w-background="primary" data-tone="primary"><?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?></span>
                             </td>
-                            <td class="text-center"><?= $flag ?></td>
+                            <td class="w-text" data-align="center"><?= $flag ?></td>
                             <td>
-                                <div class="fw-semibold"><?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="w-text" data-weight="strong"><?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?></div>
                                 <?php if ($localeCount > 0): ?>
-                                    <div class="text-muted small">
+                                    <div class="w-text" data-tone="muted" data-size="sm">
                                         <?= __('区域') ?>: <?= $localeCount ?>
                                         <?php if ($preferredLocale !== ''): ?>
                                             | <?= htmlspecialchars($preferredLocale, ENT_QUOTES, 'UTF-8') ?>
@@ -252,22 +228,22 @@ $renderHiddenFields = static function (array $fields): string {
                                     </div>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-center" data-country-active-state>
+                            <td class="w-text" data-country-active-state data-align="center">
                                 <?php if ($isActive): ?>
-                                    <span class="badge bg-success-subtle text-success"><?= __('已激活') ?></span>
+                                    <span class="w-badge w-text" data-w-background="success" data-tone="success"><?= __('已激活') ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary-subtle text-secondary"><?= __('未激活') ?></span>
+                                    <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('未激活') ?></span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-center" data-country-install-state>
+                            <td class="w-text" data-country-install-state data-align="center">
                                 <?php if ($isInstall): ?>
-                                    <span class="badge bg-primary-subtle text-primary"><?= __('已安装') ?></span>
+                                    <span class="w-badge w-text" data-w-background="primary" data-tone="primary"><?= __('已安装') ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-light text-muted"><?= __('未安装') ?></span>
+                                    <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('未安装') ?></span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-center">
-                                <div class="d-flex flex-wrap justify-content-center gap-2">
+                            <td class="w-text" data-align="center">
+                                <div class="w-cluster" data-wrap="true" data-justify="center" style="--w-gap:var(--weline-space-2);">
                                     <?php if (!$isInstall): ?>
                                         <w:form method="post"
                                               action="@backend-url('*/backend/countries/install')"
@@ -278,7 +254,7 @@ $renderHiddenFields = static function (array $fields): string {
                                               data-confirm-type="info">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
-                                            <button type="submit" class="btn btn-sm btn-outline-primary" data-async-submit-label="<?= htmlspecialchars(__('安装中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已安装并激活'), ENT_QUOTES, 'UTF-8') ?>"><?= __('安装') ?></button>
+                                            <button type="submit" class="w-button" data-async-submit-label="<?= htmlspecialchars(__('安装中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已安装并激活'), ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('安装') ?></button>
                                         </w:form>
                                     <?php elseif (!$isActive): ?>
                                         <w:form method="post"
@@ -289,13 +265,12 @@ $renderHiddenFields = static function (array $fields): string {
                                               data-confirm-type="success">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
-                                            <button type="submit" class="btn btn-sm btn-outline-success" data-async-submit-label="<?= htmlspecialchars(__('激活中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已激活'), ENT_QUOTES, 'UTF-8') ?>"><?= __('激活') ?></button>
+                                            <button type="submit" class="w-button" data-async-submit-label="<?= htmlspecialchars(__('激活中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已激活'), ENT_QUOTES, 'UTF-8') ?>" data-tone="success" data-variant="outline" data-size="sm"><?= __('激活') ?></button>
                                         </w:form>
                                     <?php endif; ?>
 
                                     <?php if ($isInstall): ?>
-                                        <a class="btn btn-sm btn-outline-info"
-                                           href="@backend-url('*/backend/countries/locales')?country_code=<?= urlencode($code) ?>">
+                                        <a class="w-button" href="@backend-url('*/backend/countries/locales')?country_code=<?= urlencode($code) ?>" data-tone="info" data-variant="outline" data-size="sm">
                                             <?= __('区域') ?>
                                         </a>
                                     <?php endif; ?>
@@ -309,7 +284,7 @@ $renderHiddenFields = static function (array $fields): string {
                                               data-confirm-type="warning">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
-                                            <button type="submit" class="btn btn-sm btn-outline-warning"><?= __('停用') ?></button>
+                                            <button type="submit" class="w-button" data-tone="warning" data-variant="outline" data-size="sm"><?= __('停用') ?></button>
                                         </w:form>
                                     <?php endif; ?>
 
@@ -324,7 +299,7 @@ $renderHiddenFields = static function (array $fields): string {
                                               data-confirm-type="danger">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
-                                            <button type="submit" class="btn btn-sm btn-outline-danger"><?= __('卸载') ?></button>
+                                            <button type="submit" class="w-button" data-tone="danger" data-variant="outline" data-size="sm"><?= __('卸载') ?></button>
                                         </w:form>
                                     <?php endif; ?>
                                 </div>
@@ -333,7 +308,7 @@ $renderHiddenFields = static function (array $fields): string {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">
+                        <td colspan="7" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
                             <?= __('暂无国家数据') ?>
                         </td>
                     </tr>
@@ -342,38 +317,27 @@ $renderHiddenFields = static function (array $fields): string {
             </table>
         </div>
 
-        <div class="mt-3"><?= $pagination ?></div>
+        <div style="--w-mt:var(--weline-space-4);"><?= $pagination ?></div>
     </div>
 </div>
 
 <script>
 (function () {
     function showConfirm(message, type) {
-        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
-            return BackendConfirm.show(message, {type: type || 'info'});
-        }
-        if (typeof Swal !== 'undefined' && Swal.fire) {
-            return Swal.fire({
-                text: message,
-                icon: type === 'danger' ? 'warning' : (type || 'info'),
-                showCancelButton: true,
-                confirmButtonText: '<?= addslashes(__('确定')) ?>',
-                cancelButtonText: '<?= addslashes(__('取消')) ?>'
-            }).then(function (result) {
-                return !!result.isConfirmed;
-            });
-        }
-        showWarning(<?= json_encode((string)__('确认组件不可用，请刷新页面后重试'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR) ?>);
-        return Promise.resolve(false);
+        return Weline.UI.dialog.request({
+            message: message,
+            tone: type === 'danger' ? 'warning' : (type || 'info'),
+            cancelable: true,
+            confirmLabel: '<?= addslashes(__('确定')) ?>',
+            cancelLabel: '<?= addslashes(__('取消')) ?>'
+        }).then(function (result) {
+            return !!result.confirmed;
+        });
     }
 
     function showWarning(message) {
-        if (typeof BackendToast !== 'undefined' && BackendToast.warning) {
-            BackendToast.warning(message);
-            return;
-        }
-        if (typeof Swal !== 'undefined' && Swal.fire) {
-            Swal.fire({text: message, icon: 'warning'});
+        if (typeof Weline.UI.toast !== 'undefined' && Weline.UI.toast.warning) {
+            Weline.UI.toast.warning(message);
             return;
         }
         console.warn(message);

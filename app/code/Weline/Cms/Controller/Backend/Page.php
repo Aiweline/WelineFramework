@@ -13,7 +13,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Cms::page', 'CMS 页面', 'mdi mdi-text-box-outline', '管理 CMS 页面', 'Weline_Backend::cms_group')]
+#[Acl('Weline_Cms::page', 'CMS 页面', 'box', '管理 CMS 页面', 'Weline_Backend::cms_group')]
 class Page extends BackendController
 {
     public function __construct(
@@ -23,7 +23,7 @@ class Page extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Cms::page_listing', 'CMS 页面列表', 'mdi mdi-format-list-bulleted', '查看 CMS 页面列表')]
+    #[Acl('Weline_Cms::page_listing', 'CMS 页面列表', 'list', '查看 CMS 页面列表')]
     public function getListing(): string
     {
         $params = $this->request->getParams();
@@ -63,7 +63,7 @@ class Page extends BackendController
         return $this->fetch('listing');
     }
 
-    #[Acl('Weline_Cms::page_new', '新建 CMS 页面', 'mdi mdi-plus-box-outline', '新建 CMS 页面')]
+    #[Acl('Weline_Cms::page_new', '新建 CMS 页面', 'plus', '新建 CMS 页面')]
     public function getNew(): string
     {
         try {
@@ -96,7 +96,7 @@ class Page extends BackendController
         }
     }
 
-    #[Acl('Weline_Cms::page_edit', '编辑 CMS 页面', 'mdi mdi-file-edit-outline', '编辑 CMS 页面')]
+    #[Acl('Weline_Cms::page_edit', '编辑 CMS 页面', 'edit', '编辑 CMS 页面')]
     public function getEdit(): string
     {
         $pageId = (int)$this->request->getGet('page_id', $this->request->getGet('id', 0));
@@ -168,7 +168,7 @@ class Page extends BackendController
         return $this->fetch('Weline_Cms::templates/Backend/Page/edit.phtml');
     }
 
-    #[Acl('Weline_Cms::page_save', '保存 CMS 页面', 'mdi mdi-content-save-outline', '保存 CMS 页面')]
+    #[Acl('Weline_Cms::page_save', '保存 CMS 页面', 'save', '保存 CMS 页面')]
     public function postSave(): string
     {
         $data = $this->collectRequestData();
@@ -222,7 +222,7 @@ class Page extends BackendController
         }
     }
 
-    #[Acl('Weline_Cms::path_group_save', '保存 CMS 一级 path', 'mdi mdi-folder-edit-outline', '保存 CMS 一级 path')]
+    #[Acl('Weline_Cms::path_group_save', '保存 CMS 一级 path', 'edit', '保存 CMS 一级 path')]
     public function postSavePathGroup(): string
     {
         $data = $this->collectRequestData();
@@ -253,7 +253,7 @@ class Page extends BackendController
         }
     }
 
-    #[Acl('Weline_Cms::page_copy', '拷贝 CMS 页面', 'mdi mdi-content-copy', '将 CMS 页面拷贝到目标站点')]
+    #[Acl('Weline_Cms::page_copy', '拷贝 CMS 页面', 'copy', '将 CMS 页面拷贝到目标站点')]
     public function postCopy(): string
     {
         $data = $this->collectRequestData();
@@ -299,7 +299,7 @@ class Page extends BackendController
         }
     }
 
-    #[Acl('Weline_Cms::path_group_copy', '拷贝 CMS 一级 path', 'mdi mdi-content-copy', '将 CMS 一级 path 及页面拷贝到目标站点')]
+    #[Acl('Weline_Cms::path_group_copy', '拷贝 CMS 一级 path', 'copy', '将 CMS 一级 path 及页面拷贝到目标站点')]
     public function postCopyPathGroup(): string
     {
         $data = $this->collectRequestData();
@@ -353,7 +353,7 @@ class Page extends BackendController
         }
     }
 
-    #[Acl('Weline_Cms::page_delete', 'CMS 页面移入回收站', 'mdi mdi-delete-outline', '将 CMS 页面移入回收站')]
+    #[Acl('Weline_Cms::page_delete', 'CMS 页面移入回收站', 'trash', '将 CMS 页面移入回收站')]
     public function postDelete(): string
     {
         $data = $this->collectRequestData();
@@ -376,7 +376,7 @@ class Page extends BackendController
         return $this->redirect('cms/backend/page/listing');
     }
 
-    #[Acl('Weline_Cms::path_group_delete', 'CMS 一级 path 移入回收站', 'mdi mdi-folder-remove-outline', '将 CMS 一级 path 移入回收站')]
+    #[Acl('Weline_Cms::path_group_delete', 'CMS 一级 path 移入回收站', 'minus', '将 CMS 一级 path 移入回收站')]
     public function postDeletePathGroup(): string
     {
         $data = $this->collectRequestData();
@@ -403,7 +403,7 @@ class Page extends BackendController
         return $this->redirect('cms/backend/page/listing');
     }
 
-    #[Acl('Weline_Cms::page_preview', '预览 CMS 页面', 'mdi mdi-eye-outline', '预览 CMS 页面')]
+    #[Acl('Weline_Cms::page_preview', '预览 CMS 页面', 'eye', '预览 CMS 页面')]
     public function getPreview(): string
     {
         $pageId = (int)$this->request->getGet('page_id', $this->request->getGet('id', 0));

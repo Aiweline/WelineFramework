@@ -6,6 +6,6 @@
           title="统一配置中心"
           action="weline_systemconfig/backend/config"
           parent="Weline_Backend::system_config_group"
-          icon="mdi mdi-tune-variant"
+          icon="settings"
           order="5"/>
 </menus>

@@ -5,5 +5,5 @@
     <!--监控与日志-->
     <menu source="Weline_BackendActivity::main" name="main" title="后台日志"
          action="*/backend/activity/listing" parent="Weline_Backend::access_log"
-         icon="fas fa-history" order="10"/>
+         icon="history" order="10"/>
 </menus>

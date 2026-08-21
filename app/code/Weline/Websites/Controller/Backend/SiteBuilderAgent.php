@@ -29,7 +29,7 @@ use Weline\Websites\Service\AiWorkbench\SessionService;
 use Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService;
 use Weline\Websites\Service\WebsiteAgentService;
 
-#[Acl('Weline_Websites::site_builder_agent', 'AI Site Workbench', 'mdi mdi-robot', 'Coordinate domain, website, and workspace site building', 'Weline_Websites::website_service')]
+#[Acl('Weline_Websites::site_builder_agent', 'AI Site Workbench', 'robot', 'Coordinate domain, website, and workspace site building', 'Weline_Websites::website_service')]
 class SiteBuilderAgent extends BackendController
 {
     private const DEV_SIM_DOMAIN = 'weline-dev.local';
@@ -44,7 +44,7 @@ class SiteBuilderAgent extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_index', 'AI Site Workbench', 'mdi mdi-robot', 'AI site workbench hub')]
+    #[Acl('Weline_Websites::site_builder_agent_index', 'AI Site Workbench', 'robot', 'AI site workbench hub')]
     public function index(): string
     {
         $selectedProvider = \trim((string)$this->request->getGet('provider', ''));
@@ -86,7 +86,7 @@ class SiteBuilderAgent extends BackendController
         return $this->fetch('index-v1');
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_workspace', 'AI Site Workspace', 'mdi mdi-view-dashboard-outline', 'View and edit resumable AI site workspaces', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_workspace', 'AI Site Workspace', 'grid', 'View and edit resumable AI site workspaces', 'Weline_Websites::site_builder_agent')]
     public function workspace(): string
     {
         $adminId = $this->getAdminId();
@@ -164,7 +164,7 @@ class SiteBuilderAgent extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_state_json', 'AI Site State JSON', 'mdi mdi-code-json', 'Read workspace state JSON', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_state_json', 'AI Site State JSON', 'code', 'Read workspace state JSON', 'Weline_Websites::site_builder_agent')]
     public function getStateJson(): string
     {
         $adminId = $this->getAdminId();
@@ -184,7 +184,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_domain_lifecycle_status', 'AI Site Domain Lifecycle Status', 'mdi mdi-sync', 'Read domain lifecycle status for workspace top-bar', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_domain_lifecycle_status', 'AI Site Domain Lifecycle Status', 'refresh', 'Read domain lifecycle status for workspace top-bar', 'Weline_Websites::site_builder_agent')]
     public function getDomainLifecycleStatus(): string
     {
         $adminId = $this->getAdminId();
@@ -206,7 +206,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_stage_info', 'AI Site Stage Info', 'mdi mdi-information-outline', 'Read current stage and available stages', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_stage_info', 'AI Site Stage Info', 'info', 'Read current stage and available stages', 'Weline_Websites::site_builder_agent')]
     public function getStageInfo(): string
     {
         $adminId = $this->getAdminId();
@@ -235,7 +235,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Create AI Site Workspace', 'mdi mdi-plus', 'Create a resumable AI site workspace', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Create AI Site Workspace', 'plus', 'Create a resumable AI site workspace', 'Weline_Websites::site_builder_agent')]
     public function postCreateSession(): string
     {
         $adminId = $this->getAdminId();
@@ -552,7 +552,7 @@ class SiteBuilderAgent extends BackendController
         }
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_recommend_domain', 'Recommend Available Domain', 'mdi mdi-auto-fix', 'Recommend an available domain for the quick-start flow', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_recommend_domain', 'Recommend Available Domain', 'sparkles', 'Recommend an available domain for the quick-start flow', 'Weline_Websites::site_builder_agent')]
     public function postRecommendDomain(): string
     {
         $adminId = $this->getAdminId();
@@ -609,7 +609,7 @@ class SiteBuilderAgent extends BackendController
         );
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_check_domain', 'Check Domain Availability', 'mdi mdi-shield-search', 'Check a specific domain availability for quick-start flow', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_check_domain', 'Check Domain Availability', 'search', 'Check a specific domain availability for quick-start flow', 'Weline_Websites::site_builder_agent')]
     public function postCheckDomain(): string
     {
         $adminId = $this->getAdminId();
@@ -729,7 +729,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_recommend_domain_stream', 'Recommend Available Domain SSE', 'mdi mdi-access-point', 'Stream domain recommendation checks', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_recommend_domain_stream', 'Recommend Available Domain SSE', 'wifi', 'Stream domain recommendation checks', 'Weline_Websites::site_builder_agent')]
     public function getRecommendDomainSse(): void
     {
         @\set_time_limit(0);
@@ -999,19 +999,19 @@ class SiteBuilderAgent extends BackendController
         return \strtolower(\trim($domain)) === self::DEV_SIM_DOMAIN;
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_merge_scope', 'Merge Workspace Scope', 'mdi mdi-database-plus-outline', 'Merge workspace scope JSON', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_merge_scope', 'Merge Workspace Scope', 'plus', 'Merge workspace scope JSON', 'Weline_Websites::site_builder_agent')]
     public function postMergeScope(): string
     {
         return $this->jsonMutateScope(true);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_replace_scope', 'Replace Workspace Scope', 'mdi mdi-database-edit-outline', 'Replace workspace scope JSON', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_replace_scope', 'Replace Workspace Scope', 'edit', 'Replace workspace scope JSON', 'Weline_Websites::site_builder_agent')]
     public function postReplaceScope(): string
     {
         return $this->jsonMutateScope(false);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_set_stage', 'Set Workspace Stage', 'mdi mdi-flag-checkered', 'Update the current workspace stage', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_set_stage', 'Set Workspace Stage', 'check', 'Update the current workspace stage', 'Weline_Websites::site_builder_agent')]
     public function postSetStage(): string
     {
         $adminId = $this->getAdminId();
@@ -1052,7 +1052,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_delete_session', 'Delete Workspace Session', 'mdi mdi-delete-outline', 'Delete a resumable AI site workspace', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_delete_session', 'Delete Workspace Session', 'trash', 'Delete a resumable AI site workspace', 'Weline_Websites::site_builder_agent')]
     public function postDeleteSession(): string
     {
         $adminId = $this->getAdminId();
@@ -1077,7 +1077,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_save_virtual_theme', 'Save Virtual Theme', 'mdi mdi-palette', 'Save current virtual theme into database', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_save_virtual_theme', 'Save Virtual Theme', 'palette', 'Save current virtual theme into database', 'Weline_Websites::site_builder_agent')]
     public function postSaveVirtualTheme(): string
     {
         $adminId = $this->getAdminId();
@@ -1117,7 +1117,7 @@ class SiteBuilderAgent extends BackendController
         return $this->fetchJson($result);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_save_page_type_layout', 'Save Page Type Layout', 'mdi mdi-file-document-edit-outline', 'Save one page-type layout JSON into virtual theme', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_save_page_type_layout', 'Save Page Type Layout', 'edit', 'Save one page-type layout JSON into virtual theme', 'Weline_Websites::site_builder_agent')]
     public function postSavePageTypeLayout(): string
     {
         $adminId = $this->getAdminId();
@@ -1148,7 +1148,7 @@ class SiteBuilderAgent extends BackendController
         return $this->fetchJson($result);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_save_virtual_component', 'Save Virtual Component', 'mdi mdi-view-quilt-plus', 'Save AI component into virtual theme', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_save_virtual_component', 'Save Virtual Component', 'plus', 'Save AI component into virtual theme', 'Weline_Websites::site_builder_agent')]
     public function postSaveVirtualComponent(): string
     {
         $adminId = $this->getAdminId();
@@ -1176,7 +1176,7 @@ class SiteBuilderAgent extends BackendController
         return $this->fetchJson($result);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_generate_virtual_theme_stream', 'Generate Virtual Theme SSE', 'mdi mdi-robot', 'Auto-generate virtual theme from brief', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_generate_virtual_theme_stream', 'Generate Virtual Theme SSE', 'robot', 'Auto-generate virtual theme from brief', 'Weline_Websites::site_builder_agent')]
     public function getGenerateVirtualThemeSse(): void
     {
         @\set_time_limit(0);
@@ -1319,7 +1319,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_append_message', 'Append Workspace Message', 'mdi mdi-message-plus-outline', 'Append a note or message to the workspace', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_append_message', 'Append Workspace Message', 'plus', 'Append a note or message to the workspace', 'Weline_Websites::site_builder_agent')]
     public function postAppendMessage(): string
     {
         $adminId = $this->getAdminId();
@@ -1367,7 +1367,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_domain_purchase_start', 'Start Domain Purchase', 'mdi mdi-cart-arrow-down', 'Queue a non-blocking workbench domain purchase', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_domain_purchase_start', 'Start Domain Purchase', 'arrow-down', 'Queue a non-blocking workbench domain purchase', 'Weline_Websites::site_builder_agent')]
     public function postStartDomainPurchase(): string
     {
         $adminId = $this->getAdminId();
@@ -1414,7 +1414,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_stream', 'Workspace SSE Stream', 'mdi mdi-access-point', 'Stream workspace events', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_stream', 'Workspace SSE Stream', 'wifi', 'Stream workspace events', 'Weline_Websites::site_builder_agent')]
     public function getStreamSse(): void
     {
         $sse = new SseWriter();
@@ -1469,7 +1469,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_domain_purchase_stream', 'Workbench Domain Purchase SSE', 'mdi mdi-access-point-network', 'Run a non-blocking workbench domain purchase stream', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_domain_purchase_stream', 'Workbench Domain Purchase SSE', 'circle', 'Run a non-blocking workbench domain purchase stream', 'Weline_Websites::site_builder_agent')]
     public function getDomainPurchaseSse(): void
     {
         @\set_time_limit(0);
@@ -1531,7 +1531,7 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_trigger', 'Trigger Site Build', 'mdi mdi-play', 'Trigger the site building flow')]
+    #[Acl('Weline_Websites::site_builder_agent_trigger', 'Trigger Site Build', 'play', 'Trigger the site building flow')]
     public function getTriggerSse(): void
     {
         @\set_time_limit(0);

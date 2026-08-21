@@ -10,10 +10,10 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Model\OrderPayment;
 use Weline\Order\Model\RefundOutbox;
 
-#[Acl('Weline_Order::records', '订单业务记录', 'mdi-format-list-bulleted', '订单关联业务记录', 'Weline_Backend::order_group')]
+#[Acl('Weline_Order::records', '订单业务记录', 'list', '订单关联业务记录', 'Weline_Backend::order_group')]
 final class Records extends BackendController
 {
-    #[Acl('Weline_Order::payment_manage', '订单收款记录', 'mdi-credit-card', '订单收款记录', 'Weline_Backend::payment_group')]
+    #[Acl('Weline_Order::payment_manage', '订单收款记录', 'edit', '订单收款记录', 'Weline_Backend::payment_group')]
     public function payment(): string
     {
         return $this->renderRecords('payment', __('订单收款记录'), OrderPayment::class, [
@@ -22,7 +22,7 @@ final class Records extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Order::exception_manage', '订单异常与补偿', 'mdi-alert-circle', '查看订单退款补偿异常', 'Weline_Order::order_manage')]
+    #[Acl('Weline_Order::exception_manage', '订单异常与补偿', 'warning', '查看订单退款补偿异常', 'Weline_Order::order_manage')]
     public function exceptions(): string
     {
         return $this->renderRecords('exception', __('订单异常与补偿'), RefundOutbox::class, [

@@ -18,16 +18,16 @@ $confirmMessages = [
 ];
 ?>
 <?php if (empty($embed)): ?>
-<div class="row" data-testid="shipping-region-management">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('地区管理') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
+<div class="w-grid" data-testid="shipping-region-management">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;"><?= __('地区管理') ?></h4>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item">
                                         <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
                                     </li>
-                                    <li class="breadcrumb-item active"><?= __('地区管理') ?></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= __('地区管理') ?></li>
                                 </ol>
                             </div>
                         </div>
@@ -35,19 +35,19 @@ $confirmMessages = [
                 </div>
 <?php endif; ?>
 
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card" data-testid="shipping-region-create-form">
-                            <div class="card-header"><h5 class="card-title mb-0"><?= __('新增地区') ?></h5></div>
-                            <div class="card-body">
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <div class="w-card" data-testid="shipping-region-create-form">
+                            <div class="w-card__header"><h5 class="w-card__title" style="--w-mb:0;"><?= __('新增地区') ?></h5></div>
+                            <div class="w-card__body">
                                 <w:form method="post" action="@backend-url('shipping/backend/region/save')">
-                                    <div class="row g-3">
-                                        <div class="col-md-2"><label class="form-label"><?= __('国家代码') ?></label><input class="form-control" name="country_code" maxlength="2" value="<?= htmlspecialchars((string)($currentCountryCode ?: 'CN')) ?>" required></div>
-                                        <div class="col-md-2"><label class="form-label"><?= __('地区代码') ?></label><input class="form-control" name="region_code" maxlength="50" required></div>
-                                        <div class="col-md-3"><label class="form-label"><?= __('地区名称') ?></label><input class="form-control" name="region_name" maxlength="255" required></div>
-                                        <div class="col-md-2"><label class="form-label"><?= __('类型') ?></label><select class="form-select" name="region_type"><option value="province"><?= __('省/州') ?></option><option value="city"><?= __('城市') ?></option><option value="district"><?= __('区县') ?></option><option value="country"><?= __('国家') ?></option></select></div>
-                                        <div class="col-md-1"><label class="form-label"><?= __('排序') ?></label><input class="form-control" type="number" min="0" name="sort_order" value="0"></div>
-                                        <div class="col-md-2 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100" type="submit" data-testid="shipping-region-submit"><?= __('创建') ?></button></div>
+                                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('国家代码') ?></label><input class="w-input" name="country_code" maxlength="2" value="<?= htmlspecialchars((string)($currentCountryCode ?: 'CN')) ?>" required></div>
+                                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('地区代码') ?></label><input class="w-input" name="region_code" maxlength="50" required></div>
+                                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('地区名称') ?></label><input class="w-input" name="region_name" maxlength="255" required></div>
+                                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('类型') ?></label><select class="w-select" name="region_type"><option value="province"><?= __('省/州') ?></option><option value="city"><?= __('城市') ?></option><option value="district"><?= __('区县') ?></option><option value="country"><?= __('国家') ?></option></select></div>
+                                        <div style="--w-span-md:1;"><label class="w-field__label"><?= __('排序') ?></label><input class="w-input" type="number" min="0" name="sort_order" value="0"></div>
+                                        <div class="w-cluster" data-align="end" style="--w-span-md:2;"><input type="hidden" name="is_active" value="1"><button class="w-button" type="submit" data-testid="shipping-region-submit" data-w-width="full" data-tone="primary"><?= __('创建') ?></button></div>
                                     </div>
                                 </w:form>
                             </div>
@@ -55,18 +55,18 @@ $confirmMessages = [
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="row align-items-center">
-                                    <div class="col-md-6">
-                                        <h5 class="card-title mb-0"><?= __('地区列表') ?></h5>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <div class="w-grid" data-align="center">
+                                    <div style="--w-span-md:6;">
+                                        <h5 class="w-card__title" style="--w-mb:0;"><?= __('地区列表') ?></h5>
                                     </div>
-                                    <div class="col-md-6 text-end">
-                                        <w:form method="get" action="@var($backendBase)" class="d-inline-flex align-items-center">
-                                            <label class="me-2 mb-0"><?= __('国家') ?>:</label>
-                                            <select name="country_code" class="form-select form-select-sm me-2" data-region-country-select>
+                                    <div class="w-text" data-align="end" style="--w-span-md:6;">
+                                        <w:form method="get" action="@var($backendBase)" class="w-cluster" data-align="center">
+                                            <label class="me-2" style="--w-mb:0;"><?= __('国家') ?>:</label>
+                                            <select name="country_code" class="w-select me-2" data-region-country-select data-size="sm">
                                                 <?php foreach ($countries as $country): ?>
                                                     <?php $code = (string)($country['code'] ?? ''); ?>
                                                     <option value="<?= htmlspecialchars($code) ?>"
@@ -75,23 +75,22 @@ $confirmMessages = [
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <a href="<?= $syncUrl ?>" class="btn btn-sm btn-secondary"
-                                               data-region-confirm="syncRegions">
-                                                <i class="mdi mdi-earth"></i> <?= __('从i18n同步国家') ?>
+                                            <a href="<?= $syncUrl ?>" class="w-button" data-region-confirm="syncRegions" data-tone="neutral" data-size="sm">
+                                                <w:icon name="globe" size="sm"></w:icon> <?= __('从i18n同步国家') ?>
                                             </a>
                                         </w:form>
                                     </div>
                                 </div>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($regionTree)): ?>
-                                    <div class="alert alert-info mb-0">
+                                    <div class="w-alert" data-tone="info" style="--w-mb:0;">
                                         <?= __('当前国家暂无地区数据，请先从i18n同步或手动添加。') ?>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered table-hover align-middle">
-                                            <thead class="table-light">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table" data-w-vertical="middle">
+                                            <thead>
                                             <tr>
                                                 <th style="width: 50%;"><?= __('地区名称') ?></th>
                                                 <th><?= __('地区代码') ?></th>
@@ -110,9 +109,9 @@ $confirmMessages = [
                                                     <td><?= htmlspecialchars($node['region_type']) ?></td>
                                                     <td>
                                                         <?php if (!empty($node['is_active'])): ?>
-                                                            <span class="badge bg-success"><?= __('启用') ?></span>
+                                                            <span class="w-badge" data-w-background="success"><?= __('启用') ?></span>
                                                         <?php else: ?>
-                                                            <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                                            <span class="w-badge" data-w-background="muted"><?= __('禁用') ?></span>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>
@@ -202,20 +201,16 @@ $confirmMessages = [
     }
 
     function showRegionChoice(message) {
-        if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
-            return Swal.fire({
-                icon: 'warning',
-                title: messages.confirmTitle,
-                text: message,
-                showCancelButton: true,
-                confirmButtonText: messages.confirmButton,
-                cancelButtonText: messages.cancelButton
-            }).then(function(result) {
-                return !!(result && result.isConfirmed);
-            });
-        }
-
-        return showLocalChoice(message);
+        return Weline.UI.dialog.request({
+            tone: 'warning',
+            title: messages.confirmTitle,
+            message: message,
+            cancelable: true,
+            confirmLabel: messages.confirmButton,
+            cancelLabel: messages.cancelButton
+        }).then(function(result) {
+            return !!(result && result.confirmed);
+        });
     }
 
     document.querySelectorAll('[data-region-confirm]').forEach(function(link) {

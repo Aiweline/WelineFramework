@@ -6,51 +6,50 @@
  */
 ?>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'><?= __('Cms内容管理') ?></h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><?= __('系统') ?></span></li>
-                    <li class='breadcrumb-item active'><?= __('内容管理') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('Cms内容管理') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('内容管理') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'><?= __('Cms内容管理') ?></h4>
-                <p class='card-title-desc'><?= __('后台可视化建设页面等的内容管理。') ?></p>
-                <div class='col-lg-12'>
-                    <div class='card alert border p-0 mb-0'>
-                        <div class='card-header bg-soft-success'>
-                            <div class='d-flex'>
-                                <div class='flex-grow-1'>
-                                    <h5 class='font-size-16 text-success my-1'>等待开发中...</h5>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title"><?= __('Cms内容管理') ?></h4>
+                <p class="w-text" data-tone="muted"><?= __('后台可视化建设页面等的内容管理。') ?></p>
+                <div style="--w-span-lg:12;">
+                    <div class="w-card w-alert" data-w-border="border" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;--w-mb:0;">
+                        <div class="w-card__header" data-w-background="success">
+                            <div class="w-cluster">
+                                <div data-grow="true">
+                                    <h5 class="w-text" data-tone="success" style="--w-font-size:1rem;--w-mt:var(--weline-space-1);--w-mb:var(--weline-space-1);">等待开发中...</h5>
                                 </div>
-                                <div class='flex-shrink-0'>
-                                    <button type='button' class='btn-close' data-bs-dismiss='alert'
-                                            aria-label='Close'></button>
+                                <div data-shrink="false">
+                                    <button type='button' class="w-button" aria-label='Close' data-w-action="element.remove" data-w-close="" data-tone="quiet" data-size="sm"></button>
                                 </div>
                             </div>
                         </div>
 
-                        <div class='card-body'>
-                            <div class='text-center'>
-                                <div class='mb-4'>
-                                    <i class='mdi mdi-checkbox-marked-circle-outline display-4 text-success'></i>
+                        <div class="w-card__body">
+                            <div class="w-text" data-align="center">
+                                <div style="--w-mb:var(--weline-space-6);">
+                                    <w:icon name="check" size="sm"></w:icon>
                                 </div>
-                                <h4 class='alert-heading font-18'>马上就好！</h4>
-                                <p class='mb-0'>有兴趣可以一起参与！</p>
+                                <h4 class="alert-heading w-text" style="--w-font-size:1.125rem;">马上就好！</h4>
+                                <p style="--w-mb:0;">有兴趣可以一起参与！</p>
                             </div>
                         </div>
                     </div>

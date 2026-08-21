@@ -816,7 +816,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="w-container">
         <div class="icon">🔧</div>
         <h1>{$heading}</h1>
         <p>{$message1}<br>{$message2}</p>

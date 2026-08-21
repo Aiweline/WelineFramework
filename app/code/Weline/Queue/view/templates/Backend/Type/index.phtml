@@ -167,13 +167,13 @@
 </style>
 
 <!-- start page title -->
-<div class='row' data-testid="queue-type-management">
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid" data-testid="queue-type-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <breadcrumb model="Weline\Backend\Model\Menu" order_field="order" name_field="title"></breadcrumb>
             </h4>
-            <div class='page-title-right'>
+            <div class="w-cluster">
                 <breadcrumb model='Weline\Backend\Model\Menu' order_field='order' name_field='title'></breadcrumb>
             </div>
         </div>
@@ -182,26 +182,26 @@
 <!-- end page title -->
 
 <!-- start page message -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 <!-- end message -->
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card weline-queue-type-container'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card weline-queue-type-container">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>{{title}}</lang>
                 </h4>
-                <p class="card-title-desc">
+                <p class="w-text" data-tone="muted">
                     <lang>管理系统中注册的队列类型，可以启用或禁用特定类型的队列处理器</lang>
                 </p>
                 
-                <div class='table-rep-plugin'>
+                <div class="table-rep-plugin">
                     <!-- search form -->
-                    <div class='row mb-3'>
-                        <div class='col-12'>
+                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                        <div style="--w-span:12;">
                             <block class='Weline\Component\Block\Form\Search' 
                                    id='type-search'
                                    action='*/backend/type' 
@@ -213,8 +213,8 @@
                     </div>
                     <!-- end search form -->
                     
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table class='weline-queue-type-table table table-striped table-bordered'>
+                    <div class="w-table-wrap" data-pattern='priority-columns' style="--w-mb:0;">
+                        <table class="weline-queue-type-table w-table">
                             <thead>
                             <tr>
                                 <th data-priority='1' style="width: 80px;"><?= __('ID') ?></th>
@@ -231,7 +231,7 @@
                                 <tr>
                                     <td colspan="7">
                                         <div class="weline-queue-type-empty">
-                                            <i class="mdi mdi-inbox-outline"></i>
+                                            <w:icon name="box" size="sm"></w:icon>
                                             <p><lang>暂无队列类型数据</lang></p>
                                         </div>
                                     </td>
@@ -247,7 +247,7 @@
                                     </td>
                                     <td>
                                         <span class="weline-queue-type-module">
-                                            <i class="mdi mdi-package-variant-closed"></i>
+                                            <w:icon name="close" size="sm"></w:icon>
                                             {{type.module_name}}
                                         </span>
                                     </td>
@@ -260,12 +260,12 @@
                                         <div class="weline-queue-type-status">
                                             <if condition="type.enable == 1">
                                                 <span class="weline-queue-type-status-badge weline-queue-type-status-badge--enabled">
-                                                    <i class="mdi mdi-check-circle"></i>
+                                                    <w:icon name="check" size="sm"></w:icon>
                                                     <lang>启用</lang>
                                                 </span>
                                             <else/>
                                                 <span class="weline-queue-type-status-badge weline-queue-type-status-badge--disabled">
-                                                    <i class="mdi mdi-close-circle"></i>
+                                                    <w:icon name="close" size="sm"></w:icon>
                                                     <lang>禁用</lang>
                                                 </span>
                                             </if>
@@ -283,7 +283,7 @@
                                                         data-id="{{type.type_id}}"
                                                         data-name="{{type.name}}"
                                                         title="@lang(禁用此队列类型)">
-                                                    <i class="mdi mdi-power-off"></i>
+                                                    <w:icon name="circle" size="sm"></w:icon>
                                                     <lang>禁用</lang>
                                                 </button>
                                             <else/>
@@ -293,7 +293,7 @@
                                                         data-id="{{type.type_id}}"
                                                         data-name="{{type.name}}"
                                                         title="@lang(启用此队列类型)">
-                                                    <i class="mdi mdi-power"></i>
+                                                    <w:icon name="circle" size="sm"></w:icon>
                                                     <lang>启用</lang>
                                                 </button>
                                             </if>
@@ -301,7 +301,7 @@
                                                     class="weline-queue-type-btn weline-queue-type-btn--view weline-queue-type-view-btn"
                                                     data-id="{{type.type_id}}"
                                                     title="@lang(查看详情)">
-                                                <i class="mdi mdi-eye" aria-hidden="true"></i>
+                                                <w:icon name="eye" size="sm"></w:icon>
                                                 <lang>详情</lang>
                                             </button>
                                         </div>
@@ -326,15 +326,16 @@
        action='*/backend/type/show'
        target-tag='button'
        target-button-text=''
-       icon='mdi mdi-eye'
-       target-button-class='d-none weline-queue-type-shared-view-trigger'
+       icon='eye'
+       target-hidden='1'
+       target-class='w-queue-type-shared-view-trigger'
        flush='1'
        save='0'
        close-button-show='1'
        close-button-text='关闭'
        direction='right'
-       class-names='w-50'
-       off-canvas-body-style=''
+       drawer-size='md'
+
 />
 
 <script>
@@ -397,21 +398,21 @@
 
     function openTypeOffcanvas(typeId) {
         var id = parseInt(String(typeId || ''), 10);
-        var trigger = document.querySelector('.weline-queue-type-shared-view-trigger');
+        var trigger = document.querySelector('.w-queue-type-shared-view-trigger');
         if (!Number.isFinite(id) || id <= 0 || !trigger) {
-            BackendToast.error(queueText.networkError);
+            Weline.UI.toast.error(queueText.networkError);
             return;
         }
         var targetSelector = trigger.getAttribute('data-bs-target') || '';
         var panel = targetSelector ? document.querySelector(targetSelector) : null;
         var iframe = panel ? panel.querySelector('iframe[data-src]') : null;
         if (!panel || !iframe) {
-            BackendToast.error(queueText.networkError);
+            Weline.UI.toast.error(queueText.networkError);
             return;
         }
         var baseSrc = iframe.getAttribute('data-queue-type-base-src') || iframe.getAttribute('data-src') || '';
         if (!baseSrc) {
-            BackendToast.error(queueText.networkError);
+            Weline.UI.toast.error(queueText.networkError);
             return;
         }
         iframe.setAttribute('data-queue-type-base-src', baseSrc);
@@ -430,19 +431,19 @@
         var actionText = enabled ? queueText.enable : queueText.disable;
 
         if (!Number.isFinite(typeId) || typeId <= 0) {
-            BackendToast.error(queueText.networkError);
+            Weline.UI.toast.error(queueText.networkError);
             return;
         }
 
         var confirmed = false;
         try {
-            confirmed = await BackendConfirm.show(actionText + ' · ' + String(typeName || typeId), {
+            confirmed = await Weline.UI.dialog.confirm(actionText + ' · ' + String(typeName || typeId), {
                 title: actionText,
-                confirmText: actionText,
-                type: enabled ? 'success' : 'warning'
+                confirmLabel: actionText,
+                tone: enabled ? 'success' : 'warning'
             });
         } catch (error) {
-            BackendToast.error(error && error.message ? error.message : queueText.networkError);
+            Weline.UI.toast.error(error && error.message ? error.message : queueText.networkError);
             return;
         }
         if (!confirmed) return;
@@ -452,15 +453,15 @@
         try {
             var result = await setTypeEnabled(typeId, enabled);
             if (result && result.success) {
-                BackendToast.success(result.msg);
+                Weline.UI.toast.success(result.msg);
                 setTimeout(function() {
                     window.location.reload();
                 }, 600);
             } else {
-                BackendToast.error((result && result.msg) || queueText.networkError);
+                Weline.UI.toast.error((result && result.msg) || queueText.networkError);
             }
         } catch (error) {
-            BackendToast.error(error && error.message ? error.message : queueText.networkError);
+            Weline.UI.toast.error(error && error.message ? error.message : queueText.networkError);
         } finally {
             setButtonBusy(button, false);
             if (window.hideLoading) hideLoading();

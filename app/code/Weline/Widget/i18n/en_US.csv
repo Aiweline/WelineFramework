@@ -95,7 +95,7 @@ AI翻译,"AI Translate"
 页面不存在,"Page does not exist"
 "加载失败: %{1}","Load failed: %{1}"
 "获取部件列表失败: %{1}","Failed to get widget list: %{1}"
-"mdi mdi-pencil-box","mdi mdi-pencil-box"
+edit,edit
 编辑器首页,编辑器首页
 访问编辑器,访问编辑器
 保存页面,保存页面
@@ -196,3 +196,4 @@ FAQ部件,"FAQ widget"
 位置：generated/param_schemas.php,"Location: generated/param_schemas.php"
 "✖ 写入 ParamSchema 注册表失败。","✖ Writing to ParamSchema registry failed."
 刷新失败：%{1},"Refresh Failed: %{1}"
+"mdi mdi-pencil-box","mdi mdi-pencil-box"

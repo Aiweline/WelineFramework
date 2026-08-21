@@ -14,13 +14,13 @@ use Weline\Framework\Acl\Acl;
  *
  * @package Weline_Shipping
  */
-#[Acl('Weline_Shipping::shipping_system', '配送系统', 'mdi-truck-delivery-outline', '配送系统管理聚合页', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::shipping_system', '配送系统', 'truck', '配送系统管理聚合页', 'Weline_Backend::shipping_group')]
 class Manager extends BackendController
 {
     /**
      * 聚合页：7 个 Tab
      */
-    #[Acl('Weline_Shipping::shipping_system_index', '查看配送系统', 'mdi-view-dashboard', '查看配送系统聚合页')]
+    #[Acl('Weline_Shipping::shipping_system_index', '查看配送系统', 'grid', '查看配送系统聚合页')]
     public function index(): string
     {
         $tab = (string) $this->request->getGet('tab', 'region');

@@ -20,20 +20,20 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 ?>
 
 <!-- 消息提示 -->
-<div class='row mb-3'>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 表单 -->
-<div class="card">
-    <div class="card-body">
+<div class="w-card">
+    <div class="w-card__body">
         <w:form id="domainForm" method="post" action="@var($this->getBackendUrl('*/backend/domain/save'))" data-testid="cdn-domain-editor-form" data-state="idle" data-message="">
             <input type="hidden" name="id" value="<?= $domain && $domain->getId() ? (int)$domain->getId() : '' ?>">
             
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('网站') ?> <span class="text-danger">*</span></label>
-                <div class="col-md-10">
-                    <select name="site_id" id="siteSelect" class="form-select" required>
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('网站') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <div style="--w-span-md:10;">
+                    <select name="site_id" id="siteSelect" class="w-select" required>
                         <option value=""><?= __('请选择网站') ?></option>
                         <?php foreach ($websites as $website): ?>
                             <option value="<?= (int)$website['website_id'] ?>" 
@@ -43,14 +43,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <small class="form-text text-muted"><?= __('从Weline_Websites模块选择网站') ?></small>
+                    <small class="w-field__hint w-text" data-tone="muted"><?= __('从Weline_Websites模块选择网站') ?></small>
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('适配器') ?> <span class="text-danger">*</span></label>
-                <div class="col-md-10">
-                    <select name="adapter" id="adapterSelect" class="form-select" required>
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('适配器') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <div style="--w-span-md:10;">
+                    <select name="adapter" id="adapterSelect" class="w-select" required>
                         <option value=""><?= __('请选择适配器') ?></option>
                         <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
                             <option value="<?= htmlspecialchars((string)$adapterCode) ?>" 
@@ -62,73 +62,65 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('域名名称') ?> <span class="text-danger">*</span></label>
-                <div class="col-md-10">
-                    <input type="text" name="domain_name" id="domainNameInput" class="form-control" 
-                           value="<?= htmlspecialchars((string)($domain ? ($domain->getData('domain_name') ?? '') : '')) ?>" 
-                           required>
-                    <small class="form-text text-muted"><?= __('例如：example.com') ?></small>
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('域名名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <div style="--w-span-md:10;">
+                    <input type="text" name="domain_name" id="domainNameInput" class="w-input" value="<?= htmlspecialchars((string)($domain ? ($domain->getData('domain_name') ?? '') : '')) ?>" required>
+                    <small class="w-field__hint w-text" data-tone="muted"><?= __('例如：example.com') ?></small>
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('Zone ID') ?> <span class="text-danger">*</span></label>
-                <div class="col-md-10">
-                    <input type="text" name="zone_id" class="form-control" 
-                           value="<?= htmlspecialchars((string)($domain ? ($domain->getData('zone_id') ?? '') : '')) ?>" 
-                           required>
-                    <small class="form-text text-muted"><?= __('CDN提供商的Zone ID，例如Cloudflare的Zone ID') ?></small>
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('Zone ID') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <div style="--w-span-md:10;">
+                    <input type="text" name="zone_id" class="w-input" value="<?= htmlspecialchars((string)($domain ? ($domain->getData('zone_id') ?? '') : '')) ?>" required>
+                    <small class="w-field__hint w-text" data-tone="muted"><?= __('CDN提供商的Zone ID，例如Cloudflare的Zone ID') ?></small>
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('账户关联') ?></label>
-                <div class="col-md-10">
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" name="inherit_default" value="1" 
-                               id="inheritDefault" <?= ($domain && $domain->getData('inherit_default')) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="inheritDefault">
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('账户关联') ?></label>
+                <div style="--w-span-md:10;">
+                    <div class="w-switch" style="--w-mb:var(--weline-space-2);">
+                        <input type="checkbox" name="inherit_default" value="1" id="inheritDefault" <?= ($domain && $domain->getData('inherit_default')) ? 'checked' : '' ?>>
+                        <label for="inheritDefault">
                             <?= __('继承默认账户') ?>
                         </label>
                     </div>
-                    <select name="account_id" class="form-select" id="accountSelect" disabled>
+                    <select name="account_id" class="w-select" id="accountSelect" disabled>
                         <option value=""><?= __('请先选择适配器') ?></option>
                     </select>
-                    <small class="form-text text-muted"><?= __('选择适配器后，将显示该适配器下的可用账户') ?></small>
+                    <small class="w-field__hint w-text" data-tone="muted"><?= __('选择适配器后，将显示该适配器下的可用账户') ?></small>
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('预热间隔') ?></label>
-                <div class="col-md-10">
-                    <input type="number" name="warmup_interval_seconds" class="form-control" 
-                           value="<?= $domain && $domain->getData('warmup_interval_seconds') ? (int)$domain->getData('warmup_interval_seconds') : 300 ?>" 
-                           min="60" step="60">
-                    <small class="form-text text-muted"><?= __('预热URL的间隔时间（秒），默认300秒') ?></small>
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('预热间隔') ?></label>
+                <div style="--w-span-md:10;">
+                    <input type="number" name="warmup_interval_seconds" class="w-input" value="<?= $domain && $domain->getData('warmup_interval_seconds') ? (int)$domain->getData('warmup_interval_seconds') : 300 ?>" min="60" step="60">
+                    <small class="w-field__hint w-text" data-tone="muted"><?= __('预热URL的间隔时间（秒），默认300秒') ?></small>
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('状态') ?></label>
-                <div class="col-md-10">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="enabled" value="1" 
-                               id="enabled" <?= ($domain && $domain->getData('enabled')) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="enabled">
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('状态') ?></label>
+                <div style="--w-span-md:10;">
+                    <div class="w-switch">
+                        <input type="checkbox" name="enabled" value="1" id="enabled" <?= ($domain && $domain->getData('enabled')) ? 'checked' : '' ?>>
+                        <label for="enabled">
                             <?= __('启用') ?>
                         </label>
                     </div>
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-md-10 offset-md-2">
-                    <button type="submit" class="btn btn-primary" data-testid="cdn-domain-editor-submit">
-                        <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+            <div class="w-grid">
+                <div class="offset-md-2" style="--w-span-md:10;">
+                    <button type="submit" class="w-button" data-testid="cdn-domain-editor-submit" data-tone="primary">
+                        <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
                     </button>
-                    <a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>" class="btn btn-secondary">
-                        <i class="mdi mdi-close"></i> <?= __('取消') ?>
+                    <a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>" class="w-button" data-tone="neutral">
+                        <w:icon name="close" size="sm"></w:icon> <?= __('取消') ?>
                     </a>
                 </div>
             </div>
@@ -251,50 +243,35 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 if (data.success) {
                     domainForm.dataset.state = 'saved';
                     domainForm.dataset.message = data.message || '';
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: data.message,
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(function() {
-                            window.location.href = data.redirect || indexUrl;
-                        });
-                    } else {
-                        BackendToast.success(data.message);
-                        setTimeout(function() {
-                            window.location.href = data.redirect || indexUrl;
-                        }, 1500);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: data.message,
+                        duration: 2000,
+                        confirmable: false
+                    }).then(function() {
+                        window.location.href = data.redirect || indexUrl;
+                    });
                 } else {
                     domainForm.dataset.state = 'error';
                     domainForm.dataset.message = data.message || '<?= __('保存失败') ?>';
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('保存失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        BackendToast.error(data.message);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: '<?= __('保存失败') ?>',
+                        message: data.message,
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
             })
             .catch(function(error) {
                 domainForm.dataset.state = 'error';
                 domainForm.dataset.message = error && error.message ? error.message : String(error);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('请求失败') ?>',
-                        text: error.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    BackendToast.error(error.message);
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('请求失败') ?>',
+                    message: error.message,
+                    confirmLabel: '<?= __('确定') ?>'
+                });
             });
         });
     }

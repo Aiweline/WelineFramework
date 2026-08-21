@@ -14,10 +14,10 @@ use Weline\Product\Api\Data\CopyDraft;
  * 页面只发布 UI 常量；所有浏览器业务动作通过 Product 自有
  * `product_copy` QueryProvider 进入 ProductCopyService。
  */
-#[Acl('Weline_Websites::store_copy', 'Store 复制向导', 'mdi mdi-content-copy', '从目录/他店复制经营投影', 'Weline_Websites::website_service')]
+#[Acl('Weline_Websites::store_copy', 'Store 复制向导', 'copy', '从目录/他店复制经营投影', 'Weline_Websites::website_service')]
 class StoreCopy extends BackendController
 {
-    #[Acl('Weline_Websites::store_copy_wizard', '打开复制向导', 'mdi mdi-wizard-hat', 'Store 复制向导')]
+    #[Acl('Weline_Websites::store_copy_wizard', '打开复制向导', 'circle', 'Store 复制向导')]
     public function wizard()
     {
         $this->assign('entries', [

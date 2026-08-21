@@ -1,54 +1,7 @@
 <?php
-/**
- * 片段：Footer - 极简风格
- * 
- * 极简风格的页面底部，只包含版权信息
- * 字段
- * @meta.name {default="Footer极简风格片段",name="Footer极简风格片段",description="Footer极简风格片段，用于描述片段的名称"}
- * @meta.description {default="极简风格的页面底部，只包含版权信息",name="极简风格的页面底部，只包含版权信息",description="极简风格的页面底部，只包含版权信息，用于描述片段的用途"}
- * @param.copyright {default="© {year} Weline Framework. 保留所有权利",name="版权信息",description="版权信息，用于设置页面底部的版权文字"}
- * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
- */
-
-// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
-$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.footer.minimal');
-foreach ($metaParams as $key => $value) {
-    $this->setData("meta.{$key}", $value);
-}
-
+/** @meta.name {default="Weline UI 2.0 前台极简页脚",name="Weline UI 2.0 前台极简页脚"} */
 $copyright = \Weline\Theme\Helper\FooterCopyrightHelper::resolve(
-    $this->getData('meta.copyright') !== null ? (string) $this->getData('meta.copyright') : null
+    $this->getData('meta.copyright') !== null ? (string)$this->getData('meta.copyright') : null
 );
-$class = $this->getData("meta.class") ?? '';
 ?>
-<footer class="weline-footer minimal-footer <?= htmlspecialchars($class) ?>">
-    <div class="footer-container">
-        <div class="footer-bottom">
-            <p><?= htmlspecialchars($copyright) ?></p>
-        </div>
-    </div>
-    
-    <!-- Footer Hooks -->
-    <w:hook>footer</w:hook>
-</footer>
-
-<?php
-// 加载布局特定的JS文件（在footer中加载）
-// 从 theme 对象中读取所有主题相关数据
-$theme = $this->getData('theme') ?? [];
-$area = $theme['area'] ?? 'frontend';
-$layoutType = $theme['layoutType'] ?? $this->getData('layoutType') ?? '';
-$layoutOption = $theme['layoutOption'] ?? $this->getData('layoutOption') ?? 'default';
-$requestPath = $this->request->getPathInfo() ?? '';
-if (strpos($requestPath, '/admin') === 0 || strpos($requestPath, '/backend') === 0) {
-    $area = 'backend';
-}
-
-if ($layoutType && $layoutOption) {
-    $this->setData('area', $area);
-    ?>
-<theme:js>Weline_Theme::theme/{{area}}/assets/js/layouts/{{layoutType}}/{{layoutOption}}.js</theme:js>
-<?php
-}
-?>
-
+<footer class="w-frontend-footer"><div class="w-container w-frontend-footer__bottom"><small><?= htmlspecialchars($copyright, ENT_QUOTES, 'UTF-8') ?></small></div><w:hook>footer</w:hook></footer>

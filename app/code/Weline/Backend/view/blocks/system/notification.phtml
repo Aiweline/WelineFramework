@@ -1,507 +1,70 @@
 <?php
-/**
- * 增强版系统通知下拉组件
- * 
- * @var \Weline\Framework\View\Template $this
- */
+/** @var \Weline\Framework\View\Template $this */
 
 use Weline\Backend\Block\System\Notification;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\Ui\IconRegistry;
 
-/** @var Notification $block */
 $block = ObjectManager::getInstance(Notification::class);
 $notifications = $block->getNotifications();
 $unreadCount = $block->getUnreadCount();
+$iconRegistry = ObjectManager::getInstance(IconRegistry::class);
 ?>
-
-<div class="dropdown d-inline-block weline-notification-dropdown">
-    <button type="button" class="btn header-item noti-icon waves-effect" 
-            id="page-header-notifications-dropdown"
-            data-bs-toggle="dropdown" aria-expanded="false">
-        <span class="weline-notification-icon-wrapper">
-            <i class="ri-notification-3-line"></i>
-            <?php if ($unreadCount > 0): ?>
-            <span class="weline-notification-badge"><?= $unreadCount > 99 ? '99+' : $unreadCount ?></span>
-            <?php endif; ?>
-        </span>
+<div class="w-backend-topbar__menu" data-w-component="menu" data-w-placement="bottom-end">
+    <button
+        class="w-button w-notification-trigger"
+        data-tone="quiet"
+        data-size="sm"
+        type="button"
+        data-w-menu-trigger
+        aria-expanded="false"
+        aria-controls="w-backend-notification-menu"
+        aria-label="<?= htmlspecialchars((string)__('通知'), ENT_QUOTES, 'UTF-8') ?>"
+    >
+        <w:icon name="bell" />
+        <?php if ($unreadCount > 0): ?>
+            <span class="w-notification-trigger__badge" aria-label="<?= htmlspecialchars((string)__('未读通知'), ENT_QUOTES, 'UTF-8') ?>"><?= $unreadCount > 99 ? '99+' : (int)$unreadCount ?></span>
+        <?php endif; ?>
     </button>
-    <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0 weline-notification-menu"
-         aria-labelledby="page-header-notifications-dropdown">
-        <div class="p-3 weline-notification-header">
-            <div class="row align-items-center">
-                <div class="col">
-                    <h6 class="m-0"><?= __('通知') ?></h6>
-                </div>
-                <div class="col-auto">
-                    <?php if ($unreadCount > 0): ?>
-                    <button type="button" class="small weline-notification-mark-all"
-                            data-notification-action="mark-all-read">
-                        <?= __('全部已读') ?>
-                    </button>
-                    <?php endif; ?>
-                </div>
-            </div>
+    <div id="w-backend-notification-menu" class="w-menu w-notification-menu" data-w-menu-panel role="menu" hidden>
+        <div class="w-notification-menu__header">
+            <strong><?= htmlspecialchars((string)__('通知'), ENT_QUOTES, 'UTF-8') ?></strong>
+            <?php if ($unreadCount > 0): ?><span class="w-badge" data-tone="info"><?= (int)$unreadCount ?></span><?php endif; ?>
         </div>
-        <div data-simplebar style="max-height: 300px;" class="weline-notification-list">
-            <?php if (empty($notifications)): ?>
-            <div class="weline-notification-empty">
-                <i class="mdi mdi-bell-off"></i>
-                <p><?= __('暂无通知') ?></p>
-            </div>
+        <div class="w-notification-menu__list">
+            <?php if ($notifications === []): ?>
+                <div class="w-empty-state" role="status">
+                    <w:icon name="bell" size="lg" />
+                    <p><?= htmlspecialchars((string)__('暂无通知'), ENT_QUOTES, 'UTF-8') ?></p>
+                </div>
             <?php else: ?>
-            <?php foreach ($notifications as $notification): ?>
-            <?php
-            $type = $notification['type'] ?? 'info';
-            $typeColor = $block->getTypeColor($type);
-            $typeIcon = $block->getTypeIcon($type);
-            $typeLabel = $block->getTypeLabel($type);
-            $avatar = $notification['avatar'] ?? '';
-            if ($avatar === 'ri-sitemap-line') {
-                $avatar = 'ri-file-list-line';
-            }
-            $isRead = (bool) ($notification['is_read'] ?? false);
-            $notificationId = $notification['notification_id'] ?? 0;
-            $detailUrl = $this->getBackendUrl('system/backend/notification/detail', ['id' => $notificationId]);
-            ?>
-            <a href="<?= $detailUrl ?>" 
-               class="text-reset notification-item weline-notification-item <?= $isRead ? '' : 'weline-notification-unread' ?>"
-               data-notification-id="<?= $notificationId ?>">
-                <div class="weline-notification-icon-wrap" style="background: <?= $typeColor ?>">
-                    <?php if (!empty($notification['is_icon']) && $avatar !== ''): ?>
-                    <i class="<?= htmlspecialchars($avatar) ?>"></i>
-                    <?php else: ?>
-                    <i class="<?= $typeIcon ?>"></i>
-                    <?php endif; ?>
-                </div>
-                <div class="weline-notification-main">
-                    <div class="weline-notification-header">
-                        <h6 class="weline-notification-title"><?= htmlspecialchars($notification['title'] ?? '') ?></h6>
-                        <span class="weline-notification-type-badge" style="background: <?= $typeColor ?>">
-                            <?= $typeLabel ?>
+                <?php foreach ($notifications as $notification): ?>
+                    <?php
+                    $type = (string)($notification['type'] ?? 'info');
+                    $notificationId = (int)($notification['notification_id'] ?? 0);
+                    $detailUrl = $this->getBackendUrl('system/backend/notification/detail', ['id' => $notificationId]);
+                    $isRead = (bool)($notification['is_read'] ?? false);
+                    $content = strip_tags((string)($notification['content'] ?? ''));
+                    ?>
+                    <a
+                        class="w-menu__item w-notification-item"
+                        role="menuitem"
+                        href="<?= htmlspecialchars($detailUrl, ENT_QUOTES, 'UTF-8') ?>"
+                        data-state="<?= $isRead ? 'read' : 'unread' ?>"
+                    >
+                        <span class="w-notification-item__icon" data-tone="<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?>"><?= $iconRegistry->render($block->getTypeIcon($type), 'sm') ?></span>
+                        <span class="w-notification-item__content">
+                            <strong><?= htmlspecialchars((string)($notification['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <span><?= htmlspecialchars(mb_substr($content, 0, 80), ENT_QUOTES, 'UTF-8') ?><?= mb_strlen($content) > 80 ? '…' : '' ?></span>
+                            <small><?= htmlspecialchars((string)($notification['notification_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
                         </span>
-                        <span class="weline-notification-read-badge weline-notification-read-badge--<?= $isRead ? 'read' : 'unread' ?>">
-                            <?= $isRead ? __('已读') : __('未读') ?>
-                        </span>
-                    </div>
-                    <p class="weline-notification-content"><?= htmlspecialchars(mb_substr(strip_tags($notification['content'] ?? ''), 0, 80)) ?><?= mb_strlen(strip_tags($notification['content'] ?? '')) > 80 ? '...' : '' ?></p>
-                    <div class="weline-notification-meta">
-                        <span class="weline-notification-time">
-                            <i class="mdi mdi-clock-outline"></i> <?= $notification['notification_time'] ?? '' ?>
-                        </span>
-                        <?php if (!empty($notification['topic_code'])): ?>
-                        <span class="weline-notification-topic">
-                            <i class="mdi mdi-tag-outline"></i> <?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>
-                        </span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <?php if (!$isRead): ?>
-                <div class="weline-notification-dot"></div>
-                <?php endif; ?>
-                <div class="weline-notification-arrow">
-                    <i class="ri-arrow-right-s-line"></i>
-                </div>
-            </a>
-            <?php endforeach; ?>
+                    </a>
+                <?php endforeach; ?>
             <?php endif; ?>
         </div>
-        <div class="p-2 border-top weline-notification-footer">
-            <div class="d-flex justify-content-between align-items-center gap-2">
-                <a class="btn btn-sm btn-primary weline-notification-btn-viewall flex-grow-1" 
-                   href="<?= $this->getBackendUrl('system/backend/notification') ?>">
-                    <i class="ri-notification-3-line me-1"></i> <?= __('查看全部') ?>
-                </a>
-                <a class="btn btn-sm btn-outline-secondary" 
-                   href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>"
-                   title="<?= __('管理订阅') ?>">
-                    <i class="mdi mdi-cog"></i>
-                </a>
-            </div>
+        <div class="w-notification-menu__footer">
+            <a class="w-button" data-size="sm" href="<?= htmlspecialchars($this->getBackendUrl('system/backend/notification'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)__('查看全部'), ENT_QUOTES, 'UTF-8') ?></a>
+            <a class="w-button" data-size="sm" data-tone="neutral" href="<?= htmlspecialchars($this->getBackendUrl('system/backend/notificationsubscription'), ENT_QUOTES, 'UTF-8') ?>"><w:icon name="settings" size="sm" /><span class="w-visually-hidden"><?= htmlspecialchars((string)__('管理订阅'), ENT_QUOTES, 'UTF-8') ?></span></a>
         </div>
     </div>
 </div>
-
-<style>
-/* ============================================
-   组件：Backend Notification Dropdown
-   模块：Weline_Backend
-   前缀：weline-notification-
-   ============================================ */
-.weline-notification-dropdown .noti-icon {
-    overflow: visible !important;
-}
-
-.weline-notification-icon-wrapper {
-    position: relative;
-    display: inline-block;
-}
-
-.weline-notification-icon-wrapper > i {
-    display: block;
-    font-size: 1.3rem;
-}
-
-.weline-notification-icon-wrapper .weline-notification-badge {
-    position: absolute;
-    top: -6px;
-    right: -8px;
-    font-size: 0.6rem;
-    font-weight: 700;
-    min-width: 16px;
-    height: 16px;
-    line-height: 16px;
-    padding: 0 4px;
-    text-align: center;
-    border-radius: 8px;
-    background: var(--backend-color-danger, #f46a6a);
-    color: #fff;
-    box-shadow: 0 2px 4px rgba(244, 106, 106, 0.4);
-    box-sizing: border-box;
-    z-index: 10;
-    animation: weline-notification-pulse 2s infinite;
-}
-
-.weline-notification-dropdown .noti-dot:not(.weline-notification-badge) {
-    display: none !important;
-}
-
-@keyframes weline-notification-pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-}
-
-.weline-notification-menu {
-    min-width: 360px;
-    max-width: 400px;
-    padding: 0 !important;
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    border-radius: var(--backend-border-radius-lg, 12px);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
-    overflow: hidden;
-}
-
-.weline-notification-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-notification-header h6 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-}
-
-.weline-notification-header h6::before {
-    content: '\eb6a';
-    font-family: 'remixicon';
-    color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-notification-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--backend-color-text-tertiary, #adb5bd);
-}
-
-.weline-notification-empty i {
-    font-size: 3rem;
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
-
-.weline-notification-empty p {
-    margin: 0;
-    font-size: 0.9rem;
-}
-
-.weline-notification-list {
-    max-height: 360px;
-}
-
-.weline-notification-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-    position: relative;
-    transition: all 0.2s ease;
-    cursor: pointer;
-}
-
-.weline-notification-item:last-child {
-    border-bottom: none;
-}
-
-.weline-notification-item:hover {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-}
-
-.weline-notification-item:hover .weline-notification-arrow {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.weline-notification-unread {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.06));
-}
-
-.weline-notification-unread:hover {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-}
-
-.weline-notification-icon-wrap {
-    flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    border-radius: var(--backend-border-radius-md, 8px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--backend-color-text-inverse, #fff);
-    font-size: 1.15rem;
-}
-
-.weline-notification-main {
-    flex: 1;
-    min-width: 0;
-}
-
-.weline-notification-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-}
-
-.weline-notification-title {
-    margin: 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.weline-notification-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--backend-color-primary, #556ee6);
-    flex-shrink: 0;
-    align-self: center;
-    box-shadow: 0 0 0 3px rgba(85, 110, 230, 0.2);
-    animation: weline-notification-dot-pulse 2s infinite;
-}
-
-@keyframes weline-notification-dot-pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.15); }
-}
-
-.weline-notification-type-badge {
-    flex-shrink: 0;
-    font-size: 0.65rem;
-    font-weight: 500;
-    padding: 2px 8px;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    color: var(--backend-color-text-inverse, #fff);
-}
-
-.weline-notification-read-badge {
-    flex-shrink: 0;
-    font-size: 0.65rem;
-    font-weight: 500;
-    padding: 2px 6px;
-    border-radius: var(--backend-border-radius-sm, 4px);
-}
-
-.weline-notification-read-badge--unread {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15));
-    color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-notification-read-badge--read {
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-text-tertiary, #adb5bd);
-}
-
-.weline-notification-content {
-    margin: 0 0 8px 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.8rem;
-    line-height: 1.5;
-}
-
-.weline-notification-meta {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 0.7rem;
-    color: var(--backend-color-text-tertiary, #adb5bd);
-}
-
-.weline-notification-time,
-.weline-notification-topic {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.weline-notification-arrow {
-    flex-shrink: 0;
-    align-self: center;
-    color: var(--backend-color-text-tertiary, #adb5bd);
-    font-size: 1.25rem;
-    opacity: 0;
-    transform: translateX(-8px);
-    transition: all 0.2s ease;
-}
-
-.weline-notification-footer {
-    padding: 12px 20px;
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-notification-footer .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-weight: 500;
-}
-
-/* 查看全部：主按钮用反色文字，避免绿底蓝字不协调 */
-.weline-notification-footer .weline-notification-btn-viewall,
-.weline-notification-footer .weline-notification-btn-viewall:hover {
-    color: var(--backend-color-text-inverse, #fff) !important;
-    background: var(--backend-color-primary, #556ee6);
-    border-color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-notification-footer .weline-notification-btn-viewall:hover {
-    background: var(--backend-color-primary-dark, #4757d4);
-    border-color: var(--backend-color-primary-dark, #4757d4);
-}
-
-.weline-notification-footer .btn-outline-secondary {
-    color: var(--backend-color-text-secondary, #6c757d);
-}
-
-.weline-notification-footer .btn-outline-secondary:hover {
-    color: var(--backend-color-text-primary, #212529);
-}
-
-.weline-notification-mark-all {
-    border: 0;
-    padding: 4px 10px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--backend-color-primary, #556ee6);
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    border-radius: var(--backend-border-radius-sm, 4px);
-    text-decoration: none;
-    transition: all 0.2s ease;
-    cursor: pointer;
-}
-
-.weline-notification-mark-all:hover {
-    background: var(--backend-color-primary, #556ee6);
-    color: var(--backend-color-text-inverse, #fff);
-}
-</style>
-
-
-<script>
-(function(g){
-  if(g.__bqAdmin_backend_admin) return;
-  g.__bqAdmin_backend_admin=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['backend_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('backend_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script>
-(function() {
-    'use strict';
-
-    var WelineNotification = {
-        markAllRead: function() {
-            bqAdmin['backend_admin']('<?= $this->getBackendUrl('system/backend/notification/markAllRead') ?>', { method: 'POST' })
-            .then(function(response) {
-                var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
-                if (response.ok && data && data.success) {
-                    BackendToast.success(data.message || '<?= __('已标记全部已读') ?>');
-                    setTimeout(function() { window.location.reload(); }, 500);
-                }
-            })
-            .catch(function(error) {
-                console.error('Mark all read error:', error);
-            });
-        },
-
-        updateBadge: function() {
-            var badge = document.querySelector('.weline-notification-badge');
-            if (badge) {
-                var current = parseInt(badge.textContent) || 0;
-                if (current > 1) {
-                    badge.textContent = current - 1;
-                } else {
-                    badge.remove();
-                }
-            }
-        }
-    };
-
-    window.WelineNotification = WelineNotification;
-
-    document.addEventListener('click', function(event) {
-        var trigger = event.target.closest('[data-notification-action="mark-all-read"]');
-        if (!trigger) {
-            return;
-        }
-
-        event.preventDefault();
-        WelineNotification.markAllRead();
-    });
-})();
-</script>

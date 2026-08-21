@@ -10,18 +10,18 @@ namespace Weline\Widget\Ui\ParamType;
 class IconType extends AbstractParamType
 {
     private const COMMON_ICONS = [
-        'ri-home-line', 'ri-home-fill', 'ri-user-line', 'ri-user-fill', 'ri-settings-line', 'ri-settings-fill',
-        'ri-search-line', 'ri-search-fill', 'ri-menu-line', 'ri-menu-fill', 'ri-close-line', 'ri-close-fill',
-        'ri-arrow-left-line', 'ri-arrow-right-line', 'ri-arrow-up-line', 'ri-arrow-down-line',
-        'ri-check-line', 'ri-check-fill', 'ri-add-line', 'ri-subtract-line', 'ri-edit-line', 'ri-delete-bin-line',
-        'ri-eye-line', 'ri-eye-off-line', 'ri-heart-line', 'ri-heart-fill', 'ri-star-line', 'ri-star-fill',
-        'ri-shopping-cart-line', 'ri-shopping-bag-line', 'ri-mail-line', 'ri-phone-line',
-        'ri-map-pin-line', 'ri-calendar-line', 'ri-time-line', 'ri-notification-line', 'ri-share-line', 'ri-link',
-        'ri-image-line', 'ri-video-line', 'ri-file-line', 'ri-folder-line', 'ri-download-line', 'ri-upload-line',
-        'ri-refresh-line', 'ri-loop-left-line', 'ri-information-line', 'ri-question-line',
-        'ri-error-warning-line', 'ri-checkbox-circle-line',
-        'ri-facebook-fill', 'ri-twitter-fill', 'ri-instagram-fill', 'ri-youtube-fill', 'ri-linkedin-fill', 'ri-github-fill',
-        'ri-wechat-fill', 'ri-weibo-fill', 'ri-telegram-fill', 'ri-whatsapp-fill',
+        'home', 'home', 'user', 'user', 'settings', 'settings',
+        'search', 'search', 'menu', 'menu', 'close', 'close',
+        'arrow-left', 'arrow-right', 'arrow-up', 'arrow-down',
+        'check', 'check', 'plus', 'circle', 'edit', 'trash',
+        'eye', 'eye-off', 'heart', 'heart', 'star', 'star',
+        'pin', 'pin', 'mail', 'phone',
+        'pin', 'calendar', 'clock', 'bell', 'share', 'link',
+        'image', 'circle', 'file', 'folder', 'download', 'upload',
+        'refresh', 'circle', 'info', 'help',
+        'warning', 'check',
+        'circle', 'circle', 'circle', 'circle', 'link', 'circle',
+        'circle', 'circle', 'circle', 'circle',
     ];
 
     public function getTypeCode(): string

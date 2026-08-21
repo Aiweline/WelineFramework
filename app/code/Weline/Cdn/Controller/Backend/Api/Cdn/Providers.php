@@ -18,7 +18,7 @@ use Weline\Framework\Acl\Acl as AclAttribute;
  * CDN 供应商 API 控制器
  * 为 w:select:provider 标签提供数据
  */
-#[AclAttribute('Weline_Cdn::cdn_provider_api', 'CDN供应商API', 'mdi-api', 'CDN供应商API接口', 'Weline_Cdn::cdn_manager')]
+#[AclAttribute('Weline_Cdn::cdn_provider_api', 'CDN供应商API', 'code', 'CDN供应商API接口', 'Weline_Cdn::cdn_manager')]
 class Providers extends BackendController
 {
     private ProviderManager $providerManager;
@@ -32,7 +32,7 @@ class Providers extends BackendController
     /**
      * 获取供应商列表
      */
-    #[AclAttribute('Weline_Cdn::cdn_provider_api_index', '获取CDN供应商列表', 'mdi-view-list', '获取CDN供应商列表API')]
+    #[AclAttribute('Weline_Cdn::cdn_provider_api_index', '获取CDN供应商列表', 'list', '获取CDN供应商列表API')]
     public function index(): string
     {
         try {

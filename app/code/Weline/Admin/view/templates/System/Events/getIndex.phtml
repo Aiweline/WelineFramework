@@ -525,28 +525,28 @@ $uniqueEventCount = count($eventNames);
 }
 </style>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'><?= __('系统事件') ?></h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><?= __('系统') ?></span></li>
-                    <li class='breadcrumb-item active'><?= __('系统事件') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('系统事件') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('系统事件') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <div class="weline-event-page">
     <!-- 顶部信息卡片 -->
     <div class="weline-event-header">
-        <h2><i class="mdi mdi-lightning-bolt"></i> <?= __('系统事件') ?></h2>
+        <h2><w:icon name="bolt" size="sm"></w:icon> <?= __('系统事件') ?></h2>
         <p class="weline-event-header-subtitle"><?= __('查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件') ?></p>
     </div>
 
@@ -554,7 +554,7 @@ $uniqueEventCount = count($eventNames);
     <div class="weline-event-stats-row">
         <div class="weline-event-stat-card">
             <div class="weline-event-stat-icon primary">
-                <i class="mdi mdi-file-document-outline"></i>
+                <w:icon name="file" size="sm"></w:icon>
             </div>
             <div class="weline-event-stat-content">
                 <div class="weline-event-stat-value"><?= $totalFiles ?></div>
@@ -563,7 +563,7 @@ $uniqueEventCount = count($eventNames);
         </div>
         <div class="weline-event-stat-card">
             <div class="weline-event-stat-icon warning">
-                <i class="mdi mdi-lightning-bolt"></i>
+                <w:icon name="bolt" size="sm"></w:icon>
             </div>
             <div class="weline-event-stat-content">
                 <div class="weline-event-stat-value"><?= $uniqueEventCount ?></div>
@@ -572,7 +572,7 @@ $uniqueEventCount = count($eventNames);
         </div>
         <div class="weline-event-stat-card">
             <div class="weline-event-stat-icon info">
-                <i class="mdi mdi-eye-outline"></i>
+                <w:icon name="eye" size="sm"></w:icon>
             </div>
             <div class="weline-event-stat-content">
                 <div class="weline-event-stat-value"><?= $totalObservers ?></div>
@@ -581,7 +581,7 @@ $uniqueEventCount = count($eventNames);
         </div>
         <div class="weline-event-stat-card">
             <div class="weline-event-stat-icon success">
-                <i class="mdi mdi-check-circle-outline"></i>
+                <w:icon name="check" size="sm"></w:icon>
             </div>
             <div class="weline-event-stat-content">
                 <div class="weline-event-stat-value"><?= $enabledObservers ?></div>
@@ -590,7 +590,7 @@ $uniqueEventCount = count($eventNames);
         </div>
         <div class="weline-event-stat-card">
             <div class="weline-event-stat-icon danger">
-                <i class="mdi mdi-close-circle-outline"></i>
+                <w:icon name="close" size="sm"></w:icon>
             </div>
             <div class="weline-event-stat-content">
                 <div class="weline-event-stat-value"><?= $disabledObservers ?></div>
@@ -603,10 +603,10 @@ $uniqueEventCount = count($eventNames);
     <div class="weline-event-toolbar">
         <!-- 搜索框 -->
         <div class="weline-event-search-box">
-            <i class="mdi mdi-magnify"></i>
+            <w:icon name="search" size="sm"></w:icon>
             <input type="text" id="event-search" placeholder="<?= __('搜索事件名、观察者、实例类...') ?>">
             <button type="button" class="weline-event-search-clear" id="event-search-clear">
-                <i class="mdi mdi-close"></i>
+                <w:icon name="close" size="sm"></w:icon>
             </button>
         </div>
         
@@ -634,17 +634,17 @@ $uniqueEventCount = count($eventNames);
         <!-- 操作按钮 -->
         <div class="weline-event-actions">
             <button type="button" class="weline-event-action-btn" id="expand-all">
-                <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
+                <w:icon name="more-horizontal" size="sm"></w:icon> <?= __('展开全部') ?>
             </button>
             <button type="button" class="weline-event-action-btn" id="collapse-all">
-                <i class="mdi mdi-unfold-less-horizontal"></i> <?= __('折叠全部') ?>
+                <w:icon name="bolt" size="sm"></w:icon> <?= __('折叠全部') ?>
             </button>
         </div>
     </div>
 
     <!-- 搜索结果提示 -->
     <div id="event-result-info" class="weline-event-result-info">
-        <i class="mdi mdi-information-outline"></i>
+        <w:icon name="info" size="sm"></w:icon>
         <span id="event-result-text"></span>
     </div>
 
@@ -652,7 +652,7 @@ $uniqueEventCount = count($eventNames);
     <?php if (empty($events)): ?>
     <div class="weline-event-file-card">
         <div class="weline-event-empty">
-            <i class="mdi mdi-lightning-bolt-outline"></i>
+            <w:icon name="bolt" size="sm"></w:icon>
             <p><?= __('暂无事件配置') ?></p>
         </div>
     </div>
@@ -669,14 +669,14 @@ $uniqueEventCount = count($eventNames);
     <div class="weline-event-file-card" data-file="<?= htmlspecialchars(strtolower($file)) ?>" data-module="<?= htmlspecialchars($moduleName) ?>">
         <div class="weline-event-file-header" data-event-file-toggle="1">
             <span class="weline-event-file-title">
-                <i class="mdi mdi-file-code-outline"></i>
+                <w:icon name="file" size="sm"></w:icon>
                 <?= htmlspecialchars($file) ?>
             </span>
             <div class="weline-event-file-badges">
                 <span class="weline-event-file-badge"><?= $fileEventCount ?> <?= __('个事件') ?></span>
                 <span class="weline-event-file-badge" style="background: var(--backend-color-info-bg-subtle); color: var(--backend-color-info);"><?= $fileObserverCount ?> <?= __('个观察者') ?></span>
                 <span class="weline-event-file-toggle">
-                    <i class="mdi mdi-chevron-down"></i>
+                    <w:icon name="chevron-down" size="sm"></w:icon>
                 </span>
             </div>
         </div>
@@ -684,7 +684,7 @@ $uniqueEventCount = count($eventNames);
             <?php foreach ($eventGroups as $eventName => $observers): ?>
             <div class="weline-event-group" data-event-name="<?= htmlspecialchars(strtolower($eventName)) ?>">
                 <div class="weline-event-group-header">
-                    <i class="mdi mdi-lightning-bolt"></i>
+                    <w:icon name="bolt" size="sm"></w:icon>
                     <span class="weline-event-name"><?= htmlspecialchars($eventName) ?></span>
                     <span class="weline-event-observer-count"><?= count($observers) ?> <?= __('个观察者') ?></span>
                 </div>

@@ -6,38 +6,38 @@
     <!-- 权限管理 - 归入系统管理 > 用户与权限 -->
     <menu source="Weline_Acl::acl" name="acl" title="权限管理"
          parent="Weline_Backend::user_permission_group"
-         icon="mdi mdi-shield-lock-outline"
+         icon="lock"
          order="20">
         
         <menu source="Weline_Acl::acl_role" name="acl_role" title="权限角色" action="acl/backend/acl/role"
-             icon="mdi mdi-account-group-outline"
+             icon="users"
              order="10"/>
         
         <menu source="Weline_Acl::acl_source" name="acl_source" title="模块资源" action="acl/backend/acl"
-             icon="mdi mdi-puzzle-outline"
+             icon="puzzle"
              order="20"/>
 
         <menu source="Weline_Acl::acl_source_by_tag" name="acl_source_by_tag" title="标签资源" action="acl/backend/acl/by-tag"
-             icon="mdi mdi-tag-search-outline"
+             icon="search"
              order="25"/>
 
         <menu source="Weline_Acl::acl_tag" name="acl_tag" title="权限标签" action="acl/backend/acl/tag"
-             icon="mdi mdi-tag-multiple-outline"
+             icon="tag"
              order="30"/>
     </menu>
     
     <!-- 安全设置 - 归入系统管理 > 用户与权限 -->
     <menu source="Weline_Acl::security_settings" name="security_settings" title="安全设置"
          parent="Weline_Backend::user_permission_group"
-         icon="mdi mdi-shield-alert-outline"
+         icon="warning"
          order="30">
         
         <menu source="Weline_Acl::security_log" name="security_log" title="安全日志" action="acl/backend/security-log"
-             icon="mdi mdi-shield-search"
+             icon="search"
              order="10"/>
         
         <menu source="Weline_Acl::ip_whitelist" name="ip_whitelist" title="IP白名单" action="acl/backend/ip-whitelist"
-             icon="mdi mdi-ip-network-outline"
+             icon="globe"
              order="20"/>
     </menu>
 </menus>

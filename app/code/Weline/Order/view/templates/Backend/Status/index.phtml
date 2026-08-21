@@ -5,31 +5,31 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row" data-testid="order-status-management">
-    <div class="col-12">
-        <div class="page-title-box d-flex justify-content-between align-items-center">
-            <h4 class="page-title">
-                <i class="mdi mdi-flag me-2"></i><lang>订单状态管理</lang>
+<div class="w-grid" data-testid="order-status-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-justify="between" data-align="center">
+            <h4 class="w-backend-page__title">
+                <w:icon name="circle" size="sm"></w:icon><lang>订单状态管理</lang>
             </h4>
-            <a href="<?= $this->getBackendUrl('weline_order/backend/status/edit') ?>" class="btn btn-primary" data-testid="order-status-create">
-                <i class="mdi mdi-plus me-2"></i><?= __('新建状态') ?>
+            <a href="<?= $this->getBackendUrl('weline_order/backend/status/edit') ?>" class="w-button" data-testid="order-status-create" data-tone="primary">
+                <w:icon name="plus" size="sm"></w:icon><?= __('新建状态') ?>
             </a>
         </div>
     </div>
 </div>
 
 <!-- 消息 -->
-<div class="row">
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 状态列表 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table">
                         <thead>
                             <tr>
                                 <th><?= __('状态代码') ?></th>
@@ -45,7 +45,7 @@
                         <tbody>
                             <?php if (empty($statuses)): ?>
                                 <tr>
-                                    <td colspan="8" class="text-center text-muted">
+                                    <td colspan="8" class="w-text" data-align="center" data-tone="muted">
                                         <?= __('暂无状态') ?>
                                     </td>
                                 </tr>
@@ -61,7 +61,7 @@
                                             <?= htmlspecialchars($translatedName) ?>
                                         </td>
                                         <td>
-                                            <span class="badge bg-<?= htmlspecialchars($status->getData('color') ?? 'secondary') ?>">
+                                            <span class="w-badge bg-<?= htmlspecialchars($status->getData('color') ?? 'secondary') ?>">
                                                 <?= htmlspecialchars($status->getData('color') ?? 'secondary') ?>
                                             </span>
                                         </td>
@@ -69,43 +69,35 @@
                                             <?php if ($status->getData('icon')): ?>
                                                 <i class="<?= htmlspecialchars($status->getData('icon')) ?>"></i>
                                             <?php else: ?>
-                                                <span class="text-muted">-</span>
+                                                <span class="w-text" data-tone="muted">-</span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php if ($status->isSystem()): ?>
-                                                <span class="badge bg-info"><?= __('系统') ?></span>
+                                                <span class="w-badge" data-w-background="info"><?= __('系统') ?></span>
                                             <?php else: ?>
-                                                <span class="text-muted">-</span>
+                                                <span class="w-text" data-tone="muted">-</span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php if ($status->isActive()): ?>
-                                                <span class="badge bg-success"><?= __('启用') ?></span>
+                                                <span class="w-badge" data-w-background="success"><?= __('启用') ?></span>
                                             <?php else: ?>
-                                                <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                                <span class="w-badge" data-w-background="muted"><?= __('禁用') ?></span>
                                             <?php endif; ?>
                                         </td>
                                         <td><?= htmlspecialchars($status->getData('sort_order')) ?></td>
                                         <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <a href="<?= $this->getBackendUrl('weline_order/backend/status/edit', ['id' => $status->getId()]) ?>" 
-                                                   class="btn btn-primary" title="<?= __('编辑') ?>">
-                                                    <i class="mdi mdi-pencil"></i>
+                                            <div class="w-button-group">
+                                                <a href="<?= $this->getBackendUrl('weline_order/backend/status/edit', ['id' => $status->getId()]) ?>" class="w-button" title="<?= __('编辑') ?>" data-tone="primary">
+                                                    <w:icon name="edit" size="sm"></w:icon>
                                                 </a>
                                                 <?php if (!$status->isSystem()): ?>
-                                                    <button type="button" 
-                                                            class="btn btn-danger weline-order-delete-status"
-                                                            data-id="<?= $status->getId() ?>"
-                                                            data-code="<?= htmlspecialchars($status->getData('code')) ?>"
-                                                            title="<?= __('删除') ?>">
-                                                        <i class="mdi mdi-delete"></i>
+                                                    <button type="button" class="w-button weline-order-delete-status" data-id="<?= $status->getId() ?>" data-code="<?= htmlspecialchars($status->getData('code')) ?>" title="<?= __('删除') ?>" data-tone="danger">
+                                                        <w:icon name="trash" size="sm"></w:icon>
                                                     </button>
                                                 <?php endif; ?>
-                                                <button type="button" 
-                                                        class="btn btn-<?= $status->isActive() ? 'warning' : 'success' ?> weline-order-toggle-status"
-                                                        data-id="<?= $status->getId() ?>"
-                                                        title="<?= $status->isActive() ? __('禁用') : __('启用') ?>">
+                                                <button type="button" class="w-button btn-<?= $status->isActive() ? 'warning' : 'success' ?> weline-order-toggle-status" data-id="<?= $status->getId() ?>" title="<?= $status->isActive() ? __('禁用') : __('启用') ?>">
                                                     <i class="mdi mdi-<?= $status->isActive() ? 'close' : 'check' ?>"></i>
                                                 </button>
                                             </div>
@@ -143,20 +135,20 @@
         )
         .then(function(data) {
             if (data.success) {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.success('<?= __('状态已删除') ?>');
+                if (typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.success('<?= __('状态已删除') ?>');
                 }
                 setTimeout(function() { location.reload(); }, 1500);
             } else {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error(data.message || '<?= __('删除失败') ?>');
+                if (typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.error(data.message || '<?= __('删除失败') ?>');
                 }
             }
         })
         .catch(function(error) {
             console.error('Error:', error);
-            if (typeof BackendToast !== 'undefined') {
-                BackendToast.error('<?= __('删除失败，请重试') ?>');
+            if (typeof Weline.UI.toast !== 'undefined') {
+                Weline.UI.toast.error('<?= __('删除失败，请重试') ?>');
             }
         });
     }
@@ -176,15 +168,15 @@
                     if (data.success) {
                         location.reload();
                     } else {
-                        if (typeof BackendToast !== 'undefined') {
-                            BackendToast.error(data.message || '<?= __('操作失败') ?>');
+                        if (typeof Weline.UI.toast !== 'undefined') {
+                            Weline.UI.toast.error(data.message || '<?= __('操作失败') ?>');
                         }
                     }
                 })
                 .catch(function(error) {
                     console.error('Error:', error);
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.error('<?= __('操作失败，请重试') ?>');
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.error('<?= __('操作失败，请重试') ?>');
                     }
                 });
             });
@@ -196,20 +188,15 @@
                 var id = this.getAttribute('data-id');
                 var code = this.getAttribute('data-code');
                 
-                if (typeof AdminConfirm !== 'undefined') {
-                    AdminConfirm.show({
-                        title: '<?= __('确认删除') ?>',
-                        message: '<?= __('确定要删除状态') ?> ' + code + ' <?= __('吗？') ?>',
-                        confirmText: '<?= __('确定删除') ?>',
-                        cancelText: '<?= __('取消') ?>',
-                        type: 'danger',
-                        onConfirm: function() {
-                            performDelete(id);
-                        }
-                    });
-                } else {
-                    performDelete(id);
-                }
+                Weline.UI.dialog.confirm('<?= __('确定要删除状态') ?> ' + code + ' <?= __('吗？') ?>', {
+                    title: '<?= __('确认删除') ?>',
+                    confirmLabel: '<?= __('确定删除') ?>',
+                    cancelLabel: '<?= __('取消') ?>',
+                    tone: 'danger',
+                    dangerous: true
+                }).then(function(confirmed) {
+                    if (confirmed) performDelete(id);
+                });
             });
         });
     });

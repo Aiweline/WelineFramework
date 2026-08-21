@@ -14,104 +14,104 @@ $isEdit = !empty($config['config_id']);
 ?>
 <w:backend:card>
     <w:slot:header>
-        <div class="d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><?= $isEdit ? __('编辑存储配置') : __('新增存储配置') ?></h5>
-            <a href="<?= $this->getUrl('storage/backend/config') ?>" class="btn btn-outline-secondary btn-sm">
-                <i class="bi bi-arrow-left"></i> <?= __('返回列表') ?>
+        <div class="w-cluster" data-justify="between" data-align="center">
+            <h5 style="--w-mb:0;"><?= $isEdit ? __('编辑存储配置') : __('新增存储配置') ?></h5>
+            <a href="<?= $this->getUrl('storage/backend/config') ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+                <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
             </a>
         </div>
     </w:slot:header>
     <w:slot:body>
-        <w:form id="storage-config-form" class="needs-validation" novalidate>
+        <w:form id="storage-config-form" class="w-form" novalidate>
             <input type="hidden" name="config_id" value="<?= $config['config_id'] ?? '' ?>">
             
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label"><?= __('存储标识') ?> <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="name" value="<?= htmlspecialchars($config['name'] ?? '') ?>" required pattern="^[a-zA-Z][a-zA-Z0-9_]*$" <?= $isEdit ? 'readonly' : '' ?>>
-                    <div class="form-text"><?= __('唯一标识，只能包含字母、数字和下划线') ?></div>
+            <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label"><?= __('存储标识') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <input type="text" class="w-input" name="name" value="<?= htmlspecialchars($config['name'] ?? '') ?>" required pattern="^[a-zA-Z][a-zA-Z0-9_]*$" <?= $isEdit ? 'readonly' : '' ?>>
+                    <div class="w-field__hint"><?= __('唯一标识，只能包含字母、数字和下划线') ?></div>
                 </div>
                 
-                <div class="col-md-6">
-                    <label class="form-label"><?= __('显示名称') ?> <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="display_name" value="<?= htmlspecialchars($config['display_name'] ?? '') ?>" required>
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label"><?= __('显示名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <input type="text" class="w-input" name="display_name" value="<?= htmlspecialchars($config['display_name'] ?? '') ?>" required>
                 </div>
                 
-                <div class="col-md-6">
-                    <label class="form-label"><?= __('驱动类型') ?> <span class="text-danger">*</span></label>
-                    <select class="form-select" name="driver" id="driver-select" required>
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label"><?= __('驱动类型') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <select class="w-select" name="driver" id="driver-select" required>
                         <?php foreach ($drivers as $key => $label): ?>
                         <option value="<?= $key ?>" <?= ($config['driver'] ?? 'local') === $key ? 'selected' : '' ?>><?= $label ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 
-                <div class="col-md-6">
-                    <label class="form-label"><?= __('状态') ?></label>
-                    <select class="form-select" name="status">
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label"><?= __('状态') ?></label>
+                    <select class="w-select" name="status">
                         <?php foreach ($statusOptions as $key => $label): ?>
                         <option value="<?= $key ?>" <?= ($config['status'] ?? 1) == $key ? 'selected' : '' ?>><?= $label ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 
-                <div class="col-md-6">
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" name="is_default" id="is_default" value="1" <?= ($config['is_default'] ?? 0) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="is_default"><?= __('设为默认存储') ?></label>
+                <div style="--w-span-md:6;">
+                    <div class="w-check">
+                        <input type="checkbox" name="is_default" id="is_default" value="1" <?= ($config['is_default'] ?? 0) ? 'checked' : '' ?>>
+                        <label for="is_default"><?= __('设为默认存储') ?></label>
                     </div>
                 </div>
             </div>
             
-            <hr class="my-4">
+            <hr style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-6);">
             
             <!-- 本地存储配置 -->
             <div id="config-local" class="driver-config" style="<?= ($config['driver'] ?? 'local') === 'local' ? '' : 'display:none' ?>">
-                <h6 class="mb-3"><?= __('本地存储配置') ?></h6>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label"><?= __('根目录路径') ?></label>
-                        <input type="text" class="form-control" name="config_root_path" value="<?= htmlspecialchars($configArray['root_path'] ?? '') ?>" placeholder="<?= PUB ?>media">
+                <h6 style="--w-mb:var(--weline-space-4);"><?= __('本地存储配置') ?></h6>
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div style="--w-span-md:6;">
+                        <label class="w-field__label"><?= __('根目录路径') ?></label>
+                        <input type="text" class="w-input" name="config_root_path" value="<?= htmlspecialchars($configArray['root_path'] ?? '') ?>" placeholder="<?= PUB ?>media">
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label"><?= __('基础 URL') ?></label>
-                        <input type="text" class="form-control" name="config_base_url" value="<?= htmlspecialchars($configArray['base_url'] ?? '') ?>" placeholder="/pub/media">
+                    <div style="--w-span-md:6;">
+                        <label class="w-field__label"><?= __('基础 URL') ?></label>
+                        <input type="text" class="w-input" name="config_base_url" value="<?= htmlspecialchars($configArray['base_url'] ?? '') ?>" placeholder="/pub/media">
                     </div>
                 </div>
             </div>
             
             <!-- S3 存储配置 -->
             <div id="config-s3" class="driver-config" style="<?= ($config['driver'] ?? 'local') === 's3' ? '' : 'display:none' ?>">
-                <h6 class="mb-3"><?= __('AWS S3 配置') ?></h6>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label"><?= __('Access Key') ?> <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="config_key" value="<?= htmlspecialchars($configArray['key'] ?? '') ?>">
+                <h6 style="--w-mb:var(--weline-space-4);"><?= __('AWS S3 配置') ?></h6>
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div style="--w-span-md:6;">
+                        <label class="w-field__label"><?= __('Access Key') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="text" class="w-input" name="config_key" value="<?= htmlspecialchars($configArray['key'] ?? '') ?>">
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label"><?= __('Secret Key') ?> <span class="text-danger">*</span></label>
-                        <input type="password" class="form-control" name="config_secret" value="<?= htmlspecialchars($configArray['secret'] ?? '') ?>">
+                    <div style="--w-span-md:6;">
+                        <label class="w-field__label"><?= __('Secret Key') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="password" class="w-input" name="config_secret" value="<?= htmlspecialchars($configArray['secret'] ?? '') ?>">
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label"><?= __('Region') ?></label>
-                        <input type="text" class="form-control" name="config_region" value="<?= htmlspecialchars($configArray['region'] ?? 'us-east-1') ?>">
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('Region') ?></label>
+                        <input type="text" class="w-input" name="config_region" value="<?= htmlspecialchars($configArray['region'] ?? 'us-east-1') ?>">
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label"><?= __('Bucket') ?> <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="config_bucket" value="<?= htmlspecialchars($configArray['bucket'] ?? '') ?>">
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('Bucket') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="text" class="w-input" name="config_bucket" value="<?= htmlspecialchars($configArray['bucket'] ?? '') ?>">
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label"><?= __('前缀路径') ?></label>
-                        <input type="text" class="form-control" name="config_prefix" value="<?= htmlspecialchars($configArray['prefix'] ?? '') ?>" placeholder="uploads">
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('前缀路径') ?></label>
+                        <input type="text" class="w-input" name="config_prefix" value="<?= htmlspecialchars($configArray['prefix'] ?? '') ?>" placeholder="uploads">
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label"><?= __('自定义 Endpoint') ?></label>
-                        <input type="text" class="form-control" name="config_endpoint" value="<?= htmlspecialchars($configArray['endpoint'] ?? '') ?>" placeholder="<?= __('留空使用默认') ?>">
+                    <div style="--w-span-md:6;">
+                        <label class="w-field__label"><?= __('自定义 Endpoint') ?></label>
+                        <input type="text" class="w-input" name="config_endpoint" value="<?= htmlspecialchars($configArray['endpoint'] ?? '') ?>" placeholder="<?= __('留空使用默认') ?>">
                     </div>
-                    <div class="col-md-6">
-                        <div class="form-check mt-4">
-                            <input type="checkbox" class="form-check-input" name="config_use_path_style_endpoint" value="1" <?= ($configArray['use_path_style_endpoint'] ?? false) ? 'checked' : '' ?>>
-                            <label class="form-check-label"><?= __('使用路径风格 Endpoint') ?></label>
+                    <div style="--w-span-md:6;">
+                        <div class="w-check" style="--w-mt:var(--weline-space-6);">
+                            <input type="checkbox" name="config_use_path_style_endpoint" value="1" <?= ($configArray['use_path_style_endpoint'] ?? false) ? 'checked' : '' ?>>
+                            <label><?= __('使用路径风格 Endpoint') ?></label>
                         </div>
                     </div>
                 </div>
@@ -119,45 +119,45 @@ $isEdit = !empty($config['config_id']);
             
             <!-- OSS 存储配置 -->
             <div id="config-oss" class="driver-config" style="<?= ($config['driver'] ?? 'local') === 'oss' ? '' : 'display:none' ?>">
-                <h6 class="mb-3"><?= __('阿里云 OSS 配置') ?></h6>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label"><?= __('AccessKey ID') ?> <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="config_access_key_id" value="<?= htmlspecialchars($configArray['access_key_id'] ?? '') ?>">
+                <h6 style="--w-mb:var(--weline-space-4);"><?= __('阿里云 OSS 配置') ?></h6>
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div style="--w-span-md:6;">
+                        <label class="w-field__label"><?= __('AccessKey ID') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="text" class="w-input" name="config_access_key_id" value="<?= htmlspecialchars($configArray['access_key_id'] ?? '') ?>">
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label"><?= __('AccessKey Secret') ?> <span class="text-danger">*</span></label>
-                        <input type="password" class="form-control" name="config_access_key_secret" value="<?= htmlspecialchars($configArray['access_key_secret'] ?? '') ?>">
+                    <div style="--w-span-md:6;">
+                        <label class="w-field__label"><?= __('AccessKey Secret') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="password" class="w-input" name="config_access_key_secret" value="<?= htmlspecialchars($configArray['access_key_secret'] ?? '') ?>">
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label"><?= __('Endpoint') ?></label>
-                        <input type="text" class="form-control" name="config_endpoint" value="<?= htmlspecialchars($configArray['endpoint'] ?? 'oss-cn-hangzhou.aliyuncs.com') ?>">
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('Endpoint') ?></label>
+                        <input type="text" class="w-input" name="config_endpoint" value="<?= htmlspecialchars($configArray['endpoint'] ?? 'oss-cn-hangzhou.aliyuncs.com') ?>">
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label"><?= __('Bucket') ?> <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="config_bucket" value="<?= htmlspecialchars($configArray['bucket'] ?? '') ?>">
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('Bucket') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="text" class="w-input" name="config_bucket" value="<?= htmlspecialchars($configArray['bucket'] ?? '') ?>">
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label"><?= __('前缀路径') ?></label>
-                        <input type="text" class="form-control" name="config_prefix" value="<?= htmlspecialchars($configArray['prefix'] ?? '') ?>" placeholder="uploads">
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('前缀路径') ?></label>
+                        <input type="text" class="w-input" name="config_prefix" value="<?= htmlspecialchars($configArray['prefix'] ?? '') ?>" placeholder="uploads">
                     </div>
-                    <div class="col-md-6">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" name="config_use_ssl" value="1" <?= ($configArray['use_ssl'] ?? true) ? 'checked' : '' ?>>
-                            <label class="form-check-label"><?= __('使用 HTTPS') ?></label>
+                    <div style="--w-span-md:6;">
+                        <div class="w-check">
+                            <input type="checkbox" name="config_use_ssl" value="1" <?= ($configArray['use_ssl'] ?? true) ? 'checked' : '' ?>>
+                            <label><?= __('使用 HTTPS') ?></label>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <hr class="my-4">
+            <hr style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-6);">
             
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-check-lg"></i> <?= __('保存') ?>
+            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                <button type="submit" class="w-button" data-tone="primary">
+                    <w:icon name="check" size="sm"></w:icon> <?= __('保存') ?>
                 </button>
-                <button type="button" class="btn btn-outline-secondary" id="btn-test">
-                    <i class="bi bi-plug"></i> <?= __('测试连接') ?>
+                <button type="button" class="w-button" id="btn-test" data-tone="neutral" data-variant="outline">
+                    <w:icon name="circle" size="sm"></w:icon> <?= __('测试连接') ?>
                 </button>
             </div>
         </w:form>
@@ -194,7 +194,6 @@ $isEdit = !empty($config['config_id']);
 })(window);
 </script>
 <script type="module">
-import { BackendToast } from '<?= $this->getStaticUrl('Weline_Admin/js/admin-toast.js') ?>';
 
 const driverSelect = document.getElementById('driver-select');
 const driverConfigs = document.querySelectorAll('.driver-config');
@@ -223,15 +222,15 @@ form.addEventListener('submit', async function(e) {
         var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {
-            BackendToast.success(data.msg);
+            Weline.UI.toast.success(data.msg);
             setTimeout(() => {
                 location.href = '<?= $this->getUrl('storage/backend/config') ?>';
             }, 1000);
         } else {
-            BackendToast.error(data.msg);
+            Weline.UI.toast.error(data.msg);
         }
     } catch (e) {
-        BackendToast.error('<?= __('保存失败') ?>');
+        Weline.UI.toast.error('<?= __('保存失败') ?>');
     }
 });
 
@@ -243,7 +242,7 @@ document.getElementById('btn-test').addEventListener('click', async function() {
     }
     
     this.disabled = true;
-    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> <?= __('测试中...') ?>';
+    this.innerHTML = '<span class="w-spinner" data-size="sm"></span> <?= __('测试中...') ?>';
     
     try {
         var url = '<?= $this->getUrl('storage/backend/config/test') ?>';
@@ -252,15 +251,15 @@ document.getElementById('btn-test').addEventListener('click', async function() {
         var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {
-            BackendToast.success(data.msg);
+            Weline.UI.toast.success(data.msg);
         } else {
-            BackendToast.error(data.msg);
+            Weline.UI.toast.error(data.msg);
         }
     } catch (e) {
-        BackendToast.error('<?= __('测试失败') ?>');
+        Weline.UI.toast.error('<?= __('测试失败') ?>');
     } finally {
         this.disabled = false;
-        this.innerHTML = '<i class="bi bi-plug"></i> <?= __('测试连接') ?>';
+        this.innerHTML = '<w:icon name="circle" size="sm"></w:icon> <?= __('测试连接') ?>';
     }
 });
 </script>

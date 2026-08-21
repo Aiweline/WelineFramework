@@ -1,0 +1,252 @@
+{
+    "areas": {
+        "backend": [
+            "foundation",
+            "backend",
+            "ui-core"
+        ],
+        "frontend": [
+            "foundation",
+            "frontend",
+            "ui-core"
+        ]
+    },
+    "build_id": "5cedb51d54010d60d9fc49a56cecd3e3b77bad522e0c25aa3da169350b221faa",
+    "bundles": {
+        "backend": {
+            "bytes": 16055,
+            "file": "weline-backend.css",
+            "gzip_bytes": 3030,
+            "sha256": "1f76613b5ad215c651e76d109ddf252258710f16962e1583b9655f398c9df7be",
+            "type": "css"
+        },
+        "datatable-css": {
+            "bytes": 7720,
+            "file": "components/weline-datatable.css",
+            "gzip_bytes": 1416,
+            "sha256": "4de78513e91b83156a1c91c985a2b5addf5df41bd9b3a0910992ad21a3be4e67",
+            "type": "css"
+        },
+        "datatable-js": {
+            "bytes": 53754,
+            "file": "components/weline-datatable.js",
+            "gzip_bytes": 11102,
+            "sha256": "a9302a93820f0fdd135e20bc856a007ed7e633404a314d4fa49fde8d440450f5",
+            "type": "js"
+        },
+        "foundation": {
+            "bytes": 48922,
+            "file": "weline-foundation.css",
+            "gzip_bytes": 7354,
+            "sha256": "8192540df7e1074bbc807368c9a4a9b6023c83723033710c05fb05c73986e295",
+            "type": "css"
+        },
+        "frontend": {
+            "bytes": 4911,
+            "file": "weline-frontend.css",
+            "gzip_bytes": 1242,
+            "sha256": "764f2adad29e3fed0ef7571bdf1d7334bd6b30dd7dcd68ccd3310d7eac22ad45",
+            "type": "css"
+        },
+        "icons": {
+            "bytes": 24962,
+            "file": "weline-icons.svg",
+            "gzip_bytes": 3636,
+            "sha256": "1a125feb0848a3235c866813a56da2eb1b396268e2a9b57c46bd872a26a99648",
+            "type": "svg"
+        },
+        "theme-editor-css": {
+            "bytes": 6024,
+            "file": "pages/weline-theme-editor.css",
+            "gzip_bytes": 1232,
+            "sha256": "9a91209168289075a7e99828d5fcf280d93526a39dec5b3b38b6cc3b909d3a24",
+            "type": "css"
+        },
+        "theme-editor-js": {
+            "bytes": 16358,
+            "file": "pages/weline-theme-editor.js",
+            "gzip_bytes": 3985,
+            "sha256": "5fb4a5f2036779e436d7986d950f5acbd038ff20d645717a86991dca496df5c9",
+            "type": "js"
+        },
+        "theme-preview-css": {
+            "bytes": 7517,
+            "file": "pages/weline-theme-preview.css",
+            "gzip_bytes": 1627,
+            "sha256": "f621e8532aa3532a4dd00fa114a857a9bdd8204b92a82fad47500c2ac5b546f6",
+            "type": "css"
+        },
+        "theme-preview-js": {
+            "bytes": 3934,
+            "file": "pages/weline-theme-preview.js",
+            "gzip_bytes": 1398,
+            "sha256": "e266d6aedeb6221733e7f31d710e7b952f355b9fc5838a2459360a945b248838",
+            "type": "js"
+        },
+        "ui-advanced": {
+            "bytes": 8535,
+            "file": "weline-ui-advanced.js",
+            "gzip_bytes": 1909,
+            "sha256": "779e108b3b9e5758f9754b21deac48fc5d5b66efaf5d3e59ed92f1c1a260d116",
+            "type": "js"
+        },
+        "ui-core": {
+            "bytes": 39981,
+            "file": "weline-ui.js",
+            "gzip_bytes": 8722,
+            "sha256": "60ceaf5084c5208077320add792780b4ea1013b7d2d43d87c2ed551f6969d390",
+            "type": "js"
+        }
+    },
+    "component_assets": {
+        "data-table": {
+            "bundles": [
+                "datatable-css",
+                "datatable-js"
+            ],
+            "components": [
+                "data-table",
+                "data-table-form"
+            ],
+            "owner": "Weline_DataTable"
+        }
+    },
+    "lazy_components": {
+        "datatable-js": [
+            "data-table",
+            "data-table-form"
+        ],
+        "ui-advanced": [
+            "combobox",
+            "tree",
+            "transfer-list",
+            "icon-picker"
+        ]
+    },
+    "routes": {
+        "admin.dashboard": {
+            "area": "backend",
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Admin/view/templates/Index/index.phtml"
+            ]
+        },
+        "developer.api.manager": {
+            "area": "backend",
+            "engines": [
+                "prism"
+            ],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/api-manager.phtml"
+            ]
+        },
+        "developer.api.reference": {
+            "area": "backend",
+            "engines": [
+                "swagger-ui"
+            ],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/api.phtml"
+            ]
+        },
+        "developer.docs": {
+            "area": "backend",
+            "engines": [
+                "marked"
+            ],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/index.phtml"
+            ]
+        },
+        "developer.documents.edit": {
+            "area": "backend",
+            "engines": [
+                "tinymce"
+            ],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/add.phtml"
+            ]
+        },
+        "editor-manager.ckeditor": {
+            "area": "backend",
+            "engines": [
+                "ckeditor"
+            ],
+            "templates": [
+                "app/code/Weline/CKEditorEditorManager/view/blocks/ckeditor.html"
+            ]
+        },
+        "theme.editor": {
+            "area": "backend",
+            "bundles": [
+                "theme-editor-css",
+                "theme-editor-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml"
+            ]
+        },
+        "theme.editor.preview": {
+            "area": "backend",
+            "bundles": [
+                "theme-preview-css",
+                "theme-preview-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Theme/view/templates/backend/theme-preview/content.phtml",
+                "app/code/Weline/Theme/view/templates/frontend/theme-preview/content.phtml"
+            ]
+        }
+    },
+    "schema_version": "weline-ui-assets.v1",
+    "specialized_engines": {
+        "ckeditor": {
+            "consumers": [
+                "app/code/Weline/CKEditorEditorManager/EditorManager/CKEditor.php",
+                "app/code/Weline/CKEditorEditorManager/view/blocks/ckeditor.html"
+            ],
+            "owner": "Weline_CKEditorEditorManager",
+            "paths": [
+                "app/code/Weline/CKEditorEditorManager/view/statics/build/"
+            ]
+        },
+        "marked": {
+            "consumers": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/index.phtml"
+            ],
+            "owner": "Weline_DeveloperWorkspace",
+            "paths": [
+                "app/code/Weline/DeveloperWorkspace/view/statics/libs/marked/11.1.1/"
+            ]
+        },
+        "prism": {
+            "consumers": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/api-manager.phtml"
+            ],
+            "owner": "Weline_DeveloperWorkspace",
+            "paths": [
+                "app/code/Weline/DeveloperWorkspace/view/statics/libs/prism/1.29.0/"
+            ]
+        },
+        "swagger-ui": {
+            "consumers": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/api.phtml"
+            ],
+            "owner": "Weline_DeveloperWorkspace",
+            "paths": [
+                "app/code/Weline/DeveloperWorkspace/view/statics/libs/swagger-ui/5.32.6/"
+            ]
+        },
+        "tinymce": {
+            "consumers": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/add.phtml"
+            ],
+            "owner": "Weline_DeveloperWorkspace",
+            "paths": [
+                "app/code/Weline/DeveloperWorkspace/view/statics/engines/tinymce/"
+            ]
+        }
+    }
+}

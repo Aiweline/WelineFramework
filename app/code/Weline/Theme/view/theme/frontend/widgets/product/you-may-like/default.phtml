@@ -51,7 +51,7 @@ $widgetId = 'you-may-like-' . uniqid();
     <div class="widget-header">
         <?php if ($title): ?>
             <h2 class="widget-title">
-                <i class="ri-magic-line" style="color: #9b59b6;"></i>
+                <w:icon name="circle" size="sm"></w:icon>
                 <?= htmlspecialchars($title) ?>
             </h2>
         <?php endif; ?>
@@ -63,7 +63,7 @@ $widgetId = 'you-may-like-' . uniqid();
     <div class="products-container layout-<?= htmlspecialchars($layout) ?>">
         <?php if ($layout === 'carousel'): ?>
             <button class="carousel-arrow carousel-prev" type="button">
-                <i class="ri-arrow-left-s-line"></i>
+                <w:icon name="arrow-left" size="sm"></w:icon>
             </button>
         <?php endif; ?>
         
@@ -86,16 +86,16 @@ $widgetId = 'you-may-like-' . uniqid();
                             </a>
                             
                             <div class="match-badge">
-                                <i class="ri-thumb-up-fill"></i>
+                                <w:icon name="circle" size="sm"></w:icon>
                                 <?= $product['match_score'] ?>% <?= __('匹配') ?>
                             </div>
                             
                             <div class="product-actions">
                                 <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
-                                    <i class="ri-heart-line"></i>
+                                    <w:icon name="heart" size="sm"></w:icon>
                                 </button>
                                 <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
-                                    <i class="ri-eye-line"></i>
+                                    <w:icon name="eye" size="sm"></w:icon>
                                 </button>
                             </div>
                         </div>
@@ -110,7 +110,7 @@ $widgetId = 'you-may-like-' . uniqid();
                             <div class="product-rating">
                                 <div class="stars">
                                     <?php for ($s = 1; $s <= 5; $s++): ?>
-                                        <i class="ri-star-<?= $s <= floor($product['rating']) ? 'fill' : 'line' ?>"></i>
+                                        <span class="w-rating-star" data-state="<?= $s <= floor($product['rating']) ? 'filled' : 'empty' ?>"><w:icon name="star" size="sm"></w:icon></span>
                                     <?php endfor; ?>
                                 </div>
                                 <span class="review-count">(<?= $product['review_count'] ?>)</span>
@@ -124,7 +124,7 @@ $widgetId = 'you-may-like-' . uniqid();
                             </div>
                             
                             <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
-                                <i class="ri-shopping-cart-line"></i>
+                                <w:icon name="pin" size="sm"></w:icon>
                                 <span><?= __('加入购物车') ?></span>
                             </button>
                         </div>
@@ -135,7 +135,7 @@ $widgetId = 'you-may-like-' . uniqid();
         
         <?php if ($layout === 'carousel'): ?>
             <button class="carousel-arrow carousel-next" type="button">
-                <i class="ri-arrow-right-s-line"></i>
+                <w:icon name="arrow-right" size="sm"></w:icon>
             </button>
         <?php endif; ?>
     </div>
@@ -366,7 +366,7 @@ $widgetId = 'you-may-like-' . uniqid();
     color: #ffc107;
 }
 
-.widget-you-may-like .product-rating .stars i.ri-star-line {
+.widget-you-may-like .product-rating .stars .w-rating-star[data-state="empty"] {
     color: #ddd;
 }
 

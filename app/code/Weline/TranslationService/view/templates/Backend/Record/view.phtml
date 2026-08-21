@@ -10,22 +10,22 @@ $record = $this->getData('record');
 $provider = $this->getData('provider');
 ?>
 <div class="translation-record-view-page">
-    <div class="page-header mb-4">
+    <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h1><?= __('翻译记录详情') ?></h1>
-        <a href="<?= $this->getBackendUrl('*/backend/record') ?>" class="btn btn-secondary">
-            <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+        <a href="<?= $this->getBackendUrl('*/backend/record') ?>" class="w-button" data-tone="neutral">
+            <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
         </a>
     </div>
 
-    <div class="row">
-        <div class="col-md-8">
+    <div class="w-grid">
+        <div style="--w-span-md:8;">
             <!-- 基本信息 -->
-            <div class="card mb-4">
-                <div class="card-header">
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header">
                     <h3><?= __('基本信息') ?></h3>
                 </div>
-                <div class="card-body">
-                    <table class="table table-bordered">
+                <div class="w-card__body">
+                    <table class="w-table">
                         <tr>
                             <th width="150"><?= __('记录ID') ?></th>
                             <td><?= $record->getId() ?></td>
@@ -33,7 +33,7 @@ $provider = $this->getData('provider');
                         <tr>
                             <th><?= __('渠道') ?></th>
                             <td>
-                                <span class="badge bg-primary"><?= htmlspecialchars($provider->getData('provider_name')) ?></span>
+                                <span class="w-badge" data-w-background="primary"><?= htmlspecialchars($provider->getData('provider_name')) ?></span>
                                 <code><?= htmlspecialchars($record->getData('provider_code')) ?></code>
                             </td>
                         </tr>
@@ -41,20 +41,20 @@ $provider = $this->getData('provider');
                             <th><?= __('状态') ?></th>
                             <td>
                                 <?php if ($record->isSuccess()): ?>
-                                    <span class="badge bg-success"><?= __('成功') ?></span>
+                                    <span class="w-badge" data-w-background="success"><?= __('成功') ?></span>
                                 <?php elseif ($record->isFailed()): ?>
-                                    <span class="badge bg-danger"><?= __('失败') ?></span>
+                                    <span class="w-badge" data-w-background="danger"><?= __('失败') ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-warning"><?= __('待处理') ?></span>
+                                    <span class="w-badge" data-w-background="warning"><?= __('待处理') ?></span>
                                 <?php endif; ?>
                             </td>
                         </tr>
                         <tr>
                             <th><?= __('语言') ?></th>
                             <td>
-                                <span class="badge bg-secondary"><?= htmlspecialchars($record->getData('source_language')) ?></span>
-                                <i class="mdi mdi-arrow-right"></i>
-                                <span class="badge bg-primary"><?= htmlspecialchars($record->getData('target_language')) ?></span>
+                                <span class="w-badge" data-w-background="muted"><?= htmlspecialchars($record->getData('source_language')) ?></span>
+                                <w:icon name="arrow-right" size="sm"></w:icon>
+                                <span class="w-badge" data-w-background="primary"><?= htmlspecialchars($record->getData('target_language')) ?></span>
                             </td>
                         </tr>
                         <tr>
@@ -75,7 +75,7 @@ $provider = $this->getData('provider');
                                 <?php if ($record->getData('module_name')): ?>
                                     <code><?= htmlspecialchars($record->getData('module_name')) ?></code>
                                 <?php else: ?>
-                                    <span class="text-muted">-</span>
+                                    <span class="w-text" data-tone="muted">-</span>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -87,7 +87,7 @@ $provider = $this->getData('provider');
                             <tr>
                                 <th><?= __('错误信息') ?></th>
                                 <td>
-                                    <div class="alert alert-danger mb-0">
+                                    <div class="w-alert" data-tone="danger" style="--w-mb:0;">
                                         <?= htmlspecialchars($record->getData('error_message')) ?>
                                     </div>
                                 </td>
@@ -98,20 +98,20 @@ $provider = $this->getData('provider');
             </div>
 
             <!-- 翻译内容 -->
-            <div class="card mb-4">
-                <div class="card-header">
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header">
                     <h3><?= __('翻译内容') ?></h3>
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('源文本') ?></label>
-                        <div class="border p-3 bg-light" style="min-height: 100px; max-height: 300px; overflow-y: auto;">
+                <div class="w-card__body">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('源文本') ?></label>
+                        <div style="min-height: 100px; max-height: 300px; overflow-y: auto;" data-w-border="border" data-w-background="muted">
                             <?= nl2br(htmlspecialchars($record->getData('source_text'))) ?>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('翻译文本') ?></label>
-                        <div class="border p-3 bg-light" style="min-height: 100px; max-height: 300px; overflow-y: auto;">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('翻译文本') ?></label>
+                        <div style="min-height: 100px; max-height: 300px; overflow-y: auto;" data-w-border="border" data-w-background="muted">
                             <?= nl2br(htmlspecialchars($record->getData('translated_text'))) ?>
                         </div>
                     </div>
@@ -119,23 +119,23 @@ $provider = $this->getData('provider');
             </div>
         </div>
 
-        <div class="col-md-4">
+        <div style="--w-span-md:4;">
             <!-- 请求和响应数据 -->
-            <div class="card mb-4">
-                <div class="card-header">
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header">
                     <h3><?= __('请求数据') ?></h3>
                 </div>
-                <div class="card-body">
-                    <pre class="bg-light p-3" style="max-height: 200px; overflow-y: auto; font-size: 12px;"><?= htmlspecialchars(json_encode($record->getRequestData(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+                <div class="w-card__body">
+                    <pre style="max-height: 200px; overflow-y: auto; font-size: 12px;" data-w-background="muted"><?= htmlspecialchars(json_encode($record->getRequestData(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
                 </div>
             </div>
 
-            <div class="card mb-4">
-                <div class="card-header">
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header">
                     <h3><?= __('响应数据') ?></h3>
                 </div>
-                <div class="card-body">
-                    <pre class="bg-light p-3" style="max-height: 200px; overflow-y: auto; font-size: 12px;"><?= htmlspecialchars(json_encode($record->getResponseData(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+                <div class="w-card__body">
+                    <pre style="max-height: 200px; overflow-y: auto; font-size: 12px;" data-w-background="muted"><?= htmlspecialchars(json_encode($record->getResponseData(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
                 </div>
             </div>
         </div>

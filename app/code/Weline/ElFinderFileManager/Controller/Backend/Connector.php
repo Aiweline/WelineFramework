@@ -14,7 +14,7 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_ElFinderFileManager::backend_connector', 'ElFinder 文件管理器', 'mdi-folder-image', '访问 ElFinder 后端文件管理器入口', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_ElFinderFileManager::backend_connector', 'ElFinder 文件管理器', 'image', '访问 ElFinder 后端文件管理器入口', 'Weline_Backend::system_maintenance')]
 class Connector extends BackendController
 {
     public function __init()

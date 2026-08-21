@@ -46,7 +46,6 @@
         "weline/module-system-config": "@dev",
         "weline/module-taglib": "@dev",
         "weline/module-theme": "@dev",
-        "weline/module-theme-fancy": "@dev",
         "weline/module-url-manager": "@dev",
         "weline/module-warm-cache": "@dev",
         "weline/module-website-monitoring": "@dev"

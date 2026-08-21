@@ -14,7 +14,7 @@ use Weline\Websites\Service\DomainLifecycleOrchestrationService;
 use Weline\Websites\Service\DomainProvisioningService;
 
 /** 一站式配置 SSE 实时进度 API（URL: websites/backend/api/provisioning/stream） */
-#[Acl('Weline_Websites::provisioning_api', '配置API', 'mdi-api', '一站式配置API', 'Weline_Websites::provisioning')]
+#[Acl('Weline_Websites::provisioning_api', '配置API', 'circle', '一站式配置API', 'Weline_Websites::provisioning')]
 class Provisioning extends BaseController
 {
     public function __construct(
@@ -23,7 +23,7 @@ class Provisioning extends BaseController
     ) {
     }
 
-    #[Acl('Weline_Websites::provisioning_stream', '配置进度流', 'mdi-progress-clock')]
+    #[Acl('Weline_Websites::provisioning_stream', '配置进度流', 'clock')]
     public function stream(): string
     {
         $domain = trim($this->request->getGet('domain', '') ?? '');

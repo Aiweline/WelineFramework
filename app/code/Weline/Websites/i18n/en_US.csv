@@ -936,10 +936,10 @@ Weline（本地）,"Weline (local)"
 跳过既有商品,跳过既有商品
 仅更新所选字段包,仅更新所选字段包
 "Store 复制向导","Store 复制向导"
-"mdi mdi-content-copy","mdi mdi-content-copy"
+copy,copy
 从目录/他店复制经营投影,从目录/他店复制经营投影
 打开复制向导,打开复制向导
-"mdi mdi-wizard-hat","mdi mdi-wizard-hat"
+circle,circle
 加载维护模式失败：%{1},"Failed to load maintenance mode: %{1}"
 无效的请求方法,"Invalid request method"
 维护模式状态已更新,"Maintenance mode status updated"
@@ -951,8 +951,10 @@ Weline（本地）,"Weline (local)"
 备份创建失败：%{1},"Backup creation failed: %{1}"
 下载备份失败：%{1},下载备份失败：%{1}
 网站备份,"Site Backup"
+store,store
 查看网站备份,查看网站备份
 创建网站备份,创建网站备份
+save,save
 网站服务,"Website Service"
 "AI 建站工作区","AI website building workspace"
 需要登录或会话令牌无效,"Login required or session token is invalid"
@@ -1244,6 +1246,7 @@ SSL,SSL
 配置API,配置API
 一站式配置API,一站式配置API
 配置进度流,配置进度流
+clock,clock
 "Login required","Login required"
 "Please provide a site request or reference URL first","Please provide a site request or reference URL first"
 "Invalid draft revision payload","Invalid draft revision payload"
@@ -1632,11 +1635,10 @@ DNS管理,"DNS management"
 同步成功,"Sync succeeded"
 同步失败,"Sync failed"
 添加成功,"Add Success"
-确定删除此DNS记录吗？,"Are you sure you want to delete this DNS record?"
 确认删除,"Confirm Delete"
+确定删除此DNS记录吗？,"Are you sure you want to delete this DNS record?"
 删除失败,"Delete failed"
 "确定要删除根域「%{1}」吗？该根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。","Are you sure you want to delete the root domain ""%{1}""? All subdomains (domain pool records) and DNS resolution records under this root domain will be deleted together and cannot be recovered."
-未找到确认弹窗组件，操作已取消,"Confirmation dialog component not found, operation cancelled"
 "确定要删除选中的 %{1} 个根域吗？每个根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。","Are you sure you want to delete the selected %{1} root domains? All subdomains (domain pool records) and DNS resolution records under each root domain will be deleted together and cannot be recovered."
 正在自动解析到本服务器...,"Auto-resolving to this server..."
 解析成功,"Parse Successful"
@@ -3183,6 +3185,9 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","处理完成：%d 条非法记录"
+"mdi mdi-content-copy","mdi mdi-content-copy"
+"mdi mdi-wizard-hat","mdi mdi-wizard-hat"
+未找到确认弹窗组件，操作已取消,"Confirmation dialog component not found, operation cancelled"
 消费子站后台直进令牌,消费子站后台直进令牌
 消费主站签发的直进令牌,消费主站签发的直进令牌
 编辑网站功能授权,编辑网站功能授权

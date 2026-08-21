@@ -104,11 +104,11 @@ class CacheClear implements TaglibInterface
 
         $html = [];
         $html[] = '<div class="weline-cache-clear-entry" data-weline-cache-clear>';
-        $html[] = '<hr class="mt-0"/>';
-        $html[] = '<h6 class="text-center mb-0">' . $e((string)__('系统维护')) . '</h6>';
-        $html[] = '<div class="p-4">';
-        $html[] = '<button type="button" class="btn btn-danger w-100" data-role="open"><i class="ri-brush-3-line align-middle me-1"></i>' . $e((string)__('清理缓存')) . '</button>';
-        $html[] = '<small class="form-text text-muted d-block mt-2">' . $e((string)__('弹窗内可搜索选择缓存类型，或一键清理全部非持久缓存。')) . '</small>';
+        $html[] = '<hr style="--w-mt:0;" />';
+        $html[] = '<h6 class="w-text" data-align="center" style="--w-mb:0;">' . $e((string)__('系统维护')) . '</h6>';
+        $html[] = '<div style="--w-pt:var(--weline-space-6);--w-pe:var(--weline-space-6);--w-pb:var(--weline-space-6);--w-ps:var(--weline-space-6);">';
+        $html[] = '<button type="button" class="w-button" data-role="open" data-w-width="full" data-tone="danger"><w-icon name="circle" size="sm"></w-icon>' . $e((string)__('清理缓存')) . '</button>';
+        $html[] = '<small class="w-field__hint w-text" data-w-display="block" data-tone="muted" style="--w-mt:var(--weline-space-2);">' . $e((string)__('弹窗内可搜索选择缓存类型，或一键清理全部非持久缓存。')) . '</small>';
         $html[] = '</div>';
 
         // 弹窗（初次打开时由 JS 移动到 body，避开右侧栏层叠上下文）
@@ -116,14 +116,14 @@ class CacheClear implements TaglibInterface
         $html[] = '<div class="weline-cache-clear-modal__backdrop" data-role="close"></div>';
         $html[] = '<div class="weline-cache-clear-modal__dialog" role="dialog" aria-modal="true" aria-label="' . $e((string)__('清理缓存')) . '">';
         $html[] = '<div class="weline-cache-clear-modal__header">';
-        $html[] = '<h5 class="m-0"><i class="ri-brush-3-line align-middle me-1"></i>' . $e((string)__('清理缓存')) . '</h5>';
-        $html[] = '<button type="button" class="btn-close" data-role="close" aria-label="' . $e((string)__('关闭')) . '"></button>';
+        $html[] = '<h5 style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;"><w-icon name="circle" size="sm"></w-icon>' . $e((string)__('清理缓存')) . '</h5>';
+        $html[] = '<button type="button" class="w-button" data-role="close" aria-label="' . $e((string)__('关闭')) . '" data-w-close="" data-tone="quiet" data-size="sm"></button>';
         $html[] = '</div>';
         $html[] = '<div class="weline-cache-clear-modal__body">';
-        $html[] = '<input type="text" class="form-control mb-2" data-role="search" placeholder="' . $e((string)__('搜索缓存类型（identity / 名称 / 模块）')) . '" autocomplete="off">';
-        $html[] = '<div class="d-flex align-items-center justify-content-between mb-2">';
-        $html[] = '<label class="form-check m-0"><input type="checkbox" class="form-check-input" data-role="select-all"><span class="form-check-label ms-1">' . $e((string)__('全选当前结果')) . '</span></label>';
-        $html[] = '<span class="text-muted small"><span data-role="selected-count">0</span> ' . $e((string)__('个已选')) . '</span>';
+        $html[] = '<input type="text" class="w-input" data-role="search" placeholder="' . $e((string)__('搜索缓存类型（identity / 名称 / 模块）')) . '" autocomplete="off" style="--w-mb:var(--weline-space-2);">';
+        $html[] = '<div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-2);">';
+        $html[] = '<label class="w-check" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;"><input type="checkbox" data-role="select-all"><span class="ms-1">' . $e((string)__('全选当前结果')) . '</span></label>';
+        $html[] = '<span class="w-text" data-tone="muted" data-size="sm"><span data-role="selected-count">0</span> ' . $e((string)__('个已选')) . '</span>';
         $html[] = '</div>';
         $html[] = '<div class="weline-cache-clear-modal__list" data-role="list">';
 
@@ -134,24 +134,24 @@ class CacheClear implements TaglibInterface
             $permanent = !empty($pool['permanent']);
             $searchText = $e(\strtolower((string)$pool['identity'] . ' ' . (string)$pool['name'] . ' ' . (string)$pool['module']));
             $html[] = '<label class="weline-cache-clear-option" data-search="' . $searchText . '" data-permanent="' . ($permanent ? '1' : '0') . '">';
-            $html[] = '<input type="checkbox" class="form-check-input" value="' . $identity . '">';
-            $html[] = '<span class="weline-cache-clear-option__text"><strong>' . $name . '</strong><small class="text-muted d-block">' . $identity . ($module !== '' ? ' · ' . $module : '') . '</small></span>';
+            $html[] = '<input type="checkbox" value="' . $identity . '">';
+            $html[] = '<span class="weline-cache-clear-option__text"><strong>' . $name . '</strong><small class="w-text" data-w-display="block" data-tone="muted">' . $identity . ($module !== '' ? ' · ' . $module : '') . '</small></span>';
             if ($permanent) {
-                $html[] = '<span class="badge bg-warning text-dark">' . $e((string)__('持久')) . '</span>';
+                $html[] = '<span class="w-badge w-text" data-w-background="warning" data-tone="muted">' . $e((string)__('持久')) . '</span>';
             }
             $html[] = '</label>';
         }
 
-        $html[] = '<div class="text-muted small p-2" data-role="empty" hidden>' . $e((string)__('无匹配缓存')) . '</div>';
+        $html[] = '<div class="w-text" data-role="empty" hidden data-tone="muted" data-size="sm" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">' . $e((string)__('无匹配缓存')) . '</div>';
         $html[] = '</div>';
         $html[] = '</div>';
         $html[] = '<div class="weline-cache-clear-modal__footer">';
         if ($canClearAll) {
-            $html[] = '<button type="button" class="btn btn-outline-danger" data-role="clear-all"><i class="ri-delete-bin-line align-middle me-1"></i>' . $e((string)__('全部清理（非持久）')) . '</button>';
+            $html[] = '<button type="button" class="w-button" data-role="clear-all" data-tone="danger" data-variant="outline"><w-icon name="trash" size="sm"></w-icon>' . $e((string)__('全部清理（非持久）')) . '</button>';
         }
-        $html[] = '<div class="ms-auto d-flex gap-2">';
-        $html[] = '<button type="button" class="btn btn-secondary" data-role="close">' . $e((string)__('取消')) . '</button>';
-        $html[] = '<button type="button" class="btn btn-danger" data-role="clear-selected" disabled><i class="ri-delete-bin-6-line align-middle me-1"></i>' . $e((string)__('清理所选')) . '</button>';
+        $html[] = '<div class="ms-auto w-cluster" style="--w-gap:var(--weline-space-2);">';
+        $html[] = '<button type="button" class="w-button" data-role="close" data-tone="neutral">' . $e((string)__('取消')) . '</button>';
+        $html[] = '<button type="button" class="w-button" data-role="clear-selected" disabled data-tone="danger"><w-icon name="trash" size="sm"></w-icon>' . $e((string)__('清理所选')) . '</button>';
         $html[] = '</div>';
         $html[] = '</div>';
         $html[] = '</div>';
@@ -246,19 +246,15 @@ HTML;
 
     function text(key, fallback) { var v = strings[key]; return v == null || v === '' ? fallback : String(v); }
     function notify(type, message) {
-        if (window.BackendToast && typeof window.BackendToast[type] === 'function') { window.BackendToast[type](message); return; }
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') { window.Weline.UI.toast[type](message); return; }
         console[type === 'error' ? 'error' : 'log'](message);
     }
     function confirmAction(message) {
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            return window.BackendConfirm.show(message, {
-                confirmText: text('confirm_continue', 'OK'),
-                cancelText: text('confirm_cancel', 'Cancel'),
-                type: 'warning'
-            });
-        }
-        console.warn('[Weline CacheClear] BackendConfirm is unavailable; action cancelled.');
-        return Promise.resolve(false);
+        return Weline.UI.dialog.confirm(message, {
+            confirmLabel: text('confirm_continue', 'OK'),
+            cancelLabel: text('confirm_cancel', 'Cancel'),
+            tone: 'warning'
+        });
     }
     function loadApi() {
         if (window.Weline && typeof window.Weline.load === 'function') {

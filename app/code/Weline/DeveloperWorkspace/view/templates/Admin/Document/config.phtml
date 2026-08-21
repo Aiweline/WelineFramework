@@ -107,117 +107,117 @@ $help = static function (string $text) use ($tr): string {
     }
 </style>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-6);">
                     <div>
-                        <h4 class="card-title mb-1">
-                            <i class="mdi mdi-translate me-2"></i><?=htmlspecialchars($tr('文档管理配置'))?>
+                        <h4 class="w-card__title" style="--w-mb:var(--weline-space-1);">
+                            <w:icon name="language" size="sm"></w:icon><?=htmlspecialchars($tr('文档管理配置'))?>
                         </h4>
-                        <p class="text-muted mb-0"><?=htmlspecialchars($tr('配置文档多语言读取、AI 翻译适配器、任务限流和用量概览'))?></p>
+                        <p class="w-text" data-tone="muted" style="--w-mb:0;"><?=htmlspecialchars($tr('配置文档多语言读取、AI 翻译适配器、任务限流和用量概览'))?></p>
                     </div>
-                    <a href="@admin-url('dev/tool/admin/document')" class="btn btn-light">
-                        <i class="mdi mdi-arrow-left me-1"></i><?=htmlspecialchars($tr('返回文档管理'))?>
+                    <a href="@admin-url('dev/tool/admin/document')" class="w-button" data-tone="neutral">
+                        <w:icon name="arrow-left" size="sm"></w:icon><?=htmlspecialchars($tr('返回文档管理'))?>
                     </a>
                 </div>
 
-                <div class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 h-100">
-                            <div class="text-muted small"><?=htmlspecialchars($tr('适配器'))?></div>
-                            <div class="fw-bold"><?=htmlspecialchars((string)($adapter['code'] ?? 'developer_document_translation'))?></div>
-                            <div class="mt-2">
-                                <span class="badge <?=!empty($adapter['exists']) ? 'bg-success' : 'bg-danger'?>">
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-6);">
+                    <div style="--w-span-md:3;">
+                        <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?=htmlspecialchars($tr('适配器'))?></div>
+                            <div class="w-text" data-weight="strong"><?=htmlspecialchars((string)($adapter['code'] ?? 'developer_document_translation'))?></div>
+                            <div style="--w-mt:var(--weline-space-2);">
+                                <span class="w-badge <?=!empty($adapter['exists']) ? 'bg-success' : 'bg-danger'?>">
                                     <?=htmlspecialchars(!empty($adapter['exists']) ? $tr('已注册') : $tr('未注册'))?>
                                 </span>
-                                <span class="badge <?=!empty($adapter['active']) ? 'bg-success' : 'bg-secondary'?>">
+                                <span class="w-badge <?=!empty($adapter['active']) ? 'bg-success' : 'bg-secondary'?>">
                                     <?=htmlspecialchars(!empty($adapter['active']) ? $tr('已启用') : $tr('未启用'))?>
                                 </span>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 h-100">
-                            <div class="text-muted small"><?=htmlspecialchars($tr('配置状态'))?></div>
-                            <div class="fw-bold <?=!empty($validation['ok']) ? 'text-success' : 'text-warning'?>">
+                    <div style="--w-span-md:3;">
+                        <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?=htmlspecialchars($tr('配置状态'))?></div>
+                            <div class="w-text <?=!empty($validation['ok']) ? 'text-success' : 'text-warning'?>" data-weight="strong">
                                 <?=htmlspecialchars(!empty($validation['ok']) ? $tr('可执行') : $tr('阻塞'))?>
                             </div>
-                            <div class="small text-muted mt-2"><?=htmlspecialchars((string)($validation['message'] ?? ''))?></div>
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);"><?=htmlspecialchars((string)($validation['message'] ?? ''))?></div>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 h-100">
-                            <div class="text-muted small"><?=htmlspecialchars($tr('Token 用量'))?></div>
-                            <div class="fw-bold"><?=number_format((int)($usage['total_tokens'] ?? 0))?></div>
-                            <div class="small text-muted mt-2">
+                    <div style="--w-span-md:3;">
+                        <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?=htmlspecialchars($tr('Token 用量'))?></div>
+                            <div class="w-text" data-weight="strong"><?=number_format((int)($usage['total_tokens'] ?? 0))?></div>
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
                                 <?=__('Prompt')?> <?=number_format((int)($usage['prompt_tokens'] ?? 0))?> /
                                 <?=__('Completion')?> <?=number_format((int)($usage['completion_tokens'] ?? 0))?>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 h-100">
-                            <div class="text-muted small"><?=htmlspecialchars($tr('成本概览'))?></div>
-                            <div class="fw-bold"><?=number_format((float)($usage['actual_cost'] ?? 0), 6)?></div>
-                            <div class="small text-muted mt-2"><?=htmlspecialchars($tr('估算'))?> <?=number_format((float)($usage['estimated_cost'] ?? 0), 6)?></div>
+                    <div style="--w-span-md:3;">
+                        <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?=htmlspecialchars($tr('成本概览'))?></div>
+                            <div class="w-text" data-weight="strong"><?=number_format((float)($usage['actual_cost'] ?? 0), 6)?></div>
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);"><?=htmlspecialchars($tr('估算'))?> <?=number_format((float)($usage['estimated_cost'] ?? 0), 6)?></div>
                         </div>
                     </div>
                 </div>
 
                 <w:form id="documentTranslationConfigForm" csrf="off">
                     <input type="hidden" name="form_key" value="<?=htmlspecialchars($this->getFormKeyValue())?>">
-                    <div class="row g-4">
-                        <div class="col-lg-7">
-                            <div class="card border">
-                                <div class="card-header bg-light">
+                    <div class="w-grid" style="--w-gap:var(--weline-space-6);">
+                        <div style="--w-span-lg:7;">
+                            <div class="w-card" data-w-border="border">
+                                <div class="w-card__header" data-w-background="muted">
                                     <strong><?=htmlspecialchars($tr('基础配置'))?></strong>
                                 </div>
-                                <div class="card-body">
-                                    <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" id="enabled" name="enabled" value="1" <?=!empty($config['enabled']) ? 'checked' : ''?>>
-                                        <label class="form-check-label" for="enabled">
+                                <div class="w-card__body">
+                                    <div class="w-switch" style="--w-mb:var(--weline-space-4);">
+                                        <input type="checkbox" id="enabled" name="enabled" value="1" <?=!empty($config['enabled']) ? 'checked' : ''?>>
+                                        <label for="enabled">
                                             <?=htmlspecialchars($tr('启用文档 AI 翻译调度'))?>
                                             <?=$help(__('总开关。关闭后不会自动入队或执行 AI 翻译，已存在译文仍可按读取逻辑展示。'))?>
                                         </label>
                                     </div>
 
-                                    <div class="alert alert-light border mb-3">
+                                    <div class="w-alert" data-w-border="border" data-tone="muted" style="--w-mb:var(--weline-space-4);">
                                         <strong><?=htmlspecialchars($tr('源语言固定为中文源文档'))?></strong>
                                         <code class="ms-2"><?=htmlspecialchars($sourceLocale)?></code>
                                         <?=$help(__('文档导入事实源固定为 zh_Hans_CN，不提供界面配置；翻译结果只写数据库，不回写模块 doc 文件。'))?>
-                                        <div class="small text-muted mt-1"><?=htmlspecialchars($tr('默认导入文档按中文源文档处理，源语言本身不调用 AI 翻译。'))?></div>
+                                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?=htmlspecialchars($tr('默认导入文档按中文源文档处理，源语言本身不调用 AI 翻译。'))?></div>
                                     </div>
 
-                                    <div class="mb-3">
-                                        <label class="form-label">
+                                    <div style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label">
                                             <?=htmlspecialchars($tr('支持语言与 AI 翻译'))?>
                                             <?=$help(__('支持语言决定前台/后台语言选择器可选项；AI 自动补齐决定该语言缺失或过期时是否进入异步翻译队列。'))?>
                                         </label>
-                                        <div class="border rounded p-3">
+                                        <div data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
                                             <?php foreach ($locales as $locale): ?>
                                                 <?php
                                                 $code = (string)($locale['code'] ?? '');
                                                 $localeConfig = $configuredLocales[$code] ?? [];
                                                 ?>
-                                                <div class="row align-items-center py-2 border-bottom">
-                                                    <div class="col-md-5">
-                                                        <label class="form-check">
-                                                            <input class="form-check-input" type="checkbox" name="target_locales[]" value="<?=htmlspecialchars($code)?>" <?=!empty($localeConfig['enabled']) || $code === $sourceLocale ? 'checked' : ''?>>
-                                                            <span class="form-check-label"><?=htmlspecialchars((string)($locale['name'] ?? $code))?> <code><?=htmlspecialchars($code)?></code></span>
+                                                <div class="w-grid" data-align="center" data-w-border="bottom" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
+                                                    <div style="--w-span-md:5;">
+                                                        <label class="w-check">
+                                                            <input type="checkbox" name="target_locales[]" value="<?=htmlspecialchars($code)?>" <?=!empty($localeConfig['enabled']) || $code === $sourceLocale ? 'checked' : ''?>>
+                                                            <span><?=htmlspecialchars((string)($locale['name'] ?? $code))?> <code><?=htmlspecialchars($code)?></code></span>
                                                         </label>
                                                     </div>
-                                                    <div class="col-md-4">
-                                                        <label class="form-check form-switch mb-0">
-                                                            <input class="form-check-input" type="checkbox" name="ai_enabled[<?=htmlspecialchars($code)?>]" value="1" <?=!empty($localeConfig['ai_enabled']) ? 'checked' : ''?> <?=$code === $sourceLocale ? 'disabled' : ''?>>
-                                                <span class="form-check-label">
+                                                    <div style="--w-span-md:4;">
+                                                        <label class="w-switch" style="--w-mb:0;">
+                                                            <input type="checkbox" name="ai_enabled[<?=htmlspecialchars($code)?>]" value="1" <?=!empty($localeConfig['ai_enabled']) ? 'checked' : ''?> <?=$code === $sourceLocale ? 'disabled' : ''?>>
+                                                <span>
                                                     <?=htmlspecialchars($tr('AI 自动补齐'))?>
                                                     <?=$code === $sourceLocale ? '' : $help(__('开启后，缺失译文或源文档更新导致过期时会进入翻译队列；不会同步阻塞当前页面访问。'))?>
                                                 </span>
                                                         </label>
                                                     </div>
-                                                    <div class="col-md-3 text-muted small">
+                                                    <div class="w-text" data-tone="muted" data-size="sm" style="--w-span-md:3;">
                                                         <?=htmlspecialchars($code === $sourceLocale ? $tr('源语言不翻译') : $tr('缺失/过期异步翻译'))?>
                                                     </div>
                                                 </div>
@@ -225,29 +225,29 @@ $help = static function (string $text) use ($tr): string {
                                         </div>
                                     </div>
 
-                                    <div class="mb-3">
-                                        <label class="form-label">
+                                    <div style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label">
                                             <?=htmlspecialchars($tr('翻译范围'))?>
                                             <?=$help(__('控制哪些类型会被自动入队翻译。普通文档、API 文档、目录树互相独立；全不勾选时即使语言开启也不会产生翻译任务。'))?>
                                         </label>
-                                        <div class="d-flex gap-4 flex-wrap">
-                                            <label class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="scope_documents" value="1" <?=!empty($config['scopes']['documents']) ? 'checked' : ''?>>
-                                                <span class="form-check-label">
+                                        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-6);">
+                                            <label class="w-check">
+                                                <input type="checkbox" name="scope_documents" value="1" <?=!empty($config['scopes']['documents']) ? 'checked' : ''?>>
+                                                <span>
                                                     <?=htmlspecialchars($tr('普通文档'))?>
                                                     <?=$help(__('开发文档列表和详情页中的普通模块文档。'))?>
                                                 </span>
                                             </label>
-                                            <label class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="scope_api_documents" value="1" <?=!empty($config['scopes']['api_documents']) ? 'checked' : ''?>>
-                                                <span class="form-check-label">
+                                            <label class="w-check">
+                                                <input type="checkbox" name="scope_api_documents" value="1" <?=!empty($config['scopes']['api_documents']) ? 'checked' : ''?>>
+                                                <span>
                                                     <?=htmlspecialchars($tr('API 文档'))?>
                                                     <?=$help(__('API 文档页的接口标题、摘要、参数说明、响应说明等由导入器生成的文档内容。'))?>
                                                 </span>
                                             </label>
-                                            <label class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="scope_catalogs" value="1" <?=!empty($config['scopes']['catalogs']) ? 'checked' : ''?>>
-                                                <span class="form-check-label">
+                                            <label class="w-check">
+                                                <input type="checkbox" name="scope_catalogs" value="1" <?=!empty($config['scopes']['catalogs']) ? 'checked' : ''?>>
+                                                <span>
                                                     <?=htmlspecialchars($tr('目录树'))?>
                                                     <?=$help(__('左侧目录节点名称和描述。关闭后目录仍显示源语言或已有译文，不会自动补齐新译文。'))?>
                                                 </span>
@@ -258,18 +258,18 @@ $help = static function (string $text) use ($tr): string {
                             </div>
                         </div>
 
-                        <div class="col-lg-5">
-                            <div class="card border">
-                                <div class="card-header bg-light">
+                        <div style="--w-span-lg:5;">
+                            <div class="w-card" data-w-border="border">
+                                <div class="w-card__header" data-w-background="muted">
                                     <strong><?=htmlspecialchars($tr('AI 适配器与限流'))?></strong>
                                 </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <label class="form-label">
+                                <div class="w-card__body">
+                                    <div style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label">
                                             <?=htmlspecialchars($tr('Text-to-text 模型'))?>
                                             <?=$help(__('文档翻译适配器使用的文本模型。模型上下文大小会影响单篇大文档如何自动拆分成多次 AI 请求。'))?>
                                         </label>
-                                        <select name="model_code" class="form-select">
+                                        <select name="model_code" class="w-select">
                                             <option value=""><?=htmlspecialchars($tr('请选择模型'))?></option>
                                             <?php foreach ($textModels as $model): ?>
                                                 <?php $modelCode = (string)($model['model_code'] ?? ''); ?>
@@ -278,60 +278,60 @@ $help = static function (string $text) use ($tr): string {
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
-                                        <div class="form-text"><?=htmlspecialchars($tr('模型绑定写入 ai_scenario_adapter，不重复存业务配置。'))?></div>
+                                        <div class="w-field__hint"><?=htmlspecialchars($tr('模型绑定写入 ai_scenario_adapter，不重复存业务配置。'))?></div>
                                     </div>
 
-                                    <div class="row g-3">
-                                        <div class="col-md-6">
-                                            <label class="form-label">
+                                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                        <div style="--w-span-md:6;">
+                                            <label class="w-field__label">
                                                 <?=htmlspecialchars($tr('批量大小'))?>
                                                 <?=$help(__('每次定时任务或手动执行最多处理的翻译任务数量。它不是文档总数，也不是单篇大文档的 AI 分段大小；大文档分段由适配器按模型上下文自动处理。'))?>
                                             </label>
-                                            <input type="number" name="batch_size" class="form-control" min="1" max="200" value="<?=htmlspecialchars((string)($config['batch_size'] ?? 10))?>">
+                                            <input type="number" name="batch_size" class="w-input" min="1" max="200" value="<?=htmlspecialchars((string)($config['batch_size'] ?? 10))?>">
                                         </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label">
+                                        <div style="--w-span-md:6;">
+                                            <label class="w-field__label">
                                                 <?=htmlspecialchars($tr('最大重试'))?>
                                                 <?=$help(__('单个翻译任务遇到网络、限流等可重试错误时允许自动重试的最大次数。格式错误、配置缺失等不可重试错误不会无限重试。'))?>
                                             </label>
-                                            <input type="number" name="max_retries" class="form-control" min="0" max="20" value="<?=htmlspecialchars((string)($config['max_retries'] ?? 3))?>">
+                                            <input type="number" name="max_retries" class="w-input" min="0" max="20" value="<?=htmlspecialchars((string)($config['max_retries'] ?? 3))?>">
                                         </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label">
+                                        <div style="--w-span-md:6;">
+                                            <label class="w-field__label">
                                                 <?=htmlspecialchars($tr('单文档 token 上限'))?>
                                                 <?=$help(__('单篇源文档允许进入 AI 翻译链路的安全上限。超过模型单次上下文时会自动拆分请求；超过这里的业务上限才会被阻止。'))?>
                                             </label>
-                                            <input type="number" name="max_document_tokens" class="form-control" min="1000" value="<?=htmlspecialchars((string)($config['max_document_tokens'] ?? 12000))?>">
+                                            <input type="number" name="max_document_tokens" class="w-input" min="1000" value="<?=htmlspecialchars((string)($config['max_document_tokens'] ?? 12000))?>">
                                         </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label">
+                                        <div style="--w-span-md:6;">
+                                            <label class="w-field__label">
                                                 <?=htmlspecialchars($tr('Fallback'))?>
                                                 <?=$help(__('目标语言译文缺失、待翻译、失败或过期时的读取策略。回退源文档会显示中文源内容；空内容会让前台显示为空或由页面自行处理。'))?>
                                             </label>
-                                            <select name="fallback_policy" class="form-select">
+                                            <select name="fallback_policy" class="w-select">
                                                 <option value="source" <?=($config['fallback_policy'] ?? 'source') === 'source' ? 'selected' : ''?>><?=htmlspecialchars($tr('回退源文档'))?></option>
                                                 <option value="empty" <?=($config['fallback_policy'] ?? '') === 'empty' ? 'selected' : ''?>><?=htmlspecialchars($tr('空内容'))?></option>
                                             </select>
                                         </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label">
+                                        <div style="--w-span-md:6;">
+                                            <label class="w-field__label">
                                                 <?=htmlspecialchars($tr('每日 token 上限'))?>
                                                 <?=$help(__('当天文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。'))?>
                                             </label>
-                                            <input type="number" name="daily_token_limit" class="form-control" min="0" value="<?=htmlspecialchars((string)($config['daily_token_limit'] ?? 0))?>">
+                                            <input type="number" name="daily_token_limit" class="w-input" min="0" value="<?=htmlspecialchars((string)($config['daily_token_limit'] ?? 0))?>">
                                         </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label">
+                                        <div style="--w-span-md:6;">
+                                            <label class="w-field__label">
                                                 <?=htmlspecialchars($tr('每月 token 上限'))?>
                                                 <?=$help(__('当月文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。'))?>
                                             </label>
-                                            <input type="number" name="monthly_token_limit" class="form-control" min="0" value="<?=htmlspecialchars((string)($config['monthly_token_limit'] ?? 0))?>">
+                                            <input type="number" name="monthly_token_limit" class="w-input" min="0" value="<?=htmlspecialchars((string)($config['monthly_token_limit'] ?? 0))?>">
                                         </div>
                                     </div>
 
-                                    <label class="form-check form-switch mt-3">
-                                        <input class="form-check-input" type="checkbox" name="show_translation_status" value="1" <?=!empty($config['show_translation_status']) ? 'checked' : ''?>>
-                                        <span class="form-check-label">
+                                    <label class="w-switch" style="--w-mt:var(--weline-space-4);">
+                                        <input type="checkbox" name="show_translation_status" value="1" <?=!empty($config['show_translation_status']) ? 'checked' : ''?>>
+                                        <span>
                                             <?=htmlspecialchars($tr('前后台显示翻译状态'))?>
                                             <?=$help(__('开启后，非源语言页面会显示 missing、pending、translated、stale、failed 等状态，方便调试；源语言页面不显示 translated 状态。'))?>
                                         </span>
@@ -341,41 +341,41 @@ $help = static function (string $text) use ($tr): string {
                         </div>
                     </div>
 
-                    <div id="documentTranslationConfigNotice" class="alert d-none mt-3 mb-0" role="alert" aria-live="polite"></div>
+                    <div id="documentTranslationConfigNotice" class="w-alert" role="alert" aria-live="polite" hidden style="--w-mt:var(--weline-space-4);--w-mb:0;"></div>
 
-                    <div class="mt-3 d-flex gap-2 flex-wrap">
-                        <button type="submit" id="documentTranslationConfigSaveBtn" class="btn btn-primary">
-                            <i class="mdi mdi-content-save me-1"></i>
+                    <div class="w-cluster" data-wrap="true" style="--w-mt:var(--weline-space-4);--w-gap:var(--weline-space-2);">
+                        <button type="submit" id="documentTranslationConfigSaveBtn" class="w-button" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon>
                             <span class="doc-save-label"><?=htmlspecialchars($tr('保存配置'))?></span>
-                            <span class="doc-save-loading d-none"><?=htmlspecialchars($tr('正在保存...'))?></span>
+                            <span class="doc-save-loading" hidden><?=htmlspecialchars($tr('正在保存...'))?></span>
                         </button>
-                        <button type="button" class="btn btn-outline-secondary doc-translation-action" data-action="translation-scan"><?=htmlspecialchars($tr('扫描适配器'))?></button>
-                        <button type="button" class="btn btn-outline-info doc-translation-action" data-action="translation-test"><?=htmlspecialchars($tr('测试适配器'))?></button>
-                        <button type="button" class="btn btn-outline-success doc-translation-action" data-action="translation-run"><?=htmlspecialchars($tr('立即入队并执行'))?></button>
-                        <button type="button" class="btn btn-outline-warning doc-translation-action" data-action="translation-retry"><?=htmlspecialchars($tr('重试失败'))?></button>
+                        <button type="button" class="w-button doc-translation-action" data-action="translation-scan" data-tone="neutral" data-variant="outline"><?=htmlspecialchars($tr('扫描适配器'))?></button>
+                        <button type="button" class="w-button doc-translation-action" data-action="translation-test" data-tone="info" data-variant="outline"><?=htmlspecialchars($tr('测试适配器'))?></button>
+                        <button type="button" class="w-button doc-translation-action" data-action="translation-run" data-tone="success" data-variant="outline"><?=htmlspecialchars($tr('立即入队并执行'))?></button>
+                        <button type="button" class="w-button doc-translation-action" data-action="translation-retry" data-tone="warning" data-variant="outline"><?=htmlspecialchars($tr('重试失败'))?></button>
                     </div>
                 </w:form>
 
-                <div class="row g-3 mt-4">
-                    <div class="col-lg-5">
-                        <div class="card border h-100">
-                            <div class="card-header bg-light"><strong><?=htmlspecialchars($tr('任务状态'))?></strong></div>
-                            <div class="card-body">
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mt:var(--weline-space-6);">
+                    <div style="--w-span-lg:5;">
+                        <div class="w-card" data-w-border="border" data-w-height="full">
+                            <div class="w-card__header" data-w-background="muted"><strong><?=htmlspecialchars($tr('任务状态'))?></strong></div>
+                            <div class="w-card__body">
                                 <?php if (empty($counts)): ?>
-                                    <div class="text-muted"><?=htmlspecialchars($tr('暂无任务'))?></div>
+                                    <div class="w-text" data-tone="muted"><?=htmlspecialchars($tr('暂无任务'))?></div>
                                 <?php else: ?>
                                     <?php foreach ($counts as $status => $count): ?>
-                                        <span class="badge bg-secondary me-2 mb-2"><?=htmlspecialchars((string)$status)?>: <?=number_format((int)$count)?></span>
+                                        <span class="w-badge me-2" data-w-background="muted" style="--w-mb:var(--weline-space-2);"><?=htmlspecialchars((string)$status)?>: <?=number_format((int)$count)?></span>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-7">
-                        <div class="card border h-100">
-                            <div class="card-header bg-light"><strong><?=htmlspecialchars($tr('操作结果 / 最近错误'))?></strong></div>
-                            <div class="card-body">
-                                <pre id="documentTranslationActionResult" class="bg-light border rounded p-3 mb-0" style="min-height: 120px; white-space: pre-wrap;"><?=htmlspecialchars(json_encode($overview['recent_failures'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT))?></pre>
+                    <div style="--w-span-lg:7;">
+                        <div class="w-card" data-w-border="border" data-w-height="full">
+                            <div class="w-card__header" data-w-background="muted"><strong><?=htmlspecialchars($tr('操作结果 / 最近错误'))?></strong></div>
+                            <div class="w-card__body">
+                                <pre id="documentTranslationActionResult" style="min-height: 120px; white-space: pre-wrap;" data-w-background="muted" data-w-border="border" data-w-radius="md"><?=htmlspecialchars(json_encode($overview['recent_failures'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT))?></pre>
                             </div>
                         </div>
                     </div>

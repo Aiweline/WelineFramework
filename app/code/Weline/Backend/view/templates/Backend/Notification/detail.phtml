@@ -16,7 +16,7 @@ $nextId = $next_id ?? null;
 $nextTitle = $next_title ?? '';
 $typeColor = $notification['type_color'] ?? 'var(--backend-color-info)';
 $typeLabel = $notification['type_label'] ?? __('信息');
-$typeIcon = $notification['avatar'] ?? 'ri-notification-line';
+$typeIcon = $notification['avatar'] ?? 'bell';
 $listUrl = $this->getBackendUrl('system/backend/notification');
 $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
@@ -28,35 +28,35 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18">
-                <a href="<?= $listUrl ?>" class="text-muted me-2" title="<?= __('返回列表') ?>">
-                    <i class="ri-arrow-left-line"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;">
+                <a href="<?= $listUrl ?>" class="w-text me-2" title="<?= __('返回列表') ?>" data-tone="muted">
+                    <w:icon name="arrow-left" size="sm"></w:icon>
                 </a>
                 <lang>通知详情</lang>
             </h4>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                 <?php if ($prevId): ?>
-                <a href="<?= $detailUrlBase ?>?id=<?= (int)$prevId ?>" class="btn btn-outline-secondary btn-sm weline-nd-nav-btn" title="<?= htmlspecialchars($prevTitle) ?>">
-                    <i class="ri-arrow-up-line me-1"></i><lang>上一条</lang>
+                <a href="<?= $detailUrlBase ?>?id=<?= (int)$prevId ?>" class="w-button weline-nd-nav-btn" title="<?= htmlspecialchars($prevTitle) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <w:icon name="arrow-up" size="sm"></w:icon><lang>上一条</lang>
                 </a>
                 <?php else: ?>
-                <span class="btn btn-outline-secondary btn-sm disabled weline-nd-nav-btn" title="<lang>已是第一条</lang>">
-                    <i class="ri-arrow-up-line me-1"></i><lang>上一条</lang>
+                <span class="w-button weline-nd-nav-btn" title="<lang>已是第一条</lang>" aria-disabled="true" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <w:icon name="arrow-up" size="sm"></w:icon><lang>上一条</lang>
                 </span>
                 <?php endif; ?>
-                <a href="<?= $listUrl ?>" class="btn btn-outline-secondary btn-sm">
-                    <i class="ri-list-unordered me-1"></i><lang>返回列表</lang>
+                <a href="<?= $listUrl ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <w:icon name="list" size="sm"></w:icon><lang>返回列表</lang>
                 </a>
                 <?php if ($nextId): ?>
-                <a href="<?= $detailUrlBase ?>?id=<?= (int)$nextId ?>" class="btn btn-outline-secondary btn-sm weline-nd-nav-btn" title="<?= htmlspecialchars($nextTitle) ?>">
-                    <lang>下一条</lang><i class="ri-arrow-down-line ms-1"></i>
+                <a href="<?= $detailUrlBase ?>?id=<?= (int)$nextId ?>" class="w-button weline-nd-nav-btn" title="<?= htmlspecialchars($nextTitle) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <lang>下一条</lang><w:icon name="arrow-down" size="sm"></w:icon>
                 </a>
                 <?php else: ?>
-                <span class="btn btn-outline-secondary btn-sm disabled weline-nd-nav-btn" title="<?= __('已是最后一条') ?>">
-                    <lang>下一条</lang><i class="ri-arrow-down-line ms-1"></i>
+                <span class="w-button weline-nd-nav-btn" title="<?= __('已是最后一条') ?>" aria-disabled="true" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <lang>下一条</lang><w:icon name="arrow-down" size="sm"></w:icon>
                 </span>
                 <?php endif; ?>
             </div>
@@ -64,10 +64,10 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     </div>
 </div>
 
-<div class="row">
-    <div class="col-lg-8 mx-auto">
-        <div class="card weline-nd-card">
-            <div class="card-body p-0">
+<div class="w-grid">
+    <div style="--w-span-lg:8;--w-ms:auto;--w-me:auto;">
+        <div class="w-card weline-nd-card">
+            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                 <div class="weline-nd-header" style="background: <?= $typeColor ?>">
                     <div class="weline-nd-header-icon">
                         <i class="<?= htmlspecialchars($typeIcon) ?>"></i>
@@ -76,7 +76,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                         <span class="weline-nd-type-badge"><?= $typeLabel ?></span>
                         <?php if (!empty($notification['topic_name'])): ?>
                         <span class="weline-nd-topic">
-                            <i class="mdi mdi-tag-outline me-1"></i><?= htmlspecialchars($notification['topic_name']) ?>
+                            <w:icon name="tag" size="sm"></w:icon><?= htmlspecialchars($notification['topic_name']) ?>
                         </span>
                         <?php endif; ?>
                     </div>
@@ -87,16 +87,16 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     
                     <div class="weline-nd-meta">
                         <span class="weline-nd-time">
-                            <i class="mdi mdi-clock-outline me-1"></i>
+                            <w:icon name="clock" size="sm"></w:icon>
                             <?= $notification['notification_time'] ?? '' ?>
                         </span>
                         <?php if ($notification['is_read'] ?? false): ?>
                         <span class="weline-nd-read-status weline-nd-read">
-                            <i class="mdi mdi-check-circle me-1"></i><lang>已读</lang>
+                            <w:icon name="check" size="sm"></w:icon><lang>已读</lang>
                         </span>
                         <?php else: ?>
                         <span class="weline-nd-read-status weline-nd-unread">
-                            <i class="mdi mdi-circle me-1"></i><lang>未读</lang>
+                            <w:icon name="circle" size="sm"></w:icon><lang>未读</lang>
                         </span>
                         <?php endif; ?>
                     </div>
@@ -108,9 +108,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     </div>
 
                     <?php if (!empty($notification['metadata'])): ?>
-                    <div class="weline-nd-metadata mt-4">
+                    <div class="weline-nd-metadata" style="--w-mt:var(--weline-space-6);">
                         <h6 class="weline-nd-metadata-title">
-                            <i class="mdi mdi-information-outline me-1"></i><lang>附加信息</lang>
+                            <w:icon name="info" size="sm"></w:icon><lang>附加信息</lang>
                         </h6>
                         <div class="weline-nd-metadata-content">
                             <?php foreach ($notification['metadata'] as $key => $value): ?>
@@ -126,9 +126,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     <?php endif; ?>
 
                     <?php if (!empty($notification['external_channels'])): ?>
-                    <div class="weline-nd-channels mt-4">
+                    <div class="weline-nd-channels" style="--w-mt:var(--weline-space-6);">
                         <h6 class="weline-nd-channels-title">
-                            <i class="mdi mdi-broadcast me-1"></i><lang>已推送渠道</lang>
+                            <w:icon name="circle" size="sm"></w:icon><lang>已推送渠道</lang>
                         </h6>
                         <div class="weline-nd-channels-list">
                             <?php foreach ($notification['external_channels'] as $channel): ?>
@@ -144,34 +144,34 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 <div class="weline-nd-footer">
                     <div class="weline-nd-footer-nav">
                         <?php if ($prevId): ?>
-                        <a href="<?= $detailUrlBase ?>?id=<?= (int)$prevId ?>" class="btn btn-outline-secondary btn-sm weline-nd-footer-prev" title="<?= htmlspecialchars($prevTitle) ?>">
-                            <i class="ri-arrow-left-s-line me-1"></i><lang>上一条</lang>
+                        <a href="<?= $detailUrlBase ?>?id=<?= (int)$prevId ?>" class="w-button weline-nd-footer-prev" title="<?= htmlspecialchars($prevTitle) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                            <w:icon name="arrow-left" size="sm"></w:icon><lang>上一条</lang>
                         </a>
                         <?php else: ?>
-                        <span class="btn btn-outline-secondary btn-sm disabled"><i class="ri-arrow-left-s-line me-1"></i><lang>上一条</lang></span>
+                        <span class="w-button" aria-disabled="true" data-tone="neutral" data-variant="outline" data-size="sm"><w:icon name="arrow-left" size="sm"></w:icon><lang>上一条</lang></span>
                         <?php endif; ?>
-                        <a href="<?= $listUrl ?>" class="btn btn-light btn-sm">
-                            <i class="ri-home-4-line me-1"></i><lang>返回通知中心</lang>
+                        <a href="<?= $listUrl ?>" class="w-button" data-tone="neutral" data-size="sm">
+                            <w:icon name="home" size="sm"></w:icon><lang>返回通知中心</lang>
                         </a>
                         <?php if ($nextId): ?>
-                        <a href="<?= $detailUrlBase ?>?id=<?= (int)$nextId ?>" class="btn btn-outline-secondary btn-sm weline-nd-footer-next" title="<?= htmlspecialchars($nextTitle) ?>">
-                            <lang>下一条</lang><i class="ri-arrow-right-s-line ms-1"></i>
+                        <a href="<?= $detailUrlBase ?>?id=<?= (int)$nextId ?>" class="w-button weline-nd-footer-next" title="<?= htmlspecialchars($nextTitle) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                            <lang>下一条</lang><w:icon name="arrow-right" size="sm"></w:icon>
                         </a>
                         <?php else: ?>
-                        <span class="btn btn-outline-secondary btn-sm disabled"><lang>下一条</lang><i class="ri-arrow-right-s-line ms-1"></i></span>
+                        <span class="w-button" aria-disabled="true" data-tone="neutral" data-variant="outline" data-size="sm"><lang>下一条</lang><w:icon name="arrow-right" size="sm"></w:icon></span>
                         <?php endif; ?>
                     </div>
                     <div class="weline-nd-footer-actions">
-                        <span class="weline-nd-keyboard-hint text-muted small">
-                            <i class="ri-keyboard-line me-1"></i><lang>使用 ← → 方向键可切换上/下一条</lang>
+                        <span class="weline-nd-keyboard-hint w-text" data-tone="muted" data-size="sm">
+                            <w:icon name="key" size="sm"></w:icon><lang>使用 ← → 方向键可切换上/下一条</lang>
                         </span>
                         <?php if (!empty($notification['topic_code'])): ?>
-                        <button type="button" class="btn btn-outline-secondary btn-sm weline-nd-mark-topic-read" data-topic-code="<?= htmlspecialchars($notification['topic_code']) ?>" data-topic-name="<?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>">
-                            <i class="ri-checkbox-multiple-line me-1"></i><lang>此类全部已读</lang>
+                        <button type="button" class="w-button weline-nd-mark-topic-read" data-topic-code="<?= htmlspecialchars($notification['topic_code']) ?>" data-topic-name="<?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                            <w:icon name="check" size="sm"></w:icon><lang>此类全部已读</lang>
                         </button>
                         <?php endif; ?>
-                        <a href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>" class="btn btn-outline-primary btn-sm">
-                            <i class="mdi mdi-cog me-1"></i><lang>订阅设置</lang>
+                        <a href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
+                            <w:icon name="settings" size="sm"></w:icon><lang>订阅设置</lang>
                         </a>
                     </div>
                 </div>
@@ -477,21 +477,21 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             var topicCode = btn.getAttribute('data-topic-code');
             var topicName = btn.getAttribute('data-topic-name') || topicCode;
             var msg = confirmMsgTemplate.replace('%{name}', topicName || topicCode || '');
-            BackendConfirm.show(msg).then(function(confirmed) {
+            Weline.UI.dialog.confirm(msg).then(function(confirmed) {
                 if (!confirmed) return;
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic_code: topicCode }) };
                 bqAdmin['backend_admin'](markTopicReadUrl, opts)
                     .then(function(res) {
                         var data = (res && res.data) !== undefined ? res.data : res;
                         if (data.success) {
-                            BackendToast.success(data.message || '<?= __('已标记为已读') ?>');
+                            Weline.UI.toast.success(data.message || '<?= __('已标记为已读') ?>');
                             setTimeout(function() { window.location.reload(); }, 800);
                         } else {
-                            BackendToast.error(data.message || '<?= __('操作失败') ?>');
+                            Weline.UI.toast.error(data.message || '<?= __('操作失败') ?>');
                         }
                     })
                     .catch(function(err) {
-                        BackendToast.error('<?= __('网络错误，请重试') ?>');
+                        Weline.UI.toast.error('<?= __('网络错误，请重试') ?>');
                     });
             });
         });

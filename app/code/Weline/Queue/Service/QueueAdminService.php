@@ -81,7 +81,7 @@ final class QueueAdminService
                 'name' => (string)($row[Type::schema_fields_name] ?? ''),
                 'module_name' => (string)($row[Type::schema_fields_module_name] ?? ''),
                 'class' => $class,
-                'tip' => \nl2br($tip) . '<hr><br><span class="text-primary">'
+                'tip' => \nl2br($tip) . '<hr><br><span class="w-text" data-tone="primary">'
                     . \htmlspecialchars((string)__('执行类：'), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
                     . \htmlspecialchars($class, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
                     . '</span>',

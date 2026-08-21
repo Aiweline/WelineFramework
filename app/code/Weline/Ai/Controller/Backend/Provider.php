@@ -20,7 +20,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Ai
  */
-#[Acl('Weline_Ai::ai_provider_account', 'AI供应商账户', 'mdi-account-key', 'AI供应商账户管理', 'Weline_Backend::ai_group')]
+#[Acl('Weline_Ai::ai_provider_account', 'AI供应商账户', 'user', 'AI供应商账户管理', 'Weline_Backend::ai_group')]
 class Provider extends BackendPageController
 {
     /**
@@ -88,7 +88,7 @@ class Provider extends BackendPageController
     /**
      * 账户列表页面
      */
-    #[Acl('Weline_Ai::ai_provider_list', '查看供应商账户', 'mdi-view-list', '查看供应商账户列表')]
+    #[Acl('Weline_Ai::ai_provider_list', '查看供应商账户', 'list', '查看供应商账户列表')]
     public function index()
     {
         if ($this->request->getParam('embed') === '1') {
@@ -461,7 +461,7 @@ class Provider extends BackendPageController
     /**
      * Offcanvas 编辑/新建账户（供侧边栏加载）
      */
-    #[Acl('Weline_Ai::ai_provider_edit_offcanvas', '编辑供应商账户（侧边栏）', 'mdi-pencil', '编辑供应商账户（侧边栏）')]
+    #[Acl('Weline_Ai::ai_provider_edit_offcanvas', '编辑供应商账户（侧边栏）', 'edit', '编辑供应商账户（侧边栏）')]
     public function editOffcanvas(): string
     {
         $this->layoutType = 'default.blank';

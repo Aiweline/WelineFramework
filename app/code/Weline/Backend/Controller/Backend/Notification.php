@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::notification', '通知中心', 'ri-notification-3-line', '查看系统通知', 'Weline_Backend::notification_settings')]
+#[Acl('Weline_Backend::notification', '通知中心', 'bell', '查看系统通知', 'Weline_Backend::notification_settings')]
 class Notification extends BackendController
 {
     private NotificationService $notificationService;
@@ -20,7 +20,7 @@ class Notification extends BackendController
         $this->notificationService = ObjectManager::getInstance(NotificationService::class);
     }
 
-    #[Acl('Weline_Backend::notification_index', '通知列表', 'ri-list-check', '查看通知列表')]
+    #[Acl('Weline_Backend::notification_index', '通知列表', 'check', '查看通知列表')]
     public function index(): string
     {
         $userId = (int) $this->getLoginUserId();
@@ -51,7 +51,7 @@ class Notification extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Backend::notification_detail', '通知详情', 'ri-file-text-line', '查看通知详情')]
+    #[Acl('Weline_Backend::notification_detail', '通知详情', 'file', '查看通知详情')]
     public function detail(): string
     {
         $userId = (int) $this->getLoginUserId();

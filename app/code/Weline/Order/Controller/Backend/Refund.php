@@ -12,7 +12,7 @@ use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Order\Service\OrderTradeAdminCommandException;
 use Weline\Order\Service\OrderTradeAdminCommandService;
 
-#[Acl('Weline_Order::refund_controller', '订单退款控制器', 'mdi-cash-refund', '订单并发安全退款管理', 'Weline_Backend::order_group')]
+#[Acl('Weline_Order::refund_controller', '订单退款控制器', 'cash', '订单并发安全退款管理', 'Weline_Backend::order_group')]
 final class Refund extends BackendController
 {
     use OrderObjectAuthorizationTrait;
@@ -24,7 +24,7 @@ final class Refund extends BackendController
         $this->commands = $objectManager->getInstance(OrderTradeAdminCommandService::class);
     }
 
-    #[Acl('Weline_Order::refund_manage', '查看订单退款', 'mdi-format-list-bulleted', '查看可退款订单项和退款案例', 'Weline_Backend::order_group')]
+    #[Acl('Weline_Order::refund_manage', '查看订单退款', 'list', '查看可退款订单项和退款案例', 'Weline_Backend::order_group')]
     public function index(): string
     {
         $candidates = [];
@@ -47,7 +47,7 @@ final class Refund extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Order::refund_execute', '提交退款', 'mdi-cash-refund', '锁内占用可退金额和数量并生成退款 outbox', 'Weline_Order::refund_manage')]
+    #[Acl('Weline_Order::refund_execute', '提交退款', 'cash', '锁内占用可退金额和数量并生成退款 outbox', 'Weline_Order::refund_manage')]
     public function execute(): mixed
     {
         $orderUuid = trim((string)$this->request->getPost('order_uuid', ''));

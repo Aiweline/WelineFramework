@@ -7,7 +7,7 @@
 
 $entity = $block->getEntity();
 if (!$entity) {
-    echo '<div class="alert alert-warning">未找到指定实体</div>';
+    echo '<div class="w-alert" data-tone="warning">未找到指定实体</div>';
     return;
 }
 
@@ -19,8 +19,8 @@ $entityId = $block->getData('entity_id');
 <div class="eav-entity-attributes" data-entity-code="<?= $entity->getData('code') ?>" data-entity-id="<?= $entityId ?>">
     
     <?php if (empty($attributeData)): ?>
-        <div class="text-muted text-center py-4">
-            <i class="mdi mdi-database-off-outline d-block mb-2" style="font-size: 32px;"></i>
+        <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+            <w:icon name="database" size="sm"></w:icon>
             <?= __('暂无属性数据') ?>
         </div>
     <?php else: ?>
@@ -28,27 +28,27 @@ $entityId = $block->getData('entity_id');
         <?php foreach ($attributeData as $setData): ?>
             <?php $set = $setData['set']; ?>
             
-            <div class="eav-attribute-set mb-4">
-                <h5 class="border-bottom pb-2 mb-3">
-                    <i class="mdi mdi-folder-outline me-2"></i>
+            <div class="eav-attribute-set" style="--w-mb:var(--weline-space-6);">
+                <h5 data-w-border="bottom" style="--w-pb:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                    <w:icon name="folder" size="sm"></w:icon>
                     <?= $set['local_name'] ?? $set['name'] ?? $set['code'] ?>
                 </h5>
                 
                 <?php foreach ($setData['groups'] as $groupData): ?>
                     <?php $group = $groupData['group']; ?>
                     
-                    <div class="eav-attribute-group mb-3">
-                        <h6 class="text-muted mb-2">
-                            <i class="mdi mdi-folder-multiple-outline me-1"></i>
+                    <div class="eav-attribute-group" style="--w-mb:var(--weline-space-4);">
+                        <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);">
+                            <w:icon name="folder" size="sm"></w:icon>
                             <?= $group['local_name'] ?? $group['name'] ?? $group['code'] ?>
                         </h6>
                         
                         <?php if ($isEditMode): ?>
                             <!-- 编辑模式 -->
-                            <div class="row">
+                            <div class="w-grid">
                                 <?php foreach ($groupData['attributes'] as $attr): ?>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">
+                                    <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label">
                                             <?= $attr['local_name'] ?? $attr['name'] ?? $attr['code'] ?>
                                         </label>
                                         <?php 
@@ -58,7 +58,7 @@ $entityId = $block->getData('entity_id');
                                         ?>
                                         
                                         <?php if ($element === 'select' && !empty($attr['options'])): ?>
-                                            <select class="form-select" name="eav[<?= $attrCode ?>]">
+                                            <select class="w-select" name="eav[<?= $attrCode ?>]">
                                                 <option value=""><?= __('请选择') ?></option>
                                                 <?php foreach ($attr['options'] as $option): ?>
                                                     <option value="<?= htmlspecialchars($option['code']) ?>" 
@@ -68,26 +68,24 @@ $entityId = $block->getData('entity_id');
                                                 <?php endforeach; ?>
                                             </select>
                                         <?php elseif ($element === 'textarea'): ?>
-                                            <textarea class="form-control" name="eav[<?= $attrCode ?>]" rows="3"><?= htmlspecialchars($value) ?></textarea>
+                                            <textarea class="w-textarea" name="eav[<?= $attrCode ?>]" rows="3"><?= htmlspecialchars($value) ?></textarea>
                                         <?php elseif ($element === 'checkbox'): ?>
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input" name="eav[<?= $attrCode ?>]" 
-                                                       value="1" <?= $value ? 'checked' : '' ?>>
+                                            <div class="w-check">
+                                                <input type="checkbox" name="eav[<?= $attrCode ?>]" value="1" <?= $value ? 'checked' : '' ?>>
                                             </div>
                                         <?php else: ?>
-                                            <input type="text" class="form-control" name="eav[<?= $attrCode ?>]" 
-                                                   value="<?= htmlspecialchars($value) ?>">
+                                            <input type="text" class="w-input" name="eav[<?= $attrCode ?>]" value="<?= htmlspecialchars($value) ?>">
                                         <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
                         <?php else: ?>
                             <!-- 查看模式 -->
-                            <table class="table table-sm table-borderless">
+                            <table class="w-table">
                                 <tbody>
                                     <?php foreach ($groupData['attributes'] as $attr): ?>
                                         <tr>
-                                            <th style="width: 200px;" class="text-muted">
+                                            <th style="width: 200px;" class="w-text" data-tone="muted">
                                                 <?= $attr['local_name'] ?? $attr['name'] ?? $attr['code'] ?>
                                             </th>
                                             <td>
@@ -102,7 +100,7 @@ $entityId = $block->getData('entity_id');
                                                             
                                                             // 如果有样本颜色
                                                             if (!empty($option['swatch_color'])) {
-                                                                echo '<span class="d-inline-flex align-items-center">';
+                                                                echo '<span class="w-cluster" data-align="center">';
                                                                 echo '<span class="me-2" style="display:inline-block;width:16px;height:16px;border-radius:3px;background-color:' . htmlspecialchars($option['swatch_color']) . '"></span>';
                                                                 echo htmlspecialchars($value);
                                                                 echo '</span>';
@@ -113,7 +111,7 @@ $entityId = $block->getData('entity_id');
                                                         }
                                                     }
                                                 } else {
-                                                    echo htmlspecialchars($value) ?: '<span class="text-muted">-</span>';
+                                                    echo htmlspecialchars($value) ?: '<span class="w-text" data-tone="muted">-</span>';
                                                 }
                                                 ?>
                                             </td>

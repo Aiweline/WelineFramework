@@ -17,14 +17,14 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_B2B::commerce:partner:control-center', 'B2B 管理', 'mdi-domain', 'B2B 客户组、价目表与报价审批管理', 'Weline_Backend::commerce:partner:group')]
+#[Acl('Weline_B2B::commerce:partner:control-center', 'B2B 管理', 'globe', 'B2B 客户组、价目表与报价审批管理', 'Weline_Backend::commerce:partner:group')]
 final class ControlCenter extends BackendController
 {
     public function __construct(private readonly B2BAdminService $adminService)
     {
     }
 
-    #[Acl('Weline_B2B::commerce:partner:groups', '客户组', 'mdi-account-group-outline', '查看 B2B 客户组')]
+    #[Acl('Weline_B2B::commerce:partner:groups', '客户组', 'users', '查看 B2B 客户组')]
     public function groups(): string
     {
         return $this->renderWorkspace('groups', '客户组', [
@@ -33,7 +33,7 @@ final class ControlCenter extends BackendController
         ], [], ['kind' => 'group', 'action' => 'b2b/backend/control-center/save-group']);
     }
 
-    #[Acl('Weline_B2B::commerce:partner:price-lists', '价目表', 'mdi-tag-multiple-outline', '查看 B2B 价目表')]
+    #[Acl('Weline_B2B::commerce:partner:price-lists', '价目表', 'tag', '查看 B2B 价目表')]
     public function priceLists(): string
     {
         return $this->renderWorkspace('price-lists', '价目表', [
@@ -42,19 +42,19 @@ final class ControlCenter extends BackendController
         ], [], ['kind' => 'price-list', 'action' => 'b2b/backend/control-center/save-price-list']);
     }
 
-    #[Acl('Weline_B2B::commerce:partner:quotes', '报价令牌', 'mdi-file-document-outline', '查看 B2B 报价令牌')]
+    #[Acl('Weline_B2B::commerce:partner:quotes', '报价令牌', 'file', '查看 B2B 报价令牌')]
     public function quotes(): string
     {
         return $this->renderWorkspace('quotes', '报价审批', ['报价令牌' => [B2BQuoteTokenRecord::class, ['token_id', 'customer_id', 'website_id', 'sku', 'retail_amount_minor', 'amount_minor', 'source', 'group_id', 'price_list_id', 'list_version', 'channel_id', 'issued_at_epoch', 'expires_at_epoch', 'status', 'consumed_order_ref', 'consumed_at_epoch', 'created_at']]], [], ['kind' => 'quote', 'action' => 'b2b/backend/control-center/approve-quote']);
     }
 
-    #[Acl('Weline_B2B::commerce:partner:snapshots', '订单价格快照', 'mdi-camera-outline', '查看 B2B 订单价格快照')]
+    #[Acl('Weline_B2B::commerce:partner:snapshots', '订单价格快照', 'camera', '查看 B2B 订单价格快照')]
     public function snapshots(): string
     {
         return $this->renderWorkspace('snapshots', '订单价格快照', ['订单价格快照' => [B2BOrderPriceSnapshotRecord::class, ['order_ref', 'token_id', 'customer_id', 'website_id', 'sku', 'retail_amount_minor', 'amount_minor', 'source', 'group_id', 'price_list_id', 'list_version', 'channel_id', 'created_at_epoch', 'created_at']]]);
     }
 
-    #[Acl('Weline_B2B::commerce:partner:migration', '迁移状态', 'mdi-database-eye-outline', '只读查看 B2B 迁移状态')]
+    #[Acl('Weline_B2B::commerce:partner:migration', '迁移状态', 'eye', '只读查看 B2B 迁移状态')]
     public function migration(): string
     {
         return $this->renderWorkspace('migration', '迁移状态', [], $this->rolloutStatus() + [
@@ -63,19 +63,19 @@ final class ControlCenter extends BackendController
         ]);
     }
 
-    #[Acl('Weline_B2B::commerce:partner:groups', '创建客户组', 'mdi-account-multiple-plus', '创建 B2B 客户组')]
+    #[Acl('Weline_B2B::commerce:partner:groups', '创建客户组', 'users', '创建 B2B 客户组')]
     public function saveGroup()
     {
         return $this->executeWrite('createGroup', 'groups', '客户组已创建。');
     }
 
-    #[Acl('Weline_B2B::commerce:partner:price-lists', '创建价目表', 'mdi-tag-plus-outline', '创建 B2B 价目表')]
+    #[Acl('Weline_B2B::commerce:partner:price-lists', '创建价目表', 'plus', '创建 B2B 价目表')]
     public function savePriceList()
     {
         return $this->executeWrite('createPriceList', 'price-lists', '价目表已创建。');
     }
 
-    #[Acl('Weline_B2B::commerce:partner:quotes', '审批报价', 'mdi-file-check-outline', '签发报价、重新校验并生成不可变订单价格快照')]
+    #[Acl('Weline_B2B::commerce:partner:quotes', '审批报价', 'check', '签发报价、重新校验并生成不可变订单价格快照')]
     public function approveQuote()
     {
         return $this->executeWrite('approveQuote', 'quotes', '报价已审批并生成订单价格快照。');

@@ -15,7 +15,7 @@
           name="appstore"
           title="应用商城"
           parent="Weline_Backend::apps_tools"
-          icon="mdi mdi-shopping"
+          icon="pin"
           order="100">
 
         <!-- 商城首页 -->
@@ -23,7 +23,7 @@
               name="index"
               title="商城首页"
               action="*/backend/index"
-              icon="mdi mdi-home"
+              icon="home"
               order="0"/>
 
         <!-- 我的模块 -->
@@ -31,7 +31,7 @@
               name="installed"
               title="我的模块"
               action="*/backend/installed"
-              icon="mdi mdi-puzzle"
+              icon="puzzle"
               order="1"/>
 
         <!-- 账户绑定 -->
@@ -39,7 +39,7 @@
               name="account"
               title="账户绑定"
               action="*/backend/account"
-              icon="mdi mdi-link-variant"
+              icon="link"
               order="2"/>
 
         <!-- 许可证管理 -->
@@ -47,7 +47,7 @@
               name="license"
               title="许可证管理"
               action="*/backend/license"
-              icon="mdi mdi-key-variant"
+              icon="key"
               order="3"/>
 
         <!-- 下载历史 -->
@@ -55,7 +55,7 @@
               name="download_history"
               title="下载历史"
               action="*/backend/download-history"
-              icon="mdi mdi-history"
+              icon="history"
               order="4"/>
     </menu>
 </menus>

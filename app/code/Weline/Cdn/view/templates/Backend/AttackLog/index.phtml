@@ -34,55 +34,55 @@ $escapeAttr = static function (mixed $value): string {
 ?>
 
 <!-- 统计卡片 -->
-<div class="row mb-4" data-testid="cdn-attack-log-management">
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="rounded-3 p-3" style="background: linear-gradient(135deg, #dc3545, #ff6b6b);">
-                    <i class="mdi mdi-alert-circle text-white" style="font-size: 24px;"></i>
+<div class="w-grid" data-testid="cdn-attack-log-management" style="--w-mb:var(--weline-space-6);">
+    <div style="--w-span-md:3;">
+        <div class="w-card">
+            <div class="w-card__body w-cluster" data-align="center" style="--w-gap:var(--weline-space-4);">
+                <div class="rounded-3" style="background: linear-gradient(135deg, #dc3545, #ff6b6b);">
+                    <w:icon name="warning" size="sm"></w:icon>
                 </div>
                 <div>
-                    <h3 class="mb-0"><?= $stats['active'] ?? 0 ?></h3>
-                    <p class="text-muted mb-0"><?= __('进行中的攻击') ?></p>
+                    <h3 style="--w-mb:0;"><?= $stats['active'] ?? 0 ?></h3>
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= __('进行中的攻击') ?></p>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="rounded-3 p-3" style="background: linear-gradient(135deg, #ffc107, #ffdd57);">
-                    <i class="mdi mdi-calendar-today" style="font-size: 24px; color: #333;"></i>
+    <div style="--w-span-md:3;">
+        <div class="w-card">
+            <div class="w-card__body w-cluster" data-align="center" style="--w-gap:var(--weline-space-4);">
+                <div class="rounded-3" style="background: linear-gradient(135deg, #ffc107, #ffdd57);">
+                    <w:icon name="calendar" size="sm"></w:icon>
                 </div>
                 <div>
-                    <h3 class="mb-0"><?= $stats['today'] ?? 0 ?></h3>
-                    <p class="text-muted mb-0"><?= __('今日攻击') ?></p>
+                    <h3 style="--w-mb:0;"><?= $stats['today'] ?? 0 ?></h3>
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= __('今日攻击') ?></p>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="rounded-3 p-3" style="background: linear-gradient(135deg, #17a2b8, #4ecdc4);">
-                    <i class="mdi mdi-calendar-week text-white" style="font-size: 24px;"></i>
+    <div style="--w-span-md:3;">
+        <div class="w-card">
+            <div class="w-card__body w-cluster" data-align="center" style="--w-gap:var(--weline-space-4);">
+                <div class="rounded-3" style="background: linear-gradient(135deg, #17a2b8, #4ecdc4);">
+                    <w:icon name="calendar" size="sm"></w:icon>
                 </div>
                 <div>
-                    <h3 class="mb-0"><?= $stats['week'] ?? 0 ?></h3>
-                    <p class="text-muted mb-0"><?= __('本周攻击') ?></p>
+                    <h3 style="--w-mb:0;"><?= $stats['week'] ?? 0 ?></h3>
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= __('本周攻击') ?></p>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="rounded-3 p-3" style="background: linear-gradient(135deg, #007bff, #6c8cff);">
-                    <i class="mdi mdi-calendar-month text-white" style="font-size: 24px;"></i>
+    <div style="--w-span-md:3;">
+        <div class="w-card">
+            <div class="w-card__body w-cluster" data-align="center" style="--w-gap:var(--weline-space-4);">
+                <div class="rounded-3" style="background: linear-gradient(135deg, #007bff, #6c8cff);">
+                    <w:icon name="calendar" size="sm"></w:icon>
                 </div>
                 <div>
-                    <h3 class="mb-0"><?= $stats['month'] ?? 0 ?></h3>
-                    <p class="text-muted mb-0"><?= __('本月攻击') ?></p>
+                    <h3 style="--w-mb:0;"><?= $stats['month'] ?? 0 ?></h3>
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= __('本月攻击') ?></p>
                 </div>
             </div>
         </div>
@@ -90,32 +90,26 @@ $escapeAttr = static function (mixed $value): string {
 </div>
 
 <!-- 消息提示 -->
-<div class='row mb-3'>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 操作栏 -->
-<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
-    <div class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-outline-danger" data-cdn-attack-log-action="batch-delete">
-            <i class="mdi mdi-delete-sweep"></i> <?= __('批量删除') ?>
+<div class="w-cluster" data-justify="between" data-align="start" data-wrap="true" style="--w-mb:var(--weline-space-4);--w-gap:var(--weline-space-4);">
+    <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+        <button type="button" class="w-button" data-cdn-attack-log-action="batch-delete" data-tone="danger" data-variant="outline">
+            <w:icon name="trash" size="sm"></w:icon> <?= __('批量删除') ?>
         </button>
-        <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#cleanupModal">
-            <i class="mdi mdi-broom"></i> <?= __('清理历史') ?>
+        <button type="button" class="w-button" data-w-target="#cleanupModal" data-w-action="dialog.open" data-tone="warning" data-variant="outline">
+            <w:icon name="trash" size="sm"></w:icon> <?= __('清理历史') ?>
         </button>
-        <a href="@backend-url('*/backend/attackLog/export')?status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>" 
-           class="btn btn-outline-success">
-            <i class="mdi mdi-download"></i> <?= __('导出CSV') ?>
+        <a href="@backend-url('*/backend/attackLog/export')?status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>" class="w-button" data-tone="success" data-variant="outline">
+            <w:icon name="download" size="sm"></w:icon> <?= __('导出CSV') ?>
         </a>
     </div>
-    <w:form method="get" class="d-flex gap-2 flex-wrap">
-        <input type="text" 
-               name="search" 
-               class="form-control form-control-sm" 
-               placeholder="<?= __('搜索域名或IP') ?>" 
-               value="<?= htmlspecialchars($search) ?>"
-               style="min-width: 130px;">
-        <select name="status" class="form-select form-select-sm" style="min-width: 130px;">
+    <w:form method="get" class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+        <input type="text" name="search" class="w-input" placeholder="<?= __('搜索域名或IP') ?>" value="<?= htmlspecialchars($search) ?>" style="min-width: 130px;" data-size="sm">
+        <select name="status" class="w-select" style="min-width: 130px;" data-size="sm">
             <option value=""><?= __('所有状态') ?></option>
             <?php foreach ($statuses as $key => $label): ?>
                 <option value="<?= $key ?>" <?= $status === $key ? 'selected' : '' ?>>
@@ -123,7 +117,7 @@ $escapeAttr = static function (mixed $value): string {
                 </option>
             <?php endforeach; ?>
         </select>
-        <select name="attack_type" class="form-select form-select-sm" style="min-width: 130px;">
+        <select name="attack_type" class="w-select" style="min-width: 130px;" data-size="sm">
             <option value=""><?= __('所有类型') ?></option>
             <?php foreach ($attackTypes as $key => $label): ?>
                 <option value="<?= $key ?>" <?= $attackType === $key ? 'selected' : '' ?>>
@@ -131,44 +125,33 @@ $escapeAttr = static function (mixed $value): string {
                 </option>
             <?php endforeach; ?>
         </select>
-        <input type="date" 
-               name="date_from" 
-               class="form-control form-control-sm" 
-               value="<?= htmlspecialchars($dateFrom) ?>"
-               placeholder="<?= __('开始日期') ?>">
-        <input type="date" 
-               name="date_to" 
-               class="form-control form-control-sm" 
-               value="<?= htmlspecialchars($dateTo) ?>"
-               placeholder="<?= __('结束日期') ?>">
-        <button type="submit" class="btn btn-sm btn-primary">
-            <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+        <input type="date" name="date_from" class="w-input" value="<?= htmlspecialchars($dateFrom) ?>" placeholder="<?= __('开始日期') ?>" data-size="sm">
+        <input type="date" name="date_to" class="w-input" value="<?= htmlspecialchars($dateTo) ?>" placeholder="<?= __('结束日期') ?>" data-size="sm">
+        <button type="submit" class="w-button" data-tone="primary" data-size="sm">
+            <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
         </button>
-        <a href="@backend-url('*/backend/attackLog/index')" class="btn btn-sm btn-secondary">
-            <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+        <a href="@backend-url('*/backend/attackLog/index')" class="w-button" data-tone="neutral" data-size="sm">
+            <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
         </a>
     </w:form>
 </div>
 
 <!-- 日志列表卡片 -->
-<div class="card">
-    <div class="card-body p-0">
+<div class="w-card">
+    <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
         <?php if (empty($logs)): ?>
-            <div class="text-center py-5">
-                <i class="mdi mdi-shield-check-outline d-block" style="font-size: 64px; color: var(--backend-color-border);"></i>
-                <h5 class="mt-3"><?= __('暂无攻击日志') ?></h5>
-                <p class="text-muted"><?= __('系统正常运行中，未检测到攻击') ?></p>
+            <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                <w:icon name="check" size="sm"></w:icon>
+                <h5 style="--w-mt:var(--weline-space-4);"><?= __('暂无攻击日志') ?></h5>
+                <p class="w-text" data-tone="muted"><?= __('系统正常运行中，未检测到攻击') ?></p>
             </div>
         <?php else: ?>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
+            <div class="w-table-wrap">
+                <table class="w-table" style="--w-mb:0;">
                     <thead>
                         <tr>
                             <th style="width: 40px;">
-                                <input type="checkbox"
-                                       class="form-check-input"
-                                       id="selectAll"
-                                       data-cdn-attack-log-action="select-all">
+                                <input type="checkbox" id="selectAll" data-cdn-attack-log-action="select-all">
                             </th>
                             <th style="width: 60px;"><?= __('ID') ?></th>
                             <th><?= __('域名') ?></th>
@@ -185,14 +168,14 @@ $escapeAttr = static function (mixed $value): string {
                         <?php foreach ($logs as $log): ?>
                             <tr>
                                 <td>
-                                    <input type="checkbox" class="form-check-input log-checkbox" value="<?= $escapeAttr($log->getId()) ?>">
+                                    <input type="checkbox" class="log-checkbox" value="<?= $escapeAttr($log->getId()) ?>">
                                 </td>
                                 <td><?= $log->getId() ?></td>
                                 <td>
                                     <strong><?= htmlspecialchars($log->getData('domain')) ?></strong>
                                 </td>
                                 <td>
-                                    <span class="badge bg-secondary">
+                                    <span class="w-badge" data-w-background="muted">
                                         <?= $log->getAttackTypeLabel() ?>
                                     </span>
                                 </td>
@@ -200,7 +183,7 @@ $escapeAttr = static function (mixed $value): string {
                                     <code><?= htmlspecialchars($log->getData('attacker_ip') ?: '-') ?></code>
                                 </td>
                                 <td>
-                                    <span class="badge bg-danger"><?= $log->getData('attack_count') ?></span>
+                                    <span class="w-badge" data-w-background="danger"><?= $log->getData('attack_count') ?></span>
                                 </td>
                                 <td>
                                     <?php
@@ -211,31 +194,25 @@ $escapeAttr = static function (mixed $value): string {
                                         default => 'bg-secondary'
                                     };
                                     ?>
-                                    <span class="badge <?= $statusClass ?>">
+                                    <span class="w-badge <?= $statusClass ?>">
                                         <?= $log->getStatusLabel() ?>
                                     </span>
                                 </td>
                                 <td>
-                                    <small class="text-muted"><?= $log->getDurationFormatted() ?></small>
+                                    <small class="w-text" data-tone="muted"><?= $log->getDurationFormatted() ?></small>
                                 </td>
                                 <td>
-                                    <small class="text-muted">
+                                    <small class="w-text" data-tone="muted">
                                         <?= $log->getData('started_at') ?>
                                     </small>
                                 </td>
                                 <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="@backend-url('*/backend/attackLog/detail')?id=<?= $log->getId() ?>" 
-                                           class="btn btn-info"
-                                           title="<?= __('查看详情') ?>">
-                                            <i class="mdi mdi-eye"></i>
+                                    <div class="w-button-group">
+                                        <a href="@backend-url('*/backend/attackLog/detail')?id=<?= $log->getId() ?>" class="w-button" title="<?= __('查看详情') ?>" data-tone="info">
+                                            <w:icon name="eye" size="sm"></w:icon>
                                         </a>
-                                        <button type="button" 
-                                                class="btn btn-danger" 
-                                                data-cdn-attack-log-action="delete"
-                                                data-log-id="<?= $escapeAttr($log->getId()) ?>"
-                                                title="<?= __('删除') ?>">
-                                            <i class="mdi mdi-delete"></i>
+                                        <button type="button" class="w-button" data-cdn-attack-log-action="delete" data-log-id="<?= $escapeAttr($log->getId()) ?>" title="<?= __('删除') ?>" data-tone="danger">
+                                            <w:icon name="trash" size="sm"></w:icon>
                                         </button>
                                     </div>
                                 </td>
@@ -249,16 +226,16 @@ $escapeAttr = static function (mixed $value): string {
     
     <!-- 分页 -->
     <?php if ($totalPages > 1): ?>
-        <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-3">
-            <div class="text-muted">
+        <div class="w-card__footer w-cluster" data-justify="between" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-4);">
+            <div class="w-text" data-tone="muted">
                 <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
             </div>
             <nav>
-                <ul class="pagination mb-0">
+                <ul class="w-pagination" style="--w-mb:0;">
                     <?php if ($page > 1): ?>
-                        <li class="page-item">
-                            <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
-                                <i class="mdi mdi-chevron-left"></i>
+                        <li class="w-pagination__item">
+                            <a class="w-pagination__link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
+                                <w:icon name="chevron-left" size="sm"></w:icon>
                             </a>
                         </li>
                     <?php endif; ?>
@@ -267,16 +244,16 @@ $escapeAttr = static function (mixed $value): string {
                     $endPage = min($totalPages, $page + 2);
                     for ($i = $startPage; $i <= $endPage; $i++): 
                     ?>
-                        <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                            <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
+                        <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                            <a class="w-pagination__link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
                                 <?= $i ?>
                             </a>
                         </li>
                     <?php endfor; ?>
                     <?php if ($page < $totalPages): ?>
-                        <li class="page-item">
-                            <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
-                                <i class="mdi mdi-chevron-right"></i>
+                        <li class="w-pagination__item">
+                            <a class="w-pagination__link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
+                                <w:icon name="chevron-right" size="sm"></w:icon>
                             </a>
                         </li>
                     <?php endif; ?>
@@ -287,30 +264,30 @@ $escapeAttr = static function (mixed $value): string {
 </div>
 
 <!-- 清理历史模态框 -->
-<div class="modal fade" id="cleanupModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><?= __('清理历史日志') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="w-dialog" id="cleanupModal" tabindex="-1" data-w-component="dialog" data-state="closed" hidden aria-hidden="true">
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><?= __('清理历史日志') ?></h5>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label"><?= __('清理多少天前的日志') ?></label>
-                    <select id="cleanupDays" class="form-select">
+            <div class="w-dialog__body">
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><?= __('清理多少天前的日志') ?></label>
+                    <select id="cleanupDays" class="w-select">
                         <option value="7"><?= __('7天前') ?></option>
                         <option value="30" selected><?= __('30天前') ?></option>
                         <option value="60"><?= __('60天前') ?></option>
                         <option value="90"><?= __('90天前') ?></option>
                     </select>
                 </div>
-                <p class="text-warning mb-0">
-                    <i class="mdi mdi-alert"></i> <?= __('此操作不可恢复，请谨慎操作！') ?>
+                <p class="w-text" data-tone="warning" style="--w-mb:0;">
+                    <w:icon name="warning" size="sm"></w:icon> <?= __('此操作不可恢复，请谨慎操作！') ?>
                 </p>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-danger" data-cdn-attack-log-action="cleanup"><?= __('确认清理') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" data-cdn-attack-log-action="cleanup" data-tone="danger"><?= __('确认清理') ?></button>
             </div>
         </div>
     </div>
@@ -370,30 +347,30 @@ $escapeAttr = static function (mixed $value): string {
         },
         
         deleteLog: function(id) {
-            Swal.fire({
+            Weline.UI.dialog.request({
                 title: '<?= __("确定删除？") ?>',
-                text: '<?= __("此操作不可恢复！") ?>',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: '<?= __("确定删除") ?>',
-                cancelButtonText: '<?= __("取消") ?>'
+                message: '<?= __("此操作不可恢复！") ?>',
+                tone: 'warning',
+                cancelable: true,
+                confirmTone: 'danger',
+                cancelTone: 'neutral',
+                confirmLabel: '<?= __("确定删除") ?>',
+                cancelLabel: '<?= __("取消") ?>'
             }).then(function(result) {
-                if (result.isConfirmed) {
+                if (result.confirmed) {
                     Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
                     .then(function(api){ return api.resource('cdn').deleteAttackLog({ id: id }); })
                     .then(function(data) {
                         if (data.success) {
-                            Swal.fire({
-                                icon: 'success',
+                            Weline.UI.dialog.request({
+                                tone: 'success',
                                 title: '<?= __("成功") ?>',
-                                text: data.message,
-                                timer: 1500,
-                                showConfirmButton: false
+                                message: data.message,
+                                duration: 1500,
+                                confirmable: false
                             }).then(function() { location.reload(); });
                         } else {
-                            Swal.fire({ icon: 'error', title: '<?= __("失败") ?>', text: data.message });
+                            Weline.UI.dialog.request({ tone: 'danger', title: '<?= __("失败") ?>', message: data.message });
                         }
                     });
                 }
@@ -403,21 +380,21 @@ $escapeAttr = static function (mixed $value): string {
         batchDelete: function() {
             var ids = getSelectedIds();
             if (ids.length === 0) {
-                Swal.fire({ icon: 'warning', title: '<?= __("请先选择要删除的日志") ?>' });
+                Weline.UI.dialog.request({ tone: 'warning', title: '<?= __("请先选择要删除的日志") ?>' });
                 return;
             }
             
-            Swal.fire({
+            Weline.UI.dialog.request({
                 title: '<?= __("确定批量删除？") ?>',
-                text: '<?= __("将删除 ") ?>' + ids.length + '<?= __(" 条日志，此操作不可恢复！") ?>',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: '<?= __("确定删除") ?>',
-                cancelButtonText: '<?= __("取消") ?>'
+                message: '<?= __("将删除 ") ?>' + ids.length + '<?= __(" 条日志，此操作不可恢复！") ?>',
+                tone: 'warning',
+                cancelable: true,
+                confirmTone: 'danger',
+                cancelTone: 'neutral',
+                confirmLabel: '<?= __("确定删除") ?>',
+                cancelLabel: '<?= __("取消") ?>'
             }).then(function(result) {
-                if (result.isConfirmed) {
+                if (result.confirmed) {
                     var formData = new FormData();
                     ids.forEach(function(id) { formData.append('ids[]', id); });
                     
@@ -425,15 +402,15 @@ $escapeAttr = static function (mixed $value): string {
                     .then(function(api){ return api.resource('cdn').batchDeleteAttackLogs({ ids: ids }); })
                     .then(function(data) {
                         if (data.success) {
-                            Swal.fire({
-                                icon: 'success',
+                            Weline.UI.dialog.request({
+                                tone: 'success',
                                 title: '<?= __("成功") ?>',
-                                text: data.message,
-                                timer: 1500,
-                                showConfirmButton: false
+                                message: data.message,
+                                duration: 1500,
+                                confirmable: false
                             }).then(function() { location.reload(); });
                         } else {
-                            Swal.fire({ icon: 'error', title: '<?= __("失败") ?>', text: data.message });
+                            Weline.UI.dialog.request({ tone: 'danger', title: '<?= __("失败") ?>', message: data.message });
                         }
                     });
                 }
@@ -446,17 +423,17 @@ $escapeAttr = static function (mixed $value): string {
             Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
             .then(function(api){ return api.resource('cdn').cleanupAttackLogs({ days: days }); })
             .then(function(data) {
-                bootstrap.Modal.getInstance(document.getElementById('cleanupModal')).hide();
+                Weline.UI.dialog.close('#cleanupModal');
                 if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
+                    Weline.UI.dialog.request({
+                        tone: 'success',
                         title: '<?= __("成功") ?>',
-                        text: data.message,
-                        timer: 1500,
-                        showConfirmButton: false
+                        message: data.message,
+                        duration: 1500,
+                        confirmable: false
                     }).then(function() { location.reload(); });
                 } else {
-                    Swal.fire({ icon: 'error', title: '<?= __("失败") ?>', text: data.message });
+                    Weline.UI.dialog.request({ tone: 'danger', title: '<?= __("失败") ?>', message: data.message });
                 }
             });
         }

@@ -5,13 +5,13 @@
 $page = $this->getData('page') ?: [];
 $frontendPreviewUrl = (string)($this->getData('frontend_preview_url') ?: '');
 ?>
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= htmlspecialchars((string)($page['title'] ?? __('CMS 页面预览'))) ?></h4>
-            <div class="page-title-right">
-                <a class="btn btn-outline-secondary" href="<?= $this->getBackendUrl('cms/backend/page/edit', ['page_id' => (int)($page['page_id'] ?? 0)]) ?>">
-                    <i class="mdi mdi-arrow-left"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= htmlspecialchars((string)($page['title'] ?? __('CMS 页面预览'))) ?></h4>
+            <div class="w-cluster">
+                <a class="w-button" href="<?= $this->getBackendUrl('cms/backend/page/edit', ['page_id' => (int)($page['page_id'] ?? 0)]) ?>" data-tone="neutral" data-variant="outline">
+                    <w:icon name="arrow-left" size="sm"></w:icon>
                     <?= __('返回编辑') ?>
                 </a>
             </div>
@@ -19,8 +19,8 @@ $frontendPreviewUrl = (string)($this->getData('frontend_preview_url') ?: '');
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <iframe src="<?= htmlspecialchars($frontendPreviewUrl) ?>"
                 title="<?= htmlspecialchars((string)__('CMS 页面预览')) ?>"
                 style="width:100%; min-height:calc(100vh - 170px); border:1px solid var(--bs-border-color); border-radius:6px; background:#fff;"></iframe>

@@ -4,33 +4,33 @@
  */
 ?>
 <div class="payment-return">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="card mt-5">
-                    <div class="card-body text-center">
+    <div class="w-container">
+        <div class="w-grid" data-justify="center">
+            <div style="--w-span-md:6;">
+                <div class="w-card" style="--w-mt:var(--weline-space-12);">
+                    <div class="w-card__body w-text" data-align="center">
                         <?php if ($transaction && $transaction->isSuccess()): ?>
-                            <div class="mb-3">
-                                <i class="mdi mdi-check-circle text-success" style="font-size: 64px;"></i>
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <w:icon name="check" size="sm"></w:icon>
                             </div>
-                            <h3 class="text-success"><?= __('支付成功') ?></h3>
-                            <p class="text-muted"><?= __('您的订单已支付成功') ?></p>
-                            <div class="mt-4">
+                            <h3 class="w-text" data-tone="success"><?= __('支付成功') ?></h3>
+                            <p class="w-text" data-tone="muted"><?= __('您的订单已支付成功') ?></p>
+                            <div style="--w-mt:var(--weline-space-6);">
                                 <p><strong><?= __('交易号') ?>:</strong> <?= htmlspecialchars($transaction->getData('transaction_no')) ?></p>
                                 <p><strong><?= __('支付金额') ?>:</strong> <?= htmlspecialchars($transaction->getData('amount')) ?> <?= htmlspecialchars($transaction->getData('currency')) ?></p>
                             </div>
                         <?php else: ?>
-                            <div class="mb-3">
-                                <i class="mdi mdi-close-circle text-danger" style="font-size: 64px;"></i>
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <w:icon name="close" size="sm"></w:icon>
                             </div>
-                            <h3 class="text-danger"><?= __('支付失败') ?></h3>
-                            <p class="text-muted"><?= __('支付未完成，请重试') ?></p>
+                            <h3 class="w-text" data-tone="danger"><?= __('支付失败') ?></h3>
+                            <p class="w-text" data-tone="muted"><?= __('支付未完成，请重试') ?></p>
                         <?php endif; ?>
                         
                         <w:hook>Weline_Payment::frontend::checkout::payment-result</w:hook>
                         
-                        <div class="mt-4">
-                            <a href="/" class="btn btn-primary"><?= __('返回首页') ?></a>
+                        <div style="--w-mt:var(--weline-space-6);">
+                            <a href="/" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
                         </div>
                     </div>
                 </div>

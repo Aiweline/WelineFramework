@@ -13,7 +13,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 路由：component/offcanvas/success -> getSuccess，component/offcanvas/error -> getError，
  *      component/backend/offcanvas/getResult -> getResult（框架级 success/error/info 桥接页）。
  *
- * 使用主题布局：默认 default.blank（无菜单/边栏，含 head 与 BackendToast），
+ * 使用主题布局：默认 default.blank（无菜单/边栏，含 head 与 Weline.UI.toast），
  * 可通过请求参数 layout 指定非 blank，如 layout=default 使用 default.default。
  */
 class Offcanvas extends BackendPageController
@@ -32,7 +32,7 @@ class Offcanvas extends BackendPageController
     }
 
     /**
-     * 框架级结果桥接：接收 type/msg/url/reload，通过 BackendToast 显示并关 offcanvas。
+     * 框架级结果桥接：接收 type/msg/url/reload，通过 Weline.UI.toast 显示并关 offcanvas。
      * 由 Framework ResultBridgeRedirect 在 iframe + ResultManager 有数据时自动重定向到此（桥接页地址由事件返回）。
      */
     public function getResult(): string

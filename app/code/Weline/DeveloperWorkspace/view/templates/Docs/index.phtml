@@ -93,6 +93,8 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <w:theme:font src="Weline_Theme::NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap"/>
+    <w:theme:font src="Weline_Theme::NotoSansSC-Bold.ttf" family="Noto Sans SC" weight="700" display="swap"/>
     <title><?=__('WelineFramework 开发文档')?></title>
     <script data-no-extract="true">
         (function(root) {
@@ -101,7 +103,7 @@ try {
             var apply = function () {
                 var mode = preference === 'dark' || (preference === 'system' && media && media.matches) ? 'dark' : 'light';
                 root.setAttribute('data-theme', mode);
-                root.setAttribute('data-bs-theme', mode);
+                root.setAttribute('data-theme', mode);
                 root.setAttribute('data-theme-mode', mode);
                 root.setAttribute('data-layout-mode', mode);
                 root.style.colorScheme = mode;
@@ -140,7 +142,7 @@ try {
     if(body && typeof FormData!=='undefined' && body instanceof FormData){
       var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
     } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('developer_workspace').docsRequest({url:url, method:options.method||'GET'}); };
+    var run=function(api){ return api.resource('developer_workspace').docsRequest({url:url, method:options.method||'GET'}, {keepBusinessResult:true, silent:true}); };
     var toResp=function(data){
       var body=data==null?{}:data;
       var ok=!(body&&typeof body==='object'&&!Array.isArray(body)&&body.success===false);
@@ -150,10 +152,13 @@ try {
       }
       return resp;
     };
-    if(!(g.Weline&&typeof g.Weline.load==='function')){
-      return Promise.reject(new Error('Weline API runtime is unavailable.'));
+    if(g.Weline&&typeof g.Weline.load==='function'){
+      return g.Weline.load('api').then(run).then(toResp);
     }
-    return g.Weline.load('api').then(run).then(toResp);
+    if(g.Weline&&g.Weline.Api&&typeof g.Weline.Api.resource==='function'){
+      return Promise.resolve(run(g.Weline.Api)).then(toResp);
+    }
+    return Promise.reject(new Error('Weline API runtime is unavailable.'));
   };
 })(window);
 </script>
@@ -217,7 +222,7 @@ try {
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
             background: var(--bg-color);
             color: var(--text-color);
             line-height: 1.6;

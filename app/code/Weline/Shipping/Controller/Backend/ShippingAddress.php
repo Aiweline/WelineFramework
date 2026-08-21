@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Service\ShippingAddressService;
 
-#[Acl('Weline_Shipping::shipping_address', '发货地址管理', 'mdi-map-marker', '发货地址管理', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::shipping_address', '发货地址管理', 'pin', '发货地址管理', 'Weline_Backend::shipping_group')]
 class ShippingAddress extends BackendController
 {
     private ShippingAddressService $service;
@@ -30,7 +30,7 @@ class ShippingAddress extends BackendController
     /**
      * 地址管理列表页
      */
-    #[Acl('Weline_Shipping::shipping_address_index', '查看发货地址', 'mdi-format-list-bulleted', '查看发货地址列表')]
+    #[Acl('Weline_Shipping::shipping_address_index', '查看发货地址', 'list', '查看发货地址列表')]
     public function index()
     {
         $page = max(1, (int)($this->request->getParam('page') ?? 1));
@@ -69,7 +69,7 @@ class ShippingAddress extends BackendController
     /**
      * 地址编辑表单页
      */
-    #[Acl('Weline_Shipping::shipping_address_edit', '编辑发货地址', 'mdi-pencil', '编辑发货地址')]
+    #[Acl('Weline_Shipping::shipping_address_edit', '编辑发货地址', 'edit', '编辑发货地址')]
     public function edit()
     {
         $id = $this->request->getParam('id');
@@ -91,7 +91,7 @@ class ShippingAddress extends BackendController
     /**
      * 保存地址
      */
-    #[Acl('Weline_Shipping::shipping_address_save', '保存发货地址', 'mdi-content-save', '保存发货地址')]
+    #[Acl('Weline_Shipping::shipping_address_save', '保存发货地址', 'save', '保存发货地址')]
     public function save()
     {
         $data = $this->request->getPost();
@@ -117,7 +117,7 @@ class ShippingAddress extends BackendController
     /**
      * 删除地址
      */
-    #[Acl('Weline_Shipping::shipping_address_delete', '删除发货地址', 'mdi-delete', '删除发货地址')]
+    #[Acl('Weline_Shipping::shipping_address_delete', '删除发货地址', 'trash', '删除发货地址')]
     public function delete()
     {
         $id = $this->request->getParam('id');
@@ -141,7 +141,7 @@ class ShippingAddress extends BackendController
     /**
      * 设置默认地址
      */
-    #[Acl('Weline_Shipping::shipping_address_set_default', '设置默认发货地址', 'mdi-star', '设置默认发货地址')]
+    #[Acl('Weline_Shipping::shipping_address_set_default', '设置默认发货地址', 'star', '设置默认发货地址')]
     public function setDefault()
     {
         $id = $this->request->getParam('id');
@@ -165,7 +165,7 @@ class ShippingAddress extends BackendController
     /**
      * 启用地址
      */
-    #[Acl('Weline_Shipping::shipping_address_enable', '启用发货地址', 'mdi-check-circle', '启用发货地址')]
+    #[Acl('Weline_Shipping::shipping_address_enable', '启用发货地址', 'check', '启用发货地址')]
     public function enable()
     {
         $id = $this->request->getParam('id');
@@ -189,7 +189,7 @@ class ShippingAddress extends BackendController
     /**
      * 禁用地址
      */
-    #[Acl('Weline_Shipping::shipping_address_disable', '禁用发货地址', 'mdi-cancel', '禁用发货地址')]
+    #[Acl('Weline_Shipping::shipping_address_disable', '禁用发货地址', 'close', '禁用发货地址')]
     public function disable()
     {
         $id = $this->request->getParam('id');

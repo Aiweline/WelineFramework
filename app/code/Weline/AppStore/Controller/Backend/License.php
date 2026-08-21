@@ -12,13 +12,13 @@ use Weline\AppStore\Service\AccountBindService;
 /**
  * 许可证管理控制器
  */
-#[Acl('Weline_AppStore::license', '许可证管理', 'bi-key', '许可证管理', 'Weline_AppStore::appstore')]
+#[Acl('Weline_AppStore::license', '许可证管理', 'key', '许可证管理', 'Weline_AppStore::appstore')]
 class License extends BackendController
 {
     /**
      * 许可证列表
      */
-    #[Acl('Weline_AppStore::license_view', '查看许可证', 'bi-list', '查看许可证列表')]
+    #[Acl('Weline_AppStore::license_view', '查看许可证', 'list', '查看许可证列表')]
     public function index(): string
     {
         /** @var AccountBindService $accountService */
@@ -36,7 +36,7 @@ class License extends BackendController
     /**
      * 激活许可证
      */
-    #[Acl('Weline_AppStore::license_activate', '激活许可证', 'bi-check-circle', '激活许可证')]
+    #[Acl('Weline_AppStore::license_activate', '激活许可证', 'check', '激活许可证')]
     public function activate(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -97,7 +97,7 @@ class License extends BackendController
     /**
      * 验证许可证
      */
-    #[Acl('Weline_AppStore::license_validate', '验证许可证', 'bi-shield-check', '验证许可证')]
+    #[Acl('Weline_AppStore::license_validate', '验证许可证', 'check', '验证许可证')]
     public function validate(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -137,7 +137,7 @@ class License extends BackendController
     /**
      * 续订许可证
      */
-    #[Acl('Weline_AppStore::license_renew', '续订许可证', 'bi-arrow-repeat', '续订许可证')]
+    #[Acl('Weline_AppStore::license_renew', '续订许可证', 'circle', '续订许可证')]
     public function renew(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');

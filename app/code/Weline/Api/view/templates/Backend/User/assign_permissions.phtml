@@ -6,26 +6,26 @@ $trees = $this->getData('trees') ?? [];
 $currentAccesses = $this->getData('current_accesses') ?? [];
 ?>
 <!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>API用户权限分配</lang>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item">
                         <span>
                             <lang>API</lang>
                         </span>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/api/backend/user')"><lang>API用户</lang></a>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/api/backend/user/edit')?id=<?= $user->getId() ?>"><lang>编辑用户</lang></a>
                     </li>
-                    <li class='breadcrumb-item active'>
+                    <li class="w-breadcrumb__item" data-state="active">
                         <lang>权限分配</lang>
                     </li>
                 </ol>
@@ -35,35 +35,34 @@ $currentAccesses = $this->getData('current_accesses') ?? [];
 </div>
 <!-- end page title -->
 <!-- start page message -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div> <!-- end message -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>API用户权限分配</lang>
                 </h4>
-                <p class='card-title-desc'>
+                <p class="w-text" data-tone="muted">
                     <lang>为API用户分配权限资源</lang>
                 </p>
                 <p>
                     <lang>当前用户：</lang>
-                    <b class="text-info"><?= htmlspecialchars($user->getUsername() ?? '') ?></b>
+                    <b class="w-text" data-tone="info"><?= htmlspecialchars($user->getUsername() ?? '') ?></b>
                     <lang>（<?= htmlspecialchars($user->getEmail() ?? '') ?>）</lang>
                     <br>
                     <lang>所属角色：</lang>
-                    <b class="text-info"><?= htmlspecialchars($userRole->getRoleName() ?? '') ?></b>
+                    <b class="w-text" data-tone="info"><?= htmlspecialchars($userRole->getRoleName() ?? '') ?></b>
                 </p>
-                <div class='button-items mb-1 mt-1'>
+                <div class="button-items" style="--w-mb:var(--weline-space-1);--w-mt:var(--weline-space-1);">
                     <w:form action="{{action}}" id="aclForm" method="post">
                         <input type="hidden" name="user_id" value="<?= $user->getId() ?>">
-                        <button type='submit' id='save_button'
-                                class='btn btn-primary waves-effect waves-light'>
+                        <button type='submit' id='save_button' class="w-button waves-light" data-tone="primary">
                             <lang>保存</lang>
                         </button>
-                        <a href="@backend-url('*/api/backend/user/edit')?id=<?= $user->getId() ?>" class='btn btn-secondary'>
+                        <a href="@backend-url('*/api/backend/user/edit')?id=<?= $user->getId() ?>" class="w-button" data-tone="neutral">
                             <lang>返回</lang>
                         </a>
                     </w:form>
@@ -112,19 +111,19 @@ $currentAccesses = $this->getData('current_accesses') ?? [];
                         $icon = $acl->getIcon();
                         if (empty($icon))
                             $icon = match ($type) {
-                                'menus' => 'mdi mdi-microsoft-xbox-controller-menu',
-                                'pc' => 'mdi mdi-shield-link-variant-outline',
+                                'menus' => 'menu',
+                                'pc' => 'link',
                                 '' => ''
                             };
                         if (empty($icon)) {
                             if ($acl->getMethod()) {
                                 $icon = match (strtolower($acl->getMethod())) {
-                                    'get' => 'mdi mdi-eye-check-outline',
-                                    'post' => 'ri-save-3-line',
-                                    'delete' => 'ri-delete-bin-6-line',
-                                    'put' => 'ri-edit-box-line',
-                                    'update' => 'mdi mdi-autorenew',
-                                    default => 'fas fa-fingerprint'
+                                    'get' => 'check',
+                                    'post' => 'save',
+                                    'delete' => 'trash',
+                                    'put' => 'edit',
+                                    'update' => 'circle',
+                                    default => 'circle'
                                 };
                             }
                         }

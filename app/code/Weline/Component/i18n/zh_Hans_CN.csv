@@ -7,8 +7,8 @@
 仅支持AJAX请求,仅支持AJAX请求
 请求成功！,请求成功！
 请求失败！,请求失败！
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}"
-"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}"
+关闭,关闭
+抽屉内容,抽屉内容
 清空条件,清空条件
 成功提示！,成功提示！
 倒计时关闭页面...,倒计时关闭页面...
@@ -51,3 +51,5 @@ OffCanvas组件：侧边栏弹出窗,OffCanvas组件：侧边栏弹出窗
 "结构说明：参数名=>映射的字段:排序方法 英文逗号隔开每个排序","结构说明：参数名=>映射的字段:排序方法 英文逗号隔开每个排序"
 控制器获取对应sorter可以获取这些排序字段,控制器获取对应sorter可以获取这些排序字段
 排序器属性sorter不能为空，示例：%{1},排序器属性sorter不能为空，示例：%{1}
+"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}"
+"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}"

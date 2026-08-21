@@ -3,34 +3,30 @@
     @template(Weline_FileManager::image-preview/template.phtml)
 </notempty>
 <!-- Small modal -->
-<a type="button" data-bs-target="#{{target}}-select-modal" class="btn btn-primary btn-sm waves-effect waves-light"
-   data-bs-toggle="modal">{{title}}</a>
+<a type="button" class="w-button waves-light" data-w-target="#{{target}}-select-modal" data-w-action="dialog.open" data-tone="primary" data-size="sm">{{title}}</a>
 <if condition="ext !== '*'"><br><span>@lang{允许的文件类型：}({{ext}})</span></if>
 <br>
 <span>@lang{允许的文件大小：}{{size_alias}}</span>
-<div class="modal fade bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog"
-     aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-select-modal">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down w-80">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
+<div class="w-dialog bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog" aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-select-modal" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame modal-fullscreen-md-down w-80" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
                     {{title}}
-                    <if condition="ext !== '*'"><span class="text-danger">@lang{允许的文件类型：}({{ext}})</span></if>
+                    <if condition="ext !== '*'"><span class="w-text" data-tone="danger">@lang{允许的文件类型：}({{ext}})</span></if>
                     <span>@lang{允许的文件大小：}{{size_alias}}</span>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" id="{{target}}-close-modal"
-                        aria-label="Close"></button>
+                <button type="button" class="w-button" id="{{target}}-close-modal" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body" style="padding: 0;">
-                <iframe id="{{target}}-file-manager-iframe" class="w-100" style="min-height: 50vh" src="" scrolling="no"
-                        frameborder="0"></iframe>
+            <div class="w-dialog__body" style="padding: 0;">
+                <iframe id="{{target}}-file-manager-iframe" style="min-height: 50vh" src="" scrolling="no" frameborder="0" data-w-width="full"></iframe>
             </div>
         </div><!-- /.modal-content -->
     </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
 <script>
     var timer = null;
-    $('#{{target}}-select-modal').on('shown.bs.modal', () => {
+    $('#{{target}}-select-modal').on('weline:ui:dialog:open', () => {
         const iframe = $("#{{target}}-file-manager-iframe");
         if (iframe.attr('src') === '') {
             iframe.attr('src', '{{connector}}');

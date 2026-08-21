@@ -144,30 +144,30 @@ class WebsiteForm implements TaglibInterface
             $html[] = '<div class="website-form-accordion" id="<?= htmlspecialchars($Taglib__id) ?>_wrapper">';
             
             // 基本信息（默认展开）
-            $html[] = '  <div class="accordion-item">';
-            $html[] = '    <h2 class="accordion-header" id="<?= htmlspecialchars($Taglib__id) ?>_basic_header">';
-            $html[] = '      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#<?= htmlspecialchars($Taglib__id) ?>_basic_body" aria-expanded="true" aria-controls="<?= htmlspecialchars($Taglib__id) ?>_basic_body">';
+            $html[] = '  <div class="w-disclosure" data-w-component="disclosure">';
+            $html[] = '    <h2 id="<?= htmlspecialchars($Taglib__id) ?>_basic_header">';
+            $html[] = '      <button class="w-disclosure__trigger" type="button" aria-expanded="true" aria-controls="<?= htmlspecialchars($Taglib__id) ?>_basic_body" data-w-target="#<?= htmlspecialchars($Taglib__id) ?>_basic_body" data-w-action="disclosure.toggle" data-w-disclosure-trigger>';
             $html[] = '        <i class="mdi mdiInformation-outline"></i>';
             $html[] = '        <span><lang>基本信息</lang></span>';
             $html[] = '      </button>';
             $html[] = '    </h2>';
-            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_basic_body" class="accordion-collapse collapse show" aria-labelledby="<?= htmlspecialchars($Taglib__id) ?>_basic_header" data-bs-parent="#<?= htmlspecialchars($Taglib__id) ?>_wrapper">';
-            $html[] = '      <div class="accordion-body">';
+            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_basic_body" class="w-disclosure__panel" aria-labelledby="<?= htmlspecialchars($Taglib__id) ?>_basic_header" data-w-disclosure-panel>';
+            $html[] = '      <div class="w-disclosure__body">';
             $html[] = '        <?php $this->dispatchHook("website_form_basic", ["id" => $Taglib__id, "website" => $website]); ?>';
             $html[] = '      </div>';
             $html[] = '    </div>';
             $html[] = '  </div>';
 
             // 域名选择（默认展开）
-            $html[] = '  <div class="accordion-item">';
-            $html[] = '    <h2 class="accordion-header" id="<?= htmlspecialchars($Taglib__id) ?>_domains_header">';
-            $html[] = '      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#<?= htmlspecialchars($Taglib__id) ?>_domains_body" aria-expanded="true" aria-controls="<?= htmlspecialchars($Taglib__id) ?>_domains_body">';
-            $html[] = '        <i class="mdi mdi-domain"></i>';
+            $html[] = '  <div class="w-disclosure" data-w-component="disclosure">';
+            $html[] = '    <h2 id="<?= htmlspecialchars($Taglib__id) ?>_domains_header">';
+            $html[] = '      <button class="w-disclosure__trigger" type="button" aria-expanded="true" aria-controls="<?= htmlspecialchars($Taglib__id) ?>_domains_body" data-w-target="#<?= htmlspecialchars($Taglib__id) ?>_domains_body" data-w-action="disclosure.toggle" data-w-disclosure-trigger>';
+            $html[] = '        <w-icon name="globe" size="sm"></w-icon>';
             $html[] = '        <span><lang>域名管理</lang></span>';
             $html[] = '      </button>';
             $html[] = '    </h2>';
-            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_domains_body" class="accordion-collapse collapse show" aria-labelledby="<?= htmlspecialchars($Taglib__id) ?>_domains_header" data-bs-parent="#<?= htmlspecialchars($Taglib__id) ?>_wrapper">';
-            $html[] = '      <div class="accordion-body">';
+            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_domains_body" class="w-disclosure__panel" aria-labelledby="<?= htmlspecialchars($Taglib__id) ?>_domains_header" data-w-disclosure-panel>';
+            $html[] = '      <div class="w-disclosure__body">';
             $wfsDsDisplay = __('点击选择域名（可多选）');
             $html[] = '        <?php';
             $html[] = '            $__wfs_ds_id = (string)($Taglib__id ?? \'\');';
@@ -181,58 +181,43 @@ class WebsiteForm implements TaglibInterface
             $html[] = '            $__wfs_auto_code = htmlspecialchars($__wfs_ds_id . \'_code\', ENT_QUOTES, \'UTF-8\');';
             $html[] = '            $__wfs_auto_name = htmlspecialchars($__wfs_ds_id . \'_name\', ENT_QUOTES, \'UTF-8\');';
             $html[] = '        ?>';
-            $html[] = '        <w:websites:domain:select';
-            $html[] = '            id="__wfs_domain_select_id"';
-            $html[] = '            name="pool_ids"';
-            $html[] = '            value="__wfs_domain_select_value"';
-            $html[] = '            display="__wfs_display"';
-            $html[] = '            class="w-100"';
-            $html[] = '            multiple="true"';
-            $html[] = '            value-type="pool_id"';
-            $html[] = '            site-ready-only="true"';
-            $html[] = '            website-id="__wfs_domain_select_website_id"';
-            $html[] = '            auto-fill-code="__wfs_auto_code"';
-            $html[] = '            auto-fill-name="__wfs_auto_name"';
-            $html[] = '        />';
+            $html[] = '        <w:websites:domain:select id="__wfs_domain_select_id" name="pool_ids" value="__wfs_domain_select_value" display="__wfs_display" multiple="true" value-type="pool_id" site-ready-only="true" website-id="__wfs_domain_select_website_id" auto-fill-code="__wfs_auto_code" auto-fill-name="__wfs_auto_name" data-w-width="full" />';
             $html[] = '        <input type="hidden" name="domain_values" value="">';
-            $html[] = '        <div class="form-text-hint"><lang>从域名池选择已就绪的域名（可多选）；选择后网站代码与网站名称将自动填充</lang></div>';
+            $html[] = '        <div class="w-field__hint"><lang>从域名池选择已就绪的域名（可多选）；选择后网站代码与网站名称将自动填充</lang></div>';
             $html[] = '        <?php $this->dispatchHook("website_form_domains", ["id" => $Taglib__id, "website" => $website]); ?>';
             $html[] = '      </div>';
             $html[] = '    </div>';
             $html[] = '  </div>';
 
             // 高级选项（默认折叠）
-            $html[] = '  <div class="accordion-item">';
-            $html[] = '    <h2 class="accordion-header" id="<?= htmlspecialchars($Taglib__id) ?>_advanced_header">';
-            $html[] = '      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= htmlspecialchars($Taglib__id) ?>_advanced_body" aria-expanded="false" aria-controls="<?= htmlspecialchars($Taglib__id) ?>_advanced_body">';
-            $html[] = '        <i class="mdi mdi-settings"></i>';
+            $html[] = '  <div class="w-disclosure" data-w-component="disclosure">';
+            $html[] = '    <h2 id="<?= htmlspecialchars($Taglib__id) ?>_advanced_header">';
+            $html[] = '      <button class="w-disclosure__trigger collapsed" type="button" aria-expanded="false" aria-controls="<?= htmlspecialchars($Taglib__id) ?>_advanced_body" data-w-target="#<?= htmlspecialchars($Taglib__id) ?>_advanced_body" data-w-action="disclosure.toggle" data-w-disclosure-trigger>';
+            $html[] = '        <w-icon name="settings" size="sm"></w-icon>';
             $html[] = '        <span><lang>高级选项</lang></span>';
             $html[] = '      </button>';
             $html[] = '    </h2>';
-            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_advanced_body" class="accordion-collapse collapse" aria-labelledby="<?= htmlspecialchars($Taglib__id) ?>_advanced_header" data-bs-parent="#<?= htmlspecialchars($Taglib__id) ?>_wrapper">';
-            $html[] = '      <div class="accordion-body">';
-            $html[] = '        <div class="row">';
-            $html[] = '          <div class="col-4 mb-3">';
-            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_code" class="form-label"><lang>网站代码</lang></label>';
-            $html[] = '            <input type="text" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_code" name="code"';
-            $html[] = '                   value="<?= isset($website[\'website_id\']) ? htmlspecialchars($website[\'code\'] ?? \'\') : \'\'; ?>" required>';
-            $html[] = '            <div class="invalid-feedback"><lang>请输入网站代码</lang></div>';
+            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_advanced_body" class="w-disclosure__panel" aria-labelledby="<?= htmlspecialchars($Taglib__id) ?>_advanced_header" data-w-disclosure-panel hidden>';
+            $html[] = '      <div class="w-disclosure__body">';
+            $html[] = '        <div class="w-grid">';
+            $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);">';
+            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_code" class="w-field__label"><lang>网站代码</lang></label>';
+            $html[] = '            <input type="text" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_code" name="code" value="<?= isset($website[\'website_id\']) ? htmlspecialchars($website[\'code\'] ?? \'\') : \'\'; ?>" required>';
+            $html[] = '            <div class="w-field__error"><lang>请输入网站代码</lang></div>';
             $html[] = '          </div>';
-            $html[] = '          <div class="col-4 mb-3">';
-            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_name" class="form-label"><lang>网站名称</lang></label>';
-            $html[] = '            <input type="text" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_name" name="name"';
-            $html[] = '                   value="<?= isset($website[\'website_id\']) ? htmlspecialchars($website[\'name\'] ?? \'\') : \'\'; ?>" required>';
-            $html[] = '            <div class="invalid-feedback"><lang>请输入网站名称</lang></div>';
+            $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);">';
+            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_name" class="w-field__label"><lang>网站名称</lang></label>';
+            $html[] = '            <input type="text" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_name" name="name" value="<?= isset($website[\'website_id\']) ? htmlspecialchars($website[\'name\'] ?? \'\') : \'\'; ?>" required>';
+            $html[] = '            <div class="w-field__error"><lang>请输入网站名称</lang></div>';
             $html[] = '          </div>';
-            $html[] = '          <div class="col-4 mb-3">';
-            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_url" class="form-label"><lang>网站URL</lang></label>';
-            $html[] = '            <input type="url" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_url" name="url"';
-            $html[] = '                   value="<?= isset($website[\'website_id\']) ? htmlspecialchars($website[\'url\'] ?? \'\') : \'\'; ?>" required>';
-            $html[] = '            <div class="invalid-feedback"><lang>请输入有效的URL</lang></div>';
+            $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);">';
+            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_url" class="w-field__label"><lang>网站URL</lang></label>';
+            $html[] = '            <input type="url" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_url" name="url" value="<?= isset($website[\'website_id\']) ? htmlspecialchars($website[\'url\'] ?? \'\') : \'\'; ?>" required>';
+            $html[] = '            <div class="w-field__error"><lang>请输入有效的URL</lang></div>';
             $html[] = '          </div>';
-            $html[] = '          <div class="col-4 mb-3">';
-            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_default_currency" class="form-label"><lang>默认货币</lang></label>';
-            $html[] = '            <select class="form-select" name="default_currency" id="<?= htmlspecialchars($Taglib__id) ?>_default_currency">';
+            $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);">';
+            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_default_currency" class="w-field__label"><lang>默认货币</lang></label>';
+            $html[] = '            <select class="w-select" name="default_currency" id="<?= htmlspecialchars($Taglib__id) ?>_default_currency">';
             $html[] = '              <option value="">-- <lang>请选择</lang> --</option>';
             $html[] = '              <?php foreach ($currencies as $currency): ?>';
             $html[] = '                <option value="<?= htmlspecialchars($currency[\'code\']) ?>"';
@@ -241,10 +226,10 @@ class WebsiteForm implements TaglibInterface
             $html[] = '                </option>';
             $html[] = '              <?php endforeach; ?>';
             $html[] = '            </select>';
-            $html[] = '            <div class="form-text-hint"><lang>不设置则从关联货币中选择第一个</lang></div>';
+            $html[] = '            <div class="w-field__hint"><lang>不设置则从关联货币中选择第一个</lang></div>';
             $html[] = '          </div>';
-            $html[] = '          <div class="col-4 mb-3">';
-            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_default_language" class="form-label"><lang>默认语言</lang></label>';
+            $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);">';
+            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_default_language" class="w-field__label"><lang>默认语言</lang></label>';
             $html[] = '            <?php';
             $html[] = '            $__wfs_parse_language_values = static function ($raw): array {';
             $html[] = '              if (is_array($raw)) {';
@@ -286,16 +271,9 @@ class WebsiteForm implements TaglibInterface
             $html[] = '            }';
             $html[] = '            $__wfs_readonly_languages = $__wfs_default_language_value !== \'\' ? [$__wfs_default_language_value] : [];';
             $html[] = '            ?>';
-            $html[] = '            <w:i18n:language:select';
-            $html[] = '                id="__wfs_default_language_selector_id"';
-            $html[] = '                name="default_language"';
-            $html[] = '                input-id="__wfs_default_language_input_id"';
-            $html[] = '                value="__wfs_default_language_value"';
-            $html[] = '                allow-empty="true"';
-            $html[] = '                class="w-100"';
-            $html[] = '            />';
+            $html[] = '            <w:i18n:language:select id="__wfs_default_language_selector_id" name="default_language" input-id="__wfs_default_language_input_id" value="__wfs_default_language_value" allow-empty="true" data-w-width="full" />';
             $html[] = '            <?php if (false): ?>';
-            $html[] = '            <select class="form-select" name="default_language" id="<?= htmlspecialchars($Taglib__id) ?>_default_language">';
+            $html[] = '            <select class="w-select" name="default_language" id="<?= htmlspecialchars($Taglib__id) ?>_default_language">';
             $html[] = '              <option value="">-- <lang>请选择</lang> --</option>';
             $html[] = '              <?php foreach ($locales as $locale): ?>';
             $html[] = '                <option value="<?= htmlspecialchars($locale[\'code\']) ?>"';
@@ -305,11 +283,11 @@ class WebsiteForm implements TaglibInterface
             $html[] = '              <?php endforeach; ?>';
             $html[] = '            </select>';
             $html[] = '            <?php endif; ?>';
-            $html[] = '            <div class="form-text-hint"><lang>不设置则从关联语言中选择第一个</lang></div>';
+            $html[] = '            <div class="w-field__hint"><lang>不设置则从关联语言中选择第一个</lang></div>';
             $html[] = '          </div>';
-            $html[] = '          <div class="col-6 mb-3">';
-            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_currency_codes" class="form-label"><lang>关联货币</lang></label>';
-            $html[] = '            <select class="form-select" name="currency_codes[]" id="<?= htmlspecialchars($Taglib__id) ?>_currency_codes" multiple>';
+            $html[] = '          <div style="--w-span:6;--w-mb:var(--weline-space-4);">';
+            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_currency_codes" class="w-field__label"><lang>关联货币</lang></label>';
+            $html[] = '            <select class="w-select" name="currency_codes[]" id="<?= htmlspecialchars($Taglib__id) ?>_currency_codes" multiple>';
             $html[] = '              <?php foreach ($currencies as $currency): ?>';
             $html[] = '                <option value="<?= htmlspecialchars($currency[\'code\']) ?>"';
             $html[] = '                    <?= in_array($currency[\'code\'], $selectedCurrencies) ? \'selected\' : \'\'; ?>>';
@@ -317,21 +295,13 @@ class WebsiteForm implements TaglibInterface
             $html[] = '                </option>';
             $html[] = '              <?php endforeach; ?>';
             $html[] = '            </select>';
-            $html[] = '            <div class="form-text-hint"><lang>按住Ctrl或Cmd键可多选</lang></div>';
+            $html[] = '            <div class="w-field__hint"><lang>按住Ctrl或Cmd键可多选</lang></div>';
             $html[] = '          </div>';
-            $html[] = '          <div class="col-6 mb-3">';
-            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_language_codes" class="form-label"><lang>关联语言</lang></label>';
-            $html[] = '            <w:i18n:language:select';
-            $html[] = '                id="__wfs_language_codes_selector_id"';
-            $html[] = '                name="language_codes[]"';
-            $html[] = '                input-id="__wfs_language_codes_input_id"';
-            $html[] = '                value="__wfs_selected_languages"';
-            $html[] = '                readonly-values="__wfs_readonly_languages"';
-            $html[] = '                multiple="true"';
-            $html[] = '                class="w-100"';
-            $html[] = '            />';
+            $html[] = '          <div style="--w-span:6;--w-mb:var(--weline-space-4);">';
+            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_language_codes" class="w-field__label"><lang>关联语言</lang></label>';
+            $html[] = '            <w:i18n:language:select id="__wfs_language_codes_selector_id" name="language_codes[]" input-id="__wfs_language_codes_input_id" value="__wfs_selected_languages" readonly-values="__wfs_readonly_languages" multiple="true" data-w-width="full" />';
             $html[] = '            <?php if (false): ?>';
-            $html[] = '            <select class="form-select" name="language_codes[]" id="<?= htmlspecialchars($Taglib__id) ?>_language_codes" multiple>';
+            $html[] = '            <select class="w-select" name="language_codes[]" id="<?= htmlspecialchars($Taglib__id) ?>_language_codes" multiple>';
             $html[] = '              <?php foreach ($locales as $locale): ?>';
             $html[] = '                <option value="<?= htmlspecialchars($locale[\'code\']) ?>"';
             $html[] = '                    <?= in_array($locale[\'code\'], $selectedLanguages) ? \'selected\' : \'\'; ?>>';
@@ -340,7 +310,7 @@ class WebsiteForm implements TaglibInterface
             $html[] = '              <?php endforeach; ?>';
             $html[] = '            </select>';
             $html[] = '            <?php endif; ?>';
-            $html[] = '            <div class="form-text-hint"><lang>按住Ctrl或Cmd键可多选</lang></div>';
+            $html[] = '            <div class="w-field__hint"><lang>按住Ctrl或Cmd键可多选</lang></div>';
             $html[] = '          </div>';
             $html[] = '        </div>';
             $html[] = '        <?php $this->dispatchHook("website_form_advanced", ["id" => $Taglib__id, "website" => $website]); ?>';
@@ -351,13 +321,13 @@ class WebsiteForm implements TaglibInterface
 
             // 操作按钮
             if ($showSaveBtn === 'true' || $showSaveBtn === '1') {
-                $html[] = '  <div class="d-flex justify-content-between mt-4 pt-2">';
+                $html[] = '  <div class="w-cluster" data-justify="between" style="--w-mt:var(--weline-space-6);--w-pt:var(--weline-space-2);">';
                 if ($hasCancelUrl) {
-                    $html[] = '    <a href="<?= htmlspecialchars((string)$cancelUrl, ENT_QUOTES, \'UTF-8\') ?>" class="btn btn-secondary"><lang>取消</lang></a>';
+                    $html[] = '    <a href="<?= htmlspecialchars((string)$cancelUrl, ENT_QUOTES, \'UTF-8\') ?>" class="w-button" data-tone="neutral"><lang>取消</lang></a>';
                 } else {
-                    $html[] = '    <button type="button" class="btn btn-secondary" data-website-form-action="history-back"><lang>取消</lang></button>';
+                    $html[] = '    <button type="button" class="w-button" data-website-form-action="history-back" data-tone="neutral"><lang>取消</lang></button>';
                 }
-                $html[] = '    <button type="submit" class="btn btn-primary"><?= $saveBtnText ?></button>';
+                $html[] = '    <button type="submit" class="w-button" data-tone="primary"><?= $saveBtnText ?></button>';
                 $html[] = '  </div>';
             }
 

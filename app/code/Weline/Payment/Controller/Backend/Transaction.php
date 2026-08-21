@@ -21,13 +21,13 @@ use Weline\Payment\Model\PaymentTransaction;
 use Weline\Payment\Service\PaymentObjectScopeService;
 use Weline\Payment\Service\PaymentTransactionAccessService;
 
-#[Acl('Weline_Payment::payment_transaction', '支付交易管理', 'mdi-cash-multiple', '支付交易记录管理', 'Weline_Backend::payment_group')]
+#[Acl('Weline_Payment::payment_transaction', '支付交易管理', 'cash', '支付交易记录管理', 'Weline_Backend::payment_group')]
 class Transaction extends BackendController
 {
     /**
      * 交易记录列表页
      */
-    #[Acl('Weline_Payment::payment_transaction_index', '查看交易记录', 'mdi-format-list-bulleted', '查看支付交易记录列表')]
+    #[Acl('Weline_Payment::payment_transaction_index', '查看交易记录', 'list', '查看支付交易记录列表')]
     public function index()
     {
         $page = max(1, (int)($this->request->getParam('page') ?? 1));
@@ -100,7 +100,7 @@ class Transaction extends BackendController
     /**
      * 查看交易详情
      */
-    #[Acl('Weline_Payment::payment_transaction_view', '查看交易详情', 'mdi-eye', '查看支付交易详情')]
+    #[Acl('Weline_Payment::payment_transaction_view', '查看交易详情', 'eye', '查看支付交易详情')]
     public function view()
     {
         $id = $this->request->getParam('id');
@@ -135,7 +135,7 @@ class Transaction extends BackendController
     /**
      * 查询支付状态
      */
-    #[Acl('Weline_Payment::payment_transaction_query', '查询支付状态', 'mdi-refresh', '查询支付状态')]
+    #[Acl('Weline_Payment::payment_transaction_query', '查询支付状态', 'refresh', '查询支付状态')]
     public function query()
     {
         $id = $this->request->getParam('id');

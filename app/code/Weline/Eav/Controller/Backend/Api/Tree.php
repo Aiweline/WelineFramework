@@ -128,7 +128,7 @@ class Tree extends ApiController
             'type' => 'entity',
             'code' => $entity['code'],
             'name' => $entity['local_name'] ?? $entity['name'] ?? $entity['code'],
-            'icon' => 'mdi-cube-outline',
+            'icon' => 'box',
             'isSystem' => (bool)($entity['is_system'] ?? false),
             'lazy' => true,
             'children' => [],
@@ -146,7 +146,7 @@ class Tree extends ApiController
             'type' => 'set',
             'code' => $set['code'],
             'name' => $set['local_name'] ?? $set['name'] ?? $set['code'],
-            'icon' => 'mdi-folder-outline',
+            'icon' => 'folder',
             'entityId' => (int)$set['eav_entity_id'],
             'lazy' => true,
             'children' => [],
@@ -164,7 +164,7 @@ class Tree extends ApiController
             'type' => 'group',
             'code' => $group['code'],
             'name' => $group['local_name'] ?? $group['name'] ?? $group['code'],
-            'icon' => 'mdi-folder-multiple-outline',
+            'icon' => 'folder',
             'entityId' => (int)$group['eav_entity_id'],
             'setId' => (int)$group['set_id'],
             'lazy' => true,
@@ -202,9 +202,9 @@ class Tree extends ApiController
     {
         // 根据data_has_option或type_id判断图标
         if (!empty($attribute['data_has_option'])) {
-            return 'mdi-format-list-bulleted';
+            return 'list';
         }
-        return 'mdi-tag-outline';
+        return 'tag';
     }
 
     /**

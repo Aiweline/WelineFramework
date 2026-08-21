@@ -443,7 +443,7 @@ if (!function_exists('w_msg')) {
      * @param array $options 可选参数：
      *   - priority: int 优先级 1-10，默认根据 type 自动设定
      *   - metadata: array 扩展数据（scoped / require_authorized_recipients / scope_identity）
-     *   - icon: string 图标类名，默认 ri-notification-line
+     *   - icon: string Weline 语义图标名，默认 bell
      *   - notify_users: array 指定用户 ID；普通通知空=全员；scoped urgent 空=仅审计零广播
      *   - scope_hash: string Scope 去重哈希（global 或 ScopeIdentity canonical 摘要）
      *   - scope: string 归属 Scope 三段串（空=全局）
@@ -471,7 +471,7 @@ if (!function_exists('w_msg')) {
                 'priority'      => $options['priority'] ?? null,
                 'metadata'      => $options['metadata'] ?? [],
                 'is_icon'       => 1,
-                'avatar'        => $options['icon'] ?? 'ri-notification-line',
+                'avatar'        => $options['icon'] ?? 'bell',
                 'notify_users'  => $options['notify_users'] ?? [],
                 'scope_hash'    => $options['scope_hash'] ?? null,
                 'scope'         => $options['scope'] ?? null,

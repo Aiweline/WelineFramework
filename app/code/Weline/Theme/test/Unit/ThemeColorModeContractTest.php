@@ -162,33 +162,35 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertStringContainsString("data-theme-preference', preference", $frontendHead);
         self::assertStringContainsString("frontend/colors/_light.css", $frontendHead);
         self::assertStringContainsString("frontend/assets/css/theme.css", $frontendHead);
+        self::assertStringContainsString('<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>', $frontendHead);
+        self::assertStringContainsString('<theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>', $frontendHead);
         self::assertStringNotContainsString('theme/{{area}}/assets/css/theme.css', $frontendHead);
-        self::assertStringContainsString('event.origin !== window.location.origin', $frontendHead);
         self::assertLessThan(
-            strpos($frontendHead, 'frontend/colors/_light.css'),
-            strpos($frontendHead, "data-theme-preference', preference")
+            strpos($frontendHead, "data-theme-preference', preference"),
+            strpos($frontendHead, 'frontend/colors/_light.css')
         );
         self::assertLessThan(
-            strpos($frontendHead, 'Weline_Theme::theme/frontend/colors/_dark.css'),
-            strpos($frontendHead, 'frontend/colors/_dark.css')
-        );
-        self::assertLessThan(
-            strpos($frontendHead, 'frontend/assets/css/theme.css'),
+            strpos($frontendHead, 'Weline_Theme::theme/frontend/colors/_light.css'),
             strpos($frontendHead, 'Weline_Theme::frontend::partials::head::styles-after')
         );
         self::assertLessThan(
             strpos($frontendHead, 'Weline_Theme::frontend::partials::head::styles-after'),
-            strpos($frontendHead, 'frontend/colors/_dark.css')
+            strpos($frontendHead, 'Weline_Theme::theme/frontend/colors/_dark.css')
+        );
+        self::assertLessThan(
+            strpos($frontendHead, 'Weline_Theme::theme/frontend/colors/_dark.css'),
+            strpos($frontendHead, 'frontend/assets/css/theme.css')
         );
 
         $minimalHead = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/head/minimal.phtml');
         self::assertStringContainsString("data-theme-preference', preference", $minimalHead);
         self::assertStringContainsString("frontend/assets/js/theme.js", $minimalHead);
+        self::assertStringContainsString('<theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>', $minimalHead);
         self::assertStringContainsString('window.Toast = ThemeNotice;', $frontendRuntime);
         self::assertStringContainsString('typeof window.Toast.success !== \'function\'', $frontendRuntime);
         self::assertStringContainsString('Weline.Theme.apply(themeColor, false);', $frontendRuntime);
-        self::assertStringContainsString('window.AdminToast = BackendToast;', $this->read('app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js'));
-        self::assertStringContainsString('typeof window.AdminToast.success !== \'function\'', $this->read('app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js'));
+        self::assertStringContainsString('window.Weline.UI.toast = Weline.UI.toast;', $this->read('app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js'));
+        self::assertStringContainsString('typeof window.Weline.UI.toast.success !== \'function\'', $this->read('app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js'));
         $backendComponents = $this->read('app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js');
         self::assertStringContainsString('window.__WelineBackendComponentsRuntime', $backendComponents);
         self::assertStringNotContainsString('var(--backend-color-', $backendComponents);

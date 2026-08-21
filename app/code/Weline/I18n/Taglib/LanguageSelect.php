@@ -785,8 +785,8 @@ HTML;
                 var disabled = !!disabledMap[item.code];
                 var locked = (readonlyValues.indexOf(item.code) !== -1 && selected) || disabled;
                 var icon = isMultiple
-                    ? (selected ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline')
-                    : (selected ? 'mdi-radiobox-marked' : 'mdi-radiobox-blank');
+                    ? (selected ? 'check' : 'check')
+                    : (selected ? 'box' : 'box');
                 var metaParts = [item.code];
                 var selfName = String(item.self_name || '').trim();
                 var englishName = String(item.english_name || item.reference_name || '').trim();

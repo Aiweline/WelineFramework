@@ -4,10 +4,10 @@
 $menus = $menus ?? [];
 ?>
 <div class='topnav'>
-    <div class='container-fluid'>
+    <div class="w-container">
         <nav class='navbar navbar-light navbar-expand-lg topnav-menu'>
 
-            <div class='collapse navbar-collapse' id='topnav-menu-content'>
+            <div class="w-disclosure__panel navbar-collapse" id='topnav-menu-content' data-w-disclosure-panel hidden>
                 <ul class='navbar-nav'>
                     <foreach name="menus" item="top_menu">
                         <!--顶级菜单-->
@@ -28,7 +28,7 @@ $menus = $menus ?? [];
                             // 判断是否有子菜单
                             $hasSubMenu = !empty($subMenus) && is_array($subMenus);
                         </php>
-                        <li class='nav-item @if{top_menu.nodes=>"dropdown"}'>
+                        <li class="@if{top_menu.nodes=>"dropdown"}">
                             <php>
                                 // 只有没有子菜单的菜单项才能点击
                                 if ($hasSubMenu) {
@@ -41,8 +41,7 @@ $menus = $menus ?? [];
                                     $dropdown_addition_class = '';
                                 }
                             </php>
-                            <a class='nav-link @var{$dropdown_addition_class}' href='@var{$href}'
-                               @var{$dropdown_addition}>
+                            <a class="@var{$dropdown_addition_class}" href='@var{$href}'>
                                 <i class='@var{$menuIcon}'></i>
                                 <var>$menuTitle</var>
                                 <if condition="top_menu.nodes">
@@ -50,7 +49,7 @@ $menus = $menus ?? [];
                                 </if>
                             </a>
                             <if condition="top_menu.nodes">
-                                <div class='dropdown-menu' aria-labelledby='@var{$menuSourceId}'>
+                                <div class="w-menu" aria-labelledby='@var{$menuSourceId}' data-w-menu-panel role="menu" hidden>
                                     <!--二级菜单-->
                                     <foreach name="top_menu.nodes" item='sub_menu'>
                                         <php>
@@ -67,15 +66,12 @@ $menus = $menus ?? [];
                                         </php>
                                         <if condition="sub_menu.nodes">
                                             <!--二级菜单有子菜单，不能点击，只能展开-->
-                                            <div class='dropdown'>
-                                                <a class='dropdown-item arrow-none' href='#'
-                                                   id='@var{$subMenuSourceId}'
-                                                   role='button'
-                                                   data-bs-toggle='dropdown'>
+                                            <div class="w-menu-root" data-w-component="menu">
+                                                <a class="w-menu__item arrow-none" href='#' id='@var{$subMenuSourceId}' role='button' data-w-menu-trigger aria-haspopup="menu" aria-expanded="false" tabindex="-1">
                                                     <var>$subMenuTitle</var>
                                                     <div class='arrow-down'></div>
                                                 </a>
-                                                <div class='dropdown-menu' aria-labelledby='@var{$subMenuSourceId}'>
+                                                <div class="w-menu" aria-labelledby='@var{$subMenuSourceId}' data-w-menu-panel role="menu" hidden>
                                                     <!--三级菜单（最后一级，可点击）-->
                                                     <foreach name="sub_menu.nodes" item="third_menu">
                                                         <php>
@@ -86,14 +82,13 @@ $menus = $menus ?? [];
                                                             $thirdUrlPrefix = $thirdIsBackend ? rtrim($req->getUrlBuilder()->getBackendUrl('/'), '/') : '/';
                                                             $thirdMenuUrl = $thirdUrlPrefix . '/' . ltrim($thirdMenuRoute, '/');
                                                         </php>
-                                                        <a href="@var{$thirdMenuUrl}"
-                                                           class='dropdown-item'><var>$thirdMenuTitle</var></a>
+                                                        <a href="@var{$thirdMenuUrl}" class="w-menu__item" role="menuitem" tabindex="-1"><var>$thirdMenuTitle</var></a>
                                                     </foreach>
                                                 </div>
                                             </div>
                                             <else/>
                                             <!--二级菜单如果没有子菜单（最后一级），可点击-->
-                                            <a href="@var{$subMenuUrl}" class='dropdown-item'><var>$subMenuTitle</var></a>
+                                            <a href="@var{$subMenuUrl}" class="w-menu__item" role="menuitem" tabindex="-1"><var>$subMenuTitle</var></a>
                                         </if>
                                     </foreach>
                                 </div>

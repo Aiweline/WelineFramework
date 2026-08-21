@@ -1262,39 +1262,39 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
         </div>
         <nav class="wfm-nav" data-wls-plugin-nav>
             <a href="<?= $escapeHtml($panelUrl) ?>">
-                <i class="mdi mdi-view-dashboard-outline"></i>
+                <w:icon name="grid" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('WLS 面板')) ?></span>
             </a>
             <a href="<?= $escapeHtml($buildFileManagerRouteUrl('roots')) ?>" class="<?= $escapeHtml($fileNavClass('roots')) ?>"<?= $fileNavCurrent('roots') ?>>
-                <i class="mdi mdi-folder-outline"></i>
+                <w:icon name="folder" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('路径')) ?></span>
             </a>
             <a href="<?= $escapeHtml($buildFileManagerRouteUrl('browser')) ?>" class="<?= $escapeHtml($fileNavClass('browser')) ?>"<?= $fileNavCurrent('browser') ?>>
-                <i class="mdi mdi-file-tree-outline"></i>
+                <w:icon name="file" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('浏览')) ?></span>
             </a>
             <a href="<?= $escapeHtml($buildFileManagerRouteUrl('policy')) ?>" class="<?= $escapeHtml($fileNavClass('policy')) ?>"<?= $fileNavCurrent('policy') ?>>
-                <i class="mdi mdi-shield-edit-outline"></i>
+                <w:icon name="edit" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('策略')) ?></span>
             </a>
             <a href="<?= $escapeHtml($buildFileManagerRouteUrl('write')) ?>" class="<?= $escapeHtml($fileNavClass('write')) ?>"<?= $fileNavCurrent('write') ?>>
-                <i class="mdi mdi-file-edit-outline"></i>
+                <w:icon name="edit" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('写入')) ?></span>
             </a>
             <a href="<?= $escapeHtml($buildFileManagerRouteUrl('queue')) ?>" class="<?= $escapeHtml($fileNavClass('queue')) ?>"<?= $fileNavCurrent('queue') ?>>
-                <i class="mdi mdi-progress-clock"></i>
+                <w:icon name="clock" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('队列')) ?></span>
             </a>
             <a href="<?= $escapeHtml($buildFileManagerRouteUrl('audit')) ?>" class="<?= $escapeHtml($fileNavClass('audit')) ?>"<?= $fileNavCurrent('audit') ?>>
-                <i class="mdi mdi-clipboard-text-clock-outline"></i>
+                <w:icon name="clock" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('日志')) ?></span>
             </a>
             <a href="<?= $escapeHtml($buildFileManagerRouteUrl('capabilities')) ?>" class="<?= $escapeHtml($fileNavClass('capabilities')) ?>"<?= $fileNavCurrent('capabilities') ?>>
-                <i class="mdi mdi-puzzle-outline"></i>
+                <w:icon name="puzzle" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('能力')) ?></span>
             </a>
             <a href="<?= $escapeHtml($marketplaceUrl) ?>">
-                <i class="mdi mdi-store-outline"></i>
+                <w:icon name="store" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('插件商城')) ?></span>
             </a>
         </nav>
@@ -1306,7 +1306,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                 data-wfm-theme-light-label="<?= $escapeHtml(__('浅色')) ?>"
                 aria-label="<?= $escapeHtml(__('切换明暗色')) ?>"
                 aria-pressed="false">
-            <i class="mdi mdi-theme-light-dark"></i>
+            <w:icon name="circle" size="sm"></w:icon>
             <span data-wfm-theme-label><?= $escapeHtml(__('深色')) ?></span>
         </button>
     </aside>
@@ -1324,11 +1324,11 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
             </div>
             <div class="wfm-actions">
                 <a class="wfm-action" href="<?= $escapeHtml($projectAdminUrl) ?>">
-                    <i class="mdi mdi-open-in-new"></i>
+                    <w:icon name="circle" size="sm"></w:icon>
                     <span><?= $escapeHtml(__('项目后台')) ?></span>
                 </a>
                 <a class="wfm-action primary" href="<?= $escapeHtml($panelUrl) ?>">
-                    <i class="mdi mdi-arrow-left"></i>
+                    <w:icon name="arrow-left" size="sm"></w:icon>
                     <span><?= $escapeHtml(__('返回 WLS')) ?></span>
                 </a>
             </div>
@@ -1517,7 +1517,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <input id="wfm-path-policy-confirm" name="confirm_phrase" autocomplete="off" placeholder="<?= $escapeHtml($pathPolicyConfirmPhrase) ?>">
                         </div>
                         <button type="submit" class="wfm-submit" <?= $policyRootCards ? '' : 'disabled' ?>>
-                            <i class="mdi mdi-shield-check-outline"></i>
+                            <w:icon name="check" size="sm"></w:icon>
                             <span><?= $escapeHtml(__('保存路径策略')) ?></span>
                         </button>
                     </w:form>
@@ -1549,7 +1549,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <input id="wfm-path-policy-reset-confirm" name="reset_confirm_phrase" autocomplete="off" placeholder="<?= $escapeHtml($pathPolicyResetConfirmPhrase) ?>" <?= !empty($pathPolicyConfig['has_policy']) ? '' : 'disabled' ?>>
                         </div>
                         <button type="submit" class="wfm-submit danger" <?= !empty($pathPolicyConfig['has_policy']) ? '' : 'disabled' ?>>
-                            <i class="mdi mdi-shield-refresh-outline"></i>
+                            <w:icon name="refresh" size="sm"></w:icon>
                             <span><?= $escapeHtml(__('恢复默认策略')) ?></span>
                         </button>
                     </w:form>
@@ -1591,7 +1591,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                     </div>
                     <?php if (!empty($browse['can_go_up'])): ?>
                         <a class="wfm-up-link" href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $parentRelativePath])) ?>">
-                            <i class="mdi mdi-arrow-up-left"></i>
+                            <w:icon name="arrow-up" size="sm"></w:icon>
                             <?= $escapeHtml(__('返回上级')) ?>
                         </a>
                     <?php endif; ?>
@@ -1619,7 +1619,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <div class="wfm-preview-actions">
                                 <?php if ($previewCanEdit): ?>
                                     <a class="wfm-preview-edit-action" href="<?= $escapeHtml($buildFileManagerRouteUrl('write', ['preview' => (string)($preview['relative_path'] ?? '')])) ?>">
-                                        <i class="mdi mdi-file-edit-outline"></i>
+                                        <w:icon name="edit" size="sm"></w:icon>
                                         <span><?= $escapeHtml(__('编辑此文本')) ?></span>
                                     </a>
                                 <?php elseif ($previewEditBlocker !== ''): ?>
@@ -1659,7 +1659,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <tr data-wfm-entry data-wfm-entry-type="<?= $escapeHtml($entryType) ?>">
                                     <td>
                                         <div class="wfm-entry-name">
-                                            <i class="mdi <?= $isDirectory ? 'mdi-folder-outline' : 'mdi-file-outline' ?>"></i>
+                                            <i class="mdi <?= $isDirectory ? 'folder' : 'file' ?>"></i>
                                             <span>
                                                 <?php if ($isDirectory): ?>
                                                     <a class="wfm-entry-link" href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $entryRelativePath])) ?>">
@@ -1682,13 +1682,13 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                             <div class="wfm-entry-actions">
                                                 <?php if (!empty($entry['previewable'])): ?>
                                                     <a class="wfm-entry-action" data-wfm-preview-link href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $currentRelativePath, 'preview' => $entryRelativePath])) ?>">
-                                                        <i class="mdi mdi-eye-outline"></i>
+                                                        <w:icon name="eye" size="sm"></w:icon>
                                                         <span><?= $escapeHtml(__('预览')) ?></span>
                                                     </a>
                                                 <?php endif; ?>
                                                 <?php if (!empty($entry['downloadable'])): ?>
                                                     <a class="wfm-entry-action" data-wfm-download-link href="<?= $escapeHtml($buildDownloadUrl(['root' => $selectedRootKey, 'file' => $entryRelativePath])) ?>">
-                                                        <i class="mdi mdi-download-outline"></i>
+                                                        <w:icon name="download" size="sm"></w:icon>
                                                         <span><?= $escapeHtml(__('下载')) ?></span>
                                                     </a>
                                                 <?php endif; ?>
@@ -1770,7 +1770,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <span><?= $escapeHtml(__('我确认在当前允许根目录内创建这个目录。')) ?></span>
                             </label>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedRootWritable ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-folder-plus-outline"></i>
+                                <w:icon name="plus" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('创建目录')) ?></span>
                             </button>
                         </w:form>
@@ -1819,7 +1819,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                                     class="wfm-editor-button is-active"
                                                     data-wfm-editor-wrap
                                                     aria-pressed="true">
-                                                <i class="mdi mdi-format-text-wrapping-wrap"></i>
+                                                <w:icon name="pin" size="sm"></w:icon>
                                                 <span><?= $escapeHtml(__('自动换行')) ?></span>
                                             </button>
                                             <label class="wfm-editor-select-label" for="wfm-editor-font-size"><?= $escapeHtml(__('字号')) ?></label>
@@ -1839,7 +1839,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                                     class="wfm-editor-button"
                                                     data-wfm-editor-revert
                                                     disabled>
-                                                <i class="mdi mdi-restore"></i>
+                                                <w:icon name="store" size="sm"></w:icon>
                                                 <span><?= $escapeHtml(__('还原预览')) ?></span>
                                             </button>
                                         </div>
@@ -1876,7 +1876,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="<?= $escapeHtml($saveTextConfirmPhrase) ?>">
                             </div>
                             <button type="submit" class="wfm-submit" <?= $saveTextWritable ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-content-save-outline"></i>
+                                <w:icon name="save" size="sm"></w:icon>
                                 <span><?= $escapeHtml($previewSourceEdit ? __('保存源码') : __('保存文本')) ?></span>
                             </button>
                         </w:form>
@@ -1914,7 +1914,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-upload-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="UPLOAD_FILE">
                             </div>
                             <button type="submit" class="wfm-submit" <?= $selectedRootWritable ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-upload-outline"></i>
+                                <w:icon name="upload" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Upload file')) ?></span>
                             </button>
                         </w:form>
@@ -1950,7 +1950,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-rename-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="RENAME_ENTRY">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedRootWritable ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-form-textbox"></i>
+                                <w:icon name="box" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Rename entry')) ?></span>
                             </button>
                         </w:form>
@@ -1987,7 +1987,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-compress-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="COMPRESS_ENTRY">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedRootWritable ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-archive-arrow-down-outline"></i>
+                                <w:icon name="arrow-down" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Compress entry')) ?></span>
                             </button>
                         </w:form>
@@ -2023,7 +2023,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-delete-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="DELETE_ENTRY or DELETE_TREE">
                             </div>
                             <button type="submit" class="wfm-submit danger" <?= $selectedRootWritable ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-delete-outline"></i>
+                                <w:icon name="trash" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Delete entry')) ?></span>
                             </button>
                         </w:form>
@@ -2121,7 +2121,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-queue-compress-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="QUEUE_COMPRESS">
                             </div>
                             <button type="submit" class="wfm-submit" <?= $selectedRootWritable ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-progress-clock"></i>
+                                <w:icon name="clock" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Create queue')) ?></span>
                             </button>
                         </w:form>
@@ -2170,7 +2170,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-source-create-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_CREATE_FILE">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-file-plus-outline"></i>
+                                <w:icon name="plus" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Create source file')) ?></span>
                             </button>
                         </w:form>
@@ -2214,7 +2214,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-source-rename-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_RENAME">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-file-edit-outline"></i>
+                                <w:icon name="edit" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Rename source file')) ?></span>
                             </button>
                         </w:form>
@@ -2254,7 +2254,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-source-trash-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_TRASH">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-delete-clock-outline"></i>
+                                <w:icon name="trash" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Trash source file')) ?></span>
                             </button>
                         </w:form>
@@ -2294,7 +2294,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-source-trash-queue-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_QUEUE_TRASH">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-progress-clock"></i>
+                                <w:icon name="clock" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Create source trash queue')) ?></span>
                             </button>
                         </w:form>
@@ -2334,7 +2334,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-source-archive-queue-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_QUEUE_ARCHIVE">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-archive-arrow-down-outline"></i>
+                                <w:icon name="arrow-down" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Create source archive queue')) ?></span>
                             </button>
                         </w:form>
@@ -2368,7 +2368,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-source-archive-tree-queue-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_QUEUE_ARCHIVE_TREE">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-folder-zip-outline"></i>
+                                <w:icon name="folder" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Create source directory archive queue')) ?></span>
                             </button>
                         </w:form>
@@ -2408,7 +2408,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-source-archive-selection-queue-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_QUEUE_ARCHIVE_SELECTION">
                             </div>
                             <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-archive-check-outline"></i>
+                                <w:icon name="check" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Create source selection archive queue')) ?></span>
                             </button>
                         </w:form>
@@ -2440,7 +2440,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <input id="wfm-queue-trash-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="QUEUE_TRASH">
                             </div>
                             <button type="submit" class="wfm-submit" <?= $selectedRootWritable ? '' : 'disabled' ?>>
-                                <i class="mdi mdi-delete-clock-outline"></i>
+                                <w:icon name="trash" size="sm"></w:icon>
                                 <span><?= $escapeHtml(__('Create recoverable queue')) ?></span>
                             </button>
                         </w:form>
@@ -2493,7 +2493,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                                 <input type="hidden" name="confirm_write" value="1">
                                                 <input type="hidden" name="confirm_phrase" value="RESTORE_TRASH">
                                                 <button type="submit" class="wfm-secondary-action">
-                                                    <i class="mdi mdi-restore"></i>
+                                                    <w:icon name="store" size="sm"></w:icon>
                                                     <span><?= $escapeHtml(__('Restore')) ?></span>
                                                 </button>
                                             </w:form>
@@ -2562,7 +2562,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                                 <input type="hidden" name="confirm_write" value="1">
                                                 <input type="hidden" name="confirm_phrase" value="RESTORE_TRASH">
                                                 <button type="submit" class="wfm-secondary-action">
-                                                    <i class="mdi mdi-restore"></i>
+                                                    <w:icon name="store" size="sm"></w:icon>
                                                     <span><?= $escapeHtml(__('Restore')) ?></span>
                                                 </button>
                                             </w:form>
@@ -2586,7 +2586,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                                     <input name="confirm_phrase" autocomplete="off" placeholder="PURGE_TRASH">
                                                 </div>
                                                 <button type="submit" class="wfm-secondary-action danger">
-                                                    <i class="mdi mdi-delete-forever-outline"></i>
+                                                    <w:icon name="trash" size="sm"></w:icon>
                                                     <span><?= $escapeHtml(__('永久清理')) ?></span>
                                                 </button>
                                             </w:form>
@@ -2674,7 +2674,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                 </div>
                 <div class="wfm-log-filter-actions">
                     <button type="submit" class="wfm-submit secondary">
-                        <i class="mdi mdi-filter-outline"></i>
+                        <w:icon name="filter" size="sm"></w:icon>
                         <span><?= $escapeHtml(__('Filter Logs')) ?></span>
                     </button>
                     <a class="wfm-log-reset" href="<?= $escapeHtml($buildFileManagerRouteUrl('audit')) ?>">

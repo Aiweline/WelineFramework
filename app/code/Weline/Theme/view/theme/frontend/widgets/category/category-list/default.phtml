@@ -106,8 +106,10 @@ $renderCategoryList = function ($categories, $depth = 0, $maxDepth = 2, $showCou
                 </a>
                 
                 <?php if (!empty($category['children'])): ?>
-                    <button class="toggle-btn <?= $isCollapsed ? 'collapsed' : '' ?>" type="button">
-                        <i class="ri-arrow-<?= $isCollapsed ? 'right' : 'down' ?>-s-line"></i>
+                    <button class="toggle-btn <?= $isCollapsed ? 'collapsed' : '' ?>"
+                            type="button"
+                            aria-expanded="<?= $isCollapsed ? 'false' : 'true' ?>">
+                        <w:icon name="chevron-right" size="sm"></w:icon>
                     </button>
                     <?php $renderCategoryList($category['children'], $depth + 1, $maxDepth, $showCount, $showImage, $collapsed); ?>
                 <?php endif; ?>
@@ -121,7 +123,7 @@ $renderCategoryList = function ($categories, $depth = 0, $maxDepth = 2, $showCou
 <div class="widget-category-list" id="<?= $widgetId ?>">
     <?php if ($title): ?>
         <h3 class="widget-title">
-            <i class="ri-apps-line"></i>
+            <w:icon name="grid" size="sm"></w:icon>
             <?= htmlspecialchars($title) ?>
         </h3>
     <?php endif; ?>
@@ -255,7 +257,7 @@ $renderCategoryList = function ($categories, $depth = 0, $maxDepth = 2, $showCou
                 const isHidden = subList.style.display === 'none';
                 subList.style.display = isHidden ? '' : 'none';
                 this.classList.toggle('collapsed');
-                this.querySelector('i').className = isHidden ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line';
+                this.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
             }
         });
     });

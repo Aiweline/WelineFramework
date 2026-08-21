@@ -105,11 +105,11 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
     }
 }
 </style>
-<div class="weline-pixel-dashboard-list container-fluid py-3">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+<div class="weline-pixel-dashboard-list w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
         <div>
-            <h1 class="h3 mb-1"><?= $h($pageTitle) ?></h1>
-            <div class="text-muted">
+            <h1 class="h3" style="--w-mb:var(--weline-space-1);"><?= $h($pageTitle) ?></h1>
+            <div class="w-text" data-tone="muted">
                 <lang>热表明细列表</lang>
                 · <?= $h(__('共 %{1} 条', [(string)$total])) ?>
                 <?php if (!empty($filters['range'])): ?>
@@ -117,27 +117,27 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
                 <?php endif; ?>
             </div>
         </div>
-        <div class="d-flex gap-2">
-            <a class="btn btn-sm btn-outline-secondary" href="<?= $h($indexUrl) ?>"><lang>返回看板</lang></a>
-            <a class="btn btn-sm btn-outline-secondary" href="<?= $h($archiveListUrl) ?>"><lang>冷归档明细</lang></a>
-            <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><lang>刷新</lang></a>
-            <a class="btn btn-sm btn-primary" href="<?= $h($exportUrl) ?>">
-                <i class="mdi mdi-download"></i> <lang>按当前筛选导出 CSV</lang>
+        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <a class="w-button" href="<?= $h($indexUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><lang>返回看板</lang></a>
+            <a class="w-button" href="<?= $h($archiveListUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><lang>冷归档明细</lang></a>
+            <a class="w-button" href="<?= $h($listUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><lang>刷新</lang></a>
+            <a class="w-button" href="<?= $h($exportUrl) ?>" data-tone="primary" data-size="sm">
+                <w:icon name="download" size="sm"></w:icon> <lang>按当前筛选导出 CSV</lang>
             </a>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12">
+    <div class="w-grid">
+        <div style="--w-span:12;">
             <template>Weline_Component::message.phtml</template>
         </div>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-body">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__body">
             <w:form method="get" action="@var($formAction)" class="weline-pixel-list-toolbar" id="pixel-list-filter-form">
                 <div class="weline-pixel-website-filter">
-                    <label class="form-label" for="list-filter-website_trigger"><lang>站点</lang></label>
+                    <label class="w-field__label" for="list-filter-website_trigger"><lang>站点</lang></label>
                     <w:websites:website:select
                         id="list-filter-website"
                         name="websiteId"
@@ -153,13 +153,12 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
                     />
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-event"><lang>事件</lang></label>
-                    <input type="text" name="event" id="list-filter-event" class="form-control"
-                           value="<?= $h($selectedEvent) ?>" placeholder="<?= $h(__('全部事件')) ?>">
+                    <label class="w-field__label" for="list-filter-event"><lang>事件</lang></label>
+                    <input type="text" name="event" id="list-filter-event" class="w-input" value="<?= $h($selectedEvent) ?>" placeholder="<?= $h(__('全部事件')) ?>">
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-range"><lang>时间范围</lang></label>
-                    <select name="range" id="list-filter-range" class="form-select">
+                    <label class="w-field__label" for="list-filter-range"><lang>时间范围</lang></label>
+                    <select name="range" id="list-filter-range" class="w-select">
                         <?php foreach ($rangeLabels as $rangeValue => $rangeLabel): ?>
                             <option value="<?= $h($rangeValue) ?>" <?= $selectedRange === $rangeValue ? 'selected' : '' ?>>
                                 <?= $h($rangeLabel) ?>
@@ -168,21 +167,20 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
                     </select>
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-start"><lang>开始日期</lang></label>
-                    <input type="date" name="startDate" id="list-filter-start" class="form-control" value="<?= $h($startInput) ?>">
+                    <label class="w-field__label" for="list-filter-start"><lang>开始日期</lang></label>
+                    <input type="date" name="startDate" id="list-filter-start" class="w-input" value="<?= $h($startInput) ?>">
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-end"><lang>结束日期</lang></label>
-                    <input type="date" name="endDate" id="list-filter-end" class="form-control" value="<?= $h($endInput) ?>">
+                    <label class="w-field__label" for="list-filter-end"><lang>结束日期</lang></label>
+                    <input type="date" name="endDate" id="list-filter-end" class="w-input" value="<?= $h($endInput) ?>">
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-channel"><lang>渠道码</lang></label>
-                    <input type="text" name="channel_code" id="list-filter-channel" class="form-control"
-                           value="<?= $h($selectedChannel) ?>" placeholder="wch / channel_code">
+                    <label class="w-field__label" for="list-filter-channel"><lang>渠道码</lang></label>
+                    <input type="text" name="channel_code" id="list-filter-channel" class="w-input" value="<?= $h($selectedChannel) ?>" placeholder="wch / channel_code">
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-traffic"><lang>流量类型</lang></label>
-                    <select name="traffic_type" id="list-filter-traffic" class="form-select">
+                    <label class="w-field__label" for="list-filter-traffic"><lang>流量类型</lang></label>
+                    <select name="traffic_type" id="list-filter-traffic" class="w-select">
                         <option value="" <?= $selectedTrafficType === '' ? 'selected' : '' ?>><lang>全部类型</lang></option>
                         <?php foreach ($trafficTypeOptions as $type): ?>
                             <?php $type = (string)$type; ?>
@@ -193,49 +191,46 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
                     </select>
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-utm-source">utm_source</label>
-                    <input type="text" name="utm_source" id="list-filter-utm-source" class="form-control"
-                           value="<?= $h($selectedUtmSource) ?>">
+                    <label class="w-field__label" for="list-filter-utm-source">utm_source</label>
+                    <input type="text" name="utm_source" id="list-filter-utm-source" class="w-input" value="<?= $h($selectedUtmSource) ?>">
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-utm-medium">utm_medium</label>
-                    <input type="text" name="utm_medium" id="list-filter-utm-medium" class="form-control"
-                           value="<?= $h($selectedUtmMedium) ?>">
+                    <label class="w-field__label" for="list-filter-utm-medium">utm_medium</label>
+                    <input type="text" name="utm_medium" id="list-filter-utm-medium" class="w-input" value="<?= $h($selectedUtmMedium) ?>">
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-utm-campaign">utm_campaign</label>
-                    <input type="text" name="utm_campaign" id="list-filter-utm-campaign" class="form-control"
-                           value="<?= $h($selectedUtmCampaign) ?>">
+                    <label class="w-field__label" for="list-filter-utm-campaign">utm_campaign</label>
+                    <input type="text" name="utm_campaign" id="list-filter-utm-campaign" class="w-input" value="<?= $h($selectedUtmCampaign) ?>">
                 </div>
                 <div>
-                    <label class="form-label" for="list-filter-pagesize"><lang>每页条数</lang></label>
-                    <select name="pageSize" id="list-filter-pagesize" class="form-select">
+                    <label class="w-field__label" for="list-filter-pagesize"><lang>每页条数</lang></label>
+                    <select name="pageSize" id="list-filter-pagesize" class="w-select">
                         <?php foreach ([20, 50, 100, 200] as $size): ?>
                             <option value="<?= $size ?>" <?= $pageSize === $size ? 'selected' : '' ?>><?= $size ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="d-flex gap-2 weline-pixel-list-actions">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="mdi mdi-filter-outline"></i> <lang>应用筛选</lang>
+                <div class="weline-pixel-list-actions w-cluster" style="--w-gap:var(--weline-space-2);">
+                    <button type="submit" class="w-button" data-tone="primary">
+                        <w:icon name="filter" size="sm"></w:icon> <lang>应用筛选</lang>
                     </button>
-                    <a href="<?= $h($resetUrl) ?>" class="btn btn-outline-secondary"><lang>重置</lang></a>
+                    <a href="<?= $h($resetUrl) ?>" class="w-button" data-tone="neutral" data-variant="outline"><lang>重置</lang></a>
                 </div>
             </w:form>
         </div>
     </div>
 
     <?php if ($listError !== ''): ?>
-        <div class="alert alert-warning">
+        <div class="w-alert" data-tone="warning">
             <lang>事件列表查询失败（扁平列未就绪或数据库异常）。</lang>
         </div>
     <?php endif; ?>
 
-    <div class="card">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0 align-middle">
-                    <thead class="table-light">
+    <div class="w-card">
+        <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+            <div class="w-table-wrap">
+                <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
+                    <thead>
                     <tr>
                         <th><lang>时间</lang></th>
                         <th><lang>事件</lang></th>
@@ -249,13 +244,13 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
                     <tbody>
                     <?php if (!$listReady): ?>
                         <tr>
-                            <td colspan="7" class="text-muted text-center py-5">
+                            <td colspan="7" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
                                 <lang>列表未就绪。</lang>
                             </td>
                         </tr>
                     <?php elseif (!$rows): ?>
                         <tr>
-                            <td colspan="7" class="text-muted text-center py-5">
+                            <td colspan="7" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
                                 <lang>当前筛选条件下暂无事件。</lang>
                             </td>
                         </tr>
@@ -263,13 +258,13 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
                         <?php foreach ($rows as $row): ?>
                             <?php $data = \is_array($row) ? $row : []; ?>
                             <tr>
-                                <td class="text-nowrap"><?= $h($data['created_at'] ?? '') ?></td>
+                                <td data-wrap="false"><?= $h($data['created_at'] ?? '') ?></td>
                                 <td><?= $h($data['event'] ?? '') ?></td>
                                 <td><?= $h((string)($data['website_id'] ?? '')) ?></td>
                                 <td><code><?= $h($data['channel_code'] ?? '') ?></code></td>
                                 <td><?= $h($data['traffic_type'] ?? '') ?></td>
                                 <td><code><?= $h($data['session_id'] ?? '') ?></code></td>
-                                <td class="text-truncate" style="max-width:280px" title="<?= $h($data['url'] ?? '') ?>">
+                                <td class="w-text" style="max-width:280px" title="<?= $h($data['url'] ?? '') ?>" data-truncate="true">
                                     <?= $h($data['url'] ?? '') ?>
                                 </td>
                             </tr>
@@ -280,24 +275,24 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
             </div>
         </div>
         <?php if ($listReady && $pageCount > 0): ?>
-            <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <div class="text-muted small">
+            <div class="w-card__footer w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);">
+                <div class="w-text" data-tone="muted" data-size="sm">
                     <?= $h(__('第 %{1} / %{2} 页 · 每页 %{3} 条', [
                         (string)$page,
                         (string)$pageCount,
                         (string)$pageSize,
                     ])) ?>
                 </div>
-                <div class="btn-group btn-group-sm" role="group">
+                <div class="w-button-group" role="group">
                     <?php if ($prevUrl !== ''): ?>
-                        <a class="btn btn-outline-secondary" href="<?= $h($prevUrl) ?>"><lang>上一页</lang></a>
+                        <a class="w-button" href="<?= $h($prevUrl) ?>" data-tone="neutral" data-variant="outline"><lang>上一页</lang></a>
                     <?php else: ?>
-                        <button type="button" class="btn btn-outline-secondary" disabled><lang>上一页</lang></button>
+                        <button type="button" class="w-button" disabled data-tone="neutral" data-variant="outline"><lang>上一页</lang></button>
                     <?php endif; ?>
                     <?php if ($nextUrl !== ''): ?>
-                        <a class="btn btn-outline-secondary" href="<?= $h($nextUrl) ?>"><lang>下一页</lang></a>
+                        <a class="w-button" href="<?= $h($nextUrl) ?>" data-tone="neutral" data-variant="outline"><lang>下一页</lang></a>
                     <?php else: ?>
-                        <button type="button" class="btn btn-outline-secondary" disabled><lang>下一页</lang></button>
+                        <button type="button" class="w-button" disabled data-tone="neutral" data-variant="outline"><lang>下一页</lang></button>
                     <?php endif; ?>
                 </div>
             </div>

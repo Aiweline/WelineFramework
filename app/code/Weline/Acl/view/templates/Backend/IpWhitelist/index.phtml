@@ -19,43 +19,42 @@ $totalPages = (int)($total_pages ?? 0);
 $keyword = $keyword ?? '';
 ?>
 <!-- 页面标题 -->
-<div class="row" data-testid="acl-ip-whitelist-management">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>IP白名单</lang></h4>
-            <button type="button" class="btn btn-primary" data-ip-whitelist-action="add">
-                <i class="mdi mdi-plus me-2"></i><lang>添加IP</lang>
+<div class="w-grid" data-testid="acl-ip-whitelist-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>IP白名单</lang></h4>
+            <button type="button" class="w-button" data-ip-whitelist-action="add" data-tone="primary">
+                <w:icon name="plus" size="sm"></w:icon><lang>添加IP</lang>
             </button>
         </div>
     </div>
 </div>
 
 <!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 搜索 -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card">
-            <div class="card-body">
-                <w:form method="get" action="@var($this->getBackendUrl('*/backend/ip-whitelist'))" class="row g-3">
-                    <div class="col-md-9">
-                        <label class="form-label"><lang>关键词</lang></label>
-                        <input type="text" class="form-control" name="keyword" value="<?= htmlspecialchars($keyword) ?>" 
-                               placeholder="<?= __('搜索IP地址或描述') ?>">
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <w:form method="get" action="@var($this->getBackendUrl('*/backend/ip-whitelist'))" class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div style="--w-span-md:9;">
+                        <label class="w-field__label"><lang>关键词</lang></label>
+                        <input type="text" class="w-input" name="keyword" value="<?= htmlspecialchars($keyword) ?>" placeholder="<?= __('搜索IP地址或描述') ?>">
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label">&nbsp;</label>
                         <div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-magnify me-2"></i><lang>搜索</lang>
+                            <button type="submit" class="w-button" data-tone="primary">
+                                <w:icon name="search" size="sm"></w:icon><lang>搜索</lang>
                             </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/ip-whitelist') ?>" class="btn btn-secondary">
-                                <i class="mdi mdi-refresh me-2"></i><lang>重置</lang>
+                            <a href="<?= $this->getBackendUrl('*/backend/ip-whitelist') ?>" class="w-button" data-tone="neutral">
+                                <w:icon name="refresh" size="sm"></w:icon><lang>重置</lang>
                             </a>
                         </div>
                     </div>
@@ -66,16 +65,16 @@ $keyword = $keyword ?? '';
 </div>
 
 <!-- IP白名单列表 -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>IP白名单列表</lang></h4>
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title" style="--w-mb:var(--weline-space-6);"><lang>IP白名单列表</lang></h4>
                 
                 <?php if (!empty($items)): ?>
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle table-nowrap mb-0">
-                        <thead class="table-light">
+                <div class="w-table-wrap">
+                    <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
+                        <thead>
                             <tr>
                                 <th><lang>ID</lang></th>
                                 <th><lang>IP地址</lang></th>
@@ -97,29 +96,20 @@ $keyword = $keyword ?? '';
                                 <td><?= htmlspecialchars($itemData['ip'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($itemData['description'] ?? '-') ?></td>
                                 <td>
-                                    <span class="badge bg-<?= $isActive ? 'success' : 'secondary' ?>">
+                                    <span class="w-badge bg-<?= $isActive ? 'success' : 'secondary' ?>">
                                         <?= $isActive ? __('启用') : __('禁用') ?>
                                     </span>
                                 </td>
                                 <td><?= $itemData['created_at'] ?? '-' ?></td>
                                 <td>
-                                    <button type="button"
-                                            class="btn btn-sm btn-primary"
-                                            data-ip-whitelist-action="edit"
-                                            data-item-id="<?= $itemId ?>">
-                                        <i class="mdi mdi-pencil me-1"></i><lang>编辑</lang>
+                                    <button type="button" class="w-button" data-ip-whitelist-action="edit" data-item-id="<?= $itemId ?>" data-tone="primary" data-size="sm">
+                                        <w:icon name="edit" size="sm"></w:icon><lang>编辑</lang>
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-<?= $isActive ? 'warning' : 'success' ?>"
-                                            data-ip-whitelist-action="toggle"
-                                            data-item-id="<?= $itemId ?>"
-                                            data-current-status="<?= $isActive ? 1 : 0 ?>">
-                                        <i class="mdi mdi-toggle-switch me-1"></i><?= $isActive ? __('禁用') : __('启用') ?>
+                                    <button type="button" class="w-button btn-<?= $isActive ? 'warning' : 'success' ?>" data-ip-whitelist-action="toggle" data-item-id="<?= $itemId ?>" data-current-status="<?= $isActive ? 1 : 0 ?>" data-size="sm">
+                                        <w:icon name="switch" size="sm"></w:icon><?= $isActive ? __('禁用') : __('启用') ?>
                                     </button>
-                                    <button type="button"
-                                            class="btn btn-sm btn-danger"
-                                            data-ip-whitelist-action="delete"
-                                            data-item-id="<?= $itemId ?>">
-                                        <i class="mdi mdi-delete me-1"></i><lang>删除</lang>
+                                    <button type="button" class="w-button" data-ip-whitelist-action="delete" data-item-id="<?= $itemId ?>" data-tone="danger" data-size="sm">
+                                        <w:icon name="trash" size="sm"></w:icon><lang>删除</lang>
                                     </button>
                                 </td>
                             </tr>
@@ -130,36 +120,36 @@ $keyword = $keyword ?? '';
 
                 <!-- 分页 -->
                 <?php if ($totalPages > 1): ?>
-                <div class="row mt-4">
-                    <div class="col-sm-12 col-md-5">
+                <div class="w-grid" style="--w-mt:var(--weline-space-6);">
+                    <div style="--w-span:12;--w-span-md:5;">
                         <div class="dataTables_info">
                             <lang>显示</lang> <?= (($page - 1) * $limit + 1) ?> 
                             <lang>到</lang> <?= min($page * $limit, $total) ?> 
                             <lang>共</lang> <?= $total ?> <lang>条记录</lang>
                         </div>
                     </div>
-                    <div class="col-sm-12 col-md-7">
-                        <div class="dataTables_paginate paging_simple_numbers float-end">
-                            <ul class="pagination">
+                    <div style="--w-span:12;--w-span-md:7;">
+                        <div class="dataTables_paginate paging_simple_numbers">
+                            <ul class="w-pagination">
                                 <?php if ($page > 1): ?>
-                                <li class="paginate_button page-item previous">
-                                    <a href="?page=<?= $page - 1 ?>&keyword=<?= urlencode($keyword) ?>" class="page-link">
+                                <li class="paginate_button w-pagination__item previous">
+                                    <a href="?page=<?= $page - 1 ?>&keyword=<?= urlencode($keyword) ?>" class="w-pagination__link">
                                         <lang>上一页</lang>
                                     </a>
                                 </li>
                                 <?php endif; ?>
                                 
                                 <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                                <li class="paginate_button page-item <?= $i === $page ? 'active' : '' ?>">
-                                    <a href="?page=<?= $i ?>&keyword=<?= urlencode($keyword) ?>" class="page-link">
+                                <li class="paginate_button w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                                    <a href="?page=<?= $i ?>&keyword=<?= urlencode($keyword) ?>" class="w-pagination__link">
                                         <?= $i ?>
                                     </a>
                                 </li>
                                 <?php endfor; ?>
                                 
                                 <?php if ($page < $totalPages): ?>
-                                <li class="paginate_button page-item next">
-                                    <a href="?page=<?= $page + 1 ?>&keyword=<?= urlencode($keyword) ?>" class="page-link">
+                                <li class="paginate_button w-pagination__item next">
+                                    <a href="?page=<?= $page + 1 ?>&keyword=<?= urlencode($keyword) ?>" class="w-pagination__link">
                                         <lang>下一页</lang>
                                     </a>
                                 </li>
@@ -171,9 +161,9 @@ $keyword = $keyword ?? '';
                 <?php endif; ?>
 
                 <?php else: ?>
-                <div class="text-center text-muted py-5">
-                    <i class="mdi mdi-shield-check" style="font-size: 48px;"></i>
-                    <p class="mt-3"><lang>暂无IP白名单记录</lang></p>
+                <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                    <w:icon name="check" size="sm"></w:icon>
+                    <p style="--w-mt:var(--weline-space-4);"><lang>暂无IP白名单记录</lang></p>
                 </div>
                 <?php endif; ?>
             </div>
@@ -182,39 +172,38 @@ $keyword = $keyword ?? '';
 </div>
 
 <!-- 添加/编辑模态框 -->
-<div class="modal fade" id="ipWhitelistModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle"><lang>添加IP白名单</lang></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="w-dialog" id="ipWhitelistModal" tabindex="-1" data-w-component="dialog" data-state="closed" hidden aria-hidden="true">
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title" id="modalTitle"><lang>添加IP白名单</lang></h5>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
             <w:form id="ipWhitelistForm" data-ip-whitelist-form="1">
-                <div class="modal-body">
+                <div class="w-dialog__body">
                     <input type="hidden" id="item_id" name="id" value="0">
-                    <div class="mb-3">
-                        <label class="form-label"><lang>IP地址</lang> <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="ip" name="ip" required 
-                               placeholder="<?= __('例如：192.168.1.1 或 192.168.1.0/24') ?>">
-                        <div class="form-text"><lang>支持单个IP或CIDR格式的IP范围</lang></div>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>IP地址</lang> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="text" class="w-input" id="ip" name="ip" required placeholder="<?= __('例如：192.168.1.1 或 192.168.1.0/24') ?>">
+                        <div class="w-field__hint"><lang>支持单个IP或CIDR格式的IP范围</lang></div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><lang>描述</lang></label>
-                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>描述</lang></label>
+                        <textarea class="w-textarea" id="description" name="description" rows="3"></textarea>
                     </div>
-                    <div class="mb-3">
-                        <div class="form-check">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <div class="w-check">
                             <input type="hidden" name="is_active" value="0">
-                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" checked>
-                            <label class="form-check-label" for="is_active">
+                            <input type="checkbox" id="is_active" name="is_active" value="1" checked>
+                            <label for="is_active">
                                 <lang>启用</lang>
                             </label>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
-                    <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><lang>取消</lang></button>
+                    <button type="submit" class="w-button" data-tone="primary"><lang>保存</lang></button>
                 </div>
             </w:form>
         </div>
@@ -255,16 +244,7 @@ $keyword = $keyword ?? '';
     'use strict';
 
     function confirmAction(message) {
-        var confirmApi = window.BackendConfirm || window.AdminConfirm;
-        if (confirmApi && typeof confirmApi.show === 'function') {
-            return confirmApi.show(message);
-        }
-
-        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-            window.BackendToast.error('<?= __('确认组件不可用，请刷新页面后重试') ?>');
-        }
-
-        return Promise.resolve(false);
+        return Weline.UI.dialog.confirm(message, {tone: 'warning'});
     }
     
     window.showAddModal = function() {
@@ -277,7 +257,7 @@ $keyword = $keyword ?? '';
     };
     
     window.editItem = function(id) {
-        BackendToast.info('<?= __('编辑ID：') ?>' + id);
+        Weline.UI.toast.info('<?= __('编辑ID：') ?>' + id);
     };
     
     window.saveItem = function(event) {
@@ -302,18 +282,18 @@ $keyword = $keyword ?? '';
                 var data = result && result.data && result.success === undefined ? result.data : result;
                 if (data && data.success) {
                     form.dataset.ipWhitelistState = 'created';
-                    BackendToast.success(data.message);
-                    bootstrap.Modal.getInstance(document.getElementById('ipWhitelistModal')).hide();
+                    Weline.UI.toast.success(data.message);
+                    Weline.UI.dialog.close('#ipWhitelistModal');
                     setTimeout(function() { location.reload(); }, 250);
                     return;
                 }
                 form.dataset.ipWhitelistState = 'failed';
                 form.dataset.ipWhitelistError = String(data && data.message || '<?= __('操作失败') ?>');
-                BackendToast.error(form.dataset.ipWhitelistError);
+                Weline.UI.toast.error(form.dataset.ipWhitelistError);
             }).catch(function(error) {
                 form.dataset.ipWhitelistState = 'failed';
                 form.dataset.ipWhitelistError = String(error && error.message || error || '<?= __('操作失败') ?>');
-                BackendToast.error(form.dataset.ipWhitelistError);
+                Weline.UI.toast.error(form.dataset.ipWhitelistError);
             });
             return;
         }
@@ -329,21 +309,21 @@ $keyword = $keyword ?? '';
         .then(function(data) {
             if (data.success) {
                 form.dataset.ipWhitelistState = 'updated';
-                BackendToast.success(data.message);
-                bootstrap.Modal.getInstance(document.getElementById('ipWhitelistModal')).hide();
+                Weline.UI.toast.success(data.message);
+                Weline.UI.dialog.close('#ipWhitelistModal');
                 setTimeout(function() {
                     location.reload();
                 }, 1000);
             } else {
                 form.dataset.ipWhitelistState = 'failed';
                 form.dataset.ipWhitelistError = String(data.message || '');
-                BackendToast.error(data.message);
+                Weline.UI.toast.error(data.message);
             }
         })
         .catch(function(error) {
             form.dataset.ipWhitelistState = 'failed';
             form.dataset.ipWhitelistError = String(error && error.message || error || '');
-            BackendToast.error('<?= __('操作失败') ?>');
+            Weline.UI.toast.error('<?= __('操作失败') ?>');
         });
     };
     
@@ -360,16 +340,16 @@ $keyword = $keyword ?? '';
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    BackendToast.success(data.message);
+                    Weline.UI.toast.success(data.message);
                     setTimeout(function() {
                         location.reload();
                     }, 1000);
                 } else {
-                    BackendToast.error(data.message);
+                    Weline.UI.toast.error(data.message);
                 }
             })
             .catch(function(error) {
-                BackendToast.error('<?= __('操作失败') ?>');
+                Weline.UI.toast.error('<?= __('操作失败') ?>');
             });
         });
     };
@@ -387,16 +367,16 @@ $keyword = $keyword ?? '';
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    BackendToast.success(data.message);
+                    Weline.UI.toast.success(data.message);
                     setTimeout(function() {
                         location.reload();
                     }, 1000);
                 } else {
-                    BackendToast.error(data.message);
+                    Weline.UI.toast.error(data.message);
                 }
             })
             .catch(function(error) {
-                BackendToast.error('<?= __('操作失败') ?>');
+                Weline.UI.toast.error('<?= __('操作失败') ?>');
             });
         });
     };

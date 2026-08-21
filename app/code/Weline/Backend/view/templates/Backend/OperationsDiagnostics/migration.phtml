@@ -5,45 +5,45 @@ $environment = is_array($diagnostics['environment'] ?? null) ? $diagnostics['env
 $clones = is_array($diagnostics['clones'] ?? null) ? $diagnostics['clones'] : [];
 $checkpoints = is_array($diagnostics['checkpoints'] ?? null) ? $diagnostics['checkpoints'] : [];
 ?>
-<div class="container-fluid" data-testid="operations-migration-diagnostics">
-    <div class="d-flex align-items-center justify-content-between mb-3">
+<div class="w-container" data-testid="operations-migration-diagnostics">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
         <div>
-            <h4 class="mb-1"><lang>迁移诊断</lang></h4>
-            <div class="text-muted"><lang>只读查看克隆登记和检查点；不提供迁移执行或销毁操作。</lang></div>
+            <h4 style="--w-mb:var(--weline-space-1);"><lang>迁移诊断</lang></h4>
+            <div class="w-text" data-tone="muted"><lang>只读查看克隆登记和检查点；不提供迁移执行或销毁操作。</lang></div>
         </div>
-        <span class="badge bg-secondary"><lang>只读</lang></span>
+        <span class="w-badge" data-w-background="muted"><lang>只读</lang></span>
     </div>
 
-    <div class="card mb-3"><div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-4"><strong><lang>连接器</lang></strong><div><?= $escape($environment['connector'] ?? '') ?></div></div>
-            <div class="col-md-5"><strong><lang>当前数据库</lang></strong><div><?= $escape($environment['database'] ?? '') ?></div></div>
-            <div class="col-md-3"><strong><lang>克隆环境</lang></strong><div><?= !empty($environment['is_clone']) ? '<lang>是</lang>' : '<lang>否</lang>' ?></div></div>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+        <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+            <div style="--w-span-md:4;"><strong><lang>连接器</lang></strong><div><?= $escape($environment['connector'] ?? '') ?></div></div>
+            <div style="--w-span-md:5;"><strong><lang>当前数据库</lang></strong><div><?= $escape($environment['database'] ?? '') ?></div></div>
+            <div style="--w-span-md:3;"><strong><lang>克隆环境</lang></strong><div><?= !empty($environment['is_clone']) ? '<lang>是</lang>' : '<lang>否</lang>' ?></div></div>
         </div>
     </div></div>
 
-    <div class="card mb-3">
-        <div class="card-header"><lang>已登记的隔离克隆</lang> <span class="badge bg-secondary"><?= count($clones) ?></span></div>
-        <div class="table-responsive"><table class="table table-striped mb-0">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header"><lang>已登记的隔离克隆</lang> <span class="w-badge" data-w-background="muted"><?= count($clones) ?></span></div>
+        <div class="w-table-wrap"><table class="w-table" style="--w-mb:0;">
             <thead><tr><th>Clone ID</th><th><lang>数据库</lang></th><th><lang>模式</lang></th><th><lang>源库</lang></th><th><lang>创建时间</lang></th><th><lang>指纹</lang></th></tr></thead>
             <tbody>
             <?php foreach ($clones as $row): ?>
                 <tr><td><?= $escape($row['clone_id'] ?? '') ?></td><td><?= $escape($row['database'] ?? '') ?></td><td><?= $escape($row['mode'] ?? '') ?></td><td><?= $escape($row['source_database'] ?? '') ?></td><td><?= $escape($row['created_at'] ?? '') ?></td><td><?= $escape($row['fingerprint'] ?? '') ?></td></tr>
             <?php endforeach; ?>
-            <?php if ($clones === []): ?><tr><td colspan="6" class="text-muted text-center"><lang>暂无克隆登记</lang></td></tr><?php endif; ?>
+            <?php if ($clones === []): ?><tr><td colspan="6" class="w-text" data-align="center" data-tone="muted"><lang>暂无克隆登记</lang></td></tr><?php endif; ?>
             </tbody>
         </table></div>
     </div>
 
-    <div class="card">
-        <div class="card-header"><lang>最近检查点</lang> <span class="badge bg-secondary"><?= count($checkpoints) ?></span></div>
-        <div class="table-responsive"><table class="table table-striped mb-0">
+    <div class="w-card">
+        <div class="w-card__header"><lang>最近检查点</lang> <span class="w-badge" data-w-background="muted"><?= count($checkpoints) ?></span></div>
+        <div class="w-table-wrap"><table class="w-table" style="--w-mb:0;">
             <thead><tr><th>Checkpoint ID</th><th><lang>阶段</lang></th><th><lang>更新时间</lang></th><th><lang>日志条数</lang></th></tr></thead>
             <tbody>
             <?php foreach ($checkpoints as $row): ?>
                 <tr><td><?= $escape($row['checkpoint_id'] ?? '') ?></td><td><?= $escape($row['phase'] ?? '') ?></td><td><?= $escape($row['updated_at'] ?? '') ?></td><td><?= $escape($row['journal_entries'] ?? 0) ?></td></tr>
             <?php endforeach; ?>
-            <?php if ($checkpoints === []): ?><tr><td colspan="4" class="text-muted text-center"><lang>暂无检查点</lang></td></tr><?php endif; ?>
+            <?php if ($checkpoints === []): ?><tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><lang>暂无检查点</lang></td></tr><?php endif; ?>
             </tbody>
         </table></div>
     </div>

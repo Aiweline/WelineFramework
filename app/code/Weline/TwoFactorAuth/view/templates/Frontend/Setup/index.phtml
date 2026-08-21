@@ -292,8 +292,8 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
+    <div class="w-container">
+        <div class="w-card">
             <div class="header">
                 <h1>🔐 <lang>启用双因素身份验证</lang></h1>
                 <p><lang>按照以下步骤完成设置，增强您的账户安全</lang></p>
@@ -405,7 +405,7 @@
                     <lang>在验证器应用中找到刚添加的账户，输入显示的6位数字验证码：</lang>
                 </p>
                 
-                <div class="form-group">
+                <div class="w-field">
                     <input 
                         type="text" 
                         id="verifyCode" 
@@ -417,8 +417,8 @@
                 </div>
                 
                 <div>
-                    <a href="/two-factor-auth/frontend" class="btn btn-secondary"><lang>取消</lang></a>
-                    <button class="btn btn-primary" type="button" data-twofa-action="enable-two-factor"><lang>确认启用</lang></button>
+                    <a href="/two-factor-auth/frontend" class="w-button" data-tone="neutral"><lang>取消</lang></a>
+                    <button class="w-button" type="button" data-twofa-action="enable-two-factor" data-tone="primary"><lang>确认启用</lang></button>
                 </div>
             </div>
         </div>
@@ -428,10 +428,6 @@
     <input type="hidden" id="backupCodesJson" value='<?= json_encode($backup_codes) ?>'>
     <input type="hidden" id="referer" value="<?= htmlspecialchars($referer ?? '/frontend/account') ?>">
 
-    <!-- SweetAlert2 CSS -->
-    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <!-- SweetAlert2 JS -->
-    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         document.addEventListener('click', function(e) {
             const trigger = e.target.closest('[data-twofa-action]');
@@ -491,16 +487,12 @@
                 if (!deferredPrompt) {
                     // 如果 deferredPrompt 不存在，打开验证器应用页面，那里会触发安装提示
                     window.open('/twofa-app/', '_blank');
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'info',
-                            title: '<?= __('提示') ?>',
-                            text: '<?= __('请在新打开的页面中点击"安装到桌面"按钮') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.log('<?= __('请在新打开的页面中点击"安装到桌面"按钮') ?>');
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'info',
+                        title: '<?= __('提示') ?>',
+                        message: '<?= __('请在新打开的页面中点击"安装到桌面"按钮') ?>',
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                     return;
                 }
                 
@@ -512,28 +504,20 @@
                 const { outcome } = await deferredPrompt.userChoice;
                 
                 if (outcome === 'accepted') {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: '<?= __('应用安装成功') ?>',
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-                    } else {
-                        console.log('<?= __('应用安装成功') ?>');
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: '<?= __('应用安装成功') ?>',
+                        duration: 2000,
+                        confirmable: false
+                    });
                 } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'info',
-                            title: '<?= __('提示') ?>',
-                            text: '<?= __('安装已取消') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.log('<?= __('安装已取消') ?>');
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'info',
+                        title: '<?= __('提示') ?>',
+                        message: '<?= __('安装已取消') ?>',
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
                 
                 // 清除 deferredPrompt
@@ -592,17 +576,13 @@
         function copySecret() {
             const text = '<?= str_replace(' ', '', $formatted_secret) ?>';
             navigator.clipboard.writeText(text).then(() => {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('复制成功') ?>',
-                        text: translations.secretCopied,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    console.log(translations.secretCopied);
-                }
+                Weline.UI.dialog.request({
+                    tone: 'success',
+                    title: '<?= __('复制成功') ?>',
+                    message: translations.secretCopied,
+                    duration: 2000,
+                    confirmable: false
+                });
             });
         }
 
@@ -611,17 +591,13 @@
             const codes = <?= json_encode($backup_codes) ?>;
             const text = codes.join('\n');
             navigator.clipboard.writeText(text).then(() => {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('复制成功') ?>',
-                        text: translations.backupCodesCopied,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    console.log(translations.backupCodesCopied);
-                }
+                Weline.UI.dialog.request({
+                    tone: 'success',
+                    title: '<?= __('复制成功') ?>',
+                    message: translations.backupCodesCopied,
+                    duration: 2000,
+                    confirmable: false
+                });
             });
         }
 
@@ -663,17 +639,13 @@ ${translations.finalNote}`;
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('下载成功') ?>',
-                    text: translations.fileDownloaded,
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                console.log(translations.fileDownloaded);
-            }
+            Weline.UI.dialog.request({
+                tone: 'success',
+                title: '<?= __('下载成功') ?>',
+                message: translations.fileDownloaded,
+                duration: 2000,
+                confirmable: false
+            });
         }
 
         // 自动格式化验证码输入
@@ -688,16 +660,12 @@ ${translations.finalNote}`;
             const backupCodes = document.getElementById('backupCodesJson').value;
 
             if (!code || code.length !== 6) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: translations.enter6DigitCode,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error(translations.enter6DigitCode);
-                }
+                Weline.UI.dialog.request({
+                    tone: 'warning',
+                    title: '<?= __('提示') ?>',
+                    message: translations.enter6DigitCode,
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 return;
             }
 
@@ -712,43 +680,30 @@ ${translations.finalNote}`;
                 }, {silent: true});
                 
                 if (result.success) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: translations.enableSuccess,
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(() => {
-                            window.location.href = '/two-factor-auth/frontend';
-                        });
-                    } else {
-                        console.log('✅ ' + translations.enableSuccess);
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: translations.enableSuccess,
+                        duration: 2000,
+                        confirmable: false
+                    }).then(() => {
                         window.location.href = '/two-factor-auth/frontend';
-                    }
-                } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('失败') ?>',
-                            html: result.message + '<br><br>' + translations.checkCode,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error('❌ ' + result.message + '\n\n' + translations.checkCode);
-                    }
-                }
-            } catch (error) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('操作失败') ?>',
-                        text: translations.operationFailed,
-                        confirmButtonText: '<?= __('确定') ?>'
                     });
                 } else {
-                    console.error(translations.operationFailed);
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: '<?= __('失败') ?>',
+                        message: result.message + '\n\n' + translations.checkCode,
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
+            } catch (error) {
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('操作失败') ?>',
+                    message: translations.operationFailed,
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 console.error(error);
             }
         }
@@ -762,4 +717,3 @@ ${translations.finalNote}`;
     </script>
 </body>
 </html>
-

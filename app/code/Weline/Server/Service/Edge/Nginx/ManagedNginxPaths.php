@@ -60,7 +60,7 @@ final class ManagedNginxPaths
         if ($mode === 'false') {
             return false;
         }
-        return false;
+        return true;
     }
 
     /**
@@ -106,9 +106,9 @@ final class ManagedNginxPaths
     {
         $cfg = $this->config();
         if (\array_key_exists('auto_start', $cfg)) {
-            return $this->toBool($cfg['auto_start'], false);
+            return $this->toBool($cfg['auto_start'], true);
         }
-        return false;
+        return $this->managedEnabled();
     }
 
     public function installRoot(): string

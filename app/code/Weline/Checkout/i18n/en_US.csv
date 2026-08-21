@@ -173,14 +173,20 @@
 支付处理失败：%{1},"Payment processing failed: %{1}"
 该兼容入口已停用，请从订单管理更新状态,该兼容入口已停用，请从订单管理更新状态
 订单管理,"Order Management"
+cart,cart
 查看订单列表,查看订单列表
+list,list
 查看订单详情,"View Order Details"
+eye,eye
 更新订单状态,更新订单状态
+edit,edit
 结账工作台,结账工作台
+clock,clock
 结账会话与诊断,结账会话与诊断
 结账会话,结账会话
 查看真实结账冻结会话,查看真实结账冻结会话
 结账诊断,结账诊断
+circle,circle
 查看结账会话状态和过期诊断,查看结账会话状态和过期诊断
 待处理,Pending
 处理中,Processing

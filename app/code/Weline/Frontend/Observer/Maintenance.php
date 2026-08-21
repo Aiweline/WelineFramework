@@ -48,23 +48,10 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         /**@var DataObject $data */
         $data = $event->getData('data');
         $white_urls = $data->getData('white_urls') ?? [];
-        $white_urls[] = 'img/favicon.png';
-        $white_urls[] = 'assets/css/bootstrap.min.css';
-        $white_urls[] = 'assets/css/icons.min.css';
-        $white_urls[] = 'assets/css/app.min.css';
-
-        $white_urls[] = 'assets/fonts/remixicon.ttf';
-        $white_urls[] = 'assets/fonts/remixicon.woff';
-        $white_urls[] = 'assets/fonts/remixicon.woff2';
-
-        $white_urls[] = 'assets/images/logo-dark.png';
-        $white_urls[] = 'assets/images/logo-light.png';
-
-        $white_urls[] = 'assets/libs/jquery/jquery.min.js';
-        $white_urls[] = 'assets/libs/bootstrap/js/bootstrap.bundle.min.js';
-        $white_urls[] = 'assets/libs/metismenu/metisMenu.min.js';
-        $white_urls[] = 'assets/libs/simplebar/simplebar.min.js';
-        $white_urls[] = 'assets/libs/node-waves/waves.min.js';
+        $white_urls[] = 'Weline/Theme/view/statics/ui/';
+        $white_urls[] = 'static/Weline/Theme/ui/';
+        $white_urls[] = 'Weline/Theme/view/theme/backend/assets/images/theme/logo.png';
+        $white_urls[] = 'Weline/Backend/view/statics/img/favicon.png';
         $white = false;
         foreach ($white_urls as $white_url_string) {
             if (str_contains($uri, $white_url_string)) {

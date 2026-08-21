@@ -21,7 +21,7 @@ use Weline\Sticker\Service\StickerDataService;
  * 
  * @package Weline_Sticker
  */
-#[AclAttribute('Weline_Sticker::sticker_manager', 'Sticker管理', 'mdi-sticker', 'Sticker管理', '')]
+#[AclAttribute('Weline_Sticker::sticker_manager', 'Sticker管理', 'star', 'Sticker管理', '')]
 class Sticker extends BackendController
 {
     /**
@@ -37,7 +37,7 @@ class Sticker extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Sticker::sticker_list', '查看Sticker列表', 'mdi-view-list', '查看Sticker列表')]
+    #[AclAttribute('Weline_Sticker::sticker_list', '查看Sticker列表', 'list', '查看Sticker列表')]
     public function index(): string
     {
         try {
@@ -118,7 +118,7 @@ class Sticker extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Sticker::sticker_detail', '查看Sticker详情', 'mdi-eye', '查看Sticker详情')]
+    #[AclAttribute('Weline_Sticker::sticker_detail', '查看Sticker详情', 'eye', '查看Sticker详情')]
     public function detail(): string
     {
         try {
@@ -247,7 +247,7 @@ class Sticker extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Sticker::sticker_refresh', '刷新Sticker注册表', 'mdi-refresh', '刷新Sticker注册表')]
+    #[AclAttribute('Weline_Sticker::sticker_refresh', '刷新Sticker注册表', 'refresh', '刷新Sticker注册表')]
     public function refresh(): string
     {
         try {

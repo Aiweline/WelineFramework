@@ -11,7 +11,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::contact', '联系人', 'mdi-account-box', '管理联系人（多渠道配置）', 'Weline_Backend::customer_group')]
+#[Acl('Weline_Backend::contact', '联系人', 'user', '管理联系人（多渠道配置）', 'Weline_Backend::customer_group')]
 class Contact extends BackendController
 {
     private ContactService $contactService;
@@ -23,7 +23,7 @@ class Contact extends BackendController
         $this->adapterCollector = ObjectManager::getInstance(ChannelAdapterCollector::class);
     }
 
-    #[Acl('Weline_Backend::contact_index', '联系人列表', 'mdi-contacts', '查看联系人')]
+    #[Acl('Weline_Backend::contact_index', '联系人列表', 'circle', '查看联系人')]
     public function index(): string
     {
         $userId = (int) $this->session->getLoginUserId();
@@ -54,7 +54,7 @@ class Contact extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Backend::contact_save', '保存联系人', 'mdi-content-save', '保存联系人')]
+    #[Acl('Weline_Backend::contact_save', '保存联系人', 'save', '保存联系人')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -87,7 +87,7 @@ class Contact extends BackendController
         return $this->jsonError(__('保存失败'));
     }
 
-    #[Acl('Weline_Backend::contact_add_channel_config', '添加渠道配置', 'mdi-plus', '为联系人添加渠道配置')]
+    #[Acl('Weline_Backend::contact_add_channel_config', '添加渠道配置', 'plus', '为联系人添加渠道配置')]
     public function addChannelConfig(): string
     {
         if (!$this->request->isPost()) {
@@ -120,7 +120,7 @@ class Contact extends BackendController
         return $this->jsonError(__('保存失败'));
     }
 
-    #[Acl('Weline_Backend::contact_remove_channel_config', '移除渠道配置', 'mdi-minus', '移除联系人的某渠道配置')]
+    #[Acl('Weline_Backend::contact_remove_channel_config', '移除渠道配置', 'minus', '移除联系人的某渠道配置')]
     public function removeChannelConfig(): string
     {
         if (!$this->request->isPost()) {
@@ -148,7 +148,7 @@ class Contact extends BackendController
         return $this->jsonError(__('操作失败'));
     }
 
-    #[Acl('Weline_Backend::contact_delete', '删除联系人', 'mdi-delete', '删除联系人')]
+    #[Acl('Weline_Backend::contact_delete', '删除联系人', 'trash', '删除联系人')]
     public function delete(): string
     {
         if (!$this->request->isPost()) {

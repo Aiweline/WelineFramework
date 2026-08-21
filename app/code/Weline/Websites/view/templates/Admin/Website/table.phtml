@@ -16,23 +16,23 @@ $storeLifecycleLabels = [
     'tombstone' => __('墓碑'),
 ];
 ?>
-<div class="table-responsive weline-websites-table-wrap">
-    <table class="table table-hover align-middle weline-websites-compact-table">
+<div class="w-table-wrap weline-websites-table-wrap">
+    <table class="w-table weline-websites-compact-table" data-w-vertical="middle">
         <thead>
         <tr>
             <th><lang>站点</lang></th>
             <th><lang>Store / SalesChannel 目录</lang></th>
             <th><lang>访问入口</lang></th>
             <th><lang>语言 / 货币</lang></th>
-            <th class="text-end"><lang>操作</lang></th>
+            <th class="w-text" data-align="end"><lang>操作</lang></th>
         </tr>
         </thead>
         <tbody>
         <?php if (empty($websites)): ?>
             <tr>
-                <td colspan="5" class="text-center text-muted py-4">
-                    <i class="mdi mdi-web-off" style="font-size: 2rem;"></i>
-                    <p class="mt-2 mb-0"><lang>暂无网站数据</lang></p>
+                <td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                    <w:icon name="circle" size="sm"></w:icon>
+                    <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>暂无网站数据</lang></p>
                 </td>
             </tr>
         <?php else: ?>
@@ -89,14 +89,14 @@ $storeLifecycleLabels = [
                              aria-label="<?= htmlspecialchars((string)__('Store 与 SalesChannel 只读目录'), ENT_QUOTES, 'UTF-8') ?>">
                             <div class="weline-websites-directory-heading">
                                 <span>
-                                    <i class="mdi mdi-sitemap me-1" aria-hidden="true"></i>
+                                    <w:icon name="tree" size="sm"></w:icon>
                                     <?= __('%{1} 个 Store', [count($storeChannelDirectory)]) ?>
                                 </span>
-                                <span class="badge bg-secondary-subtle text-secondary"><lang>只读</lang></span>
+                                <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><lang>只读</lang></span>
                             </div>
                             <?php if ($storeChannelDirectory === []): ?>
                                 <div class="weline-websites-directory-empty" role="status">
-                                    <i class="mdi mdi-database-alert-outline" aria-hidden="true"></i>
+                                    <w:icon name="warning" size="sm"></w:icon>
                                     <span><lang>暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。</lang></span>
                                 </div>
                             <?php else: ?>
@@ -122,22 +122,22 @@ $storeLifecycleLabels = [
                                                 </div>
                                                 <div class="weline-websites-directory-badges">
                                                     <?php if (!empty($store['is_default'])): ?>
-                                                        <span class="badge bg-primary-subtle text-primary"><lang>默认</lang></span>
+                                                        <span class="w-badge w-text" data-w-background="primary" data-tone="primary"><lang>默认</lang></span>
                                                     <?php endif; ?>
-                                                    <span class="badge bg-info-subtle text-info">
+                                                    <span class="w-badge w-text" data-w-background="info" data-tone="info">
                                                         <?= htmlspecialchars((string)($storeModeLabels[$storeMode] ?? $storeMode), ENT_QUOTES, 'UTF-8') ?>
                                                     </span>
-                                                    <span class="badge <?= !empty($store['enabled']) ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
+                                                    <span class="w-badge <?= !empty($store['enabled']) ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
                                                         <?= !empty($store['enabled']) ? __('启用') : __('停用') ?>
                                                     </span>
-                                                    <span class="badge <?= $storeLifecycle === 'active' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning' ?>">
+                                                    <span class="w-badge <?= $storeLifecycle === 'active' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning' ?>">
                                                         <?= htmlspecialchars((string)($storeLifecycleLabels[$storeLifecycle] ?? $storeLifecycle), ENT_QUOTES, 'UTF-8') ?>
                                                     </span>
                                                 </div>
                                             </div>
                                             <?php if ($channels === []): ?>
                                                 <div class="weline-websites-channel-empty">
-                                                    <i class="mdi mdi-source-branch-remove" aria-hidden="true"></i>
+                                                    <w:icon name="minus" size="sm"></w:icon>
                                                     <span><lang>此 Store 暂无 SalesChannel</lang></span>
                                                 </div>
                                             <?php else: ?>
@@ -145,14 +145,14 @@ $storeLifecycleLabels = [
                                                     aria-label="<?= htmlspecialchars((string)__('SalesChannel 列表'), ENT_QUOTES, 'UTF-8') ?>">
                                                     <?php foreach ($channels as $channel): ?>
                                                         <li>
-                                                            <i class="mdi mdi-source-branch" aria-hidden="true"></i>
+                                                            <w:icon name="branch" size="sm"></w:icon>
                                                             <span class="weline-websites-channel-name"><?= htmlspecialchars((string)($channel['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
                                                             <span class="weline-websites-inline-code"><?= htmlspecialchars((string)($channel['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
                                                             <span class="weline-websites-meta-chip">#<?= (int)($channel['channel_id'] ?? 0) ?></span>
                                                             <?php if (!empty($channel['is_default'])): ?>
-                                                                <span class="badge bg-primary-subtle text-primary"><lang>默认</lang></span>
+                                                                <span class="w-badge w-text" data-w-background="primary" data-tone="primary"><lang>默认</lang></span>
                                                             <?php endif; ?>
-                                                            <span class="badge <?= !empty($channel['effective_enabled']) ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
+                                                            <span class="w-badge <?= !empty($channel['effective_enabled']) ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
                                                                 <?= !empty($channel['effective_enabled']) ? __('有效') : __('不可用') ?>
                                                             </span>
                                                         </li>
@@ -170,10 +170,10 @@ $storeLifecycleLabels = [
                             <?php if ($siteUrl !== ''): ?>
                                 <a href="<?= htmlspecialchars($siteUrl) ?>" target="_blank" rel="noopener" class="weline-websites-url-link weline-websites-url-row">
                                     <span><?= htmlspecialchars($siteUrl) ?></span>
-                                    <i class="mdi mdi-open-in-new"></i>
+                                    <w:icon name="circle" size="sm"></w:icon>
                                 </a>
                             <?php else: ?>
-                                <span class="text-muted small"><lang>未生成访问地址</lang></span>
+                                <span class="w-text" data-tone="muted" data-size="sm"><lang>未生成访问地址</lang></span>
                             <?php endif; ?>
 
                             <div class="weline-websites-domain-list">
@@ -191,15 +191,15 @@ $storeLifecycleLabels = [
                                         <span class="weline-websites-domain-badge">
                                             <a href="<?= htmlspecialchars($domainUrl) ?>" target="_blank" rel="noopener" class="weline-websites-domain-link" title="<?= htmlspecialchars($domain) ?>">
                                                 <?= htmlspecialchars($domain) ?>
-                                                <i class="mdi mdi-open-in-new ms-1 small"></i>
+                                                <w:icon name="circle" size="sm"></w:icon>
                                             </a>
                                             <?php if ($isPrimary): ?>
-                                                <span class="badge bg-primary-subtle text-primary ms-1"><lang>主</lang></span>
+                                                <span class="w-badge w-text ms-1" data-w-background="primary" data-tone="primary"><lang>主</lang></span>
                                             <?php endif; ?>
                                         </span>
                                     <?php endforeach; ?>
                                 <?php else: ?>
-                                    <span class="text-muted small">-</span>
+                                    <span class="w-text" data-tone="muted" data-size="sm">-</span>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -210,14 +210,14 @@ $storeLifecycleLabels = [
                                 <span class="weline-websites-market-label"><lang>货币</lang></span>
                                 <div class="weline-websites-chip-group">
                                     <?php if ($defaultCurrency !== ''): ?>
-                                        <span class="badge bg-primary-subtle text-primary"><?= __('默认') ?> <?= htmlspecialchars($defaultCurrency) ?></span>
+                                        <span class="w-badge w-text" data-w-background="primary" data-tone="primary"><?= __('默认') ?> <?= htmlspecialchars($defaultCurrency) ?></span>
                                     <?php endif; ?>
                                     <?php if ($currencyCodes !== []): ?>
                                         <?php foreach ($currencyCodes as $currencyCode): ?>
-                                            <span class="badge bg-info-subtle text-info"><?= htmlspecialchars((string)$currencyCode) ?></span>
+                                            <span class="w-badge w-text" data-w-background="info" data-tone="info"><?= htmlspecialchars((string)$currencyCode) ?></span>
                                         <?php endforeach; ?>
                                     <?php elseif ($defaultCurrency === ''): ?>
-                                        <span class="text-muted small"><lang>全部</lang></span>
+                                        <span class="w-text" data-tone="muted" data-size="sm"><lang>全部</lang></span>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -226,37 +226,37 @@ $storeLifecycleLabels = [
                                 <div class="weline-websites-chip-group">
                                     <?php if ($languageCodes !== []): ?>
                                         <?php foreach ($languageCodes as $languageCode): ?>
-                                            <span class="badge bg-success-subtle text-success"><?= htmlspecialchars((string)$languageCode) ?></span>
+                                            <span class="w-badge w-text" data-w-background="success" data-tone="success"><?= htmlspecialchars((string)$languageCode) ?></span>
                                         <?php endforeach; ?>
                                     <?php else: ?>
-                                        <span class="text-muted small"><lang>全部</lang></span>
+                                        <span class="w-text" data-tone="muted" data-size="sm"><lang>全部</lang></span>
                                     <?php endif; ?>
                                 </div>
                             </div>
                         </div>
                     </td>
-                    <td class="text-end weline-websites-op-cell">
-                        <div class="d-flex gap-2 flex-wrap justify-content-end">
+                    <td class="w-text weline-websites-op-cell" data-align="end">
+                        <div class="w-cluster" data-wrap="true" data-justify="end" style="--w-gap:var(--weline-space-2);">
                             <?php
                             $frontendUrl = (string)($website['frontend_url'] ?? $siteUrl);
                             $backendUrl = (string)($website['backend_url'] ?? '');
                             ?>
                             <?php if ($frontendUrl !== ''): ?>
-                                <a href="<?= htmlspecialchars($frontendUrl) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary" title="<?= __('访问前端') ?>">
-                                    <i class="mdi mdi-open-in-new"></i> <lang>访问前端</lang>
+                                <a href="<?= htmlspecialchars($frontendUrl) ?>" target="_blank" rel="noopener" class="w-button" title="<?= __('访问前端') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                    <w:icon name="circle" size="sm"></w:icon> <lang>访问前端</lang>
                                 </a>
                             <?php else: ?>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="<?= __('请先绑定域名') ?>">
-                                    <i class="mdi mdi-open-in-new"></i> <lang>访问前端</lang>
+                                <button type="button" class="w-button" disabled title="<?= __('请先绑定域名') ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                                    <w:icon name="circle" size="sm"></w:icon> <lang>访问前端</lang>
                                 </button>
                             <?php endif; ?>
                             <?php if ($backendUrl !== ''): ?>
-                                <a href="<?= htmlspecialchars($backendUrl) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success" title="<?= __('有功能授权时从主站直进子站后台，无需再登录') ?>">
-                                    <i class="mdi mdi-monitor-dashboard"></i> <lang>管理后端</lang>
+                                <a href="<?= htmlspecialchars($backendUrl) ?>" target="_blank" rel="noopener" class="w-button" title="<?= __('有功能授权时从主站直进子站后台，无需再登录') ?>" data-tone="success" data-variant="outline" data-size="sm">
+                                    <w:icon name="grid" size="sm"></w:icon> <lang>管理后端</lang>
                                 </a>
                             <?php else: ?>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="<?= __('请先绑定域名') ?>">
-                                    <i class="mdi mdi-monitor-dashboard"></i> <lang>管理后端</lang>
+                                <button type="button" class="w-button" disabled title="<?= __('请先绑定域名') ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                                    <w:icon name="grid" size="sm"></w:icon> <lang>管理后端</lang>
                                 </button>
                             <?php endif; ?>
                             <block class='Weline\Component\Block\OffCanvas'
@@ -269,23 +269,16 @@ $storeLifecycleLabels = [
                                    close-button-show='1'
                                    close-button-text='关闭'
                                    direction='right'
-                                   class-names='w-75 h-100'
-                                   off-canvas-body-style=''
+                                   drawer-size='lg'
+
                                    target-button-text='编辑'
-                                   icon='mdi mdi-pencil'
-                                   target-button-class='btn btn-sm btn-outline-info'
+                                   icon='edit'
+                                   target-tone='info' target-variant='outline' target-size='sm'
                                    target-tag='a'
                                    save='1'
                             />
-                            <button type="button"
-                               w-delete="true"
-                               data-provider="websites"
-                               data-operation="deleteWebsite"
-                               w-var-website_id="<?= $websiteId ?>"
-                               w-msg="<?= __('您确定要删除此网站吗？') ?>"
-                               class="btn btn-sm btn-outline-danger"
-                               title="<?= __('删除') ?>">
-                                <i class="mdi mdi-delete"></i>
+                            <button type="button" w-delete="true" data-provider="websites" data-operation="deleteWebsite" w-var-website_id="<?= $websiteId ?>" w-msg="<?= __('您确定要删除此网站吗？') ?>" class="w-button" title="<?= __('删除') ?>" data-tone="danger" data-variant="outline" data-size="sm">
+                                <w:icon name="trash" size="sm"></w:icon>
                             </button>
                         </div>
                     </td>

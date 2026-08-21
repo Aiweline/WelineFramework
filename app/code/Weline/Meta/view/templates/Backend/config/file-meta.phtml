@@ -28,19 +28,19 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 ?>
 
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><lang>元数据配置管理</lang></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><lang>元数据配置管理</lang></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('admin/index/index')"><lang>系统</lang></a>
                     </li>
-                    <li class="breadcrumb-item">
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('meta/backend/meta')"><lang>元数据管理</lang></a>
                     </li>
-                    <li class="breadcrumb-item active"><lang>配置管理</lang></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>配置管理</lang></li>
                 </ol>
             </div>
         </div>
@@ -48,34 +48,34 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 </div>
 
 <!-- 消息 -->
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="container-fluid p-0">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('元数据配置管理') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
+<div class="w-container" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;"><?= __('元数据配置管理') ?></h4>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item">
                                         <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
                                     </li>
-                                    <li class="breadcrumb-item">
+                                    <li class="w-breadcrumb__item">
                                         <a href="@backend-url('meta/backend/meta')"><?= __('元数据管理') ?></a>
                                     </li>
-                                    <li class="breadcrumb-item active"><?= __('配置管理') ?></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= __('配置管理') ?></li>
                                 </ol>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-12">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
                         <template>Weline_Component::message.phtml</template>
                     </div>
                 </div>
@@ -90,18 +90,18 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
      data-meta-name-desc-translation-url="<?= $this->getUrl('meta/backend/config/file/metaNameDescriptionTranslation') ?>"
      data-meta-name-desc-translation-save-url="<?= $this->getUrl('meta/backend/config/file/metaNameDescriptionTranslationSave') ?>">
                     <!-- 筛选条件置顶一行 -->
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0"><?= __('筛选条件') ?></h5>
+                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                        <div style="--w-span:12;">
+                            <div class="w-card">
+                                <div class="w-card__header">
+                                    <h5 style="--w-mb:0;"><?= __('筛选条件') ?></h5>
                                 </div>
-                                <div class="card-body">
+                                <div class="w-card__body">
                                     <w:form id="meta-filter-form" class="meta-filter-form">
-                                        <div class="row g-3">
-                                            <div class="col-md-2">
-                                                <label class="form-label small"><?= __('命名空间') ?></label>
-                                                <select class="form-select form-select-sm" name="namespace" id="namespace-select">
+                                        <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                            <div style="--w-span-md:2;">
+                                                <label class="w-field__label w-text" data-size="sm"><?= __('命名空间') ?></label>
+                                                <select class="w-select" name="namespace" id="namespace-select" data-size="sm">
                                                     <option value=""><?= __('请选择') ?></option>
                                                     <?php foreach ($namespaceList as $ns): ?>
                                                         <option value="<?= htmlspecialchars($ns) ?>" <?= $currentNamespace === $ns ? 'selected' : '' ?>>
@@ -110,17 +110,17 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                                     <?php endforeach; ?>
                                                 </select>
                                             </div>
-                                            <div class="col-md-2">
-                                                <label class="form-label small"><?= __('区域') ?></label>
-                                                <select class="form-select form-select-sm" name="area">
+                                            <div style="--w-span-md:2;">
+                                                <label class="w-field__label w-text" data-size="sm"><?= __('区域') ?></label>
+                                                <select class="w-select" name="area" data-size="sm">
                                                     <option value=""><?= __('全部') ?></option>
                                                     <option value="frontend" <?= $currentArea === 'frontend' ? 'selected' : '' ?>>frontend</option>
                                                     <option value="backend" <?= $currentArea === 'backend' ? 'selected' : '' ?>>backend</option>
                                                 </select>
                                             </div>
-                                            <div class="col-md-2">
-                                                <label class="form-label small"><?= __('Scope') ?></label>
-                                                <select class="form-select form-select-sm" name="scope">
+                                            <div style="--w-span-md:2;">
+                                                <label class="w-field__label w-text" data-size="sm"><?= __('Scope') ?></label>
+                                                <select class="w-select" name="scope" data-size="sm">
                                                     <option value=""><?= __('全部') ?></option>
                                                     <?php foreach ($scopeOptions as $scopeOption): ?>
                                                         <option value="<?= htmlspecialchars($scopeOption) ?>" <?= $currentScope === $scopeOption ? 'selected' : '' ?>>
@@ -129,9 +129,9 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                                     <?php endforeach; ?>
                                                 </select>
                                             </div>
-                                            <div class="col-md-2">
-                                                <label class="form-label small"><?= __('语言') ?></label>
-                                                <select class="form-select form-select-sm" name="locale">
+                                            <div style="--w-span-md:2;">
+                                                <label class="w-field__label w-text" data-size="sm"><?= __('语言') ?></label>
+                                                <select class="w-select" name="locale" data-size="sm">
                                                     <option value=""><?= __('全部') ?></option>
                                                     <?php foreach ($localeOptions as $code): ?>
                                                         <option value="<?= htmlspecialchars($code) ?>" <?= $currentLocale === $code ? 'selected' : '' ?>>
@@ -140,9 +140,9 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                                     <?php endforeach; ?>
                                                 </select>
                                             </div>
-                                            <div class="col-md-2">
-                                                <label class="form-label small"><?= __('类型 (可选)') ?></label>
-                                                <select class="form-select form-select-sm" name="type">
+                                            <div style="--w-span-md:2;">
+                                                <label class="w-field__label w-text" data-size="sm"><?= __('类型 (可选)') ?></label>
+                                                <select class="w-select" name="type" data-size="sm">
                                                     <option value=""><?= __('全部') ?></option>
                                                     <?php foreach ($typeOptions as $type): ?>
                                                         <option value="<?= htmlspecialchars($type) ?>" <?= $currentType === $type ? 'selected' : '' ?>>
@@ -151,9 +151,9 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                                     <?php endforeach; ?>
                                                 </select>
                                             </div>
-                                            <div class="col-md-2">
-                                                <label class="form-label small"><?= __('分类 (可选)') ?></label>
-                                                <select class="form-select form-select-sm" name="category">
+                                            <div style="--w-span-md:2;">
+                                                <label class="w-field__label w-text" data-size="sm"><?= __('分类 (可选)') ?></label>
+                                                <select class="w-select" name="category" data-size="sm">
                                                     <option value=""><?= __('全部') ?></option>
                                                     <?php foreach ($categoryOptions as $cat): ?>
                                                         <option value="<?= htmlspecialchars($cat) ?>" <?= $currentCategory === $cat ? 'selected' : '' ?>>
@@ -163,17 +163,17 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                                 </select>
                                             </div>
                                         </div>
-                                        <div class="row g-3 mt-2">
-                                            <div class="col-md-3">
-                                                <label class="form-label small"><?= __('实体ID (可选)') ?></label>
-                                                <input type="text" class="form-control form-control-sm" name="identity_id" value="<?= htmlspecialchars($currentIdentityId) ?>" placeholder="<?= __('例如：主题ID、模块ID等') ?>">
-                                                <div class="form-text small"><?= __('对应实体的记录ID，用于过滤配置') ?></div>
+                                        <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mt:var(--weline-space-2);">
+                                            <div style="--w-span-md:3;">
+                                                <label class="w-field__label w-text" data-size="sm"><?= __('实体ID (可选)') ?></label>
+                                                <input type="text" class="w-input" name="identity_id" value="<?= htmlspecialchars($currentIdentityId) ?>" placeholder="<?= __('例如：主题ID、模块ID等') ?>" data-size="sm">
+                                                <div class="w-field__hint w-text" data-size="sm"><?= __('对应实体的记录ID，用于过滤配置') ?></div>
                                             </div>
                                         </div>
-                                        <div class="row mt-3">
-                                            <div class="col-12">
-                                                <button type="submit" class="btn btn-primary btn-sm" id="reload-tree-btn">
-                                                    <i class="mdi mdi-reload me-1"></i><?= __('加载文件树') ?>
+                                        <div class="w-grid" style="--w-mt:var(--weline-space-4);">
+                                            <div style="--w-span:12;">
+                                                <button type="submit" class="w-button" id="reload-tree-btn" data-tone="primary" data-size="sm">
+                                                    <w:icon name="refresh" size="sm"></w:icon><?= __('加载文件树') ?>
                                                 </button>
                                             </div>
                                         </div>
@@ -184,29 +184,29 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                     </div>
                     
                     <!-- 树和详情左右布局 -->
-                    <div class="row">
-                        <div class="col-lg-4">
-                            <div class="card">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h5 class="mb-0"><?= __('元数据文件树') ?></h5>
-                                    <small class="text-muted" id="meta-tree-count"></small>
+                    <div class="w-grid">
+                        <div style="--w-span-lg:4;">
+                            <div class="w-card">
+                                <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                                    <h5 style="--w-mb:0;"><?= __('元数据文件树') ?></h5>
+                                    <small class="w-text" id="meta-tree-count" data-tone="muted"></small>
                                 </div>
-                                <div class="card-body" style="max-height: calc(100vh - 300px); overflow-y: auto;">
+                                <div class="w-card__body" style="max-height: calc(100vh - 300px); overflow-y: auto;">
                                     <div id="meta-file-tree" class="meta-tree">
-                                        <div class="text-center text-muted py-4"><?= __('请先加载文件树') ?></div>
+                                        <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请先加载文件树') ?></div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-8">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0"><?= __('元数据详情') ?></h5>
+                        <div style="--w-span-lg:8;">
+                            <div class="w-card">
+                                <div class="w-card__header">
+                                    <h5 style="--w-mb:0;"><?= __('元数据详情') ?></h5>
                                 </div>
-                                <div class="card-body" id="meta-file-editor" style="max-height: calc(100vh - 300px); overflow-y: auto;">
-                                    <div class="text-center text-muted py-5">
-                                        <i class="mdi mdi-file-tree-outline" style="font-size: 3rem;"></i>
-                                        <p class="mt-3 mb-0"><?= __('请选择左侧文件以查看详情') ?></p>
+                                <div class="w-card__body" id="meta-file-editor" style="max-height: calc(100vh - 300px); overflow-y: auto;">
+                                    <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                                        <w:icon name="file" size="sm"></w:icon>
+                                        <p style="--w-mt:var(--weline-space-4);--w-mb:0;"><?= __('请选择左侧文件以查看详情') ?></p>
                                     </div>
                                 </div>
                             </div>
@@ -215,48 +215,48 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 </div>
 
 <!-- Meta name/description 翻译 Modal -->
-<div class="modal fade" id="metaNameDescriptionTranslationModal" tabindex="-1" aria-labelledby="metaNameDescriptionTranslationModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="metaNameDescriptionTranslationModalLabel"><?= __('Meta 翻译') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="w-dialog" id="metaNameDescriptionTranslationModal" tabindex="-1" aria-labelledby="metaNameDescriptionTranslationModalLabel" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title" id="metaNameDescriptionTranslationModalLabel"><?= __('Meta 翻译') ?></h5>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body" id="metaNameDescriptionTranslationModalBody">
-                <div class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+            <div class="w-dialog__body" id="metaNameDescriptionTranslationModalBody">
+                <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                    <div class="w-spinner w-text" role="status" data-tone="primary">
+                        <span class="w-visually-hidden"><?= __('加载中...') ?></span>
                     </div>
-                    <p class="mt-3 text-muted mb-0"><?= __('正在加载翻译...') ?></p>
+                    <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);--w-mb:0;"><?= __('正在加载翻译...') ?></p>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="metaSaveNameDescriptionTranslationBtn"><?= __('保存翻译') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="metaSaveNameDescriptionTranslationBtn" data-tone="primary"><?= __('保存翻译') ?></button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 参数翻译 Modal（独立于 layout-wrapper，跟随后台样式） -->
-<div class="modal fade" id="metaParamTranslationModal" tabindex="-1" aria-labelledby="metaParamTranslationModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="metaParamTranslationModalLabel"><?= __('参数翻译') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="w-dialog" id="metaParamTranslationModal" tabindex="-1" aria-labelledby="metaParamTranslationModalLabel" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title" id="metaParamTranslationModalLabel"><?= __('参数翻译') ?></h5>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body" id="metaParamTranslationModalBody">
-                <div class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+            <div class="w-dialog__body" id="metaParamTranslationModalBody">
+                <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                    <div class="w-spinner w-text" role="status" data-tone="primary">
+                        <span class="w-visually-hidden"><?= __('加载中...') ?></span>
                     </div>
-                    <p class="mt-3 text-muted mb-0"><?= __('正在加载翻译...') ?></p>
+                    <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);--w-mb:0;"><?= __('正在加载翻译...') ?></p>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="metaSaveParamTranslationBtn"><?= __('保存翻译') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="metaSaveParamTranslationBtn" data-tone="primary"><?= __('保存翻译') ?></button>
             </div>
         </div>
     </div>
@@ -385,9 +385,6 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
     }
 </style>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
 
 <script>
 (function(g){
@@ -417,7 +414,6 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
   };
 })(window);
 </script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     const app = document.getElementById('meta-config-app');
@@ -719,12 +715,12 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         
         // 验证 namespace 不能为空
         if (!filters.namespace || filters.namespace.trim() === '') {
-            treeContainer.innerHTML = '<div class="alert alert-warning mb-0"><?= __('请先选择命名空间') ?></div>';
+            treeContainer.innerHTML = '<div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= __('请先选择命名空间') ?></div>';
             return;
         }
         
         lastFilters = filters;
-        treeContainer.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0"><?= __('正在加载...') ?></p></div>';
+        treeContainer.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在加载...') ?></p></div>';
         treeCount.textContent = '';
 
         const params = new URLSearchParams(filters);
@@ -737,17 +733,17 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 const tree = json.data.tree || [];
                 treeCount.textContent = tree.length ? sprintf('<?= __('共 %s 个节点') ?>', tree.length) : '';
                 renderTree(tree);
-                editorContainer.innerHTML = '<div class="text-center text-muted py-5"><i class="mdi mdi-file-tree-outline" style="font-size: 3rem;"></i><p class="mt-3 mb-0"><?= __('请选择左侧文件以查看详情') ?></p></div>';
+                editorContainer.innerHTML = '<div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="file" size="sm"></w:icon><p style="--w-mt:var(--weline-space-4);--w-mb:0;"><?= __('请选择左侧文件以查看详情') ?></p></div>';
             })
             .catch(error => {
                 console.error(error);
-                treeContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
+                treeContainer.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
     function renderTree(nodes) {
         if (!nodes.length) {
-            treeContainer.innerHTML = '<div class="text-muted text-center py-4"><?= __('未找到符合条件的元数据文件') ?></div>';
+            treeContainer.innerHTML = '<div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('未找到符合条件的元数据文件') ?></div>';
             return;
         }
         treeContainer.innerHTML = '';
@@ -793,7 +789,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
     }
 
     function loadMetaFile(metaIdentify, area) {
-        editorContainer.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0"><?= __('正在加载元数据...') ?></p></div>';
+        editorContainer.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在加载元数据...') ?></p></div>';
 
         const params = new URLSearchParams({
             meta_identify: metaIdentify,
@@ -813,7 +809,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                editorContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
+                editorContainer.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
@@ -822,28 +818,28 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         const paramsList = data.params || [];
 
         let html = '';
-        html += '<div class="mb-3">';
-        html += '<div class="d-flex justify-content-between align-items-center">';
-        html += '<div class="flex-grow-1">';
+        html += '<div style="--w-mb:var(--weline-space-4);">';
+        html += '<div class="w-cluster" data-justify="between" data-align="center">';
+        html += '<div data-grow="true">';
         // Name 显示区域
-        html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-        html += '<h5 class="mb-0">' + escapeHtml(meta.name || meta.meta_identify || 'meta') + '</h5>';
+        html += '<div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-1);">';
+        html += '<h5 style="--w-mb:0;">' + escapeHtml(meta.name || meta.meta_identify || 'meta') + '</h5>';
         if (meta.name_translatable) {
-            html += '<button type="button" class="btn btn-sm btn-outline-secondary meta-name-desc-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-field="name" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译名称') ?>"><i class="mdi mdi-translate"></i></button>';
+            html += '<button type="button" class="w-button meta-name-desc-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-field="name" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译名称') ?>" data-tone="neutral" data-variant="outline" data-size="sm"><w:icon name="language" size="sm"></w:icon></button>';
         }
         html += '</div>';
         // Description 显示区域
         if (meta.description) {
-            html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-            html += '<div class="text-muted small">' + escapeHtml(meta.description) + '</div>';
+            html += '<div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-1);">';
+            html += '<div class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(meta.description) + '</div>';
             if (meta.description_translatable) {
-                html += '<button type="button" class="btn btn-sm btn-outline-secondary meta-name-desc-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-field="description" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译描述') ?>"><i class="mdi mdi-translate"></i></button>';
+                html += '<button type="button" class="w-button meta-name-desc-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-field="description" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译描述') ?>" data-tone="neutral" data-variant="outline" data-size="sm"><w:icon name="language" size="sm"></w:icon></button>';
             }
             html += '</div>';
         }
-        html += '<div class="text-muted small">' + escapeHtml(meta.file_path || meta.file_full_path || '') + '</div>';
+        html += '<div class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(meta.file_path || meta.file_full_path || '') + '</div>';
         html += '</div>';
-        html += '<span class="badge bg-light text-dark align-self-center" style="height: fit-content;">' + escapeHtml(meta.meta_type || 'meta') + '</span>';
+        html += '<span class="w-badge w-text" style="height: fit-content;" data-w-background="muted" data-self="center" data-tone="muted">' + escapeHtml(meta.meta_type || 'meta') + '</span>';
         html += '</div>';
         html += '</div>';
 
@@ -855,23 +851,23 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         html += '<input type="hidden" name="locale" value="' + escapeAttr(params.get('locale') || lastFilters.locale || '') + '">';
 
         if (!paramsList.length) {
-            html += '<div class="alert alert-info mb-0"><?= __('该文件没有可配置的参数。') ?></div>';
+            html += '<div class="w-alert" data-tone="info" style="--w-mb:0;"><?= __('该文件没有可配置的参数。') ?></div>';
         } else {
-            html += '<div class="list-group meta-param-list mb-3">';
+            html += '<div class="w-list-group meta-param-list" style="--w-mb:var(--weline-space-4);">';
             paramsList.forEach(function (item) {
                 const value = item.value ?? '';
-                html += '<div class="list-group-item">';
-                html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-                html += '<div><strong>' + escapeHtml(item.label || item.name) + '</strong> <code class="text-muted ms-1" style="font-size: 11px;">' + escapeHtml(item.name) + '</code> <button type="button" class="btn btn-sm btn-outline-secondary param-translate-btn ms-1" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-param="' + escapeAttr(item.name) + '" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>"><i class="mdi mdi-translate"></i></button></div>';
+                html += '<div class="w-list-group__item">';
+                html += '<div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-1);">';
+                html += '<div><strong>' + escapeHtml(item.label || item.name) + '</strong> <code class="w-text ms-1" style="font-size: 11px;" data-tone="muted">' + escapeHtml(item.name) + '</code> <button type="button" class="w-button param-translate-btn ms-1" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-param="' + escapeAttr(item.name) + '" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>" data-tone="neutral" data-variant="outline" data-size="sm"><w:icon name="language" size="sm"></w:icon></button></div>';
                 html += '</div>';
                 if (item.description) {
-                    html += '<div class="text-muted small mb-2">' + escapeHtml(item.description) + '</div>';
+                    html += '<div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">' + escapeHtml(item.description) + '</div>';
                 }
 
                 if ((item.input === 'textarea') || (typeof value === 'string' && value.length > 80)) {
-                    html += '<textarea class="form-control form-control-sm" rows="3" name="params[' + escapeAttr(item.name) + ']">' + escapeHtml(value || '') + '</textarea>';
+                    html += '<textarea class="w-textarea" rows="3" name="params[' + escapeAttr(item.name) + ']" data-size="sm">' + escapeHtml(value || '') + '</textarea>';
                 } else if ((item.input === 'select' || item.options && Object.keys(item.options).length)) {
-                    html += '<select class="form-select form-select-sm" name="params[' + escapeAttr(item.name) + ']">';
+                    html += '<select class="w-select" name="params[' + escapeAttr(item.name) + ']" data-size="sm">';
                     const options = item.options || {};
                     Object.keys(options).forEach(function (optValue) {
                         const selected = String(optValue) === String(value) ? 'selected' : '';
@@ -879,14 +875,14 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                     });
                     html += '</select>';
                 } else {
-                    html += '<input type="text" class="form-control form-control-sm" name="params[' + escapeAttr(item.name) + ']" value="' + escapeAttr(value || '') + '">';
+                    html += '<input type="text" class="w-input" name="params[' + escapeAttr(item.name) + ']" value="' + escapeAttr(value || '') + '" data-size="sm">';
                 }
 
                 html += '</div>';
             });
             html += '</div>';
-            html += '<div class="text-end">';
-            html += '<button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save me-1"></i><?= __('保存配置') ?></button>';
+            html += '<div class="w-text" data-align="end">';
+            html += '<button type="submit" class="w-button" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= __('保存配置') ?></button>';
             html += '</div>';
         }
 
@@ -921,31 +917,23 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 if (json.code !== 200) {
                     throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
                 }
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('成功') ?>',
-                        text: json.msg || json.message || '<?= __('配置保存成功') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    console.log(json.msg || json.message || '<?= __('配置保存成功') ?>');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'success',
+                    title: '<?= __('成功') ?>',
+                    message: json.msg || json.message || '<?= __('配置保存成功') ?>',
+                    duration: 2000,
+                    confirmable: false
+                });
                 notifyParentConfigSaved(formArea);
             })
             .catch(error => {
                 console.error(error);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('保存失败') ?>',
-                        text: error.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('保存失败') ?>: ' + error.message);
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('保存失败') ?>',
+                    message: error.message,
+                    confirmLabel: '<?= __('确定') ?>'
+                });
             })
             .finally(() => {
                 if (activeNode) {
@@ -975,7 +963,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             scope: translationState.scope,
         });
 
-        translationModalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0"><?= __('正在加载翻译...') ?></p></div>';
+        translationModalBody.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在加载翻译...') ?></p></div>';
 
         bqAdmin['meta'](endpoints.translation + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
@@ -993,30 +981,30 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 html += '<input type="hidden" name="param" value="' + escapeAttr(data.param || translationState.param) + '">';
                 html += '<input type="hidden" name="scope" value="' + escapeAttr(data.scope || translationState.scope) + '">';
 
-                html += '<div class="mb-3">';
-                html += '<label class="form-label"><strong><?= __('默认值') ?> (' + escapeHtml(data.label || translationState.param) + ')</strong></label>';
-                html += '<div class="form-control-plaintext bg-light p-2 rounded">' + escapeHtml(data.default_value || '') + '</div>';
-                html += '<div class="form-text"><?= __('如果某语言没有翻译，将使用此默认值') ?></div>';
+                html += '<div style="--w-mb:var(--weline-space-4);">';
+                html += '<label class="w-field__label"><strong><?= __('默认值') ?> (' + escapeHtml(data.label || translationState.param) + ')</strong></label>';
+                html += '<div class="w-input" data-w-background="muted" data-w-radius="md" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">' + escapeHtml(data.default_value || '') + '</div>';
+                html += '<div class="w-field__hint"><?= __('如果某语言没有翻译，将使用此默认值') ?></div>';
                 if (data.description) {
-                    html += '<div class="text-muted small mt-1">' + escapeHtml(data.description) + '</div>';
+                    html += '<div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);">' + escapeHtml(data.description) + '</div>';
                 }
                 html += '</div>';
 
-                html += '<div class="mb-3">';
-                html += '<label class="form-label"><strong><?= __('多语言翻译') ?></strong></label>';
+                html += '<div style="--w-mb:var(--weline-space-4);">';
+                html += '<label class="w-field__label"><strong><?= __('多语言翻译') ?></strong></label>';
                 if (translations.length === 0) {
-                    html += '<div class="alert alert-info mb-0"><?= __('没有可用的语言') ?></div>';
+                    html += '<div class="w-alert" data-tone="info" style="--w-mb:0;"><?= __('没有可用的语言') ?></div>';
                 } else {
-                    html += '<div class="list-group">';
+                    html += '<div class="w-list-group">';
                     translations.forEach(function(trans) {
-                        html += '<div class="list-group-item">';
-                        html += '<div class="row align-items-center">';
-                        html += '<div class="col-md-3">';
-                        html += '<label class="form-label mb-0"><strong>' + escapeHtml(trans.name || trans.code) + '</strong></label>';
-                        html += '<div class="text-muted small">' + escapeHtml(trans.code) + '</div>';
+                        html += '<div class="w-list-group__item">';
+                        html += '<div class="w-grid" data-align="center">';
+                        html += '<div style="--w-span-md:3;">';
+                        html += '<label class="w-field__label" style="--w-mb:0;"><strong>' + escapeHtml(trans.name || trans.code) + '</strong></label>';
+                        html += '<div class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(trans.code) + '</div>';
                         html += '</div>';
-                        html += '<div class="col-md-9">';
-                        html += '<input type="text" class="form-control" name="translations[' + escapeAttr(trans.code) + ']" value="' + escapeAttr(trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
+                        html += '<div style="--w-span-md:9;">';
+                        html += '<input type="text" class="w-input" name="translations[' + escapeAttr(trans.code) + ']" value="' + escapeAttr(trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
                         html += '</div>';
                         html += '</div>';
                         html += '</div>';
@@ -1030,7 +1018,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                translationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
+                translationModalBody.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
@@ -1052,17 +1040,13 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                     throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
                 }
                 translationModal.hide();
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('成功') ?>',
-                        text: json.msg || json.message || '<?= __('翻译已保存') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    console.log(json.msg || json.message || '<?= __('翻译已保存') ?>');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'success',
+                    title: '<?= __('成功') ?>',
+                    message: json.msg || json.message || '<?= __('翻译已保存') ?>',
+                    duration: 2000,
+                    confirmable: false
+                });
                 // 重新加载当前文件以更新显示
                 const activeNode = treeContainer.querySelector('.tree-label.active');
                 if (activeNode) {
@@ -1073,16 +1057,12 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('保存失败') ?>',
-                        text: error.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('保存失败') ?>: ' + error.message);
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('保存失败') ?>',
+                    message: error.message,
+                    confirmLabel: '<?= __('确定') ?>'
+                });
             });
     }
 
@@ -1134,7 +1114,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             scope: metaNameDescTranslationState.scope,
         });
 
-        metaNameDescTranslationModalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0"><?= __('正在加载翻译...') ?></p></div>';
+        metaNameDescTranslationModalBody.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在加载翻译...') ?></p></div>';
 
         bqAdmin['meta'](endpoints.metaNameDescTranslation + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
@@ -1153,27 +1133,27 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 html += '<input type="hidden" name="field" value="' + escapeAttr(data.field || '') + '">';
                 html += '<input type="hidden" name="scope" value="' + escapeAttr(data.scope || 'default') + '">';
 
-                html += '<div class="mb-3">';
-                html += '<label class="form-label"><strong><?= __('默认值') ?> (' + fieldLabel + ')</strong></label>';
-                html += '<div class="form-control-plaintext bg-light p-2 rounded">' + escapeHtml(data.default_value || '') + '</div>';
-                html += '<div class="form-text"><?= __('如果某语言没有翻译，将使用此默认值') ?></div>';
+                html += '<div style="--w-mb:var(--weline-space-4);">';
+                html += '<label class="w-field__label"><strong><?= __('默认值') ?> (' + fieldLabel + ')</strong></label>';
+                html += '<div class="w-input" data-w-background="muted" data-w-radius="md" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">' + escapeHtml(data.default_value || '') + '</div>';
+                html += '<div class="w-field__hint"><?= __('如果某语言没有翻译，将使用此默认值') ?></div>';
                 html += '</div>';
 
-                html += '<div class="mb-3">';
-                html += '<label class="form-label"><strong><?= __('多语言翻译') ?></strong></label>';
+                html += '<div style="--w-mb:var(--weline-space-4);">';
+                html += '<label class="w-field__label"><strong><?= __('多语言翻译') ?></strong></label>';
                 if (translations.length === 0) {
-                    html += '<div class="alert alert-info mb-0"><?= __('没有可用的语言') ?></div>';
+                    html += '<div class="w-alert" data-tone="info" style="--w-mb:0;"><?= __('没有可用的语言') ?></div>';
                 } else {
-                    html += '<div class="list-group">';
+                    html += '<div class="w-list-group">';
                     translations.forEach(function(trans) {
-                        html += '<div class="list-group-item">';
-                        html += '<div class="row align-items-center">';
-                        html += '<div class="col-md-3">';
-                        html += '<label class="form-label mb-0"><strong>' + escapeHtml(trans.name || trans.code) + '</strong></label>';
-                        html += '<div class="text-muted small">' + escapeHtml(trans.code) + '</div>';
+                        html += '<div class="w-list-group__item">';
+                        html += '<div class="w-grid" data-align="center">';
+                        html += '<div style="--w-span-md:3;">';
+                        html += '<label class="w-field__label" style="--w-mb:0;"><strong>' + escapeHtml(trans.name || trans.code) + '</strong></label>';
+                        html += '<div class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(trans.code) + '</div>';
                         html += '</div>';
-                        html += '<div class="col-md-9">';
-                        html += '<input type="text" class="form-control" name="translations[' + escapeAttr(trans.code) + ']" value="' + escapeAttr(trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
+                        html += '<div style="--w-span-md:9;">';
+                        html += '<input type="text" class="w-input" name="translations[' + escapeAttr(trans.code) + ']" value="' + escapeAttr(trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
                         html += '</div>';
                         html += '</div>';
                         html += '</div>';
@@ -1187,7 +1167,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                metaNameDescTranslationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
+                metaNameDescTranslationModalBody.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
@@ -1209,17 +1189,13 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                     throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
                 }
                 metaNameDescTranslationModal.hide();
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('成功') ?>',
-                        text: json.msg || json.message || '<?= __('翻译已保存') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    console.log(json.msg || json.message || '<?= __('翻译已保存') ?>');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'success',
+                    title: '<?= __('成功') ?>',
+                    message: json.msg || json.message || '<?= __('翻译已保存') ?>',
+                    duration: 2000,
+                    confirmable: false
+                });
                 // 重新加载当前文件以更新显示
                 const activeNode = treeContainer.querySelector('.tree-label.active');
                 if (activeNode) {
@@ -1230,16 +1206,12 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('保存失败') ?>',
-                        text: error.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('保存失败') ?>: ' + error.message);
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('保存失败') ?>',
+                    message: error.message,
+                    confirmLabel: '<?= __('确定') ?>'
+                });
             });
     }
 
@@ -1255,8 +1227,8 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             if (this.value && this.value.trim() !== '') {
                 loadTree();
             } else {
-                treeContainer.innerHTML = '<div class="text-center text-muted py-4"><?= __('请先选择命名空间') ?></div>';
-                editorContainer.innerHTML = '<div class="text-center text-muted py-5"><i class="mdi mdi-file-tree-outline" style="font-size: 3rem;"></i><p class="mt-3 mb-0"><?= __('请选择左侧文件以查看详情') ?></p></div>';
+                treeContainer.innerHTML = '<div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请先选择命名空间') ?></div>';
+                editorContainer.innerHTML = '<div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="file" size="sm"></w:icon><p style="--w-mt:var(--weline-space-4);--w-mb:0;"><?= __('请选择左侧文件以查看详情') ?></p></div>';
             }
         });
     }

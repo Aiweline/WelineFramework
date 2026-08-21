@@ -12,21 +12,21 @@ $total = (int)$this->getData('total');
         <span>共找到 <strong><?= $total ?></strong> 个Sticker</span>
     </div>
     <div class="list-actions">
-        <a href="<?= $this->getBackendUrl('*/backend/sticker/refresh') ?>" class="btn btn-sm btn-warning">
-            <i class="mdi mdi-refresh"></i> 刷新注册表
+        <a href="<?= $this->getBackendUrl('*/backend/sticker/refresh') ?>" class="w-button" data-tone="warning" data-size="sm">
+            <w:icon name="refresh" size="sm"></w:icon> 刷新注册表
         </a>
     </div>
 </div>
 
 <?php if (empty($stickers)): ?>
     <div class="empty-state">
-        <i class="mdi mdi-sticker-outline"></i>
+        <w:icon name="star" size="sm"></w:icon>
         <h3>暂无Sticker信息</h3>
         <p>系统中还没有定义任何Sticker。请检查模块的extends目录。</p>
     </div>
 <?php else: ?>
     <div class="table-container">
-        <table class="table">
+        <table class="w-table">
             <thead>
                 <tr>
                     <th>
@@ -118,38 +118,38 @@ $total = (int)$this->getData('total');
                     <tr>
                         <td>
                             <div class="sticker-module">
-                                <span class="badge badge-info"><?= htmlspecialchars($sticker['target_module']) ?></span>
+                                <span class="w-badge" data-tone="info"><?= htmlspecialchars($sticker['target_module']) ?></span>
                             </div>
                         </td>
                         <td>
                             <div class="sticker-file">
-                                <code class="text-primary"><?= htmlspecialchars($sticker['target_file']) ?></code>
+                                <code class="w-text" data-tone="primary"><?= htmlspecialchars($sticker['target_file']) ?></code>
                             </div>
                         </td>
                         <td>
                             <div class="sticker-module">
-                                <span class="badge badge-success"><?= htmlspecialchars($sticker['source_module']) ?></span>
+                                <span class="w-badge" data-tone="success"><?= htmlspecialchars($sticker['source_module']) ?></span>
                             </div>
                         </td>
                         <td>
                             <div class="sticker-file-path">
-                                <code class="text-secondary"><?= htmlspecialchars($sticker['sticker_relative_path']) ?></code>
+                                <code class="w-text" data-tone="muted"><?= htmlspecialchars($sticker['sticker_relative_path']) ?></code>
                             </div>
                         </td>
                         <td>
                             <div class="sticker-actions-count">
-                                <span class="badge badge-warning"><?= $sticker['actions_count'] ?></span>
+                                <span class="w-badge" data-tone="warning"><?= $sticker['actions_count'] ?></span>
                             </div>
                         </td>
                         <td>
                             <div class="sticker-status">
                                 <?php if ($sticker['is_active']): ?>
-                                    <span class="badge badge-success" title="Sticker已生效">
-                                        <i class="mdi mdi-check-circle"></i> 生效
+                                    <span class="w-badge" title="Sticker已生效" data-tone="success">
+                                        <w:icon name="check" size="sm"></w:icon> 生效
                                     </span>
                                 <?php else: ?>
-                                    <span class="badge badge-danger" title="<?= htmlspecialchars($sticker['error_message']) ?>">
-                                        <i class="mdi mdi-close-circle"></i> 未生效
+                                    <span class="w-badge" title="<?= htmlspecialchars($sticker['error_message']) ?>" data-tone="danger">
+                                        <w:icon name="close" size="sm"></w:icon> 未生效
                                     </span>
                                 <?php endif; ?>
                             </div>
@@ -157,25 +157,20 @@ $total = (int)$this->getData('total');
                         <td>
                             <div class="sticker-conflict">
                                 <?php if ($sticker['has_conflict']): ?>
-                                    <span class="badge badge-danger" title="存在冲突">
-                                        <i class="mdi mdi-alert-circle"></i> 有冲突
+                                    <span class="w-badge" title="存在冲突" data-tone="danger">
+                                        <w:icon name="warning" size="sm"></w:icon> 有冲突
                                     </span>
                                 <?php else: ?>
-                                    <span class="badge badge-success" title="无冲突">
-                                        <i class="mdi mdi-check-circle"></i> 无冲突
+                                    <span class="w-badge" title="无冲突" data-tone="success">
+                                        <w:icon name="check" size="sm"></w:icon> 无冲突
                                     </span>
                                 <?php endif; ?>
                             </div>
                         </td>
                         <td>
                             <div class="actions">
-                                <button type="button" 
-                                        class="btn btn-sm btn-outline-primary btn-view-detail" 
-                                        data-target-module="<?= htmlspecialchars($sticker['target_module']) ?>"
-                                        data-target-file="<?= htmlspecialchars($sticker['target_file']) ?>"
-                                        data-source-module="<?= htmlspecialchars($sticker['source_module']) ?>"
-                                        title="查看详情">
-                                    <i class="mdi mdi-eye"></i> 详情
+                                <button type="button" class="w-button btn-view-detail" data-target-module="<?= htmlspecialchars($sticker['target_module']) ?>" data-target-file="<?= htmlspecialchars($sticker['target_file']) ?>" data-source-module="<?= htmlspecialchars($sticker['source_module']) ?>" title="查看详情" data-tone="primary" data-variant="outline" data-size="sm">
+                                    <w:icon name="eye" size="sm"></w:icon> 详情
                                 </button>
                             </div>
                         </td>

@@ -1,20 +1,6 @@
 <?php
-$themeData = $this->getData('theme') ?? [];
-$layoutType = $this->getData('layoutType') ?: ($themeData['layoutType'] ?? null);
-?>
-<?php if ($layoutType && class_exists(\Weline\Theme\Block\Partials::class)): ?>
-    <?php
-    $footerPartials = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
-    $footerPartials->setData('area', 'frontend');
-    $footerPartials->setData('type', 'footer');
-    $footerPartials->setData('default-option', 'default');
-    echo $footerPartials->render();
-    ?>
-<?php else: ?>
-    <w:block>Weline\Frontend\Block\Footer\Base</w:block>
-    <?php
-    /**@var \Weline\Framework\View\Template $this */
-    echo $this->getFooter()->getHtml();
-    ?>
-    </html>
-<?php endif; ?>
+$partials = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
+$partials->setData('area', 'frontend');
+$partials->setData('type', 'footer');
+$partials->setData('default-option', 'default');
+echo $partials->render();

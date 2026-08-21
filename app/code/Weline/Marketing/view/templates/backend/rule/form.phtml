@@ -1,49 +1,49 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 ?>
-<div class="row" data-testid="marketing-rule-form">
-    <div class="col-12">
-        <div class="page-title-box d-flex align-items-center justify-content-between">
-            <h4 class="page-title"><?= __('新建营销规则') ?></h4>
-            <a class="btn btn-light" href="<?= $this->getBackendUrl('marketing/backend/rule/index') ?>">
+<div class="w-grid" data-testid="marketing-rule-form">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-backend-page__title"><?= __('新建营销规则') ?></h4>
+            <a class="w-button" href="<?= $this->getBackendUrl('marketing/backend/rule/index') ?>" data-tone="neutral">
                 <?= __('返回列表') ?>
             </a>
         </div>
         <template>Weline_Component::message.phtml</template>
-        <div class="card">
-            <div class="card-body">
+        <div class="w-card">
+            <div class="w-card__body">
                 <w:form method="post" action="@var($this->getBackendUrl('marketing/backend/rule/save'))">
-                    <div class="mb-3">
-                        <label class="form-label" for="marketing-rule-name"><?= __('规则名称') ?></label>
-                        <input id="marketing-rule-name" data-testid="marketing-rule-name" class="form-control" type="text" name="name" required maxlength="255">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="marketing-rule-name"><?= __('规则名称') ?></label>
+                        <input id="marketing-rule-name" data-testid="marketing-rule-name" class="w-input" type="text" name="name" required maxlength="255">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="marketing-rule-description"><?= __('规则描述') ?></label>
-                        <textarea id="marketing-rule-description" class="form-control" name="description" rows="3"></textarea>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="marketing-rule-description"><?= __('规则描述') ?></label>
+                        <textarea id="marketing-rule-description" class="w-textarea" name="description" rows="3"></textarea>
                     </div>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label" for="marketing-rule-type"><?= __('规则类型') ?></label>
-                            <select id="marketing-rule-type" data-testid="marketing-rule-type" class="form-select" name="rule_type" required>
+                    <div class="w-grid">
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="marketing-rule-type"><?= __('规则类型') ?></label>
+                            <select id="marketing-rule-type" data-testid="marketing-rule-type" class="w-select" name="rule_type" required>
                                 <option value="coupon"><?= __('优惠券') ?></option>
                                 <option value="campaign"><?= __('促销活动') ?></option>
                                 <option value="automatic"><?= __('自动规则') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label" for="marketing-rule-status"><?= __('状态') ?></label>
-                            <select id="marketing-rule-status" data-testid="marketing-rule-status" class="form-select" name="status" required>
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="marketing-rule-status"><?= __('状态') ?></label>
+                            <select id="marketing-rule-status" data-testid="marketing-rule-status" class="w-select" name="status" required>
                                 <option value="inactive"><?= __('禁用') ?></option>
                                 <option value="active"><?= __('启用') ?></option>
                                 <option value="expired"><?= __('已过期') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label" for="marketing-rule-priority"><?= __('优先级') ?></label>
-                            <input id="marketing-rule-priority" class="form-control" type="number" name="priority" min="0" value="0">
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="marketing-rule-priority"><?= __('优先级') ?></label>
+                            <input id="marketing-rule-priority" class="w-input" type="number" name="priority" min="0" value="0">
                         </div>
                     </div>
-                    <button data-testid="marketing-rule-submit" class="btn btn-primary" type="submit">
+                    <button data-testid="marketing-rule-submit" class="w-button" type="submit" data-tone="primary">
                         <?= __('保存规则') ?>
                     </button>
                 </w:form>

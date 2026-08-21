@@ -144,7 +144,7 @@ class TopicCollector
             ->setTopicGroupName($topicData['group_name'] ?? '')
             ->setDescription($topicData['description'] ?? '')
             ->setModule($moduleName)
-            ->setIcon($topicData['icon'] ?? 'ri-notification-line')
+            ->setIcon($topicData['icon'] ?? 'bell')
             ->setColor($topicData['color'] ?? '#50a5f1')
             ->setDefaultChannels($topicData['default_channels'] ?? ['backend'])
             ->setIsEnabled(true)

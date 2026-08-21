@@ -19,7 +19,7 @@ use Weline\Websites\Model\DomainPoolFlowLog;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Service\DomainPoolFlowLogService;
 
-#[Acl('Weline_Websites::domain_pool_api', '域名池API', 'mdi-api', '域名池数据查询接口', 'Weline_Websites::domain_service')]
+#[Acl('Weline_Websites::domain_pool_api', '域名池API', 'code', '域名池数据查询接口', 'Weline_Websites::domain_service')]
 class DomainPool extends BaseController
 {
     private DomainPoolModel $domainPoolModel;
@@ -46,7 +46,7 @@ class DomainPool extends BaseController
      * 
      * @return string JSON 响应
      */
-    #[Acl('Weline_Websites::domain_pool_api_list', '获取域名池列表', 'mdi-format-list-bulleted', '获取域名池数据列表')]
+    #[Acl('Weline_Websites::domain_pool_api_list', '获取域名池列表', 'list', '获取域名池数据列表')]
     public function index(): string
     {
         try {
@@ -244,7 +244,7 @@ class DomainPool extends BaseController
      * GET /websites/backend/api/domain-pool/check-conflict
      * ?domain=&sub_path=&exclude_website_id=
      */
-    #[Acl('Weline_Websites::domain_pool_api_list', '获取域名池列表', 'mdi-format-list-bulleted', '获取域名池数据列表')]
+    #[Acl('Weline_Websites::domain_pool_api_list', '获取域名池列表', 'list', '获取域名池数据列表')]
     public function getCheckConflict(): string
     {
         try {
@@ -362,7 +362,7 @@ class DomainPool extends BaseController
      * 
      * @return string JSON 响应
      */
-    #[Acl('Weline_Websites::domain_pool_api_add', '添加子域名', 'mdi-plus', '添加子域名到域名池')]
+    #[Acl('Weline_Websites::domain_pool_api_add', '添加子域名', 'plus', '添加子域名到域名池')]
     public function postAdd(): string
     {
         try {
@@ -440,7 +440,7 @@ class DomainPool extends BaseController
      * 
      * @return string JSON 响应
      */
-    #[Acl('Weline_Websites::domain_pool_api_delete', '删除子域名', 'mdi-delete', '从域名池删除子域名')]
+    #[Acl('Weline_Websites::domain_pool_api_delete', '删除子域名', 'trash', '从域名池删除子域名')]
     public function postDelete(): string
     {
         try {
@@ -500,7 +500,7 @@ class DomainPool extends BaseController
      * 
      * @return string JSON 响应
      */
-    #[Acl('Weline_Websites::domain_pool_api_check', '检测解析', 'mdi-refresh', '检测域名池解析状态')]
+    #[Acl('Weline_Websites::domain_pool_api_check', '检测解析', 'refresh', '检测域名池解析状态')]
     public function postCheckResolve(): string
     {
         try {
@@ -552,7 +552,7 @@ class DomainPool extends BaseController
      * 
      * @return string JSON 响应
      */
-    #[Acl('Weline_Websites::domain_pool_api_by_parent', '按根域名查询', 'mdi-tree', '按根域名ID获取子域名')]
+    #[Acl('Weline_Websites::domain_pool_api_by_parent', '按根域名查询', 'circle', '按根域名ID获取子域名')]
     public function byParent(): string
     {
         try {

@@ -220,10 +220,10 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
     body:has(.wls-db-manager-shell[data-theme="light"]) {
         background: #edf5f8;
     }
-    body[data-bs-theme="dark"]:has(.wls-db-manager-shell),
+    body[data-theme="dark"]:has(.wls-db-manager-shell),
     body[data-sidebar="dark"]:has(.wls-db-manager-shell),
     body[data-topbar="dark"]:has(.wls-db-manager-shell),
-    html[data-bs-theme="dark"] body:has(.wls-db-manager-shell),
+    html[data-theme="dark"] body:has(.wls-db-manager-shell),
     html[data-theme-mode="dark"] body:has(.wls-db-manager-shell),
     body:has(.wls-db-manager-shell[data-theme="dark"]) {
         background: #101922;
@@ -232,10 +232,10 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
     .wls-db-manager-fullscreen .backend-main-content {
         background: var(--wdb-bg, #101922);
     }
-    body[data-bs-theme="dark"] .wls-db-manager-shell,
+    body[data-theme="dark"] .wls-db-manager-shell,
     body[data-sidebar="dark"] .wls-db-manager-shell,
     body[data-topbar="dark"] .wls-db-manager-shell,
-    html[data-bs-theme="dark"] .wls-db-manager-shell,
+    html[data-theme="dark"] .wls-db-manager-shell,
     html[data-theme-mode="dark"] .wls-db-manager-shell,
     .wls-db-manager-shell[data-theme="dark"] {
         --wdb-bg: #101922;
@@ -934,16 +934,16 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
             <div class="wdb-brand-title"><?= $escapeHtml(__('Database Manager')) ?></div>
         </div>
         <nav class="wdb-nav" data-wls-plugin-nav aria-label="<?= $escapeHtml(__('Database manager navigation')) ?>">
-            <a href="<?= $escapeHtml($dbPageUrl('summary')) ?>" class="<?= $escapeHtml($navClass('summary')) ?>"<?= $pageKey === 'summary' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-view-dashboard-outline"></span><?= $escapeHtml(__('Summary')) ?></a>
-            <a href="<?= $escapeHtml($dbPageUrl('health')) ?>" class="<?= $escapeHtml($navClass('health')) ?>"<?= $pageKey === 'health' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-heart-pulse"></span><?= $escapeHtml(__('Health')) ?></a>
-            <a href="<?= $escapeHtml($dbPageUrl('profiles')) ?>" class="<?= $escapeHtml($navClass('profiles')) ?>"<?= $pageKey === 'profiles' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-search-outline"></span><?= $escapeHtml(__('Profiles')) ?></a>
-            <a href="<?= $escapeHtml($dbPageUrl('project-profile')) ?>" class="<?= $escapeHtml($navClass('project-profile')) ?>"<?= $pageKey === 'project-profile' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-edit-outline"></span><?= $escapeHtml(__('Project Profile')) ?></a>
-            <a href="<?= $escapeHtml($dbPageUrl('lifecycle')) ?>" class="<?= $escapeHtml($navClass('lifecycle')) ?>"<?= $pageKey === 'lifecycle' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-plus-outline"></span><?= $escapeHtml(__('Lifecycle')) ?></a>
-            <a href="<?= $escapeHtml($dbPageUrl('backup-plan')) ?>" class="<?= $escapeHtml($navClass('backup-plan')) ?>"<?= $pageKey === 'backup-plan' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-arrow-down-outline"></span><?= $escapeHtml(__('Backup Plan')) ?></a>
-            <a href="<?= $escapeHtml($dbPageUrl('env-apply')) ?>" class="<?= $escapeHtml($navClass('env-apply')) ?>"<?= $pageKey === 'env-apply' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-file-cog-outline"></span><?= $escapeHtml(__('Env Apply')) ?></a>
-            <a href="<?= $escapeHtml($dbPageUrl('slaves')) ?>" class="<?= $escapeHtml($navClass('slaves')) ?>"<?= $pageKey === 'slaves' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-cog-outline"></span><?= $escapeHtml(__('Slaves')) ?></a>
-            <a href="<?= $escapeHtml($dbPageUrl('test')) ?>" class="<?= $escapeHtml($navClass('test')) ?>"<?= $pageKey === 'test' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-check-outline"></span><?= $escapeHtml(__('Test')) ?></a>
-            <a href="<?= $escapeHtml($marketplaceUrl) ?>"><span class="mdi mdi-puzzle-outline"></span><?= $escapeHtml(__('Marketplace')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('summary')) ?>" class="<?= $escapeHtml($navClass('summary')) ?>"<?= $pageKey === 'summary' ? ' aria-current="page"' : '' ?>><w:icon name="grid" size="sm"></w:icon><?= $escapeHtml(__('Summary')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('health')) ?>" class="<?= $escapeHtml($navClass('health')) ?>"<?= $pageKey === 'health' ? ' aria-current="page"' : '' ?>><w:icon name="heart" size="sm"></w:icon><?= $escapeHtml(__('Health')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('profiles')) ?>" class="<?= $escapeHtml($navClass('profiles')) ?>"<?= $pageKey === 'profiles' ? ' aria-current="page"' : '' ?>><w:icon name="search" size="sm"></w:icon><?= $escapeHtml(__('Profiles')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('project-profile')) ?>" class="<?= $escapeHtml($navClass('project-profile')) ?>"<?= $pageKey === 'project-profile' ? ' aria-current="page"' : '' ?>><w:icon name="edit" size="sm"></w:icon><?= $escapeHtml(__('Project Profile')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('lifecycle')) ?>" class="<?= $escapeHtml($navClass('lifecycle')) ?>"<?= $pageKey === 'lifecycle' ? ' aria-current="page"' : '' ?>><w:icon name="plus" size="sm"></w:icon><?= $escapeHtml(__('Lifecycle')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('backup-plan')) ?>" class="<?= $escapeHtml($navClass('backup-plan')) ?>"<?= $pageKey === 'backup-plan' ? ' aria-current="page"' : '' ?>><w:icon name="arrow-down" size="sm"></w:icon><?= $escapeHtml(__('Backup Plan')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('env-apply')) ?>" class="<?= $escapeHtml($navClass('env-apply')) ?>"<?= $pageKey === 'env-apply' ? ' aria-current="page"' : '' ?>><w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Env Apply')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('slaves')) ?>" class="<?= $escapeHtml($navClass('slaves')) ?>"<?= $pageKey === 'slaves' ? ' aria-current="page"' : '' ?>><w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Slaves')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('test')) ?>" class="<?= $escapeHtml($navClass('test')) ?>"<?= $pageKey === 'test' ? ' aria-current="page"' : '' ?>><w:icon name="check" size="sm"></w:icon><?= $escapeHtml(__('Test')) ?></a>
+            <a href="<?= $escapeHtml($marketplaceUrl) ?>"><w:icon name="puzzle" size="sm"></w:icon><?= $escapeHtml(__('Marketplace')) ?></a>
         </nav>
         <div class="wdb-sidebar-spacer"></div>
         <button type="button"
@@ -952,7 +952,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 data-wdb-theme-dark-label="<?= $escapeHtml(__('Dark')) ?>"
                 data-wdb-theme-light-label="<?= $escapeHtml(__('Light')) ?>"
                 aria-pressed="false">
-            <span class="mdi mdi-theme-light-dark"></span>
+            <w:icon name="circle" size="sm"></w:icon>
             <span data-wdb-theme-label><?= $escapeHtml(__('Dark')) ?></span>
         </button>
     </aside>
@@ -966,8 +966,8 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 <p class="wdb-subtitle"><?= $escapeHtml(__('Database profile readout and guarded connection checks for the selected WLS project context.')) ?></p>
             </div>
             <div class="wdb-actions">
-                <a class="wdb-action is-primary" href="<?= $escapeHtml($panelUrl) ?>"><span class="mdi mdi-server"></span><?= $escapeHtml(__('WLS Panel')) ?></a>
-                <a class="wdb-action" href="<?= $escapeHtml($projectAdminUrl) ?>"><span class="mdi mdi-open-in-new"></span><?= $escapeHtml(__('Project Admin')) ?></a>
+                <a class="wdb-action is-primary" href="<?= $escapeHtml($panelUrl) ?>"><w:icon name="server" size="sm"></w:icon><?= $escapeHtml(__('WLS Panel')) ?></a>
+                <a class="wdb-action" href="<?= $escapeHtml($projectAdminUrl) ?>"><w:icon name="circle" size="sm"></w:icon><?= $escapeHtml(__('Project Admin')) ?></a>
             </div>
         </section>
 
@@ -1078,7 +1078,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                             <input class="wdb-input" name="health_probe_phrase" placeholder="<?= $escapeHtml($healthProbePhrase) ?>">
                         </label>
                         <button class="wdb-test-button" type="submit" <?= $canHealthProbe ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-heart-pulse"></span><?= $escapeHtml(__('Run Health Probe')) ?>
+                            <w:icon name="heart" size="sm"></w:icon><?= $escapeHtml(__('Run Health Probe')) ?>
                         </button>
                     </div>
                     <p class="wdb-field-help"><?= $escapeHtml(__('The active health probe executes one SELECT 1 check, records a sanitized audit event, and never writes schema, data, env.php, or WLS runtime state.')) ?></p>
@@ -1352,7 +1352,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 <?php endif; ?>
 
                 <button class="wdb-save-button" type="submit">
-                    <span class="mdi mdi-content-save-cog-outline"></span><?= $escapeHtml(__('Save Project Profile')) ?>
+                    <w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Save Project Profile')) ?>
                 </button>
             </w:form>
 
@@ -1460,7 +1460,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                         <div class="wdb-context-value"><?= $escapeHtml($lifecyclePlan['execution_label'] ?? __('Execution disabled in this slice')) ?></div>
                     </div>
                     <button class="wdb-secondary-button" type="submit">
-                        <span class="mdi mdi-clipboard-search-outline"></span><?= $escapeHtml(__('Preview Lifecycle Plan')) ?>
+                        <w:icon name="search" size="sm"></w:icon><?= $escapeHtml(__('Preview Lifecycle Plan')) ?>
                     </button>
                 </div>
             </w:form>
@@ -1606,7 +1606,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                     <div class="wdb-form-field">
                         <button class="wdb-danger-button" type="submit" <?= $lifecycleCanExecute ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-arrow-up-outline"></span><?= $escapeHtml(__('Run Lifecycle Action')) ?>
+                            <w:icon name="arrow-up" size="sm"></w:icon><?= $escapeHtml(__('Run Lifecycle Action')) ?>
                         </button>
                     </div>
                 </div>
@@ -1677,7 +1677,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                         <div class="wdb-context-value"><?= $escapeHtml($backupPlan['artifact_dir_label'] ?? 'var/backups/wls/db-manager/database') ?></div>
                     </div>
                     <button class="wdb-secondary-button" type="submit">
-                        <span class="mdi mdi-clipboard-search-outline"></span><?= $escapeHtml(__('Preview Backup Plan')) ?>
+                        <w:icon name="search" size="sm"></w:icon><?= $escapeHtml(__('Preview Backup Plan')) ?>
                     </button>
                 </div>
             </w:form>
@@ -1755,7 +1755,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                     <div class="wdb-form-field">
                         <button class="wdb-danger-button" type="submit" <?= $backupCanExecute ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-export-outline"></span><?= $escapeHtml(__('Run Database Backup')) ?>
+                            <w:icon name="database" size="sm"></w:icon><?= $escapeHtml(__('Run Database Backup')) ?>
                         </button>
                     </div>
                 </div>
@@ -1836,7 +1836,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                     <div class="wdb-form-field">
                         <button class="wdb-danger-button" type="submit" <?= $restoreRollbackCanExecute ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-refresh-outline"></span><?= $escapeHtml(__('Run Restore Rollback')) ?>
+                            <w:icon name="refresh" size="sm"></w:icon><?= $escapeHtml(__('Run Restore Rollback')) ?>
                         </button>
                     </div>
                 </div>
@@ -1892,7 +1892,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                     <div class="wdb-form-field">
                         <button class="wdb-secondary-button" type="submit" <?= $backupCanPreflight ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-check-outline"></span><?= $escapeHtml(__('Run Restore Preflight')) ?>
+                            <w:icon name="check" size="sm"></w:icon><?= $escapeHtml(__('Run Restore Preflight')) ?>
                         </button>
                     </div>
                 </div>
@@ -1986,7 +1986,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                     <div class="wdb-form-field">
                         <button class="wdb-danger-button" type="submit" <?= $backupCanRestoreExecute ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-import-outline"></span><?= $escapeHtml(__('Run Database Restore')) ?>
+                            <w:icon name="database" size="sm"></w:icon><?= $escapeHtml(__('Run Database Restore')) ?>
                         </button>
                     </div>
                 </div>
@@ -2042,7 +2042,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                     <div class="wdb-form-field">
                         <button class="wdb-secondary-button" type="submit" <?= $backupCanMigrationPreflight ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-sync-outline"></span><?= $escapeHtml(__('Run Migration Preflight')) ?>
+                            <w:icon name="refresh" size="sm"></w:icon><?= $escapeHtml(__('Run Migration Preflight')) ?>
                         </button>
                     </div>
                 </div>
@@ -2113,7 +2113,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                     <div class="wdb-form-field">
                         <button class="wdb-danger-button" type="submit" <?= $backupCanMigrationExecute ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-sync-outline"></span><?= $escapeHtml(__('Run Migration Import')) ?>
+                            <w:icon name="refresh" size="sm"></w:icon><?= $escapeHtml(__('Run Migration Import')) ?>
                         </button>
                     </div>
                 </div>
@@ -2173,7 +2173,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                     <div class="wdb-form-field">
                         <button class="wdb-danger-button" type="submit" <?= $backupCanSqlApplyExecute ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-arrow-up-outline"></span><?= $escapeHtml(__('Run SQL Apply')) ?>
+                            <w:icon name="arrow-up" size="sm"></w:icon><?= $escapeHtml(__('Run SQL Apply')) ?>
                         </button>
                     </div>
                 </div>
@@ -2285,7 +2285,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                                 <span><?= $escapeHtml(__('I understand Database Manager will update app/etc/env.php after creating a backup.')) ?></span>
                             </label>
                             <button class="wdb-save-button" type="submit" <?= empty($envPlan['can_apply']) ? 'disabled' : '' ?>>
-                                <span class="mdi mdi-file-cog-outline"></span><?= $escapeHtml(__('Apply env.php')) ?>
+                                <w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Apply env.php')) ?>
                             </button>
                         </div>
                     </div>
@@ -2323,7 +2323,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                                     <span><?= $escapeHtml(__('I understand Database Manager will restore the selected app/etc/env.php backup.')) ?></span>
                                 </label>
                                 <button class="wdb-danger-button" type="submit">
-                                    <span class="mdi mdi-file-restore-outline"></span><?= $escapeHtml(__('Rollback env.php')) ?>
+                                    <w:icon name="file" size="sm"></w:icon><?= $escapeHtml(__('Rollback env.php')) ?>
                                 </button>
                             </div>
                         </div>
@@ -2417,7 +2417,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                                 <span><?= $escapeHtml(__('I understand Database Manager will add a db.slaves entry after creating an env backup.')) ?></span>
                             </label>
                             <button class="wdb-save-button" type="submit" <?= empty($slavePlan['can_create']) ? 'disabled' : '' ?>>
-                                <span class="mdi mdi-database-plus-outline"></span><?= $escapeHtml(__('Create Slave')) ?>
+                                <w:icon name="plus" size="sm"></w:icon><?= $escapeHtml(__('Create Slave')) ?>
                             </button>
                         </div>
                     </div>
@@ -2465,7 +2465,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                                             <span><?= $escapeHtml(__('Remove after backup')) ?></span>
                                         </label>
                                         <button class="wdb-danger-button" type="submit" <?= empty($slavePlan['can_remove']) ? 'disabled' : '' ?>>
-                                            <span class="mdi mdi-database-minus-outline"></span><?= $escapeHtml(__('Remove')) ?>
+                                            <w:icon name="minus" size="sm"></w:icon><?= $escapeHtml(__('Remove')) ?>
                                         </button>
                                     </w:form>
                                 </div>
@@ -2513,7 +2513,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                             </select>
                         </label>
                         <button class="wdb-test-button" type="submit" <?= $canTestSelected ? '' : 'disabled' ?>>
-                            <span class="mdi mdi-database-check-outline"></span><?= $escapeHtml(__('Test Connection')) ?>
+                            <w:icon name="check" size="sm"></w:icon><?= $escapeHtml(__('Test Connection')) ?>
                         </button>
                     </div>
                     <?php if (!empty($selectedProfile['missing_fields'])): ?>

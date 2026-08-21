@@ -159,16 +159,16 @@
     }
 
     function showError(msg) {
-        if (window.BackendToast) {
-            window.BackendToast.error(msg);
+        if (window.Weline.UI.toast) {
+            window.Weline.UI.toast.error(msg);
         } else {
             console.error('[MediaManager]', msg);
         }
     }
 
     function showSuccess(msg) {
-        if (window.BackendToast) {
-            window.BackendToast.success(msg);
+        if (window.Weline.UI.toast) {
+            window.Weline.UI.toast.success(msg);
         } else {
             console.log('[MediaManager]', msg);
         }
@@ -267,7 +267,7 @@
                 document.documentElement.setAttribute('data-theme-area', 'backend');
                 document.documentElement.setAttribute('data-theme-preference', themePreference);
                 document.documentElement.setAttribute('data-theme', resolvedTheme);
-                document.documentElement.setAttribute('data-bs-theme', resolvedTheme);
+                document.documentElement.setAttribute('data-theme', resolvedTheme);
                 document.documentElement.setAttribute('data-theme-mode', resolvedTheme);
                 document.documentElement.setAttribute('data-layout-mode', resolvedTheme);
                 document.documentElement.style.colorScheme = resolvedTheme;

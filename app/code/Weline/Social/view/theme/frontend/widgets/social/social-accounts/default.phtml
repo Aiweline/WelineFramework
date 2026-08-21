@@ -91,7 +91,7 @@ $widgetId = 'weline-social-accounts-' . substr(sha1(uniqid('', true)), 0, 12);
                 <?php if ($showLabel): ?>
                     <span class="weline-social-account-label"><?= $h($name) ?></span>
                 <?php else: ?>
-                    <span class="visually-hidden"><?= $h($name !== '' ? $name : $platformCode) ?></span>
+                    <span class="w-visually-hidden"><?= $h($name !== '' ? $name : $platformCode) ?></span>
                 <?php endif; ?>
             </a>
         <?php endforeach; ?>

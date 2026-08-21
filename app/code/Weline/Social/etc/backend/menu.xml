@@ -7,7 +7,7 @@
           title="融媒体管理"
           action="/*/backend/social"
           parent="Weline_Backend::marketing_group"
-          icon="mdi mdi-share-variant-outline"
+          icon="share"
           order="36"/>
 </menus>
 

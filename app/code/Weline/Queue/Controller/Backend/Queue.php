@@ -23,7 +23,7 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Queue\Service\QueueAdminService;
 use Weline\Queue\Service\QueueAdminListingView;
 
-#[Acl('Weline_Queue::listing_manager', '队列管理', 'mdi-human-queue', '管理队列信息', 'Weline_Queue::message_service')]
+#[Acl('Weline_Queue::listing_manager', '队列管理', 'circle', '管理队列信息', 'Weline_Queue::message_service')]
 class Queue extends \Weline\Framework\App\Controller\BackendController
 {
     private \Weline\Queue\Model\Queue $queue;
@@ -50,7 +50,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         $this->queue = $queue;
     }
 
-    #[Acl('Weline_Queue::index', '队列首页列表', 'mdi mdi-format-list-numbered', '队列首页列表')]
+    #[Acl('Weline_Queue::index', '队列首页列表', 'list', '队列首页列表')]
     public function index()
     {
         $this->assign('title', __('消息队列'));
@@ -58,7 +58,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Queue::index', '队列列表快照', 'mdi mdi-refresh', '队列列表实时快照')]
+    #[Acl('Weline_Queue::index', '队列列表快照', 'refresh', '队列列表实时快照')]
     public function getSnapshot(): string
     {
         if (!$this->request->isAjax()) {
@@ -151,7 +151,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             '</pre></div>';
     }
 
-    #[Acl('Weline_Queue::form', '编辑或者新增', 'mdi mdi-form-textbox', '编辑或者新增')]
+    #[Acl('Weline_Queue::form', '编辑或者新增', 'box', '编辑或者新增')]
     function form()
     {
         if (!$this->request->isGet()) {
@@ -187,19 +187,19 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Queue::search_type', '获取类型数据', 'mdi mdi-database-arrow-right-outline', '获取类型数据')]
+    #[Acl('Weline_Queue::search_type', '获取类型数据', 'arrow-right', '获取类型数据')]
     public function getSearchType(): string
     {
         return $this->fetchJson($this->queueAdminService->searchTypes((array)$this->request->getGet()));
     }
 
-    #[Acl('Weline_Queue::get_type_attributes', '获取属性数据', 'mdi mdi-database-arrow-right-outline', '获取属性数据')]
+    #[Acl('Weline_Queue::get_type_attributes', '获取属性数据', 'arrow-right', '获取属性数据')]
     public function getTypeAttributes(): Response
     {
         return $this->legacyMutationGone();
     }
 
-    #[Acl('Weline_Queue::get_type_data', '获取类型数据', 'mdi mdi-database-arrow-right-outline', '获取类型数据')]
+    #[Acl('Weline_Queue::get_type_data', '获取类型数据', 'arrow-right', '获取类型数据')]
     public function getTypeData()
     {
         $json = ['code' => 404, 'msg' => ''];
@@ -220,7 +220,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         return $this->fetchJson($json);
     }
 
-    #[Acl('Weline_Queue::show', '查看', 'mdi mdi-monitor-eye', '查看')]
+    #[Acl('Weline_Queue::show', '查看', 'monitor', '查看')]
     function show()
     {
         $this->layoutType = 'default.blank';
@@ -258,7 +258,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Queue::download_result', '下载结果', 'mdi mdi-download', '下载结果')]
+    #[Acl('Weline_Queue::download_result', '下载结果', 'download', '下载结果')]
     function dowloadResult()
     {
         $id = $this->request->getGet('id');
@@ -284,13 +284,13 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    #[Acl('Weline_Queue::delete', '删除队列', 'mdi mdi-delete', '删除队列', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Queue::delete', '删除队列', 'trash', '删除队列', accessMode: AccessMode::EDIT)]
     function getDelete()
     {
         return $this->legacyMutationGone();
     }
 
-    #[Acl('Weline_Queue::result', '查看结果', 'mdi mdi-table-headers-eye', '查看结果')]
+    #[Acl('Weline_Queue::result', '查看结果', 'eye', '查看结果')]
     function getDetailResult()
     {
         $this->layoutType = 'default.blank';
@@ -316,7 +316,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         return $this->renderQueueDetailContent($data);
     }
 
-    #[Acl('Weline_Queue::content', '查看详情', 'mdi mdi-information', '查看详情')]
+    #[Acl('Weline_Queue::content', '查看详情', 'info', '查看详情')]
     function getDetailContent()
     {
         $this->layoutType = 'default.blank';
@@ -330,31 +330,31 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         return $this->renderQueueDetailContent($data);
     }
 
-    #[Acl('Weline_Queue::reset', '重置刊登任务', 'mdi mdi-lock-reset', '重置刊登任务', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Queue::reset', '重置刊登任务', 'lock', '重置刊登任务', accessMode: AccessMode::EDIT)]
     public function reset()
     {
         return $this->legacyMutationGone();
     }
 
-    #[Acl('Weline_Queue::stop', '完成刊登任务', 'mdi mdi-lock-reset', '完成刊登任务', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Queue::stop', '完成刊登任务', 'lock', '完成刊登任务', accessMode: AccessMode::EDIT)]
     public function stop()
     {
         return $this->legacyMutationGone();
     }
 
-    #[Acl('Weline_Queue::continue', '继续刊登任务', 'mdi mdi-arrow-right-thin-circle-outline', '继续刊登任务', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Queue::continue', '继续刊登任务', 'arrow-right', '继续刊登任务', accessMode: AccessMode::EDIT)]
     public function continue()
     {
         return $this->legacyMutationGone();
     }
 
-    #[Acl('Weline_Queue::api_action', '旧队列单条控制接口', 'mdi mdi-alert-octagon-outline', '已停用的队列单条控制接口', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Queue::api_action', '旧队列单条控制接口', 'warning', '已停用的队列单条控制接口', accessMode: AccessMode::EDIT)]
     public function postApiAction(): Response
     {
         return $this->legacyMutationGone();
     }
 
-    #[Acl('Weline_Queue::api_batch', '旧队列批量控制接口', 'mdi mdi-alert-octagon-outline', '已停用的队列批量控制接口', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Queue::api_batch', '旧队列批量控制接口', 'warning', '已停用的队列批量控制接口', accessMode: AccessMode::EDIT)]
     public function postApiBatch(): Response
     {
         return $this->legacyMutationGone();

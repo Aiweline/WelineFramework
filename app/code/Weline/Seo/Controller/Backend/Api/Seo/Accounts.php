@@ -21,7 +21,7 @@ use Weline\Seo\Service\PlatformVisual;
  * SEO 账户 API 控制器
  * 为 w:seo:account:select 标签提供数据
  */
-#[AclAttribute('Weline_Seo::seo_account', 'SEO账户API', 'mdi-api', 'SEO账户API接口', 'Weline_Backend::seo_group')]
+#[AclAttribute('Weline_Seo::seo_account', 'SEO账户API', 'code', 'SEO账户API接口', 'Weline_Backend::seo_group')]
 class Accounts extends BackendController
 {
     /**
@@ -29,7 +29,7 @@ class Accounts extends BackendController
      *
      * @return string JSON响应
      */
-    #[AclAttribute('Weline_Seo::seo_account_index', '获取SEO账户列表', 'mdi-view-list', '获取SEO账户列表API')]
+    #[AclAttribute('Weline_Seo::seo_account_index', '获取SEO账户列表', 'list', '获取SEO账户列表API')]
     public function index(): string
     {
         try {

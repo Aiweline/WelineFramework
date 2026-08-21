@@ -6,44 +6,44 @@
  */
 ?>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><lang>开发文档管理器</lang></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item">
-                        <button type="button" class="btn btn-link p-0 border-0 text-decoration-none">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><lang>开发文档管理器</lang></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item">
+                        <button type="button" class="w-button" data-w-border="none" data-w-decoration="none" data-tone="quiet" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                             <lang>系统</lang>
                         </button>
                     </li>
-                    <li class="breadcrumb-item active"><lang>开发文档管理器</lang></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>开发文档管理器</lang></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class="row">
-    <div class="col-xl-3 col-sm-6">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span-lg:3;--w-span:6;">
+        <div class="w-card">
+            <div class="w-card__body">
                 111
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-xl-3 col-sm-6">
-        <div class="card">
-            <div class="card-body">
-                <h4 class='card-title'><lang>新建文档</lang></h4>
-                <p class='card-title-desc'><lang>新建一篇开发文档</lang></p>
+<div class="w-grid">
+    <div style="--w-span-lg:3;--w-span:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title"><lang>新建文档</lang></h4>
+                <p class="w-text" data-tone="muted"><lang>新建一篇开发文档</lang></p>
 
                 <w:form method='post'>
                     <label for='elm1'></label><textarea id='elm1' name='area'></textarea>

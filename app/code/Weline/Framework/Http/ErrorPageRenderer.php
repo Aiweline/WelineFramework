@@ -356,6 +356,7 @@ final class ErrorPageRenderer
             ? '<p class="w-error-msg">' . $message . '</p>'
             : '';
         $homeJs = \json_encode((string)$vars['homeHref'] !== '' ? (string)$vars['homeHref'] : '/', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $fontFaceCss = self::resolveUiFontFaceCss();
 
         return <<<HTML
 <!DOCTYPE html>
@@ -366,11 +367,12 @@ final class ErrorPageRenderer
     <meta name="robots" content="noindex, nofollow">
     <title>{$statusCode} · {$pageTitle}</title>
     <style>
+{$fontFaceCss}
         :root { color-scheme: light; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc; --card:#fff; --accent:#0f766e; --danger:#b91c1c; --warn:#b45309; }
         * { box-sizing: border-box; }
-        body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px; font-family:"IBM Plex Sans","Segoe UI",sans-serif; color:var(--ink); background: radial-gradient(1200px 600px at 10% -10%, #ccfbf1 0%, transparent 55%), radial-gradient(900px 500px at 100% 0%, #e2e8f0 0%, transparent 50%), var(--bg); }
+        body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px; font-family:"Noto Sans SC","Segoe UI",sans-serif; color:var(--ink); background: radial-gradient(1200px 600px at 10% -10%, #ccfbf1 0%, transparent 55%), radial-gradient(900px 500px at 100% 0%, #e2e8f0 0%, transparent 50%), var(--bg); }
         .w-error { width:min(560px,100%); background:var(--card); border:1px solid var(--line); border-radius:18px; padding:36px 32px; box-shadow:0 18px 50px rgba(15,23,42,.06); }
-        .w-error-code { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:clamp(3rem,8vw,4.5rem); font-weight:600; letter-spacing:-.04em; line-height:1; color:var(--accent); margin:0 0 12px; }
+        .w-error-code { font-family:ui-monospace,monospace; font-size:clamp(3rem,8vw,4.5rem); font-weight:600; letter-spacing:-.04em; line-height:1; color:var(--accent); margin:0 0 12px; }
         .w-error-code.is-danger { color:var(--danger); }
         .w-error-code.is-warn { color:var(--warn); }
         h1 { margin:0 0 10px; font-size:1.5rem; font-weight:650; letter-spacing:-.02em; }
@@ -407,6 +409,29 @@ final class ErrorPageRenderer
 </body>
 </html>
 HTML;
+    }
+
+    private static function resolveUiFontFaceCss(): string
+    {
+        try {
+            if (!\class_exists(ObjectManager::class, false) && !\class_exists(ObjectManager::class)) {
+                return '';
+            }
+            /** @var EventsManager $events */
+            $events = ObjectManager::getInstance(EventsManager::class);
+            $data = new DataObject([
+                'font_face_css' => '',
+            ]);
+            $events->dispatch('Weline_Framework_Http::error_page_assets', $data);
+            $css = \trim((string)$data->getData('font_face_css'));
+            if ($css === '' || \str_starts_with($css, '/*')) {
+                return '';
+            }
+
+            return $css;
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**

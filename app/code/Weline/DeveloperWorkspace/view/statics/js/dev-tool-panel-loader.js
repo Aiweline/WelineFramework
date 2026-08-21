@@ -43,10 +43,13 @@
       Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
       return resp;
     };
-    if(!(g.Weline&&typeof g.Weline.load==='function')){
-      return Promise.reject(new Error('Weline API runtime is unavailable.'));
+    if(g.Weline&&typeof g.Weline.load==='function'){
+      return g.Weline.load('api').then(run).then(toResp);
     }
-    return g.Weline.load('api').then(run).then(toResp);
+    if(g.Weline&&g.Weline.Api&&typeof g.Weline.Api.resource==='function'){
+      return Promise.resolve(run(g.Weline.Api)).then(toResp);
+    }
+    return Promise.reject(new Error('Weline API runtime is unavailable.'));
   };
   g.__bqAdmin_developer_workspace=true;
   g.__bqAdmin_developer_workspace_rest=true;

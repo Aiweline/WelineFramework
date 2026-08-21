@@ -31,31 +31,31 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
 </style>
 
 <!-- 页面标题 -->
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-cpu"></i> <?= __('环境管理') ?></h4>
+<div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-6);">
+    <h4><w:icon name="circle" size="sm"></w:icon> <?= __('环境管理') ?></h4>
     <div>
-        <button class="btn btn-outline-warning btn-sm" data-env-reset-all="1">
-            <i class="bi bi-arrow-counterclockwise"></i> <?= __('重置所有记录') ?>
+        <button class="w-button" data-env-reset-all="1" data-tone="warning" data-variant="outline" data-size="sm">
+            <w:icon name="clock" size="sm"></w:icon> <?= __('重置所有记录') ?>
         </button>
     </div>
 </div>
 
 <!-- 系统信息卡片 -->
-<div class="card env-card">
-    <div class="card-header">
-        <i class="bi bi-info-circle"></i> <?= __('系统信息') ?>
+<div class="w-card env-card">
+    <div class="w-card__header">
+        <w:icon name="info" size="sm"></w:icon> <?= __('系统信息') ?>
     </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <table class="table table-sm mb-0">
+    <div class="w-card__body">
+        <div class="w-grid">
+            <div style="--w-span-md:6;">
+                <table class="w-table" style="--w-mb:0;">
                     <tr><th style="width:140px"><?= __('操作系统') ?></th><td><?= htmlspecialchars($system_info['os_family'] . ' (' . $system_info['os'] . ')') ?></td></tr>
                     <tr><th>PHP <?= __('版本') ?></th><td><?= htmlspecialchars($system_info['php_version']) ?></td></tr>
                     <tr><th>PHP SAPI</th><td><?= htmlspecialchars($system_info['sapi']) ?></td></tr>
                 </table>
             </div>
-            <div class="col-md-6">
-                <table class="table table-sm mb-0">
+            <div style="--w-span-md:6;">
+                <table class="w-table" style="--w-mb:0;">
                     <tr><th style="width:140px">php.ini</th><td><code style="font-size:0.8em"><?= htmlspecialchars($system_info['php_ini']) ?></code></td></tr>
                     <tr><th><?= __('扩展目录') ?></th><td><code style="font-size:0.8em"><?= htmlspecialchars($system_info['ext_dir']) ?></code></td></tr>
                     <tr><th><?= __('已加载扩展') ?></th><td><?= count($system_info['loaded_exts']) ?> <?= __('个') ?></td></tr>
@@ -66,42 +66,42 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
 </div>
 
 <!-- 环境检测结果 -->
-<div class="card env-card">
-    <div class="card-header">
-        <i class="bi bi-check-circle"></i> <?= __('环境检测') ?>
+<div class="w-card env-card">
+    <div class="w-card__header">
+        <w:icon name="check" size="sm"></w:icon> <?= __('环境检测') ?>
         <?php if ($check_result['has_error']): ?>
-            <span class="badge bg-danger ms-2"><?= __('存在问题') ?></span>
+            <span class="w-badge ms-2" data-w-background="danger"><?= __('存在问题') ?></span>
         <?php else: ?>
-            <span class="badge bg-success ms-2"><?= __('全部通过') ?></span>
+            <span class="w-badge ms-2" data-w-background="success"><?= __('全部通过') ?></span>
         <?php endif; ?>
     </div>
-    <div class="card-body">
+    <div class="w-card__body">
         <?php if (!empty($check_result['missing_extensions'])): ?>
-            <div class="alert alert-danger">
+            <div class="w-alert" data-tone="danger">
                 <strong><?= __('缺失的必需扩展') ?>:</strong> <?= htmlspecialchars(implode(', ', $check_result['missing_extensions'])) ?>
             </div>
         <?php endif; ?>
         <?php if (!empty($check_result['disabled_functions'])): ?>
-            <div class="alert alert-danger">
+            <div class="w-alert" data-tone="danger">
                 <strong><?= __('被禁用的必需函数') ?>:</strong> <?= htmlspecialchars(implode(', ', $check_result['disabled_functions'])) ?>
             </div>
         <?php endif; ?>
         <?php if (!$check_result['has_error'] && !$check_result['has_recommendation']): ?>
-            <div class="alert alert-success mb-0">
-                <i class="bi bi-check-circle-fill"></i> <?= __('所有必需依赖和推荐项均已满足') ?>
+            <div class="w-alert" data-tone="success" style="--w-mb:0;">
+                <w:icon name="check" size="sm"></w:icon> <?= __('所有必需依赖和推荐项均已满足') ?>
             </div>
         <?php endif; ?>
     </div>
 </div>
 
 <!-- 推荐扩展 -->
-<div class="card env-card">
-    <div class="card-header">
-        <i class="bi bi-puzzle"></i> <?= __('推荐扩展') ?>
-        <small class="text-muted ms-2"><?= __('（可选，安装后提升性能）') ?></small>
+<div class="w-card env-card">
+    <div class="w-card__header">
+        <w:icon name="puzzle" size="sm"></w:icon> <?= __('推荐扩展') ?>
+        <small class="w-text ms-2" data-tone="muted"><?= __('（可选，安装后提升性能）') ?></small>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover ext-table mb-0">
+    <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+        <table class="w-table ext-table" style="--w-mb:0;">
             <thead>
                 <tr>
                     <th><?= __('扩展名') ?></th>
@@ -123,55 +123,48 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
                     <td>
                         <span class="platform-tag"><?= htmlspecialchars($ext['platform']) ?></span>
                         <?php if (!$ext['matches']): ?>
-                            <span class="badge bg-secondary"><?= __('不适用当前系统') ?></span>
+                            <span class="w-badge" data-w-background="muted"><?= __('不适用当前系统') ?></span>
                         <?php endif; ?>
                     </td>
                     <td><?= htmlspecialchars($ext['reason']) ?></td>
                     <td>
                         <?php if ($ext['loaded']): ?>
-                            <span class="badge bg-success"><?= __('已加载') ?> ✔</span>
+                            <span class="w-badge" data-w-background="success"><?= __('已加载') ?> ✔</span>
                         <?php elseif (!$ext['matches']): ?>
-                            <span class="badge bg-secondary"><?= __('不适用') ?></span>
+                            <span class="w-badge" data-w-background="muted"><?= __('不适用') ?></span>
                         <?php else: ?>
-                            <span class="badge bg-warning text-dark"><?= __('未加载') ?></span>
+                            <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= __('未加载') ?></span>
                         <?php endif; ?>
                     </td>
                     <td>
                         <?php
                         $st = $statusLabels[$ext['status']] ?? $statusLabels['pending'];
                         ?>
-                        <span class="badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
+                        <span class="w-badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
                     </td>
                     <td>
                         <?php if (!$ext['loaded'] && $ext['matches']): ?>
-                            <button class="btn btn-sm btn-outline-primary"
-                                    data-env-retry-install="1"
-                                    data-env-retry-type="extension"
-                                    data-env-retry-name="<?= htmlspecialchars($extName, ENT_QUOTES, 'UTF-8') ?>">
-                                <i class="bi bi-download"></i> <?= __('尝试安装') ?>
+                            <button class="w-button" data-env-retry-install="1" data-env-retry-type="extension" data-env-retry-name="<?= htmlspecialchars($extName, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                <w:icon name="download" size="sm"></w:icon> <?= __('尝试安装') ?>
                             </button>
-                            <button class="btn btn-sm btn-outline-info"
-                                    data-env-guide-toggle="1"
-                                    data-env-guide-target="<?= htmlspecialchars($guideId, ENT_QUOTES, 'UTF-8') ?>">
-                                <i class="bi bi-book"></i> <?= __('安装教程') ?>
+                            <button class="w-button" data-env-guide-toggle="1" data-env-guide-target="<?= htmlspecialchars($guideId, ENT_QUOTES, 'UTF-8') ?>" data-tone="info" data-variant="outline" data-size="sm">
+                                <w:icon name="circle" size="sm"></w:icon> <?= __('安装教程') ?>
                             </button>
                         <?php else: ?>
-                            <span class="text-muted">-</span>
+                            <span class="w-text" data-tone="muted">-</span>
                         <?php endif; ?>
                     </td>
                 </tr>
                 <?php if (!$ext['loaded'] && $ext['matches'] && !empty($ext['guide'])): ?>
                 <tr id="guide-<?= htmlspecialchars($ext['name']) ?>" class="guide-section">
-                    <td colspan="6" class="bg-light p-3">
+                    <td colspan="6" data-w-background="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
                         <h6><?= __('安装教程 - %{name}', ['name' => $ext['name']]) ?></h6>
-                        <div class="d-flex gap-2 mb-2">
+                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
                             <?php foreach ($ext['guide'] as $os => $steps): ?>
                                 <?php
                                 $guideContentId = 'guide-' . $extName . '-' . \md5($os);
                                 ?>
-                                <button class="btn btn-sm btn-outline-dark guide-tab <?= ($os === 'Windows' && $platform === 'Windows') || ($os === 'Ubuntu/Debian' && $platform === 'Linux') || ($os === 'macOS (Homebrew)' && $platform === 'Darwin') ? 'active' : '' ?>"
-                                        data-env-guide-tab="1"
-                                        data-env-guide-content="<?= htmlspecialchars($guideContentId, ENT_QUOTES, 'UTF-8') ?>">
+                                <button class="w-button guide-tab <?= ($os === 'Windows' && $platform === 'Windows') || ($os === 'Ubuntu/Debian' && $platform === 'Linux') || ($os === 'macOS (Homebrew)' && $platform === 'Darwin') ? 'active' : '' ?>" data-env-guide-tab="1" data-env-guide-content="<?= htmlspecialchars($guideContentId, ENT_QUOTES, 'UTF-8') ?>" data-tone="neutral" data-variant="outline" data-size="sm">
                                     <?= htmlspecialchars($os) ?>
                                 </button>
                             <?php endforeach; ?>
@@ -179,7 +172,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
                         <?php foreach ($ext['guide'] as $os => $steps): ?>
                             <div id="guide-<?= htmlspecialchars($ext['name']) ?>-<?= \md5($os) ?>" class="guide-content"
                                 style="<?= ($os === 'Windows' && $platform === 'Windows') || ($os === 'Ubuntu/Debian' && $platform === 'Linux') || ($os === 'macOS (Homebrew)' && $platform === 'Darwin') ? '' : 'display:none' ?>">
-                                <ol class="mb-0">
+                                <ol style="--w-mb:0;">
                                     <?php foreach ($steps as $step): ?>
                                         <li><code><?= htmlspecialchars($step) ?></code></li>
                                     <?php endforeach; ?>
@@ -197,12 +190,12 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
 
 <!-- 推荐函数 -->
 <?php if (!empty($recommended_funcs)): ?>
-<div class="card env-card">
-    <div class="card-header">
-        <i class="bi bi-braces"></i> <?= __('推荐函数') ?>
+<div class="w-card env-card">
+    <div class="w-card__header">
+        <w:icon name="circle" size="sm"></w:icon> <?= __('推荐函数') ?>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover ext-table mb-0">
+    <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+        <table class="w-table ext-table" style="--w-mb:0;">
             <thead>
                 <tr>
                     <th><?= __('函数名') ?></th>
@@ -217,14 +210,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
                     <td><code><?= htmlspecialchars($func['name']) ?></code></td>
                     <td>
                         <?php if ($func['exists']): ?>
-                            <span class="badge bg-success"><?= __('可用') ?> ✔</span>
+                            <span class="w-badge" data-w-background="success"><?= __('可用') ?> ✔</span>
                         <?php else: ?>
-                            <span class="badge bg-warning text-dark"><?= __('不可用') ?></span>
+                            <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= __('不可用') ?></span>
                         <?php endif; ?>
                     </td>
                     <td>
                         <?php $st = $statusLabels[$func['status']] ?? $statusLabels['pending']; ?>
-                        <span class="badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
+                        <span class="w-badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
                     </td>
                     <td><?= __('依赖对应扩展，安装扩展后自动可用') ?></td>
                 </tr>
@@ -237,12 +230,12 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
 
 <!-- 推荐依赖项 -->
 <?php if (!empty($recommended_items)): ?>
-<div class="card env-card">
-    <div class="card-header">
-        <i class="bi bi-box-seam"></i> <?= __('推荐依赖项') ?>
+<div class="w-card env-card">
+    <div class="w-card__header">
+        <w:icon name="box" size="sm"></w:icon> <?= __('推荐依赖项') ?>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover ext-table mb-0">
+    <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+        <table class="w-table ext-table" style="--w-mb:0;">
             <thead>
                 <tr>
                     <th><?= __('依赖名称') ?></th>
@@ -257,7 +250,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
                     <td><?= htmlspecialchars($item['description']) ?></td>
                     <td>
                         <?php $st = $statusLabels[$item['status']] ?? $statusLabels['pending']; ?>
-                        <span class="badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
+                        <span class="w-badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -268,12 +261,12 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
 <?php endif; ?>
 
 <!-- CLI 快捷命令 -->
-<div class="card env-card">
-    <div class="card-header">
-        <i class="bi bi-terminal"></i> <?= __('CLI 快捷命令') ?>
+<div class="w-card env-card">
+    <div class="w-card__header">
+        <w:icon name="terminal" size="sm"></w:icon> <?= __('CLI 快捷命令') ?>
     </div>
-    <div class="card-body">
-        <table class="table table-sm mb-0">
+    <div class="w-card__body">
+        <table class="w-table" style="--w-mb:0;">
             <tr><td><code>php bin/w env:check</code></td><td><?= __('检测环境依赖') ?></td></tr>
             <tr><td><code>php bin/w env:install -y</code></td><td><?= __('自动安装依赖（跳过已尝试的推荐项）') ?></td></tr>
             <tr><td><code>php bin/w env:install --force</code></td><td><?= __('强制重试所有推荐项') ?></td></tr>
@@ -326,8 +319,8 @@ const envManagerMessages = <?= json_encode([
 
 function envManagerToast(type, message) {
     const text = String(message || envManagerMessages.operationFailed);
-    if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
-        window.BackendToast[type](text);
+    if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') {
+        window.Weline.UI.toast[type](text);
         return;
     }
 
@@ -338,9 +331,7 @@ function envManagerToast(type, message) {
 }
 
 function envManagerConfirm(message) {
-    if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-        return window.BackendConfirm.show(message);
-    }
+    return Weline.UI.dialog.confirm(message);
 
     envManagerToast('error', envManagerMessages.confirmUnavailable);
     return Promise.resolve(false);
@@ -356,7 +347,7 @@ function setEnvButtonLabel(btn, iconClass, label) {
 
 function retryInstall(type, name, btn) {
     btn.disabled = true;
-    setEnvButtonLabel(btn, 'bi bi-hourglass-split', envManagerMessages.installing);
+    setEnvButtonLabel(btn, 'circle', envManagerMessages.installing);
 
     var retryOpts = { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'}, body: 'type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name) };
     bqAdmin['framework_admin'](envManagerUrls.retryInstall, retryOpts)
@@ -372,7 +363,7 @@ function retryInstall(type, name, btn) {
     .catch(err => {
         envManagerToast('error', envManagerMessages.requestFailed + ': ' + err.message);
         btn.disabled = false;
-        setEnvButtonLabel(btn, 'bi bi-download', envManagerMessages.retryInstall);
+        setEnvButtonLabel(btn, 'download', envManagerMessages.retryInstall);
     });
 }
 

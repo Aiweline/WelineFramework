@@ -91,7 +91,7 @@ $copy = [
      data-copy="<?= htmlspecialchars((string)json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>">
     <header class="seo-opt__hero">
         <div>
-            <span class="seo-opt__eyebrow"><i class="mdi mdi-chart-timeline-variant" aria-hidden="true"></i><?= __('事件驱动优化闭环') ?></span>
+            <span class="seo-opt__eyebrow"><w:icon name="clock" size="sm"></w:icon><?= __('事件驱动优化闭环') ?></span>
             <h1><?= __('AI 优化控制台') ?></h1>
             <p><?= __('集中查看数据证据、AI 决策、自动修改、发布观察与回滚结果。页面内容仍以 plan_json 为唯一真相源。') ?></p>
         </div>
@@ -133,10 +133,10 @@ $copy = [
         </label>
         <div>
             <button type="button" class="seo-opt__button seo-opt__button--quiet" id="refreshButton" disabled>
-                <i class="mdi mdi-refresh" aria-hidden="true"></i><?= __('刷新数据') ?>
+                <w:icon name="refresh" size="sm"></w:icon><?= __('刷新数据') ?>
             </button>
             <button type="button" class="seo-opt__button seo-opt__button--primary" id="analyzeButton" hidden aria-hidden="true" disabled>
-                <i class="mdi mdi-play-circle-outline" aria-hidden="true"></i><?= __('立即分析') ?>
+                <w:icon name="play" size="sm"></w:icon><?= __('立即分析') ?>
             </button>
         </div>
     </section>
@@ -144,10 +144,10 @@ $copy = [
     <div id="pageMessage" class="seo-opt__message" role="status" aria-live="polite" hidden></div>
 
     <section class="seo-opt__kpis" aria-label="<?= __('优化概览') ?>">
-        <article><i class="mdi mdi-brain seo-opt__kpi-icon seo-opt__kpi-icon--blue" aria-hidden="true"></i><div><small><?= __('近期分析') ?></small><strong id="kpiRuns">—</strong><span><?= __('近 50 条运行记录') ?></span></div></article>
-        <article><i class="mdi mdi-flask-outline seo-opt__kpi-icon seo-opt__kpi-icon--amber" aria-hidden="true"></i><div><small><?= __('观察中的实验') ?></small><strong id="kpiEvaluating">—</strong><span><?= __('正在等待效果结论') ?></span></div></article>
-        <article><i class="mdi mdi-check-decagram-outline seo-opt__kpi-icon seo-opt__kpi-icon--green" aria-hidden="true"></i><div><small><?= __('已保留候选') ?></small><strong id="kpiKept">—</strong><span><?= __('达到提升与护栏要求') ?></span></div></article>
-        <article><i class="mdi mdi-backup-restore seo-opt__kpi-icon seo-opt__kpi-icon--red" aria-hidden="true"></i><div><small><?= __('已回滚或介入') ?></small><strong id="kpiRecovered">—</strong><span><?= __('保护人工内容与业务指标') ?></span></div></article>
+        <article><w:icon name="circle" size="sm"></w:icon><div><small><?= __('近期分析') ?></small><strong id="kpiRuns">—</strong><span><?= __('近 50 条运行记录') ?></span></div></article>
+        <article><w:icon name="circle" size="sm"></w:icon><div><small><?= __('观察中的实验') ?></small><strong id="kpiEvaluating">—</strong><span><?= __('正在等待效果结论') ?></span></div></article>
+        <article><w:icon name="check" size="sm"></w:icon><div><small><?= __('已保留候选') ?></small><strong id="kpiKept">—</strong><span><?= __('达到提升与护栏要求') ?></span></div></article>
+        <article><w:icon name="store" size="sm"></w:icon><div><small><?= __('已回滚或介入') ?></small><strong id="kpiRecovered">—</strong><span><?= __('保护人工内容与业务指标') ?></span></div></article>
     </section>
 
     <section class="seo-opt__panel seo-opt__evolve" aria-labelledby="evolveTitle">
@@ -158,10 +158,10 @@ $copy = [
             </div>
             <div class="seo-opt__toolbar" style="margin:0;padding:0;border:0;background:transparent">
                 <button type="button" class="seo-opt__button seo-opt__button--quiet" id="syncCloudButton" disabled>
-                    <i class="mdi mdi-cloud-sync-outline" aria-hidden="true"></i><?= __('同步词云') ?>
+                    <w:icon name="refresh" size="sm"></w:icon><?= __('同步词云') ?>
                 </button>
                 <button type="button" class="seo-opt__button seo-opt__button--secondary" id="evolveHeatButton" disabled>
-                    <i class="mdi mdi-auto-fix" aria-hidden="true"></i><?= __('按热度进化') ?>
+                    <w:icon name="sparkles" size="sm"></w:icon><?= __('按热度进化') ?>
                 </button>
             </div>
         </header>
@@ -187,14 +187,14 @@ $copy = [
             </header>
 
             <div class="seo-opt__modes" role="group" aria-label="<?= __('自动化模式') ?>">
-                <button type="button" data-mode="off" aria-pressed="false"><i class="mdi mdi-stop-circle-outline"></i><strong><?= __('关闭') ?></strong><small><?= __('不分析、不修改') ?></small></button>
-                <button type="button" data-mode="shadow" aria-pressed="false"><i class="mdi mdi-eye-outline"></i><strong><?= __('影子模式') ?></strong><small><?= __('只分析，不修改') ?></small></button>
-                <button type="button" data-mode="auto_draft" aria-pressed="false"><i class="mdi mdi-file-edit-outline"></i><strong><?= __('自动草稿') ?></strong><small><?= __('修改预览，不发布') ?></small></button>
-                <button type="button" data-mode="auto_publish" aria-pressed="false"><i class="mdi mdi-rocket-launch-outline"></i><strong><?= __('自动发布') ?></strong><small><?= __('修改、发布并评估') ?></small></button>
+                <button type="button" data-mode="off" aria-pressed="false"><w:icon name="stop" size="sm"></w:icon><strong><?= __('关闭') ?></strong><small><?= __('不分析、不修改') ?></small></button>
+                <button type="button" data-mode="shadow" aria-pressed="false"><w:icon name="eye" size="sm"></w:icon><strong><?= __('影子模式') ?></strong><small><?= __('只分析，不修改') ?></small></button>
+                <button type="button" data-mode="auto_draft" aria-pressed="false"><w:icon name="edit" size="sm"></w:icon><strong><?= __('自动草稿') ?></strong><small><?= __('修改预览，不发布') ?></small></button>
+                <button type="button" data-mode="auto_publish" aria-pressed="false"><w:icon name="circle" size="sm"></w:icon><strong><?= __('自动发布') ?></strong><small><?= __('修改、发布并评估') ?></small></button>
             </div>
 
             <div id="authorizationCard" class="seo-opt__authorization">
-                <i class="mdi mdi-shield-lock-outline" aria-hidden="true"></i>
+                <w:icon name="lock" size="sm"></w:icon>
                 <div>
                     <strong id="authorizationLabel"><?= __('尚未授权自动发布') ?></strong>
                     <p><?= __('授权后，符合样本、置信度、字段白名单和发布门禁的候选可自动上线；恶化或不显著时自动回滚。') ?></p>
@@ -203,7 +203,7 @@ $copy = [
             </div>
 
             <details open>
-                <summary><span><i class="mdi mdi-tune-variant" aria-hidden="true"></i><?= __('数据门槛与观察规则') ?></span><small><?= __('只有达到门槛才会请求 AI') ?></small></summary>
+                <summary><span><w:icon name="settings" size="sm"></w:icon><?= __('数据门槛与观察规则') ?></span><small><?= __('只有达到门槛才会请求 AI') ?></small></summary>
                 <div class="seo-opt__fields">
                     <label><span><?= __('最少页面访问') ?></span><input type="number" min="1" max="10000000" data-policy="min_page_views"></label>
                     <label><span><?= __('最少目标转化') ?></span><input type="number" min="1" max="1000000" data-policy="min_conversions"></label>
@@ -220,15 +220,15 @@ $copy = [
             </details>
 
             <footer class="seo-opt__policy-footer">
-                <p><i class="mdi mdi-information-outline"></i><?= __('修改只允许作用于 SEO 字段和已绑定的标题、正文、CTA、alt、锚文本字段。') ?></p>
-                <button type="button" class="seo-opt__button seo-opt__button--primary" id="saveButton" disabled><i class="mdi mdi-content-save-outline"></i><?= __('保存自动化策略') ?></button>
+                <p><w:icon name="info" size="sm"></w:icon><?= __('修改只允许作用于 SEO 字段和已绑定的标题、正文、CTA、alt、锚文本字段。') ?></p>
+                <button type="button" class="seo-opt__button seo-opt__button--primary" id="saveButton" disabled><w:icon name="save" size="sm"></w:icon><?= __('保存自动化策略') ?></button>
             </footer>
         </section>
 
         <aside class="seo-opt__panel seo-opt__boundaries" aria-labelledby="boundaryTitle">
             <header class="seo-opt__panel-head"><div><span><?= __('系统边界') ?></span><h2 id="boundaryTitle"><?= __('自动修改保护范围') ?></h2></div></header>
             <div class="seo-opt__scope seo-opt__scope--allowed">
-                <strong><i class="mdi mdi-check-circle-outline"></i><?= __('允许自动修改') ?></strong>
+                <strong><w:icon name="check" size="sm"></w:icon><?= __('允许自动修改') ?></strong>
                 <ul>
                     <li><?= __('页面 title、description、keywords 与 heading outline') ?></li>
                     <li><?= __('区块标题、正文、CTA 文案、图片 alt、锚文本') ?></li>
@@ -236,14 +236,14 @@ $copy = [
                 </ul>
             </div>
             <div class="seo-opt__scope seo-opt__scope--blocked">
-                <strong><i class="mdi mdi-cancel"></i><?= __('永不自动修改') ?></strong>
+                <strong><w:icon name="close" size="sm"></w:icon><?= __('永不自动修改') ?></strong>
                 <ul>
                     <li><?= __('路由、canonical、href、表单 action 与结构事实') ?></li>
                     <li><?= __('价格、法律文本、媒体、HTML、CSS、JS 和组件代码') ?></li>
                     <li><?= __('登录、会员、支付与结账流程') ?></li>
                 </ul>
             </div>
-            <div class="seo-opt__cas"><i class="mdi mdi-source-branch-check"></i><div><strong><?= __('人工编辑优先') ?></strong><span><?= __('版本或指纹变化时自动任务会过期，不会覆盖人工修改。') ?></span></div></div>
+            <div class="seo-opt__cas"><w:icon name="check" size="sm"></w:icon><div><strong><?= __('人工编辑优先') ?></strong><span><?= __('版本或指纹变化时自动任务会过期，不会覆盖人工修改。') ?></span></div></div>
         </aside>
     </div>
 
@@ -251,23 +251,23 @@ $copy = [
     <section class="seo-rt" id="seoRealtimeControlCenter" aria-labelledby="seoRtTitle">
         <header class="seo-rt__header">
             <div>
-                <span class="seo-rt__eyebrow"><i class="mdi mdi-radar" aria-hidden="true"></i><?= __('只读实时监控') ?></span>
+                <span class="seo-rt__eyebrow"><w:icon name="search" size="sm"></w:icon><?= __('只读实时监控') ?></span>
                 <h2 id="seoRtTitle"><?= __('AI 自动优化任务态势') ?></h2>
                 <p><?= __('实时查看系统正在检测哪个站点、发现了什么问题，以及修改、发布、观察和回滚进度。') ?></p>
             </div>
             <div class="seo-rt__controls">
-                <span class="seo-rt__connection" id="seoRtConnection" role="status" aria-live="polite"><i class="mdi mdi-circle-outline" aria-hidden="true"></i><b><?= __('正在连接') ?></b></span>
+                <span class="seo-rt__connection" id="seoRtConnection" role="status" aria-live="polite"><w:icon name="circle" size="sm"></w:icon><b><?= __('正在连接') ?></b></span>
                 <span class="seo-rt__updated"><small><?= __('最后更新') ?></small><time id="seoRtUpdated">—</time></span>
-                <button type="button" id="seoRtAllSites"><i class="mdi mdi-earth" aria-hidden="true"></i><?= __('全部站点') ?></button>
-                <button type="button" id="seoRtPause" aria-pressed="false"><i class="mdi mdi-pause" aria-hidden="true"></i><span><?= __('暂停自动滚动') ?></span></button>
+                <button type="button" id="seoRtAllSites"><w:icon name="globe" size="sm"></w:icon><?= __('全部站点') ?></button>
+                <button type="button" id="seoRtPause" aria-pressed="false"><w:icon name="pause" size="sm"></w:icon><span><?= __('暂停自动滚动') ?></span></button>
             </div>
         </header>
 
         <div class="seo-rt__kpis" aria-label="<?= __('全局任务统计') ?>">
-            <article><i class="mdi mdi-access-point" aria-hidden="true"></i><small><?= __('活跃站点') ?></small><strong id="seoRtActiveSites">0</strong><span><?= __('正在执行或观察') ?></span></article>
-            <article><i class="mdi mdi-calendar-clock" aria-hidden="true"></i><small><?= __('等待调度') ?></small><strong id="seoRtWaiting">0</strong><span><?= __('尚未到检测时间') ?></span></article>
-            <article><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i><small><?= __('异常任务') ?></small><strong id="seoRtExceptions">0</strong><span><?= __('失败或需人工介入') ?></span></article>
-            <article><i class="mdi mdi-flask-outline" aria-hidden="true"></i><small><?= __('观察中实验') ?></small><strong id="seoRtObserving">0</strong><span><?= __('等待指标结论') ?></span></article>
+            <article><w:icon name="circle" size="sm"></w:icon><small><?= __('活跃站点') ?></small><strong id="seoRtActiveSites">0</strong><span><?= __('正在执行或观察') ?></span></article>
+            <article><w:icon name="calendar" size="sm"></w:icon><small><?= __('等待调度') ?></small><strong id="seoRtWaiting">0</strong><span><?= __('尚未到检测时间') ?></span></article>
+            <article><w:icon name="warning" size="sm"></w:icon><small><?= __('异常任务') ?></small><strong id="seoRtExceptions">0</strong><span><?= __('失败或需人工介入') ?></span></article>
+            <article><w:icon name="circle" size="sm"></w:icon><small><?= __('观察中实验') ?></small><strong id="seoRtObserving">0</strong><span><?= __('等待指标结论') ?></span></article>
         </div>
 
         <section class="seo-rt__stage" id="seoRtStagePanel" hidden>
@@ -281,7 +281,7 @@ $copy = [
                 <header><div><small><?= __('站点态势') ?></small><h3 id="seoRtSitesTitle"><?= __('检测与调度状态') ?></h3></div><span id="seoRtScopeLabel">—</span></header>
                 <div class="seo-rt__table-wrap">
                     <table>
-                        <thead><tr><th><?= __('站点') ?></th><th><?= __('模式') ?></th><th><?= __('阶段与进度') ?></th><th><?= __('问题') ?></th><th><?= __('最近 / 下次检测') ?></th><th><span class="visually-hidden"><?= __('查看') ?></span></th></tr></thead>
+                        <thead><tr><th><?= __('站点') ?></th><th><?= __('模式') ?></th><th><?= __('阶段与进度') ?></th><th><?= __('问题') ?></th><th><?= __('最近 / 下次检测') ?></th><th><span class="w-visually-hidden"><?= __('查看') ?></span></th></tr></thead>
                         <tbody id="seoRtSiteRows"></tbody>
                     </table>
                 </div>
@@ -303,8 +303,8 @@ $copy = [
     <aside id="seoRtDrawer" class="seo-rt__drawer" aria-hidden="true">
         <button type="button" class="seo-rt__drawer-backdrop" data-seo-rt-close aria-label="<?= __('关闭任务详情') ?>"></button>
         <section class="seo-rt__drawer-panel" role="dialog" aria-modal="true" aria-labelledby="seoRtDrawerTitle">
-            <header><div><small><?= __('任务详情') ?></small><h2 id="seoRtDrawerTitle"><?= __('AI 优化任务') ?></h2></div><button type="button" data-seo-rt-close aria-label="<?= __('关闭') ?>"><i class="mdi mdi-close" aria-hidden="true"></i></button></header>
-            <nav class="seo-rt__drawer-tabs" role="tablist" aria-label="<?= __('任务详情页签') ?>">
+            <header><div><small><?= __('任务详情') ?></small><h2 id="seoRtDrawerTitle"><?= __('AI 优化任务') ?></h2></div><button type="button" data-seo-rt-close aria-label="<?= __('关闭') ?>"><w:icon name="close" size="sm"></w:icon></button></header>
+            <nav class="seo-rt__drawer-tabs w-tabs__list" role="tablist" aria-label="<?= __('任务详情页签') ?>" data-w-component="tabs">
                 <button type="button" role="tab" data-seo-rt-tab="timeline" aria-selected="true"><?= __('时间线') ?></button>
                 <button type="button" role="tab" data-seo-rt-tab="changes" aria-selected="false"><?= __('修改内容') ?></button>
                 <button type="button" role="tab" data-seo-rt-tab="evidence" aria-selected="false"><?= __('数据证据') ?></button>
@@ -317,7 +317,7 @@ $copy = [
     <section class="seo-opt__panel seo-opt__workbench" aria-labelledby="workbenchTitle">
         <header class="seo-opt__panel-head seo-opt__panel-head--tabs">
             <div><span><?= __('决策工作台') ?></span><h2 id="workbenchTitle"><?= __('分析、实验与审计') ?></h2></div>
-            <nav class="seo-opt__tabs" role="tablist" aria-label="<?= __('工作台视图') ?>">
+            <nav class="seo-opt__tabs w-tabs__list" role="tablist" aria-label="<?= __('工作台视图') ?>" data-w-component="tabs">
                 <button type="button" role="tab" data-tab="decisions" aria-selected="true"><?= __('AI 决策') ?><b id="decisionCount">0</b></button>
                 <button type="button" role="tab" data-tab="experiments" aria-selected="false"><?= __('效果实验') ?><b id="experimentCount">0</b></button>
                 <button type="button" role="tab" data-tab="audit" aria-selected="false"><?= __('审计轨迹') ?></button>
@@ -331,7 +331,7 @@ $copy = [
     <aside id="decisionDrawer" class="seo-opt__drawer" aria-hidden="true">
         <div class="seo-opt__drawer-backdrop" data-close-drawer></div>
         <section class="seo-opt__drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
-            <header><div><span><?= __('决策证据') ?></span><h2 id="drawerTitle"><?= __('AI 优化建议') ?></h2></div><button type="button" data-close-drawer aria-label="<?= __('关闭') ?>"><i class="mdi mdi-close"></i></button></header>
+            <header><div><span><?= __('决策证据') ?></span><h2 id="drawerTitle"><?= __('AI 优化建议') ?></h2></div><button type="button" data-close-drawer aria-label="<?= __('关闭') ?>"><w:icon name="close" size="sm"></w:icon></button></header>
             <div id="drawerContent"></div>
         </section>
     </aside>
@@ -339,7 +339,7 @@ $copy = [
     <div id="authorizationModal" class="seo-opt__modal" hidden aria-hidden="true">
         <div class="seo-opt__modal-backdrop"></div>
         <section role="dialog" aria-modal="true" aria-labelledby="authorizationTitle">
-            <i class="mdi mdi-shield-check-outline seo-opt__modal-icon"></i>
+            <w:icon name="check" size="sm"></w:icon>
             <h2 id="authorizationTitle"><?= __('授予自动发布长期授权') ?></h2>
             <p><?= __('此授权允许系统在所有数据门槛、字段白名单、CAS 冲突检查和发布门禁通过后，自动修改并发布当前站点。') ?></p>
             <label><input type="checkbox" id="scopeCheck"><span><?= __('我确认自动修改仅限界面列出的安全字段。') ?></span></label>
@@ -409,7 +409,7 @@ $copy = [
 @media(max-width:1080px){.seo-rt__header{flex-direction:column}.seo-rt__controls{justify-content:flex-start}.seo-rt__grid{grid-template-columns:1fr}.seo-rt__activity{max-height:360px}.seo-rt__task summary{grid-template-columns:minmax(180px,1fr) minmax(120px,.6fr) auto}}
 @media(max-width:780px){.seo-rt__kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.seo-rt__stage ol{grid-template-columns:repeat(5,minmax(0,1fr));row-gap:10px}.seo-rt__table-wrap{display:none}.seo-rt__site-cards{display:grid;gap:9px}.seo-rt__site-card{display:grid;grid-template-columns:1fr auto;gap:10px;padding:13px;border:1px solid var(--rt-line);border-radius:11px}.seo-rt__site-card button{grid-row:1/3;grid-column:2;align-self:center}.seo-rt__task summary{grid-template-columns:1fr auto}.seo-rt__task summary>:nth-child(2),.seo-rt__task summary>:nth-child(3){grid-column:1}.seo-rt__drawer-panel{width:100vw}}
 @media(max-width:520px){.seo-rt__header,.seo-rt__panel,.seo-rt__stage{padding:15px;border-radius:13px}.seo-rt__controls{align-items:stretch;width:100%}.seo-rt__controls button{flex:1 1 145px;justify-content:center}.seo-rt__connection,.seo-rt__updated{flex:1 1 130px}.seo-rt__kpis{gap:8px}.seo-rt__kpis article{grid-template-columns:32px 1fr;padding:12px}.seo-rt__kpis i{width:32px;height:32px}.seo-rt__stage ol{grid-template-columns:repeat(2,minmax(0,1fr))}.seo-rt__task summary{padding:11px}.seo-rt__change{grid-template-columns:1fr}.seo-rt__change>span{display:none}}
-:is(html,body):is([data-bs-theme="dark"],[data-theme-mode="dark"]) .seo-rt{--rt-ink:#f2f4f7;--rt-muted:#98a2b3;--rt-line:#344054;--rt-blue:#84adff;--rt-blue-soft:#182b49}:is(html,body):is([data-bs-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt__header,.seo-rt__panel,.seo-rt__stage,.seo-rt__kpis article,.seo-rt__task,.seo-rt__drawer-panel){background:#101828}:is(html,body):is([data-bs-theme="dark"],[data-theme-mode="dark"]) .seo-rt__header{background:linear-gradient(135deg,#182230,#101828)}:is(html,body):is([data-bs-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt__controls button,.seo-rt__open,.seo-rt__drawer-panel>header button){color:#f2f4f7;background:#1d2939}:is(html,body):is([data-bs-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt__activity article,.seo-rt__detail-card,.seo-rt__task-child){background:#182230}:is(html,body):is([data-bs-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt td,.seo-rt__task-child){border-color:#344054}:is(html,body):is([data-bs-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt__drawer-body pre,.seo-rt__change pre){color:#d0d5dd;background:#1d2939}
+:is(html,body):is([data-theme="dark"],[data-theme-mode="dark"]) .seo-rt{--rt-ink:#f2f4f7;--rt-muted:#98a2b3;--rt-line:#344054;--rt-blue:#84adff;--rt-blue-soft:#182b49}:is(html,body):is([data-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt__header,.seo-rt__panel,.seo-rt__stage,.seo-rt__kpis article,.seo-rt__task,.seo-rt__drawer-panel){background:#101828}:is(html,body):is([data-theme="dark"],[data-theme-mode="dark"]) .seo-rt__header{background:linear-gradient(135deg,#182230,#101828)}:is(html,body):is([data-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt__controls button,.seo-rt__open,.seo-rt__drawer-panel>header button){color:#f2f4f7;background:#1d2939}:is(html,body):is([data-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt__activity article,.seo-rt__detail-card,.seo-rt__task-child){background:#182230}:is(html,body):is([data-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt td,.seo-rt__task-child){border-color:#344054}:is(html,body):is([data-theme="dark"],[data-theme-mode="dark"]) :where(.seo-rt__drawer-body pre,.seo-rt__change pre){color:#d0d5dd;background:#1d2939}
 </style>
 
 <script>
@@ -465,18 +465,18 @@ function evidenceValue(payload,keys){var sources=[payload,payload.visitor,payloa
 function sampleReady(run){var payload=evidence(run),flag=payload.sample_qualified;if(flag===undefined&&payload.data_quality){flag=payload.data_quality.sample_qualified}return flag===true||flag===1||flag==='1'}
 function empty(icon,text){return'<div class="seo-opt__empty"><div><i class="mdi '+icon+'"></i><span>'+html(text)+'</span></div></div>'}
 function renderKpis(){var evaluating=state.experiments.filter(function(item){return item.status==='evaluating'||item.status==='publish_pending'||item.status==='publishing'}).length,kept=state.experiments.filter(function(item){return item.status==='kept'}).length,recovered=state.experiments.filter(function(item){return item.status==='rolled_back'||item.status==='manual_intervention'}).length;byId('kpiRuns').textContent=state.runs.length;byId('kpiEvaluating').textContent=evaluating;byId('kpiKept').textContent=kept;byId('kpiRecovered').textContent=recovered;byId('decisionCount').textContent=state.runs.length;byId('experimentCount').textContent=state.experiments.length}
-function renderDecisions(){var targetElement=byId('decisionList');if(!state.runs.length){targetElement.innerHTML=empty('mdi-lightbulb-on-outline',copy.noRuns);return}targetElement.innerHTML=state.runs.map(function(run,index){var advice=recommendation(run),stateLabel=status(run.status),score=confidence(run);return'<button type="button" class="seo-opt__decision" data-run="'+index+'"><div><strong>'+html(target(run))+'</strong><small>#'+html(run.run_id)+' · r'+html(run.source_revision)+'</small></div><div><strong>'+html(advice.objective||copy.empty)+'</strong><small>'+html(advice.primary_metric||(sampleReady(run)?copy.sampleReady:copy.sampleWaiting))+'</small></div><span class="seo-opt__confidence">'+(score===null?'—':Math.round(score*100)+'%')+'</span><span class="seo-opt__status'+stateLabel.tone+'">'+html(stateLabel.label)+'</span><i class="mdi mdi-chevron-right"></i></button>'}).join('')}
+function renderDecisions(){var targetElement=byId('decisionList');if(!state.runs.length){targetElement.innerHTML=empty('circle',copy.noRuns);return}targetElement.innerHTML=state.runs.map(function(run,index){var advice=recommendation(run),stateLabel=status(run.status),score=confidence(run);return'<button type="button" class="seo-opt__decision" data-run="'+index+'"><div><strong>'+html(target(run))+'</strong><small>#'+html(run.run_id)+' · r'+html(run.source_revision)+'</small></div><div><strong>'+html(advice.objective||copy.empty)+'</strong><small>'+html(advice.primary_metric||(sampleReady(run)?copy.sampleReady:copy.sampleWaiting))+'</small></div><span class="seo-opt__confidence">'+(score===null?'—':Math.round(score*100)+'%')+'</span><span class="seo-opt__status'+stateLabel.tone+'">'+html(stateLabel.label)+'</span><w:icon name="chevron-right" size="sm"></w:icon></button>'}).join('')}
 function metric(metrics,key){var payload=json(metrics);if(payload[key]!==undefined){return Number(payload[key])}if(payload.metrics&&payload.metrics[key]!==undefined){return Number(payload.metrics[key])}return NaN}
-function renderExperiments(){var targetElement=byId('experimentList');if(!state.experiments.length){targetElement.innerHTML=empty('mdi-flask-empty-outline',copy.noExperiments);return}var rows=state.experiments.map(function(experiment){var stateLabel=status(experiment.status),metricName=value(experiment.primary_metric),base=metric(experiment.baseline_metrics_json,metricName),candidate=metric(experiment.candidate_metrics_json,metricName),delta=Number.isFinite(base)&&base!==0&&Number.isFinite(candidate)?((candidate-base)/Math.abs(base))*100:NaN;return'<tr><td><strong>'+html(target(experiment))+'</strong><br><small>#'+html(experiment.experiment_id)+'</small></td><td>'+html(metricName)+'</td><td>'+html(formatMetric(base))+'</td><td>'+html(formatMetric(candidate))+'</td><td class="'+(Number.isFinite(delta)?(delta>=0?'seo-opt__up':'seo-opt__down'):'')+'">'+(Number.isFinite(delta)?(delta>=0?'+':'')+delta.toFixed(1)+'%':'—')+'</td><td><span class="seo-opt__status'+stateLabel.tone+'">'+html(stateLabel.label)+'</span></td><td>'+html(formatDate(experiment.evaluate_after))+'<br><small>'+html(formatDate(experiment.expires_at))+'</small></td></tr>'}).join('');targetElement.innerHTML='<div class="seo-opt__table-wrap"><table class="seo-opt__table"><thead><tr><th><?= addslashes((string)__('目标')) ?></th><th>'+html(copy.primaryMetric)+'</th><th>'+html(copy.baseline)+'</th><th>'+html(copy.candidate)+'</th><th>'+html(copy.change)+'</th><th><?= addslashes((string)__('状态')) ?></th><th><?= addslashes((string)__('观察窗口')) ?></th></tr></thead><tbody>'+rows+'</tbody></table></div>'}
-function renderAudit(){var events=state.runs.map(function(run){return{title:status(run.status).label+' · '+target(run),description:recommendation(run).objective||value(run.error_code),time:run.updated_at||run.created_at,icon:'mdi-brain'}}).concat(state.experiments.map(function(experiment){return{title:status(experiment.status).label+' · '+target(experiment),description:value(experiment.primary_metric),time:experiment.updated_at||experiment.created_at,icon:'mdi-flask-outline'}})).sort(function(left,right){return String(right.time||'').localeCompare(String(left.time||''))}).slice(0,30),targetElement=byId('auditList');if(!events.length){targetElement.innerHTML=empty('mdi-timeline-clock-outline',copy.noAudit);return}targetElement.innerHTML=events.map(function(event){return'<article><i class="mdi '+event.icon+'"></i><div><strong>'+html(event.title)+'</strong><span>'+html(event.description)+'</span></div><time>'+html(formatDate(event.time))+'</time></article>'}).join('')}
+function renderExperiments(){var targetElement=byId('experimentList');if(!state.experiments.length){targetElement.innerHTML=empty('circle',copy.noExperiments);return}var rows=state.experiments.map(function(experiment){var stateLabel=status(experiment.status),metricName=value(experiment.primary_metric),base=metric(experiment.baseline_metrics_json,metricName),candidate=metric(experiment.candidate_metrics_json,metricName),delta=Number.isFinite(base)&&base!==0&&Number.isFinite(candidate)?((candidate-base)/Math.abs(base))*100:NaN;return'<tr><td><strong>'+html(target(experiment))+'</strong><br><small>#'+html(experiment.experiment_id)+'</small></td><td>'+html(metricName)+'</td><td>'+html(formatMetric(base))+'</td><td>'+html(formatMetric(candidate))+'</td><td class="'+(Number.isFinite(delta)?(delta>=0?'seo-opt__up':'seo-opt__down'):'')+'">'+(Number.isFinite(delta)?(delta>=0?'+':'')+delta.toFixed(1)+'%':'—')+'</td><td><span class="seo-opt__status'+stateLabel.tone+'">'+html(stateLabel.label)+'</span></td><td>'+html(formatDate(experiment.evaluate_after))+'<br><small>'+html(formatDate(experiment.expires_at))+'</small></td></tr>'}).join('');targetElement.innerHTML='<div class="seo-opt__table-wrap"><table class="seo-opt__table"><thead><tr><th><?= addslashes((string)__('目标')) ?></th><th>'+html(copy.primaryMetric)+'</th><th>'+html(copy.baseline)+'</th><th>'+html(copy.candidate)+'</th><th>'+html(copy.change)+'</th><th><?= addslashes((string)__('状态')) ?></th><th><?= addslashes((string)__('观察窗口')) ?></th></tr></thead><tbody>'+rows+'</tbody></table></div>'}
+function renderAudit(){var events=state.runs.map(function(run){return{title:status(run.status).label+' · '+target(run),description:recommendation(run).objective||value(run.error_code),time:run.updated_at||run.created_at,icon:'circle'}}).concat(state.experiments.map(function(experiment){return{title:status(experiment.status).label+' · '+target(experiment),description:value(experiment.primary_metric),time:experiment.updated_at||experiment.created_at,icon:'circle'}})).sort(function(left,right){return String(right.time||'').localeCompare(String(left.time||''))}).slice(0,30),targetElement=byId('auditList');if(!events.length){targetElement.innerHTML=empty('clock',copy.noAudit);return}targetElement.innerHTML=events.map(function(event){return'<article><i class="mdi '+event.icon+'"></i><div><strong>'+html(event.title)+'</strong><span>'+html(event.description)+'</span></div><time>'+html(formatDate(event.time))+'</time></article>'}).join('')}
 function renderEvolve(){
     var cloud=byId('queryCloud'),events=byId('eventHeatList'),emptyCloud=state.gscBound?(copy.noQueryItems||copy.noQueryCloud):(copy.noGscBound||copy.noQueryCloud),emptyEvents=events?events.getAttribute('data-empty')||copy.noEventHeat:copy.noEventHeat;
     if(cloud){
-        if(!state.queryCloud.length){cloud.innerHTML=empty('mdi-cloud-outline',emptyCloud)}
+        if(!state.queryCloud.length){cloud.innerHTML=empty('cloud',emptyCloud)}
         else{cloud.innerHTML=state.queryCloud.map(function(item){var heat=Number(item.heat||0),size=Math.max(12,Math.min(28,12+Math.round(heat/8)));return'<span style="font-size:'+size+'px" title="'+html(item.query)+' · CTR '+html(formatMetric(item.ctr))+' · pos '+html(formatMetric(item.average_position))+'"><strong>'+html(item.query)+'</strong><b>'+html(Math.round(heat))+' · '+html(item.impressions||0)+'/'+html(item.clicks||0)+'</b></span>'}).join('')}
     }
     if(events){
-        if(!state.eventHeat.length){events.innerHTML=empty('mdi-chart-bar',emptyEvents)}
+        if(!state.eventHeat.length){events.innerHTML=empty('chart',emptyEvents)}
         else{var gscOnly=state.eventHeatFallback==='search_query'||state.eventHeat.every(function(item){return item.source==='search_query'});events.innerHTML=(gscOnly?'<p class="seo-opt__event-note">'+html(copy.eventHeatGscFallback||'')+'</p>'+(copy.eventHeatVisitorHint?'<p class="seo-opt__event-note" id="eventHeatVisitorHint">'+html(copy.eventHeatVisitorHint)+'</p>':'')+'')+state.eventHeat.map(function(item){var src=item.source==='search_query'?'GSC':'visitor';return'<article><div><strong>'+html(item.event)+'</strong><small>'+html(src)+' · '+html(item.count)+' · '+html(formatMetric((Number(item.heat)||0)/100))+'</small></div><b>'+html(Math.round(Number(item.heat)||0))+'</b></article>'}).join('')}
     }
 }
@@ -540,17 +540,17 @@ function formatTime(value){if(!value){return '—'}var date=new Date(value);retu
 function relativeTime(value){if(!value){return '—'}var time=new Date(value).getTime();if(Number.isNaN(time)){return '—'}var seconds=Math.round((time-Date.now())/1000),absolute=Math.abs(seconds);if(absolute<60){return seconds>=0?'不足 1 分钟':'刚刚'}if(absolute<3600){return (seconds>=0?'约 ':'')+Math.round(absolute/60)+' 分钟'+(seconds>=0?'后':'前')}if(absolute<86400){return (seconds>=0?'约 ':'')+Math.round(absolute/3600)+' 小时'+(seconds>=0?'后':'前')}return Math.round(absolute/86400)+' 天'+(seconds>=0?'后':'前')}
 function targetText(target){if(!target){return '整站检测'}var page=target.page_type||'页面',block=target.block_key||'';return block?page+' / '+block:page}
 function setText(name,value){var element=id(name);if(element){element.textContent=String(value===undefined||value===null?'—':value)}}
-function setConnection(state,label){var element=id('seoRtConnection');if(!element){return}element.classList.remove('is-live','is-offline');if(state==='live'){element.classList.add('is-live')}if(state==='offline'){element.classList.add('is-offline')}var icon=element.querySelector('i'),text=element.querySelector('b');if(icon){icon.className='mdi '+(state==='live'?'mdi-access-point':state==='offline'?'mdi-alert-circle-outline':'mdi-loading mdi-spin')}if(text){text.textContent=label}}
+function setConnection(state,label){var element=id('seoRtConnection');if(!element){return}element.classList.remove('is-live','is-offline');if(state==='live'){element.classList.add('is-live')}if(state==='offline'){element.classList.add('is-offline')}var icon=element.querySelector('i'),text=element.querySelector('b');if(icon){icon.className='mdi '+(state==='live'?'wifi':state==='offline'?'warning':'mdi-loading mdi-spin')}if(text){text.textContent=label}}
 function progressText(progress){if(!progress||progress.total===null||progress.total===undefined){return '不确定进度 · 已完成 '+Number(progress&&progress.completed||0)}return Number(progress.completed||0)+' / '+Number(progress.total||0)+' · '+Number(progress.percent||0)+'%'}
 function renderProgress(progress){var box=make('div','seo-rt__progress');box.appendChild(make('strong','',progressText(progress)));var track=make('span'),fill=make('i');fill.style.width=progress&&progress.percent!==null?Math.max(0,Math.min(100,Number(progress.percent||0)))+'%':'0';track.appendChild(fill);box.appendChild(track);return box}
 function renderSnapshot(snapshot){rt.snapshot=snapshot||{};var global=rt.snapshot.global||{};setText('seoRtActiveSites',global.active_sites||0);setText('seoRtWaiting',global.waiting_schedule||0);setText('seoRtExceptions',global.exception_tasks||0);setText('seoRtObserving',global.observing_experiments||0);setText('seoRtUpdated',formatTime(rt.snapshot.server_time));rt.cursor=String(rt.snapshot.as_of_cursor||rt.cursor||'0');rt.activities=Array.isArray(rt.snapshot.activities)?rt.snapshot.activities.slice(0,50):[];rt.activities.forEach(markSeen);renderSites(Array.isArray(rt.snapshot.sites)?rt.snapshot.sites:[]);renderActivities();renderTasks(rt.snapshot.tasks&&Array.isArray(rt.snapshot.tasks.items)?rt.snapshot.tasks.items:[]);renderStage(Array.isArray(rt.snapshot.sites)?rt.snapshot.sites:[])}
-function renderSites(sites){var body=id('seoRtSiteRows'),cards=id('seoRtSiteCards');clear(body);clear(cards);setText('seoRtScopeLabel',rt.scope===null?'全部授权站点':'单站视图');if(!sites.length){var row=make('tr'),cell=make('td','seo-rt__empty','没有可显示的授权站点');cell.colSpan=6;row.appendChild(cell);body.appendChild(row);cards.appendChild(make('div','seo-rt__empty','没有可显示的授权站点'));return}sites.forEach(function(site){var row=make('tr');var identity=make('td');identity.appendChild(make('strong','',site.name||('网站 #'+site.website_id)));identity.appendChild(make('small','',site.domain||('#'+site.website_id)));row.appendChild(identity);var mode=make('td');mode.appendChild(make('span','seo-rt__pill',site.mode||'shadow'));row.appendChild(mode);var phase=make('td');phase.appendChild(make('span','seo-rt__pill '+(site.lifecycle_state==='running'?'is-running':''),phaseNames[site.phase]||site.phase||'等待调度'));phase.appendChild(renderProgress(site.progress));row.appendChild(phase);var issues=make('td');issues.appendChild(make('strong','',String(site.issue_count||0)));issues.appendChild(make('small','',site.failure_count?('异常 '+site.failure_count):'无异常'));row.appendChild(issues);var times=make('td');times.appendChild(make('strong','',formatTime(site.last_analysis_at)));times.appendChild(make('small','',site.schedule_state==='off'?'未启用':site.schedule_state==='due'?'等待系统调度':formatTime(site.next_analysis_at)+' · '+relativeTime(site.next_analysis_at)));row.appendChild(times);var action=make('td'),button=make('button','seo-rt__open');button.type='button';button.setAttribute('aria-label','查看 '+(site.name||('网站 '+site.website_id)));button.appendChild(make('i','mdi mdi-chevron-right'));button.addEventListener('click',function(){openSite(site.website_id)});action.appendChild(button);row.appendChild(action);body.appendChild(row);
+function renderSites(sites){var body=id('seoRtSiteRows'),cards=id('seoRtSiteCards');clear(body);clear(cards);setText('seoRtScopeLabel',rt.scope===null?'全部授权站点':'单站视图');if(!sites.length){var row=make('tr'),cell=make('td','seo-rt__empty','没有可显示的授权站点');cell.colSpan=6;row.appendChild(cell);body.appendChild(row);cards.appendChild(make('div','seo-rt__empty','没有可显示的授权站点'));return}sites.forEach(function(site){var row=make('tr');var identity=make('td');identity.appendChild(make('strong','',site.name||('网站 #'+site.website_id)));identity.appendChild(make('small','',site.domain||('#'+site.website_id)));row.appendChild(identity);var mode=make('td');mode.appendChild(make('span','seo-rt__pill',site.mode||'shadow'));row.appendChild(mode);var phase=make('td');phase.appendChild(make('span','seo-rt__pill '+(site.lifecycle_state==='running'?'is-running':''),phaseNames[site.phase]||site.phase||'等待调度'));phase.appendChild(renderProgress(site.progress));row.appendChild(phase);var issues=make('td');issues.appendChild(make('strong','',String(site.issue_count||0)));issues.appendChild(make('small','',site.failure_count?('异常 '+site.failure_count):'无异常'));row.appendChild(issues);var times=make('td');times.appendChild(make('strong','',formatTime(site.last_analysis_at)));times.appendChild(make('small','',site.schedule_state==='off'?'未启用':site.schedule_state==='due'?'等待系统调度':formatTime(site.next_analysis_at)+' · '+relativeTime(site.next_analysis_at)));row.appendChild(times);var action=make('td'),button=make('button','seo-rt__open');button.type='button';button.setAttribute('aria-label','查看 '+(site.name||('网站 '+site.website_id)));button.appendChild(make('i','chevron-right'));button.addEventListener('click',function(){openSite(site.website_id)});action.appendChild(button);row.appendChild(action);body.appendChild(row);
 var card=make('article','seo-rt__site-card');var title=make('div');title.appendChild(make('strong','',site.name||('网站 #'+site.website_id)));title.appendChild(make('small','',site.domain||('#'+site.website_id)));card.appendChild(title);var state=make('div');state.appendChild(make('span','seo-rt__pill '+(site.lifecycle_state==='running'?'is-running':''),phaseNames[site.phase]||site.phase));state.appendChild(make('small','',progressText(site.progress)));card.appendChild(state);var cardButton=button.cloneNode(true);cardButton.addEventListener('click',function(){openSite(site.website_id)});card.appendChild(cardButton);cards.appendChild(card)})}
 function renderStage(sites){var panel=id('seoRtStagePanel');if(rt.scope===null||!sites.length){panel.hidden=true;return}panel.hidden=false;var site=sites[0]||{},phase=site.phase||'scheduled',index=phases.indexOf(phase);setText('seoRtStageTitle',phaseNames[phase]||phase);setText('seoRtNextCheck',site.schedule_state==='off'?'未启用':site.schedule_state==='due'?'已到期，等待系统调度':formatTime(site.next_analysis_at)+'（'+relativeTime(site.next_analysis_at)+'）');var rail=id('seoRtStageRail');clear(rail);phases.forEach(function(item,position){var li=make('li','',phaseNames[item]);if(index>=0&&position<index){li.classList.add('is-past')}if(position===index){li.classList.add('is-current');li.setAttribute('aria-current','step')}rail.appendChild(li)});var readiness=id('seoRtReadiness'),data=site.data_readiness||{};readiness.textContent=data.state==='sample_insufficient'?'数据准备度：样本门槛尚未达成，系统不会调用 AI 或修改站点。':data.state==='not_checked'?'数据准备度：等待首次检测。':'数据准备度：最近一次检测已完成数据完整度检查。'}
 function renderActivities(){var list=id('seoRtActivity');clear(list);setText('seoRtActivityCount',rt.activities.length);if(!rt.activities.length){list.appendChild(make('div','seo-rt__empty','等待新的系统动作'));return}rt.activities.slice(0,50).forEach(function(activity){var article=make('article','is-'+(activity.severity||'info'));var message=activity.message||{};article.appendChild(make('strong','',message.text||message.code||'系统状态更新'));article.appendChild(make('small','',formatTime(activity.occurred_at)+' · '+targetText(activity.target)+' · '+(phaseNames[activity.phase]||activity.phase||'')));article.appendChild(make('code','',message.code||activity.event_type||''));list.appendChild(article)});if(!rt.paused){list.scrollTop=0}}
 function markSeen(activity){var cursor=String(activity&&activity.cursor||'');if(cursor){rt.seen.add(cursor);if(rt.seen.size>500){var first=rt.seen.values().next().value;rt.seen.delete(first)}}}
 function addActivity(activity){var cursor=String(activity&&activity.cursor||'');if(!cursor||rt.seen.has(cursor)){return}markSeen(activity);rt.cursor=cursor;rt.activities.unshift(activity);rt.activities=rt.activities.slice(0,50);renderActivities();scheduleSnapshot()}
-function renderTasks(tasks){var list=id('seoRtTaskList');clear(list);if(!tasks.length){list.appendChild(make('div','seo-rt__empty','尚无检测任务。旧任务会以单目标父任务兼容显示。'));return}tasks.forEach(function(task){var details=make('details','seo-rt__task');var summary=make('summary');var identity=make('div');identity.appendChild(make('strong','',task.legacy?'历史单目标任务':('站点 #'+task.website_id+' 检测')));identity.appendChild(make('small','',task.cycle_id+' · '+formatTime(task.last_activity_at)));summary.appendChild(identity);var phase=make('div');phase.appendChild(make('strong','',phaseNames[task.phase]||task.phase||'—'));phase.appendChild(make('small','',outcomeNames[task.outcome]||task.outcome||'执行中'));summary.appendChild(phase);summary.appendChild(renderProgress(task.progress));summary.appendChild(make('i','mdi mdi-chevron-down'));details.appendChild(summary);var children=make('div','seo-rt__task-children');var child=make('button','seo-rt__task-child');child.type='button';var childText=make('span');childText.appendChild(make('strong','',task.target?targetText(task.target):'查看本次检测的页面与区块'));childText.appendChild(make('small','',(task.issue_count||0)+' 个问题 · '+(task.failure_count||0)+' 个异常'));child.appendChild(childText);child.appendChild(make('span','seo-rt__pill '+(task.failure_count?'is-error':''),outcomeNames[task.outcome]||phaseNames[task.phase]||'详情'));child.addEventListener('click',function(event){openDetail(task.cycle_id,task.target&&task.target.run_id||'',event.currentTarget)});children.appendChild(child);details.appendChild(children);list.appendChild(details)})}
+function renderTasks(tasks){var list=id('seoRtTaskList');clear(list);if(!tasks.length){list.appendChild(make('div','seo-rt__empty','尚无检测任务。旧任务会以单目标父任务兼容显示。'));return}tasks.forEach(function(task){var details=make('details','seo-rt__task');var summary=make('summary');var identity=make('div');identity.appendChild(make('strong','',task.legacy?'历史单目标任务':('站点 #'+task.website_id+' 检测')));identity.appendChild(make('small','',task.cycle_id+' · '+formatTime(task.last_activity_at)));summary.appendChild(identity);var phase=make('div');phase.appendChild(make('strong','',phaseNames[task.phase]||task.phase||'—'));phase.appendChild(make('small','',outcomeNames[task.outcome]||task.outcome||'执行中'));summary.appendChild(phase);summary.appendChild(renderProgress(task.progress));summary.appendChild(make('i','chevron-down'));details.appendChild(summary);var children=make('div','seo-rt__task-children');var child=make('button','seo-rt__task-child');child.type='button';var childText=make('span');childText.appendChild(make('strong','',task.target?targetText(task.target):'查看本次检测的页面与区块'));childText.appendChild(make('small','',(task.issue_count||0)+' 个问题 · '+(task.failure_count||0)+' 个异常'));child.appendChild(childText);child.appendChild(make('span','seo-rt__pill '+(task.failure_count?'is-error':''),outcomeNames[task.outcome]||phaseNames[task.phase]||'详情'));child.addEventListener('click',function(event){openDetail(task.cycle_id,task.target&&task.target.run_id||'',event.currentTarget)});children.appendChild(child);details.appendChild(children);list.appendChild(details)})}
 function openSite(websiteId){var url=new URL(window.location.href);url.searchParams.set('website_id',String(websiteId));window.location.assign(url.toString())}
 function openAllSites(){var url=new URL(window.location.href);url.searchParams.delete('website_id');window.location.assign(url.toString())}
 function openDetail(cycleId,runId,trigger){rt.returnFocus=trigger||document.activeElement;var drawer=id('seoRtDrawer');drawer.classList.add('is-open');drawer.setAttribute('aria-hidden','false');document.documentElement.style.overflow='hidden';setText('seoRtDrawerTitle',cycleId);var body=id('seoRtDrawerBody');clear(body);body.appendChild(make('div','seo-rt__empty','正在读取任务详情…'));api.optimizationTaskDetail({cycle_id:cycleId,run_id:runId||''}).then(function(detail){rt.detail=detail||{};renderDetail()}).catch(function(){clear(body);body.appendChild(make('div','seo-rt__error','任务详情读取失败，页面内容和队列状态未受到影响。'))});var close=id('seoRtDrawer').querySelector('[data-seo-rt-close]');if(close){close.focus()}}
@@ -569,7 +569,7 @@ function streamFailed(){setConnection('offline','连接中断 · 轮询中');sta
 function reconnect(delay){window.clearTimeout(rt.reconnectTimer);rt.reconnectTimer=window.setTimeout(startStream,delay)}
 function startPolling(){if(rt.pollTimer){return}rt.pollTimer=window.setInterval(function(){api.optimizationActivityList({website_id:rt.scope,after:String(rt.cursor||'0'),page_size:200}).then(function(result){rt.lastSignal=Date.now();if(result&&result.resync_required){loadSnapshot();return}(result&&Array.isArray(result.items)?result.items:[]).forEach(addActivity)}).catch(function(){})},15000)}
 function stopPolling(){window.clearInterval(rt.pollTimer);rt.pollTimer=null}
-function bind(){id('seoRtAllSites').addEventListener('click',openAllSites);id('seoRtPause').addEventListener('click',function(){rt.paused=!rt.paused;this.setAttribute('aria-pressed',rt.paused?'true':'false');var label=this.querySelector('span');if(label){label.textContent=rt.paused?'继续自动滚动':'暂停自动滚动'}var icon=this.querySelector('i');if(icon){icon.className='mdi '+(rt.paused?'mdi-play':'mdi-pause')}});document.querySelectorAll('[data-seo-rt-close]').forEach(function(button){button.addEventListener('click',closeDetail)});document.querySelectorAll('[data-seo-rt-tab]').forEach(function(button){button.addEventListener('click',function(){rt.detailTab=this.dataset.seoRtTab;document.querySelectorAll('[data-seo-rt-tab]').forEach(function(tab){tab.setAttribute('aria-selected',tab===button?'true':'false')});renderDetail()})});document.addEventListener('keydown',function(event){if(event.key==='Escape'&&id('seoRtDrawer').classList.contains('is-open')){closeDetail()}});rt.watchdog=window.setInterval(function(){if(Date.now()-rt.lastSignal>45000){streamFailed()}},15000);window.addEventListener('beforeunload',function(){closeStream();stopPolling();window.clearInterval(rt.watchdog)})}
+function bind(){id('seoRtAllSites').addEventListener('click',openAllSites);id('seoRtPause').addEventListener('click',function(){rt.paused=!rt.paused;this.setAttribute('aria-pressed',rt.paused?'true':'false');var label=this.querySelector('span');if(label){label.textContent=rt.paused?'继续自动滚动':'暂停自动滚动'}var icon=this.querySelector('i');if(icon){icon.className='mdi '+(rt.paused?'play':'pause')}});document.querySelectorAll('[data-seo-rt-close]').forEach(function(button){button.addEventListener('click',closeDetail)});document.querySelectorAll('[data-seo-rt-tab]').forEach(function(button){button.addEventListener('click',function(){rt.detailTab=this.dataset.seoRtTab;document.querySelectorAll('[data-seo-rt-tab]').forEach(function(tab){tab.setAttribute('aria-selected',tab===button?'true':'false')});renderDetail()})});document.addEventListener('keydown',function(event){if(event.key==='Escape'&&id('seoRtDrawer').classList.contains('is-open')){closeDetail()}});rt.watchdog=window.setInterval(function(){if(Date.now()-rt.lastSignal>45000){streamFailed()}},15000);window.addEventListener('beforeunload',function(){closeStream();stopPolling();window.clearInterval(rt.watchdog)})}
 rt.scope=scopeFromUrl();bind();loadSnapshot();
 })();
 </script>

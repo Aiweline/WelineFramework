@@ -39,17 +39,17 @@
 
 <div class="weline-currency-config" data-testid="currency-config-management">
 <!-- 页面标题 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>货币管理</lang> > <lang>货币配置</lang>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><lang>系统</lang></span></li>
-                    <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
-                    <li class='breadcrumb-item active'><lang>配置</lang></li>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>系统</lang></span></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>配置</lang></li>
                 </ol>
             </div>
         </div>
@@ -57,91 +57,88 @@
 </div>
 
 <!-- 消息 -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 配置表单 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'><lang>货币导入配置</lang></h4>
-                <p class='card-title-desc'><lang>配置货币汇率自动导入的相关设置</lang></p>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title"><lang>货币导入配置</lang></h4>
+                <p class="w-text" data-tone="muted"><lang>配置货币汇率自动导入的相关设置</lang></p>
                 
-                <w:form class='needs-validation' novalidate action="@backend-url('currency/backend/config/index')" method="post" data-testid="currency-config-form">
-                    <div class='mb-4'>
-                        <label class='form-label'><lang>汇率模式</lang></label>
-                        <div class='d-flex flex-column gap-2'>
-                            <label class='form-check border rounded p-3 mb-0'>
-                                <input class='form-check-input me-2' type='radio' name='rate_mode' value='manual' <?= ($rate_mode ?? 'manual') === 'manual' ? 'checked' : '' ?>>
-                                <span class='form-check-label'>
+                <w:form class="w-form" novalidate action="@backend-url('currency/backend/config/index')" method="post" data-testid="currency-config-form">
+                    <div style="--w-mb:var(--weline-space-6);">
+                        <label class="w-field__label"><lang>汇率模式</lang></label>
+                        <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                            <label class="w-check" data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);--w-mb:0;">
+                                <input class="me-2" type='radio' name='rate_mode' value='manual' <?= ($rate_mode ?? 'manual') === 'manual' ? 'checked' : '' ?>>
+                                <span>
                                     <strong><lang>手动汇率</lang></strong><br>
-                                    <small class='text-muted'><lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang></small>
+                                    <small class="w-text" data-tone="muted"><lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang></small>
                                 </span>
                             </label>
-                            <label class='form-check border rounded p-3 mb-0'>
-                                <input class='form-check-input me-2' type='radio' name='rate_mode' value='auto' <?= ($rate_mode ?? 'manual') === 'auto' ? 'checked' : '' ?>>
-                                <span class='form-check-label'>
+                            <label class="w-check" data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);--w-mb:0;">
+                                <input class="me-2" type='radio' name='rate_mode' value='auto' <?= ($rate_mode ?? 'manual') === 'auto' ? 'checked' : '' ?>>
+                                <span>
                                     <strong><lang>自动汇率</lang></strong><br>
-                                    <small class='text-muted'><lang>自动模式下，系统会以 CNY 为基准，通过 API / Cron / 手动导入更新汇率。</lang></small>
+                                    <small class="w-text" data-tone="muted"><lang>自动模式下，系统会以 CNY 为基准，通过 API / Cron / 手动导入更新汇率。</lang></small>
                                 </span>
                             </label>
                         </div>
                     </div>
 
-                    <div class='alert alert-info mb-3' data-rate-mode-section='manual'>
+                    <div class="w-alert" data-rate-mode-section='manual' data-tone="info" style="--w-mb:var(--weline-space-4);">
                         <lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang>
                     </div>
 
                     <div data-rate-mode-section='auto'>
                     <!-- 自动导入开关 -->
                     </div>
-                    <div class='mb-3' data-rate-mode-section='auto'>
-                        <label class='form-label'><lang>启用自动导入</lang></label>
-                        <div class='form-check form-switch'>
-                            <input class='form-check-input' type='checkbox' name='import_enabled' id='import_enabled' 
-                                   value='1' <?= $import_enabled ?? false ? 'checked' : '' ?>>
-                            <label class='form-check-label' for='import_enabled'>
+                    <div data-rate-mode-section='auto' style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>启用自动导入</lang></label>
+                        <div class="w-switch">
+                            <input type='checkbox' name='import_enabled' id='import_enabled' value='1' <?= $import_enabled ?? false ? 'checked' : '' ?>>
+                            <label for='import_enabled'>
                                 <lang>启用后，系统将按照设定的时间自动从第三方API导入汇率</lang>
                             </label>
                         </div>
                     </div>
 
                     <!-- 导入渠道 -->
-                    <div class='mb-3' data-rate-mode-section='auto'>
-                        <label class='form-label'><lang>导入渠道</lang></label>
-                        <select class='form-select' name='import_provider' id='import_provider' required>
+                    <div data-rate-mode-section='auto' style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>导入渠道</lang></label>
+                        <select class="w-select" name='import_provider' id='import_provider' required>
                             <option value='exchangerate-api' <?= ($import_provider ?? 'exchangerate-api') === 'exchangerate-api' ? 'selected' : '' ?>>
                                 exchangerate-api.com (免费)
                             </option>
                         </select>
-                        <div class='form-text'><lang>选择汇率数据来源</lang></div>
+                        <div class="w-field__hint"><lang>选择汇率数据来源</lang></div>
                     </div>
 
                     <!-- API密钥 -->
-                    <div class='mb-3' data-rate-mode-section='auto'>
-                        <label class='form-label'><lang>API密钥</lang> <span class='text-muted'>(可选)</span></label>
-                        <input type='text' class='form-control' name='import_api_key' id='import_api_key' 
-                               value='<?= htmlspecialchars($import_api_key ?? '') ?>' 
-                               placeholder='<?= __('免费版不需要API密钥') ?>'>
-                        <div class='form-text'><lang>如果使用付费API，请填写API密钥</lang></div>
-                        <button type='button' class='btn btn-sm btn-outline-primary mt-2' data-currency-config-action='test-api'>
+                    <div data-rate-mode-section='auto' style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>API密钥</lang> <span class="w-text" data-tone="muted">(可选)</span></label>
+                        <input type='text' class="w-input" name='import_api_key' id='import_api_key' value='<?= htmlspecialchars($import_api_key ?? '') ?>' placeholder='<?= __('免费版不需要API密钥') ?>'>
+                        <div class="w-field__hint"><lang>如果使用付费API，请填写API密钥</lang></div>
+                        <button type='button' class="w-button" data-currency-config-action='test-api' data-tone="primary" data-variant="outline" data-size="sm" style="--w-mt:var(--weline-space-2);">
                             <lang>测试连接</lang>
                         </button>
                     </div>
 
                     <!-- Cron执行时间 -->
-                    <div class='mb-3' data-rate-mode-section='auto'>
-                        <label class='form-label'><lang>Cron执行时间</lang></label>
+                    <div data-rate-mode-section='auto' style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>Cron执行时间</lang></label>
                         
                         <!-- 可视化配置器 -->
-                        <div class='card border'>
-                            <div class='card-body'>
+                        <div class="w-card" data-w-border="border">
+                            <div class="w-card__body">
                                 <!-- 执行频率 -->
-                                <div class='mb-3'>
-                                    <label class='form-label'><lang>执行频率</lang></label>
-                                    <select class='form-select' id='cron_frequency'>
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><lang>执行频率</lang></label>
+                                    <select class="w-select" id='cron_frequency'>
                                         <option value='daily'><?= __('每天') ?></option>
                                         <option value='weekly'><?= __('每周') ?></option>
                                         <option value='monthly'><?= __('每月') ?></option>
@@ -151,20 +148,20 @@
                                 </div>
                                 
                                 <!-- 时间选择（每天、每周、每月） -->
-                                <div id='time_selector' class='mb-3'>
-                                    <label class='form-label'><lang>执行时间</lang></label>
-                                    <div class='row g-2'>
-                                        <div class='col-6'>
-                                            <label class='form-label small'><lang>小时</lang></label>
-                                            <select class='form-select' id='cron_hour'>
+                                <div id='time_selector' style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><lang>执行时间</lang></label>
+                                    <div class="w-grid" style="--w-gap:var(--weline-space-2);">
+                                        <div style="--w-span:6;">
+                                            <label class="w-field__label w-text" data-size="sm"><lang>小时</lang></label>
+                                            <select class="w-select" id='cron_hour'>
                                                 <?php for ($h = 0; $h < 24; $h++): ?>
                                                     <option value='<?= $h ?>'><?= str_pad($h, 2, '0', STR_PAD_LEFT) ?>:00</option>
                                                 <?php endfor; ?>
                                             </select>
                                         </div>
-                                        <div class='col-6'>
-                                            <label class='form-label small'><lang>分钟</lang></label>
-                                            <select class='form-select' id='cron_minute'>
+                                        <div style="--w-span:6;">
+                                            <label class="w-field__label w-text" data-size="sm"><lang>分钟</lang></label>
+                                            <select class="w-select" id='cron_minute'>
                                                 <?php for ($m = 0; $m < 60; $m += 5): ?>
                                                     <option value='<?= $m ?>'><?= str_pad($m, 2, '0', STR_PAD_LEFT) ?></option>
                                                 <?php endfor; ?>
@@ -174,9 +171,9 @@
                                 </div>
                                 
                                 <!-- 星期选择（每周） -->
-                                <div id='weekday_selector' class='mb-3' style='display:none;'>
-                                    <label class='form-label'><lang>星期</lang></label>
-                                    <select class='form-select' id='cron_weekday'>
+                                <div id='weekday_selector' style='display:none;'>
+                                    <label class="w-field__label"><lang>星期</lang></label>
+                                    <select class="w-select" id='cron_weekday'>
                                         <option value='0'><?= __('星期日') ?></option>
                                         <option value='1'><?= __('星期一') ?></option>
                                         <option value='2'><?= __('星期二') ?></option>
@@ -188,9 +185,9 @@
                                 </div>
                                 
                                 <!-- 日期选择（每月） -->
-                                <div id='day_selector' class='mb-3' style='display:none;'>
-                                    <label class='form-label'><lang>日期</lang></label>
-                                    <select class='form-select' id='cron_day'>
+                                <div id='day_selector' style='display:none;'>
+                                    <label class="w-field__label"><lang>日期</lang></label>
+                                    <select class="w-select" id='cron_day'>
                                         <?php for ($d = 1; $d <= 31; $d++): ?>
                                             <option value='<?= $d ?>'><?= __('第 %{1} 天', $d) ?></option>
                                         <?php endfor; ?>
@@ -198,12 +195,11 @@
                                 </div>
                                 
                                 <!-- 自定义输入 -->
-                                <div id='custom_selector' class='mb-3' style='display:none;'>
-                                    <label class='form-label'><lang>Cron表达式</lang></label>
-                                    <input type='text' class='form-control' id='cron_custom'
-                                           placeholder='0 2 * * *'>
-                                    <div class='form-text'>
-                                        <small class='text-muted'>
+                                <div id='custom_selector' style='display:none;'>
+                                    <label class="w-field__label"><lang>Cron表达式</lang></label>
+                                    <input type='text' class="w-input" id='cron_custom' placeholder='0 2 * * *'>
+                                    <div class="w-field__hint">
+                                        <small class="w-text" data-tone="muted">
                                             <lang>格式：分钟 小时 日 月 星期</lang><br>
                                             <lang>例如：0 2 * * * (每天凌晨2点)</lang>
                                         </small>
@@ -211,10 +207,10 @@
                                 </div>
                                 
                                 <!-- 预览 -->
-                                <div class='alert alert-info mb-0'>
+                                <div class="w-alert" data-tone="info" style="--w-mb:0;">
                                     <strong><lang>预览：</lang></strong>
                                     <span id='cron_preview'><?= __('每天凌晨2点执行') ?></span><br>
-                                    <small class='text-muted'>
+                                    <small class="w-text" data-tone="muted">
                                         <lang>Cron表达式：</lang>
                                         <code id='cron_expression_display'>0 2 * * *</code>
                                     </small>
@@ -229,19 +225,14 @@
                     </div>
 
                     <!-- 基准货币 -->
-                    <div class='mb-3'>
-                        <label class='form-label'>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label">
                             <lang>基准货币</lang>
-                            <i class='mdi mdi-help-circle-outline text-muted ms-1' 
-                               data-bs-toggle='tooltip' 
-                               data-bs-placement='top'
-                               title='<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>'></i>
+                            <i class="mdi mdi-help-circle-outline w-text ms-1" title='<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>' data-w-placement='top' data-w-component="tooltip" data-w-tooltip="<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>" data-tone="muted"></i>
                         </label>
                         
                         <!-- 货币选择下拉框 -->
-                        <select class='form-select' name='base_currency' id='base_currency' required 
-                                data-original-value='<?= htmlspecialchars($base_currency ?? 'CNY') ?>'
-                                >
+                        <select class="w-select" name='base_currency' id='base_currency' required data-original-value='<?= htmlspecialchars($base_currency ?? 'CNY') ?>'>
                             <?php if (!empty($available_currencies)): ?>
                                 <?php foreach ($available_currencies as $currency): ?>
                                     <option value='<?= htmlspecialchars($currency['code']) ?>' 
@@ -259,44 +250,44 @@
                         </select>
                         
                         <!-- 基准货币变更警告 -->
-                        <div id='base_currency_warning' class='alert alert-warning mt-2' style='display:none;'>
-                            <i class='mdi mdi-alert-outline me-2'></i>
+                        <div id='base_currency_warning' class="w-alert" style='display:none;' data-tone="warning">
+                            <w:icon name="warning" size="sm"></w:icon>
                             <strong><lang>警告：切换基准货币的影响</lang></strong>
-                            <ul class='mb-2 mt-2'>
+                            <ul style="--w-mb:var(--weline-space-2);--w-mt:var(--weline-space-2);">
                                 <li><lang>所有货币的汇率都是相对于基准货币计算的，切换基准货币会导致所有汇率数据失效</lang></li>
                                 <li><lang>切换后，您需要重新导入汇率数据，否则汇率计算将不准确</lang></li>
                                 <li><lang>建议：切换基准货币前，先备份当前汇率数据，然后执行"手动导入"更新所有汇率</lang></li>
                             </ul>
-                            <div class='d-flex gap-2'>
-                                <button type='button' class='btn btn-sm btn-warning' id='confirm_base_currency_change'>
-                                    <i class='mdi mdi-check me-1'></i><lang>我已了解，确认切换</lang>
+                            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                <button type='button' class="w-button" id='confirm_base_currency_change' data-tone="warning" data-size="sm">
+                                    <w:icon name="check" size="sm"></w:icon><lang>我已了解，确认切换</lang>
                                 </button>
-                                <button type='button' class='btn btn-sm btn-secondary' data-currency-config-action='reset-base'>
-                                    <i class='mdi mdi-close me-1'></i><lang>取消，恢复原值</lang>
+                                <button type='button' class="w-button" data-currency-config-action='reset-base' data-tone="neutral" data-size="sm">
+                                    <w:icon name="close" size="sm"></w:icon><lang>取消，恢复原值</lang>
                                 </button>
                             </div>
                         </div>
                         
                         <!-- 说明卡片 -->
-                        <div class='card border mt-2 card-explain'>
-                            <div class='card-body p-3'>
-                                <h6 class='card-title small mb-2'>
-                                    <i class='mdi mdi-information-outline text-primary me-1'></i>
+                        <div class="w-card card-explain" data-w-border="border" style="--w-mt:var(--weline-space-2);">
+                            <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                                <h6 class="w-card__title w-text" data-size="sm" style="--w-mb:var(--weline-space-2);">
+                                    <w:icon name="info" size="sm"></w:icon>
                                     <lang>什么是基准货币？</lang>
                                 </h6>
-                                <p class='card-text small mb-2'>
+                                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">
                                     <lang>基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。</lang>
                                 </p>
-                                <p class='card-text small mb-2'>
+                                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">
                                     <strong><lang>示例：</lang></strong><br>
                                     <lang>如果基准货币是</lang> <code>CNY</code>，<lang>USD汇率</lang> <code>8.0</code> <lang>表示：1美元 = 8人民币</lang><br>
                                     <lang>如果基准货币是</lang> <code>USD</code>，<lang>CNY汇率</lang> <code>0.125</code> <lang>表示：1人民币 = 0.125美元</lang>
                                 </p>
-                                <h6 class='card-title small mb-2 mt-3'>
-                                    <i class='mdi mdi-lightbulb-outline text-warning me-1'></i>
+                                <h6 class="w-card__title w-text" data-size="sm" style="--w-mb:var(--weline-space-2);--w-mt:var(--weline-space-4);">
+                                    <w:icon name="circle" size="sm"></w:icon>
                                     <lang>如何选择基准货币？</lang>
                                 </h6>
-                                <ul class='small mb-0'>
+                                <ul class="w-text" data-size="sm" style="--w-mb:0;">
                                     <li><lang>选择您主要业务使用的货币（如：中国业务选择CNY，美国业务选择USD）</lang></li>
                                     <li><lang>选择您网站/系统主要面向的地区货币</lang></li>
                                     <li><lang>选择您商品定价的主要货币</lang></li>
@@ -306,18 +297,17 @@
                     </div>
 
                     <!-- 最后导入时间 -->
-                    <div class='mb-3'>
-                        <label class='form-label'><lang>最后导入时间</lang></label>
-                        <input type='text' class='form-control' readonly 
-                               value='<?= htmlspecialchars($last_import_time_formatted ?? __('从未导入')) ?>'>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>最后导入时间</lang></label>
+                        <input type='text' class="w-input" readonly value='<?= htmlspecialchars($last_import_time_formatted ?? __('从未导入')) ?>'>
                     </div>
 
                     <!-- 操作按钮 -->
-                    <div class='mb-3'>
-                        <button type='submit' class='btn btn-primary' data-testid="currency-config-submit">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <button type='submit' class="w-button" data-testid="currency-config-submit" data-tone="primary">
                             <lang>保存配置</lang>
                         </button>
-                        <button type='button' class='btn btn-success ms-2' data-rate-mode-section='auto' data-currency-config-action='manual-import'>
+                        <button type='button' class="w-button ms-2" data-rate-mode-section='auto' data-currency-config-action='manual-import' data-tone="success">
                             <lang>手动导入</lang>
                         </button>
                     </div>
@@ -328,37 +318,37 @@
 </div>
 
 <!-- 基准货币切换确认模态框 -->
-<div class='modal fade' id='baseCurrencyChangeModal' tabindex='-1' aria-labelledby='baseCurrencyChangeModalLabel' aria-hidden='true'>
-    <div class='modal-dialog modal-dialog-centered'>
-        <div class='modal-content'>
-            <div class='modal-header bg-warning text-dark'>
-                <h5 class='modal-title' id='baseCurrencyChangeModalLabel'>
-                    <i class='mdi mdi-alert-outline me-2'></i>
+<div class="w-dialog" id='baseCurrencyChangeModal' tabindex='-1' aria-labelledby='baseCurrencyChangeModalLabel' aria-hidden='true' data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header w-text" data-w-background="warning" data-tone="muted">
+                <h5 class="w-dialog__title" id='baseCurrencyChangeModalLabel'>
+                    <w:icon name="warning" size="sm"></w:icon>
                     <lang>确认切换基准货币</lang>
                 </h5>
-                <button type='button' class='btn-close' data-bs-dismiss='modal' aria-label='Close'></button>
+                <button type='button' class="w-button" aria-label='Close' data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class='modal-body'>
-                <div class='alert alert-warning mb-3'>
+            <div class="w-dialog__body">
+                <div class="w-alert" data-tone="warning" style="--w-mb:var(--weline-space-4);">
                     <strong><lang>警告：此操作将影响所有货币汇率数据！</lang></strong>
                 </div>
                 <p><lang>您正在将基准货币从</lang> <strong id='modal_old_base_currency'></strong> <lang>切换为</lang> <strong id='modal_new_base_currency'></strong></p>
-                <ul class='mb-3'>
+                <ul style="--w-mb:var(--weline-space-4);">
                     <li><lang>所有货币的汇率将根据新的基准货币重新计算</lang></li>
                     <li><lang>系统将自动更新所有货币数据</lang></li>
                     <li><lang>此操作不可撤销，请确保您已了解影响</lang></li>
                 </ul>
-                <p class='text-muted small mb-0'>
-                    <i class='mdi mdi-information-outline me-1'></i>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
+                    <w:icon name="info" size="sm"></w:icon>
                     <lang>切换后，系统将自动更新所有货币汇率，请等待更新完成</lang>
                 </p>
             </div>
-            <div class='modal-footer'>
-                <button type='button' class='btn btn-secondary' data-bs-dismiss='modal'>
-                    <i class='mdi mdi-close me-1'></i><lang>取消</lang>
+            <div class="w-dialog__footer">
+                <button type='button' class="w-button" data-w-action="dialog.close" data-tone="neutral">
+                    <w:icon name="close" size="sm"></w:icon><lang>取消</lang>
                 </button>
-                <button type='button' class='btn btn-warning' id='confirmBaseCurrencyChangeBtn'>
-                    <i class='mdi mdi-check me-1'></i><lang>确认切换并更新</lang>
+                <button type='button' class="w-button" id='confirmBaseCurrencyChangeBtn' data-tone="warning">
+                    <w:icon name="check" size="sm"></w:icon><lang>确认切换并更新</lang>
                 </button>
             </div>
         </div>
@@ -366,62 +356,61 @@
 </div>
 
 <!-- 货币更新进度模态框 -->
-<div class='modal fade' id='currencyUpdateProgressModal' tabindex='-1' aria-labelledby='currencyUpdateProgressModalLabel' aria-hidden='true' data-bs-backdrop='static' data-bs-keyboard='false'>
-    <div class='modal-dialog modal-dialog-centered'>
-        <div class='modal-content'>
-            <div class='modal-header bg-primary text-white'>
-                <h5 class='modal-title' id='currencyUpdateProgressModalLabel'>
-                    <i class='mdi mdi-sync me-2'></i>
+<div class="w-dialog" id='currencyUpdateProgressModal' tabindex='-1' aria-labelledby='currencyUpdateProgressModalLabel' aria-hidden='true' data-w-backdrop='static' data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header w-text" data-w-background="primary" data-tone="inverse">
+                <h5 class="w-dialog__title" id='currencyUpdateProgressModalLabel'>
+                    <w:icon name="refresh" size="sm"></w:icon>
                     <lang>正在更新货币汇率</lang>
                 </h5>
             </div>
-            <div class='modal-body'>
-                <p class='mb-3'><lang>正在重新计算所有货币的汇率，请稍候...</lang></p>
+            <div class="w-dialog__body">
+                <p style="--w-mb:var(--weline-space-4);"><lang>正在重新计算所有货币的汇率，请稍候...</lang></p>
                 
-                <div class='progress mb-3' style='height: 30px;'>
-                    <div id='update_progress_bar' class='progress-bar progress-bar-striped progress-bar-animated' 
-                         role='progressbar' style='width: 0%' aria-valuenow='0' aria-valuemin='0' aria-valuemax='100'>
+                <div class="w-progress" style='height: 30px;'>
+                    <div id='update_progress_bar' class="w-progress__bar progress-bar-striped progress-bar-animated" role='progressbar' style='width: 0%' aria-valuenow='0' aria-valuemin='0' aria-valuemax='100'>
                         <span id='update_progress_text'>0%</span>
                     </div>
                 </div>
                 
-                <div class='mb-2'>
-                    <small class='text-muted'>
-                        <lang>当前处理：</lang><span id='update_current_currency' class='fw-bold'>-</span>
+                <div style="--w-mb:var(--weline-space-2);">
+                    <small class="w-text" data-tone="muted">
+                        <lang>当前处理：</lang><span id='update_current_currency' class="w-text" data-weight="strong">-</span>
                     </small>
                 </div>
                 
-                <div class='row text-center mt-3'>
-                    <div class='col-4'>
-                        <div class='border rounded p-2'>
-                            <div class='h5 mb-0' id='update_total_count'>0</div>
-                            <small class='text-muted'><lang>总计</lang></small>
+                <div class="w-grid w-text" data-align="center" style="--w-mt:var(--weline-space-4);">
+                    <div style="--w-span:4;">
+                        <div data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                            <div class="h5" id='update_total_count' style="--w-mb:0;">0</div>
+                            <small class="w-text" data-tone="muted"><lang>总计</lang></small>
                         </div>
                     </div>
-                    <div class='col-4'>
-                        <div class='border rounded p-2 bg-success text-white'>
-                            <div class='h5 mb-0' id='update_success_count'>0</div>
+                    <div style="--w-span:4;">
+                        <div class="w-text" data-w-border="border" data-w-radius="md" data-w-background="success" data-tone="inverse" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                            <div class="h5" id='update_success_count' style="--w-mb:0;">0</div>
                             <small><lang>成功</lang></small>
                         </div>
                     </div>
-                    <div class='col-4'>
-                        <div class='border rounded p-2 bg-danger text-white'>
-                            <div class='h5 mb-0' id='update_fail_count'>0</div>
+                    <div style="--w-span:4;">
+                        <div class="w-text" data-w-border="border" data-w-radius="md" data-w-background="danger" data-tone="inverse" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                            <div class="h5" id='update_fail_count' style="--w-mb:0;">0</div>
                             <small><lang>失败</lang></small>
                         </div>
                     </div>
                 </div>
                 
-                <div id='update_errors' class='mt-3' style='display:none;'>
-                    <div class='alert alert-danger'>
+                <div id='update_errors' style='display:none;'>
+                    <div class="w-alert" data-tone="danger">
                         <strong><lang>更新错误：</lang></strong>
-                        <ul id='update_errors_list' class='mb-0 small'></ul>
+                        <ul id='update_errors_list' class="w-text" data-size="sm" style="--w-mb:0;"></ul>
                     </div>
                 </div>
             </div>
-            <div class='modal-footer' id='update_progress_footer' style='display:none;'>
-                <button type='button' class='btn btn-primary' data-bs-dismiss='modal'>
-                    <i class='mdi mdi-check me-1'></i><lang>完成</lang>
+            <div class="w-dialog__footer" id='update_progress_footer' style='display:none;'>
+                <button type='button' class="w-button" data-w-action="dialog.close" data-tone="primary">
+                    <w:icon name="check" size="sm"></w:icon><lang>完成</lang>
                 </button>
             </div>
         </div>
@@ -762,7 +751,7 @@
                     if (self.progressModalInstance) {
                         self.progressModalInstance.hide();
                     }
-                    BackendToast.success(data.message || '<?= __('配置保存成功！') ?>');
+                    Weline.UI.toast.success(data.message || '<?= __('配置保存成功！') ?>');
                     baseCurrencySelect.setAttribute('data-original-value', newBaseCurrency);
                     form.dataset.baseCurrencyConfirmed = '';
                     setTimeout(function() { window.location.reload(); }, 1000);
@@ -770,7 +759,7 @@
                     if (self.progressModalInstance) {
                         self.progressModalInstance.hide();
                     }
-                    BackendToast.error(data.message || '<?= __('配置保存失败') ?>');
+                    Weline.UI.toast.error(data.message || '<?= __('配置保存失败') ?>');
                     form.dataset.baseCurrencyConfirmed = '';
                 }
             })
@@ -778,7 +767,7 @@
                 if (self.progressModalInstance) {
                     self.progressModalInstance.hide();
                 }
-                BackendToast.error('<?= __('请求失败') ?>');
+                Weline.UI.toast.error('<?= __('请求失败') ?>');
                 form.dataset.baseCurrencyConfirmed = '';
             });
         },
@@ -810,12 +799,12 @@
                     baseCurrencySelect.setAttribute('data-original-value', newBaseCurrency);
                     form.dataset.baseCurrencyConfirmed = '';
                     
-                    BackendToast.success(data.message || '<?= __('货币汇率更新完成') ?>');
+                    Weline.UI.toast.success(data.message || '<?= __('货币汇率更新完成') ?>');
                 } else {
                     if (self.progressModalInstance) {
                         self.progressModalInstance.hide();
                     }
-                    BackendToast.error(data.message || '<?= __('货币汇率更新失败') ?>');
+                    Weline.UI.toast.error(data.message || '<?= __('货币汇率更新失败') ?>');
                     form.dataset.baseCurrencyConfirmed = '';
                 }
             })
@@ -823,7 +812,7 @@
                 if (self.progressModalInstance) {
                     self.progressModalInstance.hide();
                 }
-                BackendToast.error('<?= __('更新失败') ?>');
+                Weline.UI.toast.error('<?= __('更新失败') ?>');
                 form.dataset.baseCurrencyConfirmed = '';
             });
         },
@@ -875,13 +864,13 @@
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    BackendToast.success(data.message || '<?= __('API连接测试成功') ?>');
+                    Weline.UI.toast.success(data.message || '<?= __('API连接测试成功') ?>');
                 } else {
-                    BackendToast.error(data.message || '<?= __('API连接测试失败') ?>');
+                    Weline.UI.toast.error(data.message || '<?= __('API连接测试失败') ?>');
                 }
             })
             .catch(function(error) {
-                BackendToast.error('<?= __('请求失败') ?>');
+                Weline.UI.toast.error('<?= __('请求失败') ?>');
             })
             .finally(function() {
                 btn.disabled = false;
@@ -901,16 +890,16 @@
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    BackendToast.success(data.message || '<?= __('导入成功') ?>');
+                    Weline.UI.toast.success(data.message || '<?= __('导入成功') ?>');
                     setTimeout(function() { location.reload(); }, 2000);
                 } else {
-                    BackendToast.error(data.message || '<?= __('导入失败') ?>');
+                    Weline.UI.toast.error(data.message || '<?= __('导入失败') ?>');
                     btn.disabled = false;
                     btn.innerHTML = originalText;
                 }
             })
             .catch(function(error) {
-                BackendToast.error('<?= __('请求失败') ?>');
+                Weline.UI.toast.error('<?= __('请求失败') ?>');
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             });

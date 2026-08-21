@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Ui\FormKey;
 use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 
-#[Acl('Weline_Backend::system_config_set', '保存系统配置', 'mdi-content-save', '保存后台系统配置', 'Weline_Backend::system_config_group')]
+#[Acl('Weline_Backend::system_config_set', '保存系统配置', 'save', '保存后台系统配置', 'Weline_Backend::system_config_group')]
 class Config extends \Weline\Framework\App\Controller\BackendController
 {
     protected function csrf(): string
@@ -29,7 +29,7 @@ class Config extends \Weline\Framework\App\Controller\BackendController
         return FormKey::key_name;
     }
 
-    #[Acl('Weline_Backend::system_config_set_save', '保存系统配置', 'mdi-content-save', '保存后台系统配置', 'Weline_Backend::system_config_set', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Backend::system_config_set_save', '保存系统配置', 'save', '保存后台系统配置', 'Weline_Backend::system_config_set', accessMode: AccessMode::EDIT)]
     public function set(): string
     {
         if (!$this->request->isPost()) {

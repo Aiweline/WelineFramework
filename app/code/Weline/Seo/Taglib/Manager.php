@@ -71,7 +71,7 @@ class Manager implements TaglibInterface
             $title = $attributes['title'] ?? '';
 
             if (empty($module)) {
-                return '<div class="alert alert-danger">' . __('SEO管理标签缺少 module 属性') . '</div>';
+                return '<div class="w-alert" data-tone="danger">' . __('SEO管理标签缺少 module 属性') . '</div>';
             }
 
             /** @var Url $url */
@@ -110,8 +110,8 @@ class Manager implements TaglibInterface
             // 可选标题栏
             if (!empty($title)) {
                 $html[] = '  <div class="seo-manager-header" style="padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; display: flex; justify-content: space-between; align-items: center;">';
-                $html[] = '    <h6 style="margin: 0; font-weight: 600;"><i class="mdi mdi-chart-line me-2"></i><?= htmlspecialchars($Taglib__title ?? \'' . addslashes($titleText) . '\') ?></h6>';
-                $html[] = '    <a href="' . htmlspecialchars($embedUrl) . '" target="_blank" class="text-white" title="' . __('在新窗口打开') . '" style="opacity: 0.8;"><i class="mdi mdi-open-in-new"></i></a>';
+                $html[] = '    <h6 style="margin: 0; font-weight: 600;"><w-icon name="chart" size="sm"></w-icon><?= htmlspecialchars($Taglib__title ?? \'' . addslashes($titleText) . '\') ?></h6>';
+                $html[] = '    <a href="' . htmlspecialchars($embedUrl) . '" target="_blank" class="w-text" title="' . __('在新窗口打开') . '" style="opacity: 0.8;" data-tone="inverse"><w-icon name="circle" size="sm"></w-icon></a>';
                 $html[] = '  </div>';
             }
             
@@ -164,7 +164,7 @@ class Manager implements TaglibInterface
 <p><strong>作用</strong>：在其他模块中嵌入 SEO 管理界面，实现多态 SEO 管理。</p>
 
 <h4>属性说明</h4>
-<table class="table table-bordered">
+<table class="w-table">
   <thead>
     <tr><th>属性</th><th>必填</th><th>说明</th></tr>
   </thead>

@@ -1,12 +1,12 @@
 <!-- 页面标题 -->
-<div class="page-title">
+<div class="w-backend-page__title">
     <h1><?= $title ?? '模块扩展详情' ?></h1>
     <div class="page-actions">
-        <a href="*/backend/extends/index" class="btn btn-secondary">
-            <i class="mdi mdi-arrow-left"></i> 返回列表
+        <a href="*/backend/extends/index" class="w-button" data-tone="neutral">
+            <w:icon name="arrow-left" size="sm"></w:icon> 返回列表
         </a>
-        <a href="*/backend/extends/refresh" class="btn btn-warning">
-            <i class="mdi mdi-refresh"></i> 刷新注册表
+        <a href="*/backend/extends/refresh" class="w-button" data-tone="warning">
+            <w:icon name="refresh" size="sm"></w:icon> 刷新注册表
         </a>
     </div>
 </div>
@@ -25,22 +25,22 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
 <div class="module-overview">
     <div class="module-header">
         <div class="module-icon">
-            <i class="mdi mdi-cube-outline"></i>
+            <w:icon name="box" size="sm"></w:icon>
         </div>
         <div class="module-info">
             <h2><?= htmlspecialchars($module) ?></h2>
             <div class="module-badges">
                 <?php if (!empty($moduleExtends)): ?>
-                    <span class="badge badge-info">提供扩展点</span>
+                    <span class="w-badge" data-tone="info">提供扩展点</span>
                 <?php endif; ?>
                 <?php if ($hasStickerExtensions): ?>
-                    <span class="badge badge-primary">被 Sticker 扩展</span>
+                    <span class="w-badge" data-tone="primary">被 Sticker 扩展</span>
                 <?php endif; ?>
                 <?php if ($hasModuleExtensions): ?>
-                    <span class="badge badge-success">被模块扩展</span>
+                    <span class="w-badge" data-tone="success">被模块扩展</span>
                 <?php endif; ?>
                 <?php if ($hasThemeExtensions): ?>
-                    <span class="badge badge-warning">被主题扩展</span>
+                    <span class="w-badge" data-tone="warning">被主题扩展</span>
                 <?php endif; ?>
             </div>
         </div>
@@ -51,7 +51,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-puzzle"></i>
+            <w:icon name="puzzle" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= count($moduleExtends['extends'] ?? []) ?></div>
@@ -60,7 +60,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
     </div>
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-sticker"></i>
+            <w:icon name="star" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= count($stickerExtensions) ?></div>
@@ -69,7 +69,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
     </div>
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-cube"></i>
+            <w:icon name="box" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= count($extendedBy['module_extensions'] ?? []) ?></div>
@@ -78,7 +78,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
     </div>
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-theme-light-dark"></i>
+            <w:icon name="circle" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= count($extendedBy['theme_extensions'] ?? []) ?></div>
@@ -100,10 +100,10 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
     </div>
 
     <!-- 扩展定义 -->
-    <div class="tab-content active" id="extends-definition">
+    <div class="w-tabs__content" id="extends-definition" data-state="active">
         <?php if (empty($moduleExtends)): ?>
             <div class="empty-state">
-                <i class="mdi mdi-puzzle-outline"></i>
+                <w:icon name="puzzle" size="sm"></w:icon>
                 <h3>无扩展定义</h3>
                 <p>该模块没有定义任何扩展点。</p>
             </div>
@@ -112,14 +112,12 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
                 <div class="definition-header">
                     <div class="def-type">
                         <strong>扩展类型：</strong>
-                        <span class="badge badge-info"><?= $moduleExtends['type'] ?? 'unknown' ?></span>
+                        <span class="w-badge" data-tone="info"><?= $moduleExtends['type'] ?? 'unknown' ?></span>
                     </div>
                     <div class="def-doc">
                         <?php if (!empty($moduleExtends['documentation'])): ?>
                             <strong>文档：</strong>
-                            <button type="button"
-                                    class="btn btn-link p-0 align-baseline weline-extends-doc-path"
-                                    data-doc-path="<?= htmlspecialchars((string)$moduleExtends['documentation'], ENT_QUOTES, 'UTF-8') ?>">
+                            <button type="button" class="w-button align-baseline weline-extends-doc-path" data-doc-path="<?= htmlspecialchars((string)$moduleExtends['documentation'], ENT_QUOTES, 'UTF-8') ?>" data-tone="quiet" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                                 <?= htmlspecialchars($moduleExtends['documentation']) ?>
                             </button>
                         <?php endif; ?>
@@ -137,21 +135,21 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
                                     $type = $pointConfig['type'] ?? '';
                                     if (is_array($type)) {
                                         foreach ($type as $t) {
-                                            echo '<span class="badge badge-secondary">' . htmlspecialchars($t) . '</span>';
+                                            echo '<span class="w-badge" data-tone="muted">' . htmlspecialchars($t) . '</span>';
                                         }
                                     } else {
-                                        echo '<span class="badge badge-secondary">' . htmlspecialchars($type) . '</span>';
+                                        echo '<span class="w-badge" data-tone="muted">' . htmlspecialchars($type) . '</span>';
                                     }
                                     ?>
                                     <?php if (($pointConfig['required'] ?? false) === true): ?>
-                                        <span class="badge badge-danger">必需</span>
+                                        <span class="w-badge" data-tone="danger">必需</span>
                                     <?php else: ?>
-                                        <span class="badge badge-success">可选</span>
+                                        <span class="w-badge" data-tone="success">可选</span>
                                     <?php endif; ?>
                                     <?php if (($pointConfig['multiple'] ?? false) === true): ?>
-                                        <span class="badge badge-info">多实例</span>
+                                        <span class="w-badge" data-tone="info">多实例</span>
                                     <?php else: ?>
-                                        <span class="badge badge-warning">单实例</span>
+                                        <span class="w-badge" data-tone="warning">单实例</span>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -178,7 +176,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
     </div>
 
     <!-- 被扩展信息 -->
-    <div class="tab-content" id="extended-by">
+    <div class="w-tabs__content" id="extended-by">
         <?php
         $totalExtended = 0;
         foreach ($extendedBy as $typeExtensions) {
@@ -190,7 +188,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
         
         <?php if ($totalExtended === 0): ?>
             <div class="empty-state">
-                <i class="mdi mdi-arrow-down"></i>
+                <w:icon name="arrow-down" size="sm"></w:icon>
                 <h3>没有被扩展</h3>
                 <p>该模块没有被其他模块扩展。</p>
             </div>
@@ -223,7 +221,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
 
     <!-- Sticker 扩展 -->
     <?php if ($hasStickerExtensions): ?>
-        <div class="tab-content" id="sticker-extensions">
+        <div class="w-tabs__content" id="sticker-extensions">
             <div class="extensions-list">
                 <?php 
                 $stickerBySource = [];
@@ -239,12 +237,12 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
                 <?php foreach ($stickerBySource as $sourceModule => $extensions): ?>
                     <div class="source-module">
                         <h4>
-                            <i class="mdi mdi-cube"></i>
+                            <w:icon name="box" size="sm"></w:icon>
                             <?= htmlspecialchars($sourceModule) ?>
                             <span class="count"><?= count($extensions) ?> 个 Sticker</span>
                         </h4>
                         <div class="extensions-table">
-                            <table class="table">
+                            <table class="w-table">
                                 <thead>
                                     <tr>
                                         <th>目标文件</th>
@@ -260,17 +258,16 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
                                                 <code><?= htmlspecialchars($extension['file_path'] ?? '') ?></code>
                                             </td>
                                             <td>
-                                                <span class="badge badge-primary">
+                                                <span class="w-badge" data-tone="primary">
                                                     <?= ($extension['sticker_type'] ?? 'unknown') === 'module' ? '模块级' : '主题级' ?>
                                                 </span>
                                             </td>
                                             <td>
-                                                <code class="small"><?= htmlspecialchars($extension['source_file'] ?? '') ?></code>
+                                                <code class="w-text" data-size="sm"><?= htmlspecialchars($extension['source_file'] ?? '') ?></code>
                                             </td>
                                             <td>
-                                                <a href="*/backend/sticker/detail?target_module=<?= urlencode($module) ?>&target_file=<?= urlencode($extension['file_path'] ?? '') ?>&source_module=<?= urlencode($sourceModule) ?>" 
-                                                   class="btn btn-sm btn-outline-primary" title="查看 Sticker 详情">
-                                                    <i class="mdi mdi-eye"></i> 详情
+                                                <a href="*/backend/sticker/detail?target_module=<?= urlencode($module) ?>&target_file=<?= urlencode($extension['file_path'] ?? '') ?>&source_module=<?= urlencode($sourceModule) ?>" class="w-button" title="查看 Sticker 详情" data-tone="primary" data-variant="outline" data-size="sm">
+                                                    <w:icon name="eye" size="sm"></w:icon> 详情
                                                 </a>
                                             </td>
                                         </tr>
@@ -285,7 +282,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
     <?php endif; ?>
 
     <!-- 模块扩展 -->
-    <div class="tab-content" id="module-extensions">
+    <div class="w-tabs__content" id="module-extensions">
         <div class="extensions-list">
             <!-- 模块扩展内容将在这里显示 -->
             <p>模块扩展详情...</p>
@@ -293,7 +290,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
     </div>
 
     <!-- 主题扩展 -->
-    <div class="tab-content" id="theme-extensions">
+    <div class="w-tabs__content" id="theme-extensions">
         <div class="extensions-list">
             <!-- 主题扩展内容将在这里显示 -->
             <p>主题扩展详情...</p>
@@ -327,12 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const title = <?= json_encode((string)__('文档路径'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
             const confirmText = <?= json_encode((string)__('确定'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 
-            if (typeof Swal !== 'undefined' && Swal.fire) {
-                Swal.fire({icon: 'info', title: title, text: docPath, confirmButtonText: confirmText});
-                return;
-            }
-
-            console.log(title + '：' + docPath);
+            Weline.UI.dialog.request({tone: 'info', title: title, message: docPath, confirmLabel: confirmText});
         });
     });
 });

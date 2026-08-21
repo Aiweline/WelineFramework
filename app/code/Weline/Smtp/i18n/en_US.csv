@@ -56,6 +56,7 @@ Smtp配置成功！为了保证Smtp邮件服务正常工作，请测试确认。
 删除成功！,"Deletion successful!"
 你要删除的记录已不存在！,"The record you want to delete no longer exists!"
 "SMTP 发件记录","SMTP 发件记录"
+check,check
 "查看 SMTP 发送日志","查看 SMTP 发送日志"
 "SMTP 发件人配置","SMTP sender configuration"
 添加发件人,"Add Sender"

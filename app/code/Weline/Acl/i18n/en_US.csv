@@ -95,6 +95,7 @@ ACL违规,"ACL violation"
 可疑活动,"Suspicious Activity"
 加载安全日志失败：%{1},"Failed to load security logs: %{1}"
 安全日志,"Security log"
+warning,warning
 查看安全日志,查看安全日志
 标签词非法,标签词非法
 标签元数据已保存,标签元数据已保存
@@ -115,9 +116,11 @@ ACL标签管理,ACL标签管理
 仅允许超管分配权限！,"Only admins are allowed to assign permissions!"
 角色ID不存在！,"Role ID does not exist!"
 权限分配被站级授权包拒绝,权限分配被站级授权包拒绝
-权限分配成功，权限缓存已清理。,"Permissions assigned successfully; permission cache cleared."
 权限分配失败！,"Permission assignment failed!"
+权限分配成功，所有缓存已刷新！,"Permission assignment succeeded and all caches were refreshed!"
+权限已保存，但所有缓存刷新失败：%{1},"Permissions were saved, but refreshing all caches failed: %{1}"
 搜索成功,"Search Successful"
+shield,shield
 访问控制权限管理,访问控制权限管理
 角色列表,角色列表
 角色添加,角色添加
@@ -155,7 +158,6 @@ IP地址,"IP address"
 搜索IP地址或描述,"Search IP address or description"
 禁用,Disable
 "例如：192.168.1.1 或 192.168.1.0/24","For example: 192.168.1.1 or 192.168.1.0/24"
-确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
 编辑ID：,"Edit ID:"
 操作失败,"Operation failed"
 确定要切换状态吗？,"Are you sure you want to toggle the status?"
@@ -287,13 +289,13 @@ Acl角色添加,"Acl role addition"
 其他,Other
 系统菜单,"System Menu"
 用户菜单,"User Menu"
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
+权限分配成功，权限缓存已清理。,"Permissions assigned successfully; permission cache cleared."
 正在创建...,Creating...
 正在创建角色...,"Creating role..."
 角色创建失败，请检查输入后重试,"Role creation failed. Please check your input and try again."
 权限分配成功！,"Permission assignment succeeded!"
 权限缓存清理成功！,"Permission cache cleared successfully!"
-权限分配成功，所有缓存已刷新！,"Permission assignment succeeded and all caches were refreshed!"
-权限已保存，但所有缓存刷新失败：%{1},"Permissions were saved, but refreshing all caches failed: %{1}"
 "标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。"
 元数据,元数据
 删元数据,删元数据

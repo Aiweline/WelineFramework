@@ -63,7 +63,7 @@ $widgetId = 'full-header-' . uniqid();
     
     <!-- 顶部工具栏（可选） -->
     <div class="header-topbar">
-        <div class="container">
+        <div class="w-container">
             <div class="topbar-left">
                 <span class="topbar-text"><?= __('欢迎光临！免费配送满') ?> ¥299</span>
             </div>
@@ -77,7 +77,7 @@ $widgetId = 'full-header-' . uniqid();
     
     <!-- 头部主体区域 -->
     <div class="header-main">
-        <div class="container">
+        <div class="w-container">
             
             <!-- Logo 区域 -->
             <div class="header-logo">
@@ -103,7 +103,7 @@ $widgetId = 'full-header-' . uniqid();
                                placeholder="<?= htmlspecialchars($searchPlaceholder) ?>"
                                autocomplete="off">
                         <button type="submit" class="search-btn" aria-label="<?= __('搜索') ?>">
-                            <i class="ri-search-line"></i>
+                            <w:icon name="search" size="sm"></w:icon>
                         </button>
                     </div>
                     <div class="search-suggestions" style="display:none;">
@@ -119,7 +119,7 @@ $widgetId = 'full-header-' . uniqid();
                 <?php if ($showAccount): ?>
                 <div class="tool-item tool-account">
                     <a href="<?= $block->getUrl('customer/account') ?>" class="tool-link">
-                        <i class="ri-user-line tool-icon"></i>
+                        <w:icon name="user" size="sm"></w:icon>
                         <span class="tool-label"><?= __('账户') ?></span>
                     </a>
                 </div>
@@ -128,7 +128,7 @@ $widgetId = 'full-header-' . uniqid();
                 <?php if ($showWishlist): ?>
                 <div class="tool-item tool-wishlist">
                     <a href="<?= $block->getUrl('wishlist') ?>" class="tool-link">
-                        <i class="ri-heart-line tool-icon"></i>
+                        <w:icon name="heart" size="sm"></w:icon>
                         <span class="tool-label"><?= __('收藏') ?></span>
                         <span class="tool-badge wishlist-count" data-count="0" style="display:none;">0</span>
                     </a>
@@ -138,7 +138,7 @@ $widgetId = 'full-header-' . uniqid();
                 <?php if ($showCart): ?>
                 <div class="tool-item tool-cart">
                     <a href="<?= $block->getUrl('checkout/cart') ?>" class="tool-link">
-                        <i class="ri-shopping-cart-line tool-icon"></i>
+                        <w:icon name="pin" size="sm"></w:icon>
                         <span class="tool-label"><?= __('购物车') ?></span>
                         <span class="tool-badge cart-count" data-count="0">0</span>
                     </a>
@@ -147,7 +147,7 @@ $widgetId = 'full-header-' . uniqid();
                 
                 <!-- 移动端菜单按钮 -->
                 <button class="mobile-menu-toggle" aria-label="<?= __('菜单') ?>">
-                    <i class="ri-menu-line"></i>
+                    <w:icon name="menu" size="sm"></w:icon>
                 </button>
             </div>
             
@@ -157,19 +157,19 @@ $widgetId = 'full-header-' . uniqid();
     <!-- 导航菜单区域 -->
     <?php if ($showNav): ?>
     <nav class="header-nav">
-        <div class="container">
+        <div class="w-container">
             <ul class="nav-list">
-                <li class="nav-item">
-                    <a href="<?= $block->getUrl('/') ?>" class="nav-link active">
-                        <i class="ri-home-line nav-icon"></i>
+                <li>
+                    <a href="<?= $block->getUrl('/') ?>" data-state="active">
+                        <w:icon name="home" size="sm"></w:icon>
                         <span><?= __('首页') ?></span>
                     </a>
                 </li>
-                <li class="nav-item has-dropdown">
-                    <a href="<?= $block->getUrl('catalog/category') ?>" class="nav-link">
-                        <i class="ri-apps-line nav-icon"></i>
+                <li class="has-dropdown">
+                    <a href="<?= $block->getUrl('catalog/category') ?>">
+                        <w:icon name="grid" size="sm"></w:icon>
                         <span><?= __('商品分类') ?></span>
-                        <i class="ri-arrow-down-s-line dropdown-arrow"></i>
+                        <w:icon name="arrow-down" size="sm"></w:icon>
                     </a>
                     <div class="nav-dropdown">
                         <div class="dropdown-inner">
@@ -193,27 +193,27 @@ $widgetId = 'full-header-' . uniqid();
                         </div>
                     </div>
                 </li>
-                <li class="nav-item">
-                    <a href="<?= $block->getUrl('catalog/products', ['filter' => 'hot']) ?>" class="nav-link">
-                        <i class="ri-fire-line nav-icon"></i>
+                <li>
+                    <a href="<?= $block->getUrl('catalog/products', ['filter' => 'hot']) ?>">
+                        <w:icon name="fire" size="sm"></w:icon>
                         <span><?= __('热卖') ?></span>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a href="<?= $block->getUrl('catalog/products', ['filter' => 'new']) ?>" class="nav-link">
-                        <i class="ri-flashlight-line nav-icon"></i>
+                <li>
+                    <a href="<?= $block->getUrl('catalog/products', ['filter' => 'new']) ?>">
+                        <w:icon name="bolt" size="sm"></w:icon>
                         <span><?= __('新品') ?></span>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a href="<?= $block->getUrl('promotions') ?>" class="nav-link highlight">
-                        <i class="ri-percent-line nav-icon"></i>
+                <li>
+                    <a href="<?= $block->getUrl('promotions') ?>" class="highlight">
+                        <w:icon name="circle" size="sm"></w:icon>
                         <span><?= __('促销活动') ?></span>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a href="<?= $block->getUrl('about') ?>" class="nav-link">
-                        <i class="ri-information-line nav-icon"></i>
+                <li>
+                    <a href="<?= $block->getUrl('about') ?>">
+                        <w:icon name="info" size="sm"></w:icon>
                         <span><?= __('关于我们') ?></span>
                     </a>
                 </li>
@@ -637,10 +637,9 @@ $widgetId = 'full-header-' . uniqid();
     
     if (menuToggle && nav) {
         menuToggle.addEventListener('click', function() {
-            nav.classList.toggle('is-open');
-            const icon = this.querySelector('i');
-            icon.classList.toggle('ri-menu-line');
-            icon.classList.toggle('ri-close-line');
+            const open = nav.classList.toggle('is-open');
+            this.setAttribute('aria-expanded', open ? 'true' : 'false');
+            this.dataset.state = open ? 'open' : 'closed';
         });
     }
     

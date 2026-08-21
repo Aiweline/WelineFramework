@@ -179,39 +179,39 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
         <!-- 页面标题 -->
         <div class="page-header">
             <div>
-                <a href="<?= $this->getUrl('*/backend/embed', $baseParams) ?>" class="back-btn mb-2">
-                    <i class="mdi mdi-arrow-left me-1"></i>
+                <a href="<?= $this->getUrl('*/backend/embed', $baseParams) ?>" class="back-btn" style="--w-mb:var(--weline-space-2);">
+                    <w:icon name="arrow-left" size="sm"></w:icon>
                     <lang>返回列表</lang>
                 </a>
                 <h4>
-                    <i class="mdi mdi-file-chart-outline me-2"></i>
+                    <w:icon name="file" size="sm"></w:icon>
                     <?= htmlspecialchars($subject['title'] ?? __('主体详情')) ?>
                     <?php if ((int)($subject['status'] ?? 0) === 1): ?>
-                        <span class="badge badge-status bg-success ms-2"><lang>启用</lang></span>
+                        <span class="w-badge badge-status ms-2" data-w-background="success"><lang>启用</lang></span>
                     <?php else: ?>
-                        <span class="badge badge-status bg-secondary ms-2"><lang>禁用</lang></span>
+                        <span class="w-badge badge-status ms-2" data-w-background="muted"><lang>禁用</lang></span>
                     <?php endif; ?>
                 </h4>
             </div>
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-primary action-btn" id="btnEdit">
-                    <i class="mdi mdi-pencil me-1"></i>
+            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                <button type="button" class="w-button action-btn" id="btnEdit" data-tone="primary" data-variant="outline">
+                    <w:icon name="edit" size="sm"></w:icon>
                     <lang>编辑</lang>
                 </button>
-                <button type="button" class="btn btn-primary action-btn" id="btnRefreshSuggestion">
-                    <i class="mdi mdi-robot me-1"></i>
+                <button type="button" class="w-button action-btn" id="btnRefreshSuggestion" data-tone="primary">
+                    <w:icon name="robot" size="sm"></w:icon>
                     <lang>生成AI建议</lang>
                 </button>
             </div>
         </div>
 
-        <div class="row">
+        <div class="w-grid">
             <!-- 左侧：基本信息 + 关键词 -->
-            <div class="col-lg-6">
+            <div style="--w-span-lg:6;">
                 <!-- 基本信息 -->
                 <div class="info-card">
                     <div class="info-card-header">
-                        <h5><i class="mdi mdi-information-outline me-2"></i><lang>基本信息</lang></h5>
+                        <h5><w:icon name="info" size="sm"></w:icon><lang>基本信息</lang></h5>
                     </div>
                     <div class="info-card-body">
                         <div class="info-item">
@@ -223,9 +223,9 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                         <div class="info-item">
                             <div class="info-label"><lang>URL</lang></div>
                             <div class="info-value">
-                                <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" class="text-primary">
+                                <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" class="w-text" data-tone="primary">
                                     <?= htmlspecialchars($subject['url']) ?>
-                                    <i class="mdi mdi-open-in-new ms-1"></i>
+                                    <w:icon name="circle" size="sm"></w:icon>
                                 </a>
                             </div>
                         </div>
@@ -238,14 +238,14 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                         </div>
                         <?php endif; ?>
                         
-                        <div class="row">
-                            <div class="col-6">
+                        <div class="w-grid">
+                            <div style="--w-span:6;">
                                 <div class="info-item">
                                     <div class="info-label"><lang>类型</lang></div>
                                     <div class="info-value"><?= htmlspecialchars($subject['subject_type'] ?? '-') ?></div>
                                 </div>
                             </div>
-                            <div class="col-6">
+                            <div style="--w-span:6;">
                                 <div class="info-item">
                                     <div class="info-label"><lang>语言</lang></div>
                                     <div class="info-value"><?= htmlspecialchars($subject['locale'] ?? 'zh-CN') ?></div>
@@ -253,14 +253,14 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                             </div>
                         </div>
                         
-                        <div class="row">
-                            <div class="col-6">
+                        <div class="w-grid">
+                            <div style="--w-span:6;">
                                 <div class="info-item">
                                     <div class="info-label"><lang>创建时间</lang></div>
                                     <div class="info-value"><?= htmlspecialchars($subject['created_at'] ?? '-') ?></div>
                                 </div>
                             </div>
-                            <div class="col-6">
+                            <div style="--w-span:6;">
                                 <div class="info-item">
                                     <div class="info-label"><lang>更新时间</lang></div>
                                     <div class="info-value"><?= htmlspecialchars($subject['updated_at'] ?? '-') ?></div>
@@ -273,14 +273,14 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                 <!-- 关键词 -->
                 <div class="info-card">
                     <div class="info-card-header">
-                        <h5><i class="mdi mdi-tag-multiple me-2"></i><lang>关键词</lang></h5>
-                        <span class="badge bg-secondary"><?= count($keywords) ?></span>
+                        <h5><w:icon name="tag" size="sm"></w:icon><lang>关键词</lang></h5>
+                        <span class="w-badge" data-w-background="muted"><?= count($keywords) ?></span>
                     </div>
                     <div class="info-card-body">
                         <?php if (empty($keywords)): ?>
                             <div class="empty-keywords">
-                                <i class="mdi mdi-tag-off" style="font-size: 2rem; opacity: 0.3;"></i>
-                                <p class="mb-0 mt-2"><lang>暂无关键词</lang></p>
+                                <w:icon name="circle" size="sm"></w:icon>
+                                <p style="--w-mb:0;--w-mt:var(--weline-space-2);"><lang>暂无关键词</lang></p>
                             </div>
                         <?php else: ?>
                             <div class="keyword-list">
@@ -299,10 +299,10 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
             </div>
 
             <!-- 右侧：AI建议 -->
-            <div class="col-lg-6">
+            <div style="--w-span-lg:6;">
                 <div class="info-card suggestion-card">
                     <div class="info-card-header">
-                        <h5><i class="mdi mdi-robot me-2"></i><lang>AI SEO建议</lang></h5>
+                        <h5><w:icon name="robot" size="sm"></w:icon><lang>AI SEO建议</lang></h5>
                         <?php if ($suggestion): ?>
                             <small><?= htmlspecialchars($suggestion['created_at'] ?? '') ?></small>
                         <?php endif; ?>
@@ -313,16 +313,16 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                                 <?= nl2br(htmlspecialchars($suggestion['content'] ?? '')) ?>
                             </div>
                         <?php else: ?>
-                            <div class="text-center py-4" id="noSuggestion">
-                                <i class="mdi mdi-robot-off" style="font-size: 3rem; opacity: 0.5;"></i>
-                                <p class="mb-0 mt-2"><lang>暂无AI建议，点击上方按钮生成</lang></p>
+                            <div class="w-text" id="noSuggestion" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                                <w:icon name="circle" size="sm"></w:icon>
+                                <p style="--w-mb:0;--w-mt:var(--weline-space-2);"><lang>暂无AI建议，点击上方按钮生成</lang></p>
                             </div>
                         <?php endif; ?>
-                        <div id="suggestionLoading" style="display: none;" class="text-center py-4">
-                            <div class="spinner-border text-light" role="status">
-                                <span class="visually-hidden">Loading...</span>
+                        <div id="suggestionLoading" style="display: none;" class="w-text" data-align="center">
+                            <div class="w-spinner w-text" role="status" data-tone="muted">
+                                <span class="w-visually-hidden">Loading...</span>
                             </div>
-                            <p class="mt-2 mb-0"><lang>正在生成AI建议...</lang></p>
+                            <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>正在生成AI建议...</lang></p>
                         </div>
                     </div>
                 </div>
@@ -331,65 +331,63 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
     </div>
 
     <!-- 编辑 Modal -->
-    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="editModalLabel">
-                        <i class="mdi mdi-pencil me-2"></i>
+    <div class="w-dialog" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+        <div class="w-dialog__frame" data-size="lg">
+            <div class="w-dialog__surface">
+                <div class="w-dialog__header">
+                    <h5 class="w-dialog__title" id="editModalLabel">
+                        <w:icon name="edit" size="sm"></w:icon>
                         <lang>编辑SEO主体</lang>
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
                 </div>
                 <w:form id="editForm">
-                    <div class="modal-body">
+                    <div class="w-dialog__body">
                         <input type="hidden" name="subject_id" value="<?= (int)($subject['subject_id'] ?? 0) ?>">
                         <input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>">
                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="editTitle"><lang>标题</lang> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="editTitle" name="title" 
-                                       value="<?= htmlspecialchars($subject['title'] ?? '') ?>" required>
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="editTitle"><lang>标题</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" class="w-input" id="editTitle" name="title" value="<?= htmlspecialchars($subject['title'] ?? '') ?>" required>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="editUrl"><lang>URL</lang></label>
-                                <input type="url" class="form-control" id="editUrl" name="url" 
-                                       value="<?= htmlspecialchars($subject['url'] ?? '') ?>" placeholder="https://">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="editUrl"><lang>URL</lang></label>
+                                <input type="url" class="w-input" id="editUrl" name="url" value="<?= htmlspecialchars($subject['url'] ?? '') ?>" placeholder="https://">
                             </div>
                         </div>
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="editType"><lang>主体类型</lang></label>
-                                <select class="form-select" id="editType" name="subject_type">
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="editType"><lang>主体类型</lang></label>
+                                <select class="w-select" id="editType" name="subject_type">
                                     <option value="page" <?= ($subject['subject_type'] ?? '') === 'page' ? 'selected' : '' ?>><?= __('页面') ?></option>
                                     <option value="product" <?= ($subject['subject_type'] ?? '') === 'product' ? 'selected' : '' ?>><?= __('商品') ?></option>
                                     <option value="store" <?= ($subject['subject_type'] ?? '') === 'store' ? 'selected' : '' ?>><?= __('店铺') ?></option>
                                     <option value="website" <?= ($subject['subject_type'] ?? '') === 'website' ? 'selected' : '' ?>><?= __('网站') ?></option>
                                 </select>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="editStatus"><lang>状态</lang></label>
-                                <select class="form-select" id="editStatus" name="status">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="editStatus"><lang>状态</lang></label>
+                                <select class="w-select" id="editStatus" name="status">
                                     <option value="1" <?= (int)($subject['status'] ?? 1) === 1 ? 'selected' : '' ?>><?= __('启用') ?></option>
                                     <option value="0" <?= (int)($subject['status'] ?? 1) === 0 ? 'selected' : '' ?>><?= __('禁用') ?></option>
                                 </select>
                             </div>
                         </div>
                         
-                        <div class="mb-3">
-                            <label class="form-label" for="editDescription"><lang>描述</lang></label>
-                            <textarea class="form-control" id="editDescription" name="description" rows="4"><?= htmlspecialchars($subject['description'] ?? '') ?></textarea>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="editDescription"><lang>描述</lang></label>
+                            <textarea class="w-textarea" id="editDescription" name="description" rows="4"><?= htmlspecialchars($subject['description'] ?? '') ?></textarea>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <div class="w-dialog__footer">
+                        <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral">
                             <lang>取消</lang>
                         </button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="mdi mdi-content-save me-1"></i>
+                        <button type="submit" class="w-button" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon>
                             <lang>保存</lang>
                         </button>
                     </div>
@@ -427,7 +425,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
         }
 
         function notify(type, message) {
-            var toast = getBackendTool('BackendToast');
+            var toast = getBackendTool('Weline.UI.toast');
             if (toast && typeof toast[type] === 'function') {
                 toast[type](typeof message === 'string' ? message : String(message || ''));
             }

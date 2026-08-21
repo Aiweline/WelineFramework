@@ -110,7 +110,7 @@ class ThemeSlotContractService
             $this->buildNotificationContent($warnings),
             [
                 'priority' => 6,
-                'icon' => 'ri-layout-masonry-line',
+                'icon' => 'circle',
                 'source_module' => 'Weline_Theme',
                 'metadata' => [
                     'area' => $this->normalizeArea($area),

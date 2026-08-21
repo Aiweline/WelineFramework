@@ -5,15 +5,15 @@
     <!--元数据管理菜单-->
     <menu source="Weline_Meta::meta_manager" name="meta_manager" title="元数据管理" action="" 
          parent="Weline_Eav::eav"
-         icon="mdi mdi-file-document-edit" order="20410">
+         icon="edit" order="20410">
         <menu source="Weline_Meta::meta_list" name="meta_list" title="元数据列表" 
              action="meta/backend/meta"
-             icon="mdi mdi-format-list-bulleted" order="1"/>
+             icon="list" order="1"/>
         <menu source="Weline_Meta::meta_scanner" name="meta_scanner" title="扫描元数据" 
              action="meta/backend/scanner"
-             icon="mdi mdi-file-search" order="2"/>
+             icon="search" order="2"/>
         <menu source="Weline_Meta::meta_config_files" name="meta_config_files" title="元数据配置管理"
              action="meta/backend/config/file"
-             icon="mdi mdi-file-tree" order="3"/>
+             icon="file" order="3"/>
     </menu>
 </menus>

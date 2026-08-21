@@ -15,49 +15,47 @@ $filters = $this->getData('filters') ?? [];
 
 $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
 ?>
-<div class="row" data-testid="order-management">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('订单管理') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                    <li class="breadcrumb-item active"><?= __('订单管理') ?></li>
+<div class="w-grid" data-testid="order-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('订单管理') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('订单管理') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <div class="row align-items-center">
-                    <div class="col-md-6">
-                        <h5 class="card-title mb-0"><?= __('订单列表') ?></h5>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <div class="w-grid" data-align="center">
+                    <div style="--w-span-md:6;">
+                        <h5 class="w-card__title" style="--w-mb:0;"><?= __('订单列表') ?></h5>
                     </div>
-                    <div class="col-md-6 text-end">
-                        <a href="<?= $this->getBackendUrl('weline_order/backend/order/edit') ?>" class="btn btn-primary">
-                            <i class="mdi mdi-plus"></i> <?= __('新建订单') ?>
+                    <div class="w-text" data-align="end" style="--w-span-md:6;">
+                        <a href="<?= $this->getBackendUrl('weline_order/backend/order/edit') ?>" class="w-button" data-tone="primary">
+                            <w:icon name="plus" size="sm"></w:icon> <?= __('新建订单') ?>
                         </a>
                     </div>
                 </div>
             </div>
-            <div class="card-body">
-                <w:form method="get" action="@var($backendBase)" class="mb-3">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <input type="text" name="keyword" class="form-control" 
-                                   placeholder="<?= __('搜索订单号、客户姓名、邮箱') ?>" 
-                                   value="<?= htmlspecialchars($filters['keyword'] ?? '') ?>">
+            <div class="w-card__body">
+                <w:form method="get" action="@var($backendBase)" style="--w-mb:var(--weline-space-4);">
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:3;">
+                            <input type="text" name="keyword" class="w-input" placeholder="<?= __('搜索订单号、客户姓名、邮箱') ?>" value="<?= htmlspecialchars($filters['keyword'] ?? '') ?>">
                         </div>
-                        <div class="col-md-2">
-                            <select name="status" class="form-select">
+                        <div style="--w-span-md:2;">
+                            <select name="status" class="w-select">
                                 <option value=""><?= __('全部状态') ?></option>
                                 <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>><?= __('待处理') ?></option>
                                 <option value="processing" <?= ($filters['status'] ?? '') === 'processing' ? 'selected' : '' ?>><?= __('处理中') ?></option>
@@ -67,37 +65,37 @@ $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
                                 <option value="cancelled" <?= ($filters['status'] ?? '') === 'cancelled' ? 'selected' : '' ?>><?= __('已取消') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <select name="payment_status" class="form-select">
+                        <div style="--w-span-md:2;">
+                            <select name="payment_status" class="w-select">
                                 <option value=""><?= __('全部支付状态') ?></option>
                                 <option value="pending" <?= ($filters['payment_status'] ?? '') === 'pending' ? 'selected' : '' ?>><?= __('待支付') ?></option>
                                 <option value="paid" <?= ($filters['payment_status'] ?? '') === 'paid' ? 'selected' : '' ?>><?= __('已支付') ?></option>
                                 <option value="partial" <?= ($filters['payment_status'] ?? '') === 'partial' ? 'selected' : '' ?>><?= __('部分支付') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <select name="fulfillment_status" class="form-select">
+                        <div style="--w-span-md:2;">
+                            <select name="fulfillment_status" class="w-select">
                                 <option value=""><?= __('全部发货状态') ?></option>
                                 <option value="pending" <?= ($filters['fulfillment_status'] ?? '') === 'pending' ? 'selected' : '' ?>><?= __('待发货') ?></option>
                                 <option value="shipped" <?= ($filters['fulfillment_status'] ?? '') === 'shipped' ? 'selected' : '' ?>><?= __('已发货') ?></option>
                                 <option value="delivered" <?= ($filters['fulfillment_status'] ?? '') === 'delivered' ? 'selected' : '' ?>><?= __('已送达') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+                        <div style="--w-span-md:2;">
+                            <button type="submit" class="w-button" data-w-width="full" data-tone="primary">
+                                <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
                             </button>
                         </div>
-                        <div class="col-md-1">
-                            <a href="<?= $backendBase ?>" class="btn btn-secondary w-100">
-                                <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                        <div style="--w-span-md:1;">
+                            <a href="<?= $backendBase ?>" class="w-button" data-w-width="full" data-tone="neutral">
+                                <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
                             </a>
                         </div>
                     </div>
                 </w:form>
 
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover">
+                <div class="w-table-wrap">
+                    <table class="w-table">
                         <thead>
                             <tr>
                                 <th><?= __('订单号') ?></th>
@@ -113,7 +111,7 @@ $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
                         <tbody>
                             <?php if (empty($orders)): ?>
                                 <tr>
-                                    <td colspan="8" class="text-center"><?= __('暂无数据') ?></td>
+                                    <td colspan="8" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($orders as $order): ?>
@@ -131,7 +129,7 @@ $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
                                         </td>
                                         <td>
                                             <div><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_NAME] ?? '') ?></div>
-                                            <small class="text-muted"><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_EMAIL] ?? '') ?></small>
+                                            <small class="w-text" data-tone="muted"><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_EMAIL] ?? '') ?></small>
                                         </td>
                                         <td>
                                             <strong><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_GRAND_TOTAL] ?? 0), 2) ?></strong>
@@ -141,7 +139,7 @@ $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
                                             $statusText = \Weline\Order\Model\Order::getStatusLabel($status);
                                             $statusClass = \Weline\Order\Model\Order::getStatusClassByCode($status);
                                             ?>
-                                            <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
+                                            <span class="w-badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
                                         </td>
                                         <td>
                                             <?php
@@ -154,7 +152,7 @@ $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
                                             };
                                             $paymentText = Order::getPaymentStatusLabel($paymentStatus);
                                             ?>
-                                            <span class="badge bg-<?= $paymentClass ?>"><?= $paymentText ?></span>
+                                            <span class="w-badge bg-<?= $paymentClass ?>"><?= $paymentText ?></span>
                                         </td>
                                         <td>
                                             <?php
@@ -166,18 +164,16 @@ $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
                                             };
                                             $fulfillmentText = Order::getFulfillmentStatusLabel($fulfillmentStatus);
                                             ?>
-                                            <span class="badge bg-<?= $fulfillmentClass ?>"><?= $fulfillmentText ?></span>
+                                            <span class="w-badge bg-<?= $fulfillmentClass ?>"><?= $fulfillmentText ?></span>
                                         </td>
                                         <td><?= $orderData[Order::schema_fields_CREATED_AT] ?? '' ?></td>
                                         <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <a href="<?= $this->getBackendUrl('weline_order/backend/order/view', ['id' => $orderData[Order::schema_fields_ID] ?? '']) ?>" 
-                                                   class="btn btn-primary btn-sm" title="<?= __('查看详情') ?>">
-                                                    <i class="mdi mdi-eye"></i>
+                                            <div class="w-button-group">
+                                                <a href="<?= $this->getBackendUrl('weline_order/backend/order/view', ['id' => $orderData[Order::schema_fields_ID] ?? '']) ?>" class="w-button" title="<?= __('查看详情') ?>" data-tone="primary" data-size="sm">
+                                                    <w:icon name="eye" size="sm"></w:icon>
                                                 </a>
-                                                <a href="<?= $this->getBackendUrl('weline_order/backend/order/edit', ['id' => $orderData[Order::schema_fields_ID] ?? '']) ?>" 
-                                                   class="btn btn-info btn-sm" title="<?= __('编辑') ?>">
-                                                    <i class="mdi mdi-pencil"></i>
+                                                <a href="<?= $this->getBackendUrl('weline_order/backend/order/edit', ['id' => $orderData[Order::schema_fields_ID] ?? '']) ?>" class="w-button" title="<?= __('编辑') ?>" data-tone="info" data-size="sm">
+                                                    <w:icon name="edit" size="sm"></w:icon>
                                                 </a>
                                             </div>
                                         </td>
@@ -190,24 +186,24 @@ $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
 
                 <?php if ($totalPages > 1): ?>
                     <nav aria-label="Page navigation">
-                        <ul class="pagination justify-content-center">
+                        <ul class="w-pagination" data-justify="center">
                             <?php if ($page > 1): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $page - 1 ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
+                                <li class="w-pagination__item">
+                                    <a class="w-pagination__link" href="<?= $backendBase ?>?page=<?= $page - 1 ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
                                         <?= __('上一页') ?>
                                     </a>
                                 </li>
                             <?php endif; ?>
                             <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $i ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
+                                <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                                    <a class="w-pagination__link" href="<?= $backendBase ?>?page=<?= $i ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
                                         <?= $i ?>
                                     </a>
                                 </li>
                             <?php endfor; ?>
                             <?php if ($page < $totalPages): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $page + 1 ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
+                                <li class="w-pagination__item">
+                                    <a class="w-pagination__link" href="<?= $backendBase ?>?page=<?= $page + 1 ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
                                         <?= __('下一页') ?>
                                     </a>
                                 </li>

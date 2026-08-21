@@ -14,16 +14,14 @@ $escape = static fn(mixed $value): string => htmlspecialchars(
     'UTF-8',
 );
 ?>
-<div class="container-fluid"
-     data-testid="product-management-<?= $escape($section) ?>"
-     data-management-section="<?= $escape($section) ?>">
-    <div class="d-flex align-items-center justify-content-between mb-3">
+<div class="w-container" data-testid="product-management-<?= $escape($section) ?>" data-management-section="<?= $escape($section) ?>">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
         <div>
-            <h4 class="mb-1"><?= $escape($title) ?></h4>
-            <div class="text-muted"><lang>商品内核管理工作台</lang> · 网站=<?= $escape($website_id) ?></div>
+            <h4 style="--w-mb:var(--weline-space-1);"><?= $escape($title) ?></h4>
+            <div class="w-text" data-tone="muted"><lang>商品内核管理工作台</lang> · 网站=<?= $escape($website_id) ?></div>
         </div>
-        <form method="get" class="d-flex gap-2" data-testid="product-website-filter-form">
-            <label class="visually-hidden" for="product-website-id"><lang>网站</lang></label>
+        <form method="get" class="w-cluster" data-testid="product-website-filter-form" style="--w-gap:var(--weline-space-2);">
+            <label class="w-visually-hidden" for="product-website-id"><lang>网站</lang></label>
             <w:websites:website:select
                 id="product-website-id"
                 name="website_id"
@@ -37,96 +35,90 @@ $escape = static fn(mixed $value): string => htmlspecialchars(
                 placeholder="@lang(搜索站点或编码)"
                 class="product-website-filter-select"
             />
-            <button class="btn btn-primary align-self-end" type="submit"><lang>切换网站</lang></button>
+            <button class="w-button" type="submit" data-self="end" data-tone="primary"><lang>切换网站</lang></button>
         </form>
     </div>
 
     <?php if ($section === 'sku-registry'): ?>
-        <div class="card mb-3"><div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/register-sku')" csrf="auto"
-                    class="row g-3" data-testid="product-sku-register-form">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/catalog/register-sku')" csrf="auto" class="w-grid" data-testid="product-sku-register-form" style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div class="col-md-4"><label class="form-label"><lang>SKU</lang></label><input class="form-control" name="sku" maxlength="128" required></div>
-                <div class="col-md-6"><label class="form-label"><lang>请求哈希</lang></label><input class="form-control" name="request_hash" minlength="32" maxlength="128" required></div>
-                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>注册 SKU</lang></button></div>
+                <div style="--w-span-md:4;"><label class="w-field__label"><lang>SKU</lang></label><input class="w-input" name="sku" maxlength="128" required></div>
+                <div style="--w-span-md:6;"><label class="w-field__label"><lang>请求哈希</lang></label><input class="w-input" name="request_hash" minlength="32" maxlength="128" required></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>注册 SKU</lang></button></div>
             </w:form>
         </div></div>
     <?php elseif ($section === 'products'): ?>
-        <div class="card mb-3"><div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/create-product')" csrf="auto"
-                    class="row g-3" data-testid="product-create-form">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/catalog/create-product')" csrf="auto" class="w-grid" data-testid="product-create-form" style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div class="col-md-7"><label class="form-label"><lang>已注册 SKU</lang></label><input class="form-control" name="sku" maxlength="128" required></div>
-                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>创建商品</lang></button></div>
+                <div style="--w-span-md:7;"><label class="w-field__label"><lang>已注册 SKU</lang></label><input class="w-input" name="sku" maxlength="128" required></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建商品</lang></button></div>
             </w:form>
         </div></div>
     <?php elseif ($section === 'offers'): ?>
-        <div class="card mb-3"><div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/create-offer')" csrf="auto"
-                    class="row g-3" data-testid="product-offer-create-form">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/catalog/create-offer')" csrf="auto" class="w-grid" data-testid="product-offer-create-form" style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div class="col-md-7"><label class="form-label"><lang>商品 SKU</lang></label><input class="form-control" name="sku" maxlength="128" required></div>
-                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>创建报价</lang></button></div>
+                <div style="--w-span-md:7;"><label class="w-field__label"><lang>商品 SKU</lang></label><input class="w-input" name="sku" maxlength="128" required></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建报价</lang></button></div>
             </w:form>
         </div></div>
     <?php elseif ($section === 'categories'): ?>
-        <div class="card mb-3"><div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/create-category')" csrf="auto"
-                    class="row g-3" data-testid="product-category-create-form">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/catalog/create-category')" csrf="auto" class="w-grid" data-testid="product-category-create-form" style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div class="col-md-2"><label class="form-label"><lang>父分类 ID</lang></label><input class="form-control" type="number" min="0" name="parent_id" value="0"></div>
-                <div class="col-md-6"><label class="form-label"><lang>分类路径</lang></label><input class="form-control" name="path" placeholder="/r43/category" maxlength="255" required></div>
-                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>创建分类</lang></button></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>父分类 ID</lang></label><input class="w-input" type="number" min="0" name="parent_id" value="0"></div>
+                <div style="--w-span-md:6;"><label class="w-field__label"><lang>分类路径</lang></label><input class="w-input" name="path" placeholder="/r43/category" maxlength="255" required></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建分类</lang></button></div>
             </w:form>
         </div></div>
     <?php elseif ($section === 'media'): ?>
-        <div class="card mb-3"><div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/create-media')" csrf="auto"
-                    class="row g-3" data-testid="product-media-create-form">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/catalog/create-media')" csrf="auto" class="w-grid" data-testid="product-media-create-form" style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div class="col-md-3"><label class="form-label"><lang>商品 SKU</lang></label><input class="form-control" name="sku" maxlength="128" required></div>
-                <div class="col-md-3"><label class="form-label"><lang>媒体路径</lang></label><input class="form-control" name="path" maxlength="255" required></div>
-                <div class="col-md-3"><label class="form-label"><lang>Blob Key</lang></label><input class="form-control" name="blob_key" maxlength="255" required></div>
-                <div class="col-md-1"><label class="form-label"><lang>排序</lang></label><input class="form-control" type="number" min="0" name="position" value="0"></div>
-                <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>创建</lang></button></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>商品 SKU</lang></label><input class="w-input" name="sku" maxlength="128" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>媒体路径</lang></label><input class="w-input" name="path" maxlength="255" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>Blob Key</lang></label><input class="w-input" name="blob_key" maxlength="255" required></div>
+                <div style="--w-span-md:1;"><label class="w-field__label"><lang>排序</lang></label><input class="w-input" type="number" min="0" name="position" value="0"></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:1;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建</lang></button></div>
             </w:form>
         </div></div>
     <?php elseif ($section === 'site-content'): ?>
-        <div class="card mb-3"><div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/save-site-content')" csrf="auto"
-                    class="row g-3" data-testid="product-site-content-form">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/catalog/save-site-content')" csrf="auto" class="w-grid" data-testid="product-site-content-form" style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div class="col-md-2"><label class="form-label"><lang>Store ID</lang></label><input class="form-control" type="number" min="0" name="store_id" value="<?= $escape($store_id ?? 0) ?>" required></div>
-                <div class="col-md-2"><label class="form-label"><lang>商品 ID</lang></label><input class="form-control" type="number" min="1" name="entity_id" value="<?= $escape($entity_id ?? 0) ?>" required></div>
-                <div class="col-md-2"><label class="form-label"><lang>属性代码</lang></label><input class="form-control" name="attribute_code" value="name" maxlength="64" pattern="[a-z][a-z0-9_]{0,63}" required></div>
-                <div class="col-md-2"><label class="form-label"><lang>语言</lang></label><input class="form-control" name="locale" value="zh_Hans_CN" maxlength="32" required></div>
-                <div class="col-md-8"><label class="form-label"><lang>站点文案</lang></label><textarea class="form-control" name="value_text" maxlength="65535" rows="3" required></textarea></div>
-                <div class="col-md-2 form-check d-flex align-items-center"><input class="form-check-input me-2" type="checkbox" name="is_required" value="1" id="product-site-content-required"><label class="form-check-label" for="product-site-content-required"><lang>必填文案</lang></label></div>
-                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>保存文案</lang></button></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="0" name="store_id" value="<?= $escape($store_id ?? 0) ?>" required></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>商品 ID</lang></label><input class="w-input" type="number" min="1" name="entity_id" value="<?= $escape($entity_id ?? 0) ?>" required></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>属性代码</lang></label><input class="w-input" name="attribute_code" value="name" maxlength="64" pattern="[a-z][a-z0-9_]{0,63}" required></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>语言</lang></label><input class="w-input" name="locale" value="zh_Hans_CN" maxlength="32" required></div>
+                <div style="--w-span-md:8;"><label class="w-field__label"><lang>站点文案</lang></label><textarea class="w-textarea" name="value_text" maxlength="65535" rows="3" required></textarea></div>
+                <div class="w-check w-cluster" data-align="center" style="--w-span-md:2;"><input class="me-2" type="checkbox" name="is_required" value="1" id="product-site-content-required"><label for="product-site-content-required"><lang>必填文案</lang></label></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>保存文案</lang></button></div>
             </w:form>
         </div></div>
     <?php endif; ?>
 
     <?php if ($error !== ''): ?>
-        <div class="alert alert-danger" role="alert">
+        <div class="w-alert" role="alert" data-tone="danger">
             <strong><lang>数据读取失败</lang></strong>
             <div><?= $escape($error) ?></div>
         </div>
     <?php elseif ($rows === []): ?>
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <i class="mdi mdi-database-off-outline fs-1 text-muted"></i>
-                <p class="mb-0 mt-2"><lang>暂无数据</lang></p>
+        <div class="w-card">
+            <div class="w-card__body w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                <w:icon name="database" size="sm"></w:icon>
+                <p style="--w-mb:0;--w-mt:var(--weline-space-2);"><lang>暂无数据</lang></p>
             </div>
         </div>
     <?php else: ?>
-        <div class="card">
-            <div class="card-header d-flex justify-content-between">
+        <div class="w-card">
+            <div class="w-card__header w-cluster" data-justify="between">
                 <span><?= $escape($title) ?></span>
-                <span class="badge bg-secondary"><?= count($rows) ?> / 100</span>
+                <span class="w-badge" data-w-background="muted"><?= count($rows) ?> / 100</span>
             </div>
-            <div class="table-responsive">
-                <table class="table table-striped table-hover align-middle mb-0">
+            <div class="w-table-wrap">
+                <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                     <thead>
                         <tr>
                             <?php foreach ($columns as $column): ?>
@@ -147,14 +139,11 @@ $escape = static fn(mixed $value): string => htmlspecialchars(
                                     <td>
                                         <?php $productId = (int)($row['product_id'] ?? $row['id'] ?? 0); ?>
                                         <?php if ($productId > 0): ?>
-                                            <a href="@backend-url('*/backend/catalog/edit-product')?website_id=<?= $escape($website_id) ?>&product_id=<?= $escape($productId) ?>"
-                                               class="btn btn-sm btn-outline-primary"
-                                               data-testid="product-edit-button"
-                                               data-product-id="<?= $escape($productId) ?>">
-                                                <i class="mdi mdi-pencil-box-outline" aria-hidden="true"></i> <lang>编辑</lang>
+                                            <a href="@backend-url('*/backend/catalog/edit-product')?website_id=<?= $escape($website_id) ?>&product_id=<?= $escape($productId) ?>" class="w-button" data-testid="product-edit-button" data-product-id="<?= $escape($productId) ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                                <w:icon name="edit" size="sm"></w:icon> <lang>编辑</lang>
                                             </a>
                                         <?php else: ?>
-                                            <span class="text-muted"><lang>无效</lang></span>
+                                            <span class="w-text" data-tone="muted"><lang>无效</lang></span>
                                         <?php endif; ?>
                                     </td>
                                 <?php endif; ?>

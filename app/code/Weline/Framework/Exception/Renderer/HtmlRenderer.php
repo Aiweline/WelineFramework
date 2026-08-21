@@ -129,7 +129,7 @@ class HtmlRenderer implements RendererInterface
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="w-container">
         <div class="header">
             <h1>{$class} [{$code}]</h1>
             <div class="message">{$message}</div>

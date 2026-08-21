@@ -35,7 +35,7 @@ $identityBridgeService = ObjectManager::getInstance(IdentityBridgeService::class
     }
     $this->assign('identity_bindings', $identityBindings);
     ?>
-<section class="account-hook-section account-index__section d-none" id="identity-bridge-section" data-account-section="identity-bridge" hidden weline-code="multipass.account_sidebar_content.identity_bridge_section">
+<section class="account-hook-section account-index__section" id="identity-bridge-section" data-account-section="identity-bridge" hidden weline-code="multipass.account_sidebar_content.identity_bridge_section">
     <?= $this->fetch('Weline_Multipass::templates/frontend/account/identity-bridge.phtml') ?>
 </section>
 <?php elseif ($projection->isSection('multipass-developer-apps')): ?>
@@ -47,7 +47,7 @@ $identityBridgeService = ObjectManager::getInstance(IdentityBridgeService::class
     $this->assign('developer_applications', $developerApplications);
     $this->assign('developer_application_auto_approve', $identityBridgeService->isDeveloperApplicationAutoApproveEnabled());
     ?>
-<section class="account-hook-section account-index__section d-none" id="multipass-developer-apps-section" data-account-section="multipass-developer-apps" hidden weline-code="multipass.account_sidebar_content.multipass_developer_apps_section">
+<section class="account-hook-section account-index__section" id="multipass-developer-apps-section" data-account-section="multipass-developer-apps" hidden weline-code="multipass.account_sidebar_content.multipass_developer_apps_section">
     <?= $this->fetch('Weline_Multipass::templates/frontend/account/developer-applications.phtml') ?>
 </section>
 <?php endif; ?>

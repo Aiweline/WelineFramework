@@ -25,17 +25,17 @@ $escapeAttr = static function (mixed $value): string {
 ?>
 
 <!-- 消息提示 -->
-<div class='row mb-3'>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 操作栏 -->
-<div class="card mb-3" data-testid="cdn-api-rules-management">
-    <div class="card-body">
-        <div class="row mb-3">
-            <div class="col-md-3">
-                <label class="form-label"><?= __('模块筛选') ?></label>
-                <select id="moduleFilter" class="form-select" data-cdn-api-rules-action="filter">
+<div class="w-card" data-testid="cdn-api-rules-management" style="--w-mb:var(--weline-space-4);">
+    <div class="w-card__body">
+        <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+            <div style="--w-span-md:3;">
+                <label class="w-field__label"><?= __('模块筛选') ?></label>
+                <select id="moduleFilter" class="w-select" data-cdn-api-rules-action="filter">
                     <option value=""><?= __('全部模块') ?></option>
                     <?php
                     $modules = array_unique(array_column($rules, 'module'));
@@ -48,17 +48,17 @@ $escapeAttr = static function (mixed $value): string {
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label"><?= __('触发方式') ?></label>
-                <select id="triggerFilter" class="form-select" data-cdn-api-rules-action="filter">
+            <div style="--w-span-md:3;">
+                <label class="w-field__label"><?= __('触发方式') ?></label>
+                <select id="triggerFilter" class="w-select" data-cdn-api-rules-action="filter">
                     <option value=""><?= __('全部') ?></option>
                     <option value="cron" <?= $trigger === 'cron' ? 'selected' : '' ?>><?= __('定时推送') ?></option>
                     <option value="realtime" <?= $trigger === 'realtime' ? 'selected' : '' ?>><?= __('实时推送') ?></option>
                 </select>
             </div>
-            <div class="col-md-6 text-end d-flex align-items-end justify-content-end">
-                <button type="button" class="btn btn-primary" data-cdn-api-rules-action="collect">
-                    <i class="mdi mdi-refresh"></i> <?= __('重新收集规则') ?>
+            <div class="w-text w-cluster" data-align="end" data-justify="end" style="--w-span-md:6;">
+                <button type="button" class="w-button" data-cdn-api-rules-action="collect" data-tone="primary">
+                    <w:icon name="refresh" size="sm"></w:icon> <?= __('重新收集规则') ?>
                 </button>
             </div>
         </div>
@@ -66,88 +66,81 @@ $escapeAttr = static function (mixed $value): string {
 </div>
 
 <!-- 规则列表 -->
-<div class="card">
-    <div class="card-body">
-        <h5 class="card-title mb-4">
-            <i class="mdi mdi-list"></i> <?= __('规则列表') ?>
-            <span class="badge bg-primary ms-2"><?= count($rules) ?></span>
+<div class="w-card">
+    <div class="w-card__body">
+        <h5 class="w-card__title" style="--w-mb:var(--weline-space-6);">
+            <w:icon name="list" size="sm"></w:icon> <?= __('规则列表') ?>
+            <span class="w-badge ms-2" data-w-background="primary"><?= count($rules) ?></span>
         </h5>
 
         <?php if (empty($rules)): ?>
-            <div class="alert alert-info">
-                <i class="mdi mdi-information"></i> 
+            <div class="w-alert" data-tone="info">
+                <w:icon name="info" size="sm"></w:icon> 
                 <?= __('暂无规则。请运行 setup:upgrade 收集规则，或点击"重新收集规则"按钮。') ?>
             </div>
         <?php else: ?>
             <?php foreach ($groupedRules as $moduleName => $moduleRules): ?>
-                <div class="mb-4">
-                    <h6 class="text-primary mb-3">
-                        <i class="mdi mdi-package-variant"></i> <?= htmlspecialchars($moduleName) ?>
-                        <span class="badge bg-secondary ms-2"><?= count($moduleRules) ?></span>
+                <div style="--w-mb:var(--weline-space-6);">
+                    <h6 class="w-text" data-tone="primary" style="--w-mb:var(--weline-space-4);">
+                        <w:icon name="box" size="sm"></w:icon> <?= htmlspecialchars($moduleName) ?>
+                        <span class="w-badge ms-2" data-w-background="muted"><?= count($moduleRules) ?></span>
                     </h6>
                     
                     <?php foreach ($moduleRules as $rule): ?>
-                        <div class="border rounded p-3 mb-3" style="background: var(--backend-color-card-bg);">
-                            <div class="d-flex justify-content-between align-items-start">
+                        <div style="background: var(--backend-color-card-bg);" data-w-border="border" data-w-radius="md">
+                            <div class="w-cluster" data-justify="between" data-align="start">
                                 <div>
-                                    <div class="fw-bold">
+                                    <div class="w-text" data-weight="strong">
                                         <?= htmlspecialchars($rule->getData('class')) ?>::<?= htmlspecialchars($rule->getData('method')) ?>()
                                     </div>
-                                    <div class="small text-muted mt-1">
+                                    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);">
                                         <span class="me-3">
-                                            <i class="mdi mdi-route"></i> 
+                                            <w:icon name="circle" size="sm"></w:icon> 
                                             <?= htmlspecialchars($rule->getData('route')) ?>
                                         </span>
                                         <span class="me-3">
-                                            <i class="mdi mdi-package"></i> 
+                                            <w:icon name="box" size="sm"></w:icon> 
                                             <?= htmlspecialchars($rule->getData('module')) ?>
                                         </span>
-                                        <span class="badge <?= $rule->getData('trigger') === 'realtime' ? 'bg-warning text-dark' : 'bg-info' ?>">
+                                        <span class="w-badge <?= $rule->getData('trigger') === 'realtime' ? 'bg-warning text-dark' : 'bg-info' ?>">
                                             <?= $rule->getData('trigger') === 'realtime' ? __('实时推送') : __('定时推送') ?>
                                         </span>
                                     </div>
                                 </div>
                                 <div>
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" 
-                                               id="rule_<?= $escapeAttr($rule->getId()) ?>"
-                                               <?= $rule->getData('enabled') ? 'checked' : '' ?>
-                                               data-cdn-api-rules-action="toggle"
-                                               data-rule-id="<?= $escapeAttr($rule->getId()) ?>">
-                                        <label class="form-check-label" for="rule_<?= $escapeAttr($rule->getId()) ?>">
+                                    <div class="w-switch">
+                                        <input type="checkbox" id="rule_<?= $escapeAttr($rule->getId()) ?>" <?= $rule->getData('enabled') ? 'checked' : '' ?>
+ data-cdn-api-rules-action="toggle" data-rule-id="<?= $escapeAttr($rule->getId()) ?>">
+                                        <label for="rule_<?= $escapeAttr($rule->getId()) ?>">
                                             <?= __('启用') ?>
                                         </label>
                                     </div>
-                                    <div class="btn-group btn-group-sm mt-2">
-                                        <button type="button" class="btn btn-info" 
-                                                data-cdn-api-rules-action="view"
-                                                data-rule-id="<?= $escapeAttr($rule->getId()) ?>">
-                                            <i class="mdi mdi-eye"></i> <?= __('详情') ?>
+                                    <div class="w-button-group" style="--w-mt:var(--weline-space-2);">
+                                        <button type="button" class="w-button" data-cdn-api-rules-action="view" data-rule-id="<?= $escapeAttr($rule->getId()) ?>" data-tone="info">
+                                            <w:icon name="eye" size="sm"></w:icon> <?= __('详情') ?>
                                         </button>
-                                        <button type="button" class="btn btn-danger" 
-                                                data-cdn-api-rules-action="delete"
-                                                data-rule-id="<?= $escapeAttr($rule->getId()) ?>">
-                                            <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                        <button type="button" class="w-button" data-cdn-api-rules-action="delete" data-rule-id="<?= $escapeAttr($rule->getId()) ?>" data-tone="danger">
+                                            <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
                                         </button>
                                     </div>
                                 </div>
                             </div>
                             
                             <?php if ($rule->getData('description')): ?>
-                                <div class="mt-2">
+                                <div style="--w-mt:var(--weline-space-2);">
                                     <strong><?= __('描述') ?>:</strong> 
                                     <?= htmlspecialchars($rule->getData('description')) ?>
                                 </div>
                             <?php endif; ?>
                             
-                            <div class="mt-2 p-2 rounded font-monospace small" style="background: var(--backend-color-bg-secondary);">
+                            <div class="w-text" style="background: var(--backend-color-bg-secondary);" data-w-radius="md" data-family="mono" data-size="sm">
                                 <strong><?= __('表达式') ?>:</strong><br>
                                 <?= htmlspecialchars($rule->getData('expression')) ?>
                             </div>
                             
-                            <div class="mt-2 p-2 rounded font-monospace small" style="background: var(--backend-color-bg-tertiary, #f0f7ff);">
+                            <div class="w-text" style="background: var(--backend-color-bg-tertiary, #f0f7ff);" data-w-radius="md" data-family="mono" data-size="sm">
                                 <strong><?= __('动作') ?>:</strong><br>
-                                <pre class="mb-0"><?= htmlspecialchars(json_encode($rule->getActionArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
+                                <pre style="--w-mb:0;"><?= htmlspecialchars(json_encode($rule->getActionArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -167,26 +160,8 @@ $escapeAttr = static function (mixed $value): string {
     var viewUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/api-rules/view')) ?>;
     var deleteUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/api-rules/delete')) ?>;
 
-    function showDialog(options) {
-        if (window.Swal && typeof window.Swal.fire === 'function') {
-            return window.Swal.fire(options);
-        }
-
-        var title = String(options.title || '');
-        var message = String(options.text || '');
-        if (options.showCancelButton) {
-            return Promise.resolve({isConfirmed: window.confirm([title, message].filter(Boolean).join('\n'))});
-        }
-
-        var host = document.querySelector('[data-testid="cdn-api-rules-management"]');
-        if (host) {
-            var notice = document.createElement('div');
-            notice.className = 'alert ' + (options.icon === 'error' ? 'alert-danger' : 'alert-info') + ' mt-3 mb-0';
-            notice.setAttribute('role', 'status');
-            notice.textContent = [title, message].filter(Boolean).join('：');
-            host.appendChild(notice);
-        }
-        return Promise.resolve({isConfirmed: true});
+    function requestDialog(options) {
+        return Weline.UI.dialog.request(options);
     }
 
     document.addEventListener('change', function(event) {
@@ -244,41 +219,41 @@ $escapeAttr = static function (mixed $value): string {
         },
         
         collectRules: function() {
-            showDialog({
+            requestDialog({
                 title: '<?= __('确认收集规则') ?>',
-                text: '<?= __('确定要重新收集规则吗？这将扫描所有Api和Controller目录。') ?>',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: '<?= __("确定收集") ?>',
-                cancelButtonText: '<?= __("取消") ?>'
+                message: '<?= __('确定要重新收集规则吗？这将扫描所有Api和Controller目录。') ?>',
+                tone: 'info',
+                cancelable: true,
+                confirmLabel: '<?= __("确定收集") ?>',
+                cancelLabel: '<?= __("取消") ?>'
             }).then(function(result) {
-                if (result.isConfirmed) {
+                if (result.confirmed) {
                     Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
                     .then(function(api){ return api.resource('cdn').collectApiRules({}); })
                     .then(function(data) {
                         if (data && data.success !== false) {
-                            showDialog({
-                                icon: 'success',
+                            requestDialog({
+                                tone: 'success',
                                 title: '<?= __('成功') ?>',
-                                text: data.message,
-                                timer: 2000,
-                                showConfirmButton: false
+                                message: data.message,
+                                duration: 2000,
+                                confirmable: false
                             }).then(function() { window.location.reload(); });
                         } else {
-                            showDialog({
-                                icon: 'error',
+                            requestDialog({
+                                tone: 'danger',
                                 title: '<?= __('收集失败') ?>',
-                                text: (data && data.message) || '<?= __('收集失败') ?>',
-                                confirmButtonText: '<?= __('确定') ?>'
+                                message: (data && data.message) || '<?= __('收集失败') ?>',
+                                confirmLabel: '<?= __('确定') ?>'
                             });
                         }
                     })
                     .catch(function(error) {
-                        showDialog({
-                            icon: 'error',
+                        requestDialog({
+                            tone: 'danger',
                             title: '<?= __('收集失败') ?>',
-                            text: (error && error.message) || '<?= __('请重试') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
+                            message: (error && error.message) || '<?= __('请重试') ?>',
+                            confirmLabel: '<?= __('确定') ?>'
                         });
                     });
                 }
@@ -290,21 +265,21 @@ $escapeAttr = static function (mixed $value): string {
             .then(function(api){ return api.resource('cdn').toggleApiRule({ id: ruleId, enabled: enabled ? 1 : 0 }); })
             .then(function(data) {
                 if (!(data && data.success !== false)) {
-                    showDialog({
-                        icon: 'error',
+                    requestDialog({
+                        tone: 'danger',
                         title: '<?= __('操作失败') ?>',
-                        text: data.message || '<?= __('操作失败') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
+                        message: data.message || '<?= __('操作失败') ?>',
+                        confirmLabel: '<?= __('确定') ?>'
                     });
                     document.getElementById('rule_' + ruleId).checked = !enabled;
                 }
             })
             .catch(function(error) {
-                showDialog({
-                    icon: 'error',
+                requestDialog({
+                    tone: 'danger',
                     title: '<?= __('操作失败') ?>',
-                    text: '<?= __('请重试') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
+                    message: '<?= __('请重试') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
                 });
                 document.getElementById('rule_' + ruleId).checked = !enabled;
             });
@@ -315,42 +290,42 @@ $escapeAttr = static function (mixed $value): string {
         },
         
         deleteRule: function(ruleId) {
-            showDialog({
+            requestDialog({
                 title: '<?= __('确认删除') ?>',
-                text: '<?= __('确定要删除这条规则吗？') ?>',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: '<?= __("确定删除") ?>',
-                cancelButtonText: '<?= __("取消") ?>',
-                confirmButtonColor: '#d33'
+                message: '<?= __('确定要删除这条规则吗？') ?>',
+                tone: 'warning',
+                cancelable: true,
+                confirmLabel: '<?= __("确定删除") ?>',
+                cancelLabel: '<?= __("取消") ?>',
+                confirmTone: 'danger'
             }).then(function(result) {
-                if (result.isConfirmed) {
+                if (result.confirmed) {
                     Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
                     .then(function(api){ return api.resource('cdn').deleteApiRule({ id: ruleId }); })
                     .then(function(data) {
                         if (data && data.success !== false) {
-                            showDialog({
-                                icon: 'success',
+                            requestDialog({
+                                tone: 'success',
                                 title: '<?= __('成功') ?>',
-                                text: data.message,
-                                timer: 2000,
-                                showConfirmButton: false
+                                message: data.message,
+                                duration: 2000,
+                                confirmable: false
                             }).then(function() { window.location.reload(); });
                         } else {
-                            showDialog({
-                                icon: 'error',
+                            requestDialog({
+                                tone: 'danger',
                                 title: '<?= __('删除失败') ?>',
-                                text: data.message || '<?= __('删除失败') ?>',
-                                confirmButtonText: '<?= __('确定') ?>'
+                                message: data.message || '<?= __('删除失败') ?>',
+                                confirmLabel: '<?= __('确定') ?>'
                             });
                         }
                     })
                     .catch(function(error) {
-                        showDialog({
-                            icon: 'error',
+                        requestDialog({
+                            tone: 'danger',
                             title: '<?= __('删除失败') ?>',
-                            text: (error && error.message) || '<?= __('请重试') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
+                            message: (error && error.message) || '<?= __('请重试') ?>',
+                            confirmLabel: '<?= __('确定') ?>'
                         });
                     });
                 }

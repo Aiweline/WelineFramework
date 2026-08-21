@@ -7,31 +7,31 @@ $hookName = $this->getData('hook_name') ?? '';
 <div class="hook-overview">
     <div class="hook-header">
         <div class="hook-icon">
-            <i class="mdi mdi-hook"></i>
+            <w:icon name="circle" size="sm"></w:icon>
         </div>
         <div class="hook-info">
             <h2><?= htmlspecialchars($hook['display_name'] ?? $hookName) ?></h2>
             <div class="hook-code">
                 <code id="hook-code-value"><?= htmlspecialchars($hookName) ?></code>
                 <button type="button" class="btn-copy" data-hook-copy="1" title="复制 Hook 名">
-                    <i class="mdi mdi-content-copy"></i>
+                    <w:icon name="copy" size="sm"></w:icon>
                 </button>
             </div>
             <div class="hook-badges">
                 <?php if ($hook['has_spec'] ?? false): ?>
-                    <span class="badge badge-success">有规约</span>
+                    <span class="w-badge" data-tone="success">有规约</span>
                 <?php else: ?>
-                    <span class="badge badge-danger">无规约</span>
+                    <span class="w-badge" data-tone="danger">无规约</span>
                 <?php endif; ?>
                 <?php if ($hook['has_doc'] ?? false): ?>
-                    <span class="badge badge-info">有文档</span>
+                    <span class="w-badge" data-tone="info">有文档</span>
                 <?php else: ?>
-                    <span class="badge badge-warning">无文档</span>
+                    <span class="w-badge" data-tone="warning">无文档</span>
                 <?php endif; ?>
                 <?php if (($hook['file_count'] ?? 0) > 0): ?>
-                    <span class="badge badge-primary"><?= $hook['file_count'] ?> 个文件</span>
+                    <span class="w-badge" data-tone="primary"><?= $hook['file_count'] ?> 个文件</span>
                 <?php else: ?>
-                    <span class="badge badge-secondary">无文件</span>
+                    <span class="w-badge" data-tone="muted">无文件</span>
                 <?php endif; ?>
             </div>
         </div>
@@ -42,7 +42,7 @@ $hookName = $this->getData('hook_name') ?? '';
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-cube-outline"></i>
+            <w:icon name="box" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= htmlspecialchars($hook['module'] ?? '') ?></div>
@@ -51,7 +51,7 @@ $hookName = $this->getData('hook_name') ?? '';
     </div>
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-file-multiple"></i>
+            <w:icon name="file" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= $hook['file_count'] ?? 0 ?></div>
@@ -60,7 +60,7 @@ $hookName = $this->getData('hook_name') ?? '';
     </div>
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-package-variant"></i>
+            <w:icon name="box" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= $hook['using_module_count'] ?? 0 ?></div>
@@ -73,7 +73,7 @@ $hookName = $this->getData('hook_name') ?? '';
 <div class="hook-details">
     <!-- 基本信息 -->
     <div class="detail-section">
-        <h3><i class="mdi mdi-information"></i> 基本信息</h3>
+        <h3><w:icon name="info" size="sm"></w:icon> 基本信息</h3>
         <div class="detail-content">
             <div class="detail-item">
                 <label>Hook 名：</label>
@@ -124,7 +124,7 @@ $hookName = $this->getData('hook_name') ?? '';
                         <code><?= htmlspecialchars($hook['doc_path'] ?? '') ?></code>
                         <?php if ($hook['has_doc'] ?? false): ?>
                             <a href="/dev/tool/document?path=Weline/Theme/<?= urlencode($hook['doc_path']) ?>" target="_blank" class="btn-view-doc" title="查看文档">
-                                <i class="mdi mdi-open-in-new"></i> 查看文档
+                                <w:icon name="circle" size="sm"></w:icon> 查看文档
                             </a>
                         <?php endif; ?>
                     </span>
@@ -135,7 +135,7 @@ $hookName = $this->getData('hook_name') ?? '';
 
     <!-- 实现文件信息 -->
     <div class="detail-section">
-        <h3><i class="mdi mdi-file-multiple"></i> 实现文件</h3>
+        <h3><w:icon name="file" size="sm"></w:icon> 实现文件</h3>
         <?php
         $files = $hook['files'] ?? [];
         $filesByModule = [];
@@ -149,7 +149,7 @@ $hookName = $this->getData('hook_name') ?? '';
         ?>
         <?php if (empty($files)): ?>
             <div class="empty-state">
-                <i class="mdi mdi-file-remove"></i>
+                <w:icon name="minus" size="sm"></w:icon>
                 <p>该 Hook 暂无实现文件</p>
             </div>
         <?php else: ?>
@@ -157,12 +157,12 @@ $hookName = $this->getData('hook_name') ?? '';
                 <?php foreach ($filesByModule as $moduleName => $moduleFiles): ?>
                     <div class="file-module-group">
                         <h4>
-                            <i class="mdi mdi-package-variant"></i> 
+                            <w:icon name="box" size="sm"></w:icon> 
                             <?= htmlspecialchars($moduleName) ?>
-                            <span class="badge badge-primary"><?= count($moduleFiles) ?></span>
+                            <span class="w-badge" data-tone="primary"><?= count($moduleFiles) ?></span>
                         </h4>
                         <div class="files-table">
-                            <table class="table">
+                            <table class="w-table">
                                 <thead>
                                     <tr>
                                         <th>文件路径</th>
@@ -540,10 +540,6 @@ code {
 }
 </style>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('click', function(event) {
     const trigger = event.target.closest('[data-hook-copy]');
@@ -584,16 +580,12 @@ function fallbackCopyText(text) {
         showCopySuccess();
     } catch (err) {
         console.error('复制失败:', err);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('复制失败') ?>',
-                text: '<?= __('请手动复制') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('复制失败，请手动复制');
-        }
+        Weline.UI.dialog.request({
+            tone: 'warning',
+            title: '<?= __('复制失败') ?>',
+            message: '<?= __('请手动复制') ?>',
+            confirmLabel: '<?= __('确定') ?>'
+        });
     }
     document.body.removeChild(textArea);
 }
@@ -603,7 +595,7 @@ function showCopySuccess() {
     if (!btn) return;
     
     const originalHTML = btn.innerHTML;
-    btn.innerHTML = '<i class="mdi mdi-check"></i>';
+    btn.innerHTML = '<w:icon name="check" size="sm"></w:icon>';
     btn.style.color = '#28a745';
     setTimeout(function() {
         btn.innerHTML = originalHTML;

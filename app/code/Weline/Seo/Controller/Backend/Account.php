@@ -25,7 +25,7 @@ use Weline\Seo\Service\SitemapAdapterRegistry;
 /**
  * SEO 账户管理后台控制器
  */
-#[AclAttribute('Weline_Seo::seo_account', 'SEO账户管理', 'mdi-account-key', 'SEO账户管理', 'Weline_Backend::seo_group')]
+#[AclAttribute('Weline_Seo::seo_account', 'SEO账户管理', 'user', 'SEO账户管理', 'Weline_Backend::seo_group')]
 class Account extends BackendController
 {
     private SitemapAdapterRegistry $adapterRegistry;
@@ -50,7 +50,7 @@ class Account extends BackendController
         return ObjectManager::getInstance(SeoPlatformCapabilityService::class);
     }
 
-    #[AclAttribute('Weline_Seo::seo_account_index', '查看SEO账户列表', 'mdi-view-list', '查看SEO账户列表')]
+    #[AclAttribute('Weline_Seo::seo_account_index', '查看SEO账户列表', 'list', '查看SEO账户列表')]
     public function index(): string
     {
         $scope = trim((string)$this->request->getGet('scope', ''));
@@ -146,7 +146,7 @@ class Account extends BackendController
         return $this->fetch();
     }
 
-    #[AclAttribute('Weline_Seo::seo_account_form', 'SEO账户表单', 'mdi-form-select', '创建/编辑SEO账户表单')]
+    #[AclAttribute('Weline_Seo::seo_account_form', 'SEO账户表单', 'circle', '创建/编辑SEO账户表单')]
     public function form(): string
     {
         $id = (int)$this->request->getGet('id');
@@ -187,7 +187,7 @@ class Account extends BackendController
         return $this->fetch();
     }
 
-    #[AclAttribute('Weline_Seo::seo_account_save', '保存SEO账户', 'mdi-content-save', '保存SEO账户')]
+    #[AclAttribute('Weline_Seo::seo_account_save', '保存SEO账户', 'save', '保存SEO账户')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -278,7 +278,7 @@ class Account extends BackendController
         }
     }
 
-    #[AclAttribute('Weline_Seo::seo_account_websites', '获取站点列表', 'mdi-web', '获取账户可绑定的站点列表')]
+    #[AclAttribute('Weline_Seo::seo_account_websites', '获取站点列表', 'globe', '获取账户可绑定的站点列表')]
     public function websites(): string
     {
         $accountId = (int)$this->request->getGet('account_id');
@@ -348,7 +348,7 @@ class Account extends BackendController
         }
     }
     
-    #[AclAttribute('Weline_Seo::seo_account_bind_websites', '绑定站点', 'mdi-link-variant', '保存账户与站点的绑定关系')]
+    #[AclAttribute('Weline_Seo::seo_account_bind_websites', '绑定站点', 'link', '保存账户与站点的绑定关系')]
     public function saveWebsiteBindings(): string
     {
         if (!$this->request->isPost()) {
@@ -455,7 +455,7 @@ class Account extends BackendController
     /**
      * 保存单个网站的Sitemap配置
      */
-    #[AclAttribute('Weline_Seo::seo_account_save_website_config', '保存站点配置', 'mdi-cog', '保存单个站点的Sitemap配置')]
+    #[AclAttribute('Weline_Seo::seo_account_save_website_config', '保存站点配置', 'settings', '保存单个站点的Sitemap配置')]
     public function saveWebsiteConfig(): string
     {
         if (!$this->request->isPost()) {
@@ -537,7 +537,7 @@ class Account extends BackendController
     /**
      * 从账户解绑单个网站
      */
-    #[AclAttribute('Weline_Seo::seo_account_unbind_website', '解绑站点', 'mdi-link-off', '从账户解绑单个站点')]
+    #[AclAttribute('Weline_Seo::seo_account_unbind_website', '解绑站点', 'link', '从账户解绑单个站点')]
     public function unbindWebsite(): string
     {
         if (!$this->request->isPost()) {
@@ -623,7 +623,7 @@ class Account extends BackendController
     /**
      * 手动同步账户统计数据
      */
-    #[AclAttribute('Weline_Seo::seo_account_sync_stats', '同步统计数据', 'mdi-sync', '手动同步账户统计数据')]
+    #[AclAttribute('Weline_Seo::seo_account_sync_stats', '同步统计数据', 'refresh', '手动同步账户统计数据')]
     public function syncStats(): string
     {
         if (!$this->request->isPost()) {

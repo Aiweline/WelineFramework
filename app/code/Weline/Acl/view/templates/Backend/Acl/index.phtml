@@ -672,10 +672,10 @@ a.weline-acl-module:hover {
 </style>
 
 <!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster">
+            <h4 style="--w-mb-sm:0;">
                 <?php if ($isTagDimension): ?>
                     <lang>标签资源</lang>
                 <?php else: ?>
@@ -683,19 +683,19 @@ a.weline-acl-module:hover {
                 <?php endif; ?>
             </h4>
 
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb">
+                    <li class="w-breadcrumb__item">
                         <span>
                             <lang>系统配置</lang>
                         </span>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <span>
                             <lang>权限管理</lang>
                         </span>
                     </li>
-                    <li class='breadcrumb-item active'>
+                    <li class="w-breadcrumb__item" data-state="active">
                         <?php if ($isTagDimension): ?>
                             <lang>标签资源</lang>
                         <?php else: ?>
@@ -710,15 +710,14 @@ a.weline-acl-module:hover {
 </div>
 <!-- end page title -->
 
-<div class="weline-acl-list-page"
-     data-testid="acl-resource-<?= $isTagDimension ? 'tag' : 'module' ?>-management">
+<div class="weline-acl-list-page" data-testid="acl-resource-<?= $isTagDimension ? 'tag' : 'module' ?>-management">
     <!-- 顶部信息卡片 -->
     <div class="weline-acl-list-header">
         <h2>
             <?php if ($isTagDimension): ?>
-                <i class="mdi mdi-tag-search-outline"></i> <lang>标签维度资源</lang>
+                <w:icon name="search" size="sm"></w:icon> <lang>标签维度资源</lang>
             <?php else: ?>
-                <i class="mdi mdi-puzzle-outline"></i> <lang>模块维度资源</lang>
+                <w:icon name="puzzle" size="sm"></w:icon> <lang>模块维度资源</lang>
             <?php endif; ?>
         </h2>
         <p class="weline-acl-list-header-subtitle">
@@ -731,28 +730,27 @@ a.weline-acl-module:hover {
         <div class="weline-acl-list-header-actions">
             <?php if ($isTagDimension): ?>
             <a href="<?php echo htmlspecialchars($moduleListUrl); ?>" class="weline-acl-list-header-btn">
-                <i class="mdi mdi-puzzle-outline"></i> <lang>模块维度</lang>
+                <w:icon name="puzzle" size="sm"></w:icon> <lang>模块维度</lang>
             </a>
             <?php else: ?>
             <a href="<?php echo htmlspecialchars($tagListUrl); ?>" class="weline-acl-list-header-btn">
-                <i class="mdi mdi-tag-search-outline"></i> <lang>标签维度</lang>
+                <w:icon name="search" size="sm"></w:icon> <lang>标签维度</lang>
             </a>
             <?php endif; ?>
             <a href="@backend-url('*/backend/acl/role')" class="weline-acl-list-header-btn">
-                <i class="mdi mdi-account-group"></i> <lang>角色管理</lang>
+                <w:icon name="users" size="sm"></w:icon> <lang>角色管理</lang>
             </a>
             <a href="@backend-url('*/backend/acl/tag')" class="weline-acl-list-header-btn">
-                <i class="mdi mdi-tag-multiple-outline"></i> <lang>标签元数据</lang>
+                <w:icon name="tag" size="sm"></w:icon> <lang>标签元数据</lang>
             </a>
         </div>
     </div>
 
     <!-- 统计卡片 -->
     <div class="weline-acl-stats-row">
-        <a class="weline-acl-stat-card<?php echo !$hasActiveFilters ? ' is-active' : ''; ?>"
-           href="<?php echo htmlspecialchars($listBaseUrl); ?>">
+        <a class="weline-acl-stat-card<?php echo !$hasActiveFilters ? ' is-active' : ''; ?>" href="<?php echo htmlspecialchars($listBaseUrl); ?>">
             <div class="weline-acl-stat-icon primary">
-                <i class="mdi mdi-key-variant"></i>
+                <w:icon name="key" size="sm"></w:icon>
             </div>
             <div class="weline-acl-stat-content">
                 <div class="weline-acl-stat-value"><?php echo $totalCount; ?></div>
@@ -761,7 +759,7 @@ a.weline-acl-module:hover {
         </a>
         <div class="weline-acl-stat-card">
             <div class="weline-acl-stat-icon success">
-                <i class="mdi mdi-package-variant"></i>
+                <w:icon name="box" size="sm"></w:icon>
             </div>
             <div class="weline-acl-stat-content">
                 <div class="weline-acl-stat-value"><?php echo $moduleCount; ?></div>
@@ -770,7 +768,7 @@ a.weline-acl-module:hover {
         </div>
         <div class="weline-acl-stat-card">
             <div class="weline-acl-stat-icon info">
-                <i class="mdi mdi-shape"></i>
+                <w:icon name="circle" size="sm"></w:icon>
             </div>
             <div class="weline-acl-stat-content">
                 <div class="weline-acl-stat-value"><?php echo $typeCount; ?></div>
@@ -796,9 +794,7 @@ a.weline-acl-module:hover {
             $isActive = $currentType === (string)$statType;
             $typeQuery = $buildFilterQuery(['type' => $isActive ? '' : (string)$statType]);
         ?>
-        <a class="weline-acl-stat-card<?php echo $isActive ? ' is-active' : ''; ?><?php echo $statCount === 0 ? ' is-muted' : ''; ?>"
-           href="<?php echo htmlspecialchars($listBaseUrl . $typeQuery); ?>"
-           title="<?php echo htmlspecialchars($label); ?>">
+        <a class="weline-acl-stat-card<?php echo $isActive ? ' is-active' : ''; ?><?php echo $statCount === 0 ? ' is-muted' : ''; ?>" href="<?php echo htmlspecialchars($listBaseUrl . $typeQuery); ?>" title="<?php echo htmlspecialchars($label); ?>">
             <div class="weline-acl-stat-icon warning">
                 <i class="mdi mdi-<?php echo htmlspecialchars($typeIcons[$statType] ?? 'key'); ?>"></i>
             </div>
@@ -817,11 +813,11 @@ a.weline-acl-module:hover {
             <div class="weline-acl-search-box">
                 <w:form action="@var($listBaseUrl)" method="get" class="weline-acl-search-form" id="acl-list-filter-form">
                     <div class="weline-acl-search-input">
-                        <i class="mdi mdi-magnify"></i>
+                        <w:icon name="search" size="sm"></w:icon>
                         <input type="text" name="search" value="<?php echo htmlspecialchars($currentSearch); ?>" placeholder="<?php echo $isTagDimension ? __('搜索权限名称、ID、标签...') : __('搜索权限名称、ID、路由...'); ?>">
                     </div>
                     <button type="submit" class="weline-acl-search-btn">
-                        <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+                        <w:icon name="search" size="sm"></w:icon> <lang>搜索</lang>
                     </button>
                 </w:form>
             </div>
@@ -843,33 +839,12 @@ a.weline-acl-module:hover {
                     $acl_tag_filter_value = $currentTagsValue;
                     $acl_tag_filter_options_json = (string)($this->getData('acl_tag_filter_options_json') ?: '[]');
                 ?>
-                <w:acl:tag:select
-                    id="acl-filter-tags"
-                    name="tags"
-                    value="acl_tag_filter_value"
-                    options="acl_tag_filter_options_json"
-                    empty-label="acl_tag_filter_empty"
-                    placeholder="acl_tag_filter_placeholder"
-                    class="weline-acl-tag-filter"
-                    form="acl-list-filter-form"
-                    on-change="var f=document.getElementById('acl-list-filter-form'); if(f){f.requestSubmit ? f.requestSubmit() : f.submit();}"
-                />
+                <w:acl:tag:select id="acl-filter-tags" name="tags" value="acl_tag_filter_value" options="acl_tag_filter_options_json" empty-label="acl_tag_filter_empty" placeholder="acl_tag_filter_placeholder" class="weline-acl-tag-filter" form="acl-list-filter-form" on-change="var f=document.getElementById('acl-list-filter-form'); if(f){f.requestSubmit ? f.requestSubmit() : f.submit();}" />
                 <?php else:
                     $acl_module_filter_empty = __('所有模块');
                     $acl_module_filter_placeholder = __('搜索模块名称');
                 ?>
-                <w:module-manager:module:select
-                    id="acl-filter-module"
-                    name="module"
-                    value="current_module"
-                    allow-empty="true"
-                    clearable="true"
-                    empty-label="acl_module_filter_empty"
-                    placeholder="acl_module_filter_placeholder"
-                    class="weline-acl-module-filter"
-                    form="acl-list-filter-form"
-                    on-change="var f=document.getElementById('acl-list-filter-form'); if(f){f.requestSubmit ? f.requestSubmit() : f.submit();}"
-                />
+                <w:module-manager:module:select id="acl-filter-module" name="module" value="current_module" allow-empty="true" clearable="true" empty-label="acl_module_filter_empty" placeholder="acl_module_filter_placeholder" class="weline-acl-module-filter" form="acl-list-filter-form" on-change="var f=document.getElementById('acl-list-filter-form'); if(f){f.requestSubmit ? f.requestSubmit() : f.submit();}" />
                 <?php endif; ?>
             </div>
         </div>
@@ -879,7 +854,7 @@ a.weline-acl-module:hover {
     <div class="weline-acl-table-card">
         <div class="weline-acl-table-header">
             <span class="weline-acl-table-title">
-                <i class="mdi mdi-format-list-bulleted"></i>
+                <w:icon name="list" size="sm"></w:icon>
                 <lang>权限列表</lang>
             </span>
             <span style="font-size: 0.85rem; color: var(--backend-color-text-secondary);">
@@ -890,7 +865,7 @@ a.weline-acl-module:hover {
         <div class="weline-acl-table-body">
             <?php if (empty($acls)): ?>
             <div class="weline-acl-empty">
-                <i class="mdi mdi-database-off-outline"></i>
+                <w:icon name="database" size="sm"></w:icon>
                 <p><lang>暂无权限数据</lang></p>
             </div>
             <?php else: ?>

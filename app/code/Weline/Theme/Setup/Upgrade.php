@@ -8,18 +8,29 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\UpgradeInterface;
+use Weline\Backend\Setup\Ui\IconDataMigrator;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ProductPageLayoutNormalizer;
 use Weline\Theme\Service\ThemeContextService;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '1.0.4';
+    public const VERSION = '2.0.0';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
         $this->backfillDefaultAreaThemes();
         $this->relocateProductBestsellersFromSidebar();
+        $this->migrateSemanticIcons();
+    }
+
+    private function migrateSemanticIcons(): void
+    {
+        try {
+            ObjectManager::getInstance(IconDataMigrator::class)->migrate();
+        } catch (\Throwable $e) {
+            throw new Exception(__('Weline UI 2.0 语义图标迁移失败：%{1}', [$e->getMessage()]), 0, $e);
+        }
     }
 
     public function getVersion(): string

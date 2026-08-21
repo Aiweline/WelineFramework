@@ -22,13 +22,13 @@ use Weline\Marketing\Service\RuleEngine;
 /**
  * 营销规则管理控制器
  */
-#[Acl('Weline_Marketing::rule', '营销规则', 'mdi-rule', '营销规则管理', 'Weline_Backend::marketing_group')]
+#[Acl('Weline_Marketing::rule', '营销规则', 'circle', '营销规则管理', 'Weline_Backend::marketing_group')]
 class Rule extends BackendController
 {
     /**
      * 规则列表
      */
-    #[Acl('Weline_Marketing::rule_list', '规则列表', 'mdi-format-list-bulleted', '查看营销规则列表')]
+    #[Acl('Weline_Marketing::rule_list', '规则列表', 'list', '查看营销规则列表')]
     public function index(): string
     {
         try {
@@ -57,7 +57,7 @@ class Rule extends BackendController
     /**
      * 添加规则
      */
-    #[Acl('Weline_Marketing::rule_add', '添加规则', 'mdi-plus', '添加营销规则')]
+    #[Acl('Weline_Marketing::rule_add', '添加规则', 'plus', '添加营销规则')]
     public function getAdd(): string
     {
         try {

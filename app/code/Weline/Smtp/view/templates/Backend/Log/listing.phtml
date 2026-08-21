@@ -4,41 +4,39 @@
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('邮件发送记录管理器') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><span><?= __('系统') ?></span></li>
-                    <li class="breadcrumb-item active"><?= __('邮件发送记录管理器') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('邮件发送记录管理器') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('邮件发送记录管理器') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title"><?= __('邮件发送记录管理器') ?>:
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title"><?= __('邮件发送记录管理器') ?>:
                     <lang>一共有</lang>
                     <var>total</var>
                     <lang>条数据</lang>
                 </h4>
 
-                <div class='table-responsive mCustomScrollbar' data-mcs-axis='x' data-mcs-theme='dark'>
-                    <table class="table table-editable table-nowrap align-middle table-edits">
+                <div class="w-table-wrap">
+                    <table class="w-table table-editable table-edits" data-w-vertical="middle">
                         <thead>
                         <tr>
                             <th><lang>ID</lang></th>
@@ -74,14 +72,14 @@
                                 <td>{{log.subject}}</td>
                                 <td>
                                     <if condition="log.is_html=='1'">
-                                        <span class=" badge bg-success">html</span>
+                                        <span class="w-badge" data-w-background="success">html</span>
                                         <else/>
-                                        <span class=" badge bg-danger">text</span>
+                                        <span class="w-badge" data-w-background="danger">text</span>
                                     </if>
                                     {{log.content}}
                                     <if condition="log.alt!=''">
                                         <br>
-                                        <span class="badge bg-info">{{log.alt}}</span>
+                                        <span class="w-badge" data-w-background="info">{{log.alt}}</span>
                                     </if>
                                 </td>
                                 <td>{{log.create_time}}</td>
@@ -89,13 +87,13 @@
                                 <td>
                                     <w:form action="@backend-url('*/backend/log/delete')" method='post'>
                                         <input type='hidden' name='log_id' value='{{log.id}}'>
-                                        <button class='btn btn-danger'>
+                                        <button class="w-button" data-tone="danger">
                                             <lang>删除</lang>
                                         </button>
                                     </w:form>
                                     <w:form action="@backend-url('*/backend/log')" method='get'>
                                         <input type='hidden' name='log_id' value='{{log.id}}'>
-                                        <button class='btn btn-primary'>
+                                        <button class="w-button" data-tone="primary">
                                             <lang>阅读</lang>
                                         </button>
                                     </w:form>
@@ -115,5 +113,3 @@
 
 <script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
 <script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>

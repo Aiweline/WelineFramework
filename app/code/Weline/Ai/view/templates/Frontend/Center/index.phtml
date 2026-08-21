@@ -16,8 +16,8 @@ $user = $this->user ?? [];
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= __('个人中心') ?> - AI助手平台</title>
-    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet">
+    <css>Weline_Frontend::assets/css/bootstrap.min.css</css>
+    <css>Weline_Frontend::assets/css/icons.min.css</css>
     <style>
         body {
             background-color: #f5f7fa;
@@ -167,28 +167,28 @@ $user = $this->user ?? [];
 
 <!-- 导航栏 -->
 <nav class="navbar navbar-expand-lg">
-    <div class="container-fluid">
+    <div class="w-container">
         <a class="navbar-brand" href="<?= $this->getUrl('*/frontend/index') ?>">
-            <i class="mdi mdi-robot"></i> AI助手平台
+            <w:icon name="robot" size="sm"></w:icon> AI助手平台
         </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <button class="navbar-toggler" type="button" data-w-target="#navbarNav" data-w-action="disclosure.toggle">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
+        <div class="w-disclosure__panel navbar-collapse" id="navbarNav" data-w-disclosure-panel hidden>
             <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="<?= $this->getUrl('*/frontend/index') ?>">
-                        <i class="mdi mdi-home"></i> <?= __('首页') ?>
+                <li>
+                    <a href="<?= $this->getUrl('*/frontend/index') ?>">
+                        <w:icon name="home" size="sm"></w:icon> <?= __('首页') ?>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="<?= $this->getUrl('*/frontend/chat') ?>">
-                        <i class="mdi mdi-chat"></i> <?= __('聊天') ?>
+                <li>
+                    <a href="<?= $this->getUrl('*/frontend/chat') ?>">
+                        <w:icon name="circle" size="sm"></w:icon> <?= __('聊天') ?>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="<?= $this->getUrl('*/frontend/center') ?>">
-                        <i class="mdi mdi-account"></i> <?= __('个人中心') ?>
+                <li>
+                    <a href="<?= $this->getUrl('*/frontend/center') ?>" data-state="active">
+                        <w:icon name="user" size="sm"></w:icon> <?= __('个人中心') ?>
                     </a>
                 </li>
             </ul>
@@ -199,7 +199,7 @@ $user = $this->user ?? [];
 <div class="container-main">
     <!-- 页面标题 -->
     <div class="page-header">
-        <h1><i class="mdi mdi-account-circle"></i> <?= __('个人中心') ?></h1>
+        <h1><w:icon name="user" size="sm"></w:icon> <?= __('个人中心') ?></h1>
         <p><?= __('管理您的API密钥和个人设置') ?></p>
     </div>
 
@@ -207,7 +207,7 @@ $user = $this->user ?? [];
     <div class="stats-grid">
         <div class="stat-card">
             <div class="icon blue">
-                <i class="mdi mdi-key"></i>
+                <w:icon name="key" size="sm"></w:icon>
             </div>
             <h3><?= number_format($api_key_count) ?></h3>
             <p><?= __('API密钥') ?></p>
@@ -215,7 +215,7 @@ $user = $this->user ?? [];
 
         <div class="stat-card">
             <div class="icon orange">
-                <i class="mdi mdi-chart-line"></i>
+                <w:icon name="chart" size="sm"></w:icon>
             </div>
             <h3>0</h3>
             <p><?= __('今日使用次数') ?></p>
@@ -224,42 +224,42 @@ $user = $this->user ?? [];
 
     <!-- 快速操作 -->
     <div class="action-card">
-        <h4><i class="mdi mdi-lightning-bolt"></i> <?= __('快速操作') ?></h4>
+        <h4><w:icon name="bolt" size="sm"></w:icon> <?= __('快速操作') ?></h4>
         <ul class="action-list">
             <li>
                 <a href="<?= $this->getUrl('*/frontend/center/apikeys') ?>">
                     <div class="action-content">
-                        <i class="mdi mdi-key text-primary"></i>
+                        <w:icon name="key" size="sm"></w:icon>
                         <div>
                             <div class="action-title"><?= __('管理API密钥') ?></div>
                             <div class="action-desc"><?= __('创建、查看和管理您的API密钥') ?></div>
                         </div>
                     </div>
-                    <i class="mdi mdi-chevron-right"></i>
+                    <w:icon name="chevron-right" size="sm"></w:icon>
                 </a>
             </li>
             <li>
                 <a href="<?= $this->getUrl('*/frontend/chat') ?>">
                     <div class="action-content">
-                        <i class="mdi mdi-chat text-info"></i>
+                        <w:icon name="circle" size="sm"></w:icon>
                         <div>
                             <div class="action-title"><?= __('AI聊天') ?></div>
                             <div class="action-desc"><?= __('使用AI模型进行对话') ?></div>
                         </div>
                     </div>
-                    <i class="mdi mdi-chevron-right"></i>
+                    <w:icon name="chevron-right" size="sm"></w:icon>
                 </a>
             </li>
             <li>
                 <a href="<?= $this->getUrl('*/frontend/center/settings') ?>">
                     <div class="action-content">
-                        <i class="mdi mdi-cog text-warning"></i>
+                        <w:icon name="settings" size="sm"></w:icon>
                         <div>
                             <div class="action-title"><?= __('个人设置') ?></div>
                             <div class="action-desc"><?= __('修改个人信息和偏好设置') ?></div>
                         </div>
                     </div>
-                    <i class="mdi mdi-chevron-right"></i>
+                    <w:icon name="chevron-right" size="sm"></w:icon>
                 </a>
             </li>
         </ul>
@@ -267,15 +267,15 @@ $user = $this->user ?? [];
 
     <!-- 最近活动 -->
     <div class="action-card">
-        <h4><i class="mdi mdi-history"></i> <?= __('最近活动') ?></h4>
-        <div class="text-center py-5 text-muted">
-            <i class="mdi mdi-information-outline" style="font-size: 48px;"></i>
-            <p class="mt-3"><?= __('暂无活动记录') ?></p>
+        <h4><w:icon name="history" size="sm"></w:icon> <?= __('最近活动') ?></h4>
+        <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+            <w:icon name="info" size="sm"></w:icon>
+            <p style="--w-mt:var(--weline-space-4);"><?= __('暂无活动记录') ?></p>
         </div>
     </div>
 </div>
 
-<script src="@static(Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js)"></script>
+<js>Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js</js>
 </body>
 </html>
 

@@ -18,16 +18,16 @@ $bindingUrl = $this->getBackendUrl('seo/backend/website-account');
       data-resource-unavailable="<?= htmlspecialchars((string)__('SEO 后台 API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
       data-stats-completed="<?= htmlspecialchars((string)__('统计同步完成'), ENT_QUOTES, 'UTF-8') ?>"
       data-stats-failed="<?= htmlspecialchars((string)__('统计同步失败'), ENT_QUOTES, 'UTF-8') ?>">
-    <div class="row"><div class="col-12"><template>Weline_Component::message.phtml</template></div></div>
+    <div class="w-grid"><div style="--w-span:12;"><template>Weline_Component::message.phtml</template></div></div>
     <header class="seo-admin__header">
         <div>
             <p class="seo-admin__eyebrow"><lang>SEO 运维</lang></p>
-            <h1 class="seo-admin__title"><i class="mdi mdi-account-key-outline" aria-hidden="true"></i> <lang>SEO 账户</lang></h1>
+            <h1 class="seo-admin__title"><w:icon name="user" size="sm"></w:icon> <lang>SEO 账户</lang></h1>
             <p class="seo-admin__description"><lang>统一管理平台能力、自动提交、URL Push、站点绑定和统计同步；敏感配置在列表中始终脱敏。</lang></p>
         </div>
         <div class="seo-admin__actions">
-            <a class="btn btn-outline-primary" href="<?= htmlspecialchars($bindingUrl, ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-link-variant" aria-hidden="true"></i> <lang>站点绑定</lang></a>
-            <a class="btn btn-primary" href="<?= htmlspecialchars($createUrl, ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-plus-circle-outline" aria-hidden="true"></i> <lang>新增账户</lang></a>
+            <a class="w-button" href="<?= htmlspecialchars($bindingUrl, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline"><w:icon name="link" size="sm"></w:icon> <lang>站点绑定</lang></a>
+            <a class="w-button" href="<?= htmlspecialchars($createUrl, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary"><w:icon name="plus" size="sm"></w:icon> <lang>新增账户</lang></a>
         </div>
     </header>
 
@@ -41,11 +41,11 @@ $bindingUrl = $this->getBackendUrl('seo/backend/website-account');
             $errors += (int)($account['stats']['error_count'] ?? 0);
         }
         foreach ([
-            ['mdi-account-multiple-outline', count($accounts), __('账户')],
-            ['mdi-check-decagram-outline', $activeCount, __('启用')],
-            ['mdi-web-check', $bindingCount, __('站点绑定')],
-            ['mdi-database-check-outline', $indexed, __('已收录页面')],
-            ['mdi-alert-circle-outline', $errors, __('平台错误')],
+            ['users', count($accounts), __('账户')],
+            ['check', $activeCount, __('启用')],
+            ['check', $bindingCount, __('站点绑定')],
+            ['check', $indexed, __('已收录页面')],
+            ['warning', $errors, __('平台错误')],
         ] as [$icon, $value, $label]): ?>
             <article class="seo-kpi"><i class="mdi <?= $icon ?>" aria-hidden="true"></i><div><strong><?= number_format($value) ?></strong><span><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span></div></article>
         <?php endforeach; ?>
@@ -54,20 +54,20 @@ $bindingUrl = $this->getBackendUrl('seo/backend/website-account');
     <section class="seo-admin__panel">
         <div class="seo-toolbar seo-toolbar--accounts">
             <label class="seo-search">
-                <span class="visually-hidden"><lang>搜索账户</lang></span><i class="mdi mdi-magnify" aria-hidden="true"></i>
-                <input class="form-control" type="search" data-seo-account-search placeholder="<?= htmlspecialchars((string)__('搜索账户名称、平台或 scope'), ENT_QUOTES, 'UTF-8') ?>">
+                <span class="w-visually-hidden"><lang>搜索账户</lang></span><w:icon name="search" size="sm"></w:icon>
+                <input class="w-input" type="search" data-seo-account-search placeholder="<?= htmlspecialchars((string)__('搜索账户名称、平台或 scope'), ENT_QUOTES, 'UTF-8') ?>">
             </label>
             <?php if ($scope !== ''): ?><span class="seo-chip is-provider">scope: <?= htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
         </div>
-        <div class="table-responsive">
-            <table class="table align-middle mb-0 seo-account-table">
+        <div class="w-table-wrap">
+            <table class="w-table seo-account-table" data-w-vertical="middle" style="--w-mb:0;">
                 <thead><tr>
                     <th><lang>账户</lang></th><th><lang>平台与能力</lang></th><th><lang>绑定</lang></th>
-                    <th><lang>SEO 数据</lang></th><th><lang>状态</lang></th><th class="text-end"><lang>操作</lang></th>
+                    <th><lang>SEO 数据</lang></th><th><lang>状态</lang></th><th class="w-text" data-align="end"><lang>操作</lang></th>
                 </tr></thead>
                 <tbody>
                 <?php if ($accounts === []): ?>
-                    <tr><td colspan="6"><div class="seo-empty-state"><i class="mdi mdi-account-off-outline" aria-hidden="true"></i><p><lang>暂无 SEO 账户</lang></p></div></td></tr>
+                    <tr><td colspan="6"><div class="seo-empty-state"><w:icon name="user" size="sm"></w:icon><p><lang>暂无 SEO 账户</lang></p></div></td></tr>
                 <?php endif; ?>
                 <?php foreach ($accounts as $account):
                     $accountId = (int)($account['account_id'] ?? 0);
@@ -77,12 +77,12 @@ $bindingUrl = $this->getBackendUrl('seo/backend/website-account');
                     $search = strtolower(implode(' ', [(string)($account['name'] ?? ''), $platform, (string)($account['scope'] ?? '')]));
                 ?>
                     <tr data-seo-account-row data-search="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>">
-                        <td><strong><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><small class="d-block text-muted">ID <?= $accountId ?> · <?= htmlspecialchars((string)(($account['scope'] ?? '') !== '' ? $account['scope'] : __('全局')), ENT_QUOTES, 'UTF-8') ?></small></td>
-                        <td><span class="d-inline-flex align-items-center gap-2"><?= $visual->renderIcon($platform, $platform, '#2563eb', 28) ?><code><?= htmlspecialchars($platform, ENT_QUOTES, 'UTF-8') ?></code></span><div class="seo-chip-row mt-1"><?php if (!empty($account['enable_cron_sitemap'])): ?><span class="seo-chip"><lang>Sitemap 提交</lang></span><?php endif; ?><?php if (!empty($account['enable_cron_push_urls'])): ?><span class="seo-chip"><lang>URL Push</lang></span><?php endif; ?></div></td>
+                        <td><strong><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><small class="w-text" data-w-display="block" data-tone="muted">ID <?= $accountId ?> · <?= htmlspecialchars((string)(($account['scope'] ?? '') !== '' ? $account['scope'] : __('全局')), ENT_QUOTES, 'UTF-8') ?></small></td>
+                        <td><span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);"><?= $visual->renderIcon($platform, $platform, '#2563eb', 28) ?><code><?= htmlspecialchars($platform, ENT_QUOTES, 'UTF-8') ?></code></span><div class="seo-chip-row" style="--w-mt:var(--weline-space-1);"><?php if (!empty($account['enable_cron_sitemap'])): ?><span class="seo-chip"><lang>Sitemap 提交</lang></span><?php endif; ?><?php if (!empty($account['enable_cron_push_urls'])): ?><span class="seo-chip"><lang>URL Push</lang></span><?php endif; ?></div></td>
                         <td><?php if ((int)($account['bound_websites_count'] ?? 0) > 0): ?><span class="seo-status is-success"><?= (int)$account['bound_websites_count'] ?> <lang>个站点</lang></span><?php else: ?><span class="seo-status is-muted"><lang>未绑定</lang></span><?php endif; ?></td>
-                        <td><div class="seo-account-metrics"><span title="<?= htmlspecialchars((string)__('已收录页面'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-check-circle-outline text-success"></i><?= number_format((int)($stats['indexed_pages'] ?? 0)) ?></span><span title="<?= htmlspecialchars((string)__('点击量'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-cursor-default-click-outline text-primary"></i><?= number_format((int)($stats['clicks'] ?? 0)) ?></span><span title="<?= htmlspecialchars((string)__('错误数'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-alert-circle-outline text-danger"></i><?= number_format((int)($stats['error_count'] ?? 0)) ?></span></div><?php if (!empty($stats['last_sync_at'])): ?><small class="text-muted"><?= htmlspecialchars((string)$stats['last_sync_at'], ENT_QUOTES, 'UTF-8') ?></small><?php endif; ?></td>
+                        <td><div class="seo-account-metrics"><span title="<?= htmlspecialchars((string)__('已收录页面'), ENT_QUOTES, 'UTF-8') ?>"><w:icon name="check" size="sm"></w:icon><?= number_format((int)($stats['indexed_pages'] ?? 0)) ?></span><span title="<?= htmlspecialchars((string)__('点击量'), ENT_QUOTES, 'UTF-8') ?>"><w:icon name="circle" size="sm"></w:icon><?= number_format((int)($stats['clicks'] ?? 0)) ?></span><span title="<?= htmlspecialchars((string)__('错误数'), ENT_QUOTES, 'UTF-8') ?>"><w:icon name="warning" size="sm"></w:icon><?= number_format((int)($stats['error_count'] ?? 0)) ?></span></div><?php if (!empty($stats['last_sync_at'])): ?><small class="w-text" data-tone="muted"><?= htmlspecialchars((string)$stats['last_sync_at'], ENT_QUOTES, 'UTF-8') ?></small><?php endif; ?></td>
                         <td><span class="seo-status <?= (int)($account['is_active'] ?? 0) === 1 ? 'is-success' : 'is-muted' ?>"><?= (int)($account['is_active'] ?? 0) === 1 ? __('启用') : __('禁用') ?></span></td>
-                        <td class="text-end"><div class="btn-group"><a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars((string)__('编辑'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-pencil-outline"></i></a><?php if ((int)($account['bound_websites_count'] ?? 0) > 0): ?><button type="button" class="btn btn-sm btn-outline-info" data-seo-sync-account="<?= $accountId ?>" data-loading-label="<?= htmlspecialchars((string)__('同步中'), ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars((string)__('同步统计数据'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-sync"></i></button><?php endif; ?></div></td>
+                        <td class="w-text" data-align="end"><div class="w-button-group"><a class="w-button" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars((string)__('编辑'), ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm"><w:icon name="edit" size="sm"></w:icon></a><?php if ((int)($account['bound_websites_count'] ?? 0) > 0): ?><button type="button" class="w-button" data-seo-sync-account="<?= $accountId ?>" data-loading-label="<?= htmlspecialchars((string)__('同步中'), ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars((string)__('同步统计数据'), ENT_QUOTES, 'UTF-8') ?>" data-tone="info" data-variant="outline" data-size="sm"><w:icon name="refresh" size="sm"></w:icon></button><?php endif; ?></div></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

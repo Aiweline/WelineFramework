@@ -44,7 +44,7 @@ class MasterResurrectionFailedObserver implements ObserverInterface
                 $title,
                 $message,
                 [
-                    'icon' => 'ri-error-warning-line',
+                    'icon' => 'warning',
                     'source_module' => 'Weline_Server',
                     'metadata' => [
                         'instance_name' => $instanceName,

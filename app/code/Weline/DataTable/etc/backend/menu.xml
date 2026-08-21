@@ -6,46 +6,46 @@
           name="datatable_module"
           title="DataTable"
           parent="Weline_Backend::editor_component_group"
-          icon="mdi mdi-table-large"
+          icon="circle"
           order="30">
         <menu source="Weline_DataTable::datatable_test_index"
               name="datatable_test_index"
               title="后台仪表盘"
               action="datatable/backend/test/index"
-              icon="mdi mdi-view-dashboard-outline"
+              icon="grid"
               order="10"/>
 
         <menu source="Weline_DataTable::datatable_test_comprehensive"
               name="datatable_test_comprehensive"
               title="综合测试"
               action="datatable/backend/test/comprehensive/index"
-              icon="mdi mdi-test-tube"
+              icon="beaker"
               order="20"/>
 
         <menu source="Weline_DataTable::datatable_test_tag"
               name="datatable_test_tag"
               title="标签验证"
               action="datatable/backend/test/tag-test/index"
-              icon="mdi mdi-tag-check-outline"
+              icon="check"
               order="30"/>
 
         <menu source="Weline_DataTable::datatable_doc"
               name="datatable_doc"
               title="文档说明"
-              icon="mdi mdi-book-open-page-variant-outline"
+              icon="circle"
               order="40">
             <menu source="Weline_DataTable::datatable_doc_quickstart"
                   name="datatable_doc_quickstart"
                   title="快速入门"
                   action="datatable/backend/test/index/doc?doc=quickstart"
-                  icon="mdi mdi-rocket-launch-outline"
+                  icon="circle"
                   order="10"/>
 
             <menu source="Weline_DataTable::datatable_doc_guide"
                   name="datatable_doc_guide"
                   title="使用指南"
                   action="datatable/backend/test/index/doc?doc=guide"
-                  icon="mdi mdi-book-open-blank-variant"
+                  icon="circle"
                   order="20"/>
         </menu>
     </menu>

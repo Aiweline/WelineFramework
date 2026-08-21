@@ -3,54 +3,50 @@
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $isStores = $section === 'stores';
 ?>
-<div class="container-fluid"
-     data-testid="<?= $isStores ? 'store-management' : 'sales-channel-management' ?>"
-     data-management-section="<?= $escape($section) ?>">
-    <div class="d-flex align-items-center justify-content-between mb-3">
+<div class="w-container" data-testid="<?= $isStores ? 'store-management' : 'sales-channel-management' ?>" data-management-section="<?= $escape($section) ?>">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
         <div>
-            <h4 class="mb-1"><lang><?= $isStores ? '商店管理' : '渠道管理' ?></lang></h4>
-            <div class="text-muted"><lang>Website Scope 管理工作台</lang> · website_id=<?= $website_id ?></div>
+            <h4 style="--w-mb:var(--weline-space-1);"><lang><?= $isStores ? '商店管理' : '渠道管理' ?></lang></h4>
+            <div class="w-text" data-tone="muted"><lang>Website Scope 管理工作台</lang> · website_id=<?= $website_id ?></div>
         </div>
-        <form method="get" class="d-flex gap-2">
-            <input class="form-control" type="number" min="0" name="website_id" value="<?= $website_id ?>" aria-label="<lang>网站 ID</lang>">
-            <button class="btn btn-primary" type="submit"><lang>切换网站</lang></button>
+        <form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" aria-label="<lang>网站 ID</lang>">
+            <button class="w-button" type="submit" data-tone="primary"><lang>切换网站</lang></button>
         </form>
     </div>
 
     <?php if ($isStores): ?>
-        <div class="card mb-3"><div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/scope-management/create-store')" csrf="auto"
-                    class="row g-3" data-testid="store-management-create-form">
-                <div class="col-md-2"><label class="form-label"><lang>网站 ID</lang></label><input class="form-control" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
-                <div class="col-md-2"><label class="form-label"><lang>商店代码</lang></label><input class="form-control" name="code" maxlength="64" required></div>
-                <div class="col-md-3"><label class="form-label"><lang>商店名称</lang></label><input class="form-control" name="name" maxlength="128" required></div>
-                <div class="col-md-2"><label class="form-label"><lang>模式</lang></label><select class="form-select" name="store_mode"><option value="normal">normal</option><option value="dev">dev</option><option value="test">test</option></select></div>
-                <div class="col-md-2"><label class="form-label"><lang>独立 URL</lang></label><input class="form-control" type="url" name="url" maxlength="255"></div>
-                <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>创建</lang></button></div>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/scope-management/create-store')" csrf="auto" class="w-grid" data-testid="store-management-create-form" style="--w-gap:var(--weline-space-4);">
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>网站 ID</lang></label><input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>商店代码</lang></label><input class="w-input" name="code" maxlength="64" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>商店名称</lang></label><input class="w-input" name="name" maxlength="128" required></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>模式</lang></label><select class="w-select" name="store_mode"><option value="normal">normal</option><option value="dev">dev</option><option value="test">test</option></select></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>独立 URL</lang></label><input class="w-input" type="url" name="url" maxlength="255"></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:1;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建</lang></button></div>
             </w:form>
         </div></div>
     <?php else: ?>
-        <div class="card mb-3"><div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/scope-management/create-channel')" csrf="auto"
-                    class="row g-3" data-testid="sales-channel-management-create-form">
-                <div class="col-md-2"><label class="form-label"><lang>网站 ID</lang></label><input class="form-control" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
-                <div class="col-md-3"><label class="form-label"><lang>所属商店</lang></label><select class="form-select" name="store_id" required>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/scope-management/create-channel')" csrf="auto" class="w-grid" data-testid="sales-channel-management-create-form" style="--w-gap:var(--weline-space-4);">
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>网站 ID</lang></label><input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>所属商店</lang></label><select class="w-select" name="store_id" required>
                     <option value=""><lang>请选择商店</lang></option>
                     <?php foreach ($stores as $store): ?><option value="<?= (int)($store['store_id'] ?? 0) ?>"><?= $escape(($store['name'] ?? '') . ' (' . ($store['code'] ?? '') . ')') ?></option><?php endforeach; ?>
                 </select></div>
-                <div class="col-md-2"><label class="form-label"><lang>渠道代码</lang></label><input class="form-control" name="code" maxlength="64" required></div>
-                <div class="col-md-3"><label class="form-label"><lang>渠道名称</lang></label><input class="form-control" name="name" maxlength="128" required></div>
-                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>创建渠道</lang></button></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>渠道代码</lang></label><input class="w-input" name="code" maxlength="64" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>渠道名称</lang></label><input class="w-input" name="name" maxlength="128" required></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建渠道</lang></button></div>
             </w:form>
         </div></div>
     <?php endif; ?>
 
     <?php if ($error !== ''): ?>
-        <div class="alert alert-danger" role="alert"><?= $escape($error) ?></div>
+        <div class="w-alert" role="alert" data-tone="danger"><?= $escape($error) ?></div>
     <?php elseif ($rows === []): ?>
-        <div class="card"><div class="card-body text-center py-5"><lang>暂无数据</lang></div></div>
+        <div class="w-card"><div class="w-card__body w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><lang>暂无数据</lang></div></div>
     <?php else: ?>
-        <div class="card"><div class="table-responsive"><table class="table table-striped table-hover mb-0">
+        <div class="w-card"><div class="w-table-wrap"><table class="w-table" style="--w-mb:0;">
             <thead><tr><?php foreach (array_keys($rows[0]) as $column): ?><th><?= $escape($column) ?></th><?php endforeach; ?></tr></thead>
             <tbody><?php foreach ($rows as $row): ?><tr data-testid="<?= $isStores ? 'store-management-row' : 'sales-channel-management-row' ?>"><?php foreach (array_keys($rows[0]) as $column): ?><td><?= $escape($row[$column] ?? '') ?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody>
         </table></div></div>

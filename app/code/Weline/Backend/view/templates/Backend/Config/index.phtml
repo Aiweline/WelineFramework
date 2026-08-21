@@ -14,129 +14,81 @@ $usesDefaultLogo = trim((string)($configs['logo_dark'] ?? '')) === ''
     && trim((string)($configs['logo_sm'] ?? '')) === '';
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>外观与 Logo</lang></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>外观与 Logo</lang></h4>
         </div>
     </div>
 </div>
 
 <!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 配置表单 -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>外观与 Logo</lang></h4>
-                <p class="text-muted mb-4"><lang>配置全站 Logo 与站点图标：未填写 Logo 时默认使用与登录页一致的 W 字母黄色丝带标识；填写后前后台顶栏、登录页与浏览器标签页将统一使用此处配置。</lang></p>
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title"><lang>外观与 Logo</lang></h4>
+                <p class="w-text" data-tone="muted"><lang>配置全站 Logo 与站点图标：未填写 Logo 时默认使用与登录页一致的 W 字母黄色丝带标识；填写后前后台顶栏、登录页与浏览器标签页将统一使用此处配置。</lang></p>
                 <?php if ($usesDefaultLogo): ?>
-                    <div class="alert alert-light border d-flex align-items-center gap-3 mb-4" role="status">
-                        <img src="/Weline/Theme/view/theme/backend/assets/images/theme/logo.png"
-                             alt="<?= __('默认 Weline Logo') ?>"
-                             width="96"
-                             height="75"
-                             style="object-fit: contain;">
+                    <div class="w-alert w-cluster" role="status" data-tone="muted">
+                        <img src="/Weline/Theme/view/theme/backend/assets/images/theme/logo.png" alt="<?= __('默认 Weline Logo') ?>" width="96" height="75" style="object-fit: contain;">
                         <div>
-                            <strong class="d-block"><lang>当前使用默认 Logo</lang></strong>
-                            <span class="text-muted"><lang>未配置自定义 Logo，后台顶栏与登录页使用同一个 W 字母黄色丝带标识。</lang></span>
+                            <strong><lang>当前使用默认 Logo</lang></strong>
+                            <span class="w-text" data-tone="muted"><lang>未配置自定义 Logo，后台顶栏与登录页使用同一个 W 字母黄色丝带标识。</lang></span>
                         </div>
                     </div>
                 <?php endif; ?>
                 
                 <w:form id="configForm">
                     <!-- Logo配置 -->
-                    <div class="mb-4">
-                        <h5 class="mb-3"><lang>Logo配置</lang></h5>
+                    <div>
+                        <h5><lang>Logo配置</lang></h5>
                         
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><lang>深色Logo（大图）</lang></label>
-                                    <input type="hidden" class="form-control" id="logo_dark" name="config[logo_dark]" 
-                                           value="{{configs.logo_dark}}">
-                                    <file-manager target='#logo_dark'
-                                                  title='@lang(选择深色Logo)'
-                                                  vars='configs'
-                                                  preview="1"
-                                                  path='backend/logo/'
-                                                  value='configs.logo_dark'
-                                                  multi='0'
-                                                  ext="jpg,jpeg,png,gif,webp,svg"
-                                                  size="2048000"
-                                                  w='70'
-                                                  h='70'/>
-                                    <small class="form-text text-muted">
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;">
+                                <div>
+                                    <label class="w-field__label"><lang>深色Logo（大图）</lang></label>
+                                    <input type="hidden" class="w-input" id="logo_dark" name="config[logo_dark]" value="{{configs.logo_dark}}">
+                                    <file-manager target='#logo_dark' title='@lang(选择深色Logo)' vars='configs' preview="1" path='backend/logo/' value='configs.logo_dark' multi='0' ext="jpg,jpeg,png,gif,webp,svg" size="2048000" w='70' h='70' />
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <lang>用于深色主题的大尺寸Logo，建议高度70px</lang>
                                     </small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><lang>浅色Logo（大图）</lang></label>
-                                    <input type="hidden" class="form-control" id="logo_light" name="config[logo_light]" 
-                                           value="{{configs.logo_light}}">
-                                    <file-manager target='#logo_light'
-                                                  title='@lang(选择浅色Logo)'
-                                                  vars='configs'
-                                                  preview="1"
-                                                  path='backend/logo/'
-                                                  value='configs.logo_light'
-                                                  multi='0'
-                                                  ext="jpg,jpeg,png,gif,webp,svg"
-                                                  size="2048000"
-                                                  w='70'
-                                                  h='70'/>
-                                    <small class="form-text text-muted">
+                            <div style="--w-span-md:6;">
+                                <div>
+                                    <label class="w-field__label"><lang>浅色Logo（大图）</lang></label>
+                                    <input type="hidden" class="w-input" id="logo_light" name="config[logo_light]" value="{{configs.logo_light}}">
+                                    <file-manager target='#logo_light' title='@lang(选择浅色Logo)' vars='configs' preview="1" path='backend/logo/' value='configs.logo_light' multi='0' ext="jpg,jpeg,png,gif,webp,svg" size="2048000" w='70' h='70' />
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <lang>用于浅色主题的大尺寸Logo，建议高度70px</lang>
                                     </small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><lang>小Logo</lang></label>
-                                    <input type="hidden" class="form-control" id="logo_sm" name="config[logo_sm]" 
-                                           value="{{configs.logo_sm}}">
-                                    <file-manager target='#logo_sm'
-                                                  title='@lang(选择小Logo)'
-                                                  vars='configs'
-                                                  preview="1"
-                                                  path='backend/logo/'
-                                                  value='configs.logo_sm'
-                                                  multi='0'
-                                                  ext="jpg,jpeg,png,gif,webp,svg"
-                                                  size="2048000"
-                                                  w='50'
-                                                  h='50'/>
-                                    <small class="form-text text-muted">
+                            <div style="--w-span-md:6;">
+                                <div>
+                                    <label class="w-field__label"><lang>小Logo</lang></label>
+                                    <input type="hidden" class="w-input" id="logo_sm" name="config[logo_sm]" value="{{configs.logo_sm}}">
+                                    <file-manager target='#logo_sm' title='@lang(选择小Logo)' vars='configs' preview="1" path='backend/logo/' value='configs.logo_sm' multi='0' ext="jpg,jpeg,png,gif,webp,svg" size="2048000" w='50' h='50' />
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <lang>用于侧边栏折叠时的小尺寸Logo，建议高度50px</lang>
                                     </small>
                                 </div>
                             </div>
 
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><lang>站点图标（Favicon）</lang></label>
-                                    <input type="hidden" class="form-control" id="site_icon" name="config[site_icon]"
-                                           value="{{configs.site_icon}}">
-                                    <file-manager target='#site_icon'
-                                                  title='@lang(选择站点图标)'
-                                                  vars='configs'
-                                                  preview="1"
-                                                  path='backend/icon/'
-                                                  value='configs.site_icon'
-                                                  multi='0'
-                                                  ext="jpg,jpeg,png,gif,webp,svg,ico"
-                                                  size="1024000"
-                                                  w='128'
-                                                  h='128'/>
-                                    <small class="form-text text-muted">
+                            <div style="--w-span-md:6;">
+                                <div>
+                                    <label class="w-field__label"><lang>站点图标（Favicon）</lang></label>
+                                    <input type="hidden" class="w-input" id="site_icon" name="config[site_icon]" value="{{configs.site_icon}}">
+                                    <file-manager target='#site_icon' title='@lang(选择站点图标)' vars='configs' preview="1" path='backend/icon/' value='configs.site_icon' multi='0' ext="jpg,jpeg,png,gif,webp,svg,ico" size="1024000" w='128' h='128' />
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <lang>前后台浏览器标签页图标；留空则使用 Theme 默认 icon（与 Logo 同源）。</lang>
                                     </small>
                                 </div>
@@ -147,24 +99,15 @@ $usesDefaultLogo = trim((string)($configs['logo_dark'] ?? '')) === ''
                     <hr>
 
                     <!-- 登录页背景 -->
-                    <div class="mb-4">
-                        <h5 class="mb-3"><lang>登录页背景</lang></h5>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><lang>登录页背景图</lang></label>
-                                    <input type="hidden" class="form-control" id="login_bg" name="config[login_bg]"
-                                           value="{{configs.login_bg}}">
-                                    <file-manager target='#login_bg'
-                                                  title='@lang(选择登录页背景)'
-                                                  vars='configs'
-                                                  preview="1"
-                                                  path='backend/bg/'
-                                                  value='configs.login_bg'
-                                                  multi='0'
-                                                  ext="jpg,jpeg,png,gif,webp"
-                                                  size="5120000"/>
-                                    <small class="form-text text-muted">
+                    <div>
+                        <h5><lang>登录页背景</lang></h5>
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;">
+                                <div>
+                                    <label class="w-field__label"><lang>登录页背景图</lang></label>
+                                    <input type="hidden" class="w-input" id="login_bg" name="config[login_bg]" value="{{configs.login_bg}}">
+                                    <file-manager target='#login_bg' title='@lang(选择登录页背景)' vars='configs' preview="1" path='backend/bg/' value='configs.login_bg' multi='0' ext="jpg,jpeg,png,gif,webp" size="5120000" />
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <lang>建议尺寸 1920x1080，留空使用默认背景</lang>
                                     </small>
                                 </div>
@@ -175,26 +118,24 @@ $usesDefaultLogo = trim((string)($configs['logo_dark'] ?? '')) === ''
                     <hr>
 
                     <!-- 站点信息配置 -->
-                    <div class="mb-4">
-                        <h5 class="mb-3"><lang>站点信息</lang></h5>
+                    <div>
+                        <h5><lang>站点信息</lang></h5>
                         
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><lang>站点名称</lang></label>
-                                    <input type="text" class="form-control" name="config[site_name]" 
-                                           value="<?= htmlspecialchars($configs['site_name'] ?? '') ?>">
-                                    <small class="form-text text-muted">
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;">
+                                <div>
+                                    <label class="w-field__label"><lang>站点名称</lang></label>
+                                    <input type="text" class="w-input" name="config[site_name]" value="<?= htmlspecialchars($configs['site_name'] ?? '') ?>">
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <lang>后台管理系统的名称</lang>
                                     </small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><lang>站点描述</lang></label>
-                                    <input type="text" class="form-control" name="config[site_description]" 
-                                           value="<?= htmlspecialchars($configs['site_description'] ?? '') ?>">
-                                    <small class="form-text text-muted">
+                            <div style="--w-span-md:6;">
+                                <div>
+                                    <label class="w-field__label"><lang>站点描述</lang></label>
+                                    <input type="text" class="w-input" name="config[site_description]" value="<?= htmlspecialchars($configs['site_description'] ?? '') ?>">
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <lang>后台管理系统的描述信息</lang>
                                     </small>
                                 </div>
@@ -202,12 +143,12 @@ $usesDefaultLogo = trim((string)($configs['logo_dark'] ?? '')) === ''
                         </div>
                     </div>
 
-                    <div class="mt-4">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="mdi mdi-content-save me-2"></i><lang>保存配置</lang>
+                    <div>
+                        <button type="submit" class="w-button" data-tone="neutral">
+                            <w:icon name="save" size="sm"></w:icon><lang>保存配置</lang>
                         </button>
-                        <button type="button" class="btn btn-secondary ms-2" data-config-action="reset">
-                            <i class="mdi mdi-refresh me-2"></i><lang>重置</lang>
+                        <button type="button" class="w-button ms-2" data-config-action="reset" data-tone="neutral">
+                            <w:icon name="refresh" size="sm"></w:icon><lang>重置</lang>
                         </button>
                     </div>
                 </w:form>
@@ -270,22 +211,22 @@ $usesDefaultLogo = trim((string)($configs['logo_dark'] ?? '')) === ''
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
-                BackendToast.success(data.message);
+                Weline.UI.toast.success(data.message);
                 setTimeout(() => {
                     window.location.reload();
                 }, 1000);
             } else {
-                BackendToast.error(data.message);
+                Weline.UI.toast.error(data.message);
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            BackendToast.error('<?= __('保存失败') ?>');
+            Weline.UI.toast.error('<?= __('保存失败') ?>');
         });
     };
 
     window.resetForm = function() {
-        AdminConfirm.show('<?= __('确定要重置表单吗？') ?>').then(function(confirmed) {
+        Weline.UI.dialog.confirm('<?= __('确定要重置表单吗？') ?>').then(function(confirmed) {
             if (confirmed) {
                 document.getElementById('configForm').reset();
             }

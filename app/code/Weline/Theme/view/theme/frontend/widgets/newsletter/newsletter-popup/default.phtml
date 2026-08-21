@@ -31,10 +31,6 @@ $showOnce = (bool)($this->getData('show_once') ?? true);
 $cookieDays = (int)($this->getData('cookie_days') ?? 7);
 
 $widgetId = 'newsletter-popup-' . uniqid();
-$remixiconCssUrl = $this->fetchTagSource(
-    \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
-    'Weline_Theme::css/remixicon.css'
-);
 
 // 判断是否在编辑器预览模式（widget-preview请求）
 $isEditorPreview = $this->getData('_editor_preview') || 
@@ -42,7 +38,6 @@ $isEditorPreview = $this->getData('_editor_preview') ||
                    strpos(\w_env_request_uri(), 'widget-preview') !== false;
 ?>
 
-<link rel="stylesheet" href="<?= htmlspecialchars($remixiconCssUrl) ?>" type="text/css" data-widget-asset="newsletter-popup-icons">
 
 <div class="widget-newsletter-popup <?= $isEditorPreview ? 'editor-preview-mode' : '' ?>" 
      id="<?= $widgetId ?>"
@@ -94,7 +89,7 @@ $isEditorPreview = $this->getData('_editor_preview') ||
                 </w:form>
                 
                 <p class="popup-note">
-                    <i class="ri-shield-check-line"></i>
+                    <w:icon name="check" size="sm"></w:icon>
                     <?= __('我们不会向您发送垃圾邮件') ?>
                 </p>
             </div>

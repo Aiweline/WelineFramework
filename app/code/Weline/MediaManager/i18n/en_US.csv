@@ -16,6 +16,7 @@
 "媒体文件连接器（open/mkdir/rename/rm/upload 等）。","媒体文件连接器（open/mkdir/rename/rm/upload 等）。"
 "后台 AI 作图（服务端收集事件，禁止浏览器 EventSource）。","后台 AI 作图（服务端收集事件，禁止浏览器 EventSource）。"
 "润色 AI 作图提示词。","润色 AI 作图提示词。"
+请先登录后台,"Please log in to the backend first"
 媒体资产查询器不支持的操作：%{1},媒体资产查询器不支持的操作：%{1}
 媒体资产只读接口,媒体资产只读接口
 为可信模块读取经过路径约束的媒体图片。,为可信模块读取经过路径约束的媒体图片。
@@ -33,8 +34,10 @@
 保存成功,保存成功
 保存失败：%{1},保存失败：%{1}
 "AI 作图","AI Draw"
+image,image
 "媒体管理 AI 作图（文生图/图生图/批量）","媒体管理 AI 作图（文生图/图生图/批量）"
 "AI 作图保存","AI 作图保存"
+save,save
 "保存 AI 作图结果到媒体库","保存 AI 作图结果到媒体库"
 允许的文件类型：,"Allowed file types:"
 允许的文件大小：,"Allowed file size:"
@@ -202,4 +205,3 @@ OK,OK
 "AI 请求在确认结果前中断，无法安全重试。","AI 请求在确认结果前中断，无法安全重试。"
 本地存储,"Local Storage"
 文件管理器,"File Manager"
-请先登录后台,"Please log in to the backend first"

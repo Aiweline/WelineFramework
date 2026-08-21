@@ -29,12 +29,12 @@ $style = $this->getData('style') ?? 'icon-text';
 
 // 预设徽章配置
 $presetConfig = [
-    'secure-payment' => ['icon' => 'ri-shield-check-line', 'title' => __('安全支付'), 'description' => __('SSL加密保护')],
-    'money-back'     => ['icon' => 'ri-refund-2-line', 'title' => __('无忧退款'), 'description' => __('30天无理由退货')],
-    'free-shipping'  => ['icon' => 'ri-truck-line', 'title' => __('免费配送'), 'description' => __('满额包邮')],
-    '24-7-support'   => ['icon' => 'ri-customer-service-2-line', 'title' => __('全天候客服'), 'description' => __('7×24小时在线')],
-    'ssl-secure'     => ['icon' => 'ri-lock-line', 'title' => __('SSL安全'), 'description' => __('数据加密传输')],
-    'verified-seller'=> ['icon' => 'ri-verified-badge-line', 'title' => __('认证商家'), 'description' => __('正品保证')],
+    'secure-payment' => ['icon' => 'check', 'title' => __('安全支付'), 'description' => __('SSL加密保护')],
+    'money-back'     => ['icon' => 'circle', 'title' => __('无忧退款'), 'description' => __('30天无理由退货')],
+    'free-shipping'  => ['icon' => 'truck', 'title' => __('免费配送'), 'description' => __('满额包邮')],
+    '24-7-support'   => ['icon' => 'circle', 'title' => __('全天候客服'), 'description' => __('7×24小时在线')],
+    'ssl-secure'     => ['icon' => 'lock', 'title' => __('SSL安全'), 'description' => __('数据加密传输')],
+    'verified-seller'=> ['icon' => 'circle', 'title' => __('认证商家'), 'description' => __('正品保证')],
 ];
 
 // 合并预设和自定义徽章
@@ -58,7 +58,7 @@ $widgetId = 'trust-badges-' . uniqid();
         <?php foreach ($allBadges as $badge): ?>
             <div class="badge-item">
                 <div class="badge-icon">
-                    <i class="<?= htmlspecialchars($badge['icon'] ?? 'ri-checkbox-circle-line') ?>"></i>
+                    <i class="<?= htmlspecialchars($badge['icon'] ?? 'check') ?>"></i>
                 </div>
                 
                 <?php if ($style !== 'icon-only'): ?>

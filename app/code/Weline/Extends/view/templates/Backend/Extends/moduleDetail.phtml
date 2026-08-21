@@ -15,22 +15,22 @@ $anchor = $this->request->getParam('anchor', '');
 <div class="weline-module-detail-overview">
     <div class="weline-module-detail-header">
         <div class="weline-module-detail-icon">
-            <i class="mdi mdi-cube-outline"></i>
+            <w:icon name="box" size="sm"></w:icon>
         </div>
         <div class="weline-module-detail-info">
             <h2><?= htmlspecialchars($module) ?></h2>
             <div class="weline-module-detail-badges">
                 <?php if (!empty($moduleExtends)): ?>
-                    <span class="badge bg-info text-white"><lang>提供扩展点</lang></span>
+                    <span class="w-badge w-text" data-w-background="info" data-tone="inverse"><lang>提供扩展点</lang></span>
                 <?php endif; ?>
                 <?php if ($hasStickerExtensions): ?>
-                    <span class="badge bg-primary"><lang>被 Sticker 扩展</lang></span>
+                    <span class="w-badge" data-w-background="primary"><lang>被 Sticker 扩展</lang></span>
                 <?php endif; ?>
                 <?php if ($hasModuleExtensions): ?>
-                    <span class="badge bg-success"><lang>被模块扩展</lang></span>
+                    <span class="w-badge" data-w-background="success"><lang>被模块扩展</lang></span>
                 <?php endif; ?>
                 <?php if ($hasThemeExtensions): ?>
-                    <span class="badge bg-warning text-dark"><lang>被主题扩展</lang></span>
+                    <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><lang>被主题扩展</lang></span>
                 <?php endif; ?>
             </div>
         </div>
@@ -41,7 +41,7 @@ $anchor = $this->request->getParam('anchor', '');
 <div class="weline-module-detail-stats-grid">
     <div class="weline-module-detail-stat-card">
         <div class="weline-module-detail-stat-icon">
-            <i class="mdi mdi-puzzle"></i>
+            <w:icon name="puzzle" size="sm"></w:icon>
         </div>
         <div class="weline-module-detail-stat-content">
             <div class="weline-module-detail-stat-value"><?= count($moduleExtends['extends'] ?? []) ?></div>
@@ -50,7 +50,7 @@ $anchor = $this->request->getParam('anchor', '');
     </div>
     <div class="weline-module-detail-stat-card">
         <div class="weline-module-detail-stat-icon">
-            <i class="mdi mdi-sticker"></i>
+            <w:icon name="star" size="sm"></w:icon>
         </div>
         <div class="weline-module-detail-stat-content">
             <div class="weline-module-detail-stat-value"><?= count($stickerExtensions) ?></div>
@@ -59,7 +59,7 @@ $anchor = $this->request->getParam('anchor', '');
     </div>
     <div class="weline-module-detail-stat-card">
         <div class="weline-module-detail-stat-icon">
-            <i class="mdi mdi-cube"></i>
+            <w:icon name="box" size="sm"></w:icon>
         </div>
         <div class="weline-module-detail-stat-content">
             <div class="weline-module-detail-stat-value"><?= count($extendedBy['module_extensions'] ?? []) ?></div>
@@ -68,7 +68,7 @@ $anchor = $this->request->getParam('anchor', '');
     </div>
     <div class="weline-module-detail-stat-card">
         <div class="weline-module-detail-stat-icon">
-            <i class="mdi mdi-theme-light-dark"></i>
+            <w:icon name="circle" size="sm"></w:icon>
         </div>
         <div class="weline-module-detail-stat-content">
             <div class="weline-module-detail-stat-value"><?= count($extendedBy['theme_extensions'] ?? []) ?></div>
@@ -93,7 +93,7 @@ $anchor = $this->request->getParam('anchor', '');
     <div class="weline-module-detail-tab-content <?= empty($anchor) || $anchor !== 'sticker' ? 'active' : '' ?>" id="extends-definition">
         <?php if (empty($moduleExtends)): ?>
             <div class="weline-module-detail-empty-state">
-                <i class="mdi mdi-puzzle-outline"></i>
+                <w:icon name="puzzle" size="sm"></w:icon>
                 <h3><lang>无扩展定义</lang></h3>
                 <p><lang>该模块没有定义任何扩展点</lang>。</p>
             </div>
@@ -102,7 +102,7 @@ $anchor = $this->request->getParam('anchor', '');
                 <div class="weline-module-detail-definition-header">
                     <div class="weline-module-detail-def-type">
                         <strong><lang>扩展类型</lang>：</strong>
-                        <span class="badge bg-info text-white"><?= htmlspecialchars($moduleExtends['type'] ?? 'unknown') ?></span>
+                        <span class="w-badge w-text" data-w-background="info" data-tone="inverse"><?= htmlspecialchars($moduleExtends['type'] ?? 'unknown') ?></span>
                     </div>
                     <?php if (!empty($moduleExtends['documentation'])): ?>
                         <div class="weline-module-detail-def-doc">
@@ -123,21 +123,21 @@ $anchor = $this->request->getParam('anchor', '');
                                     $type = $pointConfig['type'] ?? '';
                                     if (is_array($type)) {
                                         foreach ($type as $t) {
-                                            echo '<span class="badge bg-secondary text-white">' . htmlspecialchars($t) . '</span>';
+                                            echo '<span class="w-badge w-text" data-w-background="muted" data-tone="inverse">' . htmlspecialchars($t) . '</span>';
                                         }
                                     } else {
-                                        echo '<span class="badge bg-secondary text-white">' . htmlspecialchars($type) . '</span>';
+                                        echo '<span class="w-badge w-text" data-w-background="muted" data-tone="inverse">' . htmlspecialchars($type) . '</span>';
                                     }
                                     ?>
                                     <?php if (($pointConfig['required'] ?? false) === true): ?>
-                                        <span class="badge bg-danger"><lang>必需</lang></span>
+                                        <span class="w-badge" data-w-background="danger"><lang>必需</lang></span>
                                     <?php else: ?>
-                                        <span class="badge bg-success"><lang>可选</lang></span>
+                                        <span class="w-badge" data-w-background="success"><lang>可选</lang></span>
                                     <?php endif; ?>
                                     <?php if (($pointConfig['multiple'] ?? false) === true): ?>
-                                        <span class="badge bg-info text-white"><lang>多实例</lang></span>
+                                        <span class="w-badge w-text" data-w-background="info" data-tone="inverse"><lang>多实例</lang></span>
                                     <?php else: ?>
-                                        <span class="badge bg-warning text-dark"><lang>单实例</lang></span>
+                                        <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><lang>单实例</lang></span>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -180,7 +180,7 @@ $anchor = $this->request->getParam('anchor', '');
         
         <?php if ($totalExtended === 0): ?>
             <div class="weline-module-detail-empty-state">
-                <i class="mdi mdi-arrow-down"></i>
+                <w:icon name="arrow-down" size="sm"></w:icon>
                 <h3><lang>没有被扩展</lang></h3>
                 <p><lang>该模块没有被其他模块扩展</lang>。</p>
             </div>
@@ -228,7 +228,7 @@ $anchor = $this->request->getParam('anchor', '');
                 
                 <?php if (empty($stickerBySource)): ?>
                     <div class="weline-module-detail-empty-state">
-                        <i class="mdi mdi-sticker"></i>
+                        <w:icon name="star" size="sm"></w:icon>
                         <h3><lang>无 Sticker 扩展</lang></h3>
                         <p><lang>该模块没有 Sticker 扩展</lang>。</p>
                     </div>
@@ -236,12 +236,12 @@ $anchor = $this->request->getParam('anchor', '');
                     <?php foreach ($stickerBySource as $sourceModule => $extensions): ?>
                         <div class="weline-module-detail-source-module">
                             <h4>
-                                <i class="mdi mdi-cube"></i>
+                                <w:icon name="box" size="sm"></w:icon>
                                 <?= htmlspecialchars($sourceModule) ?>
                                 <span class="weline-module-detail-count"><?= count($extensions) ?> <lang>个 Sticker</lang></span>
                             </h4>
                             <div class="weline-module-detail-extensions-table">
-                                <table class="table">
+                                <table class="w-table">
                                     <thead>
                                         <tr>
                                             <th><lang>目标文件</lang></th>
@@ -256,7 +256,7 @@ $anchor = $this->request->getParam('anchor', '');
                                                     <code><?= htmlspecialchars($extension['file_path'] ?? '') ?></code>
                                                 </td>
                                                 <td>
-                                                    <span class="badge bg-primary">
+                                                    <span class="w-badge" data-w-background="primary">
                                                         <?php if (($extension['sticker_type'] ?? 'unknown') === 'module'): ?>
                                                             <lang>模块级</lang>
                                                         <?php else: ?>
@@ -265,7 +265,7 @@ $anchor = $this->request->getParam('anchor', '');
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <code class="small"><?= htmlspecialchars($extension['source_file'] ?? '') ?></code>
+                                                    <code class="w-text" data-size="sm"><?= htmlspecialchars($extension['source_file'] ?? '') ?></code>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -283,7 +283,7 @@ $anchor = $this->request->getParam('anchor', '');
     <div class="weline-module-detail-tab-content" id="module-extensions">
         <?php if (empty($extendedBy['module_extensions'] ?? [])): ?>
             <div class="weline-module-detail-empty-state">
-                <i class="mdi mdi-cube"></i>
+                <w:icon name="box" size="sm"></w:icon>
                 <h3><lang>无模块扩展</lang></h3>
                 <p><lang>该模块没有被其他模块扩展</lang>。</p>
             </div>
@@ -292,12 +292,12 @@ $anchor = $this->request->getParam('anchor', '');
                 <?php foreach ($extendedBy['module_extensions'] ?? [] as $sourceModule => $extensions): ?>
                     <div class="weline-module-detail-source-module">
                         <h4>
-                            <i class="mdi mdi-cube"></i>
+                            <w:icon name="box" size="sm"></w:icon>
                             <?= htmlspecialchars($sourceModule) ?>
                             <span class="weline-module-detail-count"><?= count($extensions) ?> <lang>个扩展</lang></span>
                         </h4>
                         <div class="weline-module-detail-extensions-table">
-                            <table class="table">
+                            <table class="w-table">
                                 <thead>
                                     <tr>
                                         <th><lang>扩展文件</lang></th>
@@ -312,7 +312,7 @@ $anchor = $this->request->getParam('anchor', '');
                                                 <code><?= htmlspecialchars($extension['file_path'] ?? '') ?></code>
                                             </td>
                                             <td>
-                                                <span class="badge bg-info text-white"><?= htmlspecialchars($extension['type'] ?? 'unknown') ?></span>
+                                                <span class="w-badge w-text" data-w-background="info" data-tone="inverse"><?= htmlspecialchars($extension['type'] ?? 'unknown') ?></span>
                                             </td>
                                             <td>
                                                 <code><?= htmlspecialchars($extension['extend_point'] ?? '') ?></code>
@@ -332,7 +332,7 @@ $anchor = $this->request->getParam('anchor', '');
     <div class="weline-module-detail-tab-content" id="theme-extensions">
         <?php if (empty($extendedBy['theme_extensions'] ?? [])): ?>
             <div class="weline-module-detail-empty-state">
-                <i class="mdi mdi-theme-light-dark"></i>
+                <w:icon name="circle" size="sm"></w:icon>
                 <h3><lang>无主题扩展</lang></h3>
                 <p><lang>该模块没有被主题扩展</lang>。</p>
             </div>
@@ -341,12 +341,12 @@ $anchor = $this->request->getParam('anchor', '');
                 <?php foreach ($extendedBy['theme_extensions'] ?? [] as $sourceModule => $extensions): ?>
                     <div class="weline-module-detail-source-module">
                         <h4>
-                            <i class="mdi mdi-theme-light-dark"></i>
+                            <w:icon name="circle" size="sm"></w:icon>
                             <?= htmlspecialchars($sourceModule) ?>
                             <span class="weline-module-detail-count"><?= count($extensions) ?> <lang>个扩展</lang></span>
                         </h4>
                         <div class="weline-module-detail-extensions-table">
-                            <table class="table">
+                            <table class="w-table">
                                 <thead>
                                     <tr>
                                         <th><lang>扩展文件</lang></th>
@@ -361,7 +361,7 @@ $anchor = $this->request->getParam('anchor', '');
                                                 <code><?= htmlspecialchars($extension['file_path'] ?? '') ?></code>
                                             </td>
                                             <td>
-                                                <span class="badge bg-warning text-dark"><?= htmlspecialchars($extension['type'] ?? 'unknown') ?></span>
+                                                <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= htmlspecialchars($extension['type'] ?? 'unknown') ?></span>
                                             </td>
                                             <td>
                                                 <code><?= htmlspecialchars($extension['extend_point'] ?? '') ?></code>

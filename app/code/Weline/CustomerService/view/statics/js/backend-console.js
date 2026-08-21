@@ -28,13 +28,13 @@ const CustomerServiceConsole = (function() {
     };
 
     function notify(type, message) {
-        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
-            window.BackendToast[type](message);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') {
+            window.Weline.UI.toast[type](message);
             return;
         }
 
-        if (window.BackendToast && typeof window.BackendToast.info === 'function') {
-            window.BackendToast.info(message);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.info === 'function') {
+            window.Weline.UI.toast.info(message);
             return;
         }
 

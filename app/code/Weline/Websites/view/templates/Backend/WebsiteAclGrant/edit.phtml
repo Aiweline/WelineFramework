@@ -695,26 +695,26 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 </style>
 
 <!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>网站功能授权</lang>
             </h4>
 
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item">
                         <span>
                             <lang>网站服务</lang>
                         </span>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/backend/website-acl-grant/index')">
                             <lang>网站功能授权</lang>
                         </a>
                     </li>
-                    <li class='breadcrumb-item active'>
+                    <li class="w-breadcrumb__item" data-state="active">
                         <lang>编辑授权包</lang>
                     </li>
                 </ol>
@@ -728,16 +728,16 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 <div class="weline-acl-page">
     <!-- 顶部信息卡片 -->
     <div class="weline-acl-header">
-        <h2><i class="mdi mdi-shield-key-outline"></i> <lang>网站功能授权配置</lang></h2>
+        <h2><w:icon name="shield" size="sm"></w:icon> <lang>网站功能授权配置</lang></h2>
         <p class="weline-acl-header-subtitle"><lang>为子站设定可用菜单与 ACL 上限；进入该站后台仅能使用这些权限</lang></p>
         <div class="weline-acl-role-info">
             <span class="weline-acl-role-badge">
-                <i class="mdi mdi-web"></i>
+                <w:icon name="globe" size="sm"></w:icon>
                 <lang>目标网站</lang>: <strong>{{website.name}}</strong>
             </span>
-            <span class="weline-acl-role-arrow"><i class="mdi mdi-arrow-right"></i></span>
+            <span class="weline-acl-role-arrow"><w:icon name="arrow-right" size="sm"></w:icon></span>
             <span class="weline-acl-role-badge" style="background: rgba(255, 255, 255, 0.35);">
-                <i class="mdi mdi-identifier"></i>
+                <w:icon name="circle" size="sm"></w:icon>
                 <lang>编码</lang>: <strong>{{website.code}}</strong>
                 · ID {{website_id}}
             </span>
@@ -748,7 +748,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     <div class="weline-acl-stats-row">
         <div class="weline-acl-stat-card">
             <div class="weline-acl-stat-icon success">
-                <i class="mdi mdi-checkbox-marked-circle-outline"></i>
+                <w:icon name="check" size="sm"></w:icon>
             </div>
             <div class="weline-acl-stat-content">
                 <div class="weline-acl-stat-value" id="stat-selected"><?php echo $selectedAll; ?></div>
@@ -757,7 +757,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         </div>
         <div class="weline-acl-stat-card">
             <div class="weline-acl-stat-icon primary">
-                <i class="mdi mdi-format-list-bulleted"></i>
+                <w:icon name="list" size="sm"></w:icon>
             </div>
             <div class="weline-acl-stat-content">
                 <div class="weline-acl-stat-value"><?php echo $totalAll; ?></div>
@@ -766,7 +766,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         </div>
         <div class="weline-acl-stat-card">
             <div class="weline-acl-stat-icon info">
-                <i class="mdi mdi-folder-multiple-outline"></i>
+                <w:icon name="folder" size="sm"></w:icon>
             </div>
             <div class="weline-acl-stat-content">
                 <div class="weline-acl-stat-value"><?php echo count($statistics); ?></div>
@@ -790,10 +790,10 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
             <!-- 搜索框 -->
             <div class="weline-acl-search-box">
                 <div class="weline-acl-search-input">
-                    <i class="mdi mdi-magnify"></i>
+                    <w:icon name="search" size="sm"></w:icon>
                     <input type="text" id="acl-search" placeholder="<?php echo __('搜索权限名称、ID 或描述...'); ?>">
                     <button type="button" class="weline-acl-search-clear" id="acl-search-clear">
-                        <i class="mdi mdi-close"></i>
+                        <w:icon name="close" size="sm"></w:icon>
                     </button>
                 </div>
             </div>
@@ -840,16 +840,16 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
             <!-- 操作按钮 -->
             <div class="weline-acl-actions">
                 <button type="button" class="weline-acl-action-btn" id="acl-expand-all" title="<?php echo __('展开所有'); ?>">
-                    <i class="mdi mdi-unfold-more-horizontal"></i> <lang>展开</lang>
+                    <w:icon name="more-horizontal" size="sm"></w:icon> <lang>展开</lang>
                 </button>
                 <button type="button" class="weline-acl-action-btn" id="acl-collapse-all" title="<?php echo __('折叠所有'); ?>">
-                    <i class="mdi mdi-unfold-less-horizontal"></i> <lang>折叠</lang>
+                    <w:icon name="circle" size="sm"></w:icon> <lang>折叠</lang>
                 </button>
                 <button type="button" class="weline-acl-action-btn" id="acl-select-all" title="<?php echo __('全选'); ?>">
-                    <i class="mdi mdi-checkbox-multiple-marked"></i> <lang>全选</lang>
+                    <w:icon name="check" size="sm"></w:icon> <lang>全选</lang>
                 </button>
                 <button type="button" class="weline-acl-action-btn" id="acl-deselect-all" title="<?php echo __('清空'); ?>">
-                    <i class="mdi mdi-checkbox-multiple-blank-outline"></i> <lang>清空</lang>
+                    <w:icon name="check" size="sm"></w:icon> <lang>清空</lang>
                 </button>
             </div>
         </div>
@@ -857,22 +857,22 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 
     <!-- 搜索结果提示 -->
     <div id="acl-search-result" class="weline-acl-search-result">
-        <i class="mdi mdi-information-outline"></i>
+        <w:icon name="info" size="sm"></w:icon>
         <span id="acl-search-result-text"></span>
     </div>
 
     <!-- 双视图切换 + 标签树（D-12） -->
     <div class="weline-acl-toolbar" style="margin-bottom:12px;">
         <div class="weline-acl-actions">
-            <button type="button" class="weline-acl-action-btn active" id="acl-view-menu"><i class="mdi mdi-menu"></i> <lang>菜单维度</lang></button>
-            <button type="button" class="weline-acl-action-btn" id="acl-view-tag"><i class="mdi mdi-tag-multiple"></i> <lang>标签维度</lang></button>
+            <button type="button" class="weline-acl-action-btn active" id="acl-view-menu"><w:icon name="menu" size="sm"></w:icon> <lang>菜单维度</lang></button>
+            <button type="button" class="weline-acl-action-btn" id="acl-view-tag"><w:icon name="tag" size="sm"></w:icon> <lang>标签维度</lang></button>
         </div>
-        <p class="text-muted mb-0" style="font-size:0.85rem;"><lang>取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。</lang></p>
+        <p class="w-text" style="font-size:0.85rem;" data-tone="muted"><lang>取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。</lang></p>
     </div>
 
     <div class="weline-acl-tree-card" id="acl-tag-panel" style="display:none;margin-bottom:16px;">
         <div class="weline-acl-tree-header">
-            <span class="weline-acl-tree-title"><i class="mdi mdi-tag-multiple-outline"></i> <lang>标签权限树</lang></span>
+            <span class="weline-acl-tree-title"><w:icon name="tag" size="sm"></w:icon> <lang>标签权限树</lang></span>
             <span style="font-size: 0.85rem; color: var(--backend-color-text-secondary);">
                 <lang>勾选标签可整包授权；叶子也可单独勾选或取消</lang>
             </span>
@@ -888,7 +888,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 $tagId = 'tag:' . $path;
                 $tagAttr = " class='show_tooltip' title='" . htmlspecialchars($path, ENT_QUOTES) . "' data-node-kind='tag' data-tag-path='"
                     . htmlspecialchars($path, ENT_QUOTES) . "' data-jstree='{\"disabled\":false,\"opened\":true,\"selected\":"
-                    . ($tagSelected ? 'true' : 'false') . ",\"icon\":\"mdi mdi-tag-outline\"}' ";
+                    . ($tagSelected ? 'true' : 'false') . ",\"icon\":\"circle\"}' ";
                 echo '<li id="' . htmlspecialchars($tagId, ENT_QUOTES) . '" ' . $tagAttr . '>'
                     . htmlspecialchars($name)
                     . " <span class='weline-acl-type-badge is-tag'><lang>标签</lang></span>";
@@ -927,7 +927,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                             . "' data-module='" . htmlspecialchars($leafModule, ENT_QUOTES)
                             . "' data-type='" . htmlspecialchars($leafType, ENT_QUOTES)
                             . "' data-jstree='{\"disabled\":false,\"opened\":false,\"selected\":"
-                            . ($leafSelected ? 'true' : 'false') . ",\"icon\":\"mdi mdi-key-outline\"}' ";
+                            . ($leafSelected ? 'true' : 'false') . ",\"icon\":\"key\"}' ";
                         echo '<li id="' . htmlspecialchars($sourceId, ENT_QUOTES) . '" ' . $leafAttr . '>'
                             . htmlspecialchars($leafName)
                             . " <span class='weline-acl-type-badge is-acl'>" . htmlspecialchars($typeLabel) . '</span>'
@@ -952,7 +952,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     <div class="weline-acl-tree-card" id="acl-menu-panel">
         <div class="weline-acl-tree-header">
             <span class="weline-acl-tree-title">
-                <i class="mdi mdi-file-tree-outline"></i>
+                <w:icon name="file" size="sm"></w:icon>
                 <lang>权限列表</lang>
             </span>
             <span style="font-size: 0.85rem; color: var(--backend-color-text-secondary);">
@@ -970,23 +970,23 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 $icon = $acl->getIcon();
                 if (empty($icon)) {
                     $icon = match ($type) {
-                        'menus' => 'mdi mdi-menu',
-                        'pc' => 'mdi mdi-link-variant',
+                        'menus' => 'menu',
+                        'pc' => 'link',
                         default => ''
                     };
                 }
                 if (empty($icon)) {
                     if ($acl->getMethod()) {
                         $icon = match (strtolower($acl->getMethod())) {
-                            'get' => 'mdi mdi-eye-outline',
-                            'post' => 'mdi mdi-content-save-outline',
-                            'delete' => 'mdi mdi-delete-outline',
-                            'put' => 'mdi mdi-pencil-outline',
-                            'update' => 'mdi mdi-refresh',
-                            default => 'mdi mdi-key-outline'
+                            'get' => 'eye',
+                            'post' => 'save',
+                            'delete' => 'trash',
+                            'put' => 'edit',
+                            'update' => 'refresh',
+                            default => 'key'
                         };
                     } else {
-                        $icon = 'mdi mdi-key-outline';
+                        $icon = 'key';
                     }
                 }
                 $desc = $acl->getDocument() ? htmlspecialchars(__($acl->getDocument()), ENT_QUOTES) : '';
@@ -1078,10 +1078,10 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         <w:form action="@backend-url('*/backend/website-acl-grant/save')" id="aclForm" method="post" style="display: flex; gap: 8px;">
             <input type="hidden" name="website_id" value="{{website_id}}">
             <a href="@backend-url('*/backend/website-acl-grant/index')" class="weline-acl-action-btn">
-                <i class="mdi mdi-arrow-left"></i> <lang>返回列表</lang>
+                <w:icon name="arrow-left" size="sm"></w:icon> <lang>返回列表</lang>
             </a>
             <button type='submit' id='save_button' class='weline-acl-action-btn success'>
-                <i class="mdi mdi-content-save-outline"></i> <lang>保存授权包</lang>
+                <w:icon name="save" size="sm"></w:icon> <lang>保存授权包</lang>
             </button>
         </w:form>
     </div>
@@ -1423,7 +1423,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         });
 
         var $btn = $(this);
-        $btn.prop('disabled', true).html('<i class="mdi mdi-loading mdi-spin"></i> <?php echo __("保存中..."); ?>');
+        $btn.prop('disabled', true).html('<w:icon name="circle" size="sm"></w:icon> <?php echo __("保存中..."); ?>');
         setTimeout(function() {
             $btn.closest('form').submit();
         }, 100);
@@ -1483,8 +1483,8 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
             });
         }
         updateStatistics();
-        if (typeof BackendToast !== 'undefined') {
-            BackendToast.info('<?php echo __("已全选所有权限"); ?>');
+        if (typeof Weline.UI.toast !== 'undefined') {
+            Weline.UI.toast.info('<?php echo __("已全选所有权限"); ?>');
         }
     });
 
@@ -1505,8 +1505,8 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
             });
         }
         updateStatistics();
-        if (typeof BackendToast !== 'undefined') {
-            BackendToast.info('<?php echo __("已清空所有选择"); ?>');
+        if (typeof Weline.UI.toast !== 'undefined') {
+            Weline.UI.toast.info('<?php echo __("已清空所有选择"); ?>');
         }
     });
 
@@ -1553,8 +1553,8 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 tree.hide_node(nodeId);
             }
         });
-        if (hasFilter && typeof BackendToast !== 'undefined') {
-            BackendToast.info('<?php echo __("筛选结果"); ?>: ' + visibleCount + ' <?php echo __("个分组"); ?>');
+        if (hasFilter && typeof Weline.UI.toast !== 'undefined') {
+            Weline.UI.toast.info('<?php echo __("筛选结果"); ?>: ' + visibleCount + ' <?php echo __("个分组"); ?>');
         }
     }
 
@@ -1587,8 +1587,8 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 tree.hide_node(this.id);
             }
         });
-        if (hasFilter && typeof BackendToast !== 'undefined') {
-            BackendToast.info('<?php echo __("筛选结果"); ?>: ' + leafVisible + ' <?php echo __("项权限"); ?>');
+        if (hasFilter && typeof Weline.UI.toast !== 'undefined') {
+            Weline.UI.toast.info('<?php echo __("筛选结果"); ?>: ' + leafVisible + ' <?php echo __("项权限"); ?>');
         }
     }
 

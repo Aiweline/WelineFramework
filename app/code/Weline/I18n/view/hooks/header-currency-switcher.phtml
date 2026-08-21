@@ -231,12 +231,12 @@ $i18nChrome = static fn(string $source): string => \Weline\Theme\Helper\WidgetI1
 <div class="currency-switcher weline-choice-switcher" data-currency-switcher="true" data-weline-choice-switcher="currency" data-choice-page-size="<?= $selectorPageSize ?>" role="button" tabindex="0" aria-haspopup="menu" aria-label="<?= $escape($i18nChrome('切换货币')) ?>">
     <span class="action-line-1"><?= $escape($i18nChrome('货币')) ?></span>
     <span class="action-line-2">
-        <i class="fas fa-dollar-sign" aria-hidden="true"></i>
+        <w:icon name="circle" size="sm"></w:icon>
         <span class="current-currency"><?= $escape($displayCurrentCurrency) ?></span>
         <?php if ($currentCurrencySymbol !== ''): ?>
             <span class="current-currency-symbol"><?= $escape($currentCurrencySymbol) ?></span>
         <?php endif; ?>
-        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+        <w:icon name="chevron-down" size="sm"></w:icon>
     </span>
     <div class="currency-options weline-choice-panel" data-weline-choice-panel role="menu" aria-label="<?= $escape($i18nChrome('货币选项')) ?>">
         <div class="weline-choice-search">
@@ -263,7 +263,7 @@ $i18nChrome = static fn(string $source): string => \Weline\Theme\Helper\WidgetI1
                     <span class="weline-choice-name"><?= $escape($currencyName) ?></span>
                     <span class="weline-choice-meta"><?= $escape($currencyCode) ?></span>
                 </span>
-                <i class="fas fa-check" aria-hidden="true"></i>
+                <w:icon name="check" size="sm"></w:icon>
             </a>
         <?php endforeach; ?>
         </div>

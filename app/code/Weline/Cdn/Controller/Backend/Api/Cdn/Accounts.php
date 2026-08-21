@@ -19,7 +19,7 @@ use Weline\Framework\Acl\Acl as AclAttribute;
  * CDN 账户 API 控制器
  * 为 w:select:account 标签提供数据
  */
-#[AclAttribute('Weline_Cdn::cdn_account_api', 'CDN账户API', 'mdi-api', 'CDN账户API接口', 'Weline_Cdn::cdn_manager')]
+#[AclAttribute('Weline_Cdn::cdn_account_api', 'CDN账户API', 'code', 'CDN账户API接口', 'Weline_Cdn::cdn_manager')]
 class Accounts extends BackendController
 {
     private ProviderManager $providerManager;
@@ -33,7 +33,7 @@ class Accounts extends BackendController
     /**
      * 获取账户列表
      */
-    #[AclAttribute('Weline_Cdn::cdn_account_api_index', '获取CDN账户列表', 'mdi-view-list', '获取CDN账户列表API')]
+    #[AclAttribute('Weline_Cdn::cdn_account_api_index', '获取CDN账户列表', 'list', '获取CDN账户列表API')]
     public function index(): string
     {
         try {

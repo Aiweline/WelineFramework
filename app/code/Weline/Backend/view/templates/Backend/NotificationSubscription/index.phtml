@@ -14,56 +14,56 @@ $types = $types ?? [];
 $user_contacts = $user_contacts ?? [];
 ?>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>消息订阅</lang></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>消息订阅</lang></h4>
             <div>
-                <a href="<?= $this->getBackendUrl('*/backend/contact') ?>" class="btn btn-outline-primary">
-                    <i class="mdi mdi-account-cog me-1"></i><lang>管理联系人</lang>
+                <a href="<?= $this->getBackendUrl('*/backend/contact') ?>" class="w-button" data-tone="primary" data-variant="outline">
+                    <w:icon name="user" size="sm"></w:icon><lang>管理联系人</lang>
                 </a>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="alert alert-info weline-subscription-tip">
-                    <i class="mdi mdi-information-outline me-2"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-alert weline-subscription-tip" data-tone="info">
+                    <w:icon name="info" size="sm"></w:icon>
                     <lang>选择您希望通过哪些渠道接收不同类型的消息通知。外部渠道需要先在联系人里配置对应渠道信息。</lang>
                     <a href="<?= $this->getBackendUrl('*/backend/contact') ?>"><lang>管理联系人</lang></a>
                 </div>
 
                 <?php if (empty($topics_grouped)): ?>
-                    <div class="weline-subscription-empty text-center py-5">
-                        <i class="mdi mdi-bell-off weline-subscription-empty-icon"></i>
-                        <p class="mt-3"><lang>暂无可订阅的消息主题</lang></p>
+                    <div class="weline-subscription-empty w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                        <w:icon name="bell" size="sm"></w:icon>
+                        <p style="--w-mt:var(--weline-space-4);"><lang>暂无可订阅的消息主题</lang></p>
                     </div>
                 <?php else: ?>
                     <?php foreach ($topics_grouped as $groupName => $groupData): ?>
                         <?php $groupTopics = $groupData['topics'] ?? []; $groupDisplayName = $groupData['group_name'] ?? $groupName; ?>
-                        <div class="weline-subscription-group mb-4">
+                        <div class="weline-subscription-group" style="--w-mb:var(--weline-space-6);">
                             <h5 class="weline-subscription-group-title">
-                                <i class="mdi mdi-folder-outline me-2"></i><?= htmlspecialchars((string) $groupDisplayName) ?>
+                                <w:icon name="folder" size="sm"></w:icon><?= htmlspecialchars((string) $groupDisplayName) ?>
                             </h5>
 
-                            <div class="table-responsive">
-                                <table class="table table-bordered weline-subscription-table">
+                            <div class="w-table-wrap">
+                                <table class="w-table weline-subscription-table">
                                     <thead>
                                     <tr>
                                         <th style="width: 30%"><lang>消息主题</lang></th>
                                         <?php foreach ($channels as $channelCode => $channelInfo): ?>
-                                            <th class="text-center" style="width: <?= (70 / max(count($channels), 1)) ?>%">
-                                                <i class="mdi <?= htmlspecialchars($channelInfo['icon'] ?? 'mdi-circle', ENT_QUOTES, 'UTF-8') ?> me-1"></i><?= htmlspecialchars((string) ($channelInfo['name'] ?? $channelCode), ENT_QUOTES, 'UTF-8') ?>
+                                            <th class="w-text" style="width: <?= (70 / max(count($channels), 1)) ?>%" data-align="center">
+                                                <i class="mdi <?= htmlspecialchars($channelInfo['icon'] ?? 'circle', ENT_QUOTES, 'UTF-8') ?> me-1"></i><?= htmlspecialchars((string) ($channelInfo['name'] ?? $channelCode), ENT_QUOTES, 'UTF-8') ?>
                                                 <?php if ($channelCode !== 'backend'): ?>
                                                     <?php $hasContact = !empty($user_contacts[$channelCode]); ?>
                                                     <br>
@@ -79,14 +79,14 @@ $user_contacts = $user_contacts ?? [];
                                     <?php foreach ($groupTopics as $topic): ?>
                                         <tr>
                                             <td>
-                                                <div class="d-flex align-items-center">
+                                                <div class="w-cluster" data-align="center">
                                                     <?php if (!empty($topic['icon'])): ?>
                                                         <i class="<?= htmlspecialchars((string) $topic['icon'], ENT_QUOTES, 'UTF-8') ?> me-2" style="color: <?= htmlspecialchars((string) ($topic['color'] ?? 'inherit'), ENT_QUOTES, 'UTF-8') ?>"></i>
                                                     <?php endif; ?>
                                                     <div>
                                                         <strong><?= htmlspecialchars((string) ($topic['topic_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
                                                         <?php if (!empty($topic['description'])): ?>
-                                                            <br><small class="text-muted"><?= htmlspecialchars((string) $topic['description'], ENT_QUOTES, 'UTF-8') ?></small>
+                                                            <br><small class="w-text" data-tone="muted"><?= htmlspecialchars((string) $topic['description'], ENT_QUOTES, 'UTF-8') ?></small>
                                                         <?php endif; ?>
                                                     </div>
                                                 </div>
@@ -99,20 +99,14 @@ $user_contacts = $user_contacts ?? [];
                                                 $isEnabled = $sub ? (bool) ($sub['is_enabled'] ?? false) : false;
                                                 $minType = $sub ? (string) ($sub['min_type'] ?? 'info') : 'info';
                                                 ?>
-                                                <td class="text-center weline-subscription-cell">
-                                                    <div class="form-check form-switch d-inline-block">
-                                                        <input class="form-check-input weline-subscription-toggle"
-                                                               type="checkbox"
-                                                               <?= $isEnabled ? 'checked' : '' ?>
-                                                               data-topic="<?= htmlspecialchars($topicCode, ENT_QUOTES, 'UTF-8') ?>"
-                                                               data-channel="<?= htmlspecialchars((string) $channelCode, ENT_QUOTES, 'UTF-8') ?>">
+                                                <td class="w-text weline-subscription-cell" data-align="center">
+                                                    <div class="w-switch" data-w-display="inline-block">
+                                                        <input class="weline-subscription-toggle" type="checkbox" <?= $isEnabled ? 'checked' : '' ?>
+ data-topic="<?= htmlspecialchars($topicCode, ENT_QUOTES, 'UTF-8') ?>" data-channel="<?= htmlspecialchars((string) $channelCode, ENT_QUOTES, 'UTF-8') ?>">
                                                     </div>
                                                     <?php if ($isEnabled): ?>
-                                                        <div class="mt-1">
-                                                            <select class="form-select form-select-sm weline-subscription-min-type"
-                                                                    data-topic="<?= htmlspecialchars($topicCode, ENT_QUOTES, 'UTF-8') ?>"
-                                                                    data-channel="<?= htmlspecialchars((string) $channelCode, ENT_QUOTES, 'UTF-8') ?>"
-                                                                    style="font-size: 0.75rem; padding: 0.1rem 1.5rem 0.1rem 0.25rem;">
+                                                        <div style="--w-mt:var(--weline-space-1);">
+                                                            <select class="w-select weline-subscription-min-type" data-topic="<?= htmlspecialchars($topicCode, ENT_QUOTES, 'UTF-8') ?>" data-channel="<?= htmlspecialchars((string) $channelCode, ENT_QUOTES, 'UTF-8') ?>" style="font-size: 0.75rem; padding: 0.1rem 1.5rem 0.1rem 0.25rem;" data-size="sm">
                                                                 <?php foreach ($types as $value => $label): ?>
                                                                     <option value="<?= htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8') ?>" <?= $value === $minType ? 'selected' : '' ?>>
                                                                         <?= __('≥') ?> <?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?>
@@ -222,16 +216,16 @@ $user_contacts = $user_contacts ?? [];
             .then(function(response) {
                 var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
                 if (response.ok && data && data.success) {
-                    BackendToast.success(data.message);
+                    Weline.UI.toast.success(data.message);
                     setTimeout(function() { window.location.reload(); }, 500);
                 } else {
-                    BackendToast.error((data && data.message) || '<?= __('操作失败') ?>');
+                    Weline.UI.toast.error((data && data.message) || '<?= __('操作失败') ?>');
                     checkbox.checked = !checkbox.checked;
                 }
             })
             .catch(function(error) {
                 console.error('Error:', error);
-                BackendToast.error((error && error.message) || '<?= __('操作失败') ?>');
+                Weline.UI.toast.error((error && error.message) || '<?= __('操作失败') ?>');
                 checkbox.checked = !checkbox.checked;
             });
         },
@@ -252,14 +246,14 @@ $user_contacts = $user_contacts ?? [];
             .then(function(response) {
                 var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
                 if (response.ok && data && data.success) {
-                    BackendToast.success(data.message);
+                    Weline.UI.toast.success(data.message);
                 } else {
-                    BackendToast.error((data && data.message) || '<?= __('保存失败') ?>');
+                    Weline.UI.toast.error((data && data.message) || '<?= __('保存失败') ?>');
                 }
             })
             .catch(function(error) {
                 console.error('Error:', error);
-                BackendToast.error((error && error.message) || '<?= __('保存失败') ?>');
+                Weline.UI.toast.error((error && error.message) || '<?= __('保存失败') ?>');
             });
         }
     };

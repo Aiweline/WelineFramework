@@ -162,22 +162,22 @@
 <body data-offcanvas-result="success">
 <div class="offcanvas-result-card">
     <div class="card-header-success">
-        <div class="d-flex align-items-center justify-content-between">
+        <div class="w-cluster" data-align="center" data-justify="between">
             <h5>
-                <i class="mdi mdi-check-circle me-2"></i>
+                <w:icon name="check" size="sm"></w:icon>
                 <lang>成功提示！</lang>
             </h5>
-            <button type="button" class="btn-close" aria-label="Close"></button>
+            <button type="button" class="w-button" aria-label="Close" data-w-close="" data-tone="quiet" data-size="sm"></button>
         </div>
     </div>
 
-    <div class="card-body">
-        <i class="mdi mdi-checkbox-marked-circle-outline success-icon"></i>
+    <div class="w-card__body">
+        <w:icon name="check" size="sm"></w:icon>
         <h4 class="success-title">{{msg}}</h4>
         <?php if (!empty($this->getData('content'))): ?>
             <p class="success-content">{{content}}</p>
         <?php endif; ?>
-        <p class="countdown-text mb-0" id="countdown"></p>
+        <p class="countdown-text" id="countdown" style="--w-mb:0;"></p>
     </div>
 </div>
 <script>
@@ -186,7 +186,7 @@
         try {
             var parentBody = window.parent.document.body;
             var parentThemeMode = parentBody.getAttribute('data-theme-mode') || 
-                                 parentBody.getAttribute('data-bs-theme') || 
+                                 parentBody.getAttribute('data-theme') || 
                                  (parentBody.classList.contains('dark') ? 'dark' : 'light');
             
             // 如果父窗口是暗色模式，应用暗色样式

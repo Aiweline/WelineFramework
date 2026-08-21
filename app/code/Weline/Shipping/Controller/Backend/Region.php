@@ -20,7 +20,7 @@ use Weline\I18n\Api\Localization\CountryRepositoryInterface;
 use Weline\Shipping\Service\RegionService;
 use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
-#[Acl('Weline_Shipping::region', '地区管理', 'mdi-map-marker', '地区管理', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::region', '地区管理', 'pin', '地区管理', 'Weline_Backend::shipping_group')]
 class Region extends BackendController
 {
     public function __construct(
@@ -33,7 +33,7 @@ class Region extends BackendController
     /**
      * 地区列表（树形结构）
      */
-    #[Acl('Weline_Shipping::region_index', '查看地区', 'mdi-format-list-bulleted', '查看地区列表')]
+    #[Acl('Weline_Shipping::region_index', '查看地区', 'list', '查看地区列表')]
     public function index()
     {
         // 获取所有已安装国家列表
@@ -61,14 +61,14 @@ class Region extends BackendController
     /**
      * 地区编辑页（暂时简单保留占位，后续按需扩展）
      */
-    #[Acl('Weline_Shipping::region_edit', '编辑地区', 'mdi-pencil', '编辑地区')]
+    #[Acl('Weline_Shipping::region_edit', '编辑地区', 'edit', '编辑地区')]
     public function edit()
     {
         Message::warning(__('地区编辑功能暂未开放，请通过数据库或后续版本管理。'));
         $this->redirect('*/index');
     }
 
-    #[Acl('Weline_Shipping::region_save', '保存地区', 'mdi-content-save', '创建地区')]
+    #[Acl('Weline_Shipping::region_save', '保存地区', 'save', '创建地区')]
     public function save()
     {
         try {
@@ -84,7 +84,7 @@ class Region extends BackendController
     /**
      * 从 i18n 同步国家数据
      */
-    #[Acl('Weline_Shipping::region_sync', '同步国家数据', 'mdi-earth', '从i18n同步国家数据')]
+    #[Acl('Weline_Shipping::region_sync', '同步国家数据', 'globe', '从i18n同步国家数据')]
     public function syncFromI18n()
     {
         try {

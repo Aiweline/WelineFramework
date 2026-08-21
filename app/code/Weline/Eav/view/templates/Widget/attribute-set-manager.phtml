@@ -7,7 +7,7 @@
 
 $entity = $block->getEntity();
 if (!$entity) {
-    echo '<div class="alert alert-warning">未找到指定实体</div>';
+    echo '<div class="w-alert" data-tone="warning">未找到指定实体</div>';
     return;
 }
 
@@ -50,7 +50,7 @@ $eavSetManagerI18n = [
     <?php if ($isSelectMode): ?>
         <!-- 选择模式：下拉选择属性集 -->
         <div class="eav-set-selector">
-            <select class="form-select" name="set_id" id="<?= $widgetId ?>-select">
+            <select class="w-select" name="set_id" id="<?= $widgetId ?>-select">
                 <option value=""><?= __('请选择属性集') ?></option>
                 <?php foreach ($sets as $set): ?>
                     <option value="<?= $set['set_id'] ?>" <?= $selectedSetId == $set['set_id'] ? 'selected' : '' ?>>
@@ -65,93 +65,62 @@ $eavSetManagerI18n = [
         <div class="eav-set-manager-container">
             
             <!-- 属性集列表 -->
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">
-                        <i class="mdi mdi-folder-outline me-2"></i>
+            <div class="w-card" style="--w-mb:var(--weline-space-4);">
+                <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                    <h6 style="--w-mb:0;">
+                        <w:icon name="folder" size="sm"></w:icon>
                         <?= __('属性集') ?>
                     </h6>
-                    <button type="button"
-                            class="btn btn-sm btn-primary"
-                            data-eav-set-action="add"
-                            data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="mdi mdi-plus"></i> <?= __('新建') ?>
+                    <button type="button" class="w-button" data-eav-set-action="add" data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-size="sm">
+                        <w:icon name="plus" size="sm"></w:icon> <?= __('新建') ?>
                     </button>
                 </div>
-                <div class="eav-set-manager-notice alert mb-0" id="<?= $widgetId ?>-notice" style="display: none;" role="status" aria-live="polite"></div>
-                <div class="eav-set-create-form border-bottom p-3" id="<?= $widgetId ?>-new-set-form" style="display: none;">
-                    <label class="form-label" for="<?= $widgetId ?>-new-set-name"><?= __('属性集名称') ?></label>
-                    <div class="input-group input-group-sm">
-                        <input type="text"
-                               class="form-control"
-                               id="<?= $widgetId ?>-new-set-name"
-                               placeholder="<?= __('请输入属性集名称') ?>"
-                               autocomplete="off"
-                               data-eav-new-set-key
-                               data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
-                        <button type="button"
-                                class="btn btn-primary"
-                                data-eav-set-action="submit-new"
-                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                <div class="eav-set-manager-notice w-alert" id="<?= $widgetId ?>-notice" style="display: none;" role="status" aria-live="polite"></div>
+                <div class="eav-set-create-form" id="<?= $widgetId ?>-new-set-form" style="display: none;" data-w-border="bottom">
+                    <label class="w-field__label" for="<?= $widgetId ?>-new-set-name"><?= __('属性集名称') ?></label>
+                    <div class="w-field__control input-group-sm">
+                        <input type="text" class="w-input" id="<?= $widgetId ?>-new-set-name" placeholder="<?= __('请输入属性集名称') ?>" autocomplete="off" data-eav-new-set-key data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="button" class="w-button" data-eav-set-action="submit-new" data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary">
                             <?= __('新建') ?>
                         </button>
-                        <button type="button"
-                                class="btn btn-outline-secondary"
-                                data-eav-set-action="cancel-add"
-                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="button" class="w-button" data-eav-set-action="cancel-add" data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" data-tone="neutral" data-variant="outline">
                             <?= __('取消') ?>
                         </button>
                     </div>
-                    <div class="invalid-feedback" id="<?= $widgetId ?>-new-set-error" style="display: none;"></div>
+                    <div class="w-field__error" id="<?= $widgetId ?>-new-set-error" style="display: none;"></div>
                 </div>
-                <div class="eav-set-delete-confirm alert alert-warning justify-content-between align-items-center m-3" id="<?= $widgetId ?>-delete-confirm" style="display: none;" role="alert">
+                <div class="eav-set-delete-confirm w-alert" id="<?= $widgetId ?>-delete-confirm" style="display: none;" role="alert" data-justify="between" data-align="center" data-tone="warning">
                     <span><?= __('确定要删除此属性集吗？') ?></span>
-                    <span class="btn-group btn-group-sm">
-                        <button type="button"
-                                class="btn btn-danger"
-                                data-eav-set-action="confirm-inline-delete"
-                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                    <span class="w-button-group">
+                        <button type="button" class="w-button" data-eav-set-action="confirm-inline-delete" data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" data-tone="danger">
                             <?= __('删除') ?>
                         </button>
-                        <button type="button"
-                                class="btn btn-outline-secondary"
-                                data-eav-set-action="cancel-inline-delete"
-                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="button" class="w-button" data-eav-set-action="cancel-inline-delete" data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" data-tone="neutral" data-variant="outline">
                             <?= __('取消') ?>
                         </button>
                     </span>
                 </div>
-                <div class="card-body p-0">
+                <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                     <?php if (empty($sets)): ?>
-                        <div class="text-muted text-center py-4">
-                            <i class="mdi mdi-folder-off-outline d-block mb-2" style="font-size: 32px;"></i>
+                        <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                            <w:icon name="folder" size="sm"></w:icon>
                             <?= __('暂无属性集') ?>
                         </div>
                     <?php else: ?>
-                        <div class="list-group list-group-flush">
+                        <div class="w-list-group list-group-flush">
                             <?php foreach ($sets as $set): ?>
-                                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                                     data-set-id="<?= $set['set_id'] ?>"
-                                     data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
-                                     data-eav-set-action="select">
+                                <div class="w-list-group__item list-group-item-action w-cluster" data-set-id="<?= $set['set_id'] ?>" data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" data-eav-set-action="select" data-justify="between" data-align="center">
                                     <div>
                                         <strong><?= htmlspecialchars($set['local_name'] ?? $set['name'] ?? $set['code']) ?></strong>
                                         <br>
-                                        <small class="text-muted"><?= htmlspecialchars($set['code']) ?></small>
+                                        <small class="w-text" data-tone="muted"><?= htmlspecialchars($set['code']) ?></small>
                                     </div>
-                                    <div class="btn-group btn-group-sm">
-                                        <button type="button"
-                                                class="btn btn-outline-secondary"
-                                                data-eav-set-action="edit"
-                                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
-                                                data-set-id="<?= (int)$set['set_id'] ?>">
-                                            <i class="mdi mdi-pencil"></i>
+                                    <div class="w-button-group">
+                                        <button type="button" class="w-button" data-eav-set-action="edit" data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" data-set-id="<?= (int)$set['set_id'] ?>" data-tone="neutral" data-variant="outline">
+                                            <w:icon name="edit" size="sm"></w:icon>
                                         </button>
-                                        <button type="button" class="btn btn-outline-danger"
-                                                data-eav-set-action="delete"
-                                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
-                                                data-set-id="<?= (int)$set['set_id'] ?>">
-                                            <i class="mdi mdi-delete"></i>
+                                        <button type="button" class="w-button" data-eav-set-action="delete" data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" data-set-id="<?= (int)$set['set_id'] ?>" data-tone="danger" data-variant="outline">
+                                            <w:icon name="trash" size="sm"></w:icon>
                                         </button>
                                     </div>
                                 </div>
@@ -163,11 +132,11 @@ $eavSetManagerI18n = [
             
             <!-- 属性集详情区域 -->
             <div class="eav-set-detail" id="<?= $widgetId ?>-detail" style="display: none;">
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0" id="<?= $widgetId ?>-detail-title"><?= __('属性集详情') ?></h6>
+                <div class="w-card">
+                    <div class="w-card__header">
+                        <h6 id="<?= $widgetId ?>-detail-title" style="--w-mb:0;"><?= __('属性集详情') ?></h6>
                     </div>
-                    <div class="card-body" id="<?= $widgetId ?>-detail-content">
+                    <div class="w-card__body" id="<?= $widgetId ?>-detail-content">
                         <!-- 动态加载内容 -->
                     </div>
                 </div>
@@ -230,7 +199,7 @@ window.EavSetManager = window.EavSetManager || {
     },
 
     notify: function(widgetId, type, message) {
-        const toast = window.BackendToast || window.FrontendToast || null;
+        const toast = window.Weline.UI.toast || window.FrontendToast || null;
         const toastType = type === 'error' ? 'error' : type;
 
         if (toast && typeof toast[toastType] === 'function') {
@@ -281,7 +250,7 @@ window.EavSetManager = window.EavSetManager || {
         
         // 显示详情区域
         detailEl.style.display = 'block';
-        contentEl.innerHTML = '<div class="text-center py-3"><i class="mdi mdi-loading mdi-spin"></i> ' + this.escapeHtml(this.getText('loading')) + '</div>';
+        contentEl.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);"><w:icon name="circle" size="sm"></w:icon> ' + this.escapeHtml(this.getText('loading')) + '</div>';
         
         // 加载属性集详情
         var url = apiBase + '/set/detail?id=' + setId;
@@ -291,10 +260,10 @@ window.EavSetManager = window.EavSetManager || {
             if (data && data.success) {
                 this.renderSetDetail(widgetId, data.data);
             } else {
-                contentEl.innerHTML = '<div class="alert alert-danger">' + this.escapeHtml((data && data.message) || this.getText('loadFailed')) + '</div>';
+                contentEl.innerHTML = '<div class="w-alert" data-tone="danger">' + this.escapeHtml((data && data.message) || this.getText('loadFailed')) + '</div>';
             }
         }.bind(this)).catch(function(error) {
-            contentEl.innerHTML = '<div class="alert alert-danger">' + this.escapeHtml(this.getText('networkError') + ': ' + (error && error.message || '')) + '</div>';
+            contentEl.innerHTML = '<div class="w-alert" data-tone="danger">' + this.escapeHtml(this.getText('networkError') + ': ' + (error && error.message || '')) + '</div>';
         }.bind(this));
     },
     
@@ -306,16 +275,16 @@ window.EavSetManager = window.EavSetManager || {
         
         const setId = parseInt(setData.set_id, 10) || 0;
         let html = `
-            <div class="mb-3">
-                <label class="form-label">${this.escapeHtml(this.getText('setCode'))}</label>
-                <input type="text" class="form-control" value="${this.escapeAttr(setData.code || '')}" readonly>
+            <div style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label">${this.escapeHtml(this.getText('setCode'))}</label>
+                <input type="text" class="w-input" value="${this.escapeAttr(setData.code || '')}" readonly>
             </div>
-            <div class="mb-3">
-                <label class="form-label">${this.escapeHtml(this.getText('setName'))}</label>
-                <input type="text" class="form-control" value="${this.escapeAttr(setData.name || '')}" id="${widgetId}-set-name">
+            <div style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label">${this.escapeHtml(this.getText('setName'))}</label>
+                <input type="text" class="w-input" value="${this.escapeAttr(setData.name || '')}" id="${widgetId}-set-name">
             </div>
-            <button type="button" class="btn btn-primary" data-eav-set-action="save" data-widget-id="${this.escapeAttr(widgetId)}" data-set-id="${setId}">
-                <i class="mdi mdi-content-save me-1"></i> ${this.escapeHtml(this.getText('save'))}
+            <button type="button" class="w-button" data-eav-set-action="save" data-widget-id="${this.escapeAttr(widgetId)}" data-set-id="${setId}" data-tone="primary">
+                <w:icon name="save" size="sm"></w:icon> ${this.escapeHtml(this.getText('save'))}
             </button>
         `;
         
@@ -504,18 +473,16 @@ window.EavSetManager = window.EavSetManager || {
     },
     
     deleteSet: function(widgetId, setId) {
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            window.BackendConfirm.show(this.getText('deleteConfirm'), {
-                type: 'danger',
-                confirmText: this.getText('delete'),
-                cancelText: this.getText('cancel')
-            }).then(function(ok) {
-                if (ok) {
-                    this.doDeleteSet(widgetId, setId);
-                }
-            }.bind(this));
-            return;
-        }
+        Weline.UI.dialog.confirm(this.getText('deleteConfirm'), {
+            tone: 'danger',
+            confirmLabel: this.getText('delete'),
+            cancelLabel: this.getText('cancel')
+        }).then(function(ok) {
+            if (ok) {
+                this.doDeleteSet(widgetId, setId);
+            }
+        }.bind(this));
+        return;
 
         this.showInlineDeleteConfirm(widgetId, setId);
     }

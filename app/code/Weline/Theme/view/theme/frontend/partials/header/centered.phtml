@@ -54,7 +54,7 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
                 <w:form action="/search" method="get" class="search-form">
                     <input type="text" name="q" class="search-input" placeholder="<?= __('搜索商品...') ?>" autocomplete="off">
                     <button type="submit" class="search-button" title="<?= __('搜索') ?>">
-                        <i class="fas fa-search"></i>
+                        <w:icon name="search" size="sm"></w:icon>
                     </button>
                 </w:form>
             </div>
@@ -65,8 +65,8 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
             <nav class="header-nav-centered">
                 <ul class="nav-list">
                     <?php foreach ($navItems as $item): ?>
-                        <li class="nav-item">
-                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="nav-link">
+                        <li>
+                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
                                 <?= htmlspecialchars($item['text'] ?? '') ?>
                             </a>
                         </li>
@@ -80,7 +80,7 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
             <!-- 语言切换 Hook -->
             <div class="header-action-item" data-hook="header-language-switcher">
                 <w:hook>header-language-switcher<else/><button class="language-switcher-btn" title="<?= __('切换语言') ?>">
-                    <i class="fas fa-globe"></i>
+                    <w:icon name="globe" size="sm"></w:icon>
                     <span><?= __('语言') ?></span>
                 </button></w:hook>
             </div>
@@ -88,7 +88,7 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
             <!-- 货币切换 Hook -->
             <div class="header-action-item" data-hook="header-currency-switcher">
                 <w:hook>header-currency-switcher<else/><button class="currency-switcher-btn" title="<?= __('切换货币') ?>">
-                    <i class="fas fa-dollar-sign"></i>
+                    <w:icon name="circle" size="sm"></w:icon>
                     <span>CNY</span>
                 </button></w:hook>
             </div>
@@ -96,7 +96,7 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
             <!-- 购物车 Hook -->
             <div class="header-action-item" data-hook="header-cart">
                 <w:hook>header-cart<else/><a href="/cart" class="cart-link" title="<?= __('购物车') ?>">
-                    <i class="fas fa-shopping-cart"></i>
+                    <w:icon name="pin" size="sm"></w:icon>
                     <span class="cart-text"><?= __('购物车') ?></span>
                     <span class="cart-count">0</span>
                 </a></w:hook>

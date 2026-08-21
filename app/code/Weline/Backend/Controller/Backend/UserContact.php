@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::user_contact', '联系人管理', 'mdi-account-box', '管理用户联系人', 'Weline_Backend::notification_settings')]
+#[Acl('Weline_Backend::user_contact', '联系人管理', 'user', '管理用户联系人', 'Weline_Backend::notification_settings')]
 class UserContact extends BackendController
 {
     private UserContactService $contactService;
@@ -20,7 +20,7 @@ class UserContact extends BackendController
         $this->contactService = ObjectManager::getInstance(UserContactService::class);
     }
 
-    #[Acl('Weline_Backend::user_contact_index', '我的联系人', 'mdi-contacts', '查看我的联系人')]
+    #[Acl('Weline_Backend::user_contact_index', '我的联系人', 'circle', '查看我的联系人')]
     public function index(): string
     {
         $userId = (int) $this->session->getLoginUserId();
@@ -28,11 +28,11 @@ class UserContact extends BackendController
         $contactsGrouped = $this->contactService->getUserContactsGrouped($userId);
 
         $channels = [
-            'email' => ['name' => __('邮件'), 'icon' => 'mdi-email'],
-            'sms' => ['name' => __('短信'), 'icon' => 'mdi-cellphone'],
-            'feishu' => ['name' => __('飞书'), 'icon' => 'mdi-message'],
-            'dingtalk' => ['name' => __('钉钉'), 'icon' => 'mdi-message-text'],
-            'webhook' => ['name' => __('Webhook'), 'icon' => 'mdi-webhook'],
+            'email' => ['name' => __('邮件'), 'icon' => 'mail'],
+            'sms' => ['name' => __('短信'), 'icon' => 'phone'],
+            'feishu' => ['name' => __('飞书'), 'icon' => 'message'],
+            'dingtalk' => ['name' => __('钉钉'), 'icon' => 'message'],
+            'webhook' => ['name' => __('Webhook'), 'icon' => 'circle'],
         ];
 
         $this->assign('contacts_grouped', $contactsGrouped);
@@ -42,7 +42,7 @@ class UserContact extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Backend::user_contact_save', '保存联系人', 'mdi-content-save', '保存联系人')]
+    #[Acl('Weline_Backend::user_contact_save', '保存联系人', 'save', '保存联系人')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -75,7 +75,7 @@ class UserContact extends BackendController
         return $this->jsonError(__('保存失败，请稍后重试或联系管理员'));
     }
 
-    #[Acl('Weline_Backend::user_contact_update', '更新联系人', 'mdi-pencil', '更新联系人')]
+    #[Acl('Weline_Backend::user_contact_update', '更新联系人', 'edit', '更新联系人')]
     public function update(): string
     {
         if (!$this->request->isPost()) {
@@ -112,7 +112,7 @@ class UserContact extends BackendController
         return $this->jsonError(__('更新失败'));
     }
 
-    #[Acl('Weline_Backend::user_contact_set_default', '设为默认', 'mdi-star', '设为默认联系人')]
+    #[Acl('Weline_Backend::user_contact_set_default', '设为默认', 'star', '设为默认联系人')]
     public function setDefault(): string
     {
         if (!$this->request->isPost()) {
@@ -142,7 +142,7 @@ class UserContact extends BackendController
         return $this->jsonError(__('设置失败'));
     }
 
-    #[Acl('Weline_Backend::user_contact_delete', '删除联系人', 'mdi-delete', '删除联系人')]
+    #[Acl('Weline_Backend::user_contact_delete', '删除联系人', 'trash', '删除联系人')]
     public function delete(): string
     {
         if (!$this->request->isPost()) {

@@ -144,7 +144,7 @@ class StatusHelper
         }
         
         return sprintf(
-            '<span class="badge bg-%s">%s%s</span>',
+            '<span class="w-badge bg-%s">%s%s</span>',
             htmlspecialchars($info['class']),
             $iconHtml,
             htmlspecialchars($info['label'])

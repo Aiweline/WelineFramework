@@ -5375,11 +5375,11 @@ a.wls-meta-value:hover {
     const syncHostThemeAttributes = function (theme) {
         document.documentElement.setAttribute('data-wls-panel-theme', theme);
         document.documentElement.setAttribute('data-theme-mode', theme);
-        document.documentElement.setAttribute('data-bs-theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
         document.documentElement.style.colorScheme = theme;
         if (document.body) {
             document.body.setAttribute('data-wls-panel-theme', theme);
-            document.body.setAttribute('data-bs-theme', theme);
+            document.body.setAttribute('data-theme', theme);
             document.body.setAttribute('data-sidebar', theme);
             document.body.setAttribute('data-topbar', theme);
         }

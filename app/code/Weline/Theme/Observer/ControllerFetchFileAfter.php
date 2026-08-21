@@ -394,12 +394,15 @@ HTML;
         $apiWorkerUrl = $isDev
             ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
             : '/static/Weline/Frontend/js/weline-api-worker.js';
-        $welineScriptUrl = $isDev
-            ? '/Weline/Frontend/view/statics/js/weline.js?v=' . $themeAssetVersion
-            : '/static/Weline/Frontend/js/weline.js?v=' . $themeAssetVersion;
-        $themeScriptUrl = $isDev
-            ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=' . $themeAssetVersion
-            : '/static/Weline/Theme/theme/frontend/assets/js/theme.js?v=' . $themeAssetVersion;
+        $template = $this->getTemplateInstance();
+        $welineScriptUrl = (string)$template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+            'Weline_Frontend::js/weline.js'
+        );
+        $themeScriptUrl = (string)$template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_THEME,
+            'Weline_Theme::theme/frontend/assets/js/theme.js'
+        );
         $queryBinUrl = $this->resolveFrontendQueryBinUrl();
 
         $currentLang = $this->envString('user.lang', 'zh_Hans_CN');

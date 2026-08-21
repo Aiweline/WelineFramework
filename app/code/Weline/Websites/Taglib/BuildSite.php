@@ -75,7 +75,7 @@ class BuildSite implements TaglibInterface
             $title = __($rawTitle);
             $targetButtonText = __($rawTargetText);
             $targetButtonClass = $attributes['target-button-class'] ?? ($mode === 'edit' ? 'btn btn-sm btn-outline-info' : 'btn btn-primary');
-            $icon = $attributes['icon'] ?? ($mode === 'edit' ? 'mdi mdi-pencil' : 'mdi mdi-plus');
+            $icon = $attributes['icon'] ?? ($mode === 'edit' ? 'edit' : 'plus');
             $direction = $attributes['direction'] ?? 'right';
             $classNames = $attributes['class-names'] ?? 'w-75 h-100';
             $closeButtonShow = $attributes['close-button-show'] ?? '1';

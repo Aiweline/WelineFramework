@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\BackendController;
 #[Acl(
     'Weline_SessionManager::device_manage_self',
     '设备管理',
-    'mdi mdi-devices',
+    'circle',
     '管理当前后台管理员自己的登录设备',
     'Weline_Backend::user_permission_group',
 )]

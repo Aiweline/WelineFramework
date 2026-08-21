@@ -24,7 +24,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_warmup_manager', 'CDN预热管理', 'mdi-fire', 'CDN预热管理', 'Weline_Cdn::cdn_manager')]
+#[AclAttribute('Weline_Cdn::cdn_warmup_manager', 'CDN预热管理', 'fire', 'CDN预热管理', 'Weline_Cdn::cdn_manager')]
 class Warmup extends BackendController
 {
     /**
@@ -56,7 +56,7 @@ class Warmup extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_warmup_list', '查看预热URL列表', 'mdi-view-list', '查看预热URL列表')]
+    #[AclAttribute('Weline_Cdn::cdn_warmup_list', '查看预热URL列表', 'list', '查看预热URL列表')]
     public function index(): string
     {
         try {
@@ -140,7 +140,7 @@ class Warmup extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_warmup_statistics', '查看统计信息', 'mdi-chart-bar', '查看预热统计信息')]
+    #[AclAttribute('Weline_Cdn::cdn_warmup_statistics', '查看统计信息', 'chart', '查看预热统计信息')]
     public function statistics(): string
     {
         try {
@@ -183,7 +183,7 @@ class Warmup extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_warmup_execute', '执行预热任务', 'mdi-play', '手动触发预热任务')]
+    #[AclAttribute('Weline_Cdn::cdn_warmup_execute', '执行预热任务', 'play', '手动触发预热任务')]
     public function execute(): string
     {
         $limit = (int)$this->request->getPost('limit', 50);
@@ -209,7 +209,7 @@ class Warmup extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_warmup_toggle_enable', '启用/禁用预热', 'mdi-toggle-switch', '启用/禁用URL预热')]
+    #[AclAttribute('Weline_Cdn::cdn_warmup_toggle_enable', '启用/禁用预热', 'switch', '启用/禁用URL预热')]
     public function toggleEnable(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -254,7 +254,7 @@ class Warmup extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_warmup_delete', '删除预热URL', 'mdi-delete', '删除预热URL')]
+    #[AclAttribute('Weline_Cdn::cdn_warmup_delete', '删除预热URL', 'trash', '删除预热URL')]
     public function delete(): string
     {
         $id = (int)$this->request->getPost('id');

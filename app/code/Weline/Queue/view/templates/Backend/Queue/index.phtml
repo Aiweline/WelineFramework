@@ -5,13 +5,13 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row" data-testid="queue-list-management">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0">
+<div class="w-grid" data-testid="queue-list-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <breadcrumb model="Weline\Backend\Model\Menu" order_field="order" name_field="title"></breadcrumb>
             </h4>
-            <div class="page-title-right">
+            <div class="w-cluster">
                 <breadcrumb model='Weline\Backend\Model\Menu' order_field='order' name_field='title'></breadcrumb>
             </div>
         </div>
@@ -19,7 +19,7 @@
 </div>
 
 <!-- 消息提示 -->
-<div class="row">
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
@@ -28,21 +28,20 @@
 </div>
 
 <!-- 队列列表 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <!-- 工具栏 -->
-                <div class="weline-queue-toolbar d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <div class="weline-queue-search d-flex align-items-center flex-wrap gap-2">
-                            <w:form method="get" action="@backend-url('*/backend/queue')" class="d-flex align-items-center gap-1 mb-0">
+                <div class="weline-queue-toolbar w-cluster" data-justify="between" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                    <div class="w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                        <div class="weline-queue-search w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                            <w:form method="get" action="@backend-url('*/backend/queue')" class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);--w-mb:0;">
                                 <if condition="module"><input type="hidden" name="module" value="{{module}}"/></if>
                                 <if condition="status"><input type="hidden" name="status" value="{{status}}"/></if>
                                 <if condition="q"><input type="hidden" name="q" value="{{q}}"/></if>
-                                <input type="text" name="biz_key" class="form-control form-control-sm" style="width:200px;max-width:40vw;"
-                                       placeholder="@lang{业务键精确筛选}" value="{{biz_key}}"/>
-                                <button type="submit" class="btn btn-sm btn-outline-secondary"><lang>筛选</lang></button>
+                                <input type="text" name="biz_key" class="w-input" style="width:200px;max-width:40vw;" placeholder="@lang{业务键精确筛选}" value="{{biz_key}}" data-size="sm" />
+                                <button type="submit" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"><lang>筛选</lang></button>
                             </w:form>
                             <block class='Weline\Component\Block\Form\Search' id='queue-search'
                                    action='*/backend/queue'
@@ -52,7 +51,7 @@
                                    value=''
                                    placeholder='搜索队列名称/内容/结果'></block>
                         </div>
-                        <select id="weline-queue-status-filter" class="form-select form-select-sm" style="width: auto;">
+                        <select id="weline-queue-status-filter" class="w-select" style="width: auto;" data-size="sm">
                             <option value=""><lang>全部状态</lang></option>
                             <option value="pending" <?php if (($status ?? '') === 'pending') echo 'selected'; ?>><lang>等待中</lang></option>
                             <option value="running" <?php if (($status ?? '') === 'running') echo 'selected'; ?>><lang>运行中</lang></option>
@@ -61,16 +60,16 @@
                             <option value="stop" <?php if (($status ?? '') === 'stop') echo 'selected'; ?>><lang>已暂停</lang></option>
                         </select>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="weline-queue-batch-actions d-none">
-                            <button type="button" class="btn btn-outline-danger btn-sm" id="weline-queue-batch-delete">
-                                <i class="mdi mdi-delete me-1"></i><lang>批量删除</lang>
+                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                        <div class="weline-queue-batch-actions" hidden>
+                            <button type="button" class="w-button" id="weline-queue-batch-delete" data-tone="danger" data-variant="outline" data-size="sm">
+                                <w:icon name="trash" size="sm"></w:icon><lang>批量删除</lang>
                             </button>
-                            <button type="button" class="btn btn-outline-warning btn-sm" id="weline-queue-batch-stop">
-                                <i class="mdi mdi-pause me-1"></i><lang>批量暂停</lang>
+                            <button type="button" class="w-button" id="weline-queue-batch-stop" data-tone="warning" data-variant="outline" data-size="sm">
+                                <w:icon name="pause" size="sm"></w:icon><lang>批量暂停</lang>
                             </button>
-                            <button type="button" class="btn btn-outline-success btn-sm" id="weline-queue-batch-continue">
-                                <i class="mdi mdi-play me-1"></i><lang>批量继续</lang>
+                            <button type="button" class="w-button" id="weline-queue-batch-continue" data-tone="success" data-variant="outline" data-size="sm">
+                                <w:icon name="play" size="sm"></w:icon><lang>批量继续</lang>
                             </button>
                         </div>
                         <block class='Weline\Component\Block\OffCanvas'
@@ -80,19 +79,19 @@
                                id='create_queue_off_canvas_new'
                                action='*/backend/queue/form'
                                target-tag='button'
-                               icon='mdi mdi-plus'
+                               icon='plus'
                                submit-button-text='保存'
-                               submit-button-class='btn btn-primary'
+                               submit-tone='primary'
                                target-button-text='添加队列'
-                               target-button-class='btn btn-primary'
+                               target-tone='primary'
                                flush-button-text='刷新'
-                               flush-button-class='btn btn-default'
+                               flush-tone='neutral'
                                flush='1'
                                save='0'
                                close-button-show='1'
                                close-button-text='取消'
                                direction='right'
-                               class-names='w-75'
+                               drawer-size='lg'
                         />
                     </div>
                 </div>
@@ -115,11 +114,12 @@
        close-button-show='1'
        close-button-text='关闭'
        direction='right'
-       class-names='w-75'
+       drawer-size='lg'
        target-button-text=''
-       target-button-class='d-none weline-queue-shared-show-trigger'
+       target-hidden='1'
+       target-class='w-queue-shared-show-trigger'
        target-tag='button'
-       icon='mdi mdi-eye'
+       icon='eye'
        flush='1'
        save='0'
 />
@@ -132,11 +132,12 @@
        close-button-show='1'
        close-button-text='关闭'
        direction='right'
-       class-names='w-75'
+       drawer-size='lg'
        target-button-text=''
-       target-button-class='d-none weline-queue-shared-edit-trigger'
+       target-hidden='1'
+       target-class='w-queue-shared-edit-trigger'
        target-tag='button'
-       icon='mdi mdi-pencil'
+       icon='edit'
        flush='1'
        save='0'
 />
@@ -660,13 +661,13 @@
                 }
                 return true;
             }
-            if (options.showError && typeof BackendToast !== 'undefined') {
-                BackendToast.error((result && result.msg) || config.text.networkError);
+            if (options.showError && typeof Weline.UI.toast !== 'undefined') {
+                Weline.UI.toast.error((result && result.msg) || config.text.networkError);
             }
             return false;
         } catch (error) {
-            if (options.showError && typeof BackendToast !== 'undefined') {
-                BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
+            if (options.showError && typeof Weline.UI.toast !== 'undefined') {
+                Weline.UI.toast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
             }
             return false;
         } finally {
@@ -736,19 +737,19 @@
         var id = parseInt(String(queueId || ''), 10);
         var trigger = document.querySelector(triggerSelector);
         if (!Number.isFinite(id) || id <= 0 || !trigger) {
-            BackendToast.error(config.text.networkError);
+            Weline.UI.toast.error(config.text.networkError);
             return;
         }
         var targetSelector = trigger.getAttribute('data-bs-target') || '';
         var panel = targetSelector ? document.querySelector(targetSelector) : null;
         var iframe = panel ? panel.querySelector('iframe[data-src]') : null;
         if (!panel || !iframe) {
-            BackendToast.error(config.text.apiUnavailable);
+            Weline.UI.toast.error(config.text.apiUnavailable);
             return;
         }
         var baseSrc = iframe.getAttribute('data-queue-base-src') || iframe.getAttribute('data-src') || '';
         if (!baseSrc) {
-            BackendToast.error(config.text.apiUnavailable);
+            Weline.UI.toast.error(config.text.apiUnavailable);
             return;
         }
         iframe.setAttribute('data-queue-base-src', baseSrc);
@@ -760,45 +761,45 @@
     }
 
     function performAction(queueId, action, confirmMsg, sourceButton) {
-        BackendConfirm.show(confirmMsg, {
-            type: action === 'delete' ? 'danger' : 'warning'
+        Weline.UI.dialog.confirm(confirmMsg, {
+            tone: action === 'delete' ? 'danger' : 'warning'
         }).then(async function(confirmed) {
             if (!confirmed) return;
             var id = parseInt(String(queueId || ''), 10);
             if (!Number.isFinite(id) || id <= 0) {
-                BackendToast.error(config.text.networkError);
+                Weline.UI.toast.error(config.text.networkError);
                 return;
             }
             setButtonBusy(sourceButton, true);
             try {
                 var result = await queueAdminCall('action', { queue_id: id, action: action });
                 if (result && result.success) {
-                    BackendToast.success(result.msg);
+                    Weline.UI.toast.success(result.msg);
                     requestQueueMutationRefresh(action === 'delete' ? 350 : config.actionRefreshDelayMs);
                 } else {
-                    BackendToast.error((result && result.msg) || config.text.networkError);
+                    Weline.UI.toast.error((result && result.msg) || config.text.networkError);
                 }
             } catch (error) {
-                BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
+                Weline.UI.toast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
             } finally {
                 setButtonBusy(sourceButton, false);
             }
         }).catch(function(error) {
-            BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
+            Weline.UI.toast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
         });
     }
 
     function performBatchAction(action, confirmMsg) {
         var ids = getSelectedIds();
         if (ids.length === 0) {
-            BackendToast.warning(config.text.selectRequired);
+            Weline.UI.toast.warning(config.text.selectRequired);
             return;
         }
 
         var msg = confirmMsg.replace('__QUEUE_COUNT__', String(ids.length));
 
-        BackendConfirm.show(msg, {
-            type: action === 'delete' ? 'danger' : 'warning'
+        Weline.UI.dialog.confirm(msg, {
+            tone: action === 'delete' ? 'danger' : 'warning'
         }).then(async function(confirmed) {
             if (!confirmed) return;
             var queueIds = ids.map(function(id) {
@@ -807,30 +808,30 @@
                 return Number.isFinite(id) && id > 0;
             });
             if (queueIds.length === 0) {
-                BackendToast.warning(config.text.selectRequired);
+                Weline.UI.toast.warning(config.text.selectRequired);
                 return;
             }
-            BackendToast.info('<?= addslashes(__("正在执行批量操作...")) ?>');
+            Weline.UI.toast.info('<?= addslashes(__("正在执行批量操作...")) ?>');
             setBatchButtonsBusy(true);
             try {
                 var result = await queueAdminCall('batchAction', { queue_ids: queueIds, action: action });
                 if (result && result.partial) {
-                    BackendToast.warning(result.msg || config.text.networkError);
+                    Weline.UI.toast.warning(result.msg || config.text.networkError);
                 } else if (result && result.success) {
-                    BackendToast.success(result.msg);
+                    Weline.UI.toast.success(result.msg);
                 } else {
-                    BackendToast.error((result && result.msg) || config.text.networkError);
+                    Weline.UI.toast.error((result && result.msg) || config.text.networkError);
                 }
                 if (result && Number(result.success_count || 0) > 0) {
                     requestQueueMutationRefresh(config.actionRefreshDelayMs);
                 }
             } catch (error) {
-                BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
+                Weline.UI.toast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
             } finally {
                 setBatchButtonsBusy(false);
             }
         }).catch(function(error) {
-            BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
+            Weline.UI.toast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
         });
     }
 
@@ -843,13 +844,13 @@
 
         var text = content.innerText || content.textContent || '';
         var notifySuccess = function() {
-            if (typeof BackendToast !== 'undefined') {
-                BackendToast.success(config.text.resultCopied);
+            if (typeof Weline.UI.toast !== 'undefined') {
+                Weline.UI.toast.success(config.text.resultCopied);
             }
         };
         var notifyError = function() {
-            if (typeof BackendToast !== 'undefined') {
-                BackendToast.error(config.text.resultCopyFailed);
+            if (typeof Weline.UI.toast !== 'undefined') {
+                Weline.UI.toast.error(config.text.resultCopyFailed);
             }
         };
 
@@ -899,11 +900,11 @@
                 return;
             }
             modal.dataset.portalBound = '1';
-            modal.addEventListener('show.bs.modal', function() {
+            modal.addEventListener('weline:ui:dialog:before-open', function() {
                 setTimeout(markQueueResultBackdrop, 0);
             });
-            modal.addEventListener('shown.bs.modal', markQueueResultBackdrop);
-            modal.addEventListener('hidden.bs.modal', function() {
+            modal.addEventListener('weline:ui:dialog:open', markQueueResultBackdrop);
+            modal.addEventListener('weline:ui:dialog:close', function() {
                 document.querySelectorAll('.modal-backdrop.weline-queue-result-backdrop').forEach(function(backdrop) {
                     if (!document.querySelector('.weline-queue-result-modal.show')) {
                         backdrop.classList.remove('weline-queue-result-backdrop');
@@ -959,14 +960,14 @@
             var showBtn = target.closest('.weline-queue-show-btn');
             if (showBtn) {
                 event.preventDefault();
-                openQueueOffcanvas('.weline-queue-shared-show-trigger', showBtn.dataset.queueId);
+                openQueueOffcanvas('.w-queue-shared-show-trigger', showBtn.dataset.queueId);
                 return;
             }
 
             var editBtn = target.closest('.weline-queue-edit-btn');
             if (editBtn) {
                 event.preventDefault();
-                openQueueOffcanvas('.weline-queue-shared-edit-trigger', editBtn.dataset.queueId);
+                openQueueOffcanvas('.w-queue-shared-edit-trigger', editBtn.dataset.queueId);
                 return;
             }
 

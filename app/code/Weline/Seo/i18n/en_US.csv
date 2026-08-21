@@ -122,10 +122,13 @@ SEO主体列表,"SEO subject list"
 无效的主体ID,"Invalid Subject ID"
 AI建议生成成功,"AI suggestion generated successfully"
 生成建议失败：%{1},"Suggestion generation failed: %{1}"
+grid,grid
 查看SEO总览,查看SEO总览
 查看主体详情,查看主体详情
+file,file
 查看主体SEO详情,查看主体SEO详情
 刷新AI建议,刷新AI建议
+refresh,refresh
 "AI 优化控制台","AI Optimization Console"
 AI优化控制台,AI优化控制台
 查看AI优化控制台,查看AI优化控制台
@@ -162,6 +165,7 @@ SEO主体管理,"SEO Subject Management"
 商品,Product
 站点,Website
 SEO嵌入式管理,SEO嵌入式管理
+circle,circle
 SEO嵌入式管理界面,SEO嵌入式管理界面
 查看嵌入式SEO管理,查看嵌入式SEO管理
 查看嵌入式SEO管理界面,查看嵌入式SEO管理界面
@@ -169,7 +173,9 @@ SEO嵌入式管理界面,SEO嵌入式管理界面
 查看嵌入式SEO主体详情,查看嵌入式SEO主体详情
 刷新嵌入式AI建议,刷新嵌入式AI建议
 保存嵌入式SEO主体,保存嵌入式SEO主体
+save,save
 删除嵌入式SEO主体,删除嵌入式SEO主体
+trash,trash
 加载Sitemap管理失败：%{1},"Failed to load Sitemap management: %{1}"
 生成Sitemap失败：%{1},"Failed to generate Sitemap: %{1}"
 生成失败：%{1},"Generation failed: %{1}"
@@ -682,9 +688,6 @@ Scope,Scope
 "2. 运行 Sitemap 生成或等待定时任务生成平台目录","2. Run Sitemap generation or wait for the scheduled task to generate the platform directory"
 "3. 将 %{1} 提交到对应站长平台","3. Submit %{1} to the corresponding webmaster platform"
 "4. 保持 robots.txt 中的 Sitemap 入口可访问","4. Keep the Sitemap entry in robots.txt accessible"
-成功,Success
-错误,Error
-提示,Prompt
 确认操作,"Confirm operation"
 确定,Confirm
 "SEO 自动优化分析队列","SEO 自动优化分析队列"
@@ -857,6 +860,9 @@ Canonical,Canonical
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","Please go to ""SEO Management > Sitemap Management"" or ""Site Management"" to bind the SEO account."
 SEO账户配置,"SEO Account Configuration"
 """SEO subject created""","SEO subject created"
+成功,Success
+错误,Error
+提示,Prompt
 暂无访客事件,"No visitor events yet"
 "写入隔离的 SEO Search 验收证据。","Write isolated SEO Search acceptance evidence."
 "按回执精确清理 SEO Search 验收证据。","Clean up SEO Search acceptance evidence by receipt."

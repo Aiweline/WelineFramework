@@ -5,35 +5,35 @@
     
     <!-- 开发工具 - 归入开发者 > 开发工作台 -->
     <menu source="Weline_DeveloperWorkspace::dev-tool" name="dev-tool" title="开发工具" action="dev/tool/admin"
-         parent="Weline_Backend::dev_workspace" icon="mdi mdi-tools" order="10">
+         parent="Weline_Backend::dev_workspace" icon="settings" order="10">
         <menu source="Weline_DeveloperWorkspace::dev-tool-sandbox" name="dev-tool-sandbox" title="测试沙盒" action="dev/tool/admin/sandbox"
-             icon="mdi mdi-code-tags-check" order="10"/>
+             icon="check" order="10"/>
     </menu>
     
     <!-- 开发文档 -->
     <menu source="Weline_DeveloperWorkspace::dev-document-manager" name="dev-document-manager" title="开发文档" action="dev/tool/admin/document"
-         parent="Weline_Backend::dev_workspace" icon="mdi mdi-file-document-multiple-outline" order="20">
+         parent="Weline_Backend::dev_workspace" icon="file" order="20">
         <menu source="Weline_DeveloperWorkspace::dev-document-catalog" name="dev-document-catalog" title="分类管理" action="dev/tool/admin/document/catalog"
-             icon="mdi mdi-sitemap-outline" order="10"/>
+             icon="tree" order="10"/>
         <menu source="Weline_DeveloperWorkspace::dev-document-list" name="dev-document-list" title="文档管理" action="dev/tool/admin/document"
-             icon="mdi mdi-file-document-outline" order="20"/>
+             icon="file" order="20"/>
         <menu source="Weline_DeveloperWorkspace::document_config" name="document_config" title="文档管理配置" action="dev/tool/admin/document/config"
-             icon="mdi mdi-translate" order="30"/>
+             icon="language" order="30"/>
         <menu source="Weline_DeveloperWorkspace::dev-document-frontend" name="dev-document-frontend" title="前端预览" action="dev/tool/docs" is_backend="0"
-             icon="mdi mdi-open-in-new" order="40"/>
+             icon="circle" order="40"/>
     </menu>
     
     <!-- 调试工具 - 归入开发者 > 调试工具 -->
     <menu source="Weline_DeveloperWorkspace::sandbox_config" name="sandbox_config" title="沙盒配置" action="dev/backend/sandbox-config"
-         parent="Weline_Backend::debug_tools" icon="mdi mdi-test-tube" order="10"/>
+         parent="Weline_Backend::debug_tools" icon="beaker" order="10"/>
     
     <menu source="Weline_DeveloperWorkspace::debug_config" name="debug_config" title="Debug配置" action="dev/backend/debug-config"
-         parent="Weline_Backend::debug_tools" icon="mdi mdi-bug-outline" order="20"/>
+         parent="Weline_Backend::debug_tools" icon="circle" order="20"/>
     
     <menu source="Weline_DeveloperWorkspace::panel_config" name="panel_config" title="面板配置" action="dev/backend/panel-config"
-         parent="Weline_Backend::debug_tools" icon="mdi mdi-view-dashboard-outline" order="30"/>
+         parent="Weline_Backend::debug_tools" icon="grid" order="30"/>
 
     <menu source="Weline_DeveloperWorkspace::dev-sandbox-manager" name="async_event_probe" title="异步资源变更验收台"
           action="dev/tool/admin/sandbox" parent="Weline_Backend::debug_tools"
-          icon="mdi mdi-transit-connection-variant" order="40"/>
+          icon="circle" order="40"/>
 </menus>

@@ -254,7 +254,7 @@ console.log(Weline.Theme.getPreference(), Weline.Theme.getCurrent());
 #### 三态颜色模式契约
 
 - `getPreference()` 返回保存的 `system|light|dark` 偏好；`getCurrent()` 始终返回实际 `light|dark`。
-- 每次切换会更新 `data-theme-preference`、`data-theme`、`data-bs-theme` 和 `color-scheme`；`themechange` 的 `detail.theme` 是实际模式，`detail.preference` 是用户偏好。
+- 每次切换会更新 `data-theme-preference`、`data-theme`、`data-theme` 和 `color-scheme`；`themechange` 的 `detail.theme` 是实际模式，`detail.preference` 是用户偏好。
 - 前台 localStorage key 固定为 `weline-theme`。缺失或不可读时按 `system` 运行；仅 system 会监听 `prefers-color-scheme` 变化。
 - `[data-weline-theme-mode="system|light|dark"]` 是声明式三态控件；`[data-theme-toggle]` 保持为显式亮/暗快捷切换。
 

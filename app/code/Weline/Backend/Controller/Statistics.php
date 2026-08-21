@@ -15,7 +15,7 @@ use Weline\Framework\Manager\Message;
  * - 整合各模块统计数据
  * - 数据可视化展示
  */
-#[Acl('Weline_Backend::data_statistics', '数据统计', 'mdi-chart-bar', '数据统计', 'Weline_Backend::data_tools_group')]
+#[Acl('Weline_Backend::data_statistics', '数据统计', 'chart', '数据统计', 'Weline_Backend::data_tools_group')]
 class Statistics extends BackendController
 {
     /**
@@ -23,7 +23,7 @@ class Statistics extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::data_statistics_index', '查看数据统计', 'mdi-chart-bar', '查看数据统计')]
+    #[Acl('Weline_Backend::data_statistics_index', '查看数据统计', 'chart', '查看数据统计')]
     public function index(): string
     {
         try {

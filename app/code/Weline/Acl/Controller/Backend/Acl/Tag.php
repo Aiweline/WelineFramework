@@ -11,7 +11,7 @@ use Weline\Acl\Service\Resource\AclResourcePresentation;
 use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Manager\ObjectManager;
 
-#[\Weline\Framework\Acl\Acl('Weline_Acl::acl_tag', 'ACL标签管理', 'mdi mdi-tag-multiple', '管理 ACL source_id 标签元数据')]
+#[\Weline\Framework\Acl\Acl('Weline_Acl::acl_tag', 'ACL标签管理', 'tag', '管理 ACL source_id 标签元数据')]
 class Tag extends BackendPageController
 {
     #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_tag_index', '标签列表', '', '')]

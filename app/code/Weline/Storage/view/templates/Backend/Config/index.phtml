@@ -18,16 +18,16 @@ $confirmMessages = [
 ?>
 <w:backend:card>
     <w:slot:header>
-        <div class="d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><?= __('存储配置') ?></h5>
-            <a href="<?= $this->getUrl('storage/backend/config/add') ?>" class="btn btn-primary btn-sm">
-                <i class="bi bi-plus-lg"></i> <?= __('新增配置') ?>
+        <div class="w-cluster" data-justify="between" data-align="center">
+            <h5 style="--w-mb:0;"><?= __('存储配置') ?></h5>
+            <a href="<?= $this->getUrl('storage/backend/config/add') ?>" class="w-button" data-tone="primary" data-size="sm">
+                <w:icon name="plus" size="sm"></w:icon> <?= __('新增配置') ?>
             </a>
         </div>
     </w:slot:header>
     <w:slot:body>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
+        <div class="w-table-wrap">
+            <table class="w-table" data-w-vertical="middle">
                 <thead>
                     <tr>
                         <th><?= __('ID') ?></th>
@@ -43,7 +43,7 @@ $confirmMessages = [
                 <tbody>
                     <?php if (empty($configs)): ?>
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-4">
+                        <td colspan="8" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
                             <?= __('暂无存储配置') ?>
                         </td>
                     </tr>
@@ -54,32 +54,32 @@ $confirmMessages = [
                         <td><code><?= htmlspecialchars($config['name']) ?></code></td>
                         <td><?= htmlspecialchars($config['display_name'] ?? $config['name']) ?></td>
                         <td>
-                            <span class="badge bg-secondary"><?= $drivers[$config['driver']] ?? $config['driver'] ?></span>
+                            <span class="w-badge" data-w-background="muted"><?= $drivers[$config['driver']] ?? $config['driver'] ?></span>
                         </td>
                         <td>
                             <?php if ($config['is_default']): ?>
-                            <span class="badge bg-success"><?= __('是') ?></span>
+                            <span class="w-badge" data-w-background="success"><?= __('是') ?></span>
                             <?php else: ?>
-                            <button type="button" class="btn btn-link btn-sm p-0 btn-set-default" data-id="<?= $config['config_id'] ?>">
+                            <button type="button" class="w-button btn-set-default" data-id="<?= $config['config_id'] ?>" data-tone="quiet" data-size="sm" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                                 <?= __('设为默认') ?>
                             </button>
                             <?php endif; ?>
                         </td>
                         <td>
                             <?php if ($config['status']): ?>
-                            <span class="badge bg-success"><?= __('启用') ?></span>
+                            <span class="w-badge" data-w-background="success"><?= __('启用') ?></span>
                             <?php else: ?>
-                            <span class="badge bg-danger"><?= __('禁用') ?></span>
+                            <span class="w-badge" data-w-background="danger"><?= __('禁用') ?></span>
                             <?php endif; ?>
                         </td>
                         <td><?= $config['created_at'] ?? '-' ?></td>
                         <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="<?= $this->getUrl('storage/backend/config/edit', ['id' => $config['config_id']]) ?>" class="btn btn-outline-primary" title="<?= __('编辑') ?>">
-                                    <i class="bi bi-pencil"></i>
+                            <div class="w-button-group">
+                                <a href="<?= $this->getUrl('storage/backend/config/edit', ['id' => $config['config_id']]) ?>" class="w-button" title="<?= __('编辑') ?>" data-tone="primary" data-variant="outline">
+                                    <w:icon name="edit" size="sm"></w:icon>
                                 </a>
-                                <button type="button" class="btn btn-outline-danger btn-delete" data-id="<?= $config['config_id'] ?>" title="<?= __('删除') ?>">
-                                    <i class="bi bi-trash"></i>
+                                <button type="button" class="w-button btn-delete" data-id="<?= $config['config_id'] ?>" title="<?= __('删除') ?>" data-tone="danger" data-variant="outline">
+                                    <w:icon name="trash" size="sm"></w:icon>
                                 </button>
                             </div>
                         </td>
@@ -122,7 +122,6 @@ $confirmMessages = [
 })(window);
 </script>
 <script type="module">
-import { BackendToast } from '<?= $this->getStaticUrl('Weline_Admin/js/admin-toast.js') ?>';
 
 const storageMessages = <?= json_encode($confirmMessages, $dialogJsonFlags) ?>;
 
@@ -187,20 +186,16 @@ function showLocalChoice(message) {
 }
 
 function showStorageChoice(message) {
-    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
-        return Swal.fire({
-            icon: 'warning',
-            title: storageMessages.confirmTitle,
-            text: message,
-            showCancelButton: true,
-            confirmButtonText: storageMessages.confirmButton,
-            cancelButtonText: storageMessages.cancelButton
-        }).then(function(result) {
-            return !!(result && result.isConfirmed);
-        });
-    }
-
-    return showLocalChoice(message);
+    return Weline.UI.dialog.request({
+        tone: 'warning',
+        title: storageMessages.confirmTitle,
+        message: message,
+        cancelable: true,
+        confirmLabel: storageMessages.confirmButton,
+        cancelLabel: storageMessages.cancelButton
+    }).then(function(result) {
+        return !!(result && result.confirmed);
+    });
 }
 
 document.querySelectorAll('.btn-delete').forEach(btn => {
@@ -218,13 +213,13 @@ document.querySelectorAll('.btn-delete').forEach(btn => {
             var data = (res && res.data) !== undefined ? res.data : res;
             
             if (data.code === 200) {
-                BackendToast.success(data.msg);
+                Weline.UI.toast.success(data.msg);
                 this.closest('tr').remove();
             } else {
-                BackendToast.error(data.msg);
+                Weline.UI.toast.error(data.msg);
             }
         } catch (e) {
-            BackendToast.error('<?= __('操作失败') ?>');
+            Weline.UI.toast.error('<?= __('操作失败') ?>');
         }
     });
 });
@@ -239,13 +234,13 @@ document.querySelectorAll('.btn-set-default').forEach(btn => {
             var data = (res && res.data) !== undefined ? res.data : res;
             
             if (data.code === 200) {
-                BackendToast.success(data.msg);
+                Weline.UI.toast.success(data.msg);
                 location.reload();
             } else {
-                BackendToast.error(data.msg);
+                Weline.UI.toast.error(data.msg);
             }
         } catch (e) {
-            BackendToast.error('<?= __('操作失败') ?>');
+            Weline.UI.toast.error('<?= __('操作失败') ?>');
         }
     });
 });
