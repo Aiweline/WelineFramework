@@ -53,6 +53,18 @@ RUN_COMPOSER_INSTALL='0'
 # 项目生产环境常用 no-dev 和 optimize-autoloader；如需 PHP 路径请写完整命令。
 COMPOSER_COMMAND='composer install --no-dev --prefer-dist --optimize-autoloader'
 
+# 拉代码前是否开启维护模式（默认 1）。
+# 1：git fetch/reset 前执行 maintenance:enable；POST_DEPLOY 的 s:up 结束后会关闭。
+# 0：不在拉代码前开维护（不推荐生产）。
+DEPLOY_ENABLE_MAINTENANCE='1'
+
+# 可选：拉代码前额外命令（在维护开启之后、git 更新之前）。
+PRE_DEPLOY_COMMAND=''
+
+# 可选：指定 PHP / Weline 根；默认自动探测 extend/server/php 与 DEPLOY_ROOT/weline。
+# DEPLOY_PHP='/path/to/php'
+# DEPLOY_WELINE_ROOT='/path/to/weline'
+
 # 部署成功后执行的额外命令。留空表示不执行。
 # 示例：POST_DEPLOY_COMMAND='php bin/w setup:upgrade --route && php bin/w server:reload -r'
 POST_DEPLOY_COMMAND=''
