@@ -164,6 +164,8 @@
 - 主题 token 使用：
   - 前端：`--weline-theme-*`
   - 后端：`--backend-theme-*`
+- **跨区组件必须按区域切换 token**：同一套 UI 若同时出现在前台与后台，须用明确 area 属性切换，并在组件根上强制标题/正文颜色；禁止在后台页面误用 `--weline-theme-*`（未注入时会回退成浅色底，再叠加 `bootstrap-dark` 的浅色 `h1–h6`，出现白底白字）
+- 后台模块页优先复用 Admin 壳：`page-title-box` + `card`/`card-body`
 - 组件变量应引用主题 token，不要重新发明第二套不兼容变量体系
 
 推荐：

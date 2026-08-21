@@ -17,6 +17,7 @@ description: Build reusable Weline blocks, Taglibs, widgets, DataTables, storefr
 - Choose the correct Block, Widget, Taglib, Hook, slot, partial, or page assembly boundary; do not replace a registered protocol with raw HTML.
 - Reuse official Taglibs. When adding one, follow `dev/ai/skills/framework-taglib-catalog/tag-development.md` and update `dev/ai/skills/framework-taglib-catalog/tag-catalog.md`.
 - Scope CSS and JS to the component root and use the Theme/weline-api worker path for business requests.
+- When a reusable surface ships in both frontend and backend, bind colors to area tokens (`--weline-theme-*` vs `--backend-theme-*`) and force headings/buttons to use the component text token. Do not rely on inherited `body`/`h1–h6` colors alone.
 - Trace Hook/Taglib output through the real host and registration metadata rather than inferring from surrounding chrome.
 - Storefront `<section>` and `w:slot wrapper="section"` hosts must carry a non-empty semantic `weline-code`.
 
