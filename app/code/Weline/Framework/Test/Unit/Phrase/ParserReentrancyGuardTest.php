@@ -65,6 +65,21 @@ final class ParserReentrancyGuardTest extends TestCase
         self::assertStringNotContainsString('self::resolveRequestModules()', $entry);
     }
 
+    public function testProcessWordsChecksTheReentrancyFenceBeforePersistentLookup(): void
+    {
+        $source = file_get_contents((new \ReflectionClass(Parser::class))->getFileName());
+        self::assertIsString($source);
+        $methodStart = strpos($source, 'protected static function processWords(string $words): string');
+        $nextMethod = strpos($source, 'public static function getUsedWords(): array', $methodStart ?: 0);
+        self::assertIsInt($methodStart);
+        self::assertIsInt($nextMethod);
+
+        $entry = substr($source, $methodStart, $nextMethod - $methodStart);
+        self::assertStringContainsString('self::translationResolutionDepth() > 0', $entry);
+        self::assertStringContainsString('self::enterTranslationResolution()', $entry);
+        self::assertStringContainsString('self::leaveTranslationResolution()', $entry);
+    }
+
     private function setCliGuardDepth(int $depth): void
     {
         $property = new ReflectionProperty(Parser::class, 'translationResolutionDepth');
