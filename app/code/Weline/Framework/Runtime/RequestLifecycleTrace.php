@@ -179,12 +179,30 @@ class RequestLifecycleTrace
 
     /**
      * 是否启用（DEV 或 DEBUG 时启用，便于开发环境与调试时查看请求链路）
+     *
+     * WLS Master / Dispatcher / Session / Memory 等控制面没有请求级 reset。
+     * 无活跃 RequestContext 时必须保持关闭（且不写入 enabledCache），否则 DEBUG=true
+     * 时会在 Master 上无限累积 span 直至 OOM。Worker 进入请求并初始化 RequestContext
+     * 后再按 DEV/DEBUG / 显式开关决定。
      */
     public static function isEnabled(): bool
     {
         $state = self::state();
         if ($state->enabledCache !== null) {
             return $state->enabledCache;
+        }
+
+        $hasActiveRequestContext = \class_exists(RequestContext::class, false)
+            && RequestContext::isInitialized();
+
+        // Persistent control-plane / pre-request: never enable. Do not cache —
+        // Workers still need to enable after RequestContext becomes ready.
+        // Treat "RequestContext class not loaded" as no active request (Master).
+        if (\class_exists(Runtime::class, false)
+            && Runtime::isPersistent()
+            && !$hasActiveRequestContext
+        ) {
+            return false;
         }
 
         $enabled = false;
@@ -196,6 +214,8 @@ class RequestLifecycleTrace
             $enabled = true;
         } elseif (\defined('WLS_DEV_MODE') && WLS_DEV_MODE) {
             $enabled = true;
+        } elseif (self::isEnvRequestTraceEnabled()) {
+            $enabled = true;
         }
 
         if (!$enabled) {
@@ -203,18 +223,7 @@ class RequestLifecycleTrace
             return false;
         }
 
-
-        // Master / Dispatcher / Session / Memory 等常驻进程不会进入请求级 init/cleanup，
-        // 若在这些进程继续启用 trace，spans 会永久累积。
         if (\class_exists(RequestContext::class, false) && !RequestContext::isInitialized()) {
-            return false;
-        }
-
-        if (\class_exists(Runtime::class, false)
-            && Runtime::isPersistent()
-            && !self::isPersistentRequestTraceAllowed()
-        ) {
-            $state->enabledCache = false;
             return false;
         }
 
@@ -227,24 +236,17 @@ class RequestLifecycleTrace
         return true;
     }
 
-    private static function isPersistentRequestTraceAllowed(): bool
+    /**
+     * Explicit production opt-in only. DEBUG / developer panel injection must not
+     * open control-plane-wide request tracing.
+     */
+    private static function isEnvRequestTraceEnabled(): bool
     {
         if (!\class_exists(\Weline\Framework\App\Env::class, false)) {
-            return self::isExplicitPersistentTraceRequested();
+            return false;
         }
 
-        $panelEnabled = (\defined('DEV') && DEV)
-            || (\defined('DEBUG') && DEBUG)
-            || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE);
-        try {
-            $panelEnabled = \Weline\Framework\Manager\ObjectManager::getInstance(
-                DeveloperAccessPolicy::class
-            )->shouldInjectBootstrap();
-        } catch (\Throwable) {
-        }
-
-        return self::isExplicitPersistentTraceRequested()
-            || (bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', $panelEnabled);
+        return (bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', false);
     }
 
     private static function isExplicitPersistentTraceRequested(): bool
