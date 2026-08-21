@@ -212,11 +212,23 @@ record(
     $results,
     $failed,
     'RM-10.2-07',
-    '发布失败自动回滚（auto_rollback + restoreLocalCommit）',
+    '发布失败自动回滚（仅正式站：auto_rollback + restoreLocalCommit；开发环境跳过）',
     str_contains($orchSource, 'autoRollbackAfterReleaseFailure')
         && str_contains($orchSource, "'auto_rollback'")
         && str_contains($orchSource, 'restoreLocalCommit')
-        && str_contains($orchSource, '$gitUpdateStarted = true'),
+        && str_contains($orchSource, '$gitUpdateStarted = true')
+        && str_contains($orchSource, 'isProductionDeploy')
+        && str_contains($orchSource, '开发环境跳过发布失败自动回滚'),
+    ''
+);
+record(
+    $results,
+    $failed,
+    'RM-10.2-09',
+    '部署后命令非零退出须抛错以触发失败回滚',
+    str_contains($orchSource, '部署后命令失败（exit')
+        && str_contains($orchSource, 'return_vars')
+        && str_contains($orchSource, 'shouldAutoRollbackOnFailure'),
     ''
 );
 
