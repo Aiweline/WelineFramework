@@ -1292,7 +1292,11 @@ final class FrontendWorkerSessionService
 
         $this->ensureStoreDirectory();
 
-        $this->assertPrivateRegularFile(self::LOCK_FILE, true);
+        // Ops scripts sometimes widen var/cache modes (e.g. `find … chmod ug+rw`).
+        // Repair to 0600 after open; never hard-fail on a pre-existing 0660/0664 lock.
+        if (\file_exists(self::LOCK_FILE) && \is_link(self::LOCK_FILE)) {
+            throw new FrontendQueryException('worker_store_unavailable', 'Worker session store lock is unsafe.', 503);
+        }
         $lock = \fopen(self::LOCK_FILE, 'c+b');
         if ($lock === false) {
             throw new FrontendQueryException('auth_error', 'Worker session store lock is unavailable.', 503);
@@ -1523,6 +1527,7 @@ final class FrontendWorkerSessionService
             return [];
         }
 
+        $this->repairOwnedPrivateRegularFile(self::STORE_FILE);
         $this->assertPrivateRegularFile(self::STORE_FILE);
 
         $content = \file_get_contents(self::STORE_FILE);
@@ -1642,6 +1647,35 @@ final class FrontendWorkerSessionService
             || !$this->isOwnedByCurrentProcess($stat)) {
             throw new FrontendQueryException('worker_store_unavailable', 'Worker session store file is unsafe.', 503);
         }
+    }
+
+    /**
+     * Re-tighten owner-only modes after bulk `chmod ug+rw` / deploy permission sweeps.
+     */
+    private function repairOwnedPrivateRegularFile(string $path, int $mode = 0600): void
+    {
+        \clearstatcache(true, $path);
+        if (!\is_file($path) || \is_link($path)) {
+            return;
+        }
+
+        $stat = @\lstat($path);
+        if (!\is_array($stat)
+            || (($stat['mode'] ?? 0) & 0170000) !== 0100000
+            || !$this->isOwnedByCurrentProcess($stat)) {
+            return;
+        }
+        if ((($stat['mode'] ?? 0) & 0077) === 0) {
+            return;
+        }
+        if (!\chmod($path, $mode)) {
+            throw new FrontendQueryException(
+                'worker_store_unavailable',
+                'Unable to restore private worker store file permissions.',
+                503,
+            );
+        }
+        \clearstatcache(true, $path);
     }
 
     /** @param resource $handle */
