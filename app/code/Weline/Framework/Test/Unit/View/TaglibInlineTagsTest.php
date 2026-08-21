@@ -136,6 +136,20 @@ class TaglibInlineTagsTest extends TestCore
     }
 
     /**
+     * <js type="module"> 必须保留 type 属性，否则含 import.meta 的脚本会在非 module 上下文语法错误。
+     */
+    public function testJsTagPreservesModuleTypeAttribute(): void
+    {
+        $content = '<js type="module">Weline_Theme::ui/weline-ui.js</js>';
+        $result = $this->taglib->compile($this->template, $content, 'js-module-type.phtml');
+
+        $this->assertStringNotContainsString('<js', $result, '原始 <js> 标签应被替换');
+        $this->assertStringContainsString('<script type="module"', $result, '应输出 type="module"');
+        $this->assertStringContainsString("src='/Weline/Theme/view/statics/ui/weline-ui.js'", $result);
+        $this->assertStringContainsString('</script>', $result);
+    }
+
+    /**
      * <theme:css> 必须保留运行期主题解析，避免把某个 website/theme 的 URL 烘焙进共享编译缓存。
      */
     public function testThemeCssTagOutputFormat(): void

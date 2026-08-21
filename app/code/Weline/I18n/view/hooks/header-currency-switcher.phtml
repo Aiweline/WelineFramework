@@ -228,21 +228,42 @@ foreach ($currencies as $currency) {
 // 与语言切换器一致：Phrase exclusive 下框架文案走 WidgetI18n，避免英文页仍显示中文源串。
 $i18nChrome = static fn(string $source): string => \Weline\Theme\Helper\WidgetI18n::label($source);
 ?>
-<div class="currency-switcher weline-choice-switcher" data-currency-switcher="true" data-weline-choice-switcher="currency" data-choice-page-size="<?= $selectorPageSize ?>" role="button" tabindex="0" aria-haspopup="menu" aria-label="<?= $escape($i18nChrome('切换货币')) ?>">
-    <span class="action-line-1"><?= $escape($i18nChrome('货币')) ?></span>
-    <span class="action-line-2">
-        <w:icon name="circle" size="sm"></w:icon>
-        <span class="current-currency"><?= $escape($displayCurrentCurrency) ?></span>
-        <?php if ($currentCurrencySymbol !== ''): ?>
-            <span class="current-currency-symbol"><?= $escape($currentCurrencySymbol) ?></span>
-        <?php endif; ?>
-        <w:icon name="chevron-down" size="sm"></w:icon>
-    </span>
-    <div class="currency-options weline-choice-panel" data-weline-choice-panel role="menu" aria-label="<?= $escape($i18nChrome('货币选项')) ?>">
-        <div class="weline-choice-search">
-            <input type="search" data-choice-search placeholder="<?= $escape($i18nChrome('搜索货币、货币码、符号或翻译')) ?>" autocomplete="off" aria-label="<?= $escape($i18nChrome('搜索货币')) ?>">
-        </div>
-        <div class="weline-choice-items" data-choice-items>
+<div
+    class="w-currency-switcher w-menu-root"
+    data-currency-switcher="true"
+    data-w-component="menu choice-filter"
+    data-w-placement="bottom-end"
+    data-w-choice-page-size="<?= $selectorPageSize ?>"
+>
+    <button
+        type="button"
+        class="w-button w-currency-switcher__trigger"
+        data-tone="quiet"
+        data-size="sm"
+        data-w-menu-trigger
+        aria-controls="w-currency-switcher-menu"
+        aria-expanded="false"
+        aria-label="<?= $escape($i18nChrome('切换货币')) ?>"
+    >
+        <w:icon name="cash" size="sm" />
+        <span class="w-currency-switcher__current current-currency"><?= $escape($displayCurrentCurrency) ?></span>
+        <?php if ($currentCurrencySymbol !== ''): ?><span><?= $escape($currentCurrencySymbol) ?></span><?php endif; ?>
+        <w:icon name="chevron-down" size="xs" />
+    </button>
+    <div
+        class="w-menu w-currency-switcher__panel"
+        id="w-currency-switcher-menu"
+        data-w-menu-panel
+        data-w-choice-panel
+        role="menu"
+        aria-label="<?= $escape($i18nChrome('货币选项')) ?>"
+        hidden
+    >
+        <label class="w-field w-currency-switcher__search">
+            <span class="w-visually-hidden"><?= $escape($i18nChrome('搜索货币')) ?></span>
+            <input class="w-input" type="search" data-w-choice-search placeholder="<?= $escape($i18nChrome('搜索货币、货币码、符号或翻译')) ?>" autocomplete="off">
+        </label>
+        <div class="w-currency-switcher__items" data-w-choice-items>
         <?php foreach ($currencies as $index => $currency): ?>
             <?php
             $currencyCode = strtoupper($currency['code'] ?? '');
@@ -250,25 +271,26 @@ $i18nChrome = static fn(string $source): string => \Weline\Theme\Helper\WidgetI1
             $currencySymbol = (string)($currency['symbol'] ?? '');
             $isCurrent = ($currencyCode === strtoupper($displayCurrentCurrency));
             ?>
-            <a href="#"
-               class="currency-option weline-choice-option <?= $isCurrent ? 'active' : '' ?>"
+            <button type="button"
+               class="w-menu__item w-currency-switcher__option"
                data-currency-option="true"
-               data-choice-option="true"
+               data-w-choice-option
                data-currency="<?= $escape($currencyCode) ?>"
                data-search="<?= $escape($currency['search'] ?? $currencyCode) ?>"
                role="menuitem"
+               aria-current="<?= $isCurrent ? 'true' : 'false' ?>"
                <?= $index >= $selectorPageSize ? 'hidden' : '' ?>>
-                <span class="weline-choice-symbol" aria-hidden="true"><?= $escape($currencySymbol !== '' ? $currencySymbol : $currencyCode) ?></span>
-                <span class="weline-choice-text">
-                    <span class="weline-choice-name"><?= $escape($currencyName) ?></span>
-                    <span class="weline-choice-meta"><?= $escape($currencyCode) ?></span>
+                <span class="w-currency-switcher__symbol" aria-hidden="true"><?= $escape($currencySymbol !== '' ? $currencySymbol : $currencyCode) ?></span>
+                <span class="w-currency-switcher__copy">
+                    <strong><?= $escape($currencyName) ?></strong>
+                    <small><?= $escape($currencyCode) ?></small>
                 </span>
-                <w:icon name="check" size="sm"></w:icon>
-            </a>
+                <span class="w-currency-switcher__check"><w:icon name="check" size="sm" /></span>
+            </button>
         <?php endforeach; ?>
         </div>
-        <div class="weline-choice-empty" data-choice-empty hidden><?= $escape($i18nChrome('无匹配货币')) ?></div>
-        <button type="button" class="weline-choice-more" data-choice-more <?= count($currencies) <= $selectorPageSize ? 'hidden' : '' ?>><?= $escape($i18nChrome('加载更多')) ?></button>
+        <div class="w-currency-switcher__empty" data-w-choice-empty hidden><?= $escape($i18nChrome('无匹配货币')) ?></div>
+        <button type="button" class="w-button w-currency-switcher__more" data-tone="neutral" data-size="sm" data-w-choice-more <?= count($currencies) <= $selectorPageSize ? 'hidden' : '' ?>><?= $escape($i18nChrome('加载更多')) ?></button>
     </div>
 </div>
 <?php
