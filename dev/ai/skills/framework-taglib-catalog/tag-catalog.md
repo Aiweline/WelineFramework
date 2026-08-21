@@ -5,7 +5,7 @@
 > 收集命令：`php bin/w taglib:collect`（或 `setup:upgrade` 触发的 registry collect）。
 > **新增/更名/删除标签后必须同步更新本文件与 `SKILL.md` 场景映射表。**
 
-- 模块自定义标签数：59
+- 模块自定义标签数：60
 - 内置标签族：17（见下方「框架内置标签」）
 
 ## 命名约定
@@ -109,7 +109,7 @@
 | 标签 | 类 | 主要属性 | 场景/说明 |
 |---|---|---|---|
 | `<w:i18n:language:select>` | `Weline\I18n\Taglib\LanguageSelect` | id*, name, value, multiple, class, style, required, allow-empty, display-only, readonly-values, allowed-values, option-values, options-values, display-locale | 按国家分组选择可用语言/Locale；搜索覆盖国家、语言和代码 |
-| `<w:i18n:language:switcher>` | `Weline\I18n\Taglib\LanguageSwitcher` | for, allowed-values, option-values, options-values, locales | 按国家分组切换当前界面语言；与 LanguageSelect 共享语言目录 |
+| `<w:i18n:switcher>` | `Weline\I18n\Taglib\LanguageSwitcher` | for, allowed-values, option-values, options-values, locales, current, navigation, website-id, show-request, label-mode | 按国家分组切换当前界面语言；与 LanguageSelect 共享语言目录。旧名 `<w:i18n:language:switcher>` 为兼容别名 |
 | `<w:local>` | `Weline\I18n\Taglib\Local` | model*, id*, field* | 按 LocalModel 字段输出可翻译本地化文案 |
 
 ### Weline_Meta
@@ -148,13 +148,14 @@
 
 | 标签 | 类 | 主要属性 | 场景/说明 |
 |---|---|---|---|
+| `<w:icon>` | `Weline\Theme\Taglib\Icon` | name*, size, label, class | 输出 Weline UI 语义化内联 SVG 图标；无 label 时为装饰图标 |
 | `<w:slot>` | `Weline\Theme\Taglib\Slot` | id, name, accept, reject, exclusive, multiple, max, min, position, required, append, prepend, wrapper, class | 主题挂载点 / section 宿主 |
 | `<w:theme:address>` | `Weline\Theme\Taglib\Address` | id, for, code, name, country-name, province-name, city-name, district-name, country, province, city, district, cascade, searchable | 省市区地址联动 |
 | `<w:theme:cascader>` | `Weline\Theme\Taglib\Cascader` | id*, name*, url, options, value, value-field, label-field, children-field, placeholder, separator, lazy, lazy-url, multiple, check-strictly | 级联选择器 |
 | `<w:theme:color-picker>` | `Weline\Theme\Taglib\ColorPicker` | id*, name*, value, format, presets, show-alpha, show-input, clearable, class, style, disabled, required | 颜色选择器 |
 | `<w:theme:css>` | `Weline\Theme\Taglib\ThemeCss` | — | 加载主题 CSS |
 | `<w:theme:date-range>` | `Weline\Theme\Taglib\DateRangePicker` | id*, start-name*, end-name*, start-value, end-value, format, type, placeholder-start, placeholder-end, separator, shortcuts, min-date, max-date, clearable | 日期范围选择 |
-| `<w:theme:icon-picker>` | `Weline\Theme\Taglib\IconPicker` | id*, name*, value, library, placeholder, clearable, class, style, disabled, required | 图标选择器 |
+| `<w:theme:icon-picker>` | `Weline\Theme\Taglib\IconPicker` | id*, name*, value, placeholder, clearable, class, disabled, required | 只保存 Weline UI 语义图标名的可搜索图标选择器 |
 | `<w:theme:js>` | `Weline\Theme\Taglib\ThemeJs` | — | 加载主题 JS |
 | `<w:theme:modal>` | `Weline\Theme\Taglib\Modal` | id*, title, size, closable, backdrop, centered, class, style | 主题 Modal 容器 |
 | `<w:theme:search-select>` | `Weline\Theme\Taglib\SearchSelect` | id*, name*, url, options, value, value-field, label-field, placeholder, debounce, min-chars, class, style, disabled, required | 通用远程/本地搜索下拉 |

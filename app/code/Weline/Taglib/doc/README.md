@@ -105,7 +105,7 @@ ID 与 data-only metadata。Taglib Model/Controller 不得引用 ModuleManager M
 - `dev/ai/skills/framework-taglib-catalog/SKILL.md`（场景 → 标签）
 - `dev/ai/skills/framework-taglib-catalog/tag-catalog.md`（全量清单）
 
-例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，界面切换用 `<w:i18n:language:switcher .../>`。禁止手写裸 select 拼领域选项。
+例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，界面切换用 `<w:i18n:switcher .../>`（旧名 `language:switcher` 为别名）。禁止手写裸 select 拼领域选项。
 
 浮层定位与 hover 保活用 `FloatingDropdownEmitter` / `WelineTaglibFloatingDropdown` 在标签输出内自洽，禁止往 Theme.js 塞标签交互。
 
