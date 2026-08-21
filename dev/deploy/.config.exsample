@@ -20,6 +20,11 @@ GIT_REMOTE='origin'
 # 注意：这里如果写入 token，就不要把 .config 提交到仓库。
 GIT_REMOTE_URL=''
 
+# HTTPS 私有仓拉取凭证（GIT_ASKPASS 脚本路径）。PHP-FPM 用户须可执行该脚本。
+# 示例：GIT_ASKPASS='/path/to/git-askpass.sh'
+GIT_ASKPASS=''
+GIT_TERMINAL_PROMPT='0'
+
 # 目标分支。留空时部署当前 checkout 所在分支。
 # Webhook payload 里 ref 与该分支不一致时，监听入口会跳过部署。
 GIT_BRANCH=''
