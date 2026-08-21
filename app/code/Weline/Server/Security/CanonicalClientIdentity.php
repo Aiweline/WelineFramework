@@ -11,10 +11,20 @@ final class CanonicalClientIdentity
      * @param list<string> $trustedProxyCidrs
      * @return array{ip:string,trusted_proxy:bool,transport_ip:string}
      */
-    public function resolve(string $transportPeer, array $headers, array $trustedProxyCidrs): array
+    public function resolve(
+        string $transportPeer,
+        array $headers,
+        array $trustedProxyCidrs,
+        bool $forceTrustedProxy = false,
+    ): array
     {
         $transportIp = $this->normalizePeer($transportPeer);
-        $trustedProxy = $transportIp !== '' && $this->matchesAny($transportIp, $trustedProxyCidrs);
+        // Dispatcher authenticates PROXY v2 from loopback, then replaces the
+        // peer with the original client IP. That client IP must not clear the
+        // trusted-proxy bit or Nginx X-Forwarded-* (scheme/port) are ignored
+        // and absolute URLs leak the internal WLS listen port.
+        $trustedProxy = $forceTrustedProxy
+            || ($transportIp !== '' && $this->matchesAny($transportIp, $trustedProxyCidrs));
         $clientIp = $transportIp;
 
         if ($trustedProxy) {
