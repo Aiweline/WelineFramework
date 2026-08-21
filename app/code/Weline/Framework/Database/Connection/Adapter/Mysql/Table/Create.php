@@ -104,8 +104,11 @@ class Create extends AbstractTable implements CreateInterface
             if (preg_match('/^(.+)\((\d+)\)\s*$/', $clean, $m)) {
                 $clean = $m[1];
                 $prefix = '(' . $m[2] . ')';
-            } elseif ($this->mysqlNeedsTextIndexPrefix($clean)) {
-                $prefix = '(191)';
+            } else {
+                $prefixLen = $this->mysqlTextIndexPrefixLength($clean);
+                if ($prefixLen > 0) {
+                    $prefix = '(' . $prefixLen . ')';
+                }
             }
             $quotedParts[] = '`' . $clean . '`' . $prefix;
         }
@@ -241,13 +244,34 @@ createSQL;
         return $result;
     }
 
-    private function mysqlNeedsTextIndexPrefix(string $column): bool
+    /**
+     * MySQL requires a prefix length for TEXT/BLOB/JSON indexes.
+     * Returns 0 when no prefix is needed. Never exceeds the declared VARCHAR length
+     * (prefix longer than the key part yields "Incorrect prefix key").
+     *
+     * COMMENT text must be ignored: e.g. varchar COMMENT 'Shared blob key' must not
+     * match the blob type token.
+     */
+    private function mysqlTextIndexPrefixLength(string $column): int
     {
         $fieldSql = (string)($this->fields[$column] ?? $this->fields['`' . $column . '`'] ?? '');
         if ($fieldSql === '') {
-            return false;
+            return 0;
         }
-        return preg_match('/\b(tiny|medium|long)?(text|blob)\b/i', $fieldSql) === 1
-            || preg_match('/\bjson\b/i', $fieldSql) === 1;
+        // Drop COMMENT … so comment words cannot false-match type tokens.
+        $typeSql = (string)preg_replace("/\\s+COMMENT\\s+'.*$/is", '', $fieldSql);
+        $needsPrefix = preg_match('/\b(tiny|medium|long)?(text|blob)\b/i', $typeSql) === 1
+            || preg_match('/\bjson\b/i', $typeSql) === 1;
+        if (!$needsPrefix) {
+            return 0;
+        }
+        if (preg_match('/\bvarchar\s*\(\s*(\d+)\s*\)/i', $typeSql, $m) === 1) {
+            $declared = (int)$m[1];
+            if ($declared > 0) {
+                return max(1, min(191, $declared));
+            }
+        }
+
+        return 191;
     }
 }
