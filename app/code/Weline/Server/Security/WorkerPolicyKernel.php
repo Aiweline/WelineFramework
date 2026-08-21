@@ -302,6 +302,7 @@ final class WorkerPolicyKernel
         string $rawRequest,
         string $transportPeer = '',
         ?array $parsedFrame = null,
+        bool $forceTrustedProxy = false,
     ): WorkerPolicyDecision
     {
         $this->refreshActivatedBundle();
@@ -362,7 +363,12 @@ final class WorkerPolicyKernel
             $parsed['headers'][self::EDGE_CLIENT_PROTOCOL_HEADER],
         );
 
-        $identity = $this->identityResolver->resolve($transportPeer, $parsed['headers'], $trustedProxyCidrs);
+        $identity = $this->identityResolver->resolve(
+            $transportPeer,
+            $parsed['headers'],
+            $trustedProxyCidrs,
+            $forceTrustedProxy,
+        );
         $clientIp = $identity['ip'];
         $trustedProxy = $identity['trusted_proxy'];
         $envelope = new RequestEnvelope(
