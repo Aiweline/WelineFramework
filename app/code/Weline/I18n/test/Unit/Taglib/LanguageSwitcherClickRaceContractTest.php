@@ -18,7 +18,7 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 
-        self::assertStringContainsString('|markup=v2-lang-native-path-nav-9', $content);
+        self::assertStringContainsString('|markup=v2-lang-native-path-nav-10', $content);
         self::assertStringContainsString('if(navigation==="emit"){', $content);
         self::assertStringContainsString('writeLanguagePreference(code)', $content);
         self::assertStringContainsString('// Native navigation — do not preventDefault.', $content);
@@ -30,6 +30,29 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         self::assertStringContainsString('i18n.switchLang(code,href)', $content);
         self::assertStringNotContainsString(
             'window.setTimeout(function(){window.location.assign(href);},0);',
+            $content
+        );
+    }
+
+    public function testFilterQueriesStayOnPanelAfterBodyPortal(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Taglib/LanguageSwitcher.php';
+        $content = (string) file_get_contents($path);
+        self::assertStringContainsString(
+            'var groups=function(){return panel.querySelectorAll("[data-language-group]");};',
+            $content
+        );
+        self::assertStringContainsString(
+            'var options=function(){return panel.querySelectorAll(".weline-language-option");};',
+            $content
+        );
+        self::assertStringContainsString('function ensureEmpty(){var empty=panel.querySelector("#"+emptyId);', $content);
+        self::assertStringNotContainsString(
+            'var groups=function(){return root.querySelectorAll("[data-language-group]");};',
+            $content
+        );
+        self::assertStringNotContainsString(
+            'function ensureEmpty(){var empty=root.querySelector("#"+emptyId);',
             $content
         );
     }
