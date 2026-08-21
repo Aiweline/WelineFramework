@@ -48,6 +48,7 @@ Routing only. Trigger conditions live in each skill's frontmatter `description`;
 | Weline_Deploy/Webhook/release-system work | `CI发布工程师-部署发布系统` |
 | Exact passphrase 「分仓」 | `CI发布工程师-分仓发布` / `.codex/skills/fencang-release` |
 | Exact passphrase 「分项」 | `CI发布工程师-分项更新` / `.codex/skills/fenxiang-update` |
+| Exact passphrase 「回灌」 | `CI发布工程师-回灌验证`（须已给框架仓；修核→推送→update:core→验证） |
 | Third-party payment provider integration | `payment-provider-development` |
 | Queue diagnosis or operations | `queue` |
 | SystemConfig scope behavior | `system-config-scope` |

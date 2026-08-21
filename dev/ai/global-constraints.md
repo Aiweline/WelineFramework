@@ -57,12 +57,25 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 
 - Browser-side business requests use bin-query / `weline-api` (`Weline.Api.resource()`, `graph()`, or `stream()`), never direct Ajax/XHR/fetch/axios or handwritten business endpoint URLs.
 - User-visible copy is translatable; use the framework i18n forms and `%{name}` / `%{1}` placeholders. Do not use native `alert`, `confirm`, or `prompt`.
-- Do not place PHP tags inside `<w:*>` attributes or add `declare(strict_types=1)` to `.phtml`.
+- **`.phtml` is compiled, not plain PHP (hard).** Weline compiles `view/templates/**` to `view/tpl/**/com_*.phtml`. Violations cause ParseError/500 or silently broken HTML/JS.
+- **No PHP inside HTML tags (hard).** Never put `<?php`, `<?=`, or `<?` inside a tag name or attribute list. Precompute strings in a top `<?php ... ?>` block; HTML lines may only echo already-prepared scalars (`<?= $safeVar ?>`).
+- **No PHP logic interleaved in markup (hard).** Do not use `<?php if (...) : ?>` / `elseif` / `endif` between HTML blocks in `.phtml`. Build HTML fragments in the top PHP block, split partials, or pre-render in the Controller.
+- **No `$this->fetch()` inside partial templates (hard).** Pre-render sub-partials in the Controller and `assign` HTML strings. In templates use `<?php echo $assignedHtml; ?>` — never `<?= $this->fetch(...) ?>`.
+- **Short-echo restrictions (hard).** Inside HTML, do not use `<?= ($x ?? '') ?>`, ternaries, or inline `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`. Assign escaped values first.
+- **Taglib / HTML pitfalls (hard).** Do not place PHP inside `<w:*>` attributes. Do not add `declare(strict_types=1)` to `.phtml`. Avoid `<dd>`/`<dt>` (compiler misparsing). Avoid `data-test-*` attribute names; prefer neutral prefixes (e.g. `data-mcs-*`) or classes. Do not nest large HTML trees inside `<template>` in a partial that Weline re-parses — use a separate partial or controller-built store.
+- After `.phtml` edits, run `php bin/w theme:compile` and verify the page is not HTTP 500 before claiming done.
 - Theme inheritance, account-layout hooks, storefront section `weline-code`, layout boundaries, Taglib selection, and request-chain details belong to the matched frontend skill and owning Theme/Customer documentation.
+
+### HTTP 输入：禁止超全局（hard）
+
+- **禁止**在业务模块、产品模块、Observer、Controller、Service、`.phtml` 中直接读写 PHP 超全局：`$_GET`、`$_POST`、`$_REQUEST`、`$_COOKIE`、`$_FILES`、`$_SERVER`。
+- WLS 常驻进程里超全局只是兼容投影：请求结束 `GlobalsEmulator::reset()` 会清空；`WelineEnv::replaceGet()` / SEO 解码只更新 Context，**不回写** `$_GET`。直接读经常得到空数组，这不是「框架丢了参数」，是用法错误。
+- **正确获取方式**：`$request->getParam()` / `getGet()` / `getPost()` / `getServer()` / `getHeader()`；无 Request 时用 `WelineEnv::getGet()` / `getPost()` / `getCookie()` / `server()`。禁止 `getGet()` 为空再回退 `$_GET`。
+- **例外仅限运行时装配层**：`GlobalsEmulator`、`WlsRequest`、`WlsRuntime`、`WelineEnv`、`Context`、ParameterBag/ServerBag 初始化，以及单测夹具与 CLI `$_SERVER['argv']`。以 `ProjectSuperglobalUsageGuardTest` 白名单为准，禁止扩大。Cursor 常驻摘要：`.cursor/rules/no-php-superglobals.mdc`。
 
 ### Long-running runtime
 
-- Do not introduce process-global mutable request state. Use the request/context/session abstractions; limit `$_SERVER` bridging to the runtime assembly layer and then materialize explicit context.
+- Do not introduce process-global mutable request state. Use request/context/session abstractions. PHP superglobals are forbidden outside the runtime assembly layer (see **HTTP 输入：禁止超全局** above).
 - In WLS-sensitive paths, do not block with `sleep`/`usleep`, terminate with `die`/`exit`, or perform unbounded synchronous loops/I/O.
 
 ## 5. Validation is proportional to the changed surface
@@ -146,7 +159,7 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 - Stage only task files, review the staged diff, and never include secrets. Do not force-push protected branches without explicit authorization.
 - Do not add `Co-authored-by: Cursor`, `Made-with: Cursor`, or any Cursor/agent attribution trailer to commits or PRs. Commit Author stays the human account only.
 - Deployment requires a confirmed repository, target, environment, account/SSH configuration, directory, branch, and target-owned procedure. Do not infer production targets from historical notes.
-- Exact passphrases such as 「分仓」 and 「分项」 trigger only their owning skills. Similar wording does not expand scope.
+- Exact passphrases such as 「分仓」「分项」「回灌」 trigger only their owning skills. Similar wording does not expand scope.
 
 ### Local branch and worktree policy (hard)
 
@@ -162,8 +175,39 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 - Canonical framework repo (macOS): `/Users/weline/Project/Official/框架`. SaaS/site release repo: `/Users/weline/Project/QiPai`. Relative path `app/code/Weline/...` maps to the same path on the peer.
 - The framework repository is canonical for `app/code/Weline/**`.
 - If a task performed temporary core edits inside a site/release repository, merge only that verified task delta back here after a two-sided diff; never overwrite either side wholesale.
-- Distribution from this canonical repository to sites is not automatic. It requires an explicit 「分项」, deployment, or named cross-repository synchronization request.
+- Distribution from this canonical repository to sites is not automatic. It requires an explicit 「分项」, 「回灌」, deployment, or named cross-repository synchronization request.
 - Business/vendor-specific directories outside `Weline/**` (e.g. `GuoLaiRen/**`) do not move into core unless the user explicitly scopes them.
+
+### 回灌（硬 · 精确口令）
+
+**简称「回灌」。** 用户当前请求出现精确口令 **「回灌」** 时，视为明确授权：修复本任务所需核心代码，并按完整验证环路合入、推送、站点 `update:core`、本地/线上取证。权威步骤：`dev/ai/skills/CI发布工程师-回灌验证/SKILL.md`；Cursor：`.cursor/rules/huiguan-core-update.mdc`。
+
+#### 何时可以做
+
+1. 会话/工作区**已提供框架仓**（可写路径，如本仓 `/Users/weline/Project/Official/框架`）。
+2. 用户出现精确口令 **「回灌」**（或明确延续上一轮回灌授权完成本环路）。
+3. 问题确需改 `app/code/Weline/**`（或框架仓内必要核心路径如 `pub/errors`）；应用侧 Event / Interface / Hook 无法解决。
+
+#### 何时禁止
+
+1. **未给框架仓** → 禁止回灌流程；在消费站点仓只汇报，**不得**改站点内 `Weline/**` 顶替。
+2. **未说「回灌」** → 禁止自行改核、禁止主动 `update:core -f`、禁止把「改核心 / 同步 / 合并到框架 / 分项」当成回灌授权。
+3. 能在业务/应用模块解决 → 不要升级为回灌。
+
+#### 标准环路（口令已给出且框架仓可用时）
+
+1. **修**：仅在框架仓 `dev` 上改本任务核心文件 + 必要文档/单测。
+2. **合**：`dev` commit → merge `master` → push 已配置 remote（通常 Gitee + GitHub）→ tip 可核对。
+3. **灌**：在当前消费站点执行 `php bin/w update:core -b master`；冲突检测挡住且目标即对齐官方 tip 时可用 `-f`（保护文件仍按命令跳过）。
+4. **验**：本地证据 + 任务范围内线上证据；交付写明 tip、命令、结果。未测不得称完成。
+
+#### 与「分项」/跨仓对齐
+
+| 口令/规则 | 含义 |
+|---|---|
+| **回灌** | 授权修核 + 推送 + 回灌**当前**消费站并验证 |
+| **分项** | 已有 tip 分发到脚本配置的多站点；不隐含「可以改核心」 |
+| §7 Prompt merge | 改过 `Weline/**` 结案前必须提示对齐；**不等于**已授权回灌 |
 
 #### Prompt merge on every core change (hard)
 
