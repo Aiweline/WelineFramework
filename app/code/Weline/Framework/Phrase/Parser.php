@@ -159,15 +159,28 @@ class Parser
      */
     protected static function processWords(string $words): string
     {
+        // DB / cache / logger bootstrap may call __() again (e.g. MySQL version
+        // warning while loading the global dictionary). Never re-enter resolution.
+        if (self::translationResolutionDepth() > 0 || self::$isLoadingWords) {
+            return $words;
+        }
+
         if (Runtime::isPersistent()) {
             self::ensureStateRegistered();
             self::$usedWords[$words] = $words;
-            $layers = self::getCurrentLayeredWords();
-            $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
-            if (isset(self::$currentRequestTranslatedWords[$translationCacheKey])) {
-                return self::$currentRequestTranslatedWords[$translationCacheKey];
+            self::enterTranslationResolution();
+            try {
+                $layers = self::getCurrentLayeredWords();
+                $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
+                if (isset(self::$currentRequestTranslatedWords[$translationCacheKey])) {
+                    return self::$currentRequestTranslatedWords[$translationCacheKey];
+                }
+
+                return self::$currentRequestTranslatedWords[$translationCacheKey]
+                    = self::translateWordFromLayers($words, $layers);
+            } finally {
+                self::leaveTranslationResolution();
             }
-            return self::$currentRequestTranslatedWords[$translationCacheKey] = self::translateWordFromLayers($words, $layers);
         }
 
         self::getWords();
