@@ -1,0 +1,9 @@
+{
+    "success": false,
+    "code": "maintenance",
+    "message": "系统正在升级维护中，请稍后再试。",
+    "data": {
+        "retry_after": 60,
+        "lang": "zh_Hans_CN"
+    }
+}

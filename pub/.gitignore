@@ -15,3 +15,7 @@
 
 # 保留cli-server-router.php
 !cli-server-router.php
+
+# 保留 HTTP 状态回执页（站点可覆盖同路径文件）
+!errors/
+!errors/**
