@@ -69,6 +69,10 @@ set_defaults() {
   RUN_COMPOSER_INSTALL="${RUN_COMPOSER_INSTALL:-0}"
   COMPOSER_COMMAND="${COMPOSER_COMMAND:-composer install --no-dev --prefer-dist --optimize-autoloader}"
   POST_DEPLOY_COMMAND="${POST_DEPLOY_COMMAND:-}"
+  PRE_DEPLOY_COMMAND="${PRE_DEPLOY_COMMAND:-}"
+  DEPLOY_ENABLE_MAINTENANCE="${DEPLOY_ENABLE_MAINTENANCE:-1}"
+  DEPLOY_PHP="${DEPLOY_PHP:-}"
+  DEPLOY_WELINE_ROOT="${DEPLOY_WELINE_ROOT:-}"
 
   LOCK_FILE="${LOCK_FILE:-$DEPLOY_ROOT/var/deploy-webhook.lock}"
   LOG_FILE="${LOG_FILE:-$DEPLOY_ROOT/var/log/deploy-webhook.log}"
@@ -131,6 +135,69 @@ maybe_run_composer() {
   fi
 }
 
+
+resolve_weline_root() {
+  if [ -n "${DEPLOY_WELINE_ROOT:-}" ]; then
+    printf '%s\n' "$DEPLOY_WELINE_ROOT"
+    return 0
+  fi
+  if [ -x "$DEPLOY_ROOT/bin/w" ] || [ -f "$DEPLOY_ROOT/bin/w" ]; then
+    printf '%s\n' "$DEPLOY_ROOT"
+    return 0
+  fi
+  if [ -x "$DEPLOY_ROOT/weline/bin/w" ] || [ -f "$DEPLOY_ROOT/weline/bin/w" ]; then
+    printf '%s\n' "$DEPLOY_ROOT/weline"
+    return 0
+  fi
+  printf '%s\n' "$DEPLOY_ROOT"
+}
+
+resolve_deploy_php() {
+  if [ -n "${DEPLOY_PHP:-}" ]; then
+    printf '%s\n' "$DEPLOY_PHP"
+    return 0
+  fi
+  local root
+  root="$(resolve_weline_root)"
+  if [ -x "$root/extend/server/php/bin/php" ]; then
+    printf '%s\n' "$root/extend/server/php/bin/php"
+    return 0
+  fi
+  if [ -x "$DEPLOY_ROOT/weline/extend/server/php/bin/php" ]; then
+    printf '%s\n' "$DEPLOY_ROOT/weline/extend/server/php/bin/php"
+    return 0
+  fi
+  command -v php
+}
+
+maybe_run_pre_deploy() {
+  if [ -n "$PRE_DEPLOY_COMMAND" ]; then
+    log "Running pre deploy command."
+    bash -lc "$PRE_DEPLOY_COMMAND"
+  fi
+}
+
+enable_deploy_maintenance() {
+  DEPLOY_MAINTENANCE_OWNED=0
+  if ! is_truthy "${DEPLOY_ENABLE_MAINTENANCE:-1}"; then
+    log "Deploy maintenance gate disabled (DEPLOY_ENABLE_MAINTENANCE=0)."
+    return 0
+  fi
+  local root php_bin
+  root="$(resolve_weline_root)"
+  php_bin="$(resolve_deploy_php)" || die "Cannot resolve PHP for maintenance:enable"
+  if [ ! -f "$root/bin/w" ]; then
+    die "Cannot enable maintenance: bin/w not found under $root"
+  fi
+  log "Enabling maintenance mode before code update (php=$php_bin root=$root)."
+  (
+    cd "$root"
+    "$php_bin" -d max_execution_time=120 bin/w maintenance:enable
+  )
+  DEPLOY_MAINTENANCE_OWNED=1
+  date "+%Y-%m-%dT%H:%M:%S%z MAINT_ENABLE_BEFORE_GIT" >> "$DEPLOY_ROOT/var/log/deploy-post.log" 2>/dev/null || true
+}
+
 maybe_run_post_deploy() {
   if [ -n "$POST_DEPLOY_COMMAND" ]; then
     log "Running post deploy command."
@@ -185,6 +252,9 @@ deploy() {
 
   maybe_set_remote_url
   ensure_clean_tree_or_allowed
+
+  enable_deploy_maintenance
+  maybe_run_pre_deploy
 
   log "Deploy start: root=$DEPLOY_ROOT remote=$GIT_REMOTE branch=$target_branch mode=$GIT_UPDATE_MODE"
   case "$GIT_UPDATE_MODE" in
