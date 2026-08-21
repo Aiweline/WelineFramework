@@ -72,9 +72,9 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
         try {
             $registry = $this->resolveDeviceRegistry();
             $this->revokePreviousDeviceForNewLogin($registry, $context);
-        } catch (\Throwable) {
+        } catch (\Throwable $throwable) {
             $this->clearAuthenticationState(true);
-            throw new \RuntimeException((string)__('认证设备登记失败。'));
+            $this->failDeviceRegistration($throwable, 'pre_regenerate');
         }
 
         $this->session->regenerate(true);
@@ -86,18 +86,20 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
                 if ($registry->supportsArea($deviceContext->area)) {
                     $binding = $registry->register($deviceContext, $context);
                     if (!$binding->valid) {
-                        throw new \RuntimeException((string)__('认证设备登记失败。'));
+                        throw new \RuntimeException((string)__(
+                            '认证设备登记失败。',
+                        ));
                     }
                     $deviceContext = $deviceContext->withDeviceId($binding->deviceId);
                 }
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $throwable) {
             // regenerate() has already persisted the previous session payload
             // under the new id on WLS/File/Redis strategies. Persist the
             // cleared auth keys as well so a failed device registration cannot
             // leave a recoverable authentication payload behind.
             $this->clearAuthenticationState(true);
-            throw new \RuntimeException((string)__('认证设备登记失败。'));
+            $this->failDeviceRegistration($throwable, 'register');
         }
 
         try {
@@ -498,6 +500,65 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
             throw new \RuntimeException((string)__('认证设备服务不可用。'));
         }
         return $resolution->provider;
+    }
+
+    /**
+     * Fail closed on device registration, but keep the underlying cause for
+     * operators (auth.log + exception previous) and surface a schema-ready hint
+     * when the device table is missing after a core update.
+     */
+    private function failDeviceRegistration(\Throwable $cause, string $phase): never
+    {
+        if (\function_exists('w_auth_log')) {
+            w_auth_log('auth_device_register_failed', '认证设备登记失败', [
+                'area' => $this->areaConfig->getArea(),
+                'phase' => $phase,
+                'exception' => $cause::class,
+                'message' => \mb_substr($cause->getMessage(), 0, 500),
+                'code' => $cause->getCode(),
+                'schema_missing' => $this->isDeviceSchemaUnavailable($cause),
+            ]);
+        }
+
+        throw new \RuntimeException(
+            $this->deviceRegistrationFailureMessage($cause),
+            0,
+            $cause,
+        );
+    }
+
+    private function deviceRegistrationFailureMessage(\Throwable $cause): string
+    {
+        if ($this->isDeviceSchemaUnavailable($cause)) {
+            return (string)__('认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。');
+        }
+
+        return (string)__('认证设备登记失败。');
+    }
+
+    private function isDeviceSchemaUnavailable(\Throwable $cause): bool
+    {
+        for ($current = $cause; $current !== null; $current = $current->getPrevious()) {
+            $message = $current->getMessage();
+            $sqlState = '';
+            if ($current instanceof \PDOException) {
+                $sqlState = (string)($current->errorInfo[0] ?? $current->getCode());
+            }
+            if ($sqlState === '42P01'
+                || \str_contains($message, '42P01')
+                || \str_contains($message, 'Undefined table')
+                || \str_contains($message, 'Base table or view not found')
+                || \str_contains($message, 'no such table')
+                || (\str_contains($message, 'weline_authenticated_device')
+                    && (\str_contains($message, 'does not exist')
+                        || \str_contains($message, 'doesn\'t exist')
+                        || \str_contains($message, '不存在')))
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
