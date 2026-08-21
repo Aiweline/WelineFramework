@@ -514,6 +514,8 @@ pending,等待中
 已自动回滚到发布前版本 %{1},已自动回滚到发布前版本 %{1}
 自动回滚失败：%{1},自动回滚失败：%{1}
 自动回滚后服务重载失败：%{1},自动回滚后服务重载失败：%{1}
+开发环境跳过发布失败自动回滚。,开发环境跳过发布失败自动回滚。
+部署后命令失败（exit %{1}）：%{2},部署后命令失败（exit %{1}）：%{2}
 "Git restore commit cannot be empty.","Git restore commit cannot be empty."
 "Rollback reference cannot be empty.",回滚参考不能为空。
 开始回滚：%{1},开始回滚：%{1}
