@@ -208,25 +208,15 @@ class Response implements ResponseInterface
     {
         $this->flushSessionBeforeTerminate();
 
+        $statusCode = \is_int($code) ? $code : (int)$code;
         if ($msg === '') {
-            switch ($code) {
-                case 403:
-                    $msg = 'Forbidden';
-                    break;
-                case 404:
-                    $msg = 'Not Found';
-                    break;
-                case 500:
-                    $msg = 'Internal Server Error';
-                    break;
-                default:
-                    $msg = 'Unknown Error';
-            }
+            $msg = ErrorPageRenderer::defaultMessage($statusCode);
         }
 
-        $eventData = ['code' => $code, 'msg' => $msg];
+        $eventData = ['code' => $statusCode, 'msg' => $msg];
         $this->getEvenManager()->dispatch('Weline_Framework_Http::http_response_no_router_before', $eventData);
-        $statusCode = \is_int($code) ? $code : (int)$code;
+        $statusCode = \is_int($eventData['code'] ?? $statusCode) ? (int)$eventData['code'] : $statusCode;
+        $msg = (string)($eventData['msg'] ?? $msg);
 
         throw new NoRouterException($statusCode, $msg);
     }

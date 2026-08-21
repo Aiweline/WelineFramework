@@ -162,84 +162,19 @@ HTML;
      */
     private function renderProduction(\Throwable $exception): string
     {
-        $code = $exception->getCode() ?: 500;
-        $title = $this->getHttpStatusTitle($code);
+        $code = (int)($exception->getCode() ?: 500);
+        if ($code < 400 || $code > 599) {
+            $code = 500;
+        }
 
-        return <<<HTML
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{$code} - {$title}</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f5f5f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .error-box {
-            text-align: center;
-            padding: 40px;
-        }
-        .error-code {
-            font-size: 120px;
-            font-weight: bold;
-            color: #ddd;
-            margin: 0;
-        }
-        .error-title {
-            font-size: 24px;
-            color: #333;
-            margin: 20px 0 10px;
-        }
-        .error-message {
-            color: #666;
-            margin-bottom: 30px;
-        }
-        .back-link {
-            display: inline-block;
-            padding: 10px 30px;
-            border: 0;
-            background: #333;
-            color: #fff;
-            cursor: pointer;
-            font: inherit;
-            text-decoration: none;
-            border-radius: 5px;
-        }
-        .back-link:hover { background: #555; }
-    </style>
-</head>
-<body>
-    <div class="error-box">
-        <p class="error-code">{$code}</p>
-        <h1 class="error-title">{$title}</h1>
-        <p class="error-message">抱歉，服务器发生了错误。请稍后重试。</p>
-        <button type="button" class="back-link" data-action="go-back">返回</button>
-    </div>
-    <script>
-        document.addEventListener('click', function (event) {
-            var button = event.target.closest('[data-action="go-back"]');
-            if (!button) {
-                return;
-            }
-
-            if (window.history.length > 1) {
-                window.history.go(-1);
-                return;
-            }
-
-            window.location.href = '/';
-        });
-    </script>
-</body>
-</html>
-HTML;
+        return \Weline\Framework\Http\ErrorPageRenderer::render(
+            $code,
+            $this->getHttpStatusTitle($code),
+            [
+                'is_dev' => false,
+                'prefer_json' => false,
+            ]
+        );
     }
 
     /**
