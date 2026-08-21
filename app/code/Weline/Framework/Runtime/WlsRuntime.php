@@ -4899,32 +4899,34 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return $redirectResponse->toHttpString(false);
             
         } catch (\Weline\Framework\Http\NoRouterException $noRouterEx) {
-            // 无路由异常：转换为 404/403 响应
+            // 无路由 / 状态回执：优先使用异常已渲染正文（与 FPM 同源）
             if ($this->isSseRequest($request)) {
                 return $this->buildSseFailedResponse(
                     $noRouterEx->getStatusCode(),
                     $noRouterEx->getErrorMessage()
                 );
             }
-            
-            // 尝试加载错误页面模板
-            $errorFile = BP . 'pub/errors/' . $noRouterEx->getStatusCode() . '.php';
-            $errorContent = '';
-            if (is_file($errorFile)) {
-                ob_start();
-                try {
-                    include $errorFile;
-                    $errorContent = ob_get_clean();
-                } catch (\Throwable $e) {
-                    ob_end_clean();
-                    $errorContent = '<h1>' . $noRouterEx->getStatusCode() . ' ' . htmlspecialchars($noRouterEx->getErrorMessage()) . '</h1>';
-                }
-            } else {
-                $errorContent = '<h1>' . $noRouterEx->getStatusCode() . ' ' . htmlspecialchars($noRouterEx->getErrorMessage()) . '</h1>';
+
+            $errorContent = \trim($noRouterEx->getBody());
+            if ($errorContent === '') {
+                $errorContent = \Weline\Framework\Http\ErrorPageRenderer::render(
+                    $noRouterEx->getStatusCode(),
+                    $noRouterEx->getErrorMessage()
+                );
             }
-            
-            // 创建错误响应
-            return Response::fromContent($errorContent, $noRouterEx->getStatusCode(), 'text/html; charset=utf-8')->toHttpString(false);
+
+            $contentType = 'text/html; charset=utf-8';
+            $headers = $noRouterEx->getHeaders();
+            foreach ($headers as $headerName => $headerValue) {
+                if (\strtolower((string)$headerName) === 'content-type') {
+                    $contentType = \is_array($headerValue)
+                        ? (string)\reset($headerValue)
+                        : (string)$headerValue;
+                    break;
+                }
+            }
+
+            return Response::fromContent($errorContent, $noRouterEx->getStatusCode(), $contentType)->toHttpString(false);
             
         } catch (\Weline\Framework\Http\ResponseTerminateException $terminateEx) {
             // 通用响应终止异常：使用异常的 toHttpString() 方法
