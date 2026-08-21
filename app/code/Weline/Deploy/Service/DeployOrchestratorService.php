@@ -182,6 +182,7 @@ class DeployOrchestratorService
                 $preBranch,
                 is_array($preCurrent) ? $preCurrent : null,
                 $versionStampWritten,
+                is_array($config) ? $config : [],
                 $deployRoot,
                 $releaseContext,
                 $log
@@ -332,8 +333,10 @@ class DeployOrchestratorService
     /**
      * After a failed release that may have moved Git / version stamps, restore the
      * pre-release commit locally and record an auto_rollback history row.
+     * Non-production skips by default; set AUTO_ROLLBACK_ON_FAILURE=1 to force.
      *
      * @param array<string, mixed>|null $preCurrent
+     * @param array<string, mixed> $config
      * @param array<string, mixed> $releaseContext
      * @param callable(string):void $log
      */
@@ -343,6 +346,7 @@ class DeployOrchestratorService
         string $preBranch,
         ?array $preCurrent,
         bool $versionStampWritten,
+        array $config,
         string $deployRoot,
         array $releaseContext,
         callable $log
@@ -350,6 +354,12 @@ class DeployOrchestratorService
         $preCommit = trim($preCommit);
         if (!$gitUpdateStarted || $preCommit === '' || $deployRoot === '') {
             return '';
+        }
+
+        // Dev/local/pre: keep the failed tree for debugging; only production auto-restores.
+        if (!$this->shouldAutoRollbackOnFailure($config)) {
+            $log(__('开发环境跳过发布失败自动回滚。'));
+            return '；' . (string)__('开发环境跳过发布失败自动回滚。');
         }
 
         try {
@@ -483,11 +493,16 @@ class DeployOrchestratorService
             'POST_DEPLOY_COMMAND' => 'POST_DEPLOY_COMMAND',
             'BACKUP_BEFORE_DEPLOY' => 'BACKUP_BEFORE_DEPLOY',
             'GIT_UPDATE_MODE' => 'GIT_UPDATE_MODE',
+            'AUTO_ROLLBACK_ON_FAILURE' => 'AUTO_ROLLBACK_ON_FAILURE',
         ];
 
         $config = [];
         foreach ($map as $source => $target) {
             $value = $runtimeConfig[$source] ?? null;
+            if (is_bool($value) || is_int($value)) {
+                $config[$target] = (string)(int)$value;
+                continue;
+            }
             if (is_string($value) && trim($value) !== '') {
                 $config[$target] = trim($value);
             }
@@ -675,6 +690,22 @@ class DeployOrchestratorService
         }
 
         return !$noBackup;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function shouldAutoRollbackOnFailure(array $config): bool
+    {
+        $explicit = $config['AUTO_ROLLBACK_ON_FAILURE'] ?? null;
+        if ($explicit === true || $explicit === 1 || $explicit === '1' || $explicit === 'true') {
+            return true;
+        }
+        if ($explicit === false || $explicit === 0 || $explicit === '0' || $explicit === 'false') {
+            return false;
+        }
+
+        return $this->isProductionDeploy();
     }
 
     /**
@@ -886,7 +917,18 @@ class DeployOrchestratorService
     private function execCommand(string $command, string $deployRoot): void
     {
         $system = ObjectManager::getInstance(System::class);
-        $system->exec('cd ' . escapeshellarg($deployRoot) . ' && ' . $command);
+        $result = $system->exec('cd ' . escapeshellarg($deployRoot) . ' && ' . $command);
+        $code = (int)($result['return_vars'] ?? 1);
+        if ($code !== 0) {
+            $output = '';
+            if (is_array($result['output'] ?? null) && $result['output'] !== []) {
+                $output = implode("\n", $result['output']);
+            }
+            throw new \RuntimeException((string)__(
+                '部署后命令失败（exit %{1}）：%{2}',
+                [$code, $output !== '' ? $output : $command]
+            ));
+        }
     }
 
     private function reloadServer(string $deployRoot): void
