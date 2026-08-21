@@ -113,10 +113,10 @@
                 info: 'var(--backend-theme-info)'
             };
             const icons = {
-                success: 'mdi-check-circle',
-                warning: 'mdi-alert',
-                danger: 'mdi-close-circle',
-                info: 'mdi-information'
+                success: 'check',
+                warning: 'warning',
+                danger: 'close',
+                info: 'info'
             };
             
             toast.style.borderLeftColor = colors[type] || colors.info;
@@ -127,7 +127,7 @@
                 <i class="mdi ${icons[type] || icons.info}" style="color: ${colors[type]}; font-size: 1.25rem; flex-shrink: 0;"></i>
                 <div style="flex: 1; color: var(--backend-component-text-primary); word-break: break-word;">${messageContent}</div>
                 <button type="button" data-backend-toast-dismiss style="background: none; border: none; cursor: pointer; color: var(--backend-component-text-muted); font-size: 1.25rem; padding: 0; line-height: 1; flex-shrink: 0;">
-                    <i class="mdi mdi-close"></i>
+                    <w-icon name="close" size="sm"></w-icon>
                 </button>
             `;
             
@@ -449,7 +449,7 @@
                 const {
                     confirmText = __('确定'),
                     type = 'danger',
-                    icon = 'mdi-close-circle'
+                    icon = 'close'
                 } = options;
 
                 const typeColors = {

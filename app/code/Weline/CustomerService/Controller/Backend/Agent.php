@@ -22,7 +22,7 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 /**
  * 客服人员管理控制器
  */
-#[Acl('Weline_CustomerService::agent', '客服人员', 'mdi-account', '客服人员管理', 'Weline_CustomerService::customer_service')]
+#[Acl('Weline_CustomerService::agent', '客服人员', 'user', '客服人员管理', 'Weline_CustomerService::customer_service')]
 class Agent extends BackendController
 {
     private StatisticsService $statisticsService;
@@ -35,7 +35,7 @@ class Agent extends BackendController
     /**
      * 客服人员列表
      */
-    #[Acl('Weline_CustomerService::agent_index', '查看客服人员', 'mdi-account', '查看客服人员')]
+    #[Acl('Weline_CustomerService::agent_index', '查看客服人员', 'user', '查看客服人员')]
     public function index(): string
     {
         try {
@@ -88,7 +88,7 @@ class Agent extends BackendController
      * 保存客服人员
      * POST /customerservice/backend/agent/save
      */
-    #[Acl('Weline_CustomerService::agent_save', '保存客服人员', 'mdi-content-save', '保存客服人员')]
+    #[Acl('Weline_CustomerService::agent_save', '保存客服人员', 'save', '保存客服人员')]
     public function postSave(): string
     {
         try {
@@ -157,7 +157,7 @@ class Agent extends BackendController
      * 删除客服人员
      * POST /customerservice/backend/agent/remove
      */
-    #[Acl('Weline_CustomerService::agent_delete', '删除客服人员', 'mdi-delete', '删除客服人员')]
+    #[Acl('Weline_CustomerService::agent_delete', '删除客服人员', 'trash', '删除客服人员')]
     public function postRemove(): string
     {
         try {
@@ -187,7 +187,7 @@ class Agent extends BackendController
      * 获取客服详细统计（AJAX）
      * GET /customerservice/backend/agent/agent-statistics
      */
-    #[Acl('Weline_CustomerService::agent_statistics', '查看客服统计', 'mdi-chart-line', '查看客服统计')]
+    #[Acl('Weline_CustomerService::agent_statistics', '查看客服统计', 'chart', '查看客服统计')]
     public function getAgentStatistics(): string
     {
         try {

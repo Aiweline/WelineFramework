@@ -17,13 +17,13 @@ use Weline\Acl\Model\AclTag;
 use Weline\Acl\Service\Resource\AclResourcePresentation;
 use Weline\Framework\Manager\ObjectManager;
 
-#[\Weline\Framework\Acl\Acl('Weline_Acl::acl', '管理权限','mdi mdi-security', '')]
+#[\Weline\Framework\Acl\Acl('Weline_Acl::acl', '管理权限','shield', '')]
 class Acl extends \Weline\Framework\App\Controller\BackendPageController
 {
     /**
      * 模块维度资源列表：搜索 + 类型 + 模块。
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_source', '模块资源', 'mdi mdi-puzzle-outline', '')]
+    #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_source', '模块资源', 'puzzle', '')]
     public function getIndex()
     {
         return $this->renderResourceList('module');
@@ -32,7 +32,7 @@ class Acl extends \Weline\Framework\App\Controller\BackendPageController
     /**
      * 标签维度资源列表：搜索 + 类型 + 标签多选。
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_source_by_tag', '标签资源', 'mdi mdi-tag-search-outline', '')]
+    #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_source_by_tag', '标签资源', 'search', '')]
     public function getByTag()
     {
         return $this->renderResourceList('tag');

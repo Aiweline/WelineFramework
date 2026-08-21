@@ -20,7 +20,7 @@
 
 [data-theme="dark"] .acl-role-action-buttons .acl-role-permission-btn,
 [data-theme-mode="dark"] .acl-role-action-buttons .acl-role-permission-btn,
-[data-bs-theme="dark"] .acl-role-action-buttons .acl-role-permission-btn,
+[data-theme="dark"] .acl-role-action-buttons .acl-role-permission-btn,
 [data-layout-mode="dark"] .acl-role-action-buttons .acl-role-permission-btn {
     color: var(--backend-color-text-primary, #e6eef8) !important;
     background-color: var(--backend-color-bg-secondary, #172033) !important;
@@ -28,24 +28,24 @@
 }
 </style>
 <!-- start page title -->
-<div class='row' data-testid="acl-role-management">
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid" data-testid="acl-role-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>权限角色</lang>
             </h4>
 
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item">
                         <span>
                             <lang>系统配置</lang>
                         </span>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/backend/acl')"><lang>Acl权限管理</lang></a>
                     </li>
-                    <li class='breadcrumb-item active'>
+                    <li class="w-breadcrumb__item" data-state="active">
                         <a href="@backend-url('*/backend/acl/role')"><lang>Acl角色管理</lang></a>
                     </li>
                 </ol>
@@ -55,19 +55,19 @@
     </div>
 </div>
 <!-- end page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>权限角色</lang>
                 </h4>
-                <p class='card-title-desc'>
+                <p class="w-text" data-tone="muted">
                     <lang>支持角色权限管理</lang>
                 </p>
-                <div class='row'>
-                    <div class='col-6'>
-                        <div class="col-md-6">
+                <div class="w-grid">
+                    <div style="--w-span:6;">
+                        <div style="--w-span-md:6;">
                             <block class='Weline\Component\Block\Form\Search' id='acl-search'
                                    action='*/backend/acl/role'
                                    method='get'
@@ -76,16 +76,16 @@
                                    placeholder='请输入搜索词'></block>
                         </div>
                     </div>
-                    <div class='col-6'>
-                        <button type="button" class='btn btn-primary pull-right mt-1 mb-1' data-testid="acl-role-add" data-bs-toggle="offcanvas" data-bs-target="#roleAddOffcanvas" aria-controls="roleAddOffcanvas">
+                    <div style="--w-span:6;">
+                        <button type="button" class="w-button" data-testid="acl-role-add" aria-controls="roleAddOffcanvas" data-w-target="#roleAddOffcanvas" data-w-action="drawer.open" data-tone="primary" style="--w-mt:var(--weline-space-1);--w-mb:var(--weline-space-1);">
                             <lang>添加</lang>
                         </button>
                     </div>
                 </div>
 
-                <div class='table-rep-plugin'>
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                <div class="table-rep-plugin">
+                    <div class="w-table-wrap" data-pattern='priority-columns' style="--w-mb:0;">
+                        <table id='tech-companies-1' class="w-table">
                             <thead>
                             <tr>
                                 <th data-priority='1'>
@@ -108,15 +108,15 @@
                                     <td class='co-name'>{{role.update_time}}</td>
                                     <td class='co-name'>
                                         <if condition="role.role_id !== 1">
-                                            <div class="acl-role-action-buttons d-grid gap-2 d-md-flex">
+                                            <div class="acl-role-action-buttons w-stack" style="--w-gap:var(--weline-space-2);">
                                                 <w:form action="@backend-url('*/backend/acl/role/delete')" method='post'>
                                                     <input type='hidden' name='id' value='{{role.role_id}}'>
-                                                    <input type='submit' class='btn btn-danger btn-sm' value='@lang{删除}'>
+                                                    <input type='submit' class="w-button" value='@lang{删除}' data-tone="danger" data-size="sm">
                                                 </w:form>
-                                                <a class='btn btn-sm btn-info' href="@backend-url('*/backend/acl/role/edit')?id={{role.role_id}}">
+                                                <a class="w-button" href="@backend-url('*/backend/acl/role/edit')?id={{role.role_id}}" data-tone="info" data-size="sm">
                                                     <lang>编辑</lang>
                                                 </a>
-                                                <a class='acl-role-permission-btn btn btn-sm btn-secondary' href="@backend-url('*/backend/acl/role/assign')?id={{role.role_id}}">
+                                                <a class="acl-role-permission-btn w-button" href="@backend-url('*/backend/acl/role/assign')?id={{role.role_id}}" data-tone="neutral" data-size="sm">
                                                     <lang>权限管理</lang>
                                                 </a>
                                             </div>
@@ -126,7 +126,7 @@
                             </foreach>
                             <empty name="roles">
                                 <tr>
-                                    <td colspan="5" class="text-center">
+                                    <td colspan="5" class="w-text" data-align="center">
                                         <lang>暂无记录</lang>
                                     </td>
                                 </tr>
@@ -143,42 +143,38 @@
 </div> <!-- end row -->
 
 <!-- 添加角色 Offcanvas -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="roleAddOffcanvas" aria-labelledby="roleAddOffcanvasLabel">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="roleAddOffcanvasLabel">
+<div class="w-drawer offcanvas-end" tabindex="-1" id="roleAddOffcanvas" aria-labelledby="roleAddOffcanvasLabel" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+    <div class="w-drawer__header">
+        <h5 class="w-drawer__title" id="roleAddOffcanvasLabel">
             <lang>添加角色</lang>
         </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <button type="button" class="w-button" aria-label="Close" data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
     </div>
-    <div class="offcanvas-body">
-        <w:form id="roleAddForm"
-                class="needs-validation"
-                method="post"
-                action="@backend-url('*/backend/acl/role/add')"
-                novalidate>
-            <div class="mb-3">
-                <label for="role_name" class="form-label">
-                    <lang>角色名</lang> <span class="text-danger">*</span>
+    <div class="w-drawer__body">
+        <w:form id="roleAddForm" class="w-form" method="post" action="@backend-url('*/backend/acl/role/add')" novalidate>
+            <div style="--w-mb:var(--weline-space-4);">
+                <label for="role_name" class="w-field__label">
+                    <lang>角色名</lang> <span class="w-text" data-tone="danger">*</span>
                 </label>
-                <input type="text" class="form-control" id="role_name" name="role_name" required placeholder="@lang{请输入角色名}">
-                <div class="invalid-feedback">
+                <input type="text" class="w-input" id="role_name" name="role_name" required placeholder="@lang{请输入角色名}">
+                <div class="w-field__error">
                     <lang>请输入角色名称</lang>
                 </div>
             </div>
-            <div class="mb-3">
-                <label for="role_description" class="form-label">
-                    <lang>角色描述</lang> <span class="text-danger">*</span>
+            <div style="--w-mb:var(--weline-space-4);">
+                <label for="role_description" class="w-field__label">
+                    <lang>角色描述</lang> <span class="w-text" data-tone="danger">*</span>
                 </label>
-                <textarea class="form-control" id="role_description" name="role_description" rows="3" required placeholder="@lang{请输入角色描述}"></textarea>
-                <div class="invalid-feedback">
+                <textarea class="w-textarea" id="role_description" name="role_description" rows="3" required placeholder="@lang{请输入角色描述}"></textarea>
+                <div class="w-field__error">
                     <lang>请输入角色描述</lang>
                 </div>
             </div>
-            <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-primary">
+            <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                <button type="submit" class="w-button" data-tone="primary">
                     <lang>提交</lang>
                 </button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">
+                <button type="button" class="w-button" data-w-action="drawer.close" data-tone="neutral">
                     <lang>取消</lang>
                 </button>
             </div>
@@ -195,7 +191,7 @@
     var offcanvasElement = document.getElementById('roleAddOffcanvas');
 
     if (form && offcanvasElement) {
-      offcanvasElement.addEventListener('hidden.bs.offcanvas', function() {
+      offcanvasElement.addEventListener('weline:ui:drawer:close', function() {
         form.reset();
         form.classList.remove('was-validated');
       });

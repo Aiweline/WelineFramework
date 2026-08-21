@@ -33,7 +33,7 @@ $categories = [
         'id' => 1,
         'name' => __('电子产品'),
         'url' => '/category/electronics',
-        'icon' => 'ri-smartphone-line',
+        'icon' => 'phone',
         'count' => 156,
         'children' => [
             [
@@ -55,7 +55,7 @@ $categories = [
         'id' => 2,
         'name' => __('服装鞋帽'),
         'url' => '/category/fashion',
-        'icon' => 'ri-t-shirt-line',
+        'icon' => 'circle',
         'count' => 243,
         'children' => [
             ['id' => 21, 'name' => __('男装'), 'url' => '/category/mens', 'count' => 89],
@@ -67,28 +67,28 @@ $categories = [
         'id' => 3,
         'name' => __('家居生活'),
         'url' => '/category/home',
-        'icon' => 'ri-home-4-line',
+        'icon' => 'home',
         'count' => 178,
     ],
     [
         'id' => 4,
         'name' => __('美妆个护'),
         'url' => '/category/beauty',
-        'icon' => 'ri-heart-2-line',
+        'icon' => 'heart',
         'count' => 134,
     ],
     [
         'id' => 5,
         'name' => __('食品生鲜'),
         'url' => '/category/food',
-        'icon' => 'ri-restaurant-line',
+        'icon' => 'circle',
         'count' => 89,
     ],
     [
         'id' => 6,
         'name' => __('运动户外'),
         'url' => '/category/sports',
-        'icon' => 'ri-run-line',
+        'icon' => 'circle',
         'count' => 112,
     ],
 ];
@@ -108,7 +108,7 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
                         <span class="item-count"><?= $item['count'] ?></span>
                     <?php endif; ?>
                     <?php if (!empty($item['children'])): ?>
-                        <i class="ri-arrow-right-s-line"></i>
+                        <w:icon name="arrow-right" size="sm"></w:icon>
                     <?php endif; ?>
                 </a>
                 <?php if (!empty($item['children'])): ?>
@@ -126,9 +126,9 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
      data-expand-on-hover="<?= $expandOnHover ? 'true' : 'false' ?>">
     
     <button class="menu-trigger" type="button">
-        <i class="ri-menu-line"></i>
+        <w:icon name="menu" size="sm"></w:icon>
         <span><?= htmlspecialchars($title) ?></span>
-        <i class="ri-arrow-down-s-line trigger-arrow"></i>
+        <w:icon name="arrow-down" size="sm"></w:icon>
     </button>
     
     <div class="menu-dropdown">
@@ -144,7 +144,7 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
                             <span class="item-count"><?= $category['count'] ?></span>
                         <?php endif; ?>
                         <?php if (!empty($category['children'])): ?>
-                            <i class="ri-arrow-right-s-line arrow-icon"></i>
+                            <w:icon name="arrow-right" size="sm"></w:icon>
                         <?php endif; ?>
                     </a>
                     <?php if (!empty($category['children'])): ?>

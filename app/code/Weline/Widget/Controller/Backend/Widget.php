@@ -17,7 +17,7 @@ use Weline\Widget\Service\WidgetData;
 /**
  * 部件管理控制器
  */
-#[\Weline\Framework\Acl\Acl('Weline_Widget::widget_management', '部件管理', 'mdi mdi-puzzle', '部件管理')]
+#[\Weline\Framework\Acl\Acl('Weline_Widget::widget_management', '部件管理', 'puzzle', '部件管理')]
 class Widget extends BackendController
 {
     private WidgetData $widgetData;

@@ -3,9 +3,9 @@
 ## Repository identity
 
 - `/Users/weline/Project/Official/框架` is the canonical macOS repository for WelineFramework core.
-- Durable changes under `app/code/Weline/**` belong here first. Site repositories receive them only through an explicitly requested update/release workflow.
-- If a site-repository task changes `app/code/Weline/**` for any confirmed defect, feature, runtime, configuration, or core documentation work, merge that task's verified delta back into this canonical repository in the same task. Never overwrite either side wholesale.
-- Treat the canonical on-disk working copy, including its uncommitted hunks, as the merge base: record both path diffs, apply only the current task's semantic hunks, then prove all pre-existing canonical hunks remain. See `dev/ai/global-constraints.md` “Merge-back baseline”.
+- Durable changes under `app/code/Weline/**` belong here.
+- Distribution to consuming sites is never automatic; use only an explicitly requested 「分项」, 「回灌」, deployment, or named release workflow.
+- There is no standing dual-repo merge/align workflow with retired site peers (including QiPai).
 
 ## Start here
 
@@ -21,7 +21,7 @@
 
 - Preserve unrelated dirty working-tree changes and keep edits task-scoped.
 - Local Git policy (hard): only branches `dev` and `master`; code changes only on `dev`; no `git worktree` and no other local branches. Full text: `dev/ai/global-constraints.md` §7.
-- Core-to-site distribution is never implied by a core edit; use only the explicitly requested release or synchronization workflow.
+- Core-to-site distribution is never implied by a core edit; use only the explicitly requested release workflow.
 - Keep domain constraints, validation rules, authorization, and delivery requirements in `dev/ai/global-constraints.md` or the owning skill instead of mirroring them here.
 
 ## Resources

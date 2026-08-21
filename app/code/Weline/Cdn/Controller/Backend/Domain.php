@@ -26,7 +26,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_domain_manager', 'CDN域名管理', 'mdi-web', 'CDN域名管理', 'Weline_Cdn::cdn_manager')]
+#[AclAttribute('Weline_Cdn::cdn_domain_manager', 'CDN域名管理', 'globe', 'CDN域名管理', 'Weline_Cdn::cdn_manager')]
 class Domain extends BackendController
 {
     /**
@@ -74,7 +74,7 @@ class Domain extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_domain_list', '查看域名列表', 'mdi-view-list', '查看CDN域名列表')]
+    #[AclAttribute('Weline_Cdn::cdn_domain_list', '查看域名列表', 'list', '查看CDN域名列表')]
     public function index(): string
     {
         try {
@@ -162,7 +162,7 @@ class Domain extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_domain_form', '域名表单', 'mdi-form', '创建/编辑CDN域名表单')]
+    #[AclAttribute('Weline_Cdn::cdn_domain_form', '域名表单', 'circle', '创建/编辑CDN域名表单')]
     public function form(): string
     {
         $id = (int)$this->request->getGet('id');
@@ -226,7 +226,7 @@ class Domain extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_domain_save', '保存域名', 'mdi-content-save', '保存CDN域名')]
+    #[AclAttribute('Weline_Cdn::cdn_domain_save', '保存域名', 'save', '保存CDN域名')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -400,7 +400,7 @@ class Domain extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_domain_delete', '删除域名', 'mdi-delete', '删除CDN域名')]
+    #[AclAttribute('Weline_Cdn::cdn_domain_delete', '删除域名', 'trash', '删除CDN域名')]
     public function postDelete(): string
     {
         // 支持 JSON 和表单数据
@@ -445,7 +445,7 @@ class Domain extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_domain_toggle_enable', '启用/禁用域名', 'mdi-toggle-switch', '启用/禁用CDN域名')]
+    #[AclAttribute('Weline_Cdn::cdn_domain_toggle_enable', '启用/禁用域名', 'switch', '启用/禁用CDN域名')]
     public function toggleEnable(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -490,7 +490,7 @@ class Domain extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_domain_import_rules', '导入规则', 'mdi-download', '从CDN导入规则')]
+    #[AclAttribute('Weline_Cdn::cdn_domain_import_rules', '导入规则', 'download', '从CDN导入规则')]
     public function importRules(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -543,7 +543,7 @@ class Domain extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_domain_push_rules', '推送规则', 'mdi-upload', '推送规则到CDN')]
+    #[AclAttribute('Weline_Cdn::cdn_domain_push_rules', '推送规则', 'upload', '推送规则到CDN')]
     public function pushRules(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -592,7 +592,7 @@ class Domain extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_domain_clear_cache', '清理缓存', 'mdi-delete-sweep', '清理CDN缓存')]
+    #[AclAttribute('Weline_Cdn::cdn_domain_clear_cache', '清理缓存', 'trash', '清理CDN缓存')]
     public function clearCache(): string
     {
         if (!$this->request->isPost()) {

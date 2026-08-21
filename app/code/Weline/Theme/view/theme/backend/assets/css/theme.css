@@ -149,7 +149,7 @@
     --admin-border: var(--backend-theme-border-color); --admin-border-radius: var(--backend-theme-radius-md); --admin-border-radius-sm: var(--backend-theme-radius-sm); --admin-border-radius-lg: var(--backend-theme-radius-lg);
     --admin-shadow-sm: var(--backend-theme-shadow-sm); --admin-shadow: var(--backend-theme-shadow-sm); --admin-shadow-md: var(--backend-dropdown-shadow); --admin-shadow-lg: var(--backend-modal-shadow);
     --admin-sidebar-width: 260px; --admin-sidebar-collapsed-width: 70px; --admin-header-height: 60px; --admin-footer-height: 50px;
-    --admin-font-family: var(--backend-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif); --admin-font-size-xs: 0.75rem; --admin-font-size-sm: 0.875rem; --admin-font-size-base: 0.9375rem; --admin-font-size-lg: 1.125rem;
+    --admin-font-family: var(--backend-font-family, "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif); --admin-font-size-xs: 0.75rem; --admin-font-size-sm: 0.875rem; --admin-font-size-base: 0.9375rem; --admin-font-size-lg: 1.125rem;
     --admin-transition: 0.2s ease; --admin-transition-fast: 0.15s ease;
 }
 
@@ -461,7 +461,7 @@ body {
 
 body[data-theme-mode="dark"] #page-topbar,
 body[data-layout-mode="dark"] #page-topbar,
-body[data-bs-theme="dark"] #page-topbar,
+body[data-theme="dark"] #page-topbar,
 body[data-topbar="dark"] #page-topbar,
 body[data-sidebar="dark"] #page-topbar {
     background: var(--backend-topbar-bg);
@@ -471,7 +471,7 @@ body[data-sidebar="dark"] #page-topbar {
 
 body[data-theme-mode="dark"] #page-topbar .navbar-header,
 body[data-layout-mode="dark"] #page-topbar .navbar-header,
-body[data-bs-theme="dark"] #page-topbar .navbar-header,
+body[data-theme="dark"] #page-topbar .navbar-header,
 body[data-topbar="dark"] #page-topbar .navbar-header,
 body[data-sidebar="dark"] #page-topbar .navbar-header {
     background: var(--backend-topbar-bg);
@@ -481,7 +481,7 @@ body[data-sidebar="dark"] #page-topbar .navbar-header {
 
 body[data-theme-mode="dark"] #page-topbar .navbar-brand-box,
 body[data-layout-mode="dark"] #page-topbar .navbar-brand-box,
-body[data-bs-theme="dark"] #page-topbar .navbar-brand-box,
+body[data-theme="dark"] #page-topbar .navbar-brand-box,
 body[data-topbar="dark"] #page-topbar .navbar-brand-box,
 body[data-sidebar="dark"] #page-topbar .navbar-brand-box,
 body[data-sidebar="dark"] #page-topbar .navbar-brand-box.text-center {
@@ -491,7 +491,7 @@ body[data-sidebar="dark"] #page-topbar .navbar-brand-box.text-center {
 
 body[data-theme-mode="dark"] #page-topbar .header-item,
 body[data-layout-mode="dark"] #page-topbar .header-item,
-body[data-bs-theme="dark"] #page-topbar .header-item,
+body[data-theme="dark"] #page-topbar .header-item,
 body[data-topbar="dark"] #page-topbar .header-item,
 body[data-sidebar="dark"] #page-topbar .header-item {
     background: color-mix(in srgb, var(--backend-topbar-surface) 62%, transparent);
@@ -504,8 +504,8 @@ body[data-theme-mode="dark"] #page-topbar .header-item:hover,
 body[data-theme-mode="dark"] #page-topbar .header-item:focus,
 body[data-layout-mode="dark"] #page-topbar .header-item:hover,
 body[data-layout-mode="dark"] #page-topbar .header-item:focus,
-body[data-bs-theme="dark"] #page-topbar .header-item:hover,
-body[data-bs-theme="dark"] #page-topbar .header-item:focus,
+body[data-theme="dark"] #page-topbar .header-item:hover,
+body[data-theme="dark"] #page-topbar .header-item:focus,
 body[data-topbar="dark"] #page-topbar .header-item:hover,
 body[data-topbar="dark"] #page-topbar .header-item:focus,
 body[data-topbar="dark"] #page-topbar .navbar-header .dropdown .show.header-item,
@@ -518,12 +518,12 @@ body[data-sidebar="dark"] #page-topbar .navbar-header .dropdown .show.header-ite
 
 body[data-theme-mode="dark"] #page-topbar .navbar-brand-box .logo img,
 body[data-layout-mode="dark"] #page-topbar .navbar-brand-box .logo img,
-body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo img,
+body[data-theme="dark"] #page-topbar .navbar-brand-box .logo img,
 body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo img,
 body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img,
 body[data-theme-mode="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
 body[data-layout-mode="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
-body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
+body[data-theme="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
 body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
 body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img {
     padding: 0 !important;
@@ -534,12 +534,12 @@ body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img {
 
 body[data-theme-mode="dark"] #page-topbar .noti-icon i,
 body[data-layout-mode="dark"] #page-topbar .noti-icon i,
-body[data-bs-theme="dark"] #page-topbar .noti-icon i,
+body[data-theme="dark"] #page-topbar .noti-icon i,
 body[data-topbar="dark"] #page-topbar .noti-icon i,
 body[data-sidebar="dark"] #page-topbar .noti-icon i,
 body[data-theme-mode="dark"] #page-topbar .weline-notif-btn > i,
 body[data-layout-mode="dark"] #page-topbar .weline-notif-btn > i,
-body[data-bs-theme="dark"] #page-topbar .weline-notif-btn > i,
+body[data-theme="dark"] #page-topbar .weline-notif-btn > i,
 body[data-topbar="dark"] #page-topbar .weline-notif-btn > i,
 body[data-sidebar="dark"] #page-topbar .weline-notif-btn > i {
     color: inherit;
@@ -547,7 +547,7 @@ body[data-sidebar="dark"] #page-topbar .weline-notif-btn > i {
 
 body[data-theme-mode="dark"] #page-topbar .header-profile-user,
 body[data-layout-mode="dark"] #page-topbar .header-profile-user,
-body[data-bs-theme="dark"] #page-topbar .header-profile-user,
+body[data-theme="dark"] #page-topbar .header-profile-user,
 body[data-topbar="dark"] #page-topbar .header-profile-user,
 body[data-sidebar="dark"] #page-topbar .header-profile-user {
     background: var(--backend-component-avatar-surface);
@@ -1703,14 +1703,14 @@ a.btn {
 html[data-theme="dark"],
 html[data-theme-mode="dark"],
 html[data-layout-mode="dark"],
-html[data-bs-theme="dark"] {
+html[data-theme="dark"] {
     color-scheme: dark;
 }
 
 html[data-theme="light"],
 html[data-theme-mode="light"],
 html[data-layout-mode="light"],
-html[data-bs-theme="light"] {
+html[data-theme="light"] {
     color-scheme: light;
 }
 

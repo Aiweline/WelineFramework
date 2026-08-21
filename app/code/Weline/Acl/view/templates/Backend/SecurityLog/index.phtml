@@ -34,30 +34,30 @@ $getEventTypeBadgeClass = function ($eventType) {
 };
 ?>
 <!-- 页面标题 -->
-<div class="row" data-testid="acl-security-log-management">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>安全日志</lang></h4>
+<div class="w-grid" data-testid="acl-security-log-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>安全日志</lang></h4>
         </div>
     </div>
 </div>
 
 <!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 搜索和筛选 -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card">
-            <div class="card-body">
-                <w:form method="get" action="@var($this->getBackendUrl('*/backend/security-log'))" class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label"><lang>事件类型</lang></label>
-                        <select class="form-select" name="event_type">
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <w:form method="get" action="@var($this->getBackendUrl('*/backend/security-log'))" class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label"><lang>事件类型</lang></label>
+                        <select class="w-select" name="event_type">
                             <option value=""><lang>全部</lang></option>
                             <?php foreach ($eventTypes as $type => $label): ?>
                             <option value="<?= $type ?>" <?= $eventType === $type ? 'selected' : '' ?>>
@@ -66,19 +66,18 @@ $getEventTypeBadgeClass = function ($eventType) {
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label"><lang>关键词</lang></label>
-                        <input type="text" class="form-control" name="keyword" value="<?= htmlspecialchars($keyword) ?>" 
-                               placeholder="<?= __('搜索消息或IP地址') ?>">
+                    <div style="--w-span-md:6;">
+                        <label class="w-field__label"><lang>关键词</lang></label>
+                        <input type="text" class="w-input" name="keyword" value="<?= htmlspecialchars($keyword) ?>" placeholder="<?= __('搜索消息或IP地址') ?>">
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label">&nbsp;</label>
                         <div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-magnify me-2"></i><lang>搜索</lang>
+                            <button type="submit" class="w-button" data-tone="primary">
+                                <w:icon name="search" size="sm"></w:icon><lang>搜索</lang>
                             </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/security-log') ?>" class="btn btn-secondary">
-                                <i class="mdi mdi-refresh me-2"></i><lang>重置</lang>
+                            <a href="<?= $this->getBackendUrl('*/backend/security-log') ?>" class="w-button" data-tone="neutral">
+                                <w:icon name="refresh" size="sm"></w:icon><lang>重置</lang>
                             </a>
                         </div>
                     </div>
@@ -89,16 +88,16 @@ $getEventTypeBadgeClass = function ($eventType) {
 </div>
 
 <!-- 日志列表 -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>日志列表</lang></h4>
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title" style="--w-mb:var(--weline-space-6);"><lang>日志列表</lang></h4>
                 
                 <?php if (!empty($logs)): ?>
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle table-nowrap mb-0">
-                        <thead class="table-light">
+                <div class="w-table-wrap">
+                    <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
+                        <thead>
                             <tr>
                                 <th><lang>ID</lang></th>
                                 <th><lang>事件类型</lang></th>
@@ -118,7 +117,7 @@ $getEventTypeBadgeClass = function ($eventType) {
                             <tr>
                                 <td><?= $logData['log_id'] ?? $logData['id'] ?? '' ?></td>
                                 <td>
-                                    <span class="badge bg-<?= $getEventTypeBadgeClass($logData['event_type'] ?? '') ?>">
+                                    <span class="w-badge bg-<?= $getEventTypeBadgeClass($logData['event_type'] ?? '') ?>">
                                         <?= htmlspecialchars($eventTypeLabel) ?>
                                     </span>
                                 </td>
@@ -127,10 +126,7 @@ $getEventTypeBadgeClass = function ($eventType) {
                                 <td><?= htmlspecialchars($logData['message'] ?? '-') ?></td>
                                 <td><?= $logData['created_at'] ?? '-' ?></td>
                                 <td>
-                                    <button type="button"
-                                            class="btn btn-sm btn-info"
-                                            data-security-log-details="1"
-                                            data-log-id="<?= $logData['log_id'] ?? $logData['id'] ?? 0 ?>">
+                                    <button type="button" class="w-button" data-security-log-details="1" data-log-id="<?= $logData['log_id'] ?? $logData['id'] ?? 0 ?>" data-tone="info" data-size="sm">
                                         <lang>查看详情</lang>
                                     </button>
                                 </td>
@@ -142,36 +138,36 @@ $getEventTypeBadgeClass = function ($eventType) {
 
                 <!-- 分页 -->
                 <?php if ($totalPages > 1): ?>
-                <div class="row mt-4">
-                    <div class="col-sm-12 col-md-5">
+                <div class="w-grid" style="--w-mt:var(--weline-space-6);">
+                    <div style="--w-span:12;--w-span-md:5;">
                         <div class="dataTables_info">
                             <lang>显示</lang> <?= (($page - 1) * $limit + 1) ?> 
                             <lang>到</lang> <?= min($page * $limit, $total) ?> 
                             <lang>共</lang> <?= $total ?> <lang>条记录</lang>
                         </div>
                     </div>
-                    <div class="col-sm-12 col-md-7">
-                        <div class="dataTables_paginate paging_simple_numbers float-end">
-                            <ul class="pagination">
+                    <div style="--w-span:12;--w-span-md:7;">
+                        <div class="dataTables_paginate paging_simple_numbers">
+                            <ul class="w-pagination">
                                 <?php if ($page > 1): ?>
-                                <li class="paginate_button page-item previous">
-                                    <a href="?page=<?= $page - 1 ?>&event_type=<?= urlencode($eventType) ?>&keyword=<?= urlencode($keyword) ?>" class="page-link">
+                                <li class="paginate_button w-pagination__item previous">
+                                    <a href="?page=<?= $page - 1 ?>&event_type=<?= urlencode($eventType) ?>&keyword=<?= urlencode($keyword) ?>" class="w-pagination__link">
                                         <lang>上一页</lang>
                                     </a>
                                 </li>
                                 <?php endif; ?>
                                 
                                 <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                                <li class="paginate_button page-item <?= $i === $page ? 'active' : '' ?>">
-                                    <a href="?page=<?= $i ?>&event_type=<?= urlencode($eventType) ?>&keyword=<?= urlencode($keyword) ?>" class="page-link">
+                                <li class="paginate_button w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                                    <a href="?page=<?= $i ?>&event_type=<?= urlencode($eventType) ?>&keyword=<?= urlencode($keyword) ?>" class="w-pagination__link">
                                         <?= $i ?>
                                     </a>
                                 </li>
                                 <?php endfor; ?>
                                 
                                 <?php if ($page < $totalPages): ?>
-                                <li class="paginate_button page-item next">
-                                    <a href="?page=<?= $page + 1 ?>&event_type=<?= urlencode($eventType) ?>&keyword=<?= urlencode($keyword) ?>" class="page-link">
+                                <li class="paginate_button w-pagination__item next">
+                                    <a href="?page=<?= $page + 1 ?>&event_type=<?= urlencode($eventType) ?>&keyword=<?= urlencode($keyword) ?>" class="w-pagination__link">
                                         <lang>下一页</lang>
                                     </a>
                                 </li>
@@ -183,9 +179,9 @@ $getEventTypeBadgeClass = function ($eventType) {
                 <?php endif; ?>
 
                 <?php else: ?>
-                <div class="text-center text-muted py-5">
-                    <i class="mdi mdi-shield-alert" style="font-size: 48px;"></i>
-                    <p class="mt-3"><lang>暂无安全日志记录</lang></p>
+                <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                    <w:icon name="warning" size="sm"></w:icon>
+                    <p style="--w-mt:var(--weline-space-4);"><lang>暂无安全日志记录</lang></p>
                 </div>
                 <?php endif; ?>
             </div>
@@ -198,7 +194,7 @@ $getEventTypeBadgeClass = function ($eventType) {
     'use strict';
     
     window.viewDetails = function(logId) {
-        BackendToast.info('<?= __('查看日志ID：') ?>' + logId);
+        Weline.UI.toast.info('<?= __('查看日志ID：') ?>' + logId);
     };
 
     document.addEventListener('click', function(event) {

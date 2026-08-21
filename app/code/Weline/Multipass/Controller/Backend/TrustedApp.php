@@ -9,7 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Multipass\Model\TrustedApp as TrustedAppModel;
 use Weline\Multipass\Service\IdentityBridgeService;
 
-#[Acl('Weline_Multipass::trusted_app_management', '互通应用管理', 'mdi mdi-application-cog', '管理可信互通应用', 'Weline_Multipass::menu_multipass_management')]
+#[Acl('Weline_Multipass::trusted_app_management', '互通应用管理', 'settings', '管理可信互通应用', 'Weline_Multipass::menu_multipass_management')]
 class TrustedApp extends BackendController
 {
     private ?IdentityBridgeService $identityBridgeService = null;

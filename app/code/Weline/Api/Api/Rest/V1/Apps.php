@@ -17,7 +17,7 @@ class Apps extends FrontendRestController
     private ?ApiAppTokenService $tokenService = null;
     private ?ApiScopeCatalogService $scopeCatalogService = null;
 
-    #[Acl('Weline_Api::app_create', '创建第三方应用', 'fa fa-plus', '创建第三方应用', 'Weline_Api::integration', accessMode: 'edit')]
+    #[Acl('Weline_Api::app_create', '创建第三方应用', 'plus', '创建第三方应用', 'Weline_Api::integration', accessMode: 'edit')]
     public function postCreate(): array|string
     {
         try {
@@ -40,7 +40,7 @@ class Apps extends FrontendRestController
         }
     }
 
-    #[Acl('Weline_Api::app_authorize_read', '查看应用授权范围', 'fa fa-key', '查看应用授权范围', 'Weline_Api::integration', accessMode: 'read')]
+    #[Acl('Weline_Api::app_authorize_read', '查看应用授权范围', 'key', '查看应用授权范围', 'Weline_Api::integration', accessMode: 'read')]
     public function getAuthorize(): array|string
     {
         $clientId = $this->getStringParam('client_id');
@@ -57,7 +57,7 @@ class Apps extends FrontendRestController
         ]);
     }
 
-    #[Acl('Weline_Api::app_authorize', '批准应用授权', 'fa fa-key', '批准应用授权', 'Weline_Api::integration', accessMode: 'edit')]
+    #[Acl('Weline_Api::app_authorize', '批准应用授权', 'key', '批准应用授权', 'Weline_Api::integration', accessMode: 'edit')]
     public function postAuthorize(): array|string
     {
         try {

@@ -22,7 +22,7 @@ use Weline\Payment\Service\PaymentScopeConfigService;
 use Weline\Payment\Model\PaymentMethod;
 use Weline\Payment\Service\PaymentObjectScopeService;
 
-#[Acl('Weline_Payment::payment_method', '支付方式管理', 'mdi-credit-card', '支付方式管理', 'Weline_Backend::payment_group')]
+#[Acl('Weline_Payment::payment_method', '支付方式管理', 'edit', '支付方式管理', 'Weline_Backend::payment_group')]
 class Method extends BackendController
 {
     private PaymentMethodManager $methodManager;
@@ -38,7 +38,7 @@ class Method extends BackendController
     /**
      * 支付方式列表页
      */
-    #[Acl('Weline_Payment::payment_method_index', '查看支付方式', 'mdi-format-list-bulleted', '查看支付方式列表')]
+    #[Acl('Weline_Payment::payment_method_index', '查看支付方式', 'list', '查看支付方式列表')]
     public function index()
     {
         try {
@@ -70,7 +70,7 @@ class Method extends BackendController
     /**
      * 编辑支付方式
      */
-    #[Acl('Weline_Payment::payment_method_edit', '编辑支付方式', 'mdi-pencil', '编辑支付方式配置')]
+    #[Acl('Weline_Payment::payment_method_edit', '编辑支付方式', 'edit', '编辑支付方式配置')]
     public function edit()
     {
         $code = $this->request->getParam('code');

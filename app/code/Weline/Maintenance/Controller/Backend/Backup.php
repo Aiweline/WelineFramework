@@ -19,7 +19,7 @@ use Weline\Maintenance\Service\BackupManager;
 /**
  * 备份管理控制器
  */
-#[Acl('Weline_Maintenance::backup', '备份管理', 'mdi-backup-restore', '备份管理', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_Maintenance::backup', '备份管理', 'store', '备份管理', 'Weline_Backend::system_maintenance')]
 class Backup extends BackendController
 {
     private BackupManager $backupManager;
@@ -35,7 +35,7 @@ class Backup extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Maintenance::backup_index', '查看备份列表', 'mdi-list', '查看备份列表')]
+    #[Acl('Weline_Maintenance::backup_index', '查看备份列表', 'list', '查看备份列表')]
     public function index(): string
     {
         try {
@@ -64,7 +64,7 @@ class Backup extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Maintenance::backup_create', '创建备份', 'mdi-content-save', '创建备份')]
+    #[Acl('Weline_Maintenance::backup_create', '创建备份', 'save', '创建备份')]
     public function create(): string
     {
         if (!$this->isPost()) {
@@ -95,7 +95,7 @@ class Backup extends BackendController
      * 
      * @return void
      */
-    #[Acl('Weline_Maintenance::backup_download', '下载备份', 'mdi-download', '下载备份')]
+    #[Acl('Weline_Maintenance::backup_download', '下载备份', 'download', '下载备份')]
     public function download(): void
     {
         try {
@@ -133,7 +133,7 @@ class Backup extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Maintenance::backup_delete', '删除备份', 'mdi-delete', '删除备份')]
+    #[Acl('Weline_Maintenance::backup_delete', '删除备份', 'trash', '删除备份')]
     public function delete(): string
     {
         if (!$this->isPost()) {

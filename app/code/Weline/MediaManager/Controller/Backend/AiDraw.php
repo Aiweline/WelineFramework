@@ -18,7 +18,7 @@ use Weline\MediaManager\Service\AiDrawService;
 #[Acl(
     'Weline_MediaManager::query:ai_draw',
     'AI 作图',
-    'mdi-image-auto-adjust',
+    'image',
     '媒体管理 AI 作图（文生图/图生图/批量）',
     'Weline_MediaManager::file_manager'
 )]
@@ -63,7 +63,7 @@ class AiDraw extends BackendController
     #[Acl(
         'Weline_MediaManager::query:ai_draw_save',
         'AI 作图保存',
-        'mdi-content-save',
+        'save',
         '保存 AI 作图结果到媒体库',
         'Weline_MediaManager::query:ai_draw'
     )]

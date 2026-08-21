@@ -20,7 +20,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * 货币配置控制器
  */
-#[\Weline\Framework\Acl\Acl('Weline_Currency::currency_config', '货币配置', 'mdi mdi-cog', '货币模块配置管理', 'Weline_Backend::currency_group')]
+#[\Weline\Framework\Acl\Acl('Weline_Currency::currency_config', '货币配置', 'settings', '货币模块配置管理', 'Weline_Backend::currency_group')]
 class Config extends BackendController
 {
     /**
@@ -162,7 +162,7 @@ class Config extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_config_test', '测试API', '', '测试汇率API连接')]
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_config_test', '测试API', 'mdi mdi-connection', '测试汇率API连接')]
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_config_test', '测试API', 'link', '测试汇率API连接')]
     public function testApi()
     {
         try {
@@ -211,7 +211,7 @@ class Config extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_import', '手动导入', '', '手动触发汇率导入')]
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_import', '手动导入', 'mdi mdi-download', '手动触发汇率导入')]
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_import', '手动导入', 'download', '手动触发汇率导入')]
     public function import()
     {
         try {
@@ -268,7 +268,7 @@ class Config extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_update_rates', '更新汇率', '', '更新所有货币汇率')]
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_update_rates', '更新汇率', 'mdi mdi-refresh', '更新所有货币汇率')]
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_update_rates', '更新汇率', 'refresh', '更新所有货币汇率')]
     public function postUpdateRates()
     {
         try {

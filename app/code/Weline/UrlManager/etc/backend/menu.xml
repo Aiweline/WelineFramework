@@ -7,28 +7,28 @@
           name="seo_optimization" 
           title="SEO优化" 
           parent="Weline_Backend::business_operations" 
-          icon="mdi mdi-search-web" 
+          icon="search" 
           order="12000">
         
         <!-- URL管理器 -->
         <menu source="Weline_UrlManager::url_manager" 
               name="url_manager" 
               title="URL管理器" 
-              icon="mdi mdi-router" 
+              icon="circle" 
               order="10">
             
             <menu source="Weline_UrlManager::url_manager_listing" 
                   name="url_manager_listing" 
                   title="URL路由列表" 
                   action="url-manager/backend/url/listing"
-                  icon="mdi mdi-router" 
+                  icon="circle" 
                   order="10"/>
             
             <menu source="Weline_UrlManager::url_manager_rewrite" 
                   name="url_manager_rewrite" 
                   title="URL路由重写" 
                   action="url-manager/backend/rewriter"
-                  icon="mdi mdi-lock-reset" 
+                  icon="lock" 
                   order="20"/>
         </menu>
     </menu>

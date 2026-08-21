@@ -370,19 +370,9 @@ Events,Events
 总记录数,"Total Records"
 总价值,总价值
 未处理记录,未处理记录
-加载失败,"Failed to load"
-确定,Confirm
 提示,Prompt
-请先选择测试,"Please select a test first"
-请填写测试ID和测试名称,"Fill in the test ID and test name."
-格式错误,"Format error"
-变体配置JSON格式错误,"Variant Configuration JSON Format Error"
-成功,Success
-创建成功,"Created successfully"
-创建失败,"Creation failed"
-瀵煎嚭澶辫触,瀵煎嚭澶辫触
-纭畾,纭畾
 请输入测试ID,"Please enter the test ID"
+确定,Confirm
 请求成功！,请求成功！
 获取统计信息成功,"Successfully fetched statistics"
 获取统计信息失败：%{1},"Failed to fetch statistics: %{1}"
@@ -483,6 +473,16 @@ Events,Events
 "rule 匹配模式无效：%{1}","Invalid rule match mode: %{1}"
 "rule 匹配值必填","Rule match value is required"
 "campaign 渠道不接受匹配模式/匹配值","Campaign channels do not accept match mode/value"
+加载失败,"Failed to load"
+请先选择测试,"Please select a test first"
+请填写测试ID和测试名称,"Fill in the test ID and test name."
+格式错误,"Format error"
+变体配置JSON格式错误,"Variant Configuration JSON Format Error"
+成功,Success
+创建成功,"Created successfully"
+创建失败,"Creation failed"
+瀵煎嚭澶辫触,瀵煎嚭澶辫触
+纭畾,纭畾
 站点ID,"Website ID"
 "0 表示全局渠道。","0 means a global channel."
 "站点 ID（必填）","Site ID (required)"

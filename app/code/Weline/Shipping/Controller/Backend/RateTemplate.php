@@ -17,7 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\RateTemplate as RateTemplateModel;
 use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
-#[Acl('Weline_Shipping::rate_template', '费用模板管理', 'mdi-calculator', '费用模板管理', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::rate_template', '费用模板管理', 'circle', '费用模板管理', 'Weline_Backend::shipping_group')]
 class RateTemplate extends BackendController
 {
     private RateTemplateModel $rateTemplate;
@@ -32,7 +32,7 @@ class RateTemplate extends BackendController
     /**
      * 费用模板列表页（占位实现，保证页面可用）
      */
-    #[Acl('Weline_Shipping::rate_template_index', '查看费用模板', 'mdi-format-list-bulleted', '查看费用模板列表')]
+    #[Acl('Weline_Shipping::rate_template_index', '查看费用模板', 'list', '查看费用模板列表')]
     public function index()
     {
         $templates = $this->rateTemplate->reset()
@@ -47,7 +47,7 @@ class RateTemplate extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Shipping::rate_template_save', '保存费用模板', 'mdi-content-save', '创建费用模板')]
+    #[Acl('Weline_Shipping::rate_template_save', '保存费用模板', 'save', '创建费用模板')]
     public function save()
     {
         try {

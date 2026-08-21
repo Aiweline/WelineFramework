@@ -12,8 +12,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $page_title ?></title>
-    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet">
+    <css>Weline_Frontend::assets/css/bootstrap.min.css</css>
+    <css>Weline_Frontend::assets/css/icons.min.css</css>
     <style>
         .test-card {
             transition: transform 0.2s;
@@ -266,7 +266,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         </div>
     </div>
 
-    <script src="@static(Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js)"></script>
+    <js>Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js</js>
     <script>
         const dataTableTestMessages = {
             clearConfirm: <?= json_encode((string)__('确定要清理所有测试数据吗？此操作不可恢复！'), $jsonForScriptFlags) ?>,

@@ -14,10 +14,10 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\MarketplaceMeta\MarketplaceTag;
 
-#[Acl('Weline_AppStore::installed', '我的模块', 'bi-puzzle', 'App 商城安装来源记录', 'Weline_AppStore::appstore')]
+#[Acl('Weline_AppStore::installed', '我的模块', 'puzzle', 'App 商城安装来源记录', 'Weline_AppStore::appstore')]
 class Installed extends BackendController
 {
-    #[Acl('Weline_AppStore::installed_view', '查看模块', 'bi-list', '查看 App 商城安装来源记录')]
+    #[Acl('Weline_AppStore::installed_view', '查看模块', 'list', '查看 App 商城安装来源记录')]
     public function index(): string
     {
         /** @var AppStoreInstalledModule $moduleModel */
@@ -60,7 +60,7 @@ class Installed extends BackendController
         return $this->fetch('Weline_AppStore::templates/Backend/Installed/index.phtml');
     }
 
-    #[Acl('Weline_AppStore::installed_detail', '模块详情', 'bi-info-circle', '查看模块详情')]
+    #[Acl('Weline_AppStore::installed_detail', '模块详情', 'info', '查看模块详情')]
     public function detail(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -81,7 +81,7 @@ class Installed extends BackendController
         return $this->jsonResponse(true, '', ['module' => $module->getData()]);
     }
 
-    #[Acl('Weline_AppStore::installed_uninstall', '系统卸载提示', 'bi-terminal', '提示使用系统模块卸载')]
+    #[Acl('Weline_AppStore::installed_uninstall', '系统卸载提示', 'terminal', '提示使用系统模块卸载')]
     public function uninstall(): string
     {
         if ($this->request->isPost()) {
@@ -119,7 +119,7 @@ class Installed extends BackendController
         }
     }
 
-    #[Acl('Weline_AppStore::installed_check_update', '检查更新', 'bi-arrow-repeat', '检查模块更新')]
+    #[Acl('Weline_AppStore::installed_check_update', '检查更新', 'circle', '检查模块更新')]
     public function checkUpdate(): string
     {
         if ((int)$this->request->getPost('install_id', 0) > 0) {
@@ -134,19 +134,19 @@ class Installed extends BackendController
         return $this->index();
     }
 
-    #[Acl('Weline_AppStore::installed_update', '更新模块', 'bi-cloud-arrow-down', '下载并升级已安装模块')]
+    #[Acl('Weline_AppStore::installed_update', '更新模块', 'arrow-down', '下载并升级已安装模块')]
     public function update(): string
     {
         return $this->performUpdate();
     }
 
-    #[Acl('Weline_AppStore::installed_update', '鏇存柊妯″潡', 'bi-cloud-arrow-down', '涓嬭浇骞跺崌绾у凡瀹夎妯″潡')]
+    #[Acl('Weline_AppStore::installed_update', '鏇存柊妯″潡', 'arrow-down', '涓嬭浇骞跺崌绾у凡瀹夎妯″潡')]
     public function postUpdate(): string
     {
         return $this->performUpdate();
     }
 
-    #[Acl('Weline_AppStore::installed_submit_review', '提交评价', 'bi-star', '从终端提交应用评分和评价')]
+    #[Acl('Weline_AppStore::installed_submit_review', '提交评价', 'star', '从终端提交应用评分和评价')]
     public function submitReview(): string
     {
         if (!$this->request->isPost()) {
@@ -205,7 +205,7 @@ class Installed extends BackendController
         return $this->index();
     }
 
-    #[Acl('Weline_AppStore::installed_uninstall', '卸载模块', 'bi-trash', '通过系统卸载流程卸载 App 商城模块')]
+    #[Acl('Weline_AppStore::installed_uninstall', '卸载模块', 'trash', '通过系统卸载流程卸载 App 商城模块')]
     public function postUninstall(): string
     {
         return $this->performUninstall();

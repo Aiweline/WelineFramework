@@ -48,16 +48,16 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
 ?>
 
 <!-- 面包屑导航 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18">
-                <i class="mdi mdi-robot text-primary"></i> <?= $pageTitle ?>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;">
+                <w:icon name="robot" size="sm"></w:icon> <?= $pageTitle ?>
             </h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/model') ?>"><lang>AI模型</lang></a></li>
-                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新建') ?></li>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('*/backend/model') ?>"><lang>AI模型</lang></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= $isEdit ? __('编辑') : __('新建') ?></li>
                 </ol>
             </div>
         </div>
@@ -65,8 +65,8 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
 </div>
 
 <!-- 消息提示 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
@@ -81,54 +81,50 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
             <input type="hidden" id="record_max_tokens" name="max_tokens" value="4096">
             <input type="hidden" id="cost_per_token" name="cost_per_token" value="0">
 
-            <div class="card mb-3 quick-model-create-card border-primary">
-                <div class="card-header">
-                    <h5><i class="mdi mdi-lightning-bolt me-2"></i><?= __('快速选择模型') ?></h5>
+            <div class="w-card quick-model-create-card border-primary" style="--w-mb:var(--weline-space-4);">
+                <div class="w-card__header">
+                    <h5><w:icon name="bolt" size="sm"></w:icon><?= __('快速选择模型') ?></h5>
                 </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label for="common_provider_preset" class="form-label">
-                                <?= __('供应商') ?> <span class="text-danger">*</span>
+                <div class="w-card__body">
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:4;">
+                            <label for="common_provider_preset" class="w-field__label">
+                                <?= __('供应商') ?> <span class="w-text" data-tone="danger">*</span>
                             </label>
-                            <select class="form-select" id="common_provider_preset">
+                            <select class="w-select" id="common_provider_preset">
                                 <option value=""><?= __('选择供应商') ?></option>
                             </select>
-                            <small class="form-text text-muted"><?= __('先选供应商，模型列表只显示该供应商可用模型。') ?></small>
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('先选供应商，模型列表只显示该供应商可用模型。') ?></small>
                         </div>
-                        <div class="col-md-4">
-                            <label for="common_provider_account" class="form-label">
-                                <?= __('供应商账户') ?> <span class="text-danger">*</span>
+                        <div style="--w-span-md:4;">
+                            <label for="common_provider_account" class="w-field__label">
+                                <?= __('供应商账户') ?> <span class="w-text" data-tone="danger">*</span>
                             </label>
-                            <select class="form-select" id="common_provider_account" name="provider_account_id" disabled>
+                            <select class="w-select" id="common_provider_account" name="provider_account_id" disabled>
                                 <option value=""><?= __('先选择供应商') ?></option>
                             </select>
-                            <small class="form-text text-muted"><?= __('选择账户后才可加载并绑定模型。') ?></small>
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('选择账户后才可加载并绑定模型。') ?></small>
                         </div>
-                        <div class="col-md-4">
-                            <label for="common_model_preset" class="form-label">
-                                <?= __('模型') ?> <span class="text-danger">*</span>
+                        <div style="--w-span-md:4;">
+                            <label for="common_model_preset" class="w-field__label">
+                                <?= __('模型') ?> <span class="w-text" data-tone="danger">*</span>
                             </label>
-                            <input type="search"
-                                   class="form-control mb-2"
-                                   id="common_model_search"
-                                   placeholder="Search provider models"
-                                   disabled>
-                            <select class="form-select" id="common_model_preset" disabled>
+                            <input type="search" class="w-input" id="common_model_search" placeholder="Search provider models" disabled style="--w-mb:var(--weline-space-2);">
+                            <select class="w-select" id="common_model_preset" disabled>
                                 <option value=""><?= __('先选择供应商') ?></option>
                             </select>
-                            <small class="form-text text-muted"><?= __('选择后自动填充模型代码、Base URL、最大输出和价格。') ?></small>
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('选择后自动填充模型代码、Base URL、最大输出和价格。') ?></small>
                         </div>
-                        <div class="col-md-4">
-                            <label for="api_key_input" class="form-label">
+                        <div style="--w-span-md:4;">
+                            <label for="api_key_input" class="w-field__label">
                                 <?= __('账户配置') ?>
                             </label>
-                            <input type="text" class="form-control" value="<?= __('使用所选账户') ?>" readonly>
-                            <small class="form-text text-muted"><?= __('快速新增会固定绑定所选账户。') ?></small>
+                            <input type="text" class="w-input" value="<?= __('使用所选账户') ?>" readonly>
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('快速新增会固定绑定所选账户。') ?></small>
                         </div>
                     </div>
-                    <div class="alert alert-light border mt-3 mb-0">
-                        <i class="mdi mdi-information-outline me-1"></i>
+                    <div class="w-alert" data-w-border="border" data-tone="muted" style="--w-mt:var(--weline-space-4);--w-mb:0;">
+                        <w:icon name="info" size="sm"></w:icon>
                         <?= __('高级字段已自动处理；如需手动改 Base URL、代理或 JSON，保存后再进入编辑。') ?>
                     </div>
                 </div>
@@ -136,95 +132,72 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
         <?php endif; ?>
         
         <!-- 基本信息卡片 -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5><i class="mdi mdi-information-outline me-2"></i><?= __('基本信息') ?></h5>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5><w:icon name="info" size="sm"></w:icon><?= __('基本信息') ?></h5>
                 <?php if ($isReadonly): ?>
-                    <small class="text-muted"><?= __('（原始模型基本信息不可修改）') ?></small>
+                    <small class="w-text" data-tone="muted"><?= __('（原始模型基本信息不可修改）') ?></small>
                 <?php endif; ?>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="vendor" class="form-label">
-                                <?= __('供应商') ?> <span class="text-danger">*</span>
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="vendor" class="w-field__label">
+                                <?= __('供应商') ?> <span class="w-text" data-tone="danger">*</span>
                             </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="vendor" 
-                                   name="vendor" 
-                                   value="<?= $isEdit ? $model->getVendor() : '' ?>" 
-                                   required
-                                   <?= $isReadonly ? 'readonly' : '' ?>
-                                   placeholder="<?= __('例如: OpenAI, Google, Anthropic') ?>">
-                            <small class="form-text text-muted">
+                            <input type="text" class="w-input" id="vendor" name="vendor" value="<?= $isEdit ? $model->getVendor() : '' ?>" required <?= $isReadonly ? 'readonly' : '' ?>
+ placeholder="<?= __('例如: OpenAI, Google, Anthropic') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted">
                                 <?= $isReadonly ? __('AI模型供应商名称（不可修改）') : __('AI模型供应商名称') ?>
                             </small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="model_code" class="form-label">
-                                <?= __('模型代码') ?> <span class="text-danger">*</span>
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="model_code" class="w-field__label">
+                                <?= __('模型代码') ?> <span class="w-text" data-tone="danger">*</span>
                             </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="model_code" 
-                                   name="model_code" 
-                                   value="<?= $isEdit ? $model->getModelCode() : '' ?>" 
-                                   required
-                                   <?= $isReadonly ? 'readonly' : '' ?>
-                                   placeholder="<?= __('例如: gpt-4, claude-3') ?>">
-                            <small class="form-text text-muted">
+                            <input type="text" class="w-input" id="model_code" name="model_code" value="<?= $isEdit ? $model->getModelCode() : '' ?>" required <?= $isReadonly ? 'readonly' : '' ?>
+ placeholder="<?= __('例如: gpt-4, claude-3') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted">
                                 <?= $isReadonly ? __('模型唯一标识代码（不可修改）') : __('模型唯一标识代码') ?>
                             </small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="primary_modality" class="form-label">Primary modality</label>
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="primary_modality" class="w-field__label">Primary modality</label>
                             <?php $primaryModality = $isEdit ? $model->getPrimaryModality() : \Weline\Ai\Model\AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT; ?>
-                            <select class="form-select" id="primary_modality" name="primary_modality">
+                            <select class="w-select" id="primary_modality" name="primary_modality">
                                 <option value="text2text" <?= $primaryModality === 'text2text' ? 'selected' : '' ?>>text2text</option>
                                 <option value="text2image" <?= $primaryModality === 'text2image' ? 'selected' : '' ?>>text2image</option>
                                 <option value="text2video" <?= $primaryModality === 'text2video' ? 'selected' : '' ?>>text2video</option>
                             </select>
-                            <small class="form-text text-muted">Used by adapters to route text, image, and video calls.</small>
+                            <small class="w-field__hint w-text" data-tone="muted">Used by adapters to route text, image, and video calls.</small>
                         </div>
                     </div>
 
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="model_name" class="form-label">
-                                <?= __('模型名称') ?> <span class="text-danger">*</span>
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="model_name" class="w-field__label">
+                                <?= __('模型名称') ?> <span class="w-text" data-tone="danger">*</span>
                             </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="model_name" 
-                                   name="model_name" 
-                                   value="<?= $isEdit ? $model->getModelName() : '' ?>" 
-                                   required
-                                   placeholder="<?= __('例如: GPT-4 Turbo') ?>">
-                            <small class="form-text text-muted"><?= __('模型显示名称') ?></small>
+                            <input type="text" class="w-input" id="model_name" name="model_name" value="<?= $isEdit ? $model->getModelName() : '' ?>" required placeholder="<?= __('例如: GPT-4 Turbo') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('模型显示名称') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="model_version" class="form-label">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="model_version" class="w-field__label">
                                 <?= __('模型版本') ?>
                             </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="model_version" 
-                                   name="model_version" 
-                                   value="<?= $isEdit ? $model->getModelVersion() : '1.0' ?>"
-                                   <?= $isReadonly ? 'readonly' : '' ?>
-                                   placeholder="<?= __('例如: 1.0, 2.5') ?>">
-                            <small class="form-text text-muted">
+                            <input type="text" class="w-input" id="model_version" name="model_version" value="<?= $isEdit ? $model->getModelVersion() : '1.0' ?>" <?= $isReadonly ? 'readonly' : '' ?>
+ placeholder="<?= __('例如: 1.0, 2.5') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted">
                                 <?= $isReadonly ? __('模型版本号（不可修改）') : __('模型版本号') ?>
                             </small>
                         </div>
@@ -234,160 +207,101 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
         </div>
         
         <!-- API配置卡片 -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5><i class="mdi mdi-api me-2"></i><?= __('API配置') ?></h5>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5><w:icon name="code" size="sm"></w:icon><?= __('API配置') ?></h5>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="api_key" class="form-label">
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="api_key" class="w-field__label">
                                 <?= __('API密钥') ?>
                             </label>
-                            <input type="password" 
-                                   class="form-control" 
-                                   id="api_key" 
-                                   name="config[api_key]" 
-                                   value="<?= $config['api_key'] ?? '' ?>"
-                                   placeholder="<?= __('输入API密钥') ?>">
-                            <small class="form-text text-muted"><?= __('API访问密钥') ?></small>
+                            <input type="password" class="w-input" id="api_key" name="config[api_key]" value="<?= $config['api_key'] ?? '' ?>" placeholder="<?= __('输入API密钥') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('API访问密钥') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="api_url" class="form-label">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="api_url" class="w-field__label">
                                 <?= __('API地址') ?>
                             </label>
-                            <input type="url" 
-                                   class="form-control" 
-                                   id="api_url" 
-                                   name="config[api_url]" 
-                                   value="<?= $config['api_url'] ?? '' ?>"
-                                   placeholder="<?= __('例如: https://api.openai.com/v1') ?>">
-                            <small class="form-text text-muted"><?= __('API基础URL') ?></small>
+                            <input type="url" class="w-input" id="api_url" name="config[api_url]" value="<?= $config['api_url'] ?? '' ?>" placeholder="<?= __('例如: https://api.openai.com/v1') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('API基础URL') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="temperature" class="form-label">
+                    <div style="--w-span-md:4;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="temperature" class="w-field__label">
                                 <?= __('温度系数 (Temperature)') ?>
                             </label>
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="temperature" 
-                                   name="config[temperature]" 
-                                   value="<?= $config['temperature'] ?? '0.7' ?>"
-                                   step="0.1"
-                                   min="0"
-                                   max="2"
-                                   placeholder="0.7">
-                            <small class="form-text text-muted"><?= __('控制输出随机性，0-2之间') ?></small>
+                            <input type="number" class="w-input" id="temperature" name="config[temperature]" value="<?= $config['temperature'] ?? '0.7' ?>" step="0.1" min="0" max="2" placeholder="0.7">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('控制输出随机性，0-2之间') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="max_tokens" class="form-label">
+                    <div style="--w-span-md:4;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="max_tokens" class="w-field__label">
                                 <?= __('最大Token数') ?>
                             </label>
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="max_tokens" 
-                                   name="config[max_tokens]" 
-                                   value="<?= $config['max_tokens'] ?? '4096' ?>"
-                                   min="1"
-                                   placeholder="4096">
-                            <small class="form-text text-muted"><?= __('最大生成token数量') ?></small>
+                            <input type="number" class="w-input" id="max_tokens" name="config[max_tokens]" value="<?= $config['max_tokens'] ?? '4096' ?>" min="1" placeholder="4096">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('最大生成token数量') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="timeout" class="form-label">
+                    <div style="--w-span-md:4;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="timeout" class="w-field__label">
                                 <?= __('超时时间（秒）') ?>
                             </label>
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="timeout" 
-                                   name="config[timeout]" 
-                                       value="<?= $config['timeout'] ?? (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>"
-                                   min="0"
-                                       placeholder="<?= (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>">
-                                <small class="form-text text-muted"><?= __('API请求超时时间，0表示不限制，默认900秒') ?></small>
+                            <input type="number" class="w-input" id="timeout" name="config[timeout]" value="<?= $config['timeout'] ?? (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>" min="0" placeholder="<?= (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>">
+                                <small class="w-field__hint w-text" data-tone="muted"><?= __('API请求超时时间，0表示不限制，默认900秒') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="top_p" class="form-label">
+                    <div style="--w-span-md:4;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="top_p" class="w-field__label">
                                 <?= __('Top P') ?>
                             </label>
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="top_p" 
-                                   name="config[top_p]" 
-                                   value="<?= $config['top_p'] ?? '1' ?>"
-                                   step="0.1"
-                                   min="0"
-                                   max="1"
-                                   placeholder="1">
-                            <small class="form-text text-muted"><?= __('核采样参数，0-1之间') ?></small>
+                            <input type="number" class="w-input" id="top_p" name="config[top_p]" value="<?= $config['top_p'] ?? '1' ?>" step="0.1" min="0" max="1" placeholder="1">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('核采样参数，0-1之间') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="frequency_penalty" class="form-label">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="frequency_penalty" class="w-field__label">
                                 <?= __('频率惩罚 (Frequency Penalty)') ?>
                             </label>
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="frequency_penalty" 
-                                   name="config[frequency_penalty]" 
-                                   value="<?= $config['frequency_penalty'] ?? '0' ?>"
-                                   step="0.1"
-                                   min="-2"
-                                   max="2"
-                                   placeholder="0">
-                            <small class="form-text text-muted"><?= __('降低重复词汇，-2到2之间') ?></small>
+                            <input type="number" class="w-input" id="frequency_penalty" name="config[frequency_penalty]" value="<?= $config['frequency_penalty'] ?? '0' ?>" step="0.1" min="-2" max="2" placeholder="0">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('降低重复词汇，-2到2之间') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="presence_penalty" class="form-label">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="presence_penalty" class="w-field__label">
                                 <?= __('存在惩罚 (Presence Penalty)') ?>
                             </label>
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="presence_penalty" 
-                                   name="config[presence_penalty]" 
-                                   value="<?= $config['presence_penalty'] ?? '0' ?>"
-                                   step="0.1"
-                                   min="-2"
-                                   max="2"
-                                   placeholder="0">
-                            <small class="form-text text-muted"><?= __('鼓励新话题，-2到2之间') ?></small>
+                            <input type="number" class="w-input" id="presence_penalty" name="config[presence_penalty]" value="<?= $config['presence_penalty'] ?? '0' ?>" step="0.1" min="-2" max="2" placeholder="0">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('鼓励新话题，-2到2之间') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-12">
-                        <div class="mb-3">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" 
-                                       type="checkbox" 
-                                       id="stream" 
-                                       name="config[stream]" 
-                                       value="1"
-                                       <?= ($config['stream'] ?? true) ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="stream">
+                    <div style="--w-span-md:12;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <div class="w-switch">
+                                <input type="checkbox" id="stream" name="config[stream]" value="1" <?= ($config['stream'] ?? true) ? 'checked' : '' ?>>
+                                <label for="stream">
                                     <?= __('启用流式输出') ?>
                                 </label>
                             </div>
-                            <small class="form-text text-muted"><?= __('实时返回生成内容') ?></small>
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('实时返回生成内容') ?></small>
                         </div>
                     </div>
                 </div>
@@ -395,51 +309,37 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
         </div>
         
         <!-- 定价信息卡片 -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5><i class="mdi mdi-cash-multiple me-2"></i><?= __('定价信息') ?></h5>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5><w:icon name="cash" size="sm"></w:icon><?= __('定价信息') ?></h5>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="token_price_input" class="form-label">
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="token_price_input" class="w-field__label">
                                 <?= __('输入Token价格') ?>
                             </label>
-                            <div class="input-group">
-                                <span class="input-group-text">$</span>
-                                <input type="number" 
-                                       class="form-control" 
-                                       id="token_price_input" 
-                                       name="token_price_input" 
-                                       value="<?= $isEdit ? $model->getTokenPriceInput() : '0.000000' ?>"
-                                       step="0.000001"
-                                       min="0"
-                                       placeholder="0.000000">
-                                <span class="input-group-text">/1K tokens</span>
+                            <div class="w-field__control">
+                                <span class="w-field__addon">$</span>
+                                <input type="number" class="w-input" id="token_price_input" name="token_price_input" value="<?= $isEdit ? $model->getTokenPriceInput() : '0.000000' ?>" step="0.000001" min="0" placeholder="0.000000">
+                                <span class="w-field__addon">/1K tokens</span>
                             </div>
-                            <small class="form-text text-muted"><?= __('每1000个输入token的价格') ?></small>
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('每1000个输入token的价格') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="token_price_output" class="form-label">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="token_price_output" class="w-field__label">
                                 <?= __('输出Token价格') ?>
                             </label>
-                            <div class="input-group">
-                                <span class="input-group-text">$</span>
-                                <input type="number" 
-                                       class="form-control" 
-                                       id="token_price_output" 
-                                       name="token_price_output" 
-                                       value="<?= $isEdit ? $model->getTokenPriceOutput() : '0.000000' ?>"
-                                       step="0.000001"
-                                       min="0"
-                                       placeholder="0.000000">
-                                <span class="input-group-text">/1K tokens</span>
+                            <div class="w-field__control">
+                                <span class="w-field__addon">$</span>
+                                <input type="number" class="w-input" id="token_price_output" name="token_price_output" value="<?= $isEdit ? $model->getTokenPriceOutput() : '0.000000' ?>" step="0.000001" min="0" placeholder="0.000000">
+                                <span class="w-field__addon">/1K tokens</span>
                             </div>
-                            <small class="form-text text-muted"><?= __('每1000个输出token的价格') ?></small>
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('每1000个输出token的价格') ?></small>
                         </div>
                     </div>
                 </div>
@@ -447,22 +347,18 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
         </div>
         
         <!-- 提供商配置卡片 -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5><i class="mdi mdi-cog me-2"></i><?= __('提供商配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small></h5>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5><w:icon name="settings" size="sm"></w:icon><?= __('提供商配置') ?> <small class="w-text" data-tone="muted">(<?= __('可选') ?>)</small></h5>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="mb-3">
-                            <label for="provider_config_json" class="form-label">
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:12;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="provider_config_json" class="w-field__label">
                                 <?= __('配置JSON') ?>
                             </label>
-                            <textarea class="form-control" 
-                                      id="provider_config_json" 
-                                      name="provider_config_json" 
-                                      rows="16"
-                                      placeholder='{
+                            <textarea class="w-textarea" id="provider_config_json" name="provider_config_json" rows="16" placeholder='{
   "api_key": "your-api-key-here",
   "base_url": "https://api.example.com",
   "model_id": "model-name",
@@ -474,8 +370,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
   "stream": true,
                                         "timeout": 900,
   "max_retries": 3
-}'
-                                      style="font-family: 'Courier New', monospace;"><?php
+}' style="font-family: 'Courier New', monospace;"><?php
 $displayConfig = $providerConfig;
 if (empty($displayConfig) && !empty($config)) {
     $displayConfig = $config;
@@ -496,7 +391,7 @@ if (!empty($displayConfig)) {
     }
 }
 ?></textarea>
-                            <small class="form-text text-muted">
+                            <small class="w-field__hint w-text" data-tone="muted">
                                 <?= __('JSON格式的提供商特定配置。所有字段都可自定义，预置值仅供参考。') ?>
                             </small>
                         </div>
@@ -506,71 +401,49 @@ if (!empty($displayConfig)) {
         </div>
         
         <!-- 代理配置卡片 -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5><i class="mdi mdi-server-network me-2"></i><?= __('代理配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small></h5>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5><w:icon name="server" size="sm"></w:icon><?= __('代理配置') ?> <small class="w-text" data-tone="muted">(<?= __('可选') ?>)</small></h5>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="proxy_host" class="form-label">
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="proxy_host" class="w-field__label">
                                 <?= __('代理主机') ?>
                             </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="proxy_host" 
-                                   name="proxy[host]" 
-                                   value="<?= $proxyInfo['host'] ?? '' ?>"
-                                   placeholder="<?= __('例如: proxy.example.com') ?>">
-                            <small class="form-text text-muted"><?= __('代理服务器地址') ?></small>
+                            <input type="text" class="w-input" id="proxy_host" name="proxy[host]" value="<?= $proxyInfo['host'] ?? '' ?>" placeholder="<?= __('例如: proxy.example.com') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('代理服务器地址') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="proxy_port" class="form-label">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="proxy_port" class="w-field__label">
                                 <?= __('代理端口') ?>
                             </label>
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="proxy_port" 
-                                   name="proxy[port]" 
-                                   value="<?= $proxyInfo['port'] ?? '' ?>"
-                                   min="1"
-                                   max="65535"
-                                   placeholder="<?= __('例如: 8080') ?>">
-                            <small class="form-text text-muted"><?= __('代理服务器端口') ?></small>
+                            <input type="number" class="w-input" id="proxy_port" name="proxy[port]" value="<?= $proxyInfo['port'] ?? '' ?>" min="1" max="65535" placeholder="<?= __('例如: 8080') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('代理服务器端口') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="proxy_username" class="form-label">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="proxy_username" class="w-field__label">
                                 <?= __('代理用户名') ?>
                             </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="proxy_username" 
-                                   name="proxy[username]" 
-                                   value="<?= $proxyInfo['username'] ?? '' ?>"
-                                   placeholder="<?= __('如需认证请填写') ?>">
-                            <small class="form-text text-muted"><?= __('代理认证用户名（可选）') ?></small>
+                            <input type="text" class="w-input" id="proxy_username" name="proxy[username]" value="<?= $proxyInfo['username'] ?? '' ?>" placeholder="<?= __('如需认证请填写') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('代理认证用户名（可选）') ?></small>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="proxy_password" class="form-label">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label for="proxy_password" class="w-field__label">
                                 <?= __('代理密码') ?>
                             </label>
-                            <input type="password" 
-                                   class="form-control" 
-                                   id="proxy_password" 
-                                   name="proxy[password]" 
-                                   value="<?= $proxyInfo['password'] ?? '' ?>"
-                                   placeholder="<?= __('如需认证请填写') ?>">
-                            <small class="form-text text-muted"><?= __('代理认证密码（可选）') ?></small>
+                            <input type="password" class="w-input" id="proxy_password" name="proxy[password]" value="<?= $proxyInfo['password'] ?? '' ?>" placeholder="<?= __('如需认证请填写') ?>">
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('代理认证密码（可选）') ?></small>
                         </div>
                     </div>
                 </div>
@@ -578,14 +451,14 @@ if (!empty($displayConfig)) {
         </div>
         
         <!-- 状态设置卡片 -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5><i class="mdi mdi-toggle-switch me-2"></i><?= __('状态设置') ?></h5>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5><w:icon name="switch" size="sm"></w:icon><?= __('状态设置') ?></h5>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
                             <?php 
                             $providerOk = (($model ? $model->getData('provider_test_status') : 'pending') === 'success');
                             $hasSelfConfig = false;
@@ -610,26 +483,21 @@ if (!empty($displayConfig)) {
                                 $disableReason = '自配置连通性未通过';
                             }
                             ?>
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" 
-                                       type="checkbox" 
-                                       id="is_active" 
-                                       name="is_active" 
-                                       value="1"
-                                       <?= ($isEdit && $model->getIsActive()) || !$isEdit ? 'checked' : '' ?>
-                                       <?= !$canActivate ? 'disabled' : '' ?>>
-                                <label class="form-check-label" for="is_active">
+                            <div class="w-switch">
+                                <input type="checkbox" id="is_active" name="is_active" value="1" <?= ($isEdit && $model->getIsActive()) || !$isEdit ? 'checked' : '' ?>
+ <?= !$canActivate ? 'disabled' : '' ?>>
+                                <label for="is_active">
                                     <?= __('启用此模型') ?>
                                     <?php if (!$canActivate): ?>
-                                        <span class="text-warning">(<?= $disableReason ?>)</span>
+                                        <span class="w-text" data-tone="warning">(<?= $disableReason ?>)</span>
                                     <?php endif; ?>
                                 </label>
                             </div>
-                            <small class="form-text text-muted">
+                            <small class="w-field__hint w-text" data-tone="muted">
                                 <?= __('只有启用的模型才能被使用') ?>
                                 <?php if (!$canActivate): ?>
-                                    <br><span class="text-warning">
-                                        <i class="mdi mdi-alert-circle"></i> 
+                                    <br><span class="w-text" data-tone="warning">
+                                        <w:icon name="warning" size="sm"></w:icon> 
                                         无法激活：<?= $disableReason ?>。请先配置API密钥并进行连通性测试。
                                     </span>
                                 <?php endif; ?>
@@ -637,20 +505,15 @@ if (!empty($displayConfig)) {
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" 
-                                       type="checkbox" 
-                                       id="is_default" 
-                                       name="is_default" 
-                                       value="1"
-                                       <?= $isEdit && $model->getIsDefault() ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="is_default">
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <div class="w-switch">
+                                <input type="checkbox" id="is_default" name="is_default" value="1" <?= $isEdit && $model->getIsDefault() ? 'checked' : '' ?>>
+                                <label for="is_default">
                                     <?= __('设为默认模型') ?>
                                 </label>
                             </div>
-                            <small class="form-text text-muted"><?= __('默认模型将在未指定模型时使用') ?></small>
+                            <small class="w-field__hint w-text" data-tone="muted"><?= __('默认模型将在未指定模型时使用') ?></small>
                         </div>
                     </div>
                 </div>
@@ -658,32 +521,29 @@ if (!empty($displayConfig)) {
         </div>
         
         <!-- 模型测试卡片 -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5><i class="mdi mdi-test-tube me-2"></i><?= __('模型测试') ?> <small class="text-muted">(<?= __('可选') ?>)</small></h5>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5><w:icon name="beaker" size="sm"></w:icon><?= __('模型测试') ?> <small class="w-text" data-tone="muted">(<?= __('可选') ?>)</small></h5>
             </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="test_prompt" class="form-label">
+            <div class="w-card__body">
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label for="test_prompt" class="w-field__label">
                         <?= __('测试提示词') ?>
                     </label>
-                    <textarea class="form-control" 
-                              id="test_prompt" 
-                              rows="3"
-                              placeholder="<?= __('例如: 你好，请介绍一下你自己') ?>">Hello, this is a connection test.</textarea>
-                    <small class="form-text text-muted"><?= __('输入测试提示词，点击测试按钮查看响应结果') ?></small>
+                    <textarea class="w-textarea" id="test_prompt" rows="3" placeholder="<?= __('例如: 你好，请介绍一下你自己') ?>">Hello, this is a connection test.</textarea>
+                    <small class="w-field__hint w-text" data-tone="muted"><?= __('输入测试提示词，点击测试按钮查看响应结果') ?></small>
                 </div>
                 
-                <button type="button" class="btn btn-success" id="testModelBtn" <?= $isEdit ? '' : 'disabled' ?>>
-                    <i class="mdi mdi-play-circle"></i> <?= __('测试模型') ?>
+                <button type="button" class="w-button" id="testModelBtn" <?= $isEdit ? '' : 'disabled' ?> data-tone="success">
+                    <w:icon name="play" size="sm"></w:icon> <?= __('测试模型') ?>
                 </button>
                 
-                <div id="testResult" class="mt-3" style="display: none;">
-                    <div class="card">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><?= __('测试结果') ?></h6>
+                <div id="testResult" style="display: none;">
+                    <div class="w-card">
+                        <div class="w-card__header" data-w-background="muted">
+                            <h6 style="--w-mb:0;"><?= __('测试结果') ?></h6>
                         </div>
-                        <div class="card-body">
+                        <div class="w-card__body">
                             <div id="testResultContent"></div>
                         </div>
                     </div>
@@ -692,23 +552,19 @@ if (!empty($displayConfig)) {
         </div>
         
         <!-- 提交按钮 -->
-        <div class="card">
-            <div class="card-body text-end">
-                <a href="<?= $this->getBackendUrl('*/backend/model') ?>" class="btn btn-secondary">
-                    <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+        <div class="w-card">
+            <div class="w-card__body w-text" data-align="end">
+                <a href="<?= $this->getBackendUrl('*/backend/model') ?>" class="w-button" data-tone="neutral">
+                    <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
                 </a>
-                <button type="submit" class="btn btn-primary">
-                    <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                <button type="submit" class="w-button" data-tone="primary">
+                    <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
                 </button>
             </div>
         </div>
     </w:form>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     'use strict';
@@ -999,23 +855,17 @@ if (!empty($displayConfig)) {
         
         if (!vendor || !modelCode || !modelName) {
             e.preventDefault();
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('请填写必填项：供应商、模型代码、模型名称') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('请填写必填项：供应商、模型代码、模型名称') ?>');
-            }
+            Weline.UI.dialog.request({
+                tone: 'warning',
+                title: '<?= __('提示') ?>',
+                message: '<?= __('请填写必填项：供应商、模型代码、模型名称') ?>',
+                confirmLabel: '<?= __('确定') ?>'
+            });
             return false;
         }
         if (quickAccount && !quickAccount.value) {
             e.preventDefault();
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({ icon: 'warning', title: '<?= __('提示') ?>', text: '<?= __('快速新增请按顺序选择供应商、供应商账户和模型') ?>', confirmButtonText: '<?= __('确定') ?>' });
-            }
+            Weline.UI.dialog.request({ tone: 'warning', title: '<?= __('提示') ?>', message: '<?= __('快速新增请按顺序选择供应商、供应商账户和模型') ?>', confirmLabel: '<?= __('确定') ?>' });
             return false;
         }
         
@@ -1025,16 +875,12 @@ if (!empty($displayConfig)) {
                 JSON.parse(providerConfigTextarea.value);
             } catch (err) {
                 e.preventDefault();
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('格式错误') ?>',
-                        text: '<?= __('提供商配置JSON格式错误，请检查语法') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('提供商配置JSON格式错误，请检查语法') ?>');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('格式错误') ?>',
+                    message: '<?= __('提供商配置JSON格式错误，请检查语法') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 providerConfigTextarea.focus();
                 return false;
             }
@@ -1051,21 +897,17 @@ if (!empty($displayConfig)) {
         var form = document.getElementById('model-form');
         
         if (!prompt) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('请输入测试提示词') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('请输入测试提示词') ?>');
-            }
+            Weline.UI.dialog.request({
+                tone: 'warning',
+                title: '<?= __('提示') ?>',
+                message: '<?= __('请输入测试提示词') ?>',
+                confirmLabel: '<?= __('确定') ?>'
+            });
             return;
         }
         
         testModelBtn.disabled = true;
-        testModelBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
+        testModelBtn.innerHTML = '<w:icon name="circle" size="sm"></w:icon> <?= __('测试中...') ?>';
         
         document.getElementById('testResult').style.display = 'none';
 
@@ -1075,15 +917,13 @@ if (!empty($displayConfig)) {
                 JSON.parse(providerConfigTextarea.value);
             } catch (err) {
                 testModelBtn.disabled = false;
-                testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> Test model';
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Invalid JSON',
-                        text: 'Provider config JSON is invalid. Please check the syntax.',
-                        confirmButtonText: 'OK'
-                    });
-                }
+                testModelBtn.innerHTML = '<w:icon name="play" size="sm"></w:icon> Test model';
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: 'Invalid JSON',
+                    message: 'Provider config JSON is invalid. Please check the syntax.',
+                    confirmLabel: 'OK'
+                });
                 return;
             }
         }
@@ -1116,7 +956,7 @@ if (!empty($displayConfig)) {
             var data = res;
             while (data && data.success === undefined && data.data && !Array.isArray(data.data)) data = data.data;
             testModelBtn.disabled = false;
-            testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> <?= __('测试模型') ?>';
+            testModelBtn.innerHTML = '<w:icon name="play" size="sm"></w:icon> <?= __('测试模型') ?>';
             
             var resultDiv = document.getElementById('testResult');
             var resultContent = document.getElementById('testResultContent');
@@ -1131,9 +971,9 @@ if (!empty($displayConfig)) {
                         return '';
                     }
                     src = escapeHtml(src);
-                    return '<div class="col-sm-6 col-lg-4"><a href="' + src + '" target="_blank" rel="noopener"><img src="' + src + '" class="img-fluid rounded border" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;"></a></div>';
+                    return '<div style="--w-span:6;--w-span-lg:4;"><a href="' + src + '" target="_blank" rel="noopener"><img src="' + src + '" class="img-fluid" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;" data-w-radius="md" data-w-border="border"></a></div>';
                 }).join('');
-                return items ? '<div class="row g-2 mt-2">' + items + '</div>' : '';
+                return items ? '<div class="w-grid" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-2);">' + items + '</div>' : '';
             };
             
             if (data && data.data && data.data.results) {
@@ -1141,15 +981,15 @@ if (!empty($displayConfig)) {
                 var s = r.self_config || {};
                 var p = r.provider_account || {};
                 var pTrace = Array.isArray(p.trace) && p.trace.length
-                    ? ('<hr class="my-2"><small class="text-muted">详细过程：</small><div class="alert alert-light mb-0 mt-1" style="white-space: pre-wrap; max-height: 240px; overflow-y: auto;">' + escapeHtml(p.trace.join('\n')) + '</div>')
+                    ? ('<hr style="--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-2);"><small class="w-text" data-tone="muted">详细过程：</small><div class="w-alert" style="white-space: pre-wrap; max-height: 240px; overflow-y: auto;" data-tone="muted">' + escapeHtml(p.trace.join('\n')) + '</div>')
                     : '';
-                var sBadge = s.tested ? (s.success ? '<span class="badge bg-success"><?= __('成功') ?></span>' : '<span class="badge bg-danger"><?= __('失败') ?></span>') : '<span class="badge bg-secondary"><?= __('未测') ?></span>';
-                var pBadge = p.tested ? (p.success ? '<span class="badge bg-success"><?= __('成功') ?></span>' : '<span class="badge bg-danger"><?= __('失败') ?></span>') : '<span class="badge bg-secondary"><?= __('未测') ?></span>';
-                resultContent.innerHTML = '<div class="row g-2"><div class="col-12"><div class="alert alert-' + (s.success ? 'success' : (s.tested ? 'danger' : 'secondary')) + ' py-2 px-3 mb-2"><strong>自配置</strong> ' + sBadge + '<br>' + (s.tested ? ('<small class="text-muted">耗时：</small><code>' + escapeHtml(s.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + escapeTextWithBreaks(s.message || '') + '<br><div class="alert alert-light mb-0" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' + escapeHtml(s.response || '') + '</div>' + renderTestImages(s)) : '') + '</div></div><div class="col-12"><div class="alert alert-' + (p.success ? 'success' : (p.tested ? 'danger' : 'secondary')) + ' py-2 px-3 mb-2"><strong>供应商账户</strong> ' + pBadge + (p.account_name ? ' <span class="badge bg-info">' + escapeHtml(p.account_name) + '</span>' : '') + '<br>' + (p.tested ? ('<small class="text-muted">耗时：</small><code>' + escapeHtml(p.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + escapeTextWithBreaks(p.message || '') + '<br><div class="alert alert-light mb-0" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' + escapeHtml(p.response || '') + '</div>' + renderTestImages(p) + pTrace) : '') + '</div></div></div>';
+                var sBadge = s.tested ? (s.success ? '<span class="w-badge" data-w-background="success"><?= __('成功') ?></span>' : '<span class="w-badge" data-w-background="danger"><?= __('失败') ?></span>') : '<span class="w-badge" data-w-background="muted"><?= __('未测') ?></span>';
+                var pBadge = p.tested ? (p.success ? '<span class="w-badge" data-w-background="success"><?= __('成功') ?></span>' : '<span class="w-badge" data-w-background="danger"><?= __('失败') ?></span>') : '<span class="w-badge" data-w-background="muted"><?= __('未测') ?></span>';
+                resultContent.innerHTML = '<div class="w-grid" style="--w-gap:var(--weline-space-2);"><div style="--w-span:12;"><div class="w-alert alert-' + (s.success ? 'success' : (s.tested 'danger' 'secondary')) '" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-mb:var(--weline-space-2);"><strong>自配置</strong> ' + sBadge + '<br>' + (s.tested ? ('<small class="w-text" data-tone="muted">耗时：</small><code>' + escapeHtml(s.duration || 0) + ' ms</code><br><small class="w-text" data-tone="muted">消息：</small>' + escapeTextWithBreaks(s.message || '') + '<br><div class="w-alert" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;" data-tone="muted">' + escapeHtml(s.response || '') + '</div>' + renderTestImages(s)) : '') + '</div></div><div style="--w-span:12;"><div class="w-alert alert-' + (p.success ? 'success' : (p.tested 'danger' 'secondary')) '" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-mb:var(--weline-space-2);"><strong>供应商账户</strong> ' + pBadge + (p.account_name ? ' <span class="w-badge" data-w-background="info">' + escapeHtml(p.account_name) + '</span>' : '') + '<br>' + (p.tested ? ('<small class="w-text" data-tone="muted">耗时：</small><code>' + escapeHtml(p.duration || 0) + ' ms</code><br><small class="w-text" data-tone="muted">消息：</small>' + escapeTextWithBreaks(p.message || '') + '<br><div class="w-alert" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;" data-tone="muted">' + escapeHtml(p.response || '') + '</div>' + renderTestImages(p) + pTrace) : '') + '</div></div></div>';
             } else if (data.success) {
-                resultContent.innerHTML = '<div class="alert alert-success"><strong><?= __('测试成功') ?>!</strong> ' + escapeTextWithBreaks(data.message || '') + renderTestImages(data) + '</div>';
+                resultContent.innerHTML = '<div class="w-alert" data-tone="success"><strong><?= __('测试成功') ?>!</strong> ' + escapeTextWithBreaks(data.message || '') + renderTestImages(data) + '</div>';
             } else {
-                resultContent.innerHTML = '<div class="alert alert-danger"><strong><?= __('测试失败') ?>!</strong> ' + escapeTextWithBreaks(data.message || '') + '</div>' + (data.error ? '<div class="alert alert-warning"><small>' + escapeTextWithBreaks(data.error) + '</small></div>' : '');
+                resultContent.innerHTML = '<div class="w-alert" data-tone="danger"><strong><?= __('测试失败') ?>!</strong> ' + escapeTextWithBreaks(data.message || '') + '</div>' + (data.error ? '<div class="w-alert" data-tone="warning"><small>' + escapeTextWithBreaks(data.error) + '</small></div>' : '');
             }
             
             resultDiv.style.display = 'block';
@@ -1157,12 +997,12 @@ if (!empty($displayConfig)) {
         })
         .catch(function(error) {
             testModelBtn.disabled = false;
-            testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> <?= __('测试模型') ?>';
+            testModelBtn.innerHTML = '<w:icon name="play" size="sm"></w:icon> <?= __('测试模型') ?>';
             
             var resultDiv = document.getElementById('testResult');
             var resultContent = document.getElementById('testResultContent');
             
-            resultContent.innerHTML = '<div class="alert alert-danger"><strong><?= __('网络错误') ?>!</strong> ' + escapeTextWithBreaks(error.message || '') + '</div>';
+            resultContent.innerHTML = '<div class="w-alert" data-tone="danger"><strong><?= __('网络错误') ?>!</strong> ' + escapeTextWithBreaks(error.message || '') + '</div>';
             resultDiv.style.display = 'block';
         });
     });

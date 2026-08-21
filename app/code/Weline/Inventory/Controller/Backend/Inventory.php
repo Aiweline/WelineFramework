@@ -28,31 +28,31 @@ final class Inventory extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Inventory::commerce:inventory:stocks', '库存', 'mdi-warehouse', '查看库存投影')]
+    #[Acl('Weline_Inventory::commerce:inventory:stocks', '库存', 'circle', '查看库存投影')]
     public function stocks(): string { return $this->renderSection('stocks'); }
 
-    #[Acl('Weline_Inventory::commerce:inventory:adjustments', '库存调整', 'mdi-tune-variant', '查看库存调整事件')]
+    #[Acl('Weline_Inventory::commerce:inventory:adjustments', '库存调整', 'settings', '查看库存调整事件')]
     public function adjustments(): string { return $this->renderSection('adjustments'); }
 
-    #[Acl('Weline_Inventory::commerce:inventory:warehouses', '仓库', 'mdi-home-city-outline', '查看仓库')]
+    #[Acl('Weline_Inventory::commerce:inventory:warehouses', '仓库', 'home', '查看仓库')]
     public function warehouses(): string { return $this->renderSection('warehouses'); }
 
-    #[Acl('Weline_Inventory::commerce:inventory:authorizations', '仓库授权', 'mdi-shield-account-outline', '查看仓库授权')]
+    #[Acl('Weline_Inventory::commerce:inventory:authorizations', '仓库授权', 'user', '查看仓库授权')]
     public function authorizations(): string { return $this->renderSection('authorizations'); }
 
-    #[Acl('Weline_Inventory::commerce:inventory:reservations', '库存预占', 'mdi-lock-clock', '查看库存预占')]
+    #[Acl('Weline_Inventory::commerce:inventory:reservations', '库存预占', 'clock', '查看库存预占')]
     public function reservations(): string { return $this->renderSection('reservations'); }
 
-    #[Acl('Weline_Inventory::commerce:inventory:leases', '预占租约', 'mdi-timer-lock-outline', '查看预占租约')]
+    #[Acl('Weline_Inventory::commerce:inventory:leases', '预占租约', 'clock', '查看预占租约')]
     public function leases(): string { return $this->renderSection('leases'); }
 
-    #[Acl('Weline_Inventory::commerce:inventory:ledger', '库存账本', 'mdi-book-open-variant', '查看库存不可变账本')]
+    #[Acl('Weline_Inventory::commerce:inventory:ledger', '库存账本', 'book', '查看库存不可变账本')]
     public function ledger(): string { return $this->renderSection('ledger'); }
 
-    #[Acl('Weline_Inventory::commerce:inventory:migration', '库存迁移', 'mdi-database-sync-outline', '查看库存迁移状态')]
+    #[Acl('Weline_Inventory::commerce:inventory:migration', '库存迁移', 'refresh', '查看库存迁移状态')]
     public function migration(): string { return $this->renderSection('migration'); }
 
-    #[Acl('Weline_Inventory::commerce:inventory:warehouses', '创建仓库', 'mdi-home-city-outline', '创建仓库')]
+    #[Acl('Weline_Inventory::commerce:inventory:warehouses', '创建仓库', 'home', '创建仓库')]
     public function postCreateWarehouse(): string
     {
         return $this->handleMutation('warehouses', function (int $websiteId): void {
@@ -66,7 +66,7 @@ final class Inventory extends BackendController
         }, '仓库已创建');
     }
 
-    #[Acl('Weline_Inventory::commerce:inventory:authorizations', '创建仓库授权', 'mdi-shield-account-outline', '创建仓库授权')]
+    #[Acl('Weline_Inventory::commerce:inventory:authorizations', '创建仓库授权', 'user', '创建仓库授权')]
     public function postAuthorizeWarehouse(): string
     {
         return $this->handleMutation('authorizations', function (int $websiteId): void {
@@ -79,7 +79,7 @@ final class Inventory extends BackendController
         }, '仓库授权已创建');
     }
 
-    #[Acl('Weline_Inventory::commerce:inventory:adjustments', '提交库存调整', 'mdi-tune-variant', '设置商品可用库存')]
+    #[Acl('Weline_Inventory::commerce:inventory:adjustments', '提交库存调整', 'settings', '设置商品可用库存')]
     public function postAdjustStock(): string
     {
         return $this->handleMutation('adjustments', function (int $websiteId): void {

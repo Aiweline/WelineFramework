@@ -1403,14 +1403,14 @@ class AiService
         $providerUrl = $urlBuilder->getBackendUrl('ai/backend/provider');
         $adapterUrl = $urlBuilder->getBackendUrl('ai/backend/adapter');
         $linkHtml = '<div class="ai-config-links" style="margin-top: 10px;">'
-            . '<a href="' . $adapterUrl . '" class="btn btn-sm btn-primary me-2" target="_blank">'
-            . '<i class="mdi mdi-puzzle me-1"></i>' . __('场景适配器') . '</a>'
-            . '<a href="' . $configUrl . '" class="btn btn-sm btn-outline-secondary me-2" target="_blank">'
-            . '<i class="mdi mdi-star-settings me-1"></i>' . __('配置默认模型') . '</a>'
-            . '<a href="' . $modelListUrl . '" class="btn btn-sm btn-outline-secondary me-2" target="_blank">'
-            . '<i class="mdi mdi-robot me-1"></i>' . __('模型列表') . '</a>'
-            . '<a href="' . $providerUrl . '" class="btn btn-sm btn-outline-secondary" target="_blank">'
-            . '<i class="mdi mdi-account-key me-1"></i>' . __('供应商账户') . '</a>'
+            . '<a href="' . $adapterUrl . '" class="w-button me-2" target="_blank" data-tone="primary" data-size="sm">'
+            . '<w-icon name="puzzle" size="sm"></w-icon>' . __('场景适配器') . '</a>'
+            . '<a href="' . $configUrl . '" class="w-button me-2" target="_blank" data-tone="neutral" data-variant="outline" data-size="sm">'
+            . '<w-icon name="settings" size="sm"></w-icon>' . __('配置默认模型') . '</a>'
+            . '<a href="' . $modelListUrl . '" class="w-button me-2" target="_blank" data-tone="neutral" data-variant="outline" data-size="sm">'
+            . '<w-icon name="robot" size="sm"></w-icon>' . __('模型列表') . '</a>'
+            . '<a href="' . $providerUrl . '" class="w-button" target="_blank" data-tone="neutral" data-variant="outline" data-size="sm">'
+            . '<w-icon name="user" size="sm"></w-icon>' . __('供应商账户') . '</a>'
             . '</div>';
         
         return __('无法选择合适的AI模型。原因：%{1}', [implode('；', $reasons)]) . $linkHtml;

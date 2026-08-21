@@ -31,20 +31,20 @@ $jsonForAttributeFlags = JSON_UNESCAPED_UNICODE
 
 // 获取部件图标
 $typeIcons = [
-    'header' => 'ri-layout-top-line',
-    'footer' => 'ri-layout-bottom-line',
-    'sidebar' => 'ri-layout-left-line',
-    'banner' => 'ri-image-line',
-    'carousel' => 'ri-slideshow-line',
-    'product' => 'ri-shopping-bag-line',
-    'category' => 'ri-folder-line',
-    'navigation' => 'ri-menu-line',
-    'search' => 'ri-search-line',
-    'social' => 'ri-share-line',
-    'newsletter' => 'ri-mail-line',
-    'content' => 'ri-file-text-line',
+    'header' => 'circle',
+    'footer' => 'circle',
+    'sidebar' => 'circle',
+    'banner' => 'image',
+    'carousel' => 'circle',
+    'product' => 'pin',
+    'category' => 'folder',
+    'navigation' => 'menu',
+    'search' => 'search',
+    'social' => 'share',
+    'newsletter' => 'mail',
+    'content' => 'file',
 ];
-$icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
+$icon = $typeIcons[$widgetType] ?? 'circle';
 ?>
 
 <div class="preview-widget-item" 
@@ -61,20 +61,20 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
             <?= htmlspecialchars($widgetName) ?>
         </span>
         <div class="widget-actions">
-            <button type="button" class="btn btn-sm btn-outline-primary btn-edit-widget" title="@lang{编辑}">
-                <i class="ri-edit-line"></i>
+            <button type="button" class="w-button btn-edit-widget" title="@lang{编辑}" data-tone="primary" data-variant="outline" data-size="sm">
+                <w:icon name="edit" size="sm"></w:icon>
             </button>
-            <button type="button" class="btn btn-sm btn-outline-danger btn-delete-widget" title="@lang{删除}">
-                <i class="ri-delete-bin-line"></i>
+            <button type="button" class="w-button btn-delete-widget" title="@lang{删除}" data-tone="danger" data-variant="outline" data-size="sm">
+                <w:icon name="trash" size="sm"></w:icon>
             </button>
         </div>
     </div>
     
     <div class="widget-preview">
         <?php if (!empty($meta['template'])): ?>
-            <span class="text-muted"><?= htmlspecialchars($widgetDesc ?: __('点击配置此部件')) ?></span>
+            <span class="w-text" data-tone="muted"><?= htmlspecialchars($widgetDesc ?: __('点击配置此部件')) ?></span>
         <?php else: ?>
-            <span class="text-warning"><?= __('无模板') ?></span>
+            <span class="w-text" data-tone="warning"><?= __('无模板') ?></span>
         <?php endif; ?>
     </div>
 </div>

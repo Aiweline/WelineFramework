@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '1.0.8',
+    "version" => '2.0.0',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -39,6 +39,7 @@ return [
         'process_cache_resetter.Weline_Theme' => \Weline\Theme\Api\Runtime\ProcessCacheResetter::class,
         'resource_compiler.less' => \Weline\Theme\Console\Resource\Compiler\Less::class,
         'resource_compiler.welineModules' => \Weline\Theme\Console\Resource\Compiler\WelineModules::class,
+        'resource_compiler.welineUi' => \Weline\Theme\Console\Resource\Compiler\WelineUi::class,
         'template_cache_policy.Weline_Theme' => \Weline\Theme\Api\View\TemplateCachePolicyProvider::class,
         'i18n.javascript_module_config.Weline_Theme' => \Weline\Theme\Api\I18n\ThemeJavascriptModuleConfigProvider::class,
     ],

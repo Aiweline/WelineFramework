@@ -69,14 +69,14 @@
         }
 
         if (message) {
-            Swal.fire({
+            Weline.UI.dialog.request({
                 title: message,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: confirm??'@lang{好的}',
-                cancelButtonText: cancel??'@lang{算了}'
+                tone: 'warning',
+                cancelable: true,
+                confirmLabel: confirm??'@lang{好的}',
+                cancelLabel: cancel??'@lang{算了}'
             }).then((result) => {
-                if (result.isConfirmed) {
+                if (result.confirmed) {
                     showLoading();
                     requestAction().then((res) => {
                         const ok = !res || res.success !== false
@@ -84,18 +84,18 @@
                             const errText = (window.Weline && window.Weline.ApiBusiness)
                                 ? window.Weline.ApiBusiness.formatApiError({ response: { data: res } }, res.message || '')
                                 : (res.message || res.title || '')
-                            Swal.fire({
+                            Weline.UI.dialog.request({
                                 title: res.title || '@lang{失败}',
-                                text: errText,
-                                icon: 'error',
-                                confirmButtonText: failure_confirm??'@lang{好的}'
+                                message: errText,
+                                tone: 'danger',
+                                confirmLabel: failure_confirm??'@lang{好的}'
                             })
                         } else {
-                            Swal.fire({
+                            Weline.UI.dialog.request({
                                 title: res && res.title ? res.title : '@lang{成功}',
-                                text: (res && res.message) ? res.message : __('操作成功!'),
-                                icon: 'success',
-                                confirmButtonText: success_confirm??'@lang{好的}'
+                                message: (res && res.message) ? res.message : __('操作成功!'),
+                                tone: 'success',
+                                confirmLabel: success_confirm??'@lang{好的}'
                             })
                         }
                         if (reload) {
@@ -107,11 +107,11 @@
                         const errText = (window.Weline && window.Weline.ApiBusiness)
                             ? window.Weline.ApiBusiness.formatApiError(err)
                             : (err && err.message ? err.message : String(err))
-                        Swal.fire({
+                        Weline.UI.dialog.request({
                             title: '@lang{失败}',
-                            text: errText,
-                            icon: 'error',
-                            confirmButtonText: failure_confirm??'@lang{好的}'
+                            message: errText,
+                            tone: 'danger',
+                            confirmLabel: failure_confirm??'@lang{好的}'
                         })
                     })
                 }

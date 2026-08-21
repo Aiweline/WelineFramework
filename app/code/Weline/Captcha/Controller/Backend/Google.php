@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\Message;
 
-#[Acl('Weline_Captcha::config', '人机验证配置', 'mdi mdi-shield-check', '系统配置')]
+#[Acl('Weline_Captcha::config', '人机验证配置', 'check', '系统配置')]
 final class Google extends BackendController
 {
     public function __construct(
@@ -19,7 +19,7 @@ final class Google extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Captcha::google_authorize', '授权 Google reCAPTCHA Enterprise', 'mdi mdi-google', '人机验证配置')]
+    #[Acl('Weline_Captcha::google_authorize', '授权 Google reCAPTCHA Enterprise', 'circle', '人机验证配置')]
     public function authorize(): string
     {
         try {
@@ -44,7 +44,7 @@ final class Google extends BackendController
         }
     }
 
-    #[Acl('Weline_Captcha::google_callback', '处理 Google reCAPTCHA Enterprise 回调', 'mdi mdi-login-variant', '人机验证配置')]
+    #[Acl('Weline_Captcha::google_callback', '处理 Google reCAPTCHA Enterprise 回调', 'login', '人机验证配置')]
     public function callback(): string
     {
         $result = [];
@@ -70,14 +70,14 @@ final class Google extends BackendController
         return $this->redirect($this->configUrl());
     }
 
-    #[Acl('Weline_Captcha::google_projects', '选择 Google Cloud Project', 'mdi mdi-cloud-outline', '人机验证配置')]
+    #[Acl('Weline_Captcha::google_projects', '选择 Google Cloud Project', 'cloud', '人机验证配置')]
     public function projects(): string
     {
         $this->assign('config_scope', \trim((string)$this->request->getGet('scope', '')));
         return $this->fetch('Weline_Captcha::templates/Backend/Google/projects.phtml');
     }
 
-    #[Acl('Weline_Captcha::google_test', '测试 Google reCAPTCHA Enterprise 连接', 'mdi mdi-connection', '人机验证配置')]
+    #[Acl('Weline_Captcha::google_test', '测试 Google reCAPTCHA Enterprise 连接', 'link', '人机验证配置')]
     public function test(): string
     {
         try {
@@ -89,7 +89,7 @@ final class Google extends BackendController
         return $this->redirect($this->configUrl());
     }
 
-    #[Acl('Weline_Captcha::google_revoke', '撤销 Google reCAPTCHA Enterprise 授权', 'mdi mdi-link-off', '人机验证配置')]
+    #[Acl('Weline_Captcha::google_revoke', '撤销 Google reCAPTCHA Enterprise 授权', 'link', '人机验证配置')]
     public function revoke(): string
     {
         return $this->fetch('Weline_Captcha::templates/Backend/Google/revoke.phtml');

@@ -170,7 +170,7 @@ $email = $this->getData('email') ?? '';
                 </div>
             <?php endif; ?>
             <div class="verify-actions">
-                <a href="/" class="btn btn-primary"><?= __('返回首页') ?></a>
+                <a href="/" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
             </div>
             <p class="help-text">
                 <?= __('绑定成功后，您将收到客服回复的邮件通知') ?>
@@ -182,8 +182,8 @@ $email = $this->getData('email') ?? '';
             <h1 class="verify-title"><?= __('验证失败') ?></h1>
             <p class="verify-message"><?= htmlspecialchars($message) ?></p>
             <div class="verify-actions">
-                <a href="/" class="btn btn-primary"><?= __('返回首页') ?></a>
-                <button class="btn btn-secondary" type="button" data-cs-bind-back><?= __('返回上一页') ?></button>
+                <a href="/" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
+                <button class="w-button" type="button" data-cs-bind-back data-tone="neutral"><?= __('返回上一页') ?></button>
             </div>
             <p class="help-text">
                 <?= __('如有问题，请') ?> <a href="/" data-cs-bind-open-chat><?= __('联系客服') ?></a>

@@ -29,64 +29,64 @@ use Weline\Server\Model\ServerStatusLog;
 
 <div class="server-monitor">
     <!-- 顶部统计卡片 -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card stat-card bg-gradient">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-6);">
+        <div style="--w-span-md:3;">
+            <div class="w-card stat-card bg-gradient">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-justify="between" data-align="center">
                         <div>
-                            <h6 class="text-muted mb-2"><?= __('运行中 Workers') ?></h6>
-                            <h3 class="mb-0" id="running-workers"><?= $serverStats['running_workers'] ?? 0 ?></h3>
+                            <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= __('运行中 Workers') ?></h6>
+                            <h3 id="running-workers" style="--w-mb:0;"><?= $serverStats['running_workers'] ?? 0 ?></h3>
                         </div>
-                        <div class="stat-icon bg-success-subtle text-success">
-                            <i class="bi bi-hdd-stack"></i>
+                        <div class="stat-icon w-text" data-w-background="success" data-tone="success">
+                            <w:icon name="circle" size="sm"></w:icon>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
+        <div style="--w-span-md:3;">
+            <div class="w-card stat-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-justify="between" data-align="center">
                         <div>
-                            <h6 class="text-muted mb-2"><?= __('总连接数') ?></h6>
-                            <h3 class="mb-0" id="total-connections"><?= $serverStats['total_connections'] ?? 0 ?></h3>
+                            <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= __('总连接数') ?></h6>
+                            <h3 id="total-connections" style="--w-mb:0;"><?= $serverStats['total_connections'] ?? 0 ?></h3>
                         </div>
-                        <div class="stat-icon bg-primary-subtle text-primary">
-                            <i class="bi bi-diagram-3"></i>
+                        <div class="stat-icon w-text" data-w-background="primary" data-tone="primary">
+                            <w:icon name="circle" size="sm"></w:icon>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
+        <div style="--w-span-md:3;">
+            <div class="w-card stat-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-justify="between" data-align="center">
                         <div>
-                            <h6 class="text-muted mb-2"><?= __('总请求数') ?></h6>
-                            <h3 class="mb-0" id="total-requests"><?= number_format($serverStats['total_requests'] ?? 0) ?></h3>
+                            <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= __('总请求数') ?></h6>
+                            <h3 id="total-requests" style="--w-mb:0;"><?= number_format($serverStats['total_requests'] ?? 0) ?></h3>
                         </div>
-                        <div class="stat-icon bg-info-subtle text-info">
-                            <i class="bi bi-arrow-left-right"></i>
+                        <div class="stat-icon w-text" data-w-background="info" data-tone="info">
+                            <w:icon name="arrow-left" size="sm"></w:icon>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
+        <div style="--w-span-md:3;">
+            <div class="w-card stat-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-justify="between" data-align="center">
                         <div>
-                            <h6 class="text-muted mb-2"><?= __('攻击拦截') ?></h6>
-                            <h3 class="mb-0 <?= ($attackStats['blocked_attacks'] ?? 0) > 0 ? 'text-danger' : '' ?>" id="blocked-attacks">
+                            <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= __('攻击拦截') ?></h6>
+                            <h3 class="<?= ($attackStats['blocked_attacks'] ?? 0) > 0 ? 'text-danger' : '' ?>" id="blocked-attacks" style="--w-mb:0;">
                                 <?= $attackStats['blocked_attacks'] ?? 0 ?>
                             </h3>
                         </div>
-                        <div class="stat-icon bg-danger-subtle text-danger">
-                            <i class="bi bi-shield-exclamation"></i>
+                        <div class="stat-icon w-text" data-w-background="danger" data-tone="danger">
+                            <w:icon name="warning" size="sm"></w:icon>
                         </div>
                     </div>
                 </div>
@@ -94,47 +94,47 @@ use Weline\Server\Model\ServerStatusLog;
         </div>
     </div>
     
-    <div class="row g-4">
+    <div class="w-grid" style="--w-gap:var(--weline-space-6);">
         <!-- 左侧：进程状态 -->
-        <div class="col-lg-8">
+        <div style="--w-span-lg:8;">
             <!-- Master/Dispatcher 状态 -->
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-diagram-2 me-2"></i><?= __('进程状态') ?>
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                    <h5 style="--w-mb:0;">
+                        <w:icon name="circle" size="sm"></w:icon><?= __('进程状态') ?>
                     </h5>
                     <div>
-                        <button class="btn btn-sm btn-outline-primary" data-server-monitor-action="refresh-status">
-                            <i class="bi bi-arrow-clockwise"></i> <?= __('刷新') ?>
+                        <button class="w-button" data-server-monitor-action="refresh-status" data-tone="primary" data-variant="outline" data-size="sm">
+                            <w:icon name="clock" size="sm"></w:icon> <?= __('刷新') ?>
                         </button>
-                        <a href="<?= $managerUrl ?>" class="btn btn-sm btn-outline-secondary ms-2">
-                            <i class="bi bi-gear"></i> <?= __('管理') ?>
+                        <a href="<?= $managerUrl ?>" class="w-button ms-2" data-tone="neutral" data-variant="outline" data-size="sm">
+                            <w:icon name="settings" size="sm"></w:icon> <?= __('管理') ?>
                         </a>
                     </div>
                 </div>
-                <div class="card-body">
-                    <div class="row mb-3">
-                        <div class="col-md-6">
+                <div class="w-card__body">
+                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                        <div style="--w-span-md:6;">
                             <div class="process-status-card <?= ($serverStats['master_running'] ?? false) ? 'running' : 'stopped' ?>">
-                                <div class="d-flex justify-content-between align-items-center">
+                                <div class="w-cluster" data-justify="between" data-align="center">
                                     <div>
-                                        <h6 class="mb-1"><?= __('Master 进程') ?></h6>
-                                        <small class="text-muted"><?= __('主控进程') ?></small>
+                                        <h6 style="--w-mb:var(--weline-space-1);"><?= __('Master 进程') ?></h6>
+                                        <small class="w-text" data-tone="muted"><?= __('主控进程') ?></small>
                                     </div>
-                                    <span class="badge bg-<?= ($serverStats['master_running'] ?? false) ? 'success' : 'secondary' ?>">
+                                    <span class="w-badge bg-<?= ($serverStats['master_running'] ?? false) ? 'success' : 'secondary' ?>">
                                         <?= ($serverStats['master_running'] ?? false) ? __('运行中') : __('已停止') ?>
                                     </span>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div style="--w-span-md:6;">
                             <div class="process-status-card <?= ($serverStats['dispatcher_running'] ?? false) ? 'running' : 'stopped' ?>">
-                                <div class="d-flex justify-content-between align-items-center">
+                                <div class="w-cluster" data-justify="between" data-align="center">
                                     <div>
-                                        <h6 class="mb-1"><?= __('Dispatcher 进程') ?></h6>
-                                        <small class="text-muted"><?= __('分流器（Windows）') ?></small>
+                                        <h6 style="--w-mb:var(--weline-space-1);"><?= __('Dispatcher 进程') ?></h6>
+                                        <small class="w-text" data-tone="muted"><?= __('分流器（Windows）') ?></small>
                                     </div>
-                                    <span class="badge bg-<?= ($serverStats['dispatcher_running'] ?? false) ? 'success' : 'secondary' ?>">
+                                    <span class="w-badge bg-<?= ($serverStats['dispatcher_running'] ?? false) ? 'success' : 'secondary' ?>">
                                         <?= ($serverStats['dispatcher_running'] ?? false) ? __('运行中') : __('未启用') ?>
                                     </span>
                                 </div>
@@ -143,13 +143,13 @@ use Weline\Server\Model\ServerStatusLog;
                     </div>
                     
                     <!-- Worker 状态列表 -->
-                    <h6 class="mb-3"><i class="bi bi-hdd-stack me-2"></i><?= __('Worker 进程列表') ?></h6>
+                    <h6 style="--w-mb:var(--weline-space-4);"><w:icon name="circle" size="sm"></w:icon><?= __('Worker 进程列表') ?></h6>
                     <div class="worker-grid" id="worker-grid">
                         <?php if (empty($statusLogs)): ?>
-                            <div class="text-center text-muted py-4">
-                                <i class="bi bi-inbox display-6"></i>
-                                <p class="mt-2"><?= __('暂无 Worker 状态数据') ?></p>
-                                <p class="small"><?= __('启动 WLS 服务器后将自动收集状态') ?></p>
+                            <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                                <w:icon name="box" size="sm"></w:icon>
+                                <p style="--w-mt:var(--weline-space-2);"><?= __('暂无 Worker 状态数据') ?></p>
+                                <p class="w-text" data-size="sm"><?= __('启动 WLS 服务器后将自动收集状态') ?></p>
                             </div>
                         <?php else: ?>
                             <?php foreach ($statusLogs as $log): ?>
@@ -157,7 +157,7 @@ use Weline\Server\Model\ServerStatusLog;
                                     <div class="worker-card <?= $log[ServerStatusLog::schema_fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'running' : 'stopped' ?>">
                                         <div class="worker-header">
                                             <span class="worker-id">W#<?= $log[ServerStatusLog::schema_fields_WORKER_ID] ?></span>
-                                            <span class="badge bg-<?= $log[ServerStatusLog::schema_fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'success' : 'secondary' ?> badge-sm">
+                                            <span class="w-badge bg-<?= $log[ServerStatusLog::schema_fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'success' : 'secondary' ?> badge-sm">
                                                 <?= $log[ServerStatusLog::schema_fields_STATUS] ?>
                                             </span>
                                         </div>
@@ -187,16 +187,16 @@ use Weline\Server\Model\ServerStatusLog;
                 </div>
             </div>
 
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-list-task me-2"></i><?= __('进程明细（实时）') ?>
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                    <h5 style="--w-mb:0;">
+                        <w:icon name="list" size="sm"></w:icon><?= __('进程明细（实时）') ?>
                     </h5>
-                    <small class="text-muted"><?= __('来自 Orchestrator + Worker Health') ?></small>
+                    <small class="w-text" data-tone="muted"><?= __('来自 Orchestrator + Worker Health') ?></small>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover mb-0">
+                <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                    <div class="w-table-wrap">
+                        <table class="w-table" style="--w-mb:0;">
                             <thead>
                             <tr>
                                 <th></th>
@@ -216,7 +216,7 @@ use Weline\Server\Model\ServerStatusLog;
                             </thead>
                             <tbody id="process-detail-body">
                             <tr>
-                                <td colspan="13" class="text-center text-muted py-3"><?= __('等待状态刷新...') ?></td>
+                                <td colspan="13" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);"><?= __('等待状态刷新...') ?></td>
                             </tr>
                             </tbody>
                         </table>
@@ -224,16 +224,16 @@ use Weline\Server\Model\ServerStatusLog;
                 </div>
             </div>
 
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-clock-history me-2"></i><?= __('进程状态记录（最近）') ?>
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                    <h5 style="--w-mb:0;">
+                        <w:icon name="clock" size="sm"></w:icon><?= __('进程状态记录（最近）') ?>
                     </h5>
-                    <small class="text-muted"><?= __('日志保留默认 7 天') ?></small>
+                    <small class="w-text" data-tone="muted"><?= __('日志保留默认 7 天') ?></small>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-striped mb-0">
+                <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                    <div class="w-table-wrap">
+                        <table class="w-table" style="--w-mb:0;">
                             <thead>
                             <tr>
                                 <th><?= __('时间') ?></th>
@@ -250,7 +250,7 @@ use Weline\Server\Model\ServerStatusLog;
                             </thead>
                             <tbody id="process-history-body">
                             <tr>
-                                <td colspan="10" class="text-center text-muted py-3"><?= __('等待状态刷新...') ?></td>
+                                <td colspan="10" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);"><?= __('等待状态刷新...') ?></td>
                             </tr>
                             </tbody>
                         </table>
@@ -259,30 +259,28 @@ use Weline\Server\Model\ServerStatusLog;
             </div>
             
             <!-- API 文档 -->
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-book me-2"></i><?= __('Master API 接口') ?>
+            <div class="w-card">
+                <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                    <h5 style="--w-mb:0;">
+                        <w:icon name="circle" size="sm"></w:icon><?= __('Master API 接口') ?>
                     </h5>
-                    <a href="<?= $apiDocUrl ?>" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-arrow-right"></i> <?= __('完整文档') ?>
+                    <a href="<?= $apiDocUrl ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
+                        <w:icon name="arrow-right" size="sm"></w:icon> <?= __('完整文档') ?>
                     </a>
                 </div>
-                <div class="card-body">
-                    <div class="accordion" id="apiAccordion">
+                <div class="w-card__body">
+                    <div class="w-stack" id="apiAccordion">
                         <?php foreach ($masterApiDocs as $idx => $category): ?>
-                            <div class="accordion-item">
-                                <h2 class="accordion-header">
-                                    <button class="accordion-button <?= $idx > 0 ? 'collapsed' : '' ?>" type="button" 
-                                            data-bs-toggle="collapse" data-bs-target="#api-cat-<?= $idx ?>">
+                            <div class="w-disclosure" data-w-component="disclosure">
+                                <h2>
+                                    <button class="w-disclosure__trigger <?= $idx > 0 ? 'collapsed' : '' ?>" type="button" data-w-target="#api-cat-<?= $idx ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger aria-expanded="false">
                                         <?= $category['category'] ?>
                                     </button>
                                 </h2>
-                                <div id="api-cat-<?= $idx ?>" class="accordion-collapse collapse <?= $idx === 0 ? 'show' : '' ?>" 
-                                     data-bs-parent="#apiAccordion">
-                                    <div class="accordion-body">
-                                        <div class="table-responsive">
-                                            <table class="table table-sm table-hover mb-0">
+                                <div id="api-cat-<?= $idx ?>" class="w-disclosure__panel <?= $idx === 0 ? 'show' : '' ?>" data-w-disclosure-panel hidden>
+                                    <div class="w-disclosure__body">
+                                        <div class="w-table-wrap">
+                                            <table class="w-table" style="--w-mb:0;">
                                                 <thead>
                                                     <tr>
                                                         <th width="20%"><?= __('接口') ?></th>
@@ -295,7 +293,7 @@ use Weline\Server\Model\ServerStatusLog;
                                                     <?php foreach ($category['apis'] as $api): ?>
                                                         <tr>
                                                             <td><strong><?= $api['name'] ?></strong></td>
-                                                            <td><span class="badge bg-<?= strpos($api['method'], 'POST') !== false ? 'warning' : 'success' ?>"><?= $api['method'] ?></span></td>
+                                                            <td><span class="w-badge bg-<?= strpos($api['method'], 'POST') !== false ? 'warning' : 'success' ?>"><?= $api['method'] ?></span></td>
                                                             <td><code><?= htmlspecialchars($api['path']) ?></code></td>
                                                             <td><?= $api['description'] ?></td>
                                                         </tr>
@@ -313,33 +311,33 @@ use Weline\Server\Model\ServerStatusLog;
         </div>
         
         <!-- 右侧：攻击统计 -->
-        <div class="col-lg-4">
+        <div style="--w-span-lg:4;">
             <!-- 攻击统计 -->
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-shield-exclamation me-2"></i><?= __('攻击统计') ?>
-                        <small class="text-muted ms-2"><?= __('近7天') ?></small>
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                    <h5 style="--w-mb:0;">
+                        <w:icon name="warning" size="sm"></w:icon><?= __('攻击统计') ?>
+                        <small class="w-text ms-2" data-tone="muted"><?= __('近7天') ?></small>
                     </h5>
-                    <a href="<?= $attackLogUrl ?>" class="btn btn-sm btn-outline-danger">
-                        <i class="bi bi-list"></i> <?= __('详情') ?>
+                    <a href="<?= $attackLogUrl ?>" class="w-button" data-tone="danger" data-variant="outline" data-size="sm">
+                        <w:icon name="list" size="sm"></w:icon> <?= __('详情') ?>
                     </a>
                 </div>
-                <div class="card-body">
+                <div class="w-card__body">
                     <?php if (($attackStats['total_attacks'] ?? 0) === 0): ?>
-                        <div class="text-center text-muted py-4">
-                            <i class="bi bi-shield-check display-6 text-success"></i>
-                            <p class="mt-2"><?= __('暂无攻击记录') ?></p>
+                        <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                            <w:icon name="check" size="sm"></w:icon>
+                            <p style="--w-mt:var(--weline-space-2);"><?= __('暂无攻击记录') ?></p>
                         </div>
                     <?php else: ?>
                         <div class="attack-summary">
                             <div class="attack-stat-row">
                                 <span class="label"><?= __('总攻击次数') ?></span>
-                                <span class="value text-danger"><?= $attackStats['total_attacks'] ?></span>
+                                <span class="value w-text" data-tone="danger"><?= $attackStats['total_attacks'] ?></span>
                             </div>
                             <div class="attack-stat-row">
                                 <span class="label"><?= __('已拦截') ?></span>
-                                <span class="value text-success"><?= $attackStats['blocked_attacks'] ?></span>
+                                <span class="value w-text" data-tone="success"><?= $attackStats['blocked_attacks'] ?></span>
                             </div>
                             <div class="attack-stat-row">
                                 <span class="label"><?= __('CDN 通知') ?></span>
@@ -349,26 +347,26 @@ use Weline\Server\Model\ServerStatusLog;
                         
                         <hr>
                         
-                        <h6 class="mb-3"><?= __('按类型分布') ?></h6>
+                        <h6 style="--w-mb:var(--weline-space-4);"><?= __('按类型分布') ?></h6>
                         <?php foreach (($attackStats['by_type'] ?? []) as $type => $count): ?>
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge" style="background-color: <?= AttackLog::getSeverityColor(AttackLog::getSeverityByType($type)) ?>">
+                            <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-2);">
+                                <span class="w-badge" style="background-color: <?= AttackLog::getSeverityColor(AttackLog::getSeverityByType($type)) ?>">
                                     <?= AttackLog::getTypeLabel($type) ?>
                                 </span>
-                                <span class="fw-bold"><?= $count ?></span>
+                                <span class="w-text" data-weight="strong"><?= $count ?></span>
                             </div>
                         <?php endforeach; ?>
                         
                         <?php if (!empty($attackStats['by_severity'])): ?>
                             <hr>
-                            <h6 class="mb-3"><?= __('按严重程度') ?></h6>
+                            <h6 style="--w-mb:var(--weline-space-4);"><?= __('按严重程度') ?></h6>
                             <?php foreach ($attackStats['by_severity'] as $severity => $count): ?>
                                 <?php if ($count > 0): ?>
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge" style="background-color: <?= AttackLog::getSeverityColor($severity) ?>">
+                                    <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-2);">
+                                        <span class="w-badge" style="background-color: <?= AttackLog::getSeverityColor($severity) ?>">
                                             <?= AttackLog::getSeverityLabel($severity) ?>
                                         </span>
-                                        <span class="fw-bold"><?= $count ?></span>
+                                        <span class="w-text" data-weight="strong"><?= $count ?></span>
                                     </div>
                                 <?php endif; ?>
                             <?php endforeach; ?>
@@ -376,12 +374,12 @@ use Weline\Server\Model\ServerStatusLog;
                         
                         <?php if (!empty($attackStats['top_ips'])): ?>
                             <hr>
-                            <h6 class="mb-3"><?= __('Top 攻击 IP') ?></h6>
+                            <h6 style="--w-mb:var(--weline-space-4);"><?= __('Top 攻击 IP') ?></h6>
                             <?php $topCount = 0; foreach ($attackStats['top_ips'] as $ip => $count): ?>
                                 <?php if (++$topCount > 5) break; ?>
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <code class="small"><?= htmlspecialchars($ip) ?></code>
-                                    <span class="badge bg-danger"><?= $count ?></span>
+                                <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-2);">
+                                    <code class="w-text" data-size="sm"><?= htmlspecialchars($ip) ?></code>
+                                    <span class="w-badge" data-w-background="danger"><?= $count ?></span>
                                 </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -390,64 +388,64 @@ use Weline\Server\Model\ServerStatusLog;
             </div>
             
             <!-- 快速操作 -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><?= __('流量与压测') ?></h5>
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header">
+                    <h5 style="--w-mb:0;"><w:icon name="circle" size="sm"></w:icon><?= __('流量与压测') ?></h5>
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('Host 分组流量（最近5分钟）') ?></label>
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
+                <div class="w-card__body">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('Host 分组流量（最近5分钟）') ?></label>
+                        <div class="w-table-wrap">
+                            <table class="w-table" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th><?= __('Host') ?></th>
-                                    <th class="text-end"><?= __('请求') ?></th>
-                                    <th class="text-end"><?= __('错误') ?></th>
-                                    <th class="text-end"><?= __('平均延迟(ms)') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('请求') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('错误') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('平均延迟(ms)') ?></th>
                                 </tr>
                                 </thead>
                                 <tbody id="traffic-host-table">
-                                <tr><td colspan="4" class="text-center text-muted"><?= __('暂无流量数据') ?></td></tr>
+                                <tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('暂无流量数据') ?></td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    <div class="input-group input-group-sm mb-2">
-                        <input id="benchmark-target" class="form-control" type="text" placeholder="<?= __('压测目标 URL，例如 http://127.0.0.1:9981/_wls/health') ?>">
-                        <input id="benchmark-concurrency" class="form-control" type="number" min="1" value="50" style="max-width: 90px;">
-                        <input id="benchmark-requests" class="form-control" type="number" min="1" value="1000" style="max-width: 110px;">
-                        <button class="btn btn-outline-primary" data-server-monitor-action="run-benchmark">
-                            <i class="bi bi-play-circle"></i> <?= __('开始压测') ?>
+                    <div class="w-field__control input-group-sm" style="--w-mb:var(--weline-space-2);">
+                        <input id="benchmark-target" class="w-input" type="text" placeholder="<?= __('压测目标 URL，例如 http://127.0.0.1:9981/_wls/health') ?>">
+                        <input id="benchmark-concurrency" class="w-input" type="number" min="1" value="50" style="max-width: 90px;">
+                        <input id="benchmark-requests" class="w-input" type="number" min="1" value="1000" style="max-width: 110px;">
+                        <button class="w-button" data-server-monitor-action="run-benchmark" data-tone="primary" data-variant="outline">
+                            <w:icon name="play" size="sm"></w:icon> <?= __('开始压测') ?>
                         </button>
                     </div>
-                    <small class="text-muted d-block mb-2"><?= __('输入参数：目标 URL / 并发 / 请求数') ?></small>
-                    <div id="benchmark-last-result" class="small text-muted"><?= __('暂无压测结果') ?></div>
-                    <div class="mt-2">
-                        <a class="btn btn-sm btn-outline-secondary" href="<?= $managerUrl ?>">
-                            <i class="bi bi-gear"></i> <?= __('前往服务器管理执行重启/热重载') ?>
+                    <small class="w-text" data-w-display="block" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= __('输入参数：目标 URL / 并发 / 请求数') ?></small>
+                    <div id="benchmark-last-result" class="w-text" data-tone="muted" data-size="sm"><?= __('暂无压测结果') ?></div>
+                    <div style="--w-mt:var(--weline-space-2);">
+                        <a class="w-button" href="<?= $managerUrl ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                            <w:icon name="settings" size="sm"></w:icon> <?= __('前往服务器管理执行重启/热重载') ?>
                         </a>
                     </div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-lightning me-2"></i><?= __('快速操作') ?></h5>
+            <div class="w-card">
+                <div class="w-card__header">
+                    <h5 style="--w-mb:0;"><w:icon name="circle" size="sm"></w:icon><?= __('快速操作') ?></h5>
                 </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <a href="<?= $managerUrl ?>" class="btn btn-outline-primary">
-                            <i class="bi bi-hdd-rack me-2"></i><?= __('服务器管理') ?>
+                <div class="w-card__body">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                        <a href="<?= $managerUrl ?>" class="w-button" data-tone="primary" data-variant="outline">
+                            <w:icon name="circle" size="sm"></w:icon><?= __('服务器管理') ?>
                         </a>
-                        <a href="<?= $attackLogUrl ?>" class="btn btn-outline-danger">
-                            <i class="bi bi-shield-exclamation me-2"></i><?= __('攻击日志') ?>
+                        <a href="<?= $attackLogUrl ?>" class="w-button" data-tone="danger" data-variant="outline">
+                            <w:icon name="warning" size="sm"></w:icon><?= __('攻击日志') ?>
                         </a>
-                        <a href="<?= $apiDocUrl ?>" class="btn btn-outline-info">
-                            <i class="bi bi-book me-2"></i><?= __('API 文档') ?>
+                        <a href="<?= $apiDocUrl ?>" class="w-button" data-tone="info" data-variant="outline">
+                            <w:icon name="circle" size="sm"></w:icon><?= __('API 文档') ?>
                         </a>
-                        <button class="btn btn-outline-warning" data-server-monitor-action="cleanup-logs">
-                            <i class="bi bi-trash me-2"></i><?= __('清理过期日志') ?>
+                        <button class="w-button" data-server-monitor-action="cleanup-logs" data-tone="warning" data-variant="outline">
+                            <w:icon name="trash" size="sm"></w:icon><?= __('清理过期日志') ?>
                         </button>
                     </div>
                 </div>
@@ -670,7 +668,7 @@ function renderProcessDetails(services) {
         return;
     }
     if (!Array.isArray(services) || services.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted py-3"><?= __('暂无进程明细数据') ?></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);"><?= __('暂无进程明细数据') ?></td></tr>`;
         return;
     }
     const rows = [];
@@ -694,19 +692,19 @@ function renderProcessDetails(services) {
             const canExpand = isWorker && fiberCount > 0;
             const fibersJson = escapeHtml(JSON.stringify(fibers));
             const expandCell = canExpand
-                ? `<td class="text-center align-middle"><button type="button" class="btn btn-sm btn-outline-secondary border-0 p-1 server-monitor-fiber-toggle" data-fibers-json="${fibersJson}" data-row-idx="${rowIndex}" aria-label="<?= __('展开 Fiber 列表') ?>"><i class="bi bi-chevron-down"></i></button></td>`
-                : `<td class="text-center"></td>`;
+                ? `<td class="w-text" data-align="center" data-w-vertical="middle"><button type="button" class="w-button server-monitor-fiber-toggle" data-fibers-json="${fibersJson}" data-row-idx="${rowIndex}" aria-label="<?= __('展开 Fiber 列表') ?>" data-w-border="none" data-tone="neutral" data-variant="outline" data-size="sm" style="--w-pt:var(--weline-space-1);--w-pe:var(--weline-space-1);--w-pb:var(--weline-space-1);--w-ps:var(--weline-space-1);"><w:icon name="chevron-down" size="sm"></w:icon></button></td>`
+                : `<td class="w-text" data-align="center"></td>`;
             const fiberCell = isWorker
                 ? `<td class="process-detail-table-memory">${fiberCount}</td>`
-                : `<td class="text-muted">-</td>`;
+                : `<td class="w-text" data-tone="muted">-</td>`;
             rows.push(`
                 <tr class="server-monitor-process-row" data-row-idx="${rowIndex}">
                     ${expandCell}
-                    <td><span class="badge process-role-badge ${roleBadge.cls}">${escapeHtml(roleBadge.label)}</span></td>
+                    <td><span class="w-badge process-role-badge ${roleBadge.cls}">${escapeHtml(roleBadge.label)}</span></td>
                     <td>#${escapeHtml(String(item.instance_id ?? '-'))}</td>
                     <td>${escapeHtml(String(item.pid || '-'))}</td>
                     <td>${escapeHtml(String(item.port || '-'))}</td>
-                    <td><span class="badge ${stateBadge.cls}">${escapeHtml(stateBadge.label)}</span></td>
+                    <td><span class="w-badge ${stateBadge.cls}">${escapeHtml(stateBadge.label)}</span></td>
                     <td>${escapeHtml(uptime)}</td>
                     <td>${escapeHtml(String(item.restarts || 0))}</td>
                     <td>${formatNumber(connections)} / ${formatNumber(activeRequests)}</td>
@@ -746,18 +744,18 @@ function renderProcessDetails(services) {
                 return (p === 'sse' ? 'SSE' : 'HTTP');
             };
             const fiberRows = fibers.length === 0
-                ? `<tr><td colspan="4" class="text-muted"><?= __('无 Fiber') ?></td></tr>`
+                ? `<tr><td colspan="4" class="w-text" data-tone="muted"><?= __('无 Fiber') ?></td></tr>`
                 : fibers.map((f) => `
                     <tr>
                         <td>${escapeHtml(String(f.conn_id ?? ''))}</td>
-                        <td><span class="badge ${(f.status === 'idle' ? 'bg-secondary' : 'bg-primary')}">${escapeHtml(statusLabel(f.status))}</span></td>
+                        <td><span class="w-badge ${(f.status === 'idle' ? 'bg-secondary' : 'bg-primary')}">${escapeHtml(statusLabel(f.status))}</span></td>
                         <td>${escapeHtml(protocolLabel(f.protocol))}</td>
                     </tr>
                 `).join('');
             detailRow.innerHTML = `
-                <td colspan="13" class="p-0">
-                    <div class="p-2 border-start border-3 border-info">
-                        <table class="table table-sm table-borderless mb-0 small">
+                <td colspan="13" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                    <div class="border-3 border-info" data-w-border="start" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                        <table class="w-table w-text" data-size="sm" style="--w-mb:0;">
                             <thead><tr><th><?= __('连接 ID') ?></th><th><?= __('状态') ?></th><th><?= __('协议') ?></th></tr></thead>
                             <tbody>${fiberRows}</tbody>
                         </table>
@@ -777,7 +775,7 @@ function renderProcessHistory(logs) {
         return;
     }
     if (!Array.isArray(logs) || logs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-3"><?= __('暂无状态日志') ?></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);"><?= __('暂无状态日志') ?></td></tr>`;
         return;
     }
     const rows = logs.slice(0, 30).map((log) => {
@@ -791,7 +789,7 @@ function renderProcessHistory(logs) {
                 <td>${escapeHtml(type)}</td>
                 <td>${escapeHtml(String(log.process_id || '-'))}</td>
                 <td>${escapeHtml(String(log.pid || '-'))}</td>
-                <td><span class="badge ${statusBadge.cls}">${escapeHtml(statusBadge.label)}</span></td>
+                <td><span class="w-badge ${statusBadge.cls}">${escapeHtml(statusBadge.label)}</span></td>
                 <td>${formatNumber(Number(log.connections || 0))}</td>
                 <td>${formatNumber(Number(log.active_requests || 0))}</td>
                 <td>${formatNumber(Number(log.total_requests || 0))}</td>
@@ -899,7 +897,7 @@ function renderTrafficHosts(hosts) {
         return;
     }
     if (!hosts || hosts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted"><?= __('暂无流量数据') ?></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('暂无流量数据') ?></td></tr>`;
         return;
     }
     tbody.innerHTML = hosts.map(item => {
@@ -907,9 +905,9 @@ function renderTrafficHosts(hosts) {
         return `
             <tr>
                 <td>${escapeHtml(item.host || '*')}</td>
-                <td class="text-end">${formatNumber(item.request_count || 0)}</td>
-                <td class="text-end">${formatNumber(item.error_count || 0)}</td>
-                <td class="text-end">${avg}</td>
+                <td class="w-text" data-align="end">${formatNumber(item.request_count || 0)}</td>
+                <td class="w-text" data-align="end">${formatNumber(item.error_count || 0)}</td>
+                <td class="w-text" data-align="end">${avg}</td>
             </tr>
         `;
     }).join('');
@@ -920,10 +918,10 @@ async function runBenchmark() {
     const concurrency = parseInt(document.getElementById('benchmark-concurrency')?.value || '50', 10);
     const requests = parseInt(document.getElementById('benchmark-requests')?.value || '1000', 10);
     if (!target) {
-        BackendToast.warning('<?= __('请先输入压测目标 URL。') ?>');
+        Weline.UI.toast.warning('<?= __('请先输入压测目标 URL。') ?>');
         return;
     }
-    BackendToast.info('<?= __('压测执行中，请稍候...') ?>');
+    Weline.UI.toast.info('<?= __('压测执行中，请稍候...') ?>');
     try {
         const data = await bqAdmin[\'server\'](BENCHMARK_API_URL, {
             method: 'POST',
@@ -935,15 +933,15 @@ async function runBenchmark() {
             credentials: 'same-origin'
         });
         if (!data.success) {
-            BackendToast.error(data.message || '<?= __('压测失败') ?>');
+            Weline.UI.toast.error(data.message || '<?= __('压测失败') ?>');
             return;
         }
         const result = data.data || {};
         const text = `QPS: ${result.qps || 0}, p95: ${result.latency_p95 || 0}ms, error_rate: ${result.error_rate || 0}%`;
         document.getElementById('benchmark-last-result').textContent = text;
-        BackendToast.success('<?= __('压测完成') ?>');
+        Weline.UI.toast.success('<?= __('压测完成') ?>');
     } catch (error) {
-        BackendToast.error('<?= __('压测失败：请检查网络连接后重试。') ?> ' + error.message);
+        Weline.UI.toast.error('<?= __('压测失败：请检查网络连接后重试。') ?> ' + error.message);
     }
 }
 
@@ -958,17 +956,17 @@ function formatNumber(num) {
 }
 
 async function cleanupLogs() {
-    const confirmed = await BackendConfirm.show('<?= __('确定要清理过期日志吗？状态日志保留 7 天，攻击日志保留 30 天。') ?>', {
+    const confirmed = await Weline.UI.dialog.confirm('<?= __('确定要清理过期日志吗？状态日志保留 7 天，攻击日志保留 30 天。') ?>', {
         title: '<?= __('清理过期日志') ?>',
-        type: 'warning',
-        confirmText: '<?= __('确认清理') ?>',
-        cancelText: '<?= __('取消') ?>'
+        tone: 'warning',
+        confirmLabel: '<?= __('确认清理') ?>',
+        cancelLabel: '<?= __('取消') ?>'
     });
     if (!confirmed) {
         return;
     }
     
-    BackendToast.info('<?= __('正在清理...') ?>');
+    Weline.UI.toast.info('<?= __('正在清理...') ?>');
     
     try {
         const data = await bqAdmin[\'server\'](CLEANUP_API_URL, {
@@ -982,12 +980,12 @@ async function cleanupLogs() {
         });
         
         if (data.success) {
-            BackendToast.success(data.message + ' (状态日志: ' + data.data.status_logs_cleaned + ', 攻击日志: ' + data.data.attack_logs_cleaned + ')');
+            Weline.UI.toast.success(data.message + ' (状态日志: ' + data.data.status_logs_cleaned + ', 攻击日志: ' + data.data.attack_logs_cleaned + ')');
         } else {
-            BackendToast.error(data.message || '<?= __('清理失败') ?>');
+            Weline.UI.toast.error(data.message || '<?= __('清理失败') ?>');
         }
     } catch (error) {
-        BackendToast.error('<?= __('清理失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('清理失败') ?>: ' + error.message);
     }
 }
 </script>

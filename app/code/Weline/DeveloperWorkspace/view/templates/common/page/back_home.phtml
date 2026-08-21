@@ -6,14 +6,13 @@
  * 论坛：https://bbs.aiweline.com
  */
 ?>
-<div class='col-12'>
-    <div class='card'>
-        <div class='card-body'>
-            <a href="@url('/dev/tool/')" class='btn btn-dark'>
+<div style="--w-span:12;">
+    <div class="w-card">
+        <div class="w-card__body">
+            <a href="@url('/dev/tool/')" class="w-button" data-tone="neutral">
                 <lang>返回欢迎页</lang>
             </a>
-            <button type='button' class='btn btn-info' data-dev-workspace-action='history-back'
-                    data-dev-workspace-fallback="@url('/dev/tool/')">
+            <button type='button' class="w-button" data-dev-workspace-action='history-back' data-dev-workspace-fallback="@url('/dev/tool/')" data-tone="info">
                 <lang>返回上一页</lang>
             </button>
         </div>

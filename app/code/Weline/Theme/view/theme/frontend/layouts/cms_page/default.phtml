@@ -60,7 +60,7 @@ $colors = $this->getData('colors') ?? [];
             <main class="cms-page-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="cms-page-main" data-layout="cms_page">
                 <!-- 面包屑导航 -->
                 <if condition="meta.showBreadcrumb">
-                    <div class="container">
+                    <div class="w-container">
                         <w:hook>Weline_Theme::frontend::layouts::cms_page::breadcrumb</w:hook>
                     </div>
                 </if>
@@ -77,7 +77,7 @@ $colors = $this->getData('colors') ?? [];
                         class="cms-page-content-slot">
                     <w:hook name="Weline_Theme::frontend::layouts::cms_page::content">
                         <div class="cms-page-default-content">
-                            <div class="container">
+                            <div class="w-container">
                                 <div class="slot-placeholder" data-placeholder="content">
                                     <span class="placeholder-icon" aria-hidden="true"></span>
                                     <span class="placeholder-text"><?= __('拖拽部件或容器到此处') ?></span>

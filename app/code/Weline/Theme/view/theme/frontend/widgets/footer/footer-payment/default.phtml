@@ -26,17 +26,17 @@ $showLabel = (bool)($this->getData('show_label') ?? true);
 
 // 支付方式图标映射
 $paymentIcons = [
-    'visa'      => ['icon' => 'ri-visa-line', 'name' => 'Visa'],
-    'mastercard'=> ['icon' => 'ri-mastercard-line', 'name' => 'Mastercard'],
-    'amex'      => ['icon' => 'ri-bank-card-line', 'name' => 'American Express'],
-    'paypal'    => ['icon' => 'ri-paypal-line', 'name' => 'PayPal'],
-    'alipay'    => ['icon' => 'ri-alipay-line', 'name' => '支付宝'],
-    'wechat'    => ['icon' => 'ri-wechat-pay-line', 'name' => '微信支付'],
-    'unionpay'  => ['icon' => 'ri-bank-card-line', 'name' => '银联'],
-    'jcb'       => ['icon' => 'ri-bank-card-line', 'name' => 'JCB'],
-    'discover'  => ['icon' => 'ri-bank-card-line', 'name' => 'Discover'],
-    'applepay'  => ['icon' => 'ri-apple-line', 'name' => 'Apple Pay'],
-    'googlepay' => ['icon' => 'ri-google-line', 'name' => 'Google Pay'],
+    'visa'      => ['icon' => 'circle', 'name' => 'Visa'],
+    'mastercard'=> ['icon' => 'circle', 'name' => 'Mastercard'],
+    'amex'      => ['icon' => 'circle', 'name' => 'American Express'],
+    'paypal'    => ['icon' => 'circle', 'name' => 'PayPal'],
+    'alipay'    => ['icon' => 'circle', 'name' => '支付宝'],
+    'wechat'    => ['icon' => 'circle', 'name' => '微信支付'],
+    'unionpay'  => ['icon' => 'circle', 'name' => '银联'],
+    'jcb'       => ['icon' => 'circle', 'name' => 'JCB'],
+    'discover'  => ['icon' => 'circle', 'name' => 'Discover'],
+    'applepay'  => ['icon' => 'circle', 'name' => 'Apple Pay'],
+    'googlepay' => ['icon' => 'circle', 'name' => 'Google Pay'],
 ];
 
 $widgetId = 'footer-payment-' . uniqid();
@@ -49,7 +49,7 @@ $widgetId = 'footer-payment-' . uniqid();
     
     <div class="payment-icons">
         <?php foreach ($paymentMethods as $method): 
-            $payment = $paymentIcons[$method] ?? ['icon' => 'ri-bank-card-line', 'name' => ucfirst($method)];
+            $payment = $paymentIcons[$method] ?? ['icon' => 'circle', 'name' => ucfirst($method)];
         ?>
             <span class="payment-icon" title="<?= htmlspecialchars($payment['name']) ?>">
                 <i class="<?= htmlspecialchars($payment['icon']) ?>"></i>

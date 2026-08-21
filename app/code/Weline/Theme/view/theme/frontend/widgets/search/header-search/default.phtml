@@ -44,7 +44,7 @@ $hotWords = ['iPhone', '耳机', '运动鞋', '连衣裙', '笔记本'];
                    autocomplete="off">
             
             <button type="submit" class="search-button">
-                <i class="ri-search-line"></i>
+                <w:icon name="search" size="sm"></w:icon>
             </button>
             
             <?php if ($autoComplete): ?>
@@ -57,7 +57,7 @@ $hotWords = ['iPhone', '耳机', '运动鞋', '连衣裙', '笔记本'];
     
     <?php if ($showHotWords && !empty($hotWords)): ?>
         <div class="hot-words">
-            <span class="hot-label"><i class="ri-fire-line"></i> <?= __('热搜') ?>:</span>
+            <span class="hot-label"><w:icon name="fire" size="sm"></w:icon> <?= __('热搜') ?>:</span>
             <?php foreach ($hotWords as $word): ?>
                 <a href="/search?q=<?= urlencode($word) ?>" class="hot-word"><?= htmlspecialchars($word) ?></a>
             <?php endforeach; ?>

@@ -100,7 +100,7 @@ class Modal implements TaglibInterface
             $html[] = '          </button>';
             if ($closable) {
                 $html[] = '        <button type="button" class="weline-modal-close" id="<?= htmlspecialchars($Taglib__id) ?>_close" title="' . $t_close . '">';
-                $html[] = '          <i class="mdi mdi-close"></i>';
+                $html[] = '          <w-icon name="close" size="sm"></w-icon>';
                 $html[] = '        </button>';
             }
             $html[] = '        </div>';
@@ -343,11 +343,11 @@ function showProgress(options) {
     showFooter(false);
     
     var html = '<div class="weline-modal-progress">';
-    html += '  <div class="spinner-border" role="status"></div>';
+    html += '  <div class="w-spinner" role="status"></div>';
     if (title) html += '  <h5 id="' + id + '_progress_title">' + escapeHtml(title) + '</h5>';
     if (subtitle) html += '  <p id="' + id + '_progress_subtitle">' + escapeHtml(subtitle) + '</p>';
-    html += '  <div class="progress">';
-    html += '    <div class="progress-bar progress-bar-striped progress-bar-animated" id="' + id + '_progress_bar" style="width: ' + progress + '%">' + Math.round(progress) + '%</div>';
+    html += '  <div class="w-progress">';
+    html += '    <div class="w-progress__bar progress-bar-striped progress-bar-animated" id="' + id + '_progress_bar" style="width: ' + progress + '%">' + Math.round(progress) + '%</div>';
     html += '  </div>';
     if (count) html += '  <small id="' + id + '_progress_count">' + escapeHtml(count) + '</small>';
     html += '</div>';

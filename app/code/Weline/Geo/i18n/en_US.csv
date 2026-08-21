@@ -29,10 +29,14 @@ API,API
 生成成功,"Generate successful"
 生成失败：%{1},"Generate failed: %{1}"
 Feed管理,"Feed Management"
+circle,circle
 查看Feed列表,查看Feed列表
 编辑Feed,"Edit Feed"
+edit,edit
 保存Feed,保存Feed
+save,save
 生成Feed,生成Feed
+refresh,refresh
 加载平台列表失败：%{1},"Failed to load platform list: %{1}"
 平台不存在,"Platform does not exist"
 加载平台失败：%{1},"Failed to load platform: %{1}"

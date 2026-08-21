@@ -195,10 +195,10 @@ class ParamTypeRenderer implements ParamFormRendererInterface
     private function groupFields(array $params): array
     {
         $groups = [
-            'basic'   => ['label' => __('基本信息'), 'icon' => 'ri-information-line', 'collapsed' => false, 'fields' => []],
-            'style'   => ['label' => __('样式设置'), 'icon' => 'ri-palette-line', 'collapsed' => false, 'fields' => []],
-            'link'    => ['label' => __('链接配置'), 'icon' => 'ri-links-line', 'collapsed' => true, 'fields' => []],
-            'advanced'=> ['label' => __('高级设置'), 'icon' => 'ri-settings-4-line', 'collapsed' => true, 'fields' => []],
+            'basic'   => ['label' => __('基本信息'), 'icon' => 'info', 'collapsed' => false, 'fields' => []],
+            'style'   => ['label' => __('样式设置'), 'icon' => 'palette', 'collapsed' => false, 'fields' => []],
+            'link'    => ['label' => __('链接配置'), 'icon' => 'link', 'collapsed' => true, 'fields' => []],
+            'advanced'=> ['label' => __('高级设置'), 'icon' => 'settings', 'collapsed' => true, 'fields' => []],
         ];
         $socialKeys = ['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'pinterest', 'tiktok', 'weibo', 'wechat', 'github', 'telegram', 'whatsapp', 'discord', 'reddit', 'snapchat'];
         foreach ($params as $key => $param) {

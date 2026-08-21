@@ -14,10 +14,10 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Ai::ai_style_list', 'AI style governance', 'mdi-palette-outline', 'AI style list and governance', 'Weline_Backend::ai_group')]
+#[Acl('Weline_Ai::ai_style_list', 'AI style governance', 'palette', 'AI style list and governance', 'Weline_Backend::ai_group')]
 class Style extends BackendController
 {
-    #[Acl('Weline_Ai::ai_style_index', 'AI style list', 'mdi-palette-outline', 'View AI styles')]
+    #[Acl('Weline_Ai::ai_style_index', 'AI style list', 'palette', 'View AI styles')]
     public function index(): string
     {
         if ($this->request->getGet('embed') === '1') {
@@ -32,19 +32,19 @@ class Style extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Ai::ai_style_view', 'AI style catalog', 'mdi-palette-outline', 'View AI style catalog')]
+    #[Acl('Weline_Ai::ai_style_view', 'AI style catalog', 'palette', 'View AI style catalog')]
     public function getCatalog(): string
     {
         return $this->catalogResponse(false);
     }
 
-    #[Acl('Weline_Ai::ai_style_view', 'AI style catalog', 'mdi-palette-outline', 'View AI style catalog')]
+    #[Acl('Weline_Ai::ai_style_view', 'AI style catalog', 'palette', 'View AI style catalog')]
     public function postCatalog(): string
     {
         return $this->catalogResponse(true);
     }
 
-    #[Acl('Weline_Ai::ai_style_save', 'Save AI style', 'mdi-content-save', 'Save AI custom style')]
+    #[Acl('Weline_Ai::ai_style_save', 'Save AI style', 'save', 'Save AI custom style')]
     public function postSave(): string
     {
         $adminId = $this->adminId();
@@ -90,7 +90,7 @@ class Style extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_style_disable', 'Disable AI style', 'mdi-close-circle-outline', 'Disable AI custom style')]
+    #[Acl('Weline_Ai::ai_style_disable', 'Disable AI style', 'close', 'Disable AI custom style')]
     public function postDisable(): string
     {
         $adminId = $this->adminId();
@@ -113,7 +113,7 @@ class Style extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_style_delete', 'Delete AI style', 'mdi-delete-outline', 'Delete AI custom style')]
+    #[Acl('Weline_Ai::ai_style_delete', 'Delete AI style', 'trash', 'Delete AI custom style')]
     public function postDelete(): string
     {
         $adminId = $this->adminId();
@@ -137,7 +137,7 @@ class Style extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_style_clone', 'Clone AI style', 'mdi-content-copy', 'Clone builtin/module style')]
+    #[Acl('Weline_Ai::ai_style_clone', 'Clone AI style', 'copy', 'Clone builtin/module style')]
     public function postCloneBuiltin(): string
     {
         $adminId = $this->adminId();
@@ -160,7 +160,7 @@ class Style extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_style_match', 'Match AI style', 'mdi-target', 'Match AI style by brief')]
+    #[Acl('Weline_Ai::ai_style_match', 'Match AI style', 'circle', 'Match AI style by brief')]
     public function postMatch(): string
     {
         $adminId = $this->adminId();
@@ -190,7 +190,7 @@ class Style extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_adapter_style_manage', 'Manage adapter styles', 'mdi-link-variant', 'Manage manual adapter style bindings')]
+    #[Acl('Weline_Ai::ai_adapter_style_manage', 'Manage adapter styles', 'link', 'Manage manual adapter style bindings')]
     public function postBindAdapterStyle(): string
     {
         $adapterCode = \trim((string)$this->bodyValue('adapter_code', ''));
@@ -216,7 +216,7 @@ class Style extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_adapter_style_manage', 'Manage adapter styles', 'mdi-link-variant-off', 'Manage manual adapter style bindings')]
+    #[Acl('Weline_Ai::ai_adapter_style_manage', 'Manage adapter styles', 'link', 'Manage manual adapter style bindings')]
     public function postUnbindAdapterStyle(): string
     {
         $adapterCode = \trim((string)$this->bodyValue('adapter_code', ''));

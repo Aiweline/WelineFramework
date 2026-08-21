@@ -174,12 +174,12 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
         <!-- 页面标题 -->
         <div class="page-header">
             <h4>
-                <i class="mdi mdi-chart-line me-2"></i>
+                <w:icon name="chart" size="sm"></w:icon>
                 <?= htmlspecialchars($title) ?>
-                <span class="badge bg-secondary ms-2"><?= count($subjects) ?></span>
+                <span class="w-badge ms-2" data-w-background="muted"><?= count($subjects) ?></span>
             </h4>
-            <button type="button" class="btn btn-primary action-btn" data-bs-toggle="modal" data-bs-target="#addSubjectModal">
-                <i class="mdi mdi-plus me-1" aria-hidden="true"></i>
+            <button type="button" class="w-button action-btn" data-w-target="#addSubjectModal" data-w-action="dialog.open" data-tone="primary">
+                <w:icon name="plus" size="sm"></w:icon>
                 <lang>添加主体</lang>
             </button>
         </div>
@@ -189,28 +189,26 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
             <w:form method="get" action="@var($this->getUrl('*/backend/embed', $baseParams))">
                 <?php if ($module): ?><input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>"><?php endif; ?>
                 <?php if ($scope): ?><input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>"><?php endif; ?>
-                <div class="row align-items-end">
-                    <div class="col-md-5">
-                        <label class="form-label"><lang>搜索</lang></label>
-                        <input type="text" class="form-control" name="search" 
-                               value="<?= htmlspecialchars($search) ?>" 
-                               placeholder="<?= __('输入主体标题...') ?>">
+                <div class="w-grid" data-align="end">
+                    <div style="--w-span-md:5;">
+                        <label class="w-field__label"><lang>搜索</lang></label>
+                        <input type="text" class="w-input" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= __('输入主体标题...') ?>">
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label"><lang>状态</lang></label>
-                        <select class="form-select" name="status">
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label"><lang>状态</lang></label>
+                        <select class="w-select" name="status">
                             <option value=""><?= __('全部状态') ?></option>
                             <option value="1" <?= $status === '1' ? 'selected' : '' ?>><?= __('启用') ?></option>
                             <option value="0" <?= $status === '0' ? 'selected' : '' ?>><?= __('禁用') ?></option>
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-primary action-btn">
-                            <i class="mdi mdi-magnify me-1"></i>
+                    <div style="--w-span-md:4;">
+                        <button type="submit" class="w-button action-btn" data-tone="primary">
+                            <w:icon name="search" size="sm"></w:icon>
                             <lang>搜索</lang>
                         </button>
-                        <a href="<?= $this->getUrl('*/backend/embed', $baseParams) ?>" class="btn btn-outline-secondary action-btn ms-2">
-                            <i class="mdi mdi-refresh me-1"></i>
+                        <a href="<?= $this->getUrl('*/backend/embed', $baseParams) ?>" class="w-button action-btn ms-2" data-tone="neutral" data-variant="outline">
+                            <w:icon name="refresh" size="sm"></w:icon>
                             <lang>重置</lang>
                         </a>
                     </div>
@@ -221,9 +219,9 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
         <!-- 主体列表 -->
         <?php if (empty($subjects)): ?>
             <div class="empty-state">
-                <i class="mdi mdi-file-document-outline"></i>
+                <w:icon name="file" size="sm"></w:icon>
                 <h5><lang>暂无SEO主体</lang></h5>
-                <p class="text-muted"><lang>点击上方"添加主体"按钮创建第一个SEO主体。</lang></p>
+                <p class="w-text" data-tone="muted"><lang>点击上方"添加主体"按钮创建第一个SEO主体。</lang></p>
             </div>
         <?php else: ?>
             <?php foreach ($subjects as $subject): ?>
@@ -235,48 +233,45 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                                 <?= htmlspecialchars($subject['title'] ?? __('未命名主体')) ?>
                             </a>
                             <?php if ((int)($subject['status'] ?? 0) === 1): ?>
-                                <span class="badge badge-status bg-success ms-2"><lang>启用</lang></span>
+                                <span class="w-badge badge-status ms-2" data-w-background="success"><lang>启用</lang></span>
                             <?php else: ?>
-                                <span class="badge badge-status bg-secondary ms-2"><lang>禁用</lang></span>
+                                <span class="w-badge badge-status ms-2" data-w-background="muted"><lang>禁用</lang></span>
                             <?php endif; ?>
                         </div>
-                        <div class="d-flex gap-2">
+                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
                             <span class="keyword-count">
-                                <i class="mdi mdi-tag me-1"></i>
+                                <w:icon name="tag" size="sm"></w:icon>
                                 <?= (int)($subject['keyword_count'] ?? 0) ?> <lang>关键词</lang>
                             </span>
-                            <a href="<?= $this->getUrl('*/backend/embed/detail', array_merge($baseParams, ['id' => $subject['subject_id']])) ?>" 
-                               class="btn btn-sm btn-outline-primary" title="<?= __('查看详情') ?>">
-                                <i class="mdi mdi-eye"></i>
+                            <a href="<?= $this->getUrl('*/backend/embed/detail', array_merge($baseParams, ['id' => $subject['subject_id']])) ?>" class="w-button" title="<?= __('查看详情') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                <w:icon name="eye" size="sm"></w:icon>
                             </a>
-                            <button type="button" class="btn btn-sm btn-outline-danger btn-delete" 
-                                    data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>"
-                                    title="<?= __('删除') ?>">
-                                <i class="mdi mdi-delete"></i>
+                            <button type="button" class="w-button btn-delete" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>" title="<?= __('删除') ?>" data-tone="danger" data-variant="outline" data-size="sm">
+                                <w:icon name="trash" size="sm"></w:icon>
                             </button>
                         </div>
                     </div>
                     <div class="subject-card-body">
                         <?php if (!empty($subject['url'])): ?>
                             <div class="subject-url">
-                                <i class="mdi mdi-link-variant me-1"></i>
+                                <w:icon name="link" size="sm"></w:icon>
                                 <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank"><?= htmlspecialchars($subject['url']) ?></a>
                             </div>
                         <?php endif; ?>
                         <?php if (!empty($subject['description'])): ?>
-                            <p class="text-muted mt-2 mb-0" style="font-size: 0.9rem;">
+                            <p class="w-text" style="font-size: 0.9rem;" data-tone="muted">
                                 <?= htmlspecialchars(mb_substr($subject['description'], 0, 150)) ?>
                                 <?= mb_strlen($subject['description']) > 150 ? '...' : '' ?>
                             </p>
                         <?php endif; ?>
                         <div class="subject-meta">
                             <span>
-                                <i class="mdi mdi-clock-outline me-1"></i>
+                                <w:icon name="clock" size="sm"></w:icon>
                                 <?= htmlspecialchars($subject['updated_at'] ?? '-') ?>
                             </span>
                             <?php if (!empty($subject['locale'])): ?>
                             <span>
-                                <i class="mdi mdi-translate me-1"></i>
+                                <w:icon name="language" size="sm"></w:icon>
                                 <?= htmlspecialchars($subject['locale']) ?>
                             </span>
                             <?php endif; ?>
@@ -288,62 +283,62 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
     </div>
 
     <!-- 添加主体 Modal -->
-    <div class="modal fade" id="addSubjectModal" tabindex="-1" aria-labelledby="addSubjectModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addSubjectModalLabel">
-                        <i class="mdi mdi-plus-circle me-2"></i>
+    <div class="w-dialog" id="addSubjectModal" tabindex="-1" aria-labelledby="addSubjectModalLabel" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+        <div class="w-dialog__frame" data-size="lg">
+            <div class="w-dialog__surface">
+                <div class="w-dialog__header">
+                    <h5 class="w-dialog__title" id="addSubjectModalLabel">
+                        <w:icon name="plus" size="sm"></w:icon>
                         <lang>添加SEO主体</lang>
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
                 </div>
                 <w:form id="addSubjectForm">
-                    <div class="modal-body">
+                    <div class="w-dialog__body">
                         <input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>">
                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="subjectTitle"><lang>标题</lang> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="subjectTitle" name="title" required>
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="subjectTitle"><lang>标题</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" class="w-input" id="subjectTitle" name="title" required>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="subjectUrl"><lang>URL</lang></label>
-                                <input type="url" class="form-control" id="subjectUrl" name="url" placeholder="https://">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="subjectUrl"><lang>URL</lang></label>
+                                <input type="url" class="w-input" id="subjectUrl" name="url" placeholder="https://">
                             </div>
                         </div>
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="subjectType"><lang>主体类型</lang></label>
-                                <select class="form-select" id="subjectType" name="subject_type">
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="subjectType"><lang>主体类型</lang></label>
+                                <select class="w-select" id="subjectType" name="subject_type">
                                     <option value="page"><?= __('页面') ?></option>
                                     <option value="product"><?= __('商品') ?></option>
                                     <option value="store"><?= __('店铺') ?></option>
                                     <option value="website"><?= __('网站') ?></option>
                                 </select>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="subjectStatus"><lang>状态</lang></label>
-                                <select class="form-select" id="subjectStatus" name="status">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="subjectStatus"><lang>状态</lang></label>
+                                <select class="w-select" id="subjectStatus" name="status">
                                     <option value="1"><?= __('启用') ?></option>
                                     <option value="0"><?= __('禁用') ?></option>
                                 </select>
                             </div>
                         </div>
                         
-                        <div class="mb-3">
-                            <label class="form-label" for="subjectDescription"><lang>描述</lang></label>
-                            <textarea class="form-control" id="subjectDescription" name="description" rows="3"></textarea>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="subjectDescription"><lang>描述</lang></label>
+                            <textarea class="w-textarea" id="subjectDescription" name="description" rows="3"></textarea>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <div class="w-dialog__footer">
+                        <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral">
                             <lang>取消</lang>
                         </button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="mdi mdi-content-save me-1"></i>
+                        <button type="submit" class="w-button" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon>
                             <lang>保存</lang>
                         </button>
                     </div>
@@ -382,7 +377,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
         }
 
         function notify(type, message) {
-            var toast = getBackendTool('BackendToast');
+            var toast = getBackendTool('Weline.UI.toast');
             if (toast && typeof toast[type] === 'function') {
                 toast[type](typeof message === 'string' ? message : String(message || ''));
             }
@@ -434,12 +429,10 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                         notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError(error, text.requestFailed)) || requestFailedMessage(error));
                     });
                 };
-                var confirm = getBackendTool('BackendConfirm');
-                if (confirm && typeof confirm.show === 'function') {
-                    confirm.show(text.confirmDelete).then(doDelete);
-                } else {
-                    notify('error', text.confirmUnavailable);
-                }
+                Weline.UI.dialog.confirm(text.confirmDelete, {
+                    tone: 'danger',
+                    dangerous: true
+                }).then(doDelete);
             });
         });
     });

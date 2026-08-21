@@ -17,13 +17,13 @@ use Weline\Framework\Exception\Core;
 
 #[Acl('Weline_DeveloperWorkspace::dev-document-manager',
     'dev-document-catalog-manager',
-    'fa fa-book-o',
+    'circle',
     '文档分类管理器')]
 class Catalog extends \Weline\Framework\App\Controller\BackendController
 {
     #[Acl('Weline_DeveloperWorkspace::dev-document-catalog-manager-list',
         'dev-document-manager',
-        'fa fa-list-alt',
+        'list',
         '文档分类列表')]
     public function index()
     {
@@ -44,7 +44,7 @@ class Catalog extends \Weline\Framework\App\Controller\BackendController
 
     #[Acl('Weline_DeveloperWorkspace::dev-document-catalog-manager-tree',
         'dev-document-manager',
-        'fa fa-list-alt',
+        'list',
         '文档分类树')]
     public function tree()
     {
@@ -65,7 +65,7 @@ class Catalog extends \Weline\Framework\App\Controller\BackendController
     #[Acl(
         'Weline_DeveloperWorkspace::dev-document-catalog-manager-delete',
         'dev-document-manager',
-        'fa fa-delete',
+        'trash',
         '文档分类删除')]
     /**
      * @throws \ReflectionException
@@ -154,7 +154,7 @@ class Catalog extends \Weline\Framework\App\Controller\BackendController
 
     #[Acl('Weline_DeveloperWorkspace::dev-document-manager-post',
             'dev-document-manager',
-            'fa fa-save',
+            'save',
             '文档分类保存')]
     public function postPost()
     {
@@ -316,7 +316,7 @@ class Catalog extends \Weline\Framework\App\Controller\BackendController
      */
     #[Acl('Weline_DeveloperWorkspace::dev-document-catalog-manager-update-order',
         'dev-document-manager',
-        'fa fa-sort',
+        'sort',
         '文档分类排序')]
     public function postUpdateOrder()
     {
@@ -510,7 +510,7 @@ class Catalog extends \Weline\Framework\App\Controller\BackendController
      */
     #[Acl('Weline_DeveloperWorkspace::dev-document-catalog-manager-view',
         'dev-document-manager',
-        'fa fa-eye',
+        'eye',
         '文档分类查看')]
     public function getView()
     {

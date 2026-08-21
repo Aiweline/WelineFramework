@@ -4,20 +4,20 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <menu source="Weline_CustomerAsset::commerce:partner:control-center" name="customer_asset_control_center"
           title="客户资产" action="" parent="Weline_Backend::commerce:partner:group"
-          icon="mdi mdi-wallet-outline" order="40">
+          icon="circle" order="40">
         <menu source="Weline_CustomerAsset::commerce:partner:accounts" name="customer_asset_accounts" title="资产账户"
-              action="customer_asset/backend/controlcenter/accounts" icon="mdi mdi-account-cash-outline" order="10"/>
+              action="customer_asset/backend/controlcenter/accounts" icon="user" order="10"/>
         <menu source="Weline_CustomerAsset::commerce:partner:ledger" name="customer_asset_ledger" title="资产账本"
-              action="customer_asset/backend/controlcenter/ledger" icon="mdi mdi-book-open-variant" order="20"/>
+              action="customer_asset/backend/controlcenter/ledger" icon="book" order="20"/>
         <menu source="Weline_CustomerAsset::commerce:partner:reservations" name="customer_asset_reservations" title="资产预留"
-              action="customer_asset/backend/controlcenter/reservations" icon="mdi mdi-lock-clock" order="30"/>
+              action="customer_asset/backend/controlcenter/reservations" icon="clock" order="30"/>
         <menu source="Weline_CustomerAsset::commerce:partner:settlements" name="customer_asset_settlements" title="资产结算"
-              action="customer_asset/backend/controlcenter/settlements" icon="mdi mdi-cash-check" order="40"/>
+              action="customer_asset/backend/controlcenter/settlements" icon="check" order="40"/>
         <menu source="Weline_CustomerAsset::commerce:partner:returns" name="customer_asset_returns" title="资产退回"
-              action="customer_asset/backend/controlcenter/returns" icon="mdi mdi-cash-refund" order="50"/>
+              action="customer_asset/backend/controlcenter/returns" icon="cash" order="50"/>
         <menu source="Weline_CustomerAsset::commerce:partner:exceptions" name="customer_asset_exceptions" title="一致性异常"
-              action="customer_asset/backend/controlcenter/exceptions?website_id=0" icon="mdi mdi-alert-decagram-outline" order="60"/>
+              action="customer_asset/backend/controlcenter/exceptions?website_id=0" icon="warning" order="60"/>
         <menu source="Weline_CustomerAsset::commerce:partner:migration" name="customer_asset_migration" title="迁移状态"
-              action="customer_asset/backend/controlcenter/migration" icon="mdi mdi-database-eye-outline" order="70"/>
+              action="customer_asset/backend/controlcenter/migration" icon="eye" order="70"/>
     </menu>
 </menus>

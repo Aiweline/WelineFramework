@@ -25,46 +25,46 @@ try {
     return;
 }
 ?>
-<div class="row">
-    <div class="col-xl-8">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-center mb-3">
-                    <div class="flex-grow-1">
-                        <h5 class="card-title mb-0">
+<div class="w-grid">
+    <div style="--w-span-lg:8;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" style="--w-mb:var(--weline-space-4);">
+                    <div data-grow="true">
+                        <h5 class="w-card__title" style="--w-mb:0;">
                             <lang>最近 7 天像素趋势</lang>
                         </h5>
                     </div>
-                    <div class="flex-shrink-0">
-                        <span class="badge bg-soft-primary text-primary font-size-12">
+                    <div data-shrink="false">
+                        <span class="w-badge w-text" data-w-background="primary" data-tone="primary" style="--w-font-size:0.75rem;">
                             <lang>像素统计</lang>
                         </span>
                     </div>
                 </div>
 
                 <?php if (!empty($trends)): ?>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-striped align-middle mb-0">
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                             <thead>
                             <tr>
                                 <th><lang>日期</lang></th>
-                                <th class="text-end"><lang>事件数</lang></th>
-                                <th class="text-end"><lang>价值</lang></th>
+                                <th class="w-text" data-align="end"><lang>事件数</lang></th>
+                                <th class="w-text" data-align="end"><lang>价值</lang></th>
                             </tr>
                             </thead>
                             <tbody>
                             <?php foreach ($trends as $row): ?>
                                 <tr>
                                     <td><?= htmlspecialchars($row['date'] ?? '') ?></td>
-                                    <td class="text-end"><?= number_format((int)($row['count'] ?? 0)) ?></td>
-                                    <td class="text-end"><?= number_format((float)($row['value'] ?? 0), 2) ?></td>
+                                    <td class="w-text" data-align="end"><?= number_format((int)($row['count'] ?? 0)) ?></td>
+                                    <td class="w-text" data-align="end"><?= number_format((float)($row['value'] ?? 0), 2) ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
                         </table>
                     </div>
                 <?php else: ?>
-                    <p class="text-muted mb-0">
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;">
                         <lang>暂无像素趋势数据。</lang>
                     </p>
                 <?php endif; ?>
@@ -72,32 +72,32 @@ try {
         </div>
     </div>
 
-    <div class="col-xl-4">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-center mb-3">
-                    <div class="flex-grow-1">
-                        <h5 class="card-title mb-0">
+    <div style="--w-span-lg:4;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" style="--w-mb:var(--weline-space-4);">
+                    <div data-grow="true">
+                        <h5 class="w-card__title" style="--w-mb:0;">
                             <lang>热门事件 Top 5</lang>
                         </h5>
                     </div>
                 </div>
 
                 <?php if (!empty($topEvents)): ?>
-                    <ul class="list-group list-group-flush">
+                    <ul class="w-list-group">
                         <?php foreach ($topEvents as $eventName => $count): ?>
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                <span class="text-truncate" title="<?= htmlspecialchars($eventName) ?>">
+                            <li class="w-list-group__item w-cluster" data-justify="between" data-align="center" style="--w-ps:0;--w-pe:0;">
+                                <span class="w-text" title="<?= htmlspecialchars($eventName) ?>" data-truncate="true">
                                     <?= htmlspecialchars($eventName) ?>
                                 </span>
-                                <span class="badge bg-primary rounded-pill">
+                                <span class="w-badge" data-w-background="primary" data-w-radius="round">
                                     <?= number_format((int)$count) ?>
                                 </span>
                             </li>
                         <?php endforeach; ?>
                     </ul>
                 <?php else: ?>
-                    <p class="text-muted mb-0">
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;">
                         <lang>暂无事件统计数据。</lang>
                     </p>
                 <?php endif; ?>

@@ -113,52 +113,52 @@
 执行结果为空，以下展示任务内容：,"Execution result is empty. Below is the task content:"
 "旧 Queue 控制接口已停用，请使用后台页面操作。","旧 Queue 控制接口已停用，请使用后台页面操作。"
 队列管理,队列管理
+circle,circle
 管理队列信息,管理队列信息
 队列首页列表,队列首页列表
-"mdi mdi-format-list-numbered","mdi mdi-format-list-numbered"
+list,list
 队列列表快照,队列列表快照
-"mdi mdi-refresh","mdi mdi-refresh"
+refresh,refresh
 队列列表实时快照,队列列表实时快照
 编辑或者新增,编辑或者新增
-"mdi mdi-form-textbox","mdi mdi-form-textbox"
+box,box
 获取类型数据,获取类型数据
-"mdi mdi-database-arrow-right-outline","mdi mdi-database-arrow-right-outline"
+arrow-right,arrow-right
 获取属性数据,获取属性数据
 查看,查看
-"mdi mdi-monitor-eye","mdi mdi-monitor-eye"
+monitor,monitor
 下载结果,下载结果
-"mdi mdi-download","mdi mdi-download"
+download,download
 删除队列,删除队列
-"mdi mdi-delete","mdi mdi-delete"
+trash,trash
 查看结果,查看结果
-"mdi mdi-table-headers-eye","mdi mdi-table-headers-eye"
+eye,eye
 查看详情,查看详情
-"mdi mdi-information","mdi mdi-information"
+info,info
 重置刊登任务,重置刊登任务
-"mdi mdi-lock-reset","mdi mdi-lock-reset"
+lock,lock
 完成刊登任务,完成刊登任务
 继续刊登任务,继续刊登任务
-"mdi mdi-arrow-right-thin-circle-outline","mdi mdi-arrow-right-thin-circle-outline"
 旧队列单条控制接口,旧队列单条控制接口
-"mdi mdi-alert-octagon-outline","mdi mdi-alert-octagon-outline"
+warning,warning
 已停用的队列单条控制接口,已停用的队列单条控制接口
 旧队列批量控制接口,旧队列批量控制接口
 已停用的队列批量控制接口,已停用的队列批量控制接口
 队列诊断,队列诊断
 队列只读运行诊断,队列只读运行诊断
 消费者,消费者
+user,user
 查看已注册队列消费者,查看已注册队列消费者
 重试诊断,重试诊断
 查看失败与待重试队列,查看失败与待重试队列
 Inbox,Inbox
+arrow-down,arrow-down
 查看队列任务收件状态,查看队列任务收件状态
 Outbox,Outbox
+arrow-up,arrow-up
 "查看可靠异步事件 Outbox","查看可靠异步事件 Outbox"
 "幂等键不能超过 %{1} 字节","幂等键不能超过 %{1} 字节"
 "请填写 %{1}","Fill in %{1}."
-队列状态筛选值无效。,队列状态筛选值无效。
-"queue_id 不能小于 0。","queue_id 不能小于 0。"
-"%{1} 长度不能超过 %{2}。","%{1} 长度不能超过 %{2}。"
 管理系统中注册的队列类型，可以启用或禁用特定类型的队列处理器,"Manage the registered queue types in the system, enabling or disabling specific types of queue processors."
 暂无队列类型数据,"No queue type data"
 启用,Enable
@@ -386,6 +386,9 @@ dir：,dir：
 队列属性值格式无效。,队列属性值格式无效。
 保存队列失败，请稍后重试。,保存队列失败，请稍后重试。
 队列状态已保存，但后续事件通知未完全完成。,队列状态已保存，但后续事件通知未完全完成。
+"%{1} 长度不能超过 %{2}。","%{1} 长度不能超过 %{2}。"
+队列状态筛选值无效。,队列状态筛选值无效。
+"queue_id 不能小于 0。","queue_id 不能小于 0。"
 "异步事件投递 #%{1} 尝试 %{2}","异步事件投递 #%{1} 尝试 %{2}"
 类型不存在:%{1},类型不存在:%{1}
 "队列类：%{1} 属性错误。 队列属性必须继承自 %{2}","Queue class: %{1} attribute error. Queue attributes must inherit from %{2}"
@@ -414,6 +417,18 @@ dir：,dir：
 队列执行详情（失败）,"Queue execution detail (failed)"
 运行队列.,"Run queue."
 说明：,Description:
+"mdi mdi-format-list-numbered","mdi mdi-format-list-numbered"
+"mdi mdi-refresh","mdi mdi-refresh"
+"mdi mdi-form-textbox","mdi mdi-form-textbox"
+"mdi mdi-database-arrow-right-outline","mdi mdi-database-arrow-right-outline"
+"mdi mdi-monitor-eye","mdi mdi-monitor-eye"
+"mdi mdi-download","mdi mdi-download"
+"mdi mdi-delete","mdi mdi-delete"
+"mdi mdi-table-headers-eye","mdi mdi-table-headers-eye"
+"mdi mdi-information","mdi mdi-information"
+"mdi mdi-lock-reset","mdi mdi-lock-reset"
+"mdi mdi-arrow-right-thin-circle-outline","mdi mdi-arrow-right-thin-circle-outline"
+"mdi mdi-alert-octagon-outline","mdi mdi-alert-octagon-outline"
 "无效的 status。","Invalid status."
 "队列正在运行中，无法删除。请先暂停或传 force=true（慎用）。","Queue is running and cannot be deleted. Please pause first or pass force=true (use with caution)."
 "JSON 或数组","JSON or array"

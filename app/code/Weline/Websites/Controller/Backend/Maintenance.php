@@ -17,7 +17,7 @@ use Weline\Websites\Service\ScopeMaintenanceGate;
  * 功能：
  * - 网站级维护模式（后台仍可访问）
  */
-#[Acl('Weline_Websites::website_maintenance', '网站维护模式', 'mdi-tools', '网站维护模式', 'Weline_Websites::website_service')]
+#[Acl('Weline_Websites::website_maintenance', '网站维护模式', 'settings', '网站维护模式', 'Weline_Websites::website_service')]
 class Maintenance extends BackendController
 {
     /**
@@ -25,7 +25,7 @@ class Maintenance extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Websites::website_maintenance_index', '查看网站维护模式', 'mdi-tools', '查看网站维护模式')]
+    #[Acl('Weline_Websites::website_maintenance_index', '查看网站维护模式', 'settings', '查看网站维护模式')]
     public function index(): string
     {
         try {
@@ -58,7 +58,7 @@ class Maintenance extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Websites::website_maintenance_toggle', '切换网站维护模式', 'mdi-toggle-switch', '切换网站维护模式')]
+    #[Acl('Weline_Websites::website_maintenance_toggle', '切换网站维护模式', 'switch', '切换网站维护模式')]
     public function toggle(): string
     {
         if (!$this->isPost()) {

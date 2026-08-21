@@ -1471,10 +1471,10 @@
             const area = this.resolveArea();
             const themeNotice = window.Weline?.Theme?.Notice || window.Weline?.Notice || null;
             const backendCandidates = [
-                window.BackendToast,
-                window.AdminToast,
+                window.Weline.UI.toast,
+                window.Weline.UI.toast,
                 window.WelineBackendToast,
-                window.Weline?.BackendToast,
+                window.Weline?.Weline.UI.toast,
                 window.Weline?.Toast,
                 themeNotice,
                 window.Toast,

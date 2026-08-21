@@ -859,7 +859,7 @@ final class PaymentReconciliationService
                     $auditCode,
                 ]),
                 [
-                    'icon' => 'ri-alarm-warning-line',
+                    'icon' => 'warning',
                     'notify_users' => $notifyUsers,
                     'scope_hash' => $scopeHash,
                     'scope' => $this->scopeCode($scope),

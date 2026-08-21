@@ -144,12 +144,12 @@
     }
 
     function showError(message) {
-        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-            window.BackendToast.error(message);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.error === 'function') {
+            window.Weline.UI.toast.error(message);
             return;
         }
-        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-            window.BackendToast.error(message);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.error === 'function') {
+            window.Weline.UI.toast.error(message);
         }
     }
 

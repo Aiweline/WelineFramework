@@ -77,28 +77,28 @@ $agentI18n = [
     }
 </style>
 
-<div class="container-fluid py-3 weline-ai-agent-page">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+<div class="w-container weline-ai-agent-page" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
         <div>
-            <h4 class="mb-1"><i class="mdi mdi-robot-industrial-outline me-1"></i><?= __('AI 智能体') ?></h4>
-            <div class="text-muted small"><?= __('管理已注册智能体、描述覆盖与工具启停。不能在后台新建智能体。') ?></div>
+            <h4 style="--w-mb:var(--weline-space-1);"><w:icon name="circle" size="sm"></w:icon><?= __('AI 智能体') ?></h4>
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('管理已注册智能体、描述覆盖与工具启停。不能在后台新建智能体。') ?></div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-outline-primary" id="ai-agent-scan-btn">
-                <i class="mdi mdi-magnify-scan me-1"></i><?= __('扫描智能体') ?>
+        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+            <button type="button" class="w-button" id="ai-agent-scan-btn" data-tone="primary" data-variant="outline">
+                <w:icon name="search" size="sm"></w:icon><?= __('扫描智能体') ?>
             </button>
         </div>
     </div>
 
-    <div class="row g-3 agent-shell">
-        <div class="col-xl-6">
-            <div class="card h-100">
-                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div class="w-grid agent-shell" style="--w-gap:var(--weline-space-4);">
+        <div style="--w-span-lg:6;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__header w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
                     <strong><?= __('智能体目录') ?></strong>
-                    <input type="search" class="form-control form-control-sm" style="max-width: 240px;" id="ai-agent-filter" placeholder="<?= __('代码 / 名称 / 模块 / 场景') ?>">
+                    <input type="search" class="w-input" style="max-width: 240px;" id="ai-agent-filter" placeholder="<?= __('代码 / 名称 / 模块 / 场景') ?>" data-size="sm">
                 </div>
-                <div class="card-body p-0 agent-table-wrap">
-                    <table class="table table-hover mb-0" id="ai-agent-table">
+                <div class="w-card__body agent-table-wrap" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                    <table class="w-table" id="ai-agent-table" style="--w-mb:0;">
                         <thead>
                         <tr>
                             <th><?= __('智能体') ?></th>
@@ -109,50 +109,50 @@ $agentI18n = [
                         </thead>
                         <tbody id="ai-agent-tbody"></tbody>
                     </table>
-                    <div class="agent-empty m-3 d-none" id="ai-agent-empty"><?= __('没有智能体符合当前筛选。') ?></div>
+                    <div class="agent-empty" id="ai-agent-empty" hidden style="--w-mt:var(--weline-space-4);--w-me:var(--weline-space-4);--w-mb:var(--weline-space-4);--w-ms:var(--weline-space-4);"><?= __('没有智能体符合当前筛选。') ?></div>
                 </div>
-                <div class="card-footer small text-muted" id="ai-agent-status"></div>
+                <div class="w-card__footer w-text" id="ai-agent-status" data-tone="muted" data-size="sm"></div>
             </div>
         </div>
-        <div class="col-xl-6">
-            <div class="card agent-detail-card">
-                <div class="card-header d-flex align-items-center justify-content-between gap-2">
+        <div style="--w-span-lg:6;">
+            <div class="w-card agent-detail-card">
+                <div class="w-card__header w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
                     <strong id="ai-agent-detail-title"><?= __('智能体详情') ?></strong>
-                    <span class="badge text-bg-secondary" id="ai-agent-detail-mode"><?= __('未选择') ?></span>
+                    <span class="w-badge" id="ai-agent-detail-mode" data-w-background="muted" data-tone="muted"><?= __('未选择') ?></span>
                 </div>
-                <div class="card-body">
-                    <form id="ai-agent-form" class="d-none">
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('代码') ?></label>
-                            <input type="text" class="form-control" id="ai-agent-code" readonly>
+                <div class="w-card__body">
+                    <form id="ai-agent-form" hidden>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('代码') ?></label>
+                            <input type="text" class="w-input" id="ai-agent-code" readonly>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('源名称（只读）') ?></label>
-                            <input type="text" class="form-control" id="ai-agent-source-name" readonly>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('源名称（只读）') ?></label>
+                            <input type="text" class="w-input" id="ai-agent-source-name" readonly>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('名称覆盖') ?></label>
-                            <input type="text" class="form-control" id="ai-agent-name-override" placeholder="<?= __('留空则回退为源名称') ?>">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('名称覆盖') ?></label>
+                            <input type="text" class="w-input" id="ai-agent-name-override" placeholder="<?= __('留空则回退为源名称') ?>">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('源描述（只读）') ?></label>
-                            <textarea class="form-control" id="ai-agent-source-description" rows="3" readonly></textarea>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('源描述（只读）') ?></label>
+                            <textarea class="w-textarea" id="ai-agent-source-description" rows="3" readonly></textarea>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('描述覆盖') ?></label>
-                            <textarea class="form-control" id="ai-agent-description-override" rows="4" placeholder="<?= __('留空则回退为源描述') ?>"></textarea>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('描述覆盖') ?></label>
+                            <textarea class="w-textarea" id="ai-agent-description-override" rows="4" placeholder="<?= __('留空则回退为源描述') ?>"></textarea>
                         </div>
-                        <div class="mb-3">
-                            <div class="small text-muted mb-1"><?= __('场景') ?></div>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('场景') ?></div>
                             <div id="ai-agent-scenarios"></div>
                         </div>
-                        <div class="d-flex flex-wrap gap-2 mb-3">
-                            <button type="button" class="btn btn-primary" id="ai-agent-save-btn"><?= __('保存覆盖') ?></button>
-                            <button type="button" class="btn btn-outline-secondary" id="ai-agent-toggle-btn"><?= __('禁用智能体') ?></button>
+                        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                            <button type="button" class="w-button" id="ai-agent-save-btn" data-tone="primary"><?= __('保存覆盖') ?></button>
+                            <button type="button" class="w-button" id="ai-agent-toggle-btn" data-tone="neutral" data-variant="outline"><?= __('禁用智能体') ?></button>
                         </div>
-                        <div class="small" id="ai-agent-form-status"></div>
+                        <div class="w-text" id="ai-agent-form-status" data-size="sm"></div>
                         <hr>
-                        <h6 class="mb-2"><?= __('工具') ?></h6>
+                        <h6 style="--w-mb:var(--weline-space-2);"><?= __('工具') ?></h6>
                         <div id="ai-agent-tools"></div>
                     </form>
                     <div class="agent-empty" id="ai-agent-detail-empty">
@@ -229,12 +229,12 @@ $agentI18n = [
     function statusBadge(item) {
         var status = String(item.status || '');
         if (status === 'missing') {
-            return '<span class="badge text-bg-warning">' + i18n.missingLabel + '</span>';
+            return '<span class="w-badge" data-w-background="warning" data-tone="warning">' + i18n.missingLabel + '</span>';
         }
         if (status === 'disabled' || !item.is_active) {
-            return '<span class="badge text-bg-secondary">' + i18n.disabledLabel + '</span>';
+            return '<span class="w-badge" data-w-background="muted" data-tone="muted">' + i18n.disabledLabel + '</span>';
         }
-        return '<span class="badge text-bg-success">' + i18n.activeLabel + '</span>';
+        return '<span class="w-badge" data-w-background="success" data-tone="success">' + i18n.activeLabel + '</span>';
     }
 
     function selectedItem() {
@@ -283,8 +283,8 @@ $agentI18n = [
             tr.className = 'agent-row' + (String(item.code || '') === state.selectedCode ? ' is-selected' : '');
             tr.setAttribute('data-code', item.code || '');
             tr.innerHTML =
-                '<td><div class="fw-semibold">' + escapeHtml(item.effective_name || item.name || i18n.untitledAgent) + '</div>' +
-                '<div class="small text-muted">' + escapeHtml(item.code || '') + '</div></td>' +
+                '<td><div class="w-text" data-weight="strong">' + escapeHtml(item.effective_name || item.name || i18n.untitledAgent) + '</div>' +
+                '<div class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(item.code || '') + '</div></td>' +
                 '<td>' + escapeHtml(item.module || '-') + '</td>' +
                 '<td>' + String(item.tools_count || 0) + '</td>' +
                 '<td>' + statusBadge(item) + '</td>';
@@ -331,7 +331,7 @@ $agentI18n = [
     function renderTools(item) {
         var tools = Array.isArray(item.tools) ? item.tools : [];
         if (!tools.length) {
-            els.tools.innerHTML = '<div class="text-muted small">' + escapeHtml(i18n.noTools) + '</div>';
+            els.tools.innerHTML = '<div class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(i18n.noTools) + '</div>';
             return;
         }
         els.tools.innerHTML = '';
@@ -340,9 +340,9 @@ $agentI18n = [
             wrap.className = 'border rounded p-3 mb-2';
             var title = document.createElement('div');
             title.className = 'd-flex justify-content-between align-items-start gap-2 mb-2';
-            title.innerHTML = '<div><div class="fw-semibold">' + escapeHtml(tool.tool_name || '') + '</div>' +
-                '<div class="small text-muted">' + (tool.is_present ? '' : escapeHtml(i18n.missingLabel)) + '</div></div>' +
-                '<span class="badge ' + (tool.is_enabled && tool.is_present ? 'text-bg-success' : 'text-bg-secondary') + '">' +
+            title.innerHTML = '<div><div class="w-text" data-weight="strong">' + escapeHtml(tool.tool_name || '') + '</div>' +
+                '<div class="w-text" data-tone="muted" data-size="sm">' + (tool.is_present ? '' : escapeHtml(i18n.missingLabel)) + '</div></div>' +
+                '<span class="w-badge ' + (tool.is_enabled && tool.is_present ? 'text-bg-success' : 'text-bg-secondary')">' +
                 escapeHtml(tool.is_enabled ? i18n.activeLabel : i18n.disabledLabel) + '</span>';
             var source = document.createElement('textarea');
             source.className = 'form-control mb-2';
@@ -502,15 +502,13 @@ $agentI18n = [
                 setStatus(els.status, responseErrorMessage(err, i18n.scanFailed), true);
             });
         };
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            window.BackendConfirm.show(i18n.scanConfirm, {
-                title: i18n.scanTitle,
-                confirmText: i18n.scanConfirmText,
-                cancelText: i18n.cancelText,
-                onConfirm: run
-            });
-            return;
-        }
+        Weline.UI.dialog.confirm(i18n.scanConfirm, {
+            title: i18n.scanTitle,
+            confirmLabel: i18n.scanConfirmText,
+            cancelLabel: i18n.cancelText,
+            onConfirm: run
+        });
+        return;
         run();
     }
 

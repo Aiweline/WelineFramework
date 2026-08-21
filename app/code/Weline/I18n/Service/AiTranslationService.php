@@ -162,7 +162,7 @@ class AiTranslationService
                         'duration' => (string)$duration,
                     ]
                 ),
-                $success ? 'ri-translate' : 'ri-error-warning-line'
+                $success ? 'language' : 'warning'
             );
 
             return [
@@ -181,7 +181,7 @@ class AiTranslationService
             $this->sendSystemMessage(
                 (string)__('I18n AI翻译异常'),
                 (string)__('目标语言：%{1}；错误：%{2}', [$targetLocale, $message]),
-                'ri-alarm-warning-line'
+                'warning'
             );
 
             return [
@@ -807,7 +807,7 @@ class AiTranslationService
         return trim(str_replace('-', '_', $localeCode));
     }
 
-    private function sendSystemMessage(string $title, string $content, string $icon = 'ri-translate'): void
+    private function sendSystemMessage(string $title, string $content, string $icon = 'language'): void
     {
         try {
             w_msg('ai_translation', 'info', $title, $content, [

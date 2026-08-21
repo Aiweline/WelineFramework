@@ -8,12 +8,12 @@
 $error = $error ?? __('发生错误');
 ?>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18">
-                <a href="<?= $this->getBackendUrl('system/backend/notification') ?>" class="text-muted me-2">
-                    <i class="ri-arrow-left-line"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;">
+                <a href="<?= $this->getBackendUrl('system/backend/notification') ?>" class="w-text me-2" data-tone="muted">
+                    <w:icon name="arrow-left" size="sm"></w:icon>
                 </a>
                 <lang>通知详情</lang>
             </h4>
@@ -21,16 +21,16 @@ $error = $error ?? __('发生错误');
     </div>
 </div>
 
-<div class="row">
-    <div class="col-lg-6 mx-auto">
-        <div class="card">
-            <div class="card-body text-center py-5">
+<div class="w-grid">
+    <div style="--w-span-lg:6;--w-ms:auto;--w-me:auto;">
+        <div class="w-card">
+            <div class="w-card__body w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
                 <div class="weline-ne-icon">
-                    <i class="ri-error-warning-line"></i>
+                    <w:icon name="warning" size="sm"></w:icon>
                 </div>
-                <h5 class="mt-4 mb-3"><?= htmlspecialchars($error) ?></h5>
-                <a href="<?= $this->getBackendUrl('system/backend/notification') ?>" class="btn btn-primary">
-                    <i class="ri-arrow-left-line me-1"></i><lang>返回通知中心</lang>
+                <h5 style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-4);"><?= htmlspecialchars($error) ?></h5>
+                <a href="<?= $this->getBackendUrl('system/backend/notification') ?>" class="w-button" data-tone="primary">
+                    <w:icon name="arrow-left" size="sm"></w:icon><lang>返回通知中心</lang>
                 </a>
             </div>
         </div>

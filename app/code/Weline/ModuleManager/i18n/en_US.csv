@@ -19,14 +19,19 @@ id属性不能为空,id属性不能为空
 "表已存在！该表已被：%{1} 模组下的 %{2} 模型创建，请为当前模型 %{3} 更换表名。如果你确认需要移除表，请访问module_table表，手动删除表。","Table already exists! It has been created by model %{2} under module %{1}. Please change the table name for the current model %{3}. If you confirm the need to remove the table, please visit the module_table table and delete it manually."
 "表 %{1} 在模块 %{2} 中仍由有效模型 %{3} 使用，不能自动改绑到 %{4}","表 %{1} 在模块 %{2} 中仍由有效模型 %{3} 使用，不能自动改绑到 %{4}"
 "表已存在！该表已被：%{1} 模组下的 %{2} 模型创建。请为当前模型更换表名。","Table already exists! It has been created by model %{2} under module %{1}. Please change the table name for the current model."
+store,store
 预检、执行并查看模块代码与数据库联动回滚,预检、执行并查看模块代码与数据库联动回滚
 查看回滚目标,查看回滚目标
+list,list
 查看可用目标版本,查看可用目标版本
 创建回滚预检,创建回滚预检
+search,search
 生成只读级联回滚计划,生成只读级联回滚计划
 执行模块回滚,执行模块回滚
+play,play
 启动已确认的持久化回滚任务,启动已确认的持久化回滚任务
 查看回滚任务,查看回滚任务
+clock,clock
 查看回滚阶段、备份和补偿结果,查看回滚阶段、备份和补偿结果
 "模块状态变更后注册表更新失败: %{1}","Registry update failed after module status change: %{1}"
 操作成功！,"Operation successful!"
@@ -249,11 +254,11 @@ Schema,Schema
 "请输入类级别Acl的source_id（例如完整格式：%{1}，您只需输入：%{2}，前缀 %{3}:: 已自动添加，直接回车使用默认值）","Please enter the source_id for the class-level ACL (e.g., full format: %{1}, you only need to enter: %{2}, the prefix %{3}:: is already added, press Enter to use the default value)"
 请输入类级别Acl的名称（必填，例如：%{1}管理）,"Please enter the name for the class-level ACL (required, e.g., %{1} Management)"
 Acl名称不能为空，使用默认值：%{1},"Acl name cannot be empty, use default value: %{1}"
-"请输入类级别Acl的图标（可选，例如：mdi mdi-home，留空则不设置）","Please enter the icon for the class-level ACL (optional, e.g., mdi mdi-home, leave blank to not set)"
+请输入类级别Acl的图标（可选，例如：home，留空则不设置）,请输入类级别Acl的图标（可选，例如：home，留空则不设置）
 请输入类级别Acl的文档描述（可选，留空则不设置）,"Please enter the documentation description for the class-level ACL (optional, leave blank to not set)"
 "请输入方法级别Acl的source_id（例如完整格式：%{1}，您只需输入：index，前缀 %{2}:: 已自动添加，直接回车使用默认值 index）","Please enter the source_id for the method-level ACL (e.g., full format: %{1}, you only need to enter: index; the prefix %{2}:: is automatically added; press Enter to use the default value index)"
 请输入方法级别Acl的名称（必填，例如：%{1}列表）,"Please enter the name for the method-level ACL (required, e.g., %{1} List)"
-"请输入方法级别Acl的图标（可选，例如：mdi mdi-list，留空则不设置）","Please enter the icon for the method-level ACL (optional, e.g., mdi mdi-list; leave blank to not set)"
+请输入方法级别Acl的图标（可选，例如：list，留空则不设置）,请输入方法级别Acl的图标（可选，例如：list，留空则不设置）
 请输入方法级别Acl的文档描述（可选，留空则不设置）,"Please enter the documentation description for the method-level ACL (optional; leave blank to not set)"
 "已添加控制器：%{1} (%{2})，路由：%{3}","Added controller: %{1} (%{2}), route: %{3}"
 是否继续添加控制器？(y/n，默认：n),"Continue adding controllers? (y/n, default: n)"
@@ -464,7 +469,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 是否选择本模块的控制器路由？(y/n，默认：y，不选择则创建父级菜单),"Select this module's controller route? (y/n, default: y, if no, create parent menu)"
 找到以下控制器路由（从Acl提取）：,"Found the following controller routes (extracted from Acl):"
 "请选择路由（输入序号，或输入 0 跳过）","Please select a route (enter the number, or enter 0 to skip)"
-"请输入图标类名（例如：mdi mdi-home，留空则不设置）","Enter icon class name (e.g., mdi mdi-home, leave empty to not set)"
+请输入图标类名（例如：home，留空则不设置）,请输入图标类名（例如：home，留空则不设置）
 未找到控制器路由,"Controller route not found"
 重要提示：,Important:
 "1. 后端控制器（Backend）必须配置Acl权限注解才能被菜单识别","1. The backend controller (Backend) must be configured with Acl permission annotations to be recognized by the menu"
@@ -700,3 +705,6 @@ API分组,API分组
 接口名称,接口名称
 接口描述,接口描述
 """不支持的模块回滚操作: %{1}""","不支持的模块回滚操作: %{1}"
+"请输入类级别Acl的图标（可选，例如：mdi mdi-home，留空则不设置）","Please enter the icon for the class-level ACL (optional, e.g., mdi mdi-home, leave blank to not set)"
+"请输入方法级别Acl的图标（可选，例如：mdi mdi-list，留空则不设置）","Please enter the icon for the method-level ACL (optional, e.g., mdi mdi-list; leave blank to not set)"
+"请输入图标类名（例如：mdi mdi-home，留空则不设置）","Enter icon class name (e.g., mdi mdi-home, leave empty to not set)"

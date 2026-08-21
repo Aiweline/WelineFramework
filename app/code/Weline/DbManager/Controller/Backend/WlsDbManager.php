@@ -20,7 +20,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
 
-#[Acl('Weline_DbManager::wls_db_manager', 'WLS Database Manager', 'mdi mdi-database-cog-outline', 'WLS Panel database profile entry', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_DbManager::wls_db_manager', 'WLS Database Manager', 'settings', 'WLS Panel database profile entry', 'Weline_Backend::system_maintenance')]
 class WlsDbManager extends BackendController
 {
     public function __construct(
@@ -30,7 +30,7 @@ class WlsDbManager extends BackendController
     ) {
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_index', 'View WLS Database Manager', 'mdi mdi-database-search-outline', 'View WLS Panel database profiles')]
+    #[Acl('Weline_DbManager::wls_db_manager_index', 'View WLS Database Manager', 'search', 'View WLS Panel database profiles')]
     public function getIndex(): string
     {
         $this->useStandaloneLayout();
@@ -104,55 +104,55 @@ class WlsDbManager extends BackendController
         return $this->fetch('index');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_summary', 'View WLS Database Summary', 'mdi mdi-view-dashboard-outline', 'View WLS Panel database summary')]
+    #[Acl('Weline_DbManager::wls_db_manager_summary', 'View WLS Database Summary', 'grid', 'View WLS Panel database summary')]
     public function getSummary(): string
     {
         return $this->openPage('summary');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_profiles', 'View WLS Database Profiles', 'mdi mdi-database-search-outline', 'View WLS Panel database profiles')]
+    #[Acl('Weline_DbManager::wls_db_manager_profiles', 'View WLS Database Profiles', 'search', 'View WLS Panel database profiles')]
     public function getProfiles(): string
     {
         return $this->openPage('profiles');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_health', 'View WLS Database Health', 'mdi mdi-heart-pulse', 'View WLS Panel database health')]
+    #[Acl('Weline_DbManager::wls_db_manager_health', 'View WLS Database Health', 'heart', 'View WLS Panel database health')]
     public function getHealth(): string
     {
         return $this->openPage('health');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_project_profile', 'View WLS Database Project Profile', 'mdi mdi-database-edit-outline', 'View WLS Panel project database profile')]
+    #[Acl('Weline_DbManager::wls_db_manager_project_profile', 'View WLS Database Project Profile', 'edit', 'View WLS Panel project database profile')]
     public function getProjectProfile(): string
     {
         return $this->openPage('project-profile');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_lifecycle', 'View WLS Database Lifecycle', 'mdi mdi-database-plus-outline', 'View WLS Panel database lifecycle')]
+    #[Acl('Weline_DbManager::wls_db_manager_lifecycle', 'View WLS Database Lifecycle', 'plus', 'View WLS Panel database lifecycle')]
     public function getLifecycle(): string
     {
         return $this->openPage('lifecycle');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_backup_plan', 'View WLS Database Backup Plan', 'mdi mdi-database-arrow-down-outline', 'View WLS Panel database backup plan')]
+    #[Acl('Weline_DbManager::wls_db_manager_backup_plan', 'View WLS Database Backup Plan', 'arrow-down', 'View WLS Panel database backup plan')]
     public function getBackupPlan(): string
     {
         return $this->openPage('backup-plan');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_env_page', 'View WLS Database Env Apply', 'mdi mdi-file-cog-outline', 'View WLS Panel database env apply')]
+    #[Acl('Weline_DbManager::wls_db_manager_env_page', 'View WLS Database Env Apply', 'settings', 'View WLS Panel database env apply')]
     public function getEnvPage(): string
     {
         return $this->openPage('env-apply');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_slaves', 'View WLS Database Slaves', 'mdi mdi-database-cog-outline', 'View WLS Panel database slaves')]
+    #[Acl('Weline_DbManager::wls_db_manager_slaves', 'View WLS Database Slaves', 'settings', 'View WLS Panel database slaves')]
     public function getSlaves(): string
     {
         return $this->openPage('slaves');
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_test_page', 'View WLS Database Test', 'mdi mdi-database-check-outline', 'View WLS Panel database connection test')]
+    #[Acl('Weline_DbManager::wls_db_manager_test_page', 'View WLS Database Test', 'check', 'View WLS Panel database connection test')]
     public function getTestPage(): string
     {
         return $this->openPage('test');
@@ -222,7 +222,7 @@ class WlsDbManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_lifecycle_execute', 'Execute WLS Database Lifecycle SQL', 'mdi mdi-database-arrow-up-outline', 'Execute guarded WLS Panel database lifecycle SQL')]
+    #[Acl('Weline_DbManager::wls_db_manager_lifecycle_execute', 'Execute WLS Database Lifecycle SQL', 'arrow-up', 'Execute guarded WLS Panel database lifecycle SQL')]
     public function postLifecycleExecute(): string
     {
         if (!$this->request->isPost()) {
@@ -269,7 +269,7 @@ class WlsDbManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_backup_execute', 'Execute WLS Database Backup', 'mdi mdi-database-export-outline', 'Execute guarded WLS Panel database backup')]
+    #[Acl('Weline_DbManager::wls_db_manager_backup_execute', 'Execute WLS Database Backup', 'database', 'Execute guarded WLS Panel database backup')]
     public function postBackupExecute(): string
     {
         if (!$this->request->isPost()) {
@@ -414,7 +414,7 @@ class WlsDbManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_profile_save', 'Save WLS Database Profile', 'mdi mdi-content-save-cog-outline', 'Save WLS Panel project database profile')]
+    #[Acl('Weline_DbManager::wls_db_manager_profile_save', 'Save WLS Database Profile', 'settings', 'Save WLS Panel project database profile')]
     public function postProfileSave(): string
     {
         if (!$this->request->isPost()) {
@@ -444,7 +444,7 @@ class WlsDbManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_env_apply', 'Apply WLS Database env', 'mdi mdi-file-cog-outline', 'Apply WLS Panel project database profile to env.php')]
+    #[Acl('Weline_DbManager::wls_db_manager_env_apply', 'Apply WLS Database env', 'settings', 'Apply WLS Panel project database profile to env.php')]
     public function postEnvApply(): string
     {
         if (!$this->request->isPost()) {
@@ -473,7 +473,7 @@ class WlsDbManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_env_rollback', 'Rollback WLS Database env', 'mdi mdi-file-restore-outline', 'Restore a Database Manager env.php backup')]
+    #[Acl('Weline_DbManager::wls_db_manager_env_rollback', 'Rollback WLS Database env', 'file', 'Restore a Database Manager env.php backup')]
     public function postEnvRollback(): string
     {
         if (!$this->request->isPost()) {
@@ -500,7 +500,7 @@ class WlsDbManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_slave_create', 'Create WLS Database Slave', 'mdi mdi-database-plus-outline', 'Create a guarded WLS Panel database slave env profile')]
+    #[Acl('Weline_DbManager::wls_db_manager_slave_create', 'Create WLS Database Slave', 'plus', 'Create a guarded WLS Panel database slave env profile')]
     public function postSlaveCreate(): string
     {
         if (!$this->request->isPost()) {
@@ -528,7 +528,7 @@ class WlsDbManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_slave_remove', 'Remove WLS Database Slave', 'mdi mdi-database-minus-outline', 'Remove a guarded WLS Panel database slave env profile')]
+    #[Acl('Weline_DbManager::wls_db_manager_slave_remove', 'Remove WLS Database Slave', 'minus', 'Remove a guarded WLS Panel database slave env profile')]
     public function postSlaveRemove(): string
     {
         if (!$this->request->isPost()) {
@@ -556,7 +556,7 @@ class WlsDbManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_test', 'Test WLS Database Connection', 'mdi mdi-database-check-outline', 'Run a guarded WLS Panel database connection test')]
+    #[Acl('Weline_DbManager::wls_db_manager_test', 'Test WLS Database Connection', 'check', 'Run a guarded WLS Panel database connection test')]
     public function postTestConnection(): string
     {
         if (!$this->request->isPost()) {
@@ -612,7 +612,7 @@ class WlsDbManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_DbManager::wls_db_manager_health_probe', 'Run WLS Database Health Probe', 'mdi mdi-heart-pulse', 'Run a guarded read-only WLS Panel database health probe')]
+    #[Acl('Weline_DbManager::wls_db_manager_health_probe', 'Run WLS Database Health Probe', 'heart', 'Run a guarded read-only WLS Panel database health probe')]
     public function postHealthProbe(): string
     {
         if (!$this->request->isPost()) {

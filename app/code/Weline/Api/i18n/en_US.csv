@@ -58,27 +58,27 @@ Token无效,"Token is invalid"
 权限分配成功！,"Permission assignment succeeded!"
 权限分配失败：%{1},"Permission assignment failed: %{1}"
 API用户管理,API用户管理
-"fa fa-users","fa fa-users"
+users,users
 管理API用户,"Manage API Users"
 API用户列表,API用户列表
-"fa fa-list","fa fa-list"
+list,list
 添加API用户,添加API用户
-"fa fa-plus","fa fa-plus"
+plus,plus
 编辑API用户,"Edit API user"
-"fa fa-edit","fa fa-edit"
+edit,edit
 添加API用户请求,添加API用户请求
-"fa fa-save","fa fa-save"
+save,save
 编辑API用户请求,编辑API用户请求
 删除API用户,删除API用户
-"fa fa-trash","fa fa-trash"
+trash,trash
 启用API用户,启用API用户
-"fa fa-check","fa fa-check"
+check,check
 禁用API用户,禁用API用户
-"fa fa-ban","fa fa-ban"
+circle,circle
 重新生成API凭证,"Regenerate API credentials"
-"fa fa-refresh","fa fa-refresh"
+refresh,refresh
 API用户权限分配,"API user permission assignment"
-"fa fa-key","fa fa-key"
+key,key
 API用户权限分配请求,API用户权限分配请求
 仅支持POST请求,"Only POST requests are supported"
 配置保存成功！,"Configuration saved successfully!"
@@ -183,7 +183,6 @@ API,API
 "Token 不存在或已失效","Token 不存在或已失效"
 "Token 已撤销","Token 已撤销"
 创建第三方应用,创建第三方应用
-edit,edit
 查看应用授权范围,查看应用授权范围
 read,read
 批准应用授权,批准应用授权
@@ -213,3 +212,13 @@ API文档导入测试成功,"API documentation import test successful"
 "授权 scope 不能为空","授权 scope 不能为空"
 "以下 scope 不存在、已禁用或不允许外部授权：%{1}","以下 scope 不存在、已禁用或不允许外部授权：%{1}"
 配置值不能为负数：%{1},"Configuration value cannot be negative: %{1}"
+"fa fa-users","fa fa-users"
+"fa fa-list","fa fa-list"
+"fa fa-plus","fa fa-plus"
+"fa fa-edit","fa fa-edit"
+"fa fa-save","fa fa-save"
+"fa fa-trash","fa fa-trash"
+"fa fa-check","fa fa-check"
+"fa fa-ban","fa fa-ban"
+"fa fa-refresh","fa fa-refresh"
+"fa fa-key","fa fa-key"

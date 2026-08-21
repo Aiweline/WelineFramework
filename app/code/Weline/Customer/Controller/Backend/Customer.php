@@ -12,7 +12,7 @@ use Weline\Frontend\Api\User\FrontendUserAdministrationInterface;
 use Weline\Frontend\Api\User\FrontendUserMutationResult;
 use Weline\Frontend\Api\User\FrontendUserSaveCommand;
 
-#[Acl('Weline_Customer::customer', '前端客户', 'mdi-account-group', '前端客户', 'Weline_Backend::customer_group')]
+#[Acl('Weline_Customer::customer', '前端客户', 'users', '前端客户', 'Weline_Backend::customer_group')]
 class Customer extends BackendController
 {
     public function __construct(
@@ -20,7 +20,7 @@ class Customer extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Customer::customer_index', '查看前端客户', 'mdi-account', '查看前端客户')]
+    #[Acl('Weline_Customer::customer_index', '查看前端客户', 'user', '查看前端客户')]
     public function index(): string
     {
         try {
@@ -62,7 +62,7 @@ class Customer extends BackendController
         }
     }
 
-    #[Acl('Weline_Customer::customer_detail', '查看前端客户详情', 'mdi-account-details', '查看前端客户详情')]
+    #[Acl('Weline_Customer::customer_detail', '查看前端客户详情', 'user', '查看前端客户详情')]
     public function detail(): string
     {
         $userId = (int)($this->request->getParam('user_id') ?? 0);
@@ -80,7 +80,7 @@ class Customer extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Customer::customer_save', '保存前端客户', 'mdi-content-save', '保存前端客户')]
+    #[Acl('Weline_Customer::customer_save', '保存前端客户', 'save', '保存前端客户')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -119,7 +119,7 @@ class Customer extends BackendController
         return $this->jsonResponse(true, __('保存成功'));
     }
 
-    #[Acl('Weline_Customer::customer_delete', '删除前端客户', 'mdi-delete', '删除前端客户')]
+    #[Acl('Weline_Customer::customer_delete', '删除前端客户', 'trash', '删除前端客户')]
     public function postDelete(): string
     {
         if (!$this->request->isPost()) {
@@ -142,7 +142,7 @@ class Customer extends BackendController
         return $this->jsonResponse(true, __('删除成功'));
     }
 
-    #[Acl('Weline_Customer::customer_reset_token', '重置前端令牌', 'mdi-refresh', '重置前端令牌')]
+    #[Acl('Weline_Customer::customer_reset_token', '重置前端令牌', 'refresh', '重置前端令牌')]
     public function resetToken(): string
     {
         if (!$this->request->isPost()) {
@@ -162,7 +162,7 @@ class Customer extends BackendController
         return $this->jsonResponse(true, __('令牌已重置'));
     }
 
-    #[Acl('Weline_Customer::customer_reset_password', '重置前端密码', 'mdi-lock-reset', '重置前端密码')]
+    #[Acl('Weline_Customer::customer_reset_password', '重置前端密码', 'lock', '重置前端密码')]
     public function resetPassword(): string
     {
         if (!$this->request->isPost()) {

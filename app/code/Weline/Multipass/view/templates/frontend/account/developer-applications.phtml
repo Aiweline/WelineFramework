@@ -23,7 +23,7 @@ $appTypeOptions = [
     'custom' => __('自定义'),
 ];
 ?>
-<link rel="stylesheet" href="@static(Weline_Multipass::css/account-developer.css)?v=<?= $assetVersion ?>">
+<css>Weline_Multipass::css/account-developer.css</css>
 
 <div class="multipass-developer">
     <header class="multipass-developer__intro">
@@ -184,7 +184,7 @@ $appTypeOptions = [
             </div>
 
             <button class="multipass-developer__submit" type="submit">
-                <i class="ri-send-plane-line" aria-hidden="true"></i>
+                <w:icon name="circle" size="sm"></w:icon>
                 <span><lang>提交申请</lang></span>
             </button>
         </w:form>

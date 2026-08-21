@@ -8,15 +8,15 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><lang>角色归配</lang></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><span><lang>系统</lang></span></li>
-                    <li class="breadcrumb-item"><a href="@backend-url('*/backend/user/listing')"><lang>管理员</lang></a></li>
-                    <li class="breadcrumb-item active"><lang>角色归配</lang></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><lang>角色归配</lang></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>系统</lang></span></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url('*/backend/user/listing')"><lang>管理员</lang></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>角色归配</lang></li>
                 </ol>
             </div>
         </div>
@@ -24,12 +24,12 @@
 </div>
 
 <!-- 角色分配列表 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <!-- 工具栏 -->
-                <div class="weline-assign-toolbar d-flex justify-content-between align-items-center mb-3">
+                <div class="weline-assign-toolbar w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
                     <div class="weline-assign-search">
                         <block class='Weline\Component\Block\Form\Search' id='assign-role-search'
                                action='*/backend/user/assign-role'
@@ -38,21 +38,21 @@
                                params=''
                                placeholder='搜索用户名或邮箱'></block>
                     </div>
-                    <a class="btn btn-outline-secondary" href="@backend-url('*/backend/user/listing')">
-                        <i class="mdi mdi-arrow-left me-1"></i><lang>返回列表</lang>
+                    <a class="w-button" href="@backend-url('*/backend/user/listing')" data-tone="neutral" data-variant="outline">
+                        <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                     </a>
                 </div>
 
                 <!-- 提示信息 -->
-                <div class="alert alert-info alert-dismissible fade show weline-assign-tip" role="alert">
-                    <i class="mdi mdi-information-outline me-2"></i>
+                <div class="w-alert alert-dismissible weline-assign-tip" role="alert" data-tone="info">
+                    <w:icon name="info" size="sm"></w:icon>
                     <lang>选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。</lang>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    <button type="button" class="w-button" data-w-action="element.remove" data-w-close="" data-tone="quiet" data-size="sm"></button>
                 </div>
 
                 <!-- 用户角色列表 -->
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle weline-assign-table">
+                <div class="w-table-wrap">
+                    <table class="w-table weline-assign-table" data-w-vertical="middle">
                         <thead>
                             <tr>
                                 <th style="width: 80px;">ID</th>
@@ -66,26 +66,26 @@
                             <tr data-user-id="{{user.user_id}}" class="weline-assign-row">
                                 <td>{{user.user_id}}</td>
                                 <td>
-                                    <div class="d-flex align-items-center">
+                                    <div class="w-cluster" data-align="center">
                                         <div class="weline-assign-avatar me-3">
                                             <if condition="user.avatar">
-                                                <img src="{{user.avatar}}" alt="{{user.username}}" class="rounded-circle" width="40" height="40">
+                                                <img src="{{user.avatar}}" alt="{{user.username}}" width="40" height="40" data-w-radius="round">
                                             <else/>
                                                 <div class="weline-assign-avatar-placeholder">
-                                                    <i class="mdi mdi-shield-account"></i>
+                                                    <w:icon name="user" size="sm"></w:icon>
                                                 </div>
                                             </if>
                                         </div>
                                         <div>
-                                            <div class="fw-semibold">{{user.username}}</div>
-                                            <div class="text-muted small">{{user.email}}</div>
+                                            <div class="w-text" data-weight="strong">{{user.username}}</div>
+                                            <div class="w-text" data-tone="muted" data-size="sm">{{user.email}}</div>
                                         </div>
                                     </div>
                                 </td>
                                 <td>
                                     <if condition="user.user_id != current_user.user_id">
                                         <div class="weline-role-selector" data-user-id="{{user.user_id}}" data-current-role="{{user.role_id}}">
-                                            <select class="form-select weline-role-select" data-user-id="{{user.user_id}}">
+                                            <select class="w-select weline-role-select" data-user-id="{{user.user_id}}">
                                                 <option value=""><lang>-- 未分配角色 --</lang></option>
                                                 <foreach name="roles" item="role">
                                                     <option value="{{role.role_id}}" 
@@ -93,35 +93,35 @@
                                                     >{{role.role_name}}</option>
                                                 </foreach>
                                             </select>
-                                            <span class="weline-role-saving d-none">
-                                                <span class="spinner-border spinner-border-sm text-primary"></span>
+                                            <span class="weline-role-saving" hidden>
+                                                <span class="w-spinner w-text" data-tone="primary" data-size="sm"></span>
                                             </span>
-                                            <span class="weline-role-saved d-none text-success">
-                                                <i class="mdi mdi-check-circle"></i>
+                                            <span class="weline-role-saved w-text" hidden data-tone="success">
+                                                <w:icon name="check" size="sm"></w:icon>
                                             </span>
                                         </div>
                                     <else/>
                                         <div class="weline-current-user-role">
-                                            <span class="badge bg-primary">
-                                                <i class="mdi mdi-shield-account"></i>
+                                            <span class="w-badge" data-w-background="primary">
+                                                <w:icon name="user" size="sm"></w:icon>
                                                 <if condition="user.role_name">{{user.role_name}}<else/><lang>未分配</lang></if>
                                             </span>
-                                            <span class="text-muted"><lang>（当前登录）</lang></span>
+                                            <span class="w-text" data-tone="muted"><lang>（当前登录）</lang></span>
                                         </div>
                                     </if>
                                 </td>
                                 <td class="weline-assign-status" data-role-id="{{user.role_id}}">
-                                    <span class="badge weline-status-assigned bg-success" style="display:<?= $user['role_id'] ? 'inline-block' : 'none' ?>;"><lang>已分配</lang></span>
-                                    <span class="badge weline-status-unassigned bg-warning text-dark" style="display:<?= $user['role_id'] ? 'none' : 'inline-block' ?>;"><lang>未分配</lang></span>
+                                    <span class="w-badge weline-status-assigned" style="display:<?= $user['role_id'] ? 'inline-block' : 'none' ?>;" data-w-background="success"><lang>已分配</lang></span>
+                                    <span class="w-badge weline-status-unassigned w-text" style="display:<?= $user['role_id'] ? 'none' : 'inline-block' ?>;" data-w-background="warning" data-tone="muted"><lang>未分配</lang></span>
                                 </td>
                             </tr>
                         </foreach>
                         <empty name="users">
                             <tr>
-                                <td colspan="4" class="text-center py-4">
-                                    <div class="text-muted">
-                                        <i class="mdi mdi-account-search-outline" style="font-size: 3rem;"></i>
-                                        <p class="mt-2 mb-0"><lang>暂无管理员数据</lang></p>
+                                <td colspan="4" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                                    <div class="w-text" data-tone="muted">
+                                        <w:icon name="user" size="sm"></w:icon>
+                                        <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>暂无管理员数据</lang></p>
                                     </div>
                                 </td>
                             </tr>
@@ -344,7 +344,7 @@
             var result = (res && res.data) !== undefined ? res.data : res;
             if (result.success) {
                 showSaved(selector);
-                BackendToast.success(result.msg || config.text.assignSuccess);
+                Weline.UI.toast.success(result.msg || config.text.assignSuccess);
                 
                 var row = select.closest('tr');
                 var statusCell = row.querySelector('.weline-assign-status');
@@ -363,7 +363,7 @@
                 selector.dataset.currentRole = roleId;
             } else {
                 hideSaving(selector);
-                BackendToast.error(result.msg || config.text.assignFail);
+                Weline.UI.toast.error(result.msg || config.text.assignFail);
                 
                 var originalRole = selector.dataset.currentRole || '';
                 select.value = originalRole;
@@ -371,7 +371,7 @@
         })
         .catch(function(error) {
             hideSaving(selector);
-            BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+            Weline.UI.toast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
             
             var originalRole = selector.dataset.currentRole || '';
             select.value = originalRole;

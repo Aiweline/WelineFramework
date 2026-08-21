@@ -47,7 +47,7 @@ $widgetId = 'up-sell-' . uniqid();
 <div class="widget-up-sell widget-products" id="<?= $widgetId ?>">
     <div class="widget-header">
         <h2 class="widget-title">
-            <i class="ri-arrow-up-circle-line" style="color: #27ae60;"></i>
+            <w:icon name="arrow-up" size="sm"></w:icon>
             <?= htmlspecialchars($title) ?>
         </h2>
     </div>
@@ -55,7 +55,7 @@ $widgetId = 'up-sell-' . uniqid();
     <div class="products-container layout-<?= htmlspecialchars($layout) ?>">
         <?php if ($layout === 'carousel'): ?>
             <button class="carousel-arrow carousel-prev" type="button">
-                <i class="ri-arrow-left-s-line"></i>
+                <w:icon name="arrow-left" size="sm"></w:icon>
             </button>
         <?php endif; ?>
         
@@ -79,16 +79,16 @@ $widgetId = 'up-sell-' . uniqid();
                             </a>
                             
                             <div class="upgrade-badge">
-                                <i class="ri-arrow-up-line"></i>
+                                <w:icon name="arrow-up" size="sm"></w:icon>
                                 <?= __('升级版') ?>
                             </div>
                             
                             <div class="product-actions">
                                 <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
-                                    <i class="ri-heart-line"></i>
+                                    <w:icon name="heart" size="sm"></w:icon>
                                 </button>
                                 <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
-                                    <i class="ri-eye-line"></i>
+                                    <w:icon name="eye" size="sm"></w:icon>
                                 </button>
                             </div>
                         </div>
@@ -102,7 +102,7 @@ $widgetId = 'up-sell-' . uniqid();
                             
                             <?php if (!empty($productHighlight)): ?>
                                 <p class="product-highlight">
-                                    <i class="ri-checkbox-circle-fill"></i>
+                                    <w:icon name="check" size="sm"></w:icon>
                                     <?= htmlspecialchars($productHighlight) ?>
                                 </p>
                             <?php endif; ?>
@@ -110,7 +110,7 @@ $widgetId = 'up-sell-' . uniqid();
                             <div class="product-rating">
                                 <div class="stars">
                                     <?php for ($s = 1; $s <= 5; $s++): ?>
-                                        <i class="ri-star-<?= $s <= floor($product['rating']) ? 'fill' : 'line' ?>"></i>
+                                        <span class="w-rating-star" data-state="<?= $s <= floor($product['rating']) ? 'filled' : 'empty' ?>"><w:icon name="star" size="sm"></w:icon></span>
                                     <?php endfor; ?>
                                 </div>
                                 <span class="review-count">(<?= $product['review_count'] ?>)</span>
@@ -124,7 +124,7 @@ $widgetId = 'up-sell-' . uniqid();
                             </div>
                             
                             <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
-                                <i class="ri-shopping-cart-line"></i>
+                                <w:icon name="pin" size="sm"></w:icon>
                                 <span><?= __('加入购物车') ?></span>
                             </button>
                         </div>
@@ -135,7 +135,7 @@ $widgetId = 'up-sell-' . uniqid();
         
         <?php if ($layout === 'carousel'): ?>
             <button class="carousel-arrow carousel-next" type="button">
-                <i class="ri-arrow-right-s-line"></i>
+                <w:icon name="arrow-right" size="sm"></w:icon>
             </button>
         <?php endif; ?>
     </div>
@@ -175,7 +175,7 @@ $widgetId = 'up-sell-' . uniqid();
     color: #ffc107;
 }
 
-.widget-up-sell .product-rating .stars i.ri-star-line {
+.widget-up-sell .product-rating .stars .w-rating-star[data-state="empty"] {
     color: #ddd;
 }
 </style>

@@ -11,7 +11,7 @@ use Weline\PhpManager\Service\WlsPhpExtensionPlanService;
 use Weline\PhpManager\Service\WlsPhpIniService;
 use Weline\PhpManager\Service\WlsPhpProfileService;
 
-#[Acl('Weline_PhpManager::wls_php_manager', 'WLS PHP Manager', 'mdi mdi-language-php', 'WLS Panel PHP profile entry', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_PhpManager::wls_php_manager', 'WLS PHP Manager', 'language', 'WLS Panel PHP profile entry', 'Weline_Backend::system_maintenance')]
 class WlsPhpManager extends BackendController
 {
     private readonly WlsPhpProfileService $profileService;
@@ -31,7 +31,7 @@ class WlsPhpManager extends BackendController
         $this->extensionExecutionService = $extensionExecutionService ?? ObjectManager::getInstance(WlsPhpExtensionExecutionService::class);
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_index', 'View WLS PHP Manager', 'mdi mdi-language-php', 'View WLS Panel PHP profiles')]
+    #[Acl('Weline_PhpManager::wls_php_manager_index', 'View WLS PHP Manager', 'language', 'View WLS Panel PHP profiles')]
     public function getIndex(): string
     {
         $this->useStandaloneLayout();
@@ -68,43 +68,43 @@ class WlsPhpManager extends BackendController
         return $this->fetch('index');
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_summary', 'View WLS PHP Summary', 'mdi mdi-view-dashboard-outline', 'View WLS Panel PHP summary')]
+    #[Acl('Weline_PhpManager::wls_php_manager_summary', 'View WLS PHP Summary', 'grid', 'View WLS Panel PHP summary')]
     public function getSummary(): string
     {
         return $this->openPage('summary');
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_runtime', 'View WLS PHP Runtime', 'mdi mdi-console', 'View WLS Panel PHP runtime')]
+    #[Acl('Weline_PhpManager::wls_php_manager_runtime', 'View WLS PHP Runtime', 'terminal', 'View WLS Panel PHP runtime')]
     public function getRuntime(): string
     {
         return $this->openPage('runtime');
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_inheritance', 'View WLS PHP Inheritance', 'mdi mdi-source-branch', 'View WLS Panel PHP inheritance')]
+    #[Acl('Weline_PhpManager::wls_php_manager_inheritance', 'View WLS PHP Inheritance', 'branch', 'View WLS Panel PHP inheritance')]
     public function getInheritance(): string
     {
         return $this->openPage('inheritance');
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_project_profile', 'View WLS PHP Project Profile', 'mdi mdi-tune-variant', 'View WLS Panel PHP project profile')]
+    #[Acl('Weline_PhpManager::wls_php_manager_project_profile', 'View WLS PHP Project Profile', 'settings', 'View WLS Panel PHP project profile')]
     public function getProjectProfile(): string
     {
         return $this->openPage('project-profile');
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_ini', 'View WLS PHP ini', 'mdi mdi-file-cog-outline', 'View WLS Panel php.ini apply')]
+    #[Acl('Weline_PhpManager::wls_php_manager_ini', 'View WLS PHP ini', 'settings', 'View WLS Panel php.ini apply')]
     public function getIni(): string
     {
         return $this->openPage('ini');
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_extensions', 'View WLS PHP Extensions', 'mdi mdi-puzzle-outline', 'View WLS Panel PHP extensions')]
+    #[Acl('Weline_PhpManager::wls_php_manager_extensions', 'View WLS PHP Extensions', 'puzzle', 'View WLS Panel PHP extensions')]
     public function getExtensions(): string
     {
         return $this->openPage('extensions');
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_audit', 'View WLS PHP Audit', 'mdi mdi-clipboard-text-clock-outline', 'View WLS Panel PHP audit')]
+    #[Acl('Weline_PhpManager::wls_php_manager_audit', 'View WLS PHP Audit', 'clock', 'View WLS Panel PHP audit')]
     public function getAudit(): string
     {
         return $this->openPage('audit');
@@ -118,7 +118,7 @@ class WlsPhpManager extends BackendController
         return $this->getIndex();
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_profile_save', 'Save WLS PHP Profile', 'mdi mdi-content-save-cog-outline', 'Save WLS Panel project PHP profile')]
+    #[Acl('Weline_PhpManager::wls_php_manager_profile_save', 'Save WLS PHP Profile', 'settings', 'Save WLS Panel project PHP profile')]
     public function postProfileSave(): string
     {
         if (!$this->request->isPost()) {
@@ -147,7 +147,7 @@ class WlsPhpManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_ini_apply', 'Apply WLS PHP ini', 'mdi mdi-file-cog-outline', 'Apply WLS Panel project PHP profile to php.ini')]
+    #[Acl('Weline_PhpManager::wls_php_manager_ini_apply', 'Apply WLS PHP ini', 'settings', 'Apply WLS Panel project PHP profile to php.ini')]
     public function postIniApply(): string
     {
         if (!$this->request->isPost()) {
@@ -176,7 +176,7 @@ class WlsPhpManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_ini_rollback', 'Rollback WLS PHP ini', 'mdi mdi-file-restore-outline', 'Restore a PHP Manager php.ini backup')]
+    #[Acl('Weline_PhpManager::wls_php_manager_ini_rollback', 'Rollback WLS PHP ini', 'file', 'Restore a PHP Manager php.ini backup')]
     public function postIniRollback(): string
     {
         if (!$this->request->isPost()) {
@@ -203,7 +203,7 @@ class WlsPhpManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_PhpManager::wls_php_manager_extension_execute', 'Run WLS PHP Extension Action', 'mdi mdi-puzzle-check-outline', 'Run a guarded WLS Panel PHP extension adapter action')]
+    #[Acl('Weline_PhpManager::wls_php_manager_extension_execute', 'Run WLS PHP Extension Action', 'check', 'Run a guarded WLS Panel PHP extension adapter action')]
     public function postExtensionExecute(): string
     {
         if (!$this->request->isPost()) {

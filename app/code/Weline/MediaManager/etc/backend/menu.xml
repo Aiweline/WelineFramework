@@ -9,7 +9,7 @@
           title="文件管理"
           action="media/backend/manager"
           parent="Weline_Backend::media_group"
-          icon="mdi mdi-folder-image"
+          icon="image"
           order="10"/>
 
 </menus>

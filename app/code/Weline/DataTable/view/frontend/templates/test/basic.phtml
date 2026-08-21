@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $page_title ?></title>
-    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet">
+    <css>Weline_Frontend::assets/css/bootstrap.min.css</css>
+    <css>Weline_Frontend::assets/css/icons.min.css</css>
     <?= $this->getChildHtml('head') ?>
 </head>
 <body>
@@ -227,7 +227,7 @@
         </div>
     </div>
 
-    <script src="@static(Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js)"></script>
+    <js>Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js</js>
     <script>
 
         function escapeHtml(value) {

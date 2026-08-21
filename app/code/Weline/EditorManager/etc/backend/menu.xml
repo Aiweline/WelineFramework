@@ -7,6 +7,6 @@
     <menu source="Weline_EditorManager::main" name="editor_manager_main" title="编辑器管理" 
          action="editormanager/backend/index"
          parent="Weline_Backend::editor_component_group"
-         icon="mdi mdi-content-save-edit-outline"
+         icon="edit"
          order="20"/>
 </menus>

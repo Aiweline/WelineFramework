@@ -17,10 +17,11 @@
 需要验证码验证,需要验证码验证
 验证码错误,验证码错误
 人机验证配置,人机验证配置
-"mdi mdi-shield-check","mdi mdi-shield-check"
+check,check
 系统配置,系统配置
 "Google 授权成功","Google 授权成功"
 "Google 连接测试成功","Google 连接测试成功"
+"mdi mdi-shield-check","mdi mdi-shield-check"
 "授权 Google reCAPTCHA Enterprise","授权 Google reCAPTCHA Enterprise"
 "mdi mdi-google","mdi mdi-google"
 "处理 Google reCAPTCHA Enterprise 回调","处理 Google reCAPTCHA Enterprise 回调"

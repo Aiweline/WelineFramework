@@ -31,23 +31,23 @@
 /**@var \Weline\Framework\View\Template $this */
 ?>
 <!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>Eav>属性管理</lang>
             </h4>
 
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span>
                         <lang>系统配置</lang>
                     </span></li>
-                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/attribute')">
+                    <li class="w-breadcrumb__item"><a href="@backend-url('*/backend/attribute')">
                             <lang>Eav</lang>
                         </a>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/backend/attribute')">
                             <lang>属性</lang>
                         </a>
@@ -60,34 +60,34 @@
 </div>
 <!-- end page title -->
 <!-- start page message -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div> <!-- end message -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>Eav实体-属性管理</lang>
                 </h4>
-                <p class='card-title-desc'>
+                <p class="w-text" data-tone="muted">
                     <lang>管理实体的属性</lang>
                     <notempty name="entity">
                         <lang>您当前管理的属性实体是：</lang>
-                        <span class="text-info">{{entity.name}}</span>
+                        <span class="w-text" data-tone="info">{{entity.name}}</span>
                     </notempty>
                 </p>
-                <div class='table-rep-plugin'>
+                <div class="table-rep-plugin">
                     <!-- search form -->
-                    <div class='row'>
-                        <div class='col-6'>
+                    <div class="w-grid">
+                        <div style="--w-span:6;">
                             <block class='Weline\Component\Block\Form\Search'
                                    id='entity-attribute-search' action='*/backend/attribute'
                                    method='get' keyword='search' value=''
                                    placeholder='请输入属性关键词回车搜索'>
                             </block>
                         </div>
-                        <div class='col-6'>
+                        <div style="--w-span:6;">
                             <block class="Weline\Component\Block\OffCanvas"
                                    template="Weline_Component::off-canvas.phtml"
                                    title="添加属性"
@@ -95,27 +95,27 @@
                                    id="create_attr_off_canvas_new"
                                    action="*/backend/attribute/add"
                                    target-tag="button"
-                                   icon="mdi mdi-plus"
+                                   icon="plus"
                                    submit-button-text="保存"
-                                   submit-button-class="btn btn-primary"
+                                   submit-tone="primary"
                                    target-button-text="添加"
-                                   target-button-class="btn btn-primary"
+                                   target-tone="primary"
                                    flush-button-text="刷新"
-                                   flush-button-class="btn btn-default"
+                                   flush-tone="neutral"
                                    flush="1"
                                    save="1"
                                    save-form="#attr-form"
                                    close-button-show="1"
                                    close-button-text="取消"
                                    direction="right"
-                                   class-names="w-75"
-                                   off-canvas-body-style=""
+                                   drawer-size="lg"
+
                             />
                         </div>
                     </div>
                     <!-- end search form -->
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                    <div class="w-table-wrap" data-pattern='priority-columns' style="--w-mb:0;">
+                        <table id='tech-companies-1' class="w-table">
                             <thead>
                             <tr>
                                 <th data-priority='1'>
@@ -161,16 +161,15 @@
                                         </local>
                                     </td>
                                     <td class='co-name'>
-                                        <if condition="attribute.basic_is_enable"><span
-                                                    class="text-success">启用</span>
+                                        <if condition="attribute.basic_is_enable"><span class="w-text" data-tone="success">启用</span>
                                             <else/>
-                                            <span class="text-danger">禁用</span>
+                                            <span class="w-text" data-tone="danger">禁用</span>
                                         </if>
                                     </td>
                                     <td class='co-name'>{{attribute.create_time}}</td>
                                     <td class='co-name'>{{attribute.update_time}}</td>
                                     <td class='co-name'>
-                                        <div class="d-flex gap-2">
+                                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
                                             <empty name="attribute.is_system">
                                                 <if condition="attribute.is_system == 0">
                                                     <block class='Weline\Component\Block\OffCanvas'
@@ -181,19 +180,18 @@
                                                            save="0"
                                                            action-params="{attribute_id: attribute.attribute_id, eav_entity_id: attribute.eav_entity_id,isAjax:attribute.attribute_id}"
                                                            target-button-text='修改'
-                                                           target-button-class='btn btn-info'
+                                                           target-tone='info'
                                                            title='编辑属性'
                                                            close-button-show='1'
                                                            close-button-text='关闭'
-                                                           direction='right' class-names='w-75'
-                                                           off-canvas-body-style=''/>
+                                                           direction='right' drawer-size='lg'
+/>
                                                 </if>
-                                                <a class="btn btn-danger ajax-delete"
-                                                   data-href="@backend-url('*/backend/attribute/delete', ['id'=>$attribute['attribute_id']])">
+                                                <a class="w-button ajax-delete" data-href="@backend-url('*/backend/attribute/delete', ['id'=>$attribute['attribute_id']])" data-tone="danger">
                                                     <lang>删除</lang>
                                                 </a>
                                                 <else/>
-                                                <b class="text-danger">
+                                                <b class="w-text" data-tone="danger">
                                                     <lang>系统实体</lang>
                                                 </b>
                                             </empty>
@@ -212,16 +210,16 @@
 </div> <!-- end row -->
 
 <!-- 配置项弹窗 -->
-<div id='optionConfig' class='modal fade' tabindex='-1' aria-labelledby='#optionConfig' aria-hidden='true'>
-    <div class='modal-dialog modal-xl'>
-        <div class='modal-content'>
-            <div class='modal-header'>
-                <h5 class='modal-title' id='optionConfigLabel'>
+<div id='optionConfig' class="w-dialog" tabindex='-1' aria-labelledby='#optionConfig' aria-hidden='true' data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title" id='optionConfigLabel'>
                     <lang>属性配置项弹窗</lang>
                 </h5>
-                <button type='button' class='btn-close' data-bs-dismiss='modal' aria-label='@lang{关闭}'></button>
+                <button type='button' class="w-button" aria-label='@lang{关闭}' data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class='modal-body'>
+            <div class="w-dialog__body">
                 <h5>配置属性的配置项</h5>
                 <div>
                     <table>
@@ -240,11 +238,11 @@
                     </table>
                 </div>
             </div>
-            <div class='modal-footer'>
-                <button type='button' class='btn btn-light waves-effect' data-bs-dismiss='modal'>
+            <div class="w-dialog__footer">
+                <button type='button' class="w-button" data-w-action="dialog.close" data-tone="neutral">
                     <lang>关闭</lang>
                 </button>
-                <button type='button' class='btn btn-primary waves-effect waves-light'>
+                <button type='button' class="w-button waves-light" data-tone="primary">
                     <lang>保存更改</lang>
                 </button>
             </div>
@@ -256,7 +254,7 @@
 (function() {
     'use strict';
     
-    $('#optionConfig').on('show.bs.modal', function (event) {
+    $('#optionConfig').on('weline:ui:dialog:before-open', function (event) {
         showLoading();
         var button = event.relatedTarget;
         var attribute_code = button.getAttribute('data-code');
@@ -279,26 +277,24 @@
     
     $('.ajax-delete').on('click', function () {
         var self = this;
-        Swal.fire({
+        Weline.UI.dialog.request({
             title: '<lang>确认删除</lang>',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: '<lang>确认</lang>',
-            cancelButtonText: '<lang>取消</lang>',
-            reverseButtons: true
+            tone: 'warning',
+            cancelable: true,
+            confirmTone: 'primary',
+            cancelTone: 'neutral',
+            confirmLabel: '<lang>确认</lang>',
+            cancelLabel: '<lang>取消</lang>',
+            reverseActions: true
         }).then(function(result) {
-            if (result.isConfirmed) {
+            if (result.confirmed) {
                 showLoading();
                 var delUrl = $(self).data('href');
                 var req = bqAdmin['eav_admin'](delUrl, { silent: true });
                 req.then(function(res) {
                     var data = (res && res.data) || res;
                     if (data && data['code'] == 1) {
-                        if (typeof Swal !== 'undefined') {
-                            Swal.fire({ title: '<lang>删除成功</lang>', icon: 'success', timer: 2000, confirmButtonColor: '#3085d6', confirmButtonText: '<lang>确认</lang>' }).then(function() { location.reload(); });
-                        } else { location.reload(); }
+                        Weline.UI.dialog.request({ title: '<lang>删除成功</lang>', tone: 'success', duration: 2000, confirmTone: 'primary', confirmLabel: '<lang>确认</lang>' }).then(function() { location.reload(); });
                     }
                 }).catch(function() {}).finally(function() { hideLoading(); });
             }

@@ -23,14 +23,7 @@ use Weline\Framework\Http\Url;
  * 域名选择标签
  *
  * 使用示例（属性中勿嵌套 <?= ... ?>）：
- * <w:websites:domain:select
- *     id="domain_select"
- *     name="domain"
- *     value="selectedDomain|''"
- *     display="displayText|'请选择域名'"
- *     class="w-100"
- *     on-select="handleDomainSelect"
- * />
+ * <w:websites:domain:select id="domain_select" name="domain" value="selectedDomain|''" display="displayText|'请选择域名'" on-select="handleDomainSelect" data-w-width="full" />
  */
 class DomainSelect implements TaglibInterface
 {
@@ -357,17 +350,17 @@ class DomainSelect implements TaglibInterface
             if ($isMultiple) {
                 $html[] = '    <div class="weline-domain-select-tags" id="<?= htmlspecialchars($Taglib__id) ?>_tags">';
                 $html[] = '      <span class="weline-domain-select-placeholder" id="<?= htmlspecialchars($Taglib__id) ?>_placeholder">';
-                $html[] = '        <i class="mdi mdi-domain me-1"></i>';
+                $html[] = '        <w-icon name="globe" size="sm"></w-icon>';
                 $html[] = '        <span><?php $_display = trim($Taglib__display, "\'\""); if($_display !== ""): echo htmlspecialchars($_display); else: ?>' . htmlspecialchars(__('点击选择域名（可多选）')) . '<?php endif; ?></span>';
                 $html[] = '      </span>';
                 $html[] = '    </div>';
             } else {
                 $html[] = '    <span>';
-                $html[] = '      <i class="mdi mdi-domain me-1"></i>';
+                $html[] = '      <w-icon name="globe" size="sm"></w-icon>';
                 $html[] = '      <span id="<?= htmlspecialchars($Taglib__id) ?>_display"><?php $_display = trim($Taglib__display, "\'\""); if($_display !== ""): echo htmlspecialchars($_display); else: ?>' . htmlspecialchars(__('请选择域名')) . '<?php endif; ?></span>';
                 $html[] = '    </span>';
             }
-            $html[] = '    <i class="mdi mdi-chevron-down"></i>';
+            $html[] = '    <w-icon name="chevron-down" size="sm"></w-icon>';
             $html[] = '  </button>';
             $html[] = '  <input type="hidden" id="<?= htmlspecialchars($Taglib__id) ?>_value" name="<?= htmlspecialchars($Taglib__name) ?>" value="<?= htmlspecialchars($Taglib__value) ?>">';
             $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_dropdown" class="weline-domain-select-dropdown" style="display:none;">';
@@ -383,8 +376,8 @@ class DomainSelect implements TaglibInterface
                 $html[] = '    </div>';
             }
             $html[] = '    <div class="weline-domain-select-actions">';
-            $html[] = '      <button type="button" class="weline-domain-select-btn weline-domain-select-btn-secondary" id="<?= htmlspecialchars($Taglib__id) ?>_manual_create_btn"><i class="mdi mdi-plus-circle-outline me-1"></i>' . __('添加本地域名') . '</button>';
-            $html[] = '      <button type="button" class="weline-domain-select-btn weline-domain-select-btn-primary" id="<?= htmlspecialchars($Taglib__id) ?>_purchase_create_btn"><i class="mdi mdi-cart-outline me-1"></i>' . __('购买正式域名') . '</button>';
+            $html[] = '      <button type="button" class="weline-domain-select-btn weline-domain-select-btn-secondary" id="<?= htmlspecialchars($Taglib__id) ?>_manual_create_btn"><w-icon name="plus" size="sm"></w-icon>' . __('添加本地域名') . '</button>';
+            $html[] = '      <button type="button" class="weline-domain-select-btn weline-domain-select-btn-primary" id="<?= htmlspecialchars($Taglib__id) ?>_purchase_create_btn"><w-icon name="cart" size="sm"></w-icon>' . __('购买正式域名') . '</button>';
             $html[] = '    </div>';
             $html[] = '  </div>';
             if ($isMultiple) {
@@ -397,57 +390,57 @@ class DomainSelect implements TaglibInterface
             $html[] = '</div>';
             $html[] = '<script src="' . htmlspecialchars($mountJs, ENT_QUOTES, 'UTF-8') . '"></script>';
             $html[] = '<script src="' . htmlspecialchars($purchaseDialogJs, ENT_QUOTES, 'UTF-8') . '"></script>';
-            $html[] = '<div class="offcanvas offcanvas-end" tabindex="-1" id="<?= htmlspecialchars($Taglib__id) ?>_manual_create_offcanvas">';
-            $html[] = '  <div class="offcanvas-header">';
-            $html[] = '    <h5 class="offcanvas-title"><lang>新建域名</lang></h5>';
-            $html[] = '    <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>';
+            $html[] = '<div class="w-drawer offcanvas-end" tabindex="-1" id="<?= htmlspecialchars($Taglib__id) ?>_manual_create_offcanvas" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">';
+            $html[] = '  <div class="w-drawer__header">';
+            $html[] = '    <h5 class="w-drawer__title"><lang>新建域名</lang></h5>';
+            $html[] = '    <button type="button" class="w-button w-text" aria-label="Close" data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>';
             $html[] = '  </div>';
-            $html[] = '  <div class="offcanvas-body">';
-            $html[] = '    <div class="mb-3">';
-            $html[] = '      <label class="form-label"><lang>域名</lang></label>';
-            $html[] = '      <input type="text" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_manual_domain" placeholder="' . __('如：www.example.com') . '">';
+            $html[] = '  <div class="w-drawer__body">';
+            $html[] = '    <div style="--w-mb:var(--weline-space-4);">';
+            $html[] = '      <label class="w-field__label"><lang>域名</lang></label>';
+            $html[] = '      <input type="text" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_manual_domain" placeholder="' . __('如：www.example.com') . '">';
             $html[] = '    </div>';
-            $html[] = '    <div class="mb-3">';
-            $html[] = '      <label class="form-label"><lang>描述</lang></label>';
-            $html[] = '      <input type="text" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_manual_description" placeholder="' . __('可选') . '">';
+            $html[] = '    <div style="--w-mb:var(--weline-space-4);">';
+            $html[] = '      <label class="w-field__label"><lang>描述</lang></label>';
+            $html[] = '      <input type="text" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_manual_description" placeholder="' . __('可选') . '">';
             $html[] = '    </div>';
-            $html[] = '    <div class="row">';
-            $html[] = '      <div class="col-6 mb-3">';
-            $html[] = '        <label class="form-label"><lang>DNS 供应商/账户</lang></label>';
-            $html[] = '        <select class="form-select" id="<?= htmlspecialchars($Taglib__id) ?>_manual_dns_account"><option value="0">' . __('默认不设置') . '</option></select>';
-            $html[] = '        <div class="form-text"><lang>选择 DNS 服务商及账户，用于解析与证书</lang></div>';
+            $html[] = '    <div class="w-grid">';
+            $html[] = '      <div style="--w-span:6;--w-mb:var(--weline-space-4);">';
+            $html[] = '        <label class="w-field__label"><lang>DNS 供应商/账户</lang></label>';
+            $html[] = '        <select class="w-select" id="<?= htmlspecialchars($Taglib__id) ?>_manual_dns_account"><option value="0">' . __('默认不设置') . '</option></select>';
+            $html[] = '        <div class="w-field__hint"><lang>选择 DNS 服务商及账户，用于解析与证书</lang></div>';
             $html[] = '      </div>';
-            $html[] = '      <div class="col-6 mb-3">';
-            $html[] = '        <label class="form-label"><lang>CDN 供应商/账户</lang></label>';
-            $html[] = '        <select class="form-select" id="<?= htmlspecialchars($Taglib__id) ?>_manual_cdn_account"><option value="0">' . __('默认不设置') . '</option></select>';
-            $html[] = '        <div class="form-text"><lang>可选，如 Cloudflare 等</lang></div>';
+            $html[] = '      <div style="--w-span:6;--w-mb:var(--weline-space-4);">';
+            $html[] = '        <label class="w-field__label"><lang>CDN 供应商/账户</lang></label>';
+            $html[] = '        <select class="w-select" id="<?= htmlspecialchars($Taglib__id) ?>_manual_cdn_account"><option value="0">' . __('默认不设置') . '</option></select>';
+            $html[] = '        <div class="w-field__hint"><lang>可选，如 Cloudflare 等</lang></div>';
             $html[] = '      </div>';
             $html[] = '    </div>';
-            $html[] = '    <div class="mb-3">';
-            $html[] = '      <label class="form-label"><lang>HTTPS处理方式</lang></label>';
-            $html[] = '      <select class="form-select" id="<?= htmlspecialchars($Taglib__id) ?>_manual_https_mode">';
+            $html[] = '    <div style="--w-mb:var(--weline-space-4);">';
+            $html[] = '      <label class="w-field__label"><lang>HTTPS处理方式</lang></label>';
+            $html[] = '      <select class="w-select" id="<?= htmlspecialchars($Taglib__id) ?>_manual_https_mode">';
             $html[] = '        <option value="none">' . __('暂不处理') . '</option>';
             $html[] = '        <option value="auto">' . __('自动申请证书') . '</option>';
             $html[] = '        <option value="manual">' . __('手动导入证书') . '</option>';
             $html[] = '      </select>';
             $html[] = '    </div>';
-            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_manual_https_auto_box" style="display:none;" class="mb-3">';
-            $html[] = '      <label class="form-label"><lang>联系邮箱</lang></label>';
-            $html[] = '      <input type="email" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_manual_https_email" placeholder="' . __('可选，默认 admin@根域') . '">';
+            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_manual_https_auto_box" style="display:none;">';
+            $html[] = '      <label class="w-field__label"><lang>联系邮箱</lang></label>';
+            $html[] = '      <input type="email" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_manual_https_email" placeholder="' . __('可选，默认 admin@根域') . '">';
             $html[] = '    </div>';
             $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_manual_https_manual_box" style="display:none;">';
-            $html[] = '      <div class="mb-2"><small class="text-muted"><lang>支持 PEM/CRT/KEY/PFX/P12 上传，或直接粘贴文本</lang></small></div>';
-            $html[] = '      <div class="mb-2"><input type="file" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_manual_cert_file" accept=".pem,.crt"></div>';
-            $html[] = '      <div class="mb-2"><input type="file" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_manual_key_file" accept=".key,.pem"></div>';
-            $html[] = '      <div class="mb-2"><input type="file" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_manual_chain_file" accept=".pem,.crt"></div>';
-            $html[] = '      <div class="mb-2"><input type="file" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_manual_pfx_file" accept=".pfx,.p12"></div>';
-            $html[] = '      <div class="mb-2"><input type="password" class="form-control" id="<?= htmlspecialchars($Taglib__id) ?>_manual_pfx_password" placeholder="' . __('PFX/P12 密码（可选）') . '"></div>';
-            $html[] = '      <div class="mb-2"><textarea class="form-control" rows="3" id="<?= htmlspecialchars($Taglib__id) ?>_manual_cert_text" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>';
-            $html[] = '      <div class="mb-2"><textarea class="form-control" rows="3" id="<?= htmlspecialchars($Taglib__id) ?>_manual_key_text" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>';
-            $html[] = '      <div class="mb-2"><textarea class="form-control" rows="2" id="<?= htmlspecialchars($Taglib__id) ?>_manual_chain_text" placeholder="' . __('可选：中间证书链') . '"></textarea></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><small class="w-text" data-tone="muted"><lang>支持 PEM/CRT/KEY/PFX/P12 上传，或直接粘贴文本</lang></small></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><input type="file" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_manual_cert_file" accept=".pem,.crt"></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><input type="file" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_manual_key_file" accept=".key,.pem"></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><input type="file" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_manual_chain_file" accept=".pem,.crt"></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><input type="file" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_manual_pfx_file" accept=".pfx,.p12"></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><input type="password" class="w-input" id="<?= htmlspecialchars($Taglib__id) ?>_manual_pfx_password" placeholder="' . __('PFX/P12 密码（可选）') . '"></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><textarea class="w-textarea" rows="3" id="<?= htmlspecialchars($Taglib__id) ?>_manual_cert_text" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><textarea class="w-textarea" rows="3" id="<?= htmlspecialchars($Taglib__id) ?>_manual_key_text" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>';
+            $html[] = '      <div style="--w-mb:var(--weline-space-2);"><textarea class="w-textarea" rows="2" id="<?= htmlspecialchars($Taglib__id) ?>_manual_chain_text" placeholder="' . __('可选：中间证书链') . '"></textarea></div>';
             $html[] = '    </div>';
-            $html[] = '    <div class="d-flex justify-content-end mt-3">';
-            $html[] = '      <button type="button" class="btn btn-primary" id="<?= htmlspecialchars($Taglib__id) ?>_manual_submit"><lang>创建域名</lang></button>';
+            $html[] = '    <div class="w-cluster" data-justify="end" style="--w-mt:var(--weline-space-4);">';
+            $html[] = '      <button type="button" class="w-button" id="<?= htmlspecialchars($Taglib__id) ?>_manual_submit" data-tone="primary"><lang>创建域名</lang></button>';
             $html[] = '    </div>';
             $html[] = '  </div>';
             $html[] = '</div>';
@@ -550,12 +543,12 @@ class DomainSelect implements TaglibInterface
             $html[] = 'var activeLoadSeq = 0;';
             $html[] = '';
             $html[] = 'function notify(msg, type) {';
-            $html[] = '  if (window.BackendToast && typeof BackendToast[type || "info"] === "function") {';
-            $html[] = '    BackendToast[type || "info"](msg);';
+            $html[] = '  if (window.Weline.UI.toast && typeof Weline.UI.toast[type || "info"] === "function") {';
+            $html[] = '    Weline.UI.toast[type || "info"](msg);';
             $html[] = '    return;';
             $html[] = '  }';
-            $html[] = '  if (window.AdminToast && typeof AdminToast[type || "info"] === "function") {';
-            $html[] = '    AdminToast[type || "info"](msg);';
+            $html[] = '  if (window.Weline.UI.toast && typeof Weline.UI.toast[type || "info"] === "function") {';
+            $html[] = '    Weline.UI.toast[type || "info"](msg);';
             $html[] = '  }';
             $html[] = '}';
             $html[] = '';
@@ -720,13 +713,13 @@ class DomainSelect implements TaglibInterface
             $html[] = '  if (!isMultiple) return;';
             $html[] = '  tagsContainer.innerHTML = "";';
             $html[] = '  if (selectedDomains.length === 0) {';
-            $html[] = '    tagsContainer.innerHTML = \'<span class="weline-domain-select-placeholder"><i class="mdi mdi-domain me-1"></i><span>' . addslashes(__('点击选择域名（可多选）')) . '</span></span>\';';
+            $html[] = '    tagsContainer.innerHTML = \'<span class="weline-domain-select-placeholder"><w-icon name="globe" size="sm"></w-icon><span>' . addslashes(__('点击选择域名（可多选）')) . '</span></span>\';';
             $html[] = '    return;';
             $html[] = '  }';
             $html[] = '  selectedDomains.forEach(function(domain) {';
             $html[] = '    var tag = document.createElement("span");';
             $html[] = '    tag.className = "weline-domain-select-tag";';
-            $html[] = '    tag.innerHTML = \'<i class="mdi mdi-web me-1"></i>\' + domain + \'<span class="weline-domain-select-tag-remove" data-domain="\' + domain + \'">&times;</span>\';';
+            $html[] = '    tag.innerHTML = \'<w-icon name="globe" size="sm"></w-icon>\' + domain + \'<span class="weline-domain-select-tag-remove" data-domain="\' + domain + \'">&times;</span>\';';
             $html[] = '    tagsContainer.appendChild(tag);';
             $html[] = '  });';
             $html[] = '  bindTagRemove();';
@@ -856,7 +849,7 @@ class DomainSelect implements TaglibInterface
             $html[] = '        if (isMultiple) {';
             $html[] = '          html += \'<input type="checkbox" class="weline-domain-select-checkbox"\' + (isSelected ? " checked" : "") + \'>\';';
             $html[] = '        }';
-            $html[] = '        html += \'<i class="mdi mdi-web me-1"></i>\' + opt.domain + desc;';
+            $html[] = '        html += \'<w-icon name="globe" size="sm"></w-icon>\' + opt.domain + desc;';
             $html[] = '        html += \'</div>\';';
             $html[] = '      });';
             $html[] = '    }';
@@ -1031,11 +1024,10 @@ class DomainSelect implements TaglibInterface
             $html[] = 'if (manualHttpsMode) {';
             $html[] = '  manualHttpsMode.addEventListener("change", toggleManualHttpsFields);';
             $html[] = '}';
-            $html[] = 'var bs = (typeof window !== "undefined" && window.bootstrap) || (typeof window.parent !== "undefined" && window.parent.bootstrap);';
-            $html[] = 'var manualCanvas = (manualOffcanvasEl && bs && bs.Offcanvas) ? new bs.Offcanvas(manualOffcanvasEl) : null;';
+            $html[] = 'var manualCanvas = manualOffcanvasEl;';
             $html[] = 'function showManualOffcanvas() {';
-            $html[] = '  if (manualCanvas) { manualCanvas.show(); return; }';
-            $html[] = '  if (manualOffcanvasEl) { manualOffcanvasEl.classList.add("show"); document.body.classList.add("offcanvas-backdrop"); }';
+            $html[] = '  var host = manualCanvas && manualCanvas.ownerDocument ? manualCanvas.ownerDocument.defaultView : window;';
+            $html[] = '  if (manualCanvas && host && host.Weline && host.Weline.UI) { host.Weline.UI.drawer.open(manualCanvas); }';
             $html[] = '}';
             $html[] = 'function hideManualOffcanvas() {';
             $html[] = '  if (manualCanvas) { manualCanvas.hide(); return; }';

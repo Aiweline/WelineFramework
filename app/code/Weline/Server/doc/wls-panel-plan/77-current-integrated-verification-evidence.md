@@ -7065,7 +7065,7 @@ Scope:
   template.
 - The inline theme path now mirrors the shared
   `view/statics/assets/js/wls-panel-plugins.js` host-attribute contract:
-  `data-wls-panel-theme`, `data-theme-mode`, `data-bs-theme`,
+  `data-wls-panel-theme`, `data-theme-mode`, `data-theme`,
   `data-sidebar`, `data-topbar`, and `color-scheme`.
 - This keeps the independent WLS Panel shell, backend host attributes, and
   WLS plugin shells aligned even when the static plugin bridge is delayed or
@@ -7083,7 +7083,7 @@ Design constraints checked:
 Commands:
 
 ```powershell
-rg -n "syncHostThemeAttributes|data-theme-mode|data-bs-theme|data-sidebar|data-topbar|wls-panel-theme-change" app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml app/code/Weline/Server/view/statics/assets/js/wls-panel-plugins.js
+rg -n "syncHostThemeAttributes|data-theme-mode|data-theme|data-sidebar|data-topbar|wls-panel-theme-change" app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml app/code/Weline/Server/view/statics/assets/js/wls-panel-plugins.js
 php -l app\code\Weline\Server\view\templates\Backend\WlsPanel\index.phtml
 @'
 <node fake DOM script; extracts the inline theme IIFE from index.phtml and

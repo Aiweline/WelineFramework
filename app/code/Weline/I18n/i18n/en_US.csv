@@ -48,12 +48,8 @@ id属性不能为空,"The id attribute cannot be empty"
 翻译窗口,"Translation Window"
 刷新,Refresh
 提交,Submit
+切换语言,"Switch Language"
 申请支持其他语言,申请支持其他语言
-正在加载语言目录与人机验证...,正在加载语言目录与人机验证...
-无匹配语言,"No Matching Language"
-加载失败，请稍后重试,加载失败，请稍后重试
-重新加载,重新加载
-申请表加载失败,申请表加载失败
 "语言申请就绪同步只接受 resource_change.v1 契约","语言申请就绪同步只接受 resource_change.v1 契约"
 "I18n ResourceChange Observer 只接受 v1 契约","I18n ResourceChange Observer 只接受 v1 契约"
 没有开启实时翻译，不能访问！,"Real-time translation is not enabled"
@@ -151,7 +147,7 @@ AI翻译,"AI Translation"
 请选择要停用的区域,"Please select locales to deactivate"
 "地区 %{1} 已停用，所属国家状态已自动同步","Region %{1} has been disabled, and the country status has been automatically synced."
 请选择要安装的区域,"Please select locales to install"
-"地区 %{1} 已安装，所属国家 %{2} 已同步安装","Region %{1} has been installed, and the country %{2} has been synced and installed."
+"地区 %{1} 已安装并激活，所属国家 %{2} 已同步启用","地区 %{1} 已安装并激活，所属国家 %{2} 已同步启用"
 请选择要卸载的区域,"Please select locales to uninstall"
 "地区 %{1} 已卸载，语言包和缓存已同步清理","Region %{1} has been uninstalled, and the language pack and cache have been synced and cleaned."
 "正在跳转到 %{1} 的词典管理页面","Redirecting to dictionary management page for %{1}"
@@ -187,7 +183,7 @@ AI翻译,"AI Translation"
 已激活默认国家：%{1},"Activated default country: %{1}"
 "安装默认国家失败: %{1}","Failed to Install Default Country: %{1}"
 语言申请,语言申请
-"mdi mdi-translate-variant","mdi mdi-translate-variant"
+language,language
 国际化,国际化
 开始异步更新全球数据...,"Starting asynchronous global data update..."
 启动更新失败：%{1},"Failed to start update: %{1}"
@@ -232,17 +228,16 @@ AI翻译,"AI Translation"
 成功发布！,"Successfully published!"
 成功开启！,"Successfully enabled!"
 成功禁用！,"Successfully disabled!"
-国际化I18n管理,国际化I18n管理
-ri-translate,ri-translate
-1i8n词典管理,1i8n词典管理
-"mdi mdi-bookshelf","mdi mdi-bookshelf"
+词典管理,"Dictionary Management"
+词典词条管理,词典词条管理
+circle,circle
 国家不存在！代码：%{1},"Country does not exist! Code: %{1}"
 "国家地区数据同步完成！共 %{1} 个地区。","国家地区数据同步完成！共 %{1} 个地区。"
 区域已激活！区域代码：%{1},区域已激活！区域代码：%{1}
 地区已经不存在！,"Region no longer exists!"
 请选择要停用的区域！,请选择要停用的区域！
 区域已停用！区域代码：%{1},区域已停用！区域代码：%{1}
-区域已安装！区域代码：%{1},"Locale installed! Locale code: %{1}"
+区域已安装并激活！区域代码：%{1},区域已安装并激活！区域代码：%{1}
 请选择要卸载的区域！,请选择要卸载的区域！
 区域已卸载！区域代码：%{1},"Locale uninstalled! Locale code: %{1}"
 准备处理数据：插入%{1}个，更新%{2}个，跳过%{3}个,"Preparing data: insert %{1}, update %{2}, skip %{3}"
@@ -255,7 +250,7 @@ ri-translate,ri-translate
 国家数据同步失败，请检查日志,"Country data synchronization failed, please check the logs"
 请求错误！,"Request error!"
 请选择要安装的国家！,"Please select countries to install!"
-"国家 %{1} 已安装，可用地区 %{2} 个","Country %{1} has been installed, %{2} available regions"
+"国家 %{1} 已安装并激活，可用地区 %{2} 个","国家 %{1} 已安装并激活，可用地区 %{2} 个"
 请选择国家激活！,"Please select a country to activate!"
 "国家 %{1} 已启用，推荐地区 %{2} 已同步启用","Country %{1} has been enabled, recommended region %{2} has been enabled synchronously"
 默认地区,"Default Region"
@@ -269,7 +264,7 @@ ri-translate,ri-translate
 请选择要停用的国家！,"Please select the country to disable!"
 "已停用 %{1} 个国家","Disabled %{1} countries"
 "%{1} 个国家停用失败","Deactivation failed for %{1} countries"
-"已安装 %{1} 个国家","Installed %{1} countries"
+"已安装并激活 %{1} 个国家","已安装并激活 %{1} 个国家"
 "%{1} 个国家安装失败","Installation failed for %{1} countries"
 "已卸载 %{1} 个国家","Unloaded %{1} country/countries"
 "%{1} 个国家卸载失败","Uninstallation failed for %{1} countries"
@@ -461,7 +456,6 @@ i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regi
 缓存,Cache
 操作：,Actions:
 实时,Real-time
-词典管理,"Dictionary Management"
 双击表格行或点击编辑按钮即可快速修改译文。恢复按钮会把译文重置为原词，适合误翻或临时实验回滚。,"Double-click a row or use Edit to update the translation quickly. Restore resets the translation back to the source word, which is useful for rollback after a mistaken translation."
 词,Word
 翻译,Translation
@@ -481,9 +475,10 @@ i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
 名称,Name
 激活状态,"Activation Status"
 未激活,"Not activated"
-区域已安装，当前位置已保留。,区域已安装，当前位置已保留。
-"确定安装 %{1} 吗？","Install %{1}?"
+区域已安装并激活，已刷新到列表顶部。,区域已安装并激活，已刷新到列表顶部。
+"确定安装 %{1} 吗？安装后将默认激活。","确定安装 %{1} 吗？安装后将默认激活。"
 安装中…,安装中…
+已安装并激活,已安装并激活
 安装,Install
 区域已激活，当前位置已保留。,区域已激活，当前位置已保留。
 "确定启用 %{1} 吗？所属国家会同步启用。","Enable %{1}? Its country will be enabled automatically."
@@ -493,7 +488,6 @@ i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
 已卸载,已卸载
 "确定卸载 %{1} 吗？语言包和缓存会同步清理。","Uninstall %{1}? Language packs and cache will be cleaned up as well."
 卸载,Uninstall
-确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
 i18n国际化>国家,"i18n Internationalization > Countries"
 已安装未激活,"Installed but not activated"
 全部,All
@@ -507,7 +501,8 @@ i18n国际化>国家,"i18n Internationalization > Countries"
 确定批量启用所选国家吗？,"Enable the selected countries in batch?"
 确定批量停用所选国家吗？,"Disable the selected countries in batch?"
 确定批量卸载所选国家吗？相关地区也会同步卸载。,"Uninstall the selected countries in batch? Related locales will also be uninstalled."
-国家已安装，当前位置已保留。,国家已安装，当前位置已保留。
+国家已安装并激活，已刷新到列表顶部。,国家已安装并激活，已刷新到列表顶部。
+"确定安装 %{1} 吗？安装后将默认激活推荐地区。","确定安装 %{1} 吗？安装后将默认激活推荐地区。"
 国家已激活，当前位置已保留。,国家已激活，当前位置已保留。
 "确定启用 %{1} 吗？推荐地区会同步启用。","Enable %{1}? The recommended locale will be enabled as well."
 "确定停用 %{1} 吗？关联地区会一并停用。","Disable %{1}? Related locales will be disabled as well."
@@ -526,7 +521,7 @@ i18n国际化>国家,"i18n Internationalization > Countries"
 确定批量启用所选地区吗？所属国家会自动同步。,"Enable the selected locales in batch? Their countries will be synchronized automatically."
 确定批量停用所选地区吗？,"Disable the selected locales in batch?"
 确定批量卸载所选地区吗？语言包和缓存会同步清理。,"Uninstall the selected locales in batch? Language packs and cache will be cleaned up as well."
-地区已安装，当前位置已保留。,地区已安装，当前位置已保留。
+地区已安装并激活，已刷新到列表顶部。,地区已安装并激活，已刷新到列表顶部。
 地区已激活，当前位置已保留。,地区已激活，当前位置已保留。
 地区已停用，当前位置已保留。,地区已停用，当前位置已保留。
 停用中…,停用中…
@@ -543,8 +538,6 @@ i18n国际化>国家,"i18n Internationalization > Countries"
 不允许停用中国（CN），这是系统默认国家,"Disabling China (CN) is not allowed, this is the system default country"
 国家不存在！国家代码：%{1},"Country does not exist! Country code: %{1}"
 不允许卸载中国（CN），这是系统默认国家,"Uninstalling China (CN) is not allowed, this is the system default country"
-区域安装状态写入失败：%{1},区域安装状态写入失败：%{1}
-国家安装状态写入失败：%{1},国家安装状态写入失败：%{1}
 "不允许停用 zh_Hans_CN 区域，这是系统默认区域","Disabling zh_Hans_CN locale is not allowed, this is the system default locale"
 该区域不存在！区域代码：%{1},"Locale does not exist! Locale code: %{1}"
 "不允许卸载 zh_Hans_CN 区域，这是系统默认区域","Uninstalling zh_Hans_CN locale is not allowed, this is the system default locale"
@@ -666,8 +659,28 @@ CSV文件路径（导入单个文件时必填）,"CSV file path (required when i
 "4. 网络连接是否正常","4. Is the network connection normal?"
 无法创建文件：%{1},"Unable to create file: %{1}"
 查看本地语言码,"View local language code"
+正在加载语言目录与人机验证...,正在加载语言目录与人机验证...
+无匹配语言,"No Matching Language"
+加载失败，请稍后重试,加载失败，请稍后重试
+重新加载,重新加载
+申请表加载失败,申请表加载失败
+"地区 %{1} 已安装，所属国家 %{2} 已同步安装","Region %{1} has been installed, and the country %{2} has been synced and installed."
+"mdi mdi-translate-variant","mdi mdi-translate-variant"
+国际化I18n管理,国际化I18n管理
+ri-translate,ri-translate
+1i8n词典管理,1i8n词典管理
+"mdi mdi-bookshelf","mdi mdi-bookshelf"
+区域已安装！区域代码：%{1},"Locale installed! Locale code: %{1}"
+"国家 %{1} 已安装，可用地区 %{2} 个","Country %{1} has been installed, %{2} available regions"
+"已安装 %{1} 个国家","Installed %{1} countries"
+区域已安装，当前位置已保留。,区域已安装，当前位置已保留。
+"确定安装 %{1} 吗？","Install %{1}?"
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
+国家已安装，当前位置已保留。,国家已安装，当前位置已保留。
+地区已安装，当前位置已保留。,地区已安装，当前位置已保留。
+区域安装状态写入失败：%{1},区域安装状态写入失败：%{1}
+国家安装状态写入失败：%{1},国家安装状态写入失败：%{1}
 搜索语言,"Search language"
-切换语言,"Switch Language"
 搜索语言、语言码或翻译,"Search language, language code, or translation"
 加载更多,"Load more"
 切换货币,"Switch Currency"

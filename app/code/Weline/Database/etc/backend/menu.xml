@@ -6,19 +6,19 @@
           title="数据库管理"
           parent="Weline_Backend::data_tools_group"
           action="database/backend/admin/index"
-          icon="mdi mdi-database-cog-outline"
+          icon="settings"
           order="20">
         <menu source="Weline_Database::database_admin_overview"
               name="database_admin_overview"
               title="总览"
               action="database/backend/admin/index"
-              icon="mdi mdi-view-dashboard-outline"
+              icon="grid"
               order="10"/>
         <menu source="Weline_Database::database_admin_sql_console"
               name="database_admin_sql_console"
               title="SQL 控制台"
               action="database/backend/admin/index?tab=sql"
-              icon="mdi mdi-console-line"
+              icon="terminal"
               order="20"/>
     </menu>
 </menus>

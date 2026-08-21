@@ -127,9 +127,9 @@ class GeneratePageDraftTool implements ToolInterface
                     'type' => 'features',
                     'title' => __('为什么选择 %{title}', ['title' => $siteTitle]),
                     'items' => [
-                        ['icon' => 'mdi mdi-check', 'title' => __('品质保证'), 'description' => __('我们致力于提供最优质的产品')],
-                        ['icon' => 'mdi mdi-truck', 'title' => __('快速配送'), 'description' => __('全网快速配送，送货上门')],
-                        ['icon' => 'mdi mdi-headset', 'title' => __('专业客服'), 'description' => __('7x24 小时在线客服支持')],
+                        ['icon' => 'check', 'title' => __('品质保证'), 'description' => __('我们致力于提供最优质的产品')],
+                        ['icon' => 'truck', 'title' => __('快速配送'), 'description' => __('全网快速配送，送货上门')],
+                        ['icon' => 'circle', 'title' => __('专业客服'), 'description' => __('7x24 小时在线客服支持')],
                     ],
                 ],
                 [
@@ -170,9 +170,9 @@ class GeneratePageDraftTool implements ToolInterface
             'hero_title' => __('随时欢迎您的垂询'),
             'description' => __('如果您有任何问题或建议，请随时与我们联系'),
             'contact_methods' => [
-                ['type' => 'email', 'label' => __('电子邮件'), 'value' => 'contact@example.com', 'icon' => 'mdi mdi-email'],
-                ['type' => 'phone', 'label' => __('联系电话'), 'value' => '+86 10 1234 5678', 'icon' => 'mdi mdi-phone'],
-                ['type' => 'address', 'label' => __('公司地址'), 'value' => __('某市某区某路 123 号'), 'icon' => 'mdi mdi-map-marker'],
+                ['type' => 'email', 'label' => __('电子邮件'), 'value' => 'contact@example.com', 'icon' => 'mail'],
+                ['type' => 'phone', 'label' => __('联系电话'), 'value' => '+86 10 1234 5678', 'icon' => 'phone'],
+                ['type' => 'address', 'label' => __('公司地址'), 'value' => __('某市某区某路 123 号'), 'icon' => 'pin'],
             ],
             'form_title' => __('发送消息'),
             'form_fields' => ['name' => __('姓名'), 'email' => __('邮箱'), 'subject' => __('主题'), 'message' => __('留言内容')],

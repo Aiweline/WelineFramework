@@ -63,6 +63,7 @@ class MenuXmlReader extends XmlReader
         $module_menus = [];
         $fileList = $this->getFileList();
         foreach ($fileList as $module => $filePath) {
+            $this->assertMenuXmlWellFormed($filePath, (string)$module);
             $config = $this->parser->parseFile($filePath);
             $module_and_file = $module . '::' . $filePath;
             $one = $this->processOneMenuConfig($config, $filePath, $module_and_file);
@@ -80,6 +81,37 @@ class MenuXmlReader extends XmlReader
             }
         }
         return $module_menus;
+    }
+
+    /**
+     * Fail hard on malformed menu.xml (e.g. corrupted icon attributes).
+     * Silent skip previously dropped whole modules from the sidebar/search index.
+     */
+    private function assertMenuXmlWellFormed(string $filePath, string $module): void
+    {
+        $previous = libxml_use_internal_errors(true);
+        libxml_clear_errors();
+        try {
+            $xml = simplexml_load_file($filePath);
+            if ($xml !== false) {
+                return;
+            }
+            $parts = [];
+            foreach (libxml_get_errors() as $error) {
+                $parts[] = trim($error->message) . ' (line ' . $error->line . ')';
+            }
+            throw new \Exception(__(
+                '菜单 XML 无法解析：模块 %{1}，文件 %{2}。%{3}',
+                [
+                    $module,
+                    $filePath,
+                    $parts !== [] ? implode('; ', $parts) : __('未知解析错误'),
+                ]
+            ));
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
     }
 
     /**

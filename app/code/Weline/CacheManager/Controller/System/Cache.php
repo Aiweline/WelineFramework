@@ -9,7 +9,7 @@ use Weline\CacheManager\Service\CacheAdminService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_CacheManager::system_cache', '缓存管理', 'mdi mdi-database-cog-outline', '系统缓存状态管理')]
+#[Acl('Weline_CacheManager::system_cache', '缓存管理', 'settings', '系统缓存状态管理')]
 class Cache extends \Weline\Framework\App\Controller\BackendPageController
 {
     public function __construct(
@@ -17,7 +17,7 @@ class Cache extends \Weline\Framework\App\Controller\BackendPageController
     ) {
     }
 
-    #[Acl('Weline_CacheManager::system_cache_index', '缓存列表', 'mdi mdi-view-list', '查看缓存列表')]
+    #[Acl('Weline_CacheManager::system_cache_index', '缓存列表', 'list', '查看缓存列表')]
     public function index()
     {
         $filters = [
@@ -41,7 +41,7 @@ class Cache extends \Weline\Framework\App\Controller\BackendPageController
         return $this->fetch();
     }
 
-    #[Acl('Weline_CacheManager::system_cache_status', '更新缓存状态', 'mdi mdi-toggle-switch', '启用或禁用缓存')]
+    #[Acl('Weline_CacheManager::system_cache_status', '更新缓存状态', 'switch', '启用或禁用缓存')]
     public function postStatus()
     {
         $identity = (string)$this->request->getParam('identity', '');
@@ -64,7 +64,7 @@ class Cache extends \Weline\Framework\App\Controller\BackendPageController
         }
     }
 
-    #[Acl('Weline_CacheManager::system_cache_status_batch', '批量更新缓存状态', 'mdi mdi-toggle-switch-off-outline', '批量启用或禁用缓存')]
+    #[Acl('Weline_CacheManager::system_cache_status_batch', '批量更新缓存状态', 'circle', '批量启用或禁用缓存')]
     public function postStatusBatch()
     {
         $identities = $this->request->getBodyParams(true)['identities'] ?? $this->request->getParam('identities', []);
@@ -93,7 +93,7 @@ class Cache extends \Weline\Framework\App\Controller\BackendPageController
         }
     }
 
-    #[Acl('Weline_CacheManager::system_cache_clear', '清理缓存', 'mdi mdi-delete', '清理指定缓存池')]
+    #[Acl('Weline_CacheManager::system_cache_clear', '清理缓存', 'trash', '清理指定缓存池')]
     public function postClear()
     {
         $identity = (string)$this->request->getParam('identity', '');
@@ -120,7 +120,7 @@ class Cache extends \Weline\Framework\App\Controller\BackendPageController
         }
     }
 
-    #[Acl('Weline_CacheManager::system_cache_clear_all', '清理所有缓存', 'mdi mdi-delete-sweep', '清理所有非持久缓存池')]
+    #[Acl('Weline_CacheManager::system_cache_clear_all', '清理所有缓存', 'trash', '清理所有非持久缓存池')]
     public function postClearAll()
     {
         $force = $this->isTruthy($this->request->getParam('force', false));
@@ -148,7 +148,7 @@ class Cache extends \Weline\Framework\App\Controller\BackendPageController
         }
     }
 
-    #[Acl('Weline_CacheManager::system_cache_stats', '缓存统计', 'mdi mdi-chart-bar', '查看缓存统计信息')]
+    #[Acl('Weline_CacheManager::system_cache_stats', '缓存统计', 'chart', '查看缓存统计信息')]
     public function getStats()
     {
         try {
@@ -168,7 +168,7 @@ class Cache extends \Weline\Framework\App\Controller\BackendPageController
         }
     }
 
-    #[Acl('Weline_CacheManager::system_cache_run_cron', '执行定时任务', 'mdi mdi-play', '手动执行缓存清理定时任务')]
+    #[Acl('Weline_CacheManager::system_cache_run_cron', '执行定时任务', 'play', '手动执行缓存清理定时任务')]
     public function postRunCronTask()
     {
         try {
@@ -190,7 +190,7 @@ class Cache extends \Weline\Framework\App\Controller\BackendPageController
         }
     }
 
-    #[Acl('Weline_CacheManager::system_cache_pool_stats', '单池统计', 'mdi mdi-chart-pie', '查看单个缓存池统计')]
+    #[Acl('Weline_CacheManager::system_cache_pool_stats', '单池统计', 'chart', '查看单个缓存池统计')]
     public function getPoolStats()
     {
         $identity = (string)$this->request->getParam('identity', '');

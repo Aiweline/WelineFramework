@@ -25,7 +25,7 @@ use Weline\Geo\Service\PlatformAdapterService;
  * 
  * @package Weline_Geo
  */
-#[Acl('Weline_Geo::platform_list', '平台管理', 'mdi-cloud', '平台管理', 'Weline_Geo::geo_manager')]
+#[Acl('Weline_Geo::platform_list', '平台管理', 'cloud', '平台管理', 'Weline_Geo::geo_manager')]
 class Platform extends BackendController
 {
     /**
@@ -33,7 +33,7 @@ class Platform extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::platform_list_index', '查看平台列表', 'mdi-cloud', '查看平台列表')]
+    #[Acl('Weline_Geo::platform_list_index', '查看平台列表', 'cloud', '查看平台列表')]
     public function index(): string
     {
         try {
@@ -55,7 +55,7 @@ class Platform extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::platform_edit', '编辑平台', 'mdi-pencil', '编辑平台')]
+    #[Acl('Weline_Geo::platform_edit', '编辑平台', 'edit', '编辑平台')]
     public function edit(): string
     {
         try {
@@ -95,7 +95,7 @@ class Platform extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::platform_save', '保存平台', 'mdi-content-save', '保存平台')]
+    #[Acl('Weline_Geo::platform_save', '保存平台', 'save', '保存平台')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -149,7 +149,7 @@ class Platform extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::platform_account', '平台账户管理', 'mdi-account', '平台账户管理')]
+    #[Acl('Weline_Geo::platform_account', '平台账户管理', 'user', '平台账户管理')]
     public function account(): string
     {
         try {
@@ -193,7 +193,7 @@ class Platform extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::platform_account_save', '保存账户', 'mdi-content-save', '保存账户')]
+    #[Acl('Weline_Geo::platform_account_save', '保存账户', 'save', '保存账户')]
     public function saveAccount(): string
     {
         if (!$this->request->isPost()) {
@@ -265,7 +265,7 @@ class Platform extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::platform_test', '测试连接', 'mdi-connection', '测试连接')]
+    #[Acl('Weline_Geo::platform_test', '测试连接', 'link', '测试连接')]
     public function testConnection(): string
     {
         if (!$this->request->isPost()) {

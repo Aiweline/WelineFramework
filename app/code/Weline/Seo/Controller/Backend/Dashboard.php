@@ -24,7 +24,7 @@ use Weline\Seo\Service\SuggestionService;
  * 
  * @package Weline_Seo
  */
-#[Acl('Weline_Seo::seo_dashboard', 'SEO总览', 'mdi-view-dashboard-outline', 'SEO总览', 'Weline_Backend::seo_group')]
+#[Acl('Weline_Seo::seo_dashboard', 'SEO总览', 'grid', 'SEO总览', 'Weline_Backend::seo_group')]
 class Dashboard extends BackendPageController
 {
     private ObjectManager $objectManager;
@@ -39,7 +39,7 @@ class Dashboard extends BackendPageController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::seo_dashboard_index', '查看SEO总览', 'mdi-view-dashboard-outline', '查看SEO总览')]
+    #[Acl('Weline_Seo::seo_dashboard_index', '查看SEO总览', 'grid', '查看SEO总览')]
     public function index(): string
     {
         /** @var SeoSubject $subjectModel */
@@ -80,7 +80,7 @@ class Dashboard extends BackendPageController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::seo_subject_detail', '查看主体详情', 'mdi-file-chart-outline', '查看主体SEO详情')]
+    #[Acl('Weline_Seo::seo_subject_detail', '查看主体详情', 'file', '查看主体SEO详情')]
     public function subject(): string
     {
         $subjectId = (int)$this->request->getParam('id', 0);
@@ -181,7 +181,7 @@ class Dashboard extends BackendPageController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::seo_refresh_suggestion', '刷新AI建议', 'mdi-refresh', '刷新AI建议')]
+    #[Acl('Weline_Seo::seo_refresh_suggestion', '刷新AI建议', 'refresh', '刷新AI建议')]
     public function refreshSuggestion(): string
     {
         $subjectId = (int)$this->request->getPost('subject_id', 0);

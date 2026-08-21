@@ -15,7 +15,7 @@ interface NotificationTopicProviderInterface
      *   - group: string 分组标识（可选，默认空）
      *   - group_name: string 分组显示名称（可选，默认空）
      *   - description: string 描述（可选）
-     *   - icon: string Remix Icon 类名（可选，默认 ri-notification-line）
+     *   - icon: string Weline 语义图标名（可选，默认 bell）
      *   - color: string 主题色 HEX 值（可选，默认 #50a5f1）
      *   - default_channels: array 默认渠道列表（可选，默认 ['backend']）
      */

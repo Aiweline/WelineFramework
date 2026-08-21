@@ -31,7 +31,7 @@ use Weline\Framework\Acl\Acl;
  * - 模型保护状态查看
  * - 默认模型验证
  */
-#[Acl('Weline_Ai::ai_default_model_manager', '默认模型管理', 'mdi-star-settings', '默认模型管理', 'Weline_Backend::ai_group')]
+#[Acl('Weline_Ai::ai_default_model_manager', '默认模型管理', 'settings', '默认模型管理', 'Weline_Backend::ai_group')]
 class DefaultModel extends BackendController
 {
     /**
@@ -79,7 +79,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_index', '查看默认模型配置', 'mdi-view-list', '查看默认模型配置', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_index', '查看默认模型配置', 'list', '查看默认模型配置', 'Weline_Ai::ai_default_model_manager')]
     public function index(): string
     {
         // 硬编码的服务类型列表（作为基础配置）
@@ -206,7 +206,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_set', '设置默认模型', 'mdi-star', '设置默认模型', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_set', '设置默认模型', 'star', '设置默认模型', 'Weline_Ai::ai_default_model_manager')]
     public function postSetDefault(): string
     {
         $serviceType = $this->request->getPost('service_type');
@@ -259,7 +259,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_remove', '移除默认模型配置', 'mdi-delete', '移除默认模型配置', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_remove', '移除默认模型配置', 'trash', '移除默认模型配置', 'Weline_Ai::ai_default_model_manager')]
     public function postRemoveDefault(): string
     {
         $serviceType = $this->request->getPost('service_type');
@@ -298,7 +298,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_protection_status', '获取模型保护状态', 'mdi-shield-check', '获取模型保护状态', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_protection_status', '获取模型保护状态', 'check', '获取模型保护状态', 'Weline_Ai::ai_default_model_manager')]
     public function getProtectionStatus(): string
     {
         $modelCode = $this->request->getGet('model_code');
@@ -329,7 +329,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_initialize', '初始化默认配置', 'mdi-play', '初始化默认配置', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_initialize', '初始化默认配置', 'play', '初始化默认配置', 'Weline_Ai::ai_default_model_manager')]
     public function postInitialize(): string
     {
         try {
@@ -353,7 +353,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_validate', '验证默认模型配置', 'mdi-check-circle', '验证默认模型配置', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_validate', '验证默认模型配置', 'check', '验证默认模型配置', 'Weline_Ai::ai_default_model_manager')]
     public function validate(): string
     {
         try {
@@ -385,7 +385,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_get', '获取默认模型', 'mdi-information', '获取默认模型', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_get', '获取默认模型', 'info', '获取默认模型', 'Weline_Ai::ai_default_model_manager')]
     public function getDefaultModel(): string
     {
         $serviceType = $this->request->getGet('service_type', DefaultModelManager::SERVICE_TYPE_DEFAULT);
@@ -422,7 +422,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_clear_cache', '清除缓存', 'mdi-cached', '清除缓存', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_clear_cache', '清除缓存', 'circle', '清除缓存', 'Weline_Ai::ai_default_model_manager')]
     public function postClearCache(): string
     {
         try {
@@ -445,7 +445,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_get_protected', '获取受保护的模型列表', 'mdi-shield-lock', '获取受保护的模型列表', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_get_protected', '获取受保护的模型列表', 'lock', '获取受保护的模型列表', 'Weline_Ai::ai_default_model_manager')]
     public function getProtected(): string
     {
         try {
@@ -501,7 +501,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_default_model_batch_set', '批量设置默认模型', 'mdi-content-save-all', '批量设置默认模型', 'Weline_Ai::ai_default_model_manager')]
+    #[Acl('Weline_Ai::ai_default_model_batch_set', '批量设置默认模型', 'save', '批量设置默认模型', 'Weline_Ai::ai_default_model_manager')]
     public function postBatchSet(): string
     {
         $configurationsJson = $this->request->getPost('configurations', '[]');

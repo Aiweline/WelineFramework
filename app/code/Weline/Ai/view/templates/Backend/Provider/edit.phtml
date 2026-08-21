@@ -5,10 +5,10 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box">
-            <h4 class="page-title">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading">
+            <h4 class="w-backend-page__title">
                 <?= isset($account) ? __('编辑供应商账户') : __('添加供应商账户') ?>
             </h4>
         </div>
@@ -16,24 +16,24 @@
 </div>
 
 <!-- 消息 -->
-<div class="row">
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 编辑表单 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <w:form id="weline-ai-provider-form" method="post" action="@var($this->getBackendUrl('*/backend/provider/save'))">
                     <?php if (isset($account)): ?>
                         <input type="hidden" name="id" value="<?= $account->getId() ?>">
                     <?php endif; ?>
                     
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="provider_code" class="form-label"><lang>供应商</lang> <span class="text-danger">*</span></label>
-                            <select class="form-select" id="weline-ai-provider-code" name="provider_code" required <?= isset($account) ? 'readonly' : '' ?>>
+                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                        <div style="--w-span-md:6;">
+                            <label for="provider_code" class="w-field__label"><lang>供应商</lang> <span class="w-text" data-tone="danger">*</span></label>
+                            <select class="w-select" id="weline-ai-provider-code" name="provider_code" required <?= isset($account) ? 'readonly' : '' ?>>
                                 <option value=""><?= __('请选择供应商') ?></option>
                                 <?php foreach ($providers as $code => $info): ?>
                                     <option value="<?= $code ?>" 
@@ -45,60 +45,53 @@
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-6">
-                            <label for="account_name" class="form-label"><lang>账户名称</lang> <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="weline-ai-account-name" name="account_name" 
-                                value="<?= isset($account) ? htmlspecialchars($account->getData('account_name')) : '' ?>" required>
+                        <div style="--w-span-md:6;">
+                            <label for="account_name" class="w-field__label"><lang>账户名称</lang> <span class="w-text" data-tone="danger">*</span></label>
+                            <input type="text" class="w-input" id="weline-ai-account-name" name="account_name" value="<?= isset($account) ? htmlspecialchars($account->getData('account_name')) : '' ?>" required>
                         </div>
                     </div>
 
-                    <div class="row mb-3">
-                        <div class="col-md-12">
-                            <label for="api_key" class="form-label">API<lang>密钥</lang> <?= !isset($account) ? '<span class="text-danger">*</span>' : '' ?></label>
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="weline-ai-api-key" name="api_key" 
-                                    placeholder="<?= isset($account) ? __('留空保持不变') : __('请输入API密钥') ?>" 
-                                    <?= !isset($account) ? 'required' : '' ?>>
-                                <button class="btn btn-outline-secondary weline-ai-toggle-password" type="button" data-target="weline-ai-api-key">
-                                    <i class="mdi mdi-eye"></i>
+                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                        <div style="--w-span-md:12;">
+                            <label for="api_key" class="w-field__label">API<lang>密钥</lang> <?= !isset($account) ? '<span class="w-text" data-tone="danger">*</span>' : '' ?></label>
+                            <div class="w-field__control">
+                                <input type="password" class="w-input" id="weline-ai-api-key" name="api_key" placeholder="<?= isset($account) ? __('留空保持不变') : __('请输入API密钥') ?>" <?= !isset($account) ? 'required' : '' ?>>
+                                <button class="w-button weline-ai-toggle-password" type="button" data-target="weline-ai-api-key" data-tone="neutral" data-variant="outline">
+                                    <w:icon name="eye" size="sm"></w:icon>
                                 </button>
                             </div>
-                            <small class="text-muted"><?= __('API密钥将被加密存储') ?></small>
+                            <small class="w-text" data-tone="muted"><?= __('API密钥将被加密存储') ?></small>
                         </div>
                     </div>
 
-                    <div class="row mb-3">
-                        <div class="col-md-12">
-                            <label for="api_secret" class="form-label">API Secret<lang>（如需要）</lang></label>
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="weline-ai-api-secret" name="api_secret" 
-                                    placeholder="<?= __('某些供应商可能需要') ?>">
-                                <button class="btn btn-outline-secondary weline-ai-toggle-password" type="button" data-target="weline-ai-api-secret">
-                                    <i class="mdi mdi-eye"></i>
+                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                        <div style="--w-span-md:12;">
+                            <label for="api_secret" class="w-field__label">API Secret<lang>（如需要）</lang></label>
+                            <div class="w-field__control">
+                                <input type="password" class="w-input" id="weline-ai-api-secret" name="api_secret" placeholder="<?= __('某些供应商可能需要') ?>">
+                                <button class="w-button weline-ai-toggle-password" type="button" data-target="weline-ai-api-secret" data-tone="neutral" data-variant="outline">
+                                    <w:icon name="eye" size="sm"></w:icon>
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <div class="row mb-3">
-                        <div class="col-md-12">
-                            <label for="base_url" class="form-label">API<lang>基础URL</lang></label>
-                            <input type="url" class="form-control" id="weline-ai-base-url" name="base_url" 
-                                value="<?= isset($account) ? htmlspecialchars($account->getData('base_url')) : '' ?>"
-                                placeholder="<?= __('留空使用默认值') ?>">
-                            <small class="text-muted"><?= __('自定义API端点，例如使用代理服务或私有部署') ?></small>
+                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                        <div style="--w-span-md:12;">
+                            <label for="base_url" class="w-field__label">API<lang>基础URL</lang></label>
+                            <input type="url" class="w-input" id="weline-ai-base-url" name="base_url" value="<?= isset($account) ? htmlspecialchars($account->getData('base_url')) : '' ?>" placeholder="<?= __('留空使用默认值') ?>">
+                            <small class="w-text" data-tone="muted"><?= __('自定义API端点，例如使用代理服务或私有部署') ?></small>
                         </div>
                     </div>
 
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label for="balance" class="form-label"><lang>账户余额</lang></label>
-                            <input type="number" class="form-control" id="balance" name="balance" step="0.01" 
-                                value="<?= isset($account) ? $account->getData('balance') : '0' ?>">
+                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                        <div style="--w-span-md:4;">
+                            <label for="balance" class="w-field__label"><lang>账户余额</lang></label>
+                            <input type="number" class="w-input" id="balance" name="balance" step="0.01" value="<?= isset($account) ? $account->getData('balance') : '0' ?>">
                         </div>
-                        <div class="col-md-4">
-                            <label for="currency" class="form-label"><lang>货币单位</lang></label>
-                            <select class="form-select" id="currency" name="currency">
+                        <div style="--w-span-md:4;">
+                            <label for="currency" class="w-field__label"><lang>货币单位</lang></label>
+                            <select class="w-select" id="currency" name="currency">
                                 <?php 
                                 $currencies = ['USD' => __('美元'), 'CNY' => __('人民币'), 'EUR' => __('欧元')];
                                 $currentCurrency = isset($account) ? $account->getData('currency') : 'USD';
@@ -110,20 +103,18 @@
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label"><lang>账户设置</lang></label>
+                        <div style="--w-span-md:4;">
+                            <label class="w-field__label"><lang>账户设置</lang></label>
                             <div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="checkbox" id="weline-ai-is-active" name="is_active" value="1"
-                                        <?= isset($account) && $account->getData('is_active') ? 'checked' : '' ?>>
-                                    <label class="form-check-label" for="weline-ai-is-active"><lang>激活账户</lang></label>
+                                <div class="w-check form-check-inline">
+                                    <input type="checkbox" id="weline-ai-is-active" name="is_active" value="1" <?= isset($account) && $account->getData('is_active') ? 'checked' : '' ?>>
+                                    <label for="weline-ai-is-active"><lang>激活账户</lang></label>
                                 </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="checkbox" id="is_default" name="is_default" value="1"
-                                        <?= isset($account) && $account->getData('is_default') ? 'checked' : '' ?>>
-                                    <label class="form-check-label" for="is_default">
+                                <div class="w-check form-check-inline">
+                                    <input type="checkbox" id="is_default" name="is_default" value="1" <?= isset($account) && $account->getData('is_default') ? 'checked' : '' ?>>
+                                    <label for="is_default">
                                         <lang>设为默认</lang>
-                                        <span class="badge bg-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="<?= __('只有设置为默认的账户才能被模型调用') ?>">?</span>
+                                        <span class="w-badge ms-1" title="<?= __('只有设置为默认的账户才能被模型调用') ?>" data-w-placement="right" data-w-component="tooltip" data-w-tooltip="<?= __('只有设置为默认的账户才能被模型调用') ?>" data-w-background="muted">?</span>
                                     </label>
                                 </div>
                             </div>
@@ -131,16 +122,16 @@
                     </div>
 
                     <?php if (isset($account)): ?>
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label"><lang>总花费</lang></label>
-                                <div class="form-control-plaintext">
+                        <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                            <div style="--w-span-md:6;">
+                                <label class="w-field__label"><lang>总花费</lang></label>
+                                <div class="w-input">
                                     <strong><?= $account->getData('currency') ?> <?= number_format((float)$account->getData('total_spent'), 2) ?></strong>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label"><lang>连接状态</lang></label>
-                                <div class="form-control-plaintext">
+                            <div style="--w-span-md:6;">
+                                <label class="w-field__label"><lang>连接状态</lang></label>
+                                <div class="w-input">
                                     <?php
                                     $connectionStatus = $account->getData('connection_status');
                                     $statusClass = match($connectionStatus) {
@@ -154,9 +145,9 @@
                                         default => __('待测试')
                                     };
                                     ?>
-                                    <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
+                                    <span class="w-badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
                                     <?php if ($account->getData('connection_test_time')): ?>
-                                        <small class="text-muted ms-2">
+                                        <small class="w-text ms-2" data-tone="muted">
                                             <?= __('最后测试') ?>: <?= date('Y-m-d H:i:s', (int)$account->getData('connection_test_time')) ?>
                                         </small>
                                     <?php endif; ?>
@@ -166,68 +157,63 @@
                     <?php endif; ?>
 
                     <!-- 代理设置 -->
-                    <div class="card mb-3">
-                        <div class="card-header">
-                            <div class="form-check">
+                    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+                        <div class="w-card__header">
+                            <div class="w-check">
                                 <?php
                                 $proxyConfig = isset($account) ? $account->getProxyConfig() : [];
                                 $proxyEnabled = !empty($proxyConfig['enabled']);
                                 ?>
-                                <input class="form-check-input" type="checkbox" id="weline-ai-proxy-enabled" name="proxy_enabled" value="1"
-                                    <?= $proxyEnabled ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="weline-ai-proxy-enabled">
+                                <input type="checkbox" id="weline-ai-proxy-enabled" name="proxy_enabled" value="1" <?= $proxyEnabled ? 'checked' : '' ?>>
+                                <label for="weline-ai-proxy-enabled">
                                     <lang>启用代理</lang>
                                 </label>
                             </div>
                         </div>
-                        <div class="card-body" id="weline-ai-proxy-settings" style="<?= $proxyEnabled ? '' : 'display: none;' ?>">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <label for="proxy_type" class="form-label"><lang>代理类型</lang></label>
-                                    <select class="form-select" id="proxy_type" name="proxy_type">
+                        <div class="w-card__body" id="weline-ai-proxy-settings" style="<?= $proxyEnabled ? '' : 'display: none;' ?>">
+                            <div class="w-grid">
+                                <div style="--w-span-md:4;">
+                                    <label for="proxy_type" class="w-field__label"><lang>代理类型</lang></label>
+                                    <select class="w-select" id="proxy_type" name="proxy_type">
                                         <option value="http" <?= ($proxyConfig['type'] ?? '') == 'http' ? 'selected' : '' ?>>HTTP</option>
                                         <option value="https" <?= ($proxyConfig['type'] ?? '') == 'https' ? 'selected' : '' ?>>HTTPS</option>
                                         <option value="socks5" <?= ($proxyConfig['type'] ?? '') == 'socks5' ? 'selected' : '' ?>>SOCKS5</option>
                                     </select>
                                 </div>
-                                <div class="col-md-4">
-                                    <label for="proxy_host" class="form-label"><lang>代理地址</lang></label>
-                                    <input type="text" class="form-control" id="proxy_host" name="proxy_host"
-                                        value="<?= htmlspecialchars($proxyConfig['host'] ?? '') ?>">
+                                <div style="--w-span-md:4;">
+                                    <label for="proxy_host" class="w-field__label"><lang>代理地址</lang></label>
+                                    <input type="text" class="w-input" id="proxy_host" name="proxy_host" value="<?= htmlspecialchars($proxyConfig['host'] ?? '') ?>">
                                 </div>
-                                <div class="col-md-4">
-                                    <label for="proxy_port" class="form-label"><lang>端口</lang></label>
-                                    <input type="number" class="form-control" id="proxy_port" name="proxy_port"
-                                        value="<?= $proxyConfig['port'] ?? '' ?>">
+                                <div style="--w-span-md:4;">
+                                    <label for="proxy_port" class="w-field__label"><lang>端口</lang></label>
+                                    <input type="number" class="w-input" id="proxy_port" name="proxy_port" value="<?= $proxyConfig['port'] ?? '' ?>">
                                 </div>
                             </div>
-                            <div class="row mt-2">
-                                <div class="col-md-6">
-                                    <label for="proxy_username" class="form-label"><lang>用户名（可选）</lang></label>
-                                    <input type="text" class="form-control" id="proxy_username" name="proxy_username"
-                                        value="<?= htmlspecialchars($proxyConfig['username'] ?? '') ?>">
+                            <div class="w-grid" style="--w-mt:var(--weline-space-2);">
+                                <div style="--w-span-md:6;">
+                                    <label for="proxy_username" class="w-field__label"><lang>用户名（可选）</lang></label>
+                                    <input type="text" class="w-input" id="proxy_username" name="proxy_username" value="<?= htmlspecialchars($proxyConfig['username'] ?? '') ?>">
                                 </div>
-                                <div class="col-md-6">
-                                    <label for="proxy_password" class="form-label"><lang>密码（可选）</lang></label>
-                                    <input type="password" class="form-control" id="proxy_password" name="proxy_password"
-                                        placeholder="<?= !empty($proxyConfig['password']) ? __('已设置') : '' ?>">
+                                <div style="--w-span-md:6;">
+                                    <label for="proxy_password" class="w-field__label"><lang>密码（可选）</lang></label>
+                                    <input type="password" class="w-input" id="proxy_password" name="proxy_password" placeholder="<?= !empty($proxyConfig['password']) ? __('已设置') : '' ?>">
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="d-flex justify-content-between">
+                    <div class="w-cluster" data-justify="between">
                         <div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-content-save me-1"></i><lang>保存</lang>
+                            <button type="submit" class="w-button" data-tone="primary">
+                                <w:icon name="save" size="sm"></w:icon><lang>保存</lang>
                             </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="btn btn-secondary ms-2">
-                                <i class="mdi mdi-arrow-left me-1"></i><lang>返回列表</lang>
+                            <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="w-button ms-2" data-tone="neutral">
+                                <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                             </a>
                         </div>
                         <?php if (isset($account)): ?>
-                            <button type="button" class="btn btn-info" id="weline-ai-test-connection">
-                                <i class="mdi mdi-wifi me-1"></i><lang>测试连接</lang>
+                            <button type="button" class="w-button" id="weline-ai-test-connection" data-tone="info">
+                                <w:icon name="wifi" size="sm"></w:icon><lang>测试连接</lang>
                             </button>
                         <?php endif; ?>
                     </div>
@@ -260,15 +246,15 @@
                 : (image && image.b64_json ? ('data:' + ((image.mime_type) || 'image/png') + ';base64,' + image.b64_json) : '');
             if (!src) return '';
             var safeSrc = escapeHtml(src);
-            var revised = image && image.revised_prompt ? '<div class="small text-muted mt-1">' + escapeHtml(image.revised_prompt) + '</div>' : '';
-            return '<div class="col-12 col-md-6 mb-2">'
+            var revised = image && image.revised_prompt ? '<div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);">' + escapeHtml(image.revised_prompt) + '</div>' : '';
+            return '<div style="--w-span:12;--w-span-md:6;--w-mb:var(--weline-space-2);">'
                 + '<a href="' + safeSrc + '" target="_blank" rel="noopener">'
-                + '<img src="' + safeSrc + '" class="img-fluid rounded border" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;" alt="test image">'
+                + '<img src="' + safeSrc + '" class="img-fluid" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;" alt="test image" data-w-radius="md" data-w-border="border">'
                 + '</a>' + revised + '</div>';
         }).join('');
         if (!items) return '';
-        return '<div class="row g-2 mt-3">'
-            + '<div class="col-12 fw-bold mb-1"><i class="mdi mdi-image-multiple me-1"></i><?= __('返回的测试图片') ?></div>'
+        return '<div class="w-grid" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-4);">'
+            + '<div class="w-text" data-weight="strong" style="--w-span:12;--w-mb:var(--weline-space-1);"><w:icon name="image" size="sm"></w:icon><?= __('返回的测试图片') ?></div>'
             + items
             + '</div>';
     }
@@ -293,18 +279,18 @@
         var dialogClass = imagesHtml !== '' ? 'modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable' : 'modal-dialog modal-dialog-centered';
 
         modal.innerHTML = '<div class="' + dialogClass + '">'
-            + '<div class="modal-content">'
-            + '<div class="modal-header">'
-            + '<h5 class="modal-title">' + escapeHtml(title) + '</h5>'
-            + '<button type="button" class="btn-close" data-test-close></button>'
+            + '<div class="w-dialog__surface">'
+            + '<div class="w-dialog__header">'
+            + '<h5 class="w-dialog__title">' + escapeHtml(title) + '</h5>'
+            + '<button type="button" class="w-button" data-test-close data-w-close="" data-tone="quiet" data-size="sm"></button>'
             + '</div>'
-            + '<div class="modal-body py-3">'
-            + '<div class="text-center mb-3"><i class="mdi ' + iconClass + '" style="font-size: 3rem;"></i></div>'
+            + '<div class="w-dialog__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">'
+            + '<div class="w-text" data-align="center" style="--w-mb:var(--weline-space-4);"><i class="mdi ' + iconClass + '" style="font-size: 3rem;"></i></div>'
             + '<div class="message-content" style="white-space: pre-line; text-align: left;">' + escapeHtml(lines.join('\n')) + '</div>'
             + imagesHtml
             + '</div>'
-            + '<div class="modal-footer">'
-            + '<button type="button" class="btn btn-primary" data-test-close><?= __('确定') ?></button>'
+            + '<div class="w-dialog__footer">'
+            + '<button type="button" class="w-button" data-test-close data-tone="primary"><?= __('确定') ?></button>'
             + '</div>'
             + '</div></div>';
 
@@ -434,16 +420,16 @@
                 
                 if (!providerCode) {
                     activateCheckbox.checked = false;
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.warning('<?= __('请先选择供应商') ?>');
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.warning('<?= __('请先选择供应商') ?>');
                     }
                     return;
                 }
                 
                 if (!apiKey) {
                     activateCheckbox.checked = false;
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.warning('<?= __('请先填写API密钥') ?>');
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.warning('<?= __('请先填写API密钥') ?>');
                     }
                     return;
                 }
@@ -463,7 +449,7 @@
             
             var submitBtn = this.form.querySelector('button[type="submit"]');
             var originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __('保存中...') ?>';
+            submitBtn.innerHTML = '<w:icon name="circle" size="sm"></w:icon><?= __('保存中...') ?>';
             submitBtn.disabled = true;
             
             var req = window.Weline.Api.resource('ai').providerSaveAccount({payload: data});
@@ -473,15 +459,15 @@
                 submitBtn.disabled = false;
                 
                 if (data.success) {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.success(data.message);
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.success(data.message);
                     }
                     setTimeout(function() {
                         window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
                     }, 1500);
                 } else {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.error(data.message || '<?= __('保存失败') ?>');
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.error(data.message || '<?= __('保存失败') ?>');
                     }
                 }
             })
@@ -489,8 +475,8 @@
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
                 console.error('Error:', error);
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error('<?= __('保存失败，请重试') ?>');
+                if (typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.error('<?= __('保存失败，请重试') ?>');
                 }
             });
         },
@@ -498,13 +484,13 @@
         testConnection: function() {
             var btn = document.getElementById('weline-ai-test-connection');
             var originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __('测试中...') ?>';
+            btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon><?= __('测试中...') ?>';
             btn.disabled = true;
 
             var accountId = <?= isset($account) ? $account->getId() : 'null' ?>;
             var providerCode = '<?= isset($account) ? addslashes((string)$account->getData('provider_code')) : '' ?>';
             var chooseModel = Promise.resolve('');
-            if (typeof Swal !== 'undefined' && accountId && providerCode) {
+            if (accountId && providerCode) {
                 var modelUrl = '<?= $this->getBackendUrl('*/backend/provider/getRemoteModelsForSelect') ?>';
                 var modelForm = new FormData();
                 modelForm.set('provider_code', providerCode);
@@ -539,30 +525,34 @@
                         options[code] = label;
                         window.__welineProviderTestModelMeta[code] = model;
                     });
-                    return Swal.fire({
+                    return Weline.UI.dialog.request({
                         title: '选择测试模型',
-                        input: 'select',
-                        inputOptions: options,
-                        inputPlaceholder: '请选择模型',
-                        showCancelButton: true,
-                        confirmButtonText: '开始测试',
-                        cancelButtonText: '取消',
-                        inputValidator: function(value) {
+                        cancelable: true,
+                        confirmLabel: '开始测试',
+                        cancelLabel: '取消',
+                        field: {
+                            type: 'select',
+                            choices: options,
+                            placeholder: '请选择模型',
+                            required: true
+                        },
+                        validate: function(value) {
                             if (!value) return '请选择一个模型';
+                            return true;
                         }
                     }).then(function(result) {
-                        return result.isConfirmed ? (result.value || '') : null;
+                        return result.confirmed ? (result.value || '') : null;
                     });
                 }).catch(function(error) {
-                    return Swal.fire({
-                        icon: 'warning',
+                    return Weline.UI.dialog.request({
+                        tone: 'warning',
                         title: '无法拉取模型列表',
-                        text: error.message || '该供应商不支持 models 接口。',
-                        showCancelButton: true,
-                        confirmButtonText: '使用默认测试模型',
-                        cancelButtonText: '取消'
+                        message: error.message || '该供应商不支持 models 接口。',
+                        cancelable: true,
+                        confirmLabel: '使用默认测试模型',
+                        cancelLabel: '取消'
                     }).then(function(result) {
-                        return result.isConfirmed ? '' : null;
+                        return result.confirmed ? '' : null;
                     });
                 });
             }

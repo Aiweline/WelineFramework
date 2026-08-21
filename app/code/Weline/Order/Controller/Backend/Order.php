@@ -27,7 +27,7 @@ use Weline\Order\Service\OrderStateMachine;
 /**
  * 订单管理控制器
  */
-#[Acl('Weline_Order::order_manage', '订单管理', 'mdi-cart', '订单管理', 'Weline_Backend::order_group')]
+#[Acl('Weline_Order::order_manage', '订单管理', 'cart', '订单管理', 'Weline_Backend::order_group')]
 class Order extends BackendController
 {
     private OrderService $orderService;
@@ -42,7 +42,7 @@ class Order extends BackendController
     /**
      * 订单列表页面
      */
-    #[Acl('Weline_Order::order_list', '查看订单列表', 'mdi-format-list-bulleted', '查看订单列表')]
+    #[Acl('Weline_Order::order_list', '查看订单列表', 'list', '查看订单列表')]
     public function index()
     {
         $page = max(1, (int)($this->request->getParam('page') ?? 1));
@@ -124,7 +124,7 @@ class Order extends BackendController
     /**
      * 订单详情页面
      */
-    #[Acl('Weline_Order::order_view', '查看订单详情', 'mdi-eye', '查看订单详情')]
+    #[Acl('Weline_Order::order_view', '查看订单详情', 'eye', '查看订单详情')]
     public function view()
     {
         $orderId = (int)$this->request->getParam('id');
@@ -196,7 +196,7 @@ class Order extends BackendController
     /**
      * 订单编辑页面
      */
-    #[Acl('Weline_Order::order_edit', '编辑订单', 'mdi-pencil', '编辑订单')]
+    #[Acl('Weline_Order::order_edit', '编辑订单', 'edit', '编辑订单')]
     public function edit()
     {
         $orderId = (int)$this->request->getParam('id');
@@ -232,7 +232,7 @@ class Order extends BackendController
     /**
      * 保存订单
      */
-    #[Acl('Weline_Order::order_save', '保存订单', 'mdi-content-save', '保存订单')]
+    #[Acl('Weline_Order::order_save', '保存订单', 'save', '保存订单')]
     public function save()
     {
         $data = $this->request->getPost();
@@ -277,7 +277,7 @@ class Order extends BackendController
     /**
      * 取消订单
      */
-    #[Acl('Weline_Order::order_cancel', '取消订单', 'mdi-cancel', '取消订单')]
+    #[Acl('Weline_Order::order_cancel', '取消订单', 'close', '取消订单')]
     public function cancel()
     {
         $orderId = (int)$this->request->getParam('id');
@@ -305,7 +305,7 @@ class Order extends BackendController
     /**
      * 更新订单状态
      */
-    #[Acl('Weline_Order::order_update_status', '更新订单状态', 'mdi-update', '更新订单状态')]
+    #[Acl('Weline_Order::order_update_status', '更新订单状态', 'refresh', '更新订单状态')]
     public function updateStatus()
     {
         $orderId = (int)$this->request->getPost('order_id');

@@ -5,34 +5,34 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box">
-            <h4 class="page-title">
-                <i class="mdi mdi-eye me-2"></i><lang>交易记录详情</lang>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading">
+            <h4 class="w-backend-page__title">
+                <w:icon name="eye" size="sm"></w:icon><lang>交易记录详情</lang>
             </h4>
         </div>
     </div>
 </div>
 
 <!-- 消息 -->
-<div class="row">
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 交易详情 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-eye me-2"></i><?= __('交易记录详情') ?>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="eye" size="sm"></w:icon><?= __('交易记录详情') ?>
                 </h4>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <table class="table table-bordered">
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;">
+                        <table class="w-table">
                             <tr>
                                 <th width="30%"><?= __('交易号') ?></th>
                                 <td><?= htmlspecialchars($transaction->getData('transaction_no')) ?></td>
@@ -63,7 +63,7 @@
                                     ];
                                     $statusInfo = $statusMap[$status] ?? ['label' => $status, 'class' => 'secondary'];
                                     ?>
-                                    <span class="badge bg-<?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
+                                    <span class="w-badge bg-<?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
                                 </td>
                             </tr>
                             <tr>
@@ -87,7 +87,7 @@
                 <!-- 请求数据 -->
                 <?php $requestData = $transaction->getRequestData(); ?>
                 <?php if (!empty($requestData)): ?>
-                    <div class="mt-3">
+                    <div style="--w-mt:var(--weline-space-4);">
                         <h5><?= __('请求数据') ?></h5>
                         <pre class="weline-payment-pre"><?= htmlspecialchars(json_encode($requestData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
                     </div>
@@ -96,7 +96,7 @@
                 <!-- 响应数据 -->
                 <?php $responseData = $transaction->getResponseData(); ?>
                 <?php if (!empty($responseData)): ?>
-                    <div class="mt-3">
+                    <div style="--w-mt:var(--weline-space-4);">
                         <h5><?= __('响应数据') ?></h5>
                         <pre class="weline-payment-pre"><?= htmlspecialchars(json_encode($responseData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
                     </div>
@@ -105,15 +105,15 @@
                 <!-- 回调数据 -->
                 <?php $callbackData = $transaction->getCallbackData(); ?>
                 <?php if (!empty($callbackData)): ?>
-                    <div class="mt-3">
+                    <div style="--w-mt:var(--weline-space-4);">
                         <h5><?= __('回调数据') ?></h5>
                         <pre class="weline-payment-pre"><?= htmlspecialchars(json_encode($callbackData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
                     </div>
                 <?php endif; ?>
                 
-                <div class="mt-3">
-                    <a href="<?= $this->getUrl('*/backend/transaction/index') ?>" class="btn btn-secondary">
-                        <i class="mdi mdi-arrow-left me-2"></i><?= __('返回') ?>
+                <div style="--w-mt:var(--weline-space-4);">
+                    <a href="<?= $this->getUrl('*/backend/transaction/index') ?>" class="w-button" data-tone="neutral">
+                        <w:icon name="arrow-left" size="sm"></w:icon><?= __('返回') ?>
                     </a>
                 </div>
             </div>

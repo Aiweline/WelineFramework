@@ -41,7 +41,7 @@ class Compile extends CommandAbstract
     /**
      * @inheritDoc
      */
-    public function execute(array $args = [], array $data = []): void
+    public function execute(array $args = [], array $data = []): int
     {
         $source_types = [];
         
@@ -60,30 +60,36 @@ class Compile extends CommandAbstract
                 $source_types[] = $arg;
             } else {
                 $this->printing->error(__('不存在的编译资源类型：%{1}，支持的资源类型：%{2}', [$arg, $this->getTypes(true)]));
-                exit(1);
+                return 1;
             }
         }
         
         $this->printing->note(__('开始编译静态资源...'));
         
-        if (empty($source_types)) {
-            // 如果没有指定类型，编译所有类型
-            foreach ($this->getTypes() as $key => $type) {
-                $this->printing->warning($key . ': ' . $type . __('编译中...'));
-                $this->compileResourceType($key);
+        try {
+            if (empty($source_types)) {
+                // 如果没有指定类型，编译所有类型
+                foreach ($this->getTypes() as $key => $type) {
+                    $this->printing->warning($key . ': ' . $type . __('编译中...'));
+                    $this->compileResourceType($key);
+                }
+            } else {
+                // 编译指定的类型
+                foreach ($source_types as $source_type) {
+                    $this->printing->warning($source_type . ': ' . ($this->getTypes()[$source_type] ?? '') . __('编译中...'));
+                    $this->compileResourceType($source_type);
+                }
             }
-        } else {
-            // 编译指定的类型
-            foreach ($source_types as $source_type) {
-                $this->printing->warning($source_type . ': ' . ($this->getTypes()[$source_type] ?? '') . __('编译中...'));
-                $this->compileResourceType($source_type);
-            }
+        } catch (\Throwable $exception) {
+            $this->printing->error(__('静态资源编译失败：%{1}', [$exception->getMessage()]));
+            return 1;
         }
         
         $this->printing->success(__('静态资源编译完成！'));
         
         // 清理缓存
         ObjectManager::getInstance(Clear::class)->execute();
+        return 0;
     }
 
     /**
@@ -93,34 +99,30 @@ class Compile extends CommandAbstract
      */
     private function compileResourceType(string $type): void
     {
-        try {
-            $capability = 'resource_compiler.' . $type;
-            $compilerClass = $this->providerRegistry->implementationFor($capability);
+        $capability = 'resource_compiler.' . $type;
+        $compilerClass = $this->providerRegistry->implementationFor($capability);
 
-            // 将键名转换为类名：welineModules -> WelineModules, less -> Less
-            $displayType = preg_replace('/([a-z])([A-Z])/', '$1 $2', $type);
-            $className = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $displayType)));
+        // 将键名转换为类名：welineModules -> WelineModules, less -> Less
+        $displayType = preg_replace('/([a-z])([A-Z])/', '$1 $2', $type);
+        $className = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $displayType)));
 
-            if ($compilerClass === null) {
-                $frameworkCompiler = "Weline\\Framework\\Resource\\Compiler\\{$className}";
-                $compilerClass = class_exists($frameworkCompiler) ? $frameworkCompiler : null;
-            }
-
-            if ($compilerClass !== null && class_exists($compilerClass)) {
-                /**@var CompilerInterface $compiler */
-                $compiler = ObjectManager::getInstance($compilerClass);
-                if (!$compiler instanceof CompilerInterface) {
-                    throw new \RuntimeException(__('%{1} 资源编译器必须实现 CompilerInterface', [$type]));
-                }
-                $compiler->compile();
-                $this->printing->success(__('%{1} 编译完成', [$displayType]));
-                return;
-            }
-
-            $this->printing->error(__('未找到资源类型 %{1} 的编译器', [$type]));
-        } catch (\Exception $e) {
-            $this->printing->error(__('编译 %{1} 时出错：%{2}', [$type, $e->getMessage()]));
+        if ($compilerClass === null) {
+            $frameworkCompiler = "Weline\\Framework\\Resource\\Compiler\\{$className}";
+            $compilerClass = class_exists($frameworkCompiler) ? $frameworkCompiler : null;
         }
+
+        if ($compilerClass !== null && class_exists($compilerClass)) {
+            /**@var CompilerInterface $compiler */
+            $compiler = ObjectManager::getInstance($compilerClass);
+            if (!$compiler instanceof CompilerInterface) {
+                throw new \RuntimeException(__('%{1} 资源编译器必须实现 CompilerInterface', [$type]));
+            }
+            $compiler->compile();
+            $this->printing->success(__('%{1} 编译完成', [$displayType]));
+            return;
+        }
+
+        throw new \RuntimeException(__('未找到资源类型 %{1} 的编译器', [$type]));
     }
 
     /**

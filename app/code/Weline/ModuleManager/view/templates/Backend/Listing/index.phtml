@@ -175,64 +175,58 @@ $schemaStatusLabels = [
 </style>
 
 <div class="module-manager-page">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
                 <div>
-                    <h4 class="mb-1"><?= __('模组管理') ?></h4>
-                    <p class="text-muted mb-0"><?= __('集中检索模块状态、版本与 Schema 一致性') ?></p>
+                    <h4 style="--w-mb:var(--weline-space-1);"><?= __('模组管理') ?></h4>
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= __('集中检索模块状态、版本与 Schema 一致性') ?></p>
                 </div>
-                <div class="page-title-right">
-                    <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><span><?= __('系统') ?></span></li>
-                        <li class="breadcrumb-item active"><?= __('模组管理') ?></li>
+                <div class="w-cluster">
+                    <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                        <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
+                        <li class="w-breadcrumb__item" data-state="active"><?= __('模组管理') ?></li>
                     </ol>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="module-manager-header d-flex flex-wrap align-items-start justify-content-between mb-3">
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="module-manager-header w-cluster" data-wrap="true" data-align="start" data-justify="between" style="--w-mb:var(--weline-space-4);">
                         <div>
-                            <h4 class="card-title mb-1"><?= __('模组控制器') ?></h4>
-                            <p class="text-muted mb-0">
+                            <h4 class="w-card__title" style="--w-mb:var(--weline-space-1);"><?= __('模组控制器') ?></h4>
+                            <p class="w-text" data-tone="muted" style="--w-mb:0;">
                                 <?= __('显示 %{1}–%{2}，共 %{3} 个模块', [$rangeStart, $rangeEnd, $total]) ?>
                             </p>
                         </div>
-                        <div class="d-flex align-items-center gap-2">
+                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
                             <?php if ($activeFilterCount > 0): ?>
-                                <span class="badge bg-info-subtle text-info">
+                                <span class="w-badge w-text" data-w-background="info" data-tone="info">
                                     <?= __('已启用 %{1} 个筛选条件', $activeFilterCount) ?>
                                 </span>
                             <?php endif; ?>
-                            <span class="badge bg-primary-subtle text-primary">
+                            <span class="w-badge w-text" data-w-background="primary" data-tone="primary">
                                 <?= __('当前页 %{1} 项', $visibleCount) ?>
                             </span>
                         </div>
                     </div>
 
-                    <w:form method="get" id="module-manager-filters" class="module-filter-panel mb-3">
+                    <w:form method="get" id="module-manager-filters" class="module-filter-panel" style="--w-mb:var(--weline-space-4);">
                         <div class="module-filter-grid">
                             <div class="module-filter-field">
                                 <label for="module-filter-search"><?= __('搜索模块') ?></label>
                                 <div class="module-search-control">
-                                    <i class="mdi mdi-magnify" aria-hidden="true"></i>
-                                    <input type="search"
-                                           id="module-filter-search"
-                                           name="search"
-                                           class="form-control"
-                                           value="<?= $escapeHtml($search) ?>"
-                                           placeholder="<?= __('模块名、描述、命名空间、路由或版本') ?>"
-                                           autocomplete="off">
+                                    <w:icon name="search" size="sm"></w:icon>
+                                    <input type="search" id="module-filter-search" name="search" class="w-input" value="<?= $escapeHtml($search) ?>" placeholder="<?= __('模块名、描述、命名空间、路由或版本') ?>" autocomplete="off">
                                 </div>
                             </div>
                             <div class="module-filter-field">
                                 <label for="module-filter-status"><?= __('运行状态') ?></label>
-                                <select id="module-filter-status" name="status" class="form-select" data-module-filter-auto>
+                                <select id="module-filter-status" name="status" class="w-select" data-module-filter-auto>
                                     <option value=""><?= __('全部状态') ?></option>
                                     <option value="1" <?= $status === '1' ? 'selected' : '' ?>><?= __('已启用') ?></option>
                                     <option value="0" <?= $status === '0' ? 'selected' : '' ?>><?= __('已禁用') ?></option>
@@ -240,7 +234,7 @@ $schemaStatusLabels = [
                             </div>
                             <div class="module-filter-field">
                                 <label for="module-filter-position"><?= __('模块类型') ?></label>
-                                <select id="module-filter-position" name="position" class="form-select" data-module-filter-auto>
+                                <select id="module-filter-position" name="position" class="w-select" data-module-filter-auto>
                                     <option value=""><?= __('全部类型') ?></option>
                                     <?php foreach ($positionLabels as $positionValue => $positionLabel): ?>
                                         <option value="<?= $escapeHtml($positionValue) ?>" <?= $position === $positionValue ? 'selected' : '' ?>>
@@ -251,7 +245,7 @@ $schemaStatusLabels = [
                             </div>
                             <div class="module-filter-field">
                                 <label for="module-filter-schema"><?= __('Schema 状态') ?></label>
-                                <select id="module-filter-schema" name="schema_status" class="form-select" data-module-filter-auto>
+                                <select id="module-filter-schema" name="schema_status" class="w-select" data-module-filter-auto>
                                     <option value=""><?= __('全部 Schema 状态') ?></option>
                                     <?php foreach ($schemaStatusLabels as $schemaValue => $schemaLabel): ?>
                                         <option value="<?= $escapeHtml($schemaValue) ?>" <?= $schemaStatus === $schemaValue ? 'selected' : '' ?>>
@@ -262,7 +256,7 @@ $schemaStatusLabels = [
                             </div>
                             <div class="module-filter-field">
                                 <label for="module-filter-page-size"><?= __('每页显示') ?></label>
-                                <select id="module-filter-page-size" name="pageSize" class="form-select" data-module-filter-auto>
+                                <select id="module-filter-page-size" name="pageSize" class="w-select" data-module-filter-auto>
                                     <?php foreach ($pageSizes as $size): ?>
                                         <option value="<?= (int) $size ?>" <?= $pageSize === (int) $size ? 'selected' : '' ?>>
                                             <?= __('%{1} 项', (int) $size) ?>
@@ -270,31 +264,31 @@ $schemaStatusLabels = [
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="module-filter-actions d-flex gap-2">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="mdi mdi-filter-variant me-1" aria-hidden="true"></i><?= __('筛选') ?>
+                            <div class="module-filter-actions w-cluster" style="--w-gap:var(--weline-space-2);">
+                                <button type="submit" class="w-button" data-tone="primary">
+                                    <w:icon name="filter" size="sm"></w:icon><?= __('筛选') ?>
                                 </button>
-                                <a href="@backend-url('*/backend/listing')" class="btn btn-outline-secondary">
-                                    <i class="mdi mdi-refresh me-1" aria-hidden="true"></i><?= __('重置') ?>
+                                <a href="@backend-url('*/backend/listing')" class="w-button" data-tone="neutral" data-variant="outline">
+                                    <w:icon name="refresh" size="sm"></w:icon><?= __('重置') ?>
                                 </a>
                             </div>
                         </div>
                     </w:form>
 
-                    <div class="module-result-bar d-flex flex-wrap align-items-center justify-content-between mb-2">
-                        <small class="text-muted">
-                            <i class="mdi mdi-information-outline me-1" aria-hidden="true"></i>
+                    <div class="module-result-bar w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-2);">
+                        <small class="w-text" data-tone="muted">
+                            <w:icon name="info" size="sm"></w:icon>
                             <?= __('筛选会在全部模块中执行，分页会保留当前条件') ?>
                         </small>
                         <?php if ($activeFilterCount > 0): ?>
-                            <a href="@backend-url('*/backend/listing')" class="small">
+                            <a href="@backend-url('*/backend/listing')" class="w-text" data-size="sm">
                                 <?= __('清除全部筛选') ?>
                             </a>
                         <?php endif; ?>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0 module-manager-table">
+                    <div class="w-table-wrap">
+                        <table class="w-table module-manager-table" data-w-vertical="middle" style="--w-mb:0;">
                             <thead>
                             <tr>
                                 <th><?= __('模块') ?></th>
@@ -311,12 +305,12 @@ $schemaStatusLabels = [
                             <?php if ($modules === []): ?>
                                 <tr>
                                     <td colspan="8">
-                                        <div class="module-empty-state text-center">
-                                            <i class="mdi mdi-package-variant-closed" aria-hidden="true"></i>
-                                            <h5 class="mt-3 mb-1"><?= __('没有找到匹配的模块') ?></h5>
-                                            <p class="text-muted mb-3"><?= __('请调整搜索词或筛选条件后重试') ?></p>
+                                        <div class="module-empty-state w-text" data-align="center">
+                                            <w:icon name="close" size="sm"></w:icon>
+                                            <h5 style="--w-mt:var(--weline-space-4);--w-mb:var(--weline-space-1);"><?= __('没有找到匹配的模块') ?></h5>
+                                            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-4);"><?= __('请调整搜索词或筛选条件后重试') ?></p>
                                             <?php if ($activeFilterCount > 0): ?>
-                                                <a href="@backend-url('*/backend/listing')" class="btn btn-sm btn-outline-primary">
+                                                <a href="@backend-url('*/backend/listing')" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
                                                     <?= __('清除筛选') ?>
                                                 </a>
                                             <?php endif; ?>
@@ -356,33 +350,33 @@ $schemaStatusLabels = [
                                     <tr>
                                         <td>
                                             <div class="module-identity">
-                                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                                <div class="w-cluster" data-wrap="true" data-align="center" style="--w-gap:var(--weline-space-2);">
                                                     <strong><?= $escapeHtml($moduleName) ?></strong>
-                                                    <span class="badge bg-light text-dark">#<?= (int) $module->getId() ?></span>
+                                                    <span class="w-badge w-text" data-w-background="muted" data-tone="muted">#<?= (int) $module->getId() ?></span>
                                                 </div>
                                                 <div class="module-description">
                                                     <?= $escapeHtml($description !== '' ? $description : __('暂无描述')) ?>
                                                 </div>
                                                 <?php if ($namespacePath !== ''): ?>
                                                     <span class="module-path" title="<?= $escapeHtml($namespacePath) ?>">
-                                                        <i class="mdi mdi-code-braces me-1" aria-hidden="true"></i><?= $escapeHtml($namespacePath) ?>
+                                                        <w:icon name="code" size="sm"></w:icon><?= $escapeHtml($namespacePath) ?>
                                                     </span>
                                                 <?php endif; ?>
                                                 <?php if ($basePath !== ''): ?>
                                                     <span class="module-path" title="<?= $escapeHtml($basePath) ?>">
-                                                        <i class="mdi mdi-folder-outline me-1" aria-hidden="true"></i><?= $escapeHtml($basePath) ?>
+                                                        <w:icon name="folder" size="sm"></w:icon><?= $escapeHtml($basePath) ?>
                                                     </span>
                                                 <?php endif; ?>
                                             </div>
                                         </td>
                                         <td>
-                                            <span class="badge <?= $moduleEnabled ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
-                                                <i class="mdi <?= $moduleEnabled ? 'mdi-check-circle-outline' : 'mdi-pause-circle-outline' ?> me-1" aria-hidden="true"></i>
+                                            <span class="w-badge <?= $moduleEnabled ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
+                                                <i class="mdi <?= $moduleEnabled ? 'check' : 'pause' ?> me-1" aria-hidden="true"></i>
                                                 <?= $moduleEnabled ? __('启用') : __('禁用') ?>
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge <?= $positionClass ?>">
+                                            <span class="w-badge <?= $positionClass ?>">
                                                 <?= $escapeHtml($positionLabels[$modulePosition] ?? $modulePosition ?: __('未知')) ?>
                                             </span>
                                         </td>
@@ -403,10 +397,10 @@ $schemaStatusLabels = [
                                             </div>
                                         </td>
                                         <td>
-                                            <span class="badge <?= $schemaClass ?>"><?= $escapeHtml($schemaLabel) ?></span>
+                                            <span class="w-badge <?= $schemaClass ?>"><?= $escapeHtml($schemaLabel) ?></span>
                                             <?php if ($driftWarning !== ''): ?>
                                                 <div class="module-warning" title="<?= $escapeHtml($driftWarning) ?>">
-                                                    <i class="mdi mdi-alert-outline me-1" aria-hidden="true"></i><?= $escapeHtml($driftWarning) ?>
+                                                    <w:icon name="warning" size="sm"></w:icon><?= $escapeHtml($driftWarning) ?>
                                                 </div>
                                             <?php endif; ?>
                                         </td>
@@ -414,30 +408,18 @@ $schemaStatusLabels = [
                                             <code class="module-router"><?= $escapeHtml($module->getRouter() ?: '-') ?></code>
                                         </td>
                                         <td>
-                                            <small class="text-muted"><?= $escapeHtml($module->getUpdateTime() ?: '-') ?></small>
+                                            <small class="w-text" data-tone="muted"><?= $escapeHtml($module->getUpdateTime() ?: '-') ?></small>
                                         </td>
                                         <td class="module-actions-cell">
-                                            <div class="d-flex align-items-center gap-2">
+                                            <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
                                                 <div title="<?= $moduleEnabled ? __('点击禁用模块') : __('点击启用模块') ?>">
-                                                    <input class="form-check form-switch"
-                                                           type="checkbox"
-                                                           alt="<?= $moduleEnabled ? __('开启') : __('关闭') ?>"
-                                                           id="<?= $escapeHtml($moduleName) ?>"
-                                                           switch="bool"
-                                                           <?= $moduleEnabled ? 'checked' : '' ?>
-                                                           <?= $modulePosition === 'system' ? 'disabled' : '' ?>>
-                                                    <label class="form-label"
-                                                           for="<?= $escapeHtml($moduleName) ?>"
-                                                           data-on-label="<?= __('开启') ?>"
-                                                           data-off-label="<?= __('关闭') ?>"></label>
+                                                    <input class="w-switch" type="checkbox" alt="<?= $moduleEnabled ? __('开启') : __('关闭') ?>" id="<?= $escapeHtml($moduleName) ?>" switch="bool" <?= $moduleEnabled ? 'checked' : '' ?>
+ <?= $modulePosition === 'system' ? 'disabled' : '' ?>>
+                                                    <label class="w-field__label" for="<?= $escapeHtml($moduleName) ?>" data-on-label="<?= __('开启') ?>" data-off-label="<?= __('关闭') ?>"></label>
                                                 </div>
-                                                <button type="button"
-                                                        class="btn btn-sm btn-outline-danger module-rollback-action"
-                                                        data-module="<?= $escapeHtml($moduleName) ?>"
-                                                        data-current-version="<?= $escapeHtml($module->getCodeVersion()) ?>"
-                                                        <?= $rollbackProtected ? 'disabled' : '' ?>
-                                                        title="<?= $rollbackProtected ? __('核心模块不允许在线回滚') : __('回滚到可用版本') ?>">
-                                                    <i class="mdi mdi-backup-restore me-1" aria-hidden="true"></i><?= __('回滚') ?>
+                                                <button type="button" class="w-button module-rollback-action" data-module="<?= $escapeHtml($moduleName) ?>" data-current-version="<?= $escapeHtml($module->getCodeVersion()) ?>" <?= $rollbackProtected ? 'disabled' : '' ?>
+ title="<?= $rollbackProtected ? __('核心模块不允许在线回滚') : __('回滚到可用版本') ?>" data-tone="danger" data-variant="outline" data-size="sm">
+                                                    <w:icon name="store" size="sm"></w:icon><?= __('回滚') ?>
                                                 </button>
                                             </div>
                                         </td>
@@ -449,8 +431,8 @@ $schemaStatusLabels = [
                     </div>
                 </div>
                 <?php if ($total > $visibleCount || $page > 1): ?>
-                    <div class="card-footer d-flex flex-wrap align-items-center justify-content-between gap-2">
-                        <small class="text-muted">
+                    <div class="w-card__footer w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                        <small class="w-text" data-tone="muted">
                             <?= __('第 %{1} 页，每页 %{2} 项', [$page, $pageSize]) ?>
                         </small>
                         <div><var>pagination</var></div>
@@ -479,12 +461,6 @@ $schemaStatusLabels = [
     });
 })();
 </script>
-<link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
-<link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<js>Weline_Admin::assets/js/pages/menus/sweet-alerts.init.js</js>
 <script>
 (function () {
     'use strict';
@@ -522,12 +498,6 @@ $schemaStatusLabels = [
         'close' => __('关闭'),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
-    function escapeHtml(value) {
-        return String(value == null ? '' : value)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    }
-
     function api() {
         if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
             return Promise.reject(new Error(messages.apiUnavailable));
@@ -539,46 +509,88 @@ $schemaStatusLabels = [
         return error && error.message ? error.message : String(error || messages.error);
     }
 
-    function planHtml(plan) {
+    function appendTextRow(root, label, value) {
+        const row = document.createElement('p');
+        const strong = document.createElement('strong');
+        strong.textContent = label + ': ';
+        row.append(strong, document.createTextNode(String(value == null ? '' : value)));
+        root.append(row);
+    }
+
+    function appendMessageList(root, title, items, tone) {
+        if (!items.length) return;
+        const alert = document.createElement('section');
+        alert.className = 'w-alert w-stack';
+        alert.dataset.tone = tone;
+        const heading = document.createElement('strong');
+        heading.textContent = title;
+        const list = document.createElement('ul');
+        items.forEach(function (text) {
+            const item = document.createElement('li');
+            item.textContent = String(text || '');
+            list.append(item);
+        });
+        alert.append(heading, list);
+        root.append(alert);
+    }
+
+    function planContent(plan, includeConfirmation) {
         const items = Array.isArray(plan.cascade_modules) ? plan.cascade_modules : [];
         const blockers = Array.isArray(plan.blockers) ? plan.blockers : [];
         const warnings = Array.isArray(plan.warnings) ? plan.warnings : [];
-        let html = '<div class="text-start">';
-        html += '<h6>' + escapeHtml(messages.cascade) + '</h6><ol>';
+        const content = document.createElement('div');
+        content.className = 'w-stack';
+        const heading = document.createElement('h3');
+        heading.textContent = messages.cascade;
+        const list = document.createElement('ol');
         items.forEach(function (item) {
             const artifact = item.artifact || {};
-            html += '<li><strong>' + escapeHtml(item.module_name) + '</strong> '
-                + escapeHtml(item.from_version) + ' &rarr; ' + escapeHtml(item.to_version)
-                + '<br><small>' + escapeHtml(messages.artifact) + ': ' + escapeHtml(artifact.source || '-')
-                + ' / ' + escapeHtml((artifact.checksum || '').slice(0, 16)) + '</small>'
-                + '<br><small>' + escapeHtml(messages.schema) + ': '
-                + escapeHtml((item.schema_operations || []).length) + ' | ' + escapeHtml(messages.scripts) + ': '
-                + escapeHtml((item.script_migrations || []).length) + '</small></li>';
+            const row = document.createElement('li');
+            row.textContent = String(item.module_name || '') + ' '
+                + String(item.from_version || '') + ' → ' + String(item.to_version || '') + ' · '
+                + messages.artifact + ': ' + String(artifact.source || '-') + ' / '
+                + String(artifact.checksum || '').slice(0, 16) + ' · '
+                + messages.schema + ': ' + (item.schema_operations || []).length + ' · '
+                + messages.scripts + ': ' + (item.script_migrations || []).length;
+            list.append(row);
         });
-        html += '</ol><p><strong>' + escapeHtml(messages.backup) + ':</strong> '
-            + escapeHtml(JSON.stringify(plan.backup_summary || {})) + '</p>';
-        html += '<p><strong>' + escapeHtml(messages.downtime) + ':</strong> '
-            + escapeHtml(plan.estimated_downtime_seconds || 0) + ' ' + escapeHtml(messages.seconds) + '</p>';
-        if (blockers.length) {
-            html += '<div class="alert alert-danger"><strong>' + escapeHtml(messages.blockers) + '</strong><ul>';
-            blockers.forEach(function (item) { html += '<li>' + escapeHtml(item) + '</li>'; });
-            html += '</ul></div>';
+        content.append(heading, list);
+        appendTextRow(content, messages.backup, JSON.stringify(plan.backup_summary || {}));
+        appendTextRow(content, messages.downtime, String(plan.estimated_downtime_seconds || 0) + ' ' + messages.seconds);
+        appendMessageList(content, messages.blockers, blockers, 'danger');
+        appendMessageList(content, messages.warnings, warnings, 'warning');
+        if (includeConfirmation) {
+            const help = document.createElement('p');
+            help.textContent = messages.confirmHelp;
+            const moduleInput = document.createElement('input');
+            moduleInput.className = 'w-input';
+            moduleInput.placeholder = messages.modulePlaceholder;
+            moduleInput.dataset.wRollbackConfirm = 'module';
+            const versionInput = document.createElement('input');
+            versionInput.className = 'w-input';
+            versionInput.placeholder = messages.versionPlaceholder;
+            versionInput.dataset.wRollbackConfirm = 'version';
+            const validation = document.createElement('p');
+            validation.className = 'w-field__error';
+            validation.hidden = true;
+            validation.dataset.wRollbackValidation = 'true';
+            content.append(help, moduleInput, versionInput, validation);
         }
-        if (warnings.length) {
-            html += '<div class="alert alert-warning"><strong>' + escapeHtml(messages.warnings) + '</strong><ul>';
-            warnings.forEach(function (item) { html += '<li>' + escapeHtml(item) + '</li>'; });
-            html += '</ul></div>';
-        }
-        return html + '</div>';
+        return content;
     }
 
     async function chooseTarget(moduleName) {
-        Swal.fire({title: messages.title, text: messages.loadingTargets, allowOutsideClick: false, didOpen: function () { Swal.showLoading(); }});
+        const loading = Weline.UI.toast.info(messages.loadingTargets, {duration: 0});
         const resource = await api();
-        const response = await resource.listTargets({module_name: moduleName});
+        let response;
+        try {
+            response = await resource.listTargets({module_name: moduleName});
+        } finally {
+            loading.close();
+        }
         const items = Array.isArray(response.items) ? response.items : [];
         if (!items.length) {
-            await Swal.fire({icon: 'info', title: messages.title, text: messages.noTargets});
+            await Weline.UI.dialog.request({tone: 'info', title: messages.title, message: messages.noTargets});
             return null;
         }
         const options = {};
@@ -586,38 +598,43 @@ $schemaStatusLabels = [
             options[item.target_version] = item.target_version + ' (' + (item.source || '-') + ')'
                 + (item.rollbackable ? '' : ' ⚠');
         });
-        const selected = await Swal.fire({
-            icon: 'question', title: messages.selectTarget, input: 'select', inputOptions: options,
-            showCancelButton: true, confirmButtonText: messages.next, cancelButtonText: messages.cancel,
-            inputValidator: function (value) { return value ? undefined : messages.selectTarget; }
+        const selected = await Weline.UI.dialog.request({
+            tone: 'info',
+            title: messages.selectTarget,
+            cancelable: true,
+            confirmLabel: messages.next,
+            cancelLabel: messages.cancel,
+            field: {type: 'select', choices: options, placeholder: messages.selectTarget, required: true},
+            validate: function (value) { return value ? true : messages.selectTarget; }
         });
-        return selected.isConfirmed ? selected.value : null;
+        return selected.confirmed ? selected.value : null;
     }
 
     async function confirmAndStart(resource, plan) {
         const blocked = Array.isArray(plan.blockers) && plan.blockers.length > 0;
-        const result = await Swal.fire({
-            icon: blocked ? 'error' : 'warning',
+        const content = planContent(plan, !blocked);
+        const result = await Weline.UI.dialog.request({
+            tone: blocked ? 'danger' : 'warning',
             title: messages.preflight,
-            html: planHtml(plan) + (blocked ? '' : '<hr><p>' + escapeHtml(messages.confirmHelp) + '</p>'
-                + '<input id="rollback-confirm-module" class="swal2-input" placeholder="' + escapeHtml(messages.modulePlaceholder) + '">'
-                + '<input id="rollback-confirm-version" class="swal2-input" placeholder="' + escapeHtml(messages.versionPlaceholder) + '">'),
-            width: 780,
-            showCancelButton: !blocked,
-            showConfirmButton: !blocked,
-            confirmButtonText: messages.execute,
-            cancelButtonText: messages.cancel,
-            preConfirm: function () {
-                const moduleValue = document.getElementById('rollback-confirm-module').value.trim();
-                const versionValue = document.getElementById('rollback-confirm-version').value.trim();
+            message: content,
+            size: 'lg',
+            cancelable: !blocked,
+            confirmLabel: blocked ? messages.close : messages.execute,
+            cancelLabel: messages.cancel,
+            beforeConfirm: function () {
+                if (blocked) return true;
+                const moduleValue = content.querySelector('[data-w-rollback-confirm="module"]').value.trim();
+                const versionValue = content.querySelector('[data-w-rollback-confirm="version"]').value.trim();
                 if (moduleValue !== plan.root_module || versionValue !== plan.target_version) {
-                    Swal.showValidationMessage(messages.confirmMismatch);
+                    const validation = content.querySelector('[data-w-rollback-validation]');
+                    validation.textContent = messages.confirmMismatch;
+                    validation.hidden = false;
                     return false;
                 }
                 return {module: moduleValue, version: versionValue};
             }
         });
-        if (!result.isConfirmed || blocked) return null;
+        if (!result.confirmed || blocked) return null;
         return resource.start({
             plan_id: plan.plan_id,
             plan_hash: plan.plan_hash,
@@ -628,33 +645,39 @@ $schemaStatusLabels = [
 
     async function monitor(resource, operationId) {
         const terminal = ['succeeded', 'failed_recovered', 'manual_recovery_required'];
+        const progress = Weline.UI.toast.info(messages.queued, {duration: 0});
         while (true) {
             const response = await resource.getOperation({operation_id: operationId});
             const operation = response.operation || response;
-            Swal.fire({
-                title: messages.queued,
-                html: '<p><strong>' + escapeHtml(messages.status) + ':</strong> ' + escapeHtml(operation.status) + '</p>'
-                    + '<p><strong>' + escapeHtml(messages.phase) + ':</strong> ' + escapeHtml(operation.phase) + '</p>',
-                allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); }
-            });
+            progress.element.firstElementChild.textContent = messages.status + ': ' + String(operation.status || '')
+                + ' · ' + messages.phase + ': ' + String(operation.phase || '');
             if (terminal.indexOf(operation.status) !== -1) {
+                progress.close();
                 if (operation.status === 'succeeded') {
-                    await Swal.fire({icon: 'success', title: messages.success, confirmButtonText: messages.close});
+                    await Weline.UI.dialog.request({tone: 'success', title: messages.success, confirmLabel: messages.close});
                     window.location.reload();
                     return;
                 }
                 if (operation.status === 'failed_recovered') {
-                    await Swal.fire({icon: 'warning', title: messages.recovered, text: operation.error || '', confirmButtonText: messages.close});
+                    await Weline.UI.dialog.request({tone: 'warning', title: messages.recovered, message: operation.error || '', confirmLabel: messages.close});
                     window.location.reload();
                     return;
                 }
                 const recovery = operation.recovery || {};
-                await Swal.fire({
-                    icon: 'error', title: messages.manual,
-                    html: '<p>' + escapeHtml(operation.error || '') + '</p><p><strong>'
-                        + escapeHtml(messages.recoveryCommand) + ':</strong><br><code>'
-                        + escapeHtml(recovery.manual_command || '') + '</code></p>',
-                    confirmButtonText: messages.close
+                const recoveryContent = document.createElement('div');
+                recoveryContent.className = 'w-stack';
+                const error = document.createElement('p');
+                error.textContent = String(operation.error || '');
+                const label = document.createElement('strong');
+                label.textContent = messages.recoveryCommand;
+                const command = document.createElement('code');
+                command.textContent = String(recovery.manual_command || '');
+                recoveryContent.append(error, label, command);
+                await Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: messages.manual,
+                    message: recoveryContent,
+                    confirmLabel: messages.close
                 });
                 return;
             }
@@ -671,13 +694,18 @@ $schemaStatusLabels = [
             const target = await chooseTarget(moduleName);
             if (!target) return;
             const resource = await api();
-            Swal.fire({title: messages.preflight, allowOutsideClick: false, didOpen: function () { Swal.showLoading(); }});
-            const response = await resource.createPlan({module_name: moduleName, target_version: target});
+            const loading = Weline.UI.toast.info(messages.preflight, {duration: 0});
+            let response;
+            try {
+                response = await resource.createPlan({module_name: moduleName, target_version: target});
+            } finally {
+                loading.close();
+            }
             const plan = response.plan || response;
             const started = await confirmAndStart(resource, plan);
             if (started && started.operation_id) await monitor(resource, started.operation_id);
         } catch (error) {
-            await Swal.fire({icon: 'error', title: messages.error, text: errorMessage(error)});
+            await Weline.UI.dialog.request({tone: 'danger', title: messages.error, message: errorMessage(error)});
         } finally {
             button.disabled = false;
         }

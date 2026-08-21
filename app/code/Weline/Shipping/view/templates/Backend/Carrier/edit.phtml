@@ -12,57 +12,52 @@ $id = $carrier ? $carrier->getId() : null;
 $backendBase = $this->getBackendUrl('shipping/backend/carrier');
 $saveUrl = $this->getBackendUrl('shipping/backend/carrier/save');
 ?>
-<div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= $isEdit ? __('编辑快递公司') : __('新增快递公司') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="<?= $backendBase ?>"><?= __('快递公司') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
+<div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;"><?= $isEdit ? __('编辑快递公司') : __('新增快递公司') ?></h4>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
+                                    <li class="w-breadcrumb__item"><a href="<?= $backendBase ?>"><?= __('快递公司') ?></a></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
                                 </ol>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= $isEdit ? __('编辑快递公司') : __('新增快递公司') ?></h5>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= $isEdit ? __('编辑快递公司') : __('新增快递公司') ?></h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <w:form method="post" action="@var($saveUrl)" data-testid="shipping-carrier-editor-form">
                                     <?php if ($id): ?>
                                         <input type="hidden" name="id" value="<?= $id ?>">
                                     <?php endif; ?>
                                     
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('快递公司代码') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="carrier_code" class="form-control" required
-                                                   value="<?= htmlspecialchars($carrier ? $carrier->getData(Carrier::schema_fields_CARRIER_CODE) : '') ?>"
-                                                   placeholder="<?= __('请输入快递公司代码，如：SF、ZTO等') ?>"
-                                                   <?= $isEdit ? 'readonly' : '' ?>>
-                                            <small class="form-text text-muted"><?= __('代码必须唯一，编辑后不可修改') ?></small>
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('快递公司代码') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="carrier_code" class="w-input" required value="<?= htmlspecialchars($carrier ? $carrier->getData(Carrier::schema_fields_CARRIER_CODE) : '') ?>" placeholder="<?= __('请输入快递公司代码，如：SF、ZTO等') ?>" <?= $isEdit ? 'readonly' : '' ?>>
+                                            <small class="w-field__hint w-text" data-tone="muted"><?= __('代码必须唯一，编辑后不可修改') ?></small>
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('快递公司名称') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="carrier_name" class="form-control" required
-                                                   value="<?= htmlspecialchars($carrier ? $carrier->getData(Carrier::schema_fields_CARRIER_NAME) : '') ?>"
-                                                   placeholder="<?= __('请输入快递公司名称，如：顺丰速运') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('快递公司名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="carrier_name" class="w-input" required value="<?= htmlspecialchars($carrier ? $carrier->getData(Carrier::schema_fields_CARRIER_NAME) : '') ?>" placeholder="<?= __('请输入快递公司名称，如：顺丰速运') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('类型') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <select name="carrier_type" class="form-select" id="carrier_type" required>
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('类型') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <div style="--w-span-md:10;">
+                                            <select name="carrier_type" class="w-select" id="carrier_type" required>
                                                 <option value="<?= Carrier::TYPE_MANUAL ?>" <?= (!$carrier || $carrier->getData(Carrier::schema_fields_CARRIER_TYPE) === Carrier::TYPE_MANUAL) ? 'selected' : '' ?>>
                                                     <?= __('手动') ?>
                                                 </option>
@@ -70,52 +65,47 @@ $saveUrl = $this->getBackendUrl('shipping/backend/carrier/save');
                                                     <?= __('API') ?>
                                                 </option>
                                             </select>
-                                            <small class="form-text text-muted"><?= __('手动类型需要手动输入物流信息，API类型可通过接口自动获取') ?></small>
+                                            <small class="w-field__hint w-text" data-tone="muted"><?= __('手动类型需要手动输入物流信息，API类型可通过接口自动获取') ?></small>
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('物流跟踪URL模板') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="tracking_url_template" class="form-control" required
-                                                   value="<?= htmlspecialchars($carrier ? $carrier->getData(Carrier::schema_fields_TRACKING_URL_TEMPLATE) : '') ?>"
-                                                   placeholder="<?= __('例如：https://www.sf-express.com/track/{tracking_number}') ?>">
-                                            <small class="form-text text-muted"><?= __('使用 {tracking_number} 作为物流单号占位符') ?></small>
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('物流跟踪URL模板') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="tracking_url_template" class="w-input" required value="<?= htmlspecialchars($carrier ? $carrier->getData(Carrier::schema_fields_TRACKING_URL_TEMPLATE) : '') ?>" placeholder="<?= __('例如：https://www.sf-express.com/track/{tracking_number}') ?>">
+                                            <small class="w-field__hint w-text" data-tone="muted"><?= __('使用 {tracking_number} 作为物流单号占位符') ?></small>
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3" id="api_config_section" style="display: <?= ($carrier && $carrier->getData(Carrier::schema_fields_CARRIER_TYPE) === Carrier::TYPE_API) ? 'block' : 'none' ?>;">
-                                        <label class="col-md-2 col-form-label"><?= __('追踪API端点') ?></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="tracking_api_endpoint" class="form-control"
-                                                   value="<?= htmlspecialchars($carrier ? $carrier->getData(Carrier::schema_fields_TRACKING_API_ENDPOINT) : '') ?>"
-                                                   placeholder="<?= __('例如：https://api.example.com/track') ?>">
+                                    <div class="w-grid" id="api_config_section" style="display: <?= ($carrier && $carrier->getData(Carrier::schema_fields_CARRIER_TYPE) === Carrier::TYPE_API) ? 'block' : 'none' ?>;">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('追踪API端点') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="tracking_api_endpoint" class="w-input" value="<?= htmlspecialchars($carrier ? $carrier->getData(Carrier::schema_fields_TRACKING_API_ENDPOINT) : '') ?>" placeholder="<?= __('例如：https://api.example.com/track') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3" id="api_method_section" style="display: <?= ($carrier && $carrier->getData(Carrier::schema_fields_CARRIER_TYPE) === Carrier::TYPE_API) ? 'block' : 'none' ?>;">
-                                        <label class="col-md-2 col-form-label"><?= __('API请求方法') ?></label>
-                                        <div class="col-md-10">
-                                            <select name="tracking_api_method" class="form-select">
+                                    <div class="w-grid" id="api_method_section" style="display: <?= ($carrier && $carrier->getData(Carrier::schema_fields_CARRIER_TYPE) === Carrier::TYPE_API) ? 'block' : 'none' ?>;">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('API请求方法') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <select name="tracking_api_method" class="w-select">
                                                 <option value="GET" <?= (!$carrier || $carrier->getData(Carrier::schema_fields_TRACKING_API_METHOD) === 'GET') ? 'selected' : '' ?>>GET</option>
                                                 <option value="POST" <?= ($carrier && $carrier->getData(Carrier::schema_fields_TRACKING_API_METHOD) === 'POST') ? 'selected' : '' ?>>POST</option>
                                             </select>
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3" id="api_config_json_section" style="display: <?= ($carrier && $carrier->getData(Carrier::schema_fields_CARRIER_TYPE) === Carrier::TYPE_API) ? 'block' : 'none' ?>;">
-                                        <label class="col-md-2 col-form-label"><?= __('API配置') ?></label>
-                                        <div class="col-md-10">
-                                            <textarea name="api_config" class="form-control" rows="5"
-                                                      placeholder='<?= __('JSON格式，例如：{"api_key":"your_key","api_secret":"your_secret"}') ?>'><?= htmlspecialchars($carrier && $carrier->getData(Carrier::schema_fields_API_CONFIG) ? json_encode($carrier->getApiConfig(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : '') ?></textarea>
-                                            <small class="form-text text-muted"><?= __('API配置信息，JSON格式') ?></small>
+                                    <div class="w-grid" id="api_config_json_section" style="display: <?= ($carrier && $carrier->getData(Carrier::schema_fields_CARRIER_TYPE) === Carrier::TYPE_API) ? 'block' : 'none' ?>;">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('API配置') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <textarea name="api_config" class="w-textarea" rows="5" placeholder='<?= __('JSON格式，例如：{"api_key":"your_key","api_secret":"your_secret"}') ?>'><?= htmlspecialchars($carrier && $carrier->getData(Carrier::schema_fields_API_CONFIG) ? json_encode($carrier->getApiConfig(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : '') ?></textarea>
+                                            <small class="w-field__hint w-text" data-tone="muted"><?= __('API配置信息，JSON格式') ?></small>
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('追踪支持状态') ?></label>
-                                        <div class="col-md-10">
-                                            <select name="tracking_support_status" class="form-select">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('追踪支持状态') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <select name="tracking_support_status" class="w-select">
                                                 <option value="<?= Carrier::TRACKING_SUPPORTED ?>" <?= (!$carrier || $carrier->getData(Carrier::schema_fields_TRACKING_SUPPORT_STATUS) === Carrier::TRACKING_SUPPORTED) ? 'selected' : '' ?>>
                                                     <?= __('支持') ?>
                                                 </option>
@@ -126,35 +116,32 @@ $saveUrl = $this->getBackendUrl('shipping/backend/carrier/save');
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('排序') ?></label>
-                                        <div class="col-md-10">
-                                            <input type="number" name="sort_order" class="form-control"
-                                                   value="<?= htmlspecialchars((string)($carrier ? $carrier->getData(Carrier::schema_fields_SORT_ORDER) : 0)) ?>"
-                                                   placeholder="<?= __('数字越小越靠前，默认为0') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('排序') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="number" name="sort_order" class="w-input" value="<?= htmlspecialchars((string)($carrier ? $carrier->getData(Carrier::schema_fields_SORT_ORDER) : 0)) ?>" placeholder="<?= __('数字越小越靠前，默认为0') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('状态') ?></label>
-                                        <div class="col-md-10">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" name="is_active" value="1" id="is_active"
-                                                       <?= (!$carrier || $carrier->getData(Carrier::schema_fields_IS_ACTIVE)) ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="is_active">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('状态') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <div class="w-switch">
+                                                <input type="checkbox" name="is_active" value="1" id="is_active" <?= (!$carrier || $carrier->getData(Carrier::schema_fields_IS_ACTIVE)) ? 'checked' : '' ?>>
+                                                <label for="is_active">
                                                     <?= __('启用') ?>
                                                 </label>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div class="row">
-                                        <div class="col-md-10 offset-md-2">
-                                            <button type="submit" class="btn btn-primary" data-testid="shipping-carrier-editor-submit">
-                                                <i class="mdi mdi-content-save" aria-hidden="true"></i> <?= __('保存') ?>
+                                    <div class="w-grid">
+                                        <div class="offset-md-2" style="--w-span-md:10;">
+                                            <button type="submit" class="w-button" data-testid="shipping-carrier-editor-submit" data-tone="primary">
+                                                <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
                                             </button>
-                                            <a href="<?= $backendBase ?>" class="btn btn-secondary">
-                                                <i class="mdi mdi-arrow-left" aria-hidden="true"></i> <?= __('返回') ?>
+                                            <a href="<?= $backendBase ?>" class="w-button" data-tone="neutral">
+                                                <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回') ?>
                                             </a>
                                         </div>
                                     </div>

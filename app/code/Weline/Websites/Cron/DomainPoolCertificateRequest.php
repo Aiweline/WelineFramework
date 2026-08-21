@@ -289,7 +289,7 @@ class DomainPoolCertificateRequest
                         __('域名池证书申请失败：%{1}', [$requestDomain]),
                         $msg,
                         [
-                            'icon' => 'ri-error-warning-line',
+                            'icon' => 'warning',
                             'metadata' => [
                                 'domain' => $domain,
                                 'request_domain' => $requestDomain,
@@ -322,7 +322,7 @@ class DomainPoolCertificateRequest
                     __('域名池证书申请异常：%{1}', [$requestDomain]),
                     $errMsg,
                     [
-                        'icon' => 'ri-error-warning-line',
+                        'icon' => 'warning',
                         'metadata' => [
                             'domain' => $domain,
                             'request_domain' => $requestDomain,

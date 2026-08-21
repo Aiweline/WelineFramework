@@ -30,10 +30,10 @@ $is_logged_in = $this->is_logged_in ?? false;
         window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
         window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
     </script>
-    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2"></script>
+    <theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
     <title><?= __('AI聊天') ?> - AI助手平台</title>
-    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet">
+    <css>Weline_Frontend::assets/css/bootstrap.min.css</css>
+    <css>Weline_Frontend::assets/css/icons.min.css</css>
     <style>
         * {
             margin: 0;
@@ -176,28 +176,28 @@ $is_logged_in = $this->is_logged_in ?? false;
 
 <!-- 导航栏 -->
 <nav class="navbar navbar-expand-lg">
-    <div class="container-fluid">
+    <div class="w-container">
         <a class="navbar-brand" href="<?= $this->getUrl('*/frontend/index') ?>">
-            <i class="mdi mdi-robot"></i> AI助手平台
+            <w:icon name="robot" size="sm"></w:icon> AI助手平台
         </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <button class="navbar-toggler" type="button" data-w-target="#navbarNav" data-w-action="disclosure.toggle">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
+        <div class="w-disclosure__panel navbar-collapse" id="navbarNav" data-w-disclosure-panel hidden>
             <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="<?= $this->getUrl('*/frontend/index') ?>">
-                        <i class="mdi mdi-home"></i> <?= __('首页') ?>
+                <li>
+                    <a href="<?= $this->getUrl('*/frontend/index') ?>">
+                        <w:icon name="home" size="sm"></w:icon> <?= __('首页') ?>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="<?= $this->getUrl('*/frontend/chat') ?>">
-                        <i class="mdi mdi-chat"></i> <?= __('聊天') ?>
+                <li>
+                    <a href="<?= $this->getUrl('*/frontend/chat') ?>" data-state="active">
+                        <w:icon name="circle" size="sm"></w:icon> <?= __('聊天') ?>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="<?= $this->getUrl('*/frontend/center') ?>">
-                        <i class="mdi mdi-account"></i> <?= __('个人中心') ?>
+                <li>
+                    <a href="<?= $this->getUrl('*/frontend/center') ?>">
+                        <w:icon name="user" size="sm"></w:icon> <?= __('个人中心') ?>
                     </a>
                 </li>
             </ul>
@@ -208,23 +208,23 @@ $is_logged_in = $this->is_logged_in ?? false;
 <div class="ai-chat-page">
     <div class="chat-container">
         <div class="chat-header">
-            <h3><i class="mdi mdi-robot"></i> <?= __('AI聊天助手') ?></h3>
+            <h3><w:icon name="robot" size="sm"></w:icon> <?= __('AI聊天助手') ?></h3>
             <div class="chat-settings">
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-ai-chat-action="toggle-settings">
-                    <i class="mdi mdi-cog"></i> <?= __('设置') ?>
+                <button type="button" class="w-button" data-ai-chat-action="toggle-settings" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <w:icon name="settings" size="sm"></w:icon> <?= __('设置') ?>
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-danger" data-ai-chat-action="clear-chat">
-                    <i class="mdi mdi-delete"></i> <?= __('清空') ?>
+                <button type="button" class="w-button" data-ai-chat-action="clear-chat" data-tone="danger" data-variant="outline" data-size="sm">
+                    <w:icon name="trash" size="sm"></w:icon> <?= __('清空') ?>
                 </button>
             </div>
         </div>
 
         <div class="settings-panel" id="settingsPanel" style="display: none;">
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="form-group">
+            <div class="w-grid">
+                <div style="--w-span-md:6;">
+                    <div class="w-field">
                         <label><?= __('选择模型') ?></label>
-                        <select class="form-control" id="modelSelect">
+                        <select class="w-input" id="modelSelect">
                             <?php $fallbackModelCode = (string)($this->fallback_model_code ?? ''); ?>
                             <option value=""<?= $fallbackModelCode === '' ? ' selected' : '' ?>><?= __('使用默认模型') ?></option>
                             <?php foreach ($models as $model): ?>
@@ -242,10 +242,10 @@ $is_logged_in = $this->is_logged_in ?? false;
                         </select>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="form-group">
+                <div style="--w-span-md:6;">
+                    <div class="w-field">
                         <label><?= __('场景适配器') ?></label>
-                        <select class="form-control" id="scenarioSelect">
+                        <select class="w-input" id="scenarioSelect">
                             <option value=""><?= __('无') ?></option>
                             <?php foreach ($adapters as $adapter): ?>
                                 <?php
@@ -264,7 +264,7 @@ $is_logged_in = $this->is_logged_in ?? false;
 
         <div class="chat-messages" id="chatMessages">
             <div class="welcome-message">
-                <i class="mdi mdi-robot mdi-48px"></i>
+                <w:icon name="circle" size="sm"></w:icon>
                 <h4><?= __('欢迎使用AI聊天助手！') ?></h4>
                 <p><?= __('请输入您的问题，我会尽力为您解答。') ?></p>
             </div>
@@ -272,19 +272,15 @@ $is_logged_in = $this->is_logged_in ?? false;
 
         <div class="chat-input-container">
             <w:form id="chatForm">
-                <div class="input-group">
-                    <textarea class="form-control" 
-                              id="messageInput" 
-                              placeholder="<?= __('请输入您的消息...') ?>" 
-                              rows="1"></textarea>
+                <div class="w-field__control">
+                    <textarea class="w-textarea" id="messageInput" placeholder="<?= __('请输入您的消息...') ?>" rows="1"></textarea>
                     <div class="input-group-append">
-                        <button class="btn btn-outline-secondary" type="button" id="cancelButton" disabled
-                                title="<?= __('取消生成') ?>" aria-label="<?= __('取消生成') ?>">
-                            <i class="mdi mdi-stop-circle-outline"></i>
+                        <button class="w-button" type="button" id="cancelButton" disabled title="<?= __('取消生成') ?>" aria-label="<?= __('取消生成') ?>" data-tone="neutral" data-variant="outline">
+                            <w:icon name="stop" size="sm"></w:icon>
                             <span class="sr-only"><?= __('取消生成') ?></span>
                         </button>
-                        <button class="btn btn-primary" type="submit" id="sendButton">
-                            <i class="mdi mdi-send"></i>
+                        <button class="w-button" type="submit" id="sendButton" data-tone="primary">
+                            <w:icon name="arrow-right" size="sm"></w:icon>
                         </button>
                     </div>
                 </div>
@@ -790,7 +786,7 @@ function addMessage(content, type) {
     avatar.className = 'message-avatar';
 
     const icon = document.createElement('i');
-    icon.className = type === 'user' ? 'mdi mdi-account' : 'mdi mdi-robot';
+    icon.className = type === 'user' ? 'user' : 'robot';
     avatar.appendChild(icon);
 
     const contentDiv = document.createElement('div');

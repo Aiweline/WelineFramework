@@ -7,68 +7,56 @@
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-<link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
-
 <!-- 页面标题 -->
-<div class='row'>
-    <div class='col-xl-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>管理开发文档</lang>
                 </h4>
-                <p class='card-title-desc'>
+                <p class="w-text" data-tone="muted">
                     <lang>开发文档编辑器 有新的开发文档时可以随时编辑</lang>
                 </p>
-                <w:form class='needs-validation' method="post"
-                      action="@admin-url('dev/tool/admin/document/post')" novalidate>
+                <w:form class="w-form" method="post" action="@admin-url('dev/tool/admin/document/post')">
                     <label>
-                        <input type="text" class="sr-only" name="id" value="@var{$document['id']}">
+                        <input type="text" class="w-visually-hidden" name="id" value="@var{$document['id']}">
                     </label>
-                    <div class="row col">
-                        <div class="col-6 pull-left">
+                    <div class="w-grid">
+                        <div style="--w-span:6;">
 
                         </div>
-                        <div class='col-6 pull-right'>
-                            <button type='submit'
-                                    class='btn btn-primary waves-effect waves-light pull-right'>
+                        <div style="--w-span:6;">
+                            <button type='submit' class="w-button" data-tone="primary">
                                 <lang>保存</lang>
                             </button>
-                            <button type="button"
-                                    class='btn btn-default waves-effect waves-light pull-right'
-                                    data-dev-workspace-action='history-back'
-                                    data-dev-workspace-fallback="@admin-url('dev/tool/admin/document')">
+                            <button type="button" class="w-button" data-w-component="history-back" data-w-fallback="@admin-url('dev/tool/admin/document')" data-tone="neutral">
                                 <lang>返回</lang>
                             </button>
                         </div>
                     </div>
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3 position-relative'>
-                                <label class='form-label' for='title'>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div data-w-position="relative" style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='title'>
                                     <lang>标题</lang>
                                 </label>
-                                <input type='text' name='title' class='form-control' id='title'
-                                       placeholder='@lang(标题)' value='@var($document.title)' required>
-                                <div class='valid-feedback'>
+                                <input type='text' name='title' class="w-input" id='title' placeholder='@lang(标题)' value='@var($document.title)' required>
+                                <div class="w-field__hint">
                                     <lang>请输入标题</lang>
                                 </div>
                             </div>
                         </div>
-                        <div class='col-md-3'>
-                            <div class='mb-3 position-relative'>
-                                <label class='form-label'
-                                       for='author'>
+                        <div style="--w-span-md:3;">
+                            <div data-w-position="relative" style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='author'>
                                     <lang>作者</lang>
                                 </label>
-                                <div class='input-group'>
-                                    <div class='input-group-prepend'>
-                                        <span class='input-group-text'
-                                              id='authorPrepend'>@</span>
+                                <div class="w-field__control">
+                                    <div class="w-field__prefix">
+                                        <span class="w-field__addon" id='authorPrepend'>@</span>
                                     </div>
-                                    <select type='text' name='author_id' class='form-control'
-                                            id='author'
-                                            aria-describedby='authorPrepend' required>
+                                    <select name='author_id' class="w-select" id='author' aria-describedby='authorPrepend' required>
                                         <foreach name="users">
                                             <if condition="document.author_id === v.user_id">
                                                 <option value="{{v.user_id}}" selected>
@@ -81,32 +69,29 @@
                                             </if>
                                         </foreach>
                                     </select>
-                                    <div class='invalid-tooltip'>
+                                    <div class='w-field__error'>
                                         <lang>请输入作者</lang>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class='col-md-6'>
-                            <div class='mb-3 position-relative'>
-                                <label class='form-label' for='summary'>
+                        <div style="--w-span-md:6;">
+                            <div data-w-position="relative" style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='summary'>
                                     <lang>摘要</lang>
                                 </label>
-                                <textarea type='text' name='summary' class='form-control' id='summary'
-                                          placeholder='@lang(摘要)'
-                                          required>@var{$document->getSummary()}</textarea>
-                                <div class='invalid-tooltip'>
+                                <textarea type='text' name='summary' class="w-textarea" id='summary' placeholder='@lang(摘要)' required>@var{$document->getSummary()}</textarea>
+                                <div class='w-field__error'>
                                     <lang>请输入摘要</lang>
                                 </div>
                             </div>
                         </div>
-                        <div class='col-md-3'>
-                            <div class='mb-3 position-relative'>
-                                <label class='form-label' for='category'>
+                        <div style="--w-span-md:3;">
+                            <div data-w-position="relative" style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='category'>
                                     <lang>分类</lang>
                                 </label>
-                                <select type='text' name='category_id' class='form-control'
-                                        id='category'>
+                                <select name='category_id' class="w-select" id='category'>
                                     <w:foreach name='catalogs' item='v'>
                                         <w:if condition="document.category_id === v.id">
                                             <option value="@var{$v.id}" selected>
@@ -138,21 +123,28 @@
                             </div>
                         </div>
                     </div>
-                    <div class='row'>
-                        <div class='col-md-12'>
-                            <div class='mb-3 position-relative'>
-                                <label class='form-label' for='elm1'>
+                    <div class="w-grid">
+                        <div style="--w-span-md:12;">
+                            <div data-w-position="relative" style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='elm1'>
                                     <lang>文章内容</lang>
                                 </label>
-                                <textarea id='elm1' name='content' class='form-control'
+                                <textarea id='elm1'
+                                          name='content'
+                                          class="w-textarea"
+                                          data-w-component="tinymce"
+                                          data-w-editor-engine="@static(Weline_DeveloperWorkspace::engines/tinymce/tinymce.min.js)"
+                                          data-w-editor-language="zh_CN"
+                                          data-w-editor-language-source="@static(Weline_DeveloperWorkspace::engines/tinymce/langs/zh_CN.js)"
+                                          data-w-editor-upload-url="@admin-url('dev/tool/admin/document/upload')"
                                           required>@var{$document->getContent()}</textarea>
-                                <div class='invalid-tooltip'>
+                                <div class='w-field__error'>
                                     <lang>文章内容不能为空</lang>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <button class='btn btn-primary waves-effect waves-light pull-right' type='submit'>
+                    <button class="w-button" type='submit' data-tone="primary">
                         <lang>保存</lang>
                     </button>
                 </w:form>
@@ -161,70 +153,4 @@
     </div>
 </div>
 
-<!--tinymce js-->
-<script src='@static(Weline_Admin::assets/libs/tinymce/tinymce.min.js)'></script>
-
-<script>
-(function() {
-    'use strict';
-    
-    $(document).ready(function () {
-        $(document).on('click', '[data-dev-workspace-action="history-back"]', function(e) {
-            e.preventDefault();
-
-            if (window.history.length > 1) {
-                window.history.back();
-                return;
-            }
-
-            var fallbackUrl = $(this).data('dev-workspace-fallback');
-            if (fallbackUrl) {
-                window.location.href = fallbackUrl;
-            }
-        });
-
-        if ($('#elm1').length > 0) {
-            tinymce.init({
-                selector: '#elm1',
-                language: 'zh_CN',
-                language_url: '@static(Weline_Admin::assets/libs/tinymce/langs/zh_CN.js)',
-                height: 300,
-                auto_focus: true,
-                branding: false,
-                contextmenu: 'bold copy ',
-                draggable_modal: true,
-                skin: 'oxide-dark',
-                theme: 'silver',
-                automatic_uploads: true,
-                images_reuse_filename: true,
-                images_upload_url: '@admin-url("dev/tool/admin/document/upload")',
-                images_upload_base_path: '/',
-                plugins: [
-                    'advlist autolink link image lists charmap print preview hr anchor pagebreak spellchecker',
-                    'searchreplace wordcount visualblocks visualchars code fullscreen insertdatetime media nonbreaking',
-                    'save table contextmenu directionality emoticons template paste textcolor'
-                ],
-                toolbar: 'insertfile undo redo | styleselect | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | l      ink image | print preview media fullpage | forecolor backcolor emoticons',
-                style_formats: [
-                    {title: '<?= __('粗体') ?>', inline: 'b'},
-                    {title: '<?= __('红色文字') ?>', inline: 'span', styles: {color: '#ff0000'}},
-                    {title: '<?= __('红色标题') ?>', block: 'h1', styles: {color: '#ff0000'}},
-                    {title: '<?= __('示例1') ?>', inline: 'span', classes: 'example1'},
-                    {title: '<?= __('示例2') ?>', inline: 'span', classes: 'example2'},
-                    {title: '<?= __('表格样式') ?>'},
-                    {title: '<?= __('表格行1') ?>', selector: 'tr', classes: 'tablerow1'}
-                ]
-            });
-        }
-    });
-})();
-</script>
-
-<!-- parsleyjs -->
-<script src='@static(Weline_Admin::assets/libs/parsleyjs/parsley.min.js)'></script>
-<!-- validation init -->
-<script src='@static(Weline_Admin::assets/js/pages/form-validation.init.js)'></script>
-
-<!-- jquery.vectormap map -->
-<script src="@static(Weline_Admin::assets/libs/jqvmap/jquery.vmap.min.js)"></script>
-<script src="@static(Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.usa.js)"></script>
+<script type="module" src="@static(Weline_DeveloperWorkspace::js/document-editor.js)"></script>

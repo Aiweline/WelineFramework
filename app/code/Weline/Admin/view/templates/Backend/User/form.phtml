@@ -9,19 +9,19 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'><lang>用户管理</lang></h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><lang>用户管理</lang></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item">
                         <span><lang>系统</lang></span>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/backend/user/listing')"><lang>管理员</lang></a>
                     </li>
-                    <li class='breadcrumb-item active'>
+                    <li class="w-breadcrumb__item" data-state="active">
                         <if condition='user.user_id'>
                             <lang>编辑</lang>
                             <else/>
@@ -36,16 +36,16 @@
 </div>
 
 <!-- 消息 -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 表单 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>
                         <if condition='w_edit_user.user_id'>
                             <lang>编辑</lang>
@@ -55,7 +55,7 @@
                         系统管理员
                     </lang>
                 </h4>
-                <p class='card-title-desc'>
+                <p class="w-text" data-tone="muted">
                     <lang>
                         <if condition='w_edit_user.user_id'>
                             <lang>编辑</lang>
@@ -65,34 +65,31 @@
                         系统管理员
                     </lang>
                 </p>
-                <w:form id="user-data" class='needs-validation' action="{{action}}" method="post" novalidate>
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='username'><lang>用户名</lang></label>
+                <w:form id="user-data" class="w-form" action="{{action}}" method="post" novalidate>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='username'><lang>用户名</lang></label>
                                 <input type='hidden' name="user_id" value='{{w_edit_user.user_id}}'>
-                                <input type='text' scope="w_user" class='form-control' name="username" id='username'
-                                       placeholder='@lang{请输入用户名}' value='{{w_edit_user.username}}' required>
-                                <div class='valid-feedback'><lang>用户名称验证成功</lang></div>
-                                <div class='invalid-feedback'><lang>请输入用户名称</lang></div>
+                                <input type='text' scope="w_user" class="w-input" name="username" id='username' placeholder='@lang{请输入用户名}' value='{{w_edit_user.username}}' required>
+                                <div class="w-field__hint"><lang>用户名称验证成功</lang></div>
+                                <div class="w-field__error"><lang>请输入用户名称</lang></div>
                             </div>
-                            <div class='mb-3'>
-                                <label class='form-label' for='email'><lang>邮箱</lang></label>
-                                <input type='text' scope="w_user" class='form-control' name="email" id='email'
-                                       placeholder='@lang{请输入邮箱}' value='{{w_edit_user.email}}' required>
-                                <div class='valid-feedback'><lang>邮箱验证成功</lang></div>
-                                <div class='invalid-feedback'><lang>请输入用户邮箱</lang></div>
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='email'><lang>邮箱</lang></label>
+                                <input type='text' scope="w_user" class="w-input" name="email" id='email' placeholder='@lang{请输入邮箱}' value='{{w_edit_user.email}}' required>
+                                <div class="w-field__hint"><lang>邮箱验证成功</lang></div>
+                                <div class="w-field__error"><lang>请输入用户邮箱</lang></div>
                             </div>
-                            <div class='mb-3'>
-                                <label class='form-label' for='password'><lang>密码</lang></label>
-                                <input type='password' scope="w_user" class='form-control' name="password" id='password'
-                                       placeholder='@lang{请输入密码}' value='' required>
-                                <div class='valid-feedback'><lang>密码输入验证成功</lang></div>
-                                <div class='invalid-feedback'><lang>请输入用户密码</lang></div>
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='password'><lang>密码</lang></label>
+                                <input type='password' scope="w_user" class="w-input" name="password" id='password' placeholder='@lang{请输入密码}' value='' required>
+                                <div class="w-field__hint"><lang>密码输入验证成功</lang></div>
+                                <div class="w-field__error"><lang>请输入用户密码</lang></div>
                             </div>
                         </div>
                     </div>
-                    <button type='submit' class='btn btn-primary'><lang>提交</lang></button>
+                    <button type='submit' class="w-button" data-tone="primary"><lang>提交</lang></button>
                 </w:form>
             </div>
         </div>

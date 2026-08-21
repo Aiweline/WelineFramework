@@ -1,244 +1,106 @@
 <?php
 /**
- * Layout: default.
- *
- * A safe Theme-owned shell for generic frontend pages. Real modules can inject
- * content through hooks, slots, meta.content, content, or contentTemplate.
- *
- * @meta.name {default="Default Layout",name="Default Layout",description="Header, content, optional sidebars, footer"}
- * @param.title {default="Weline",name="Page Title",description="Page title"}
- * @param.content {default="",name="Content HTML",description="Main page content"}
- * @param.showHeader {default=true,name="Show Header",description="Whether to render header"}
- * @param.showFooter {default=true,name="Show Footer",description="Whether to render footer"}
- * @param.class {default="",name="Extra CSS class",description="Extra CSS class"}
+ * @meta.name {default="Weline UI 2.0 前台默认布局",name="Weline UI 2.0 前台默认布局"}
+ * @meta.description {default="Native frontend shell with explicit resources and slots.",name="自研前台壳层"}
+ * @param.title {default="Weline",name="页面标题"}
+ * @param.content {default="",name="主要内容"}
+ * @param.showHeader {default=true,name="显示顶部"}
+ * @param.showFooter {default=true,name="显示页脚"}
+ * @param.class {default="",name="额外 Weline CSS 类"}
  */
-
-$meta = $this->getData('meta') ?? [];
-$class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
+/** @var \Weline\Framework\View\Template $this */
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$showHeader = ($meta['showHeader'] ?? true) !== false;
+$showFooter = ($meta['showFooter'] ?? true) !== false;
 $rawContent = (string)($this->getData('meta.content') ?: $this->getData('content') ?: ($meta['content'] ?? ''));
 $contentTemplate = (string)($this->getData('meta.contentTemplate') ?: ($meta['contentTemplate'] ?? ''));
-$contentWithoutPreviewPlaceholder = trim((string)preg_replace(
-    '/<div\s+class="weline-theme-preview-content"\s+data-theme-preview-content="1"\s*><\/div>/i',
-    '',
-    $rawContent
+$extraClasses = array_values(array_filter(
+    preg_split('/\s+/', trim((string)($meta['class'] ?? ''))) ?: [],
+    static fn(string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1
 ));
-$hasRealContent = $contentWithoutPreviewPlaceholder !== '';
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-w-area="frontend" data-theme-preference="system" data-theme="light">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
-    <style data-theme-inline="layout-default">
-        .theme-layout-default .default-layout__main {
-            padding: clamp(var(--weline-layout-spacing-lg), 4vw, var(--weline-layout-spacing-3xl)) 0;
-        }
-
-        .theme-layout-default .default-layout__grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            gap: var(--weline-layout-spacing-lg);
-            align-items: start;
-        }
-
-        .theme-layout-default.has-left-sidebar .default-layout__grid {
-            grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-        }
-
-        .theme-layout-default.has-right-sidebar .default-layout__grid {
-            grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
-        }
-
-        .theme-layout-default.has-left-sidebar.has-right-sidebar .default-layout__grid {
-            grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(180px, 240px);
-        }
-
-        .default-layout__content {
-            min-width: 0;
-        }
-
-        .default-layout__fallback {
-            display: grid;
-            gap: var(--weline-layout-spacing-lg);
-            padding: clamp(var(--weline-layout-spacing-xl), 5vw, var(--weline-layout-spacing-3xl));
-        }
-
-        .default-layout__fallback h1 {
-            margin: 0;
-            font-size: clamp(var(--weline-layout-font-size-4xl), 5vw, calc(var(--weline-layout-font-size-4xl) * 1.7));
-            line-height: var(--weline-layout-line-height-tight);
-            letter-spacing: 0;
-        }
-
-        .default-layout__fallback p {
-            max-width: 660px;
-            margin: 0;
-            color: var(--weline-theme-text-muted);
-            font-size: var(--weline-layout-font-size-lg);
-        }
-
-        .default-layout__fallback-actions {
-            display: flex;
-            gap: var(--weline-layout-spacing-sm);
-            flex-wrap: wrap;
-            margin-top: var(--weline-layout-spacing-sm);
-        }
-
-        .default-layout__content-slot > .weline-theme-preview-content:empty {
-            display: none;
-        }
-
-        .default-layout__content:has(.default-layout__content-slot > :not(.weline-theme-preview-content):not(.slot-toolbar):not(.editor-insert-indicator)) .default-layout__fallback--empty-slot,
-        .default-layout__content:has(.default-layout__content-slot > .weline-theme-preview-content:not(:empty)) .default-layout__fallback--empty-slot {
-            display: none;
-        }
-
-        .default-layout__sidebar {
-            min-height: 160px;
-        }
-
-        @media (max-width: 920px) {
-            .theme-layout-default.has-left-sidebar .default-layout__grid,
-            .theme-layout-default.has-right-sidebar .default-layout__grid,
-            .theme-layout-default.has-left-sidebar.has-right-sidebar .default-layout__grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="theme-layout-default <?= $class ?>">
+<body id="top">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::body-start</w:hook>
 
-    <div class="weline-page-wrapper">
-        <w:slot id="page-top"
-                name="Page top"
-                accept="layout-page-top,announcement,banner,content"
-                multiple="true"
-                append="true"
-                position="content"
-                class="default-layout__page-top">
+    <div class="w-frontend-shell <?= htmlspecialchars(implode(' ', $extraClasses), ENT_QUOTES, 'UTF-8') ?>">
+        <w:slot id="page-top" name="Page top" accept="layout-page-top,announcement,banner,content" multiple="true" append="true" position="content" class="w-frontend-page-top">
             <w:hook>Weline_Theme::frontend::layouts::default::page-top</w:hook>
         </w:slot>
 
-        <if condition="meta.showHeader">
+        <?php if ($showHeader): ?>
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
-        </if>
+        <?php endif; ?>
 
         <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
         <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
         <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
 
-        <main class="weline-main-content default-layout__main" id="main-content" data-layout="default">
-            <div class="weline-container">
-                <w:slot id="content-before"
-                        name="Content before"
-                        accept="layout-content-before,layout-default-before,banner,content,container"
-                        multiple="true"
-                        append="true"
-                        position="content"
-                        class="default-layout__content-before">
+        <main class="w-frontend-main" id="main-content" data-layout="default">
+            <div class="w-container w-frontend-page">
+                <w:slot id="content-before" name="Content before" accept="layout-content-before,layout-default-before,banner,content,container" multiple="true" append="true" position="content" class="w-frontend-content-before">
                     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
                     <w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>
                 </w:slot>
 
-                <div class="default-layout__grid">
-                    <w:slot id="sidebar-left"
-                            name="Left sidebar"
-                            accept="layout-sidebar,sidebar,filter,navigation,content"
-                            multiple="true"
-                            position="sidebar"
-                            class="default-layout__sidebar default-layout__sidebar--left">
+                <div class="w-frontend-content-grid">
+                    <w:slot id="sidebar-left" name="Left sidebar" accept="layout-sidebar,sidebar,filter,navigation,content" multiple="true" position="sidebar" class="w-frontend-sidebar">
                         <w:hook>Weline_Theme::frontend::layouts::default::sidebar-left</w:hook>
                     </w:slot>
 
-                    <w:slot id="content"
-                            name="Content"
-                            accept="layout-default-content,content,container,banner,carousel,product,category,faq,video"
-                            reject="header,footer"
-                            multiple="true"
-                            position="content"
-                            class="default-layout__content">
-                        <w:slot id="default-content"
-                                name="Default content"
-                                accept="layout-default-content,content,banner,carousel,product,category,faq,video"
-                                reject="header,footer"
-                                multiple="true"
-                                position="content"
-                                class="default-layout__content-slot">
-                            <w:hook>
-                                Weline_Theme::frontend::layouts::default::content
-                                <else/>
-                                                        <?php if ($hasRealContent): ?>
+                    <w:slot id="content" name="Content" accept="layout-default-content,content,container,banner,carousel,product,category,faq,video" reject="header,footer" multiple="true" position="content" class="w-frontend-content">
+                        <w:hook>
+                            Weline_Theme::frontend::layouts::default::content
+                            <else/>
+                            <?php if (trim($rawContent) !== ''): ?>
                                 <?= $rawContent ?>
                             <?php elseif ($contentTemplate !== ''): ?>
-                                <?php echo $this->fetch($contentTemplate); ?>
+                                <?= $this->fetch($contentTemplate) ?>
                             <?php else: ?>
-                                <section class="weline-layout-surface default-layout__fallback" weline-code="theme.default.section_1">
-                                    <h1><?= htmlspecialchars((string)($meta['title'] ?? __('Weline 默认页面')), ENT_QUOTES, 'UTF-8') ?></h1>
-                                    <p><?= __('这个页面已经预留模块内容、可视化布局部件和控制器输出的接入位置。') ?></p>
-                                    <div class="default-layout__fallback-actions">
-                                        <a class="weline-button" href="/"><?= __('返回首页') ?></a>
-                                        <a class="weline-button weline-button--ghost" href="/contact"><?= __('联系我们') ?></a>
+                                <section class="w-card w-empty-state" weline-code="theme.layouts.default.empty_state">
+                                    <div class="w-card__body w-stack">
+                                        <h1><?= htmlspecialchars((string)($meta['title'] ?? __('Weline 默认页面')), ENT_QUOTES, 'UTF-8') ?></h1>
+                                        <p><?= htmlspecialchars((string)__('该页面尚未提供内容。'), ENT_QUOTES, 'UTF-8') ?></p>
+                                        <div class="w-cluster"><a class="w-button" href="/"><?= htmlspecialchars((string)__('返回首页'), ENT_QUOTES, 'UTF-8') ?></a></div>
                                     </div>
                                 </section>
                             <?php endif; ?>
-                            </w:hook>
-                        </w:slot>
-                        <section class="weline-layout-surface default-layout__fallback default-layout__fallback--empty-slot" weline-code="theme.default.section_2">
-                            <h1><?= htmlspecialchars((string)($meta['title'] ?? __('Weline 默认页面')), ENT_QUOTES, 'UTF-8') ?></h1>
-                            <p><?= __('这个页面已经预留模块内容、可视化布局部件和控制器输出的接入位置。') ?></p>
-                            <div class="default-layout__fallback-actions">
-                                <a class="weline-button" href="/"><?= __('返回首页') ?></a>
-                                <a class="weline-button weline-button--ghost" href="/contact"><?= __('联系我们') ?></a>
-                            </div>
-                        </section>
+                        </w:hook>
                     </w:slot>
 
-                    <w:slot id="sidebar-right"
-                            name="Right sidebar"
-                            accept="layout-sidebar,sidebar,filter,navigation,content"
-                            multiple="true"
-                            position="sidebar"
-                            class="default-layout__sidebar default-layout__sidebar--right">
+                    <w:slot id="sidebar-right" name="Right sidebar" accept="layout-sidebar,sidebar,filter,navigation,content" multiple="true" position="sidebar" class="w-frontend-sidebar">
                         <w:hook>Weline_Theme::frontend::layouts::default::sidebar-right</w:hook>
                     </w:slot>
                 </div>
 
-                <w:slot id="content-after"
-                        name="Content after"
-                        accept="layout-content-after,layout-default-after,banner,content,container"
-                        multiple="true"
-                        append="true"
-                        position="content"
-                        class="default-layout__content-after">
+                <w:slot id="content-after" name="Content after" accept="layout-content-after,layout-default-after,banner,content,container" multiple="true" append="true" position="content" class="w-frontend-content-after">
                     <w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
                     <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
                 </w:slot>
             </div>
         </main>
 
-        <w:slot id="page-bottom"
-                name="Page bottom"
-                accept="layout-page-bottom,announcement,banner,content"
-                multiple="true"
-                append="true"
-                position="content"
-                class="default-layout__page-bottom">
-            <w:hook>Weline_Theme::frontend::layouts::default::page-bottom</w:hook>
-        </w:slot>
-
-        <if condition="meta.showFooter">
+        <?php if ($showFooter): ?>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
-        </if>
+        <?php endif; ?>
+
+        <w:slot id="page-bottom" name="Page bottom" accept="layout-page-bottom,announcement,banner,content" multiple="true" append="true" position="content" class="w-frontend-page-bottom">
+            <w:hook>Weline_Theme::frontend::layouts::default::page-bottom</w:hook>
+        </w:slot>
     </div>
 
     <w:hook>Weline_Theme::frontend::layouts::default::body-end</w:hook>

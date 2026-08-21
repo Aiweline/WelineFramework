@@ -258,25 +258,25 @@ $statusText = match($status) {
 </style>
 
 <!-- start page message -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 <!-- end message -->
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card weline-queue-detail'>
-            <div class='card-body'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card weline-queue-detail">
+            <div class="w-card__body">
                 <!-- Header -->
                 <div class="weline-queue-detail-header">
                     <div class="weline-queue-detail-icon weline-queue-detail-icon--<?= $statusClass ?>">
                         <?php
                         $iconClass = match($status) {
-                            'running' => 'mdi-loading mdi-spin',
-                            'done' => 'mdi-check-circle',
-                            'error' => 'mdi-alert-circle',
-                            'stop' => 'mdi-pause-circle',
-                            default => 'mdi-clock-outline',
+                            'running' => 'circle pin',
+                            'done' => 'check',
+                            'error' => 'warning',
+                            'stop' => 'pause',
+                            default => 'clock',
                         };
                         ?>
                         <i class="mdi <?= $iconClass ?>"></i>
@@ -291,11 +291,11 @@ $statusText = match($status) {
                     <span class="weline-queue-detail-status weline-queue-detail-status--<?= $statusClass ?>">
                         <?php
                         $statusIcon = match($status) {
-                            'running' => 'mdi-loading mdi-spin',
-                            'done' => 'mdi-check-circle',
-                            'error' => 'mdi-alert-circle',
-                            'stop' => 'mdi-pause-circle',
-                            default => 'mdi-clock-outline',
+                            'running' => 'circle pin',
+                            'done' => 'check',
+                            'error' => 'warning',
+                            'stop' => 'pause',
+                            default => 'clock',
                         };
                         ?>
                         <i class="mdi <?= $statusIcon ?>"></i>
@@ -306,13 +306,13 @@ $statusText = match($status) {
                 <!-- Basic Info Section -->
                 <div class="weline-queue-detail-section">
                     <div class="weline-queue-detail-section-title">
-                        <i class="mdi mdi-information-outline"></i>
+                        <w:icon name="info" size="sm"></w:icon>
                         <lang>基本信息</lang>
                     </div>
                     <div class="weline-queue-detail-grid">
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-identifier"></i>
+                                <w:icon name="tag" size="sm"></w:icon>
                                 <lang>队列 ID</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -322,7 +322,7 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-key-variant"></i>
+                                <w:icon name="key" size="sm"></w:icon>
                                 <lang>业务键</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -336,7 +336,7 @@ $statusText = match($status) {
 
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-cog-outline"></i>
+                                <w:icon name="settings" size="sm"></w:icon>
                                 <lang>进程 ID</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -350,7 +350,7 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-clock-start"></i>
+                                <w:icon name="star" size="sm"></w:icon>
                                 <lang>开始时间</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -364,7 +364,7 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-clock-end"></i>
+                                <w:icon name="clock" size="sm"></w:icon>
                                 <lang>结束时间</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -378,7 +378,7 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-calendar-plus"></i>
+                                <w:icon name="plus" size="sm"></w:icon>
                                 <lang>创建时间</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -388,7 +388,7 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-calendar-sync"></i>
+                                <w:icon name="refresh" size="sm"></w:icon>
                                 <lang>更新时间</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -398,18 +398,18 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-check-decagram"></i>
+                                <w:icon name="check" size="sm"></w:icon>
                                 <lang>是否结束</lang>
                             </div>
                             <div class="weline-queue-detail-value">
                                 <if condition="queue.finished">
                                     <span class="weline-queue-detail-badge weline-queue-detail-badge--yes">
-                                        <i class="mdi mdi-check"></i>
+                                        <w:icon name="check" size="sm"></w:icon>
                                         <lang>已结束</lang>
                                     </span>
                                 <else/>
                                     <span class="weline-queue-detail-badge weline-queue-detail-badge--no">
-                                        <i class="mdi mdi-clock-outline"></i>
+                                        <w:icon name="clock" size="sm"></w:icon>
                                         <lang>未结束</lang>
                                     </span>
                                 </if>
@@ -418,18 +418,18 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-brightness-auto"></i>
+                                <w:icon name="tag" size="sm"></w:icon>
                                 <lang>自动运行</lang>
                             </div>
                             <div class="weline-queue-detail-value">
                                 <if condition="queue.auto">
                                     <span class="weline-queue-detail-badge weline-queue-detail-badge--yes">
-                                        <i class="mdi mdi-check"></i>
+                                        <w:icon name="check" size="sm"></w:icon>
                                         <lang>是</lang>
                                     </span>
                                 <else/>
                                     <span class="weline-queue-detail-badge weline-queue-detail-badge--no">
-                                        <i class="mdi mdi-close"></i>
+                                        <w:icon name="close" size="sm"></w:icon>
                                         <lang>否</lang>
                                     </span>
                                 </if>
@@ -441,13 +441,13 @@ $statusText = match($status) {
                 <!-- Type Info Section -->
                 <div class="weline-queue-detail-section">
                     <div class="weline-queue-detail-section-title">
-                        <i class="mdi mdi-cog-sync-outline"></i>
+                        <w:icon name="settings" size="sm"></w:icon>
                         <lang>类型信息</lang>
                     </div>
                     <div class="weline-queue-detail-grid">
                         <div class="weline-queue-detail-item">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-tag-outline"></i>
+                                <w:icon name="circle" size="sm"></w:icon>
                                 <lang>队列类型</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -457,7 +457,7 @@ $statusText = match($status) {
                         
                         <div class="weline-queue-detail-item weline-queue-detail-item--full">
                             <div class="weline-queue-detail-label">
-                                <i class="mdi mdi-code-braces"></i>
+                                <w:icon name="code" size="sm"></w:icon>
                                 <lang>执行类</lang>
                             </div>
                             <div class="weline-queue-detail-value">
@@ -467,9 +467,9 @@ $statusText = match($status) {
                     </div>
                     
                     <notempty name="queue.tip">
-                        <div class="weline-queue-detail-tip mt-3">
+                        <div class="weline-queue-detail-tip" style="--w-mt:var(--weline-space-4);">
                             <div class="weline-queue-detail-tip-title">
-                                <i class="mdi mdi-lightbulb-outline"></i>
+                                <w:icon name="circle" size="sm"></w:icon>
                                 <lang>执行注意事项</lang>
                             </div>
                             <div>{{queue.tip}}</div>
@@ -480,14 +480,14 @@ $statusText = match($status) {
                 <!-- Result Section -->
                 <div class="weline-queue-detail-section">
                     <div class="weline-queue-detail-section-title">
-                        <i class="mdi mdi-text-box-outline"></i>
+                        <w:icon name="box" size="sm"></w:icon>
                         <lang>运行结果</lang>
                     </div>
                     <notempty name="queue.result">
                         <div class="weline-queue-detail-result">{{queue.result}}</div>
                     <else/>
                         <div class="weline-queue-detail-result" style="color: var(--backend-color-text-tertiary, #adb5bd); text-align: center; padding: 40px;">
-                            <i class="mdi mdi-text-box-remove-outline" style="font-size: 2rem; display: block; margin-bottom: 8px;"></i>
+                            <w:icon name="minus" size="sm"></w:icon>
                             <lang>暂无运行结果</lang>
                         </div>
                     </notempty>
@@ -497,7 +497,7 @@ $statusText = match($status) {
                 <notempty name="queue.data">
                     <div class="weline-queue-detail-section">
                         <div class="weline-queue-detail-section-title">
-                            <i class="mdi mdi-format-list-bulleted"></i>
+                            <w:icon name="list" size="sm"></w:icon>
                             <lang>队列参数</lang>
                         </div>
                         <div class="weline-queue-detail-attrs">

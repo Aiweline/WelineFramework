@@ -43,8 +43,8 @@ $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, '
             <thead>
             <tr>
                 <th><?= __('步骤') ?></th>
-                <th class="text-end"><?= __('会话') ?></th>
-                <th class="text-end"><?= __('占比') ?></th>
+                <th class="w-text" data-align="end"><?= __('会话') ?></th>
+                <th class="w-text" data-align="end"><?= __('占比') ?></th>
             </tr>
             </thead>
             <tbody>
@@ -52,8 +52,8 @@ $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, '
                 <?php $rate = (float)($step['rate_from_step1'] ?? 0); ?>
                 <tr>
                     <th><?= $h(__((string)($step['label'] ?? $step['key'] ?? ''))) ?></th>
-                    <td class="text-end"><?= $h($service->formatNumber($step['sessions'] ?? 0)) ?></td>
-                    <td class="text-end"><?= $h($service->formatPercent($rate * 100)) ?></td>
+                    <td class="w-text" data-align="end"><?= $h($service->formatNumber($step['sessions'] ?? 0)) ?></td>
+                    <td class="w-text" data-align="end"><?= $h($service->formatPercent($rate * 100)) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

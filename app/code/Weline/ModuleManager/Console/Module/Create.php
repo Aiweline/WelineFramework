@@ -519,7 +519,7 @@ class Create extends CommandAbstract
             }
             
             // 类级别Acl的icon（可选）
-            $this->printer->note(__('请输入类级别Acl的图标（可选，例如：mdi mdi-home，留空则不设置）'));
+            $this->printer->note(__('请输入类级别Acl的图标（可选，例如：home，留空则不设置）'));
             $classAclIcon = trim($this->system->input());
             
             // 类级别Acl的文档（可选）
@@ -548,7 +548,7 @@ class Create extends CommandAbstract
             }
             
             // 方法级别Acl的icon（可选）
-            $this->printer->note(__('请输入方法级别Acl的图标（可选，例如：mdi mdi-list，留空则不设置）'));
+            $this->printer->note(__('请输入方法级别Acl的图标（可选，例如：list，留空则不设置）'));
             $methodAclIcon = trim($this->system->input());
             
             // 方法级别Acl的文档（可选）
@@ -2149,20 +2149,20 @@ HTML;
 </head>
 <body>
     <div class="page-content">
-        <div class="container-fluid">
-            <div class="row">
-                <div class="col-12">
-                    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                        <h4 class="mb-sm-0">{$controllerName}</h4>
+        <div class="w-container">
+            <div class="w-grid">
+                <div style="--w-span:12;">
+                    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                        <h4 style="--w-mb-sm:0;">{$controllerName}</h4>
                     </div>
                 </div>
             </div>
-            <div class="row">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">欢迎使用 {$controllerName}</h5>
-                            <p class="card-text">这是 {$controllerName} 控制器的默认视图模板。</p>
+            <div class="w-grid">
+                <div style="--w-span:12;">
+                    <div class="w-card">
+                        <div class="w-card__body">
+                            <h5 class="w-card__title">欢迎使用 {$controllerName}</h5>
+                            <p class="w-text" data-tone="muted">这是 {$controllerName} 控制器的默认视图模板。</p>
                         </div>
                     </div>
                 </div>
@@ -2185,7 +2185,7 @@ HTML;
     @template(Weline_Frontend::templates/public/header.phtml)
     
     <main class="main-content">
-        <div class="container">
+        <div class="w-container">
             <h1>欢迎使用 {$controllerName}</h1>
             <p>这是 {$controllerName} 控制器的默认视图模板。</p>
         </div>
@@ -3188,7 +3188,7 @@ MD;
                     
                     // 如果图标为空，询问是否输入
                     if (empty($icon)) {
-                        $this->printer->note(__('请输入图标类名（例如：mdi mdi-home，留空则不设置）'));
+                        $this->printer->note(__('请输入图标类名（例如：home，留空则不设置）'));
                         $icon = trim($this->system->input());
                     }
                 }
@@ -3217,7 +3217,7 @@ MD;
         
         // 5. 输入图标（如果还没有）
         if (empty($icon)) {
-            $this->printer->note(__('请输入图标类名（例如：mdi mdi-home，留空则不设置）'));
+            $this->printer->note(__('请输入图标类名（例如：home，留空则不设置）'));
             $icon = trim($this->system->input());
         }
         

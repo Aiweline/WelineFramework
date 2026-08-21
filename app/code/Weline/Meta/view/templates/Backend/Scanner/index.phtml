@@ -20,66 +20,66 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
     }
 </style>
 
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('元数据扫描器') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="<?= $backToList ?>"><?= __('元数据管理') ?></a></li>
-                    <li class="breadcrumb-item active"><?= __('扫描器') ?></li>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('元数据扫描器') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><a href="<?= $backToList ?>"><?= __('元数据管理') ?></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('扫描器') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="row g-4 mb-4">
-    <div class="col-xl-4 col-md-6">
-        <div class="card border shadow-sm h-100">
-            <div class="card-body d-flex">
-                <div class="scan-card-icon bg-soft-primary d-flex align-items-center justify-content-center me-3">
-                    <i class="mdi mdi-radar text-primary fs-3"></i>
+<div class="w-grid" style="--w-gap:var(--weline-space-6);--w-mb:var(--weline-space-6);">
+    <div style="--w-span-lg:4;--w-span-md:6;">
+        <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
+            <div class="w-card__body w-cluster">
+                <div class="scan-card-icon me-3 w-cluster" data-w-background="primary" data-align="center" data-justify="center">
+                    <w:icon name="search" size="sm"></w:icon>
                 </div>
                 <div>
                     <h5><?= __('事件扫描') ?></h5>
-                    <p class="text-muted mb-0 small">
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
                         <?= __('触发 Weline_Meta::scan_path 事件，允许其他模块接管扫描逻辑。适合批量任务。') ?>
                     </p>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-xl-4 col-md-6">
-        <div class="card border shadow-sm h-100">
-            <div class="card-body d-flex">
-                <div class="scan-card-icon bg-soft-success d-flex align-items-center justify-content-center me-3">
-                    <i class="mdi mdi-ray-start-arrow text-success fs-3"></i>
+    <div style="--w-span-lg:4;--w-span-md:6;">
+        <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
+            <div class="w-card__body w-cluster">
+                <div class="scan-card-icon me-3 w-cluster" data-w-background="success" data-align="center" data-justify="center">
+                    <w:icon name="star" size="sm"></w:icon>
                 </div>
                 <div>
                     <h5><?= __('直接扫描') ?></h5>
-                    <p class="text-muted mb-0 small">
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
                         <?= __('直接使用服务类解析 PHTML 文件，实时返回成功/失败结果。') ?>
                     </p>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-xl-4 col-md-12">
-        <div class="card border shadow-sm h-100">
-            <div class="card-body d-flex">
-                <div class="scan-card-icon bg-soft-warning d-flex align-items-center justify-content-center me-3">
-                    <i class="mdi mdi-information-outline text-warning fs-3"></i>
+    <div style="--w-span-lg:4;--w-span-md:12;">
+        <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
+            <div class="w-card__body w-cluster">
+                <div class="scan-card-icon me-3 w-cluster" data-w-background="warning" data-align="center" data-justify="center">
+                    <w:icon name="info" size="sm"></w:icon>
                 </div>
                 <div>
                     <h5><?= __('使用提示') ?></h5>
-                    <ul class="text-muted small ps-3 mb-0">
+                    <ul class="w-text ps-3" data-tone="muted" data-size="sm" style="--w-mb:0;">
                         <li><?= __('扫描路径格式：Module::path，例如 Weline_Theme::view/theme') ?></li>
                         <li><?= __('命名空间将写入 w_meta.namespace 字段') ?></li>
                         <li><?= __('严格模式下缺少关键字段会直接中断') ?></li>
@@ -90,96 +90,91 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
     </div>
 </div>
 
-<div class="row g-4">
-    <div class="col-xl-6">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between mb-3">
+<div class="w-grid" style="--w-gap:var(--weline-space-6);">
+    <div style="--w-span-lg:6;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
                     <div>
-                        <h4 class="card-title mb-1"><?= __('触发事件扫描') ?></h4>
-                        <p class="text-muted mb-0 small">
+                        <h4 class="w-card__title" style="--w-mb:var(--weline-space-1);"><?= __('触发事件扫描') ?></h4>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
                             <?= __('由事件监听者负责消费扫描任务，适合在线队列或自定义处理。') ?>
                         </p>
                     </div>
-                    <span class="badge bg-light text-dark"><?= __('异步/队列友好') ?></span>
+                    <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('异步/队列友好') ?></span>
                 </div>
-                <w:form action="@var($scanAction)" method="post" class="needs-validation" novalidate>
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('扫描路径') ?></label>
-                        <input type="text" class="form-control" required name="scan_path"
-                               value="<?= htmlspecialchars($defaultPath) ?>"
-                               placeholder="Weline_Theme::view/theme/frontend/components">
-                        <div class="invalid-feedback"><?= __('请输入合法路径') ?></div>
+                <w:form action="@var($scanAction)" method="post" class="w-form" novalidate>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('扫描路径') ?></label>
+                        <input type="text" class="w-input" required name="scan_path" value="<?= htmlspecialchars($defaultPath) ?>" placeholder="Weline_Theme::view/theme/frontend/components">
+                        <div class="w-field__error"><?= __('请输入合法路径') ?></div>
                     </div>
-                    <div class="row g-3">
-                        <div class="col-md-7">
-                            <label class="form-label"><?= __('命名空间') ?></label>
-                            <input type="text" class="form-control" name="namespace"
-                                   value="<?= htmlspecialchars($defaultNamespace) ?>" required>
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:7;">
+                            <label class="w-field__label"><?= __('命名空间') ?></label>
+                            <input type="text" class="w-input" name="namespace" value="<?= htmlspecialchars($defaultNamespace) ?>" required>
                         </div>
-                        <div class="col-md-5">
-                            <label class="form-label"><?= __('严格模式') ?></label>
-                            <select class="form-select" name="strict_mode">
+                        <div style="--w-span-md:5;">
+                            <label class="w-field__label"><?= __('严格模式') ?></label>
+                            <select class="w-select" name="strict_mode">
                                 <option value="1" <?= $strictMode ? 'selected' : '' ?>><?= __('开启') ?></option>
                                 <option value="0" <?= !$strictMode ? 'selected' : '' ?>><?= __('关闭') ?></option>
                             </select>
                         </div>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mt-4">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="ri-radar-line me-1"></i><?= __('提交扫描任务') ?>
+                    <div class="w-cluster" data-justify="between" data-align="center" style="--w-mt:var(--weline-space-6);">
+                        <button type="submit" class="w-button" data-tone="primary">
+                            <w:icon name="search" size="sm"></w:icon><?= __('提交扫描任务') ?>
                         </button>
-                        <a href="<?= $backToList ?>" class="btn btn-link text-muted">
-                            <i class="ri-arrow-left-line me-1"></i><?= __('返回列表') ?>
+                        <a href="<?= $backToList ?>" class="w-button w-text" data-tone="muted">
+                            <w:icon name="arrow-left" size="sm"></w:icon><?= __('返回列表') ?>
                         </a>
                     </div>
                 </w:form>
             </div>
         </div>
     </div>
-    <div class="col-xl-6">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between mb-3">
+    <div style="--w-span-lg:6;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
                     <div>
-                        <h4 class="card-title mb-1"><?= __('立即扫描并返回结果') ?></h4>
-                        <p class="text-muted mb-0 small"><?= __('适合调试阶段快速验证 @meta 标记是否生效。') ?></p>
+                        <h4 class="w-card__title" style="--w-mb:var(--weline-space-1);"><?= __('立即扫描并返回结果') ?></h4>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><?= __('适合调试阶段快速验证 @meta 标记是否生效。') ?></p>
                     </div>
-                    <span class="badge bg-soft-success text-success"><?= __('实时结果') ?></span>
+                    <span class="w-badge w-text" data-w-background="success" data-tone="success"><?= __('实时结果') ?></span>
                 </div>
-                <w:form action="@var($directAction)" method="post" class="needs-validation" novalidate>
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('扫描路径') ?></label>
-                        <input type="text" class="form-control" required name="scan_path"
-                               value="<?= htmlspecialchars($defaultPath) ?>">
-                        <div class="invalid-feedback"><?= __('请输入合法路径') ?></div>
+                <w:form action="@var($directAction)" method="post" class="w-form" novalidate>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('扫描路径') ?></label>
+                        <input type="text" class="w-input" required name="scan_path" value="<?= htmlspecialchars($defaultPath) ?>">
+                        <div class="w-field__error"><?= __('请输入合法路径') ?></div>
                     </div>
-                    <div class="row g-3">
-                        <div class="col-md-7">
-                            <label class="form-label"><?= __('命名空间') ?></label>
-                            <input type="text" class="form-control" name="namespace"
-                                   value="<?= htmlspecialchars($defaultNamespace) ?>" required>
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:7;">
+                            <label class="w-field__label"><?= __('命名空间') ?></label>
+                            <input type="text" class="w-input" name="namespace" value="<?= htmlspecialchars($defaultNamespace) ?>" required>
                         </div>
-                        <div class="col-md-5">
-                            <label class="form-label"><?= __('严格模式') ?></label>
-                            <select class="form-select" name="strict_mode">
+                        <div style="--w-span-md:5;">
+                            <label class="w-field__label"><?= __('严格模式') ?></label>
+                            <select class="w-select" name="strict_mode">
                                 <option value="1"><?= __('开启（严格）') ?></option>
                                 <option value="0"><?= __('关闭（宽松）') ?></option>
                             </select>
                         </div>
                     </div>
-                    <div class="alert alert-info d-flex align-items-center mt-3" role="alert">
-                        <i class="ri-information-line fs-4 me-2"></i>
+                    <div class="w-alert w-cluster" role="alert" data-align="center" data-tone="info" style="--w-mt:var(--weline-space-4);">
+                        <w:icon name="info" size="sm"></w:icon>
                         <div>
                             <?= __('直接扫描会立即解析所有 PHTML 文件，并展示成功/失败清单。执行时间与文件数量相关。') ?>
                         </div>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mt-4">
-                        <button type="submit" class="btn btn-success">
-                            <i class="ri-play-circle-line me-1"></i><?= __('立即扫描') ?>
+                    <div class="w-cluster" data-justify="between" data-align="center" style="--w-mt:var(--weline-space-6);">
+                        <button type="submit" class="w-button" data-tone="success">
+                            <w:icon name="play" size="sm"></w:icon><?= __('立即扫描') ?>
                         </button>
-                        <a href="<?= $backToList ?>" class="btn btn-link text-muted">
-                            <i class="ri-database-2-line me-1"></i><?= __('查看元数据') ?>
+                        <a href="<?= $backToList ?>" class="w-button w-text" data-tone="muted">
+                            <w:icon name="database" size="sm"></w:icon><?= __('查看元数据') ?>
                         </a>
                     </div>
                 </w:form>

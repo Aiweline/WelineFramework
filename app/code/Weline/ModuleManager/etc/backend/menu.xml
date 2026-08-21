@@ -5,5 +5,5 @@
     
     <!-- 模组管理 - 归入开发者 > 模组管理 -->
     <menu source="Weline_ModuleManager::module-manager" name="module-manager" title="已安装模块" action="module-manager/backend/listing"
-          parent="Weline_Backend::module_group" icon="mdi mdi-package-variant-closed" order="10" is_backend="1"/>
+          parent="Weline_Backend::module_group" icon="close" order="10" is_backend="1"/>
 </menus>

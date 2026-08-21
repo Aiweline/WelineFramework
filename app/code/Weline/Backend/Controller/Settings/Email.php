@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理邮件相关配置
  */
-#[Acl('Weline_Backend::email_settings', '邮件设置', 'mdi-email', '邮件设置', 'Weline_Backend::system_config_group')]
+#[Acl('Weline_Backend::email_settings', '邮件设置', 'mail', '邮件设置', 'Weline_Backend::system_config_group')]
 class Email extends BackendController
 {
     /**
@@ -21,7 +21,7 @@ class Email extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::email_settings_index', '查看邮件设置', 'mdi-email', '查看邮件设置')]
+    #[Acl('Weline_Backend::email_settings_index', '查看邮件设置', 'mail', '查看邮件设置')]
     public function index(): string
     {
         try {
@@ -44,7 +44,7 @@ class Email extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::email_settings_save', '保存邮件设置', 'mdi-content-save', '保存邮件设置')]
+    #[Acl('Weline_Backend::email_settings_save', '保存邮件设置', 'save', '保存邮件设置')]
     public function save(): string
     {
         if (!$this->isPost()) {

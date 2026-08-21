@@ -17,29 +17,29 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0"><?= __('域名商账号管理') ?></h5>
-    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#accountFormModal" data-domain-account-action="reset">
-        <i class="mdi mdi-plus me-1"></i><?= __('添加账号') ?>
+<div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
+    <h5 style="--w-mb:0;"><?= __('域名商账号管理') ?></h5>
+    <button type="button" class="w-button" data-domain-account-action="reset" data-w-target="#accountFormModal" data-w-action="dialog.open" data-tone="primary" data-size="sm">
+        <w:icon name="plus" size="sm"></w:icon><?= __('添加账号') ?>
     </button>
 </div>
 
 <?php if (empty($accounts)): ?>
-    <div class="text-center py-5 text-muted">
-        <i class="mdi mdi-store-outline" style="font-size:3rem;"></i>
-        <p class="mt-2"><?= __('暂无域名商账号，请点击"添加账号"配置域名服务商。') ?></p>
+    <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+        <w:icon name="store" size="sm"></w:icon>
+        <p style="--w-mt:var(--weline-space-2);"><?= __('暂无域名商账号，请点击"添加账号"配置域名服务商。') ?></p>
     </div>
 <?php else: ?>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
+    <div class="w-table-wrap">
+        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
+            <thead>
                 <tr>
                     <th><?= __('渠道') ?></th>
                     <th><?= __('账号名称') ?></th>
                     <th><?= __('区域') ?></th>
                     <th><?= __('状态') ?></th>
                     <th><?= __('创建时间') ?></th>
-                    <th class="text-end"><?= __('操作') ?></th>
+                    <th class="w-text" data-align="end"><?= __('操作') ?></th>
                 </tr>
             </thead>
             <tbody id="accounts-table-body">
@@ -52,28 +52,21 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                         <td><?= htmlspecialchars($account['region'] ?? '-') ?></td>
                         <td>
                             <?php if (($account['status'] ?? '') === 'active'): ?>
-                                <span class="badge bg-success status-badge"><?= __('正常') ?></span>
+                                <span class="w-badge status-badge" data-w-background="success"><?= __('正常') ?></span>
                             <?php else: ?>
-                                <span class="badge bg-secondary status-badge"><?= __('禁用') ?></span>
+                                <span class="w-badge status-badge" data-w-background="muted"><?= __('禁用') ?></span>
                             <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars($account['created_at'] ?? '-') ?></td>
-                        <td class="text-end">
-                            <button type="button" class="btn btn-outline-info btn-sm" title="<?= __('测试连接') ?>"
-                                    data-domain-account-action="test"
-                                    data-account-id="<?= (int)($account['account_id'] ?? 0) ?>"
-                                    data-registrar-code="<?= htmlspecialchars((string)($account['registrar_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                <i class="mdi mdi-lan-connect"></i>
+                        <td class="w-text" data-align="end">
+                            <button type="button" class="w-button" title="<?= __('测试连接') ?>" data-domain-account-action="test" data-account-id="<?= (int)($account['account_id'] ?? 0) ?>" data-registrar-code="<?= htmlspecialchars((string)($account['registrar_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-tone="info" data-variant="outline" data-size="sm">
+                                <w:icon name="circle" size="sm"></w:icon>
                             </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('编辑') ?>"
-                                    data-domain-account-action="edit"
-                                    data-account-payload="<?= htmlspecialchars(json_encode($account, $jsonForScriptFlags), ENT_QUOTES, 'UTF-8') ?>">
-                                <i class="mdi mdi-pencil"></i>
+                            <button type="button" class="w-button" title="<?= __('编辑') ?>" data-domain-account-action="edit" data-account-payload="<?= htmlspecialchars(json_encode($account, $jsonForScriptFlags), ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                <w:icon name="edit" size="sm"></w:icon>
                             </button>
-                            <button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>"
-                                    data-domain-account-action="remove"
-                                    data-account-id="<?= (int)($account['account_id'] ?? 0) ?>">
-                                <i class="mdi mdi-delete"></i>
+                            <button type="button" class="w-button" title="<?= __('删除') ?>" data-domain-account-action="remove" data-account-id="<?= (int)($account['account_id'] ?? 0) ?>" data-tone="danger" data-variant="outline" data-size="sm">
+                                <w:icon name="trash" size="sm"></w:icon>
                             </button>
                         </td>
                     </tr>
@@ -84,20 +77,20 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 <?php endif; ?>
 
 <!-- 添加/编辑账号 Modal -->
-<div class="modal fade" id="accountFormModal" tabindex="-1" aria-labelledby="accountFormModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="accountFormModalLabel"><?= __('域名商账号配置') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="w-dialog" id="accountFormModal" tabindex="-1" aria-labelledby="accountFormModalLabel" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title" id="accountFormModalLabel"><?= __('域名商账号配置') ?></h5>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <w:form id="account-form">
                     <input type="hidden" name="account_id" id="form-account-id" value="0">
 
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('域名商渠道') ?> <span class="text-danger">*</span></label>
-                        <select name="registrar_code" id="form-registrar-code" class="form-select" required>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('域名商渠道') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <select name="registrar_code" id="form-registrar-code" class="w-select" required>
                             <option value=""><?= __('请选择域名商') ?></option>
                             <?php foreach ($adapterOptions as $opt): ?>
                                 <option value="<?= htmlspecialchars($opt['code']) ?>"
@@ -106,34 +99,33 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="form-text" id="registrar-description"></div>
+                        <div class="w-field__hint" id="registrar-description"></div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('账号名称') ?> <span class="text-danger">*</span></label>
-                        <input type="text" name="account_name" id="form-account-name" class="form-control" required
-                               placeholder="<?= __('如：主账号、生产环境') ?>">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('账号名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <input type="text" name="account_name" id="form-account-name" class="w-input" required placeholder="<?= __('如：主账号、生产环境') ?>">
                     </div>
 
                     <!-- 动态配置字段区域（根据适配器自动生成） -->
                     <div id="dynamic-config-fields"></div>
                     
                     <!-- 配置帮助信息 -->
-                    <div id="config-help-info" class="alert alert-info small" style="display:none;"></div>
+                    <div id="config-help-info" class="w-alert w-text" style="display:none;" data-tone="info" data-size="sm"></div>
 
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('状态') ?></label>
-                        <select name="status" id="form-status" class="form-select">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('状态') ?></label>
+                        <select name="status" id="form-status" class="w-select">
                             <option value="active"><?= __('启用') ?></option>
                             <option value="disabled"><?= __('禁用') ?></option>
                         </select>
                     </div>
                 </w:form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" data-domain-account-action="save">
-                    <i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" data-domain-account-action="save" data-tone="primary">
+                    <w:icon name="save" size="sm"></w:icon><?= __('保存') ?>
                 </button>
             </div>
         </div>
@@ -219,8 +211,7 @@ window.editAccount = function(account) {
     // 触发动态字段加载
     onRegistrarChange(account.registrar_code);
 
-    var modal = new bootstrap.Modal(document.getElementById('accountFormModal'));
-    modal.show();
+    Weline.UI.dialog.open('#accountFormModal');
 };
 
 window.onRegistrarChange = function(code) {
@@ -267,18 +258,18 @@ window.onRegistrarChange = function(code) {
             var isRequired = field.required === true;
             var isPassword = field.type === 'password';
             
-            html += '<div class="mb-3">';
-            html += '<label class="form-label">' + (field.label || field.name);
+            html += '<div style="--w-mb:var(--weline-space-4);">';
+            html += '<label class="w-field__label">' + (field.label || field.name);
             
             if (isEditMode && isPassword) {
-                html += ' <span class="text-muted small"><?= __('（不修改请留空）') ?></span>';
+                html += ' <span class="w-text" data-tone="muted" data-size="sm"><?= __('（不修改请留空）') ?></span>';
             } else if (isRequired) {
-                html += ' <span class="text-danger">*</span>';
+                html += ' <span class="w-text" data-tone="danger">*</span>';
             }
             html += '</label>';
             
             if (field.type === 'select' && field.options) {
-                html += '<select id="' + fieldId + '" class="form-select config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '">';
+                html += '<select id="' + fieldId + '" class="w-select config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '">';
                 field.options.forEach(function(opt) {
                     var selected = (field.default && field.default === opt.value) ? ' selected' : '';
                     html += '<option value="' + (opt.value || '') + '"' + selected + '>' + (opt.label || opt.value || '') + '</option>';
@@ -291,12 +282,10 @@ window.onRegistrarChange = function(code) {
                     placeholder = '••••••••••••••••<?= __('（留空不修改）') ?>';
                 }
                 
-                html += '<input type="' + inputType + '" id="' + fieldId + '" class="form-control config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '"';
-                if (placeholder) html += ' placeholder="' + placeholder + '"';
-                html += '>';
+                html += '<input type="' + inputType + '" id="' + fieldId + '" class="w-input config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '" if html placeholder="' + placeholder + '">';
             }
             if (field.help_text) {
-                html += '<div class="form-text text-warning small mt-1">' + escapeCfgFieldHelp(field.help_text) + '</div>';
+                html += '<div class="w-field__hint w-text" data-tone="warning" data-size="sm" style="--w-mt:var(--weline-space-1);">' + escapeCfgFieldHelp(field.help_text) + '</div>';
             }
             html += '</div>';
         });
@@ -334,20 +323,20 @@ window.onRegistrarChange = function(code) {
         if (purchaseSteps.length || generalSteps.length) {
             var helpHtml = '';
             if (purchaseSteps.length) {
-                helpHtml += '<div class="alert alert-info py-2 px-3 mb-3"><div class="fw-bold mb-2"><i class="mdi mdi-shopping me-1"></i><?= __('域名购买所需权限（批量购买前请核对）') ?></div><ol class="mb-0 ps-3 small">';
+                helpHtml += '<div class="w-alert" data-tone="info" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-mb:var(--weline-space-4);"><div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-2);"><w:icon name="pin" size="sm"></w:icon><?= __('域名购买所需权限（批量购买前请核对）') ?></div><ol class="ps-3 w-text" data-size="sm" style="--w-mb:0;">';
                 purchaseSteps.forEach(function(step) {
-                    helpHtml += '<li class="mb-1">' + step + '</li>';
+                    helpHtml += '<li style="--w-mb:var(--weline-space-1);">' + step + '</li>';
                 });
                 helpHtml += '</ol></div>';
             }
             if (generalSteps.length) {
                 helpHtml += '<strong>';
                 if (help.help_url) {
-                    helpHtml += '<a href="' + help.help_url + '" target="_blank">' + (help.help_title || '<?= __('配置获取指南') ?>') + ' <i class="mdi mdi-open-in-new"></i></a>';
+                    helpHtml += '<a href="' + help.help_url + '" target="_blank">' + (help.help_title || '<?= __('配置获取指南') ?>') + ' <w:icon name="circle" size="sm"></w:icon></a>';
                 } else {
                     helpHtml += (help.help_title || '<?= __('配置获取指南') ?>');
                 }
-                helpHtml += '</strong><ol class="mb-0 mt-2 ps-3">';
+                helpHtml += '</strong><ol class="ps-3" style="--w-mb:0;--w-mt:var(--weline-space-2);">';
                 generalSteps.forEach(function(step) {
                     helpHtml += '<li>' + step + '</li>';
                 });
@@ -445,16 +434,16 @@ window.saveAccount = function() {
 
 window.removeAccount = function(accountId) {
     if (!accountId) return;
-    Swal.fire({
+    Weline.UI.dialog.request({
         title: '<?= __('确认删除') ?>',
-        text: '<?= __('删除后无法恢复，确定要删除此账号吗？') ?>',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#f46a6a',
-        cancelButtonText: '<?= __('取消') ?>',
-        confirmButtonText: '<?= __('确定删除') ?>'
+        message: '<?= __('删除后无法恢复，确定要删除此账号吗？') ?>',
+        tone: 'warning',
+        cancelable: true,
+        confirmTone: '#f46a6a',
+        cancelLabel: '<?= __('取消') ?>',
+        confirmLabel: '<?= __('确定删除') ?>'
     }).then(function(result) {
-        if (result.isConfirmed) {
+        if (result.confirmed) {
             var formData = new FormData();
             formData.append('account_id', accountId);
             bqAdmin['websites'](deleteAccountUrl, {

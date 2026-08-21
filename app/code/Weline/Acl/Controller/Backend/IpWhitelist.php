@@ -15,7 +15,7 @@ use Weline\Acl\Model\IpWhitelist as IpWhitelistModel;
  * 功能：
  * - 管理允许访问的IP地址
  */
-#[Acl('Weline_Acl::ip_whitelist', 'IP白名单', 'mdi-shield-check', 'IP白名单')]
+#[Acl('Weline_Acl::ip_whitelist', 'IP白名单', 'check', 'IP白名单')]
 class IpWhitelist extends BackendController
 {
     /**
@@ -23,7 +23,7 @@ class IpWhitelist extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Acl::ip_whitelist_index', '查看IP白名单', 'mdi-shield-check', '查看IP白名单')]
+    #[Acl('Weline_Acl::ip_whitelist_index', '查看IP白名单', 'check', '查看IP白名单')]
     public function index(): string
     {
         try {
@@ -79,7 +79,7 @@ class IpWhitelist extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Acl::ip_whitelist_add', '添加IP白名单', 'mdi-plus', '添加IP白名单')]
+    #[Acl('Weline_Acl::ip_whitelist_add', '添加IP白名单', 'plus', '添加IP白名单')]
     public function add(): string
     {
         if ($this->request->isPost()) {
@@ -133,7 +133,7 @@ class IpWhitelist extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Acl::ip_whitelist_edit', '编辑IP白名单', 'mdi-pencil', '编辑IP白名单')]
+    #[Acl('Weline_Acl::ip_whitelist_edit', '编辑IP白名单', 'edit', '编辑IP白名单')]
     public function edit(): string
     {
         $id = (int)$this->request->getParam('id', 0);
@@ -207,7 +207,7 @@ class IpWhitelist extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Acl::ip_whitelist_delete', '删除IP白名单', 'mdi-delete', '删除IP白名单')]
+    #[Acl('Weline_Acl::ip_whitelist_delete', '删除IP白名单', 'trash', '删除IP白名单')]
     public function delete(): string
     {
         if (!$this->isPost()) {
@@ -245,7 +245,7 @@ class IpWhitelist extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Acl::ip_whitelist_toggle', '切换IP白名单状态', 'mdi-toggle-switch', '切换IP白名单状态')]
+    #[Acl('Weline_Acl::ip_whitelist_toggle', '切换IP白名单状态', 'switch', '切换IP白名单状态')]
     public function toggle(): string
     {
         if (!$this->isPost()) {

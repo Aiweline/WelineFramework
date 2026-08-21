@@ -4,21 +4,21 @@
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>查看数据</lang>
                 </h4>
-                <p class='card-title-desc'>
+                <p class="w-text" data-tone="muted">
                     <lang>查看日志数据</lang>
                 </p>
-                <pre class='card-text'>{{data}}</pre>
+                <pre class="w-text" data-tone="muted">{{data}}</pre>
             </div>
         </div>
     </div>

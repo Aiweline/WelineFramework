@@ -213,38 +213,38 @@ $skillI18n = [
     }
 </style>
 
-<div class="container-fluid py-3 weline-ai-skill-page">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+<div class="w-container weline-ai-skill-page" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
         <div>
-            <h4 class="mb-1"><i class="mdi mdi-shape-outline me-1"></i><?= __('AI 技能') ?></h4>
-            <div class="text-muted small"><?= __('管理模块、自定义、导入和适配器绑定的提示词技能。') ?></div>
+            <h4 style="--w-mb:var(--weline-space-1);"><w:icon name="circle" size="sm"></w:icon><?= __('AI 技能') ?></h4>
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('管理模块、自定义、导入和适配器绑定的提示词技能。') ?></div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-skill-new">
-                <i class="mdi mdi-plus me-1"></i><?= __('新建自定义技能') ?>
+        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+            <button class="w-button" type="button" id="ai-skill-new" data-tone="neutral" data-variant="outline" data-size="sm">
+                <w:icon name="plus" size="sm"></w:icon><?= __('新建自定义技能') ?>
             </button>
-            <button class="btn btn-outline-primary btn-sm" type="button" id="ai-skill-refresh">
-                <i class="mdi mdi-refresh me-1"></i><?= __('刷新目录') ?>
+            <button class="w-button" type="button" id="ai-skill-refresh" data-tone="primary" data-variant="outline" data-size="sm">
+                <w:icon name="refresh" size="sm"></w:icon><?= __('刷新目录') ?>
             </button>
         </div>
     </div>
 
-    <div class="row g-3 skill-shell">
-        <div class="col-xl-8">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-adapter"><?= __('适配器绑定上下文') ?></label>
-                            <select class="form-select form-select-sm" id="ai-skill-adapter"></select>
+    <div class="w-grid skill-shell" style="--w-gap:var(--weline-space-4);">
+        <div style="--w-span-lg:8;">
+            <div class="w-card" style="--w-mb:var(--weline-space-4);">
+                <div class="w-card__body">
+                    <div class="w-grid" data-align="end" style="--w-gap:var(--weline-space-2);">
+                        <div style="--w-span-md:4;">
+                            <label class="w-field__label w-text" for="ai-skill-adapter" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('适配器绑定上下文') ?></label>
+                            <select class="w-select" id="ai-skill-adapter" data-size="sm"></select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-search"><?= __('搜索') ?></label>
-                            <input class="form-control form-control-sm" id="ai-skill-search" type="search" placeholder="<?= __('代码 / 名称 / 标签') ?>">
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label w-text" for="ai-skill-search" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('搜索') ?></label>
+                            <input class="w-input" id="ai-skill-search" type="search" placeholder="<?= __('代码 / 名称 / 标签') ?>" data-size="sm">
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-status-filter"><?= __('状态') ?></label>
-                            <select class="form-select form-select-sm" id="ai-skill-status-filter">
+                        <div style="--w-span-md:2;">
+                            <label class="w-field__label w-text" for="ai-skill-status-filter" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('状态') ?></label>
+                            <select class="w-select" id="ai-skill-status-filter" data-size="sm">
                                 <option value=""><?= __('全部') ?></option>
                                 <option value="active"><?= __('启用') ?></option>
                                 <option value="pending"><?= __('待审核') ?></option>
@@ -252,9 +252,9 @@ $skillI18n = [
                                 <option value="missing"><?= __('缺失') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-source-filter"><?= __('来源') ?></label>
-                            <select class="form-select form-select-sm" id="ai-skill-source-filter">
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label w-text" for="ai-skill-source-filter" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('来源') ?></label>
+                            <select class="w-select" id="ai-skill-source-filter" data-size="sm">
                                 <option value=""><?= __('全部') ?></option>
                                 <option value="module"><?= __('模块 / 系统') ?></option>
                                 <option value="custom"><?= __('自定义') ?></option>
@@ -262,19 +262,19 @@ $skillI18n = [
                             </select>
                         </div>
                     </div>
-                    <div class="small text-muted mt-2" id="ai-skill-adapter-summary"></div>
+                    <div class="w-text" id="ai-skill-adapter-summary" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);"></div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-header d-flex align-items-center justify-content-between">
+            <div class="w-card">
+                <div class="w-card__header w-cluster" data-align="center" data-justify="between">
                     <strong><?= __('技能目录') ?></strong>
-                    <span class="small text-muted" id="ai-skill-status"><?= count($skills) ?><?= __(' 个技能') ?></span>
+                    <span class="w-text" id="ai-skill-status" data-tone="muted" data-size="sm"><?= count($skills) ?><?= __(' 个技能') ?></span>
                 </div>
-                <div class="card-body p-0">
+                <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                     <div class="skill-table-wrap">
-                        <table class="table table-sm align-middle mb-0 skill-catalog-table">
-                            <thead class="table-light position-sticky top-0">
+                        <table class="w-table skill-catalog-table" data-w-vertical="middle" style="--w-mb:0;">
+                            <thead data-w-position="sticky" style="--w-top:0;">
                             <tr>
                                 <th style="width: 180px;"><?= __('代码') ?></th>
                                 <th><?= __('技能') ?></th>
@@ -286,7 +286,7 @@ $skillI18n = [
                             </thead>
                             <tbody id="ai-skill-table-body">
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4"><?= __('正在加载技能目录...') ?></td>
+                                <td colspan="6" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('正在加载技能目录...') ?></td>
                             </tr>
                             </tbody>
                         </table>
@@ -295,80 +295,80 @@ $skillI18n = [
             </div>
         </div>
 
-        <div class="col-xl-4">
-            <div class="card skill-detail-card mb-3">
-                <div class="card-header d-flex align-items-center justify-content-between">
+        <div style="--w-span-lg:4;">
+            <div class="w-card skill-detail-card" style="--w-mb:var(--weline-space-4);">
+                <div class="w-card__header w-cluster" data-align="center" data-justify="between">
                     <strong id="ai-skill-detail-title"><?= __('技能详情') ?></strong>
-                    <span class="small text-muted" id="ai-skill-detail-mode"><?= __('未选择') ?></span>
+                    <span class="w-text" id="ai-skill-detail-mode" data-tone="muted" data-size="sm"><?= __('未选择') ?></span>
                 </div>
-                <div class="card-body">
+                <div class="w-card__body">
                     <div id="ai-skill-empty" class="skill-empty">
                         <?= __('从目录选择一个技能，或新建自定义技能。') ?>
                     </div>
 
-                    <w:form id="ai-skill-form" class="d-none">
-                        <div class="d-flex flex-wrap gap-1 mb-2" id="ai-skill-badges"></div>
+                    <w:form id="ai-skill-form" hidden>
+                        <div class="w-cluster" id="ai-skill-badges" data-wrap="true" style="--w-gap:var(--weline-space-1);--w-mb:var(--weline-space-2);"></div>
 
-                        <div class="mb-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-code"><?= __('代码') ?></label>
-                            <input type="text" class="form-control form-control-sm" id="ai-skill-code" placeholder="<?= __('技能代码') ?>">
+                        <div style="--w-mb:var(--weline-space-2);">
+                            <label class="w-field__label w-text" for="ai-skill-code" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('代码') ?></label>
+                            <input type="text" class="w-input" id="ai-skill-code" placeholder="<?= __('技能代码') ?>" data-size="sm">
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-name"><?= __('名称') ?></label>
-                            <input type="text" class="form-control form-control-sm" id="ai-skill-name" placeholder="<?= __('可读的技能名称') ?>">
+                        <div style="--w-mb:var(--weline-space-2);">
+                            <label class="w-field__label w-text" for="ai-skill-name" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('名称') ?></label>
+                            <input type="text" class="w-input" id="ai-skill-name" placeholder="<?= __('可读的技能名称') ?>" data-size="sm">
                         </div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label small text-muted mb-1" for="ai-skill-edit-status"><?= __('状态') ?></label>
-                                <select class="form-select form-select-sm" id="ai-skill-edit-status">
+                        <div class="w-grid" style="--w-gap:var(--weline-space-2);">
+                            <div style="--w-span:6;">
+                                <label class="w-field__label w-text" for="ai-skill-edit-status" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('状态') ?></label>
+                                <select class="w-select" id="ai-skill-edit-status" data-size="sm">
                                     <option value="active"><?= __('启用') ?></option>
                                     <option value="pending"><?= __('待审核') ?></option>
                                     <option value="disabled"><?= __('禁用') ?></option>
                                 </select>
                             </div>
-                            <div class="col-6">
-                                <label class="form-label small text-muted mb-1" for="ai-skill-version"><?= __('版本') ?></label>
-                                <input type="text" class="form-control form-control-sm" id="ai-skill-version" placeholder="1.0.0">
+                            <div style="--w-span:6;">
+                                <label class="w-field__label w-text" for="ai-skill-version" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('版本') ?></label>
+                                <input type="text" class="w-input" id="ai-skill-version" placeholder="1.0.0" data-size="sm">
                             </div>
                         </div>
-                        <div class="mb-2 mt-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-description"><?= __('描述') ?></label>
-                            <textarea class="form-control form-control-sm" id="ai-skill-description" rows="2" placeholder="<?= __('这个技能负责什么') ?>"></textarea>
+                        <div style="--w-mb:var(--weline-space-2);--w-mt:var(--weline-space-2);">
+                            <label class="w-field__label w-text" for="ai-skill-description" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('描述') ?></label>
+                            <textarea class="w-textarea" id="ai-skill-description" rows="2" placeholder="<?= __('这个技能负责什么') ?>" data-size="sm"></textarea>
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-body"><?= __('技能正文') ?></label>
-                            <textarea class="form-control form-control-sm skill-body-editor" id="ai-skill-body" placeholder="<?= __('Markdown 指令') ?>"></textarea>
-                        </div>
-
-                        <div class="d-flex flex-wrap gap-2 mb-2">
-                            <button class="btn btn-success btn-sm" type="button" id="ai-skill-save-btn"><?= __('保存') ?></button>
-                            <button class="btn btn-outline-success btn-sm" type="button" data-skill-status-action="active"><?= __('启用') ?></button>
-                            <button class="btn btn-outline-warning btn-sm" type="button" data-skill-status-action="pending"><?= __('设为待审核') ?></button>
-                            <button class="btn btn-outline-danger btn-sm" type="button" data-skill-status-action="disabled"><?= __('禁用') ?></button>
-                            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-skill-export-btn"><?= __('导出') ?></button>
+                        <div style="--w-mb:var(--weline-space-2);">
+                            <label class="w-field__label w-text" for="ai-skill-body" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('技能正文') ?></label>
+                            <textarea class="w-textarea skill-body-editor" id="ai-skill-body" placeholder="<?= __('Markdown 指令') ?>" data-size="sm"></textarea>
                         </div>
 
-                        <div class="border-top pt-2 mt-2">
-                            <div class="small text-muted mb-2"><?= __('当前上下文的适配器绑定') ?></div>
-                            <div class="d-flex flex-wrap gap-2">
-                                <button class="btn btn-primary btn-sm" type="button" id="ai-skill-bind-btn"><?= __('绑定到适配器') ?></button>
-                                <button class="btn btn-outline-danger btn-sm" type="button" id="ai-skill-unbind-btn"><?= __('移除手动绑定') ?></button>
+                        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+                            <button class="w-button" type="button" id="ai-skill-save-btn" data-tone="success" data-size="sm"><?= __('保存') ?></button>
+                            <button class="w-button" type="button" data-skill-status-action="active" data-tone="success" data-variant="outline" data-size="sm"><?= __('启用') ?></button>
+                            <button class="w-button" type="button" data-skill-status-action="pending" data-tone="warning" data-variant="outline" data-size="sm"><?= __('设为待审核') ?></button>
+                            <button class="w-button" type="button" data-skill-status-action="disabled" data-tone="danger" data-variant="outline" data-size="sm"><?= __('禁用') ?></button>
+                            <button class="w-button" type="button" id="ai-skill-export-btn" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('导出') ?></button>
+                        </div>
+
+                        <div data-w-border="top" style="--w-pt:var(--weline-space-2);--w-mt:var(--weline-space-2);">
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);"><?= __('当前上下文的适配器绑定') ?></div>
+                            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                                <button class="w-button" type="button" id="ai-skill-bind-btn" data-tone="primary" data-size="sm"><?= __('绑定到适配器') ?></button>
+                                <button class="w-button" type="button" id="ai-skill-unbind-btn" data-tone="danger" data-variant="outline" data-size="sm"><?= __('移除手动绑定') ?></button>
                             </div>
-                            <div class="small text-muted mt-2" id="ai-skill-binding-help"></div>
+                            <div class="w-text" id="ai-skill-binding-help" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);"></div>
                         </div>
 
-                        <div class="small mt-2" id="ai-skill-form-status"></div>
+                        <div class="w-text" id="ai-skill-form-status" data-size="sm" style="--w-mt:var(--weline-space-2);"></div>
                     </w:form>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-header"><strong><?= __('从 URL 导入技能') ?></strong></div>
-                <div class="card-body">
-                    <input type="url" class="form-control form-control-sm mb-2" id="ai-skill-import-url" placeholder="https://example.com/SKILL.md">
-                    <button class="btn btn-primary btn-sm" type="button" id="ai-skill-import-btn"><?= __('导入为待审核') ?></button>
-                    <div class="small text-muted mt-2"><?= __('仅允许公开 http/https URL。限制：256KB、8 秒超时、Markdown/text/JSON。') ?></div>
-                    <div class="small mt-2" id="ai-skill-import-status"></div>
+            <div class="w-card">
+                <div class="w-card__header"><strong><?= __('从 URL 导入技能') ?></strong></div>
+                <div class="w-card__body">
+                    <input type="url" class="w-input" id="ai-skill-import-url" placeholder="https://example.com/SKILL.md" data-size="sm" style="--w-mb:var(--weline-space-2);">
+                    <button class="w-button" type="button" id="ai-skill-import-btn" data-tone="primary" data-size="sm"><?= __('导入为待审核') ?></button>
+                    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);"><?= __('仅允许公开 http/https URL。限制：256KB、8 秒超时、Markdown/text/JSON。') ?></div>
+                    <div class="w-text" id="ai-skill-import-status" data-size="sm" style="--w-mt:var(--weline-space-2);"></div>
                 </div>
             </div>
         </div>

@@ -66,18 +66,18 @@ $cmsEditorState = [
 ];
 $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
 ?>
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Cms::page" order_field="order" name_field="title"></breadcrumb></h4>
-            <div class="page-title-right d-flex gap-2">
-                <a class="btn btn-outline-secondary" href="<?= $this->getBackendUrl('cms/backend/page/listing') ?>">
-                    <i class="mdi mdi-arrow-left"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Cms::page" order_field="order" name_field="title"></breadcrumb></h4>
+            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                <a class="w-button" href="<?= $this->getBackendUrl('cms/backend/page/listing') ?>" data-tone="neutral" data-variant="outline">
+                    <w:icon name="arrow-left" size="sm"></w:icon>
                     <?= __('返回列表') ?>
                 </a>
                 <?php if ($previewUrl !== ''): ?>
-                    <a class="btn btn-outline-primary" href="<?= htmlspecialchars($previewUrl) ?>" target="_blank" rel="noopener">
-                        <i class="mdi mdi-eye-outline"></i>
+                    <a class="w-button" href="<?= htmlspecialchars($previewUrl) ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline">
+                        <w:icon name="eye" size="sm"></w:icon>
                         <?= __('预览') ?>
                     </a>
                 <?php endif; ?>
@@ -87,14 +87,14 @@ $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNE
 </div>
 
 <div class="cms-page-workbench">
-    <div class="col-12">
+    <div style="--w-span:12;">
         <w:form class="cms-page-settings-bar" method="post" action="@var($this->getBackendUrl('cms/backend/page/save'))">
             <input type="hidden" name="page_id" value="<?= $pageId ?>">
             <div class="cms-page-settings-grid <?= $hasPathGroupContext ? 'has-path-context' : 'needs-path-context' ?>">
                 <?php if ($hasPathGroupContext): ?>
                     <div class="cms-field cms-field-context">
-                        <label class="form-label"><?= __('站点 / 一级 path') ?></label>
-                        <div class="form-control cms-context-display">
+                        <label class="w-field__label"><?= __('站点 / 一级 path') ?></label>
+                        <div class="w-input cms-context-display">
                             <span><?= htmlspecialchars($currentWebsiteCode) ?></span>
                             <code><?= htmlspecialchars((string)($page['path_group_alias'] ?? $page['path_group'] ?? '')) ?> / <?= htmlspecialchars((string)($page['path_group'] ?? '')) ?></code>
                         </div>
@@ -105,8 +105,8 @@ $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNE
                     </div>
                 <?php else: ?>
                     <div class="cms-field cms-field-website">
-                        <label class="form-label"><?= __('站点') ?></label>
-                        <select class="form-select" name="website_id">
+                        <label class="w-field__label"><?= __('站点') ?></label>
+                        <select class="w-select" name="website_id">
                             <?php foreach ($websites as $website): ?>
                                 <?php
                                 $websiteId = (int)($website['website_id'] ?? 0);
@@ -125,7 +125,7 @@ $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNE
                 <?php endif; ?>
                 <div class="cms-field cms-field-title">
                     <div class="cms-title-toolbar">
-                        <label class="form-label mb-0"><?= __('标题') ?></label>
+                        <label class="w-field__label" style="--w-mb:0;"><?= __('标题') ?></label>
                         <div class="cms-title-toolbar-actions">
                             <?php if ($localeAllowedValues !== []): ?>
                                 <w:i18n:language:select
@@ -140,19 +140,15 @@ $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNE
                                     class="cms-page-locale-select"
                                 />
                             <?php endif; ?>
-                            <button class="btn btn-sm btn-outline-primary cms-translation-action"
-                                    type="button"
-                                    data-cms-translate-missing
-                                    aria-describedby="cms-page-translation-status"
-                                    <?= (!$hasPage || $missingLocaleCount === 0) ? 'disabled' : '' ?>>
-                                <i class="mdi mdi-translate"></i>
+                            <button class="w-button cms-translation-action" type="button" data-cms-translate-missing aria-describedby="cms-page-translation-status" <?= (!$hasPage || $missingLocaleCount === 0) ? 'disabled' : '' ?> data-tone="primary" data-variant="outline" data-size="sm">
+                                <w:icon name="language" size="sm"></w:icon>
                                 <span data-cms-translation-label>
                                     <?= __('一键翻译缺失语言') ?><?= $missingLocaleCount > 0 ? ' (' . $missingLocaleCount . ')' : '' ?>
                                 </span>
                             </button>
                         </div>
                     </div>
-                    <input class="form-control" type="text" name="title" value="<?= htmlspecialchars($currentLocaleTitle) ?>" required>
+                    <input class="w-input" type="text" name="title" value="<?= htmlspecialchars($currentLocaleTitle) ?>" required>
                     <div id="cms-page-translation-status"
                          class="cms-translation-status"
                          data-cms-translation-status
@@ -172,38 +168,38 @@ $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNE
                 </div>
                 <?php if (!$hasPathGroupContext): ?>
                     <div class="cms-field cms-field-path">
-                        <label class="form-label"><?= __('一级 path') ?></label>
-                        <input class="form-control" type="text" name="path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? '')) ?>" required>
+                        <label class="w-field__label"><?= __('一级 path') ?></label>
+                        <input class="w-input" type="text" name="path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? '')) ?>" required>
                     </div>
                     <div class="cms-field cms-field-path-alias">
-                        <label class="form-label"><?= __('path 别名') ?></label>
-                        <input class="form-control" type="text" name="path_group_alias" value="<?= htmlspecialchars((string)($page['path_group_alias'] ?? '')) ?>">
+                        <label class="w-field__label"><?= __('path 别名') ?></label>
+                        <input class="w-input" type="text" name="path_group_alias" value="<?= htmlspecialchars((string)($page['path_group_alias'] ?? '')) ?>">
                     </div>
                 <?php endif; ?>
                 <div class="cms-field cms-field-slug">
                     <div class="cms-slug-toolbar">
-                        <label class="form-label mb-0"><?= __('Slug') ?></label>
-                        <button class="btn btn-sm btn-link p-0" type="button" data-cms-slug-auto>
+                        <label class="w-field__label" style="--w-mb:0;"><?= __('Slug') ?></label>
+                        <button class="w-button" type="button" data-cms-slug-auto data-tone="quiet" data-size="sm" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                             <?= __('恢复标题自动联动') ?>
                         </button>
                     </div>
-                    <input class="form-control" type="text" name="slug" value="<?= htmlspecialchars((string)($page['slug'] ?? '')) ?>">
+                    <input class="w-input" type="text" name="slug" value="<?= htmlspecialchars((string)($page['slug'] ?? '')) ?>">
                     <input type="hidden" name="slug_mode" value="<?= htmlspecialchars((string)($page['slug_mode'] ?? '')) ?>">
                 </div>
                 <div class="cms-field cms-field-scope">
-                    <label class="form-label"><?= __('范围') ?></label>
-                    <input class="form-control" type="text" name="scope" value="<?= htmlspecialchars((string)($page['scope'] ?? 'default')) ?>">
+                    <label class="w-field__label"><?= __('范围') ?></label>
+                    <input class="w-input" type="text" name="scope" value="<?= htmlspecialchars((string)($page['scope'] ?? 'default')) ?>">
                 </div>
                 <div class="cms-field cms-field-status">
-                    <label class="form-label"><?= __('状态') ?></label>
-                    <select class="form-select" name="status">
+                    <label class="w-field__label"><?= __('状态') ?></label>
+                    <select class="w-select" name="status">
                         <?php foreach ($statuses as $value => $label): ?>
                             <option value="<?= htmlspecialchars((string)$value) ?>" <?= (string)($page['status'] ?? '') === (string)$value ? 'selected' : '' ?>><?= $label ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="cms-field cms-field-layout">
-                    <label class="form-label"><?= __('Theme 布局') ?></label>
+                    <label class="w-field__label"><?= __('Theme 布局') ?></label>
                     <w:theme:search-select
                         id="cms-layout-option"
                         name="layout_option"
@@ -214,13 +210,13 @@ $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNE
                     />
                 </div>
                 <div class="cms-form-actions">
-                    <button class="btn btn-primary cms-action-button" type="submit">
-                        <i class="mdi mdi-content-save-outline"></i>
+                    <button class="w-button cms-action-button" type="submit" data-tone="primary">
+                        <w:icon name="save" size="sm"></w:icon>
                         <?= __('保存页面设置') ?>
                     </button>
                     <?php if ($themeEditorUrl !== ''): ?>
-                        <a class="btn btn-outline-primary cms-action-button" href="<?= htmlspecialchars($themeEditorUrl) ?>" target="_blank" rel="noopener">
-                            <i class="mdi mdi-open-in-new"></i>
+                        <a class="w-button cms-action-button" href="<?= htmlspecialchars($themeEditorUrl) ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline">
+                            <w:icon name="circle" size="sm"></w:icon>
                             <?= __('新窗口打开编辑器') ?>
                         </a>
                     <?php endif; ?>
@@ -229,10 +225,10 @@ $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNE
         </w:form>
     </div>
 
-    <div class="col-12">
+    <div style="--w-span:12;">
         <div class="cms-theme-editor-workspace <?= $hasPage ? 'is-ready' : 'is-empty' ?>">
             <?php if ($themeEditorUrl === ''): ?>
-                <div class="alert alert-info mb-0">
+                <div class="w-alert" data-tone="info" style="--w-mb:0;">
                     <?= __('先保存页面设置，然后直接在这里进行 Theme 可视化编辑。') ?>
                 </div>
             <?php else: ?>
@@ -566,10 +562,10 @@ $localeTitlesJson = json_encode($localeTitles, JSON_UNESCAPED_UNICODE | JSON_UNE
 
 html[data-theme-mode="dark"] .cms-page-workbench,
 body[data-theme-mode="dark"] .cms-page-workbench,
-html[data-bs-theme="dark"] .cms-page-workbench,
-body[data-bs-theme="dark"] .cms-page-workbench,
+html[data-theme="dark"] .cms-page-workbench,
+body[data-theme="dark"] .cms-page-workbench,
 [data-theme-mode="dark"] .cms-page-workbench,
-[data-bs-theme="dark"] .cms-page-workbench {
+[data-theme="dark"] .cms-page-workbench {
     --cms-edit-surface: #111c2d;
     --cms-edit-surface-soft: #0e1929;
     --cms-edit-surface-raised: #142238;
@@ -583,19 +579,19 @@ body[data-bs-theme="dark"] .cms-page-workbench,
 
 html[data-theme-mode="dark"] .cms-page-settings-bar .form-control::placeholder,
 body[data-theme-mode="dark"] .cms-page-settings-bar .form-control::placeholder,
-html[data-bs-theme="dark"] .cms-page-settings-bar .form-control::placeholder,
-body[data-bs-theme="dark"] .cms-page-settings-bar .form-control::placeholder,
+html[data-theme="dark"] .cms-page-settings-bar .form-control::placeholder,
+body[data-theme="dark"] .cms-page-settings-bar .form-control::placeholder,
 [data-theme-mode="dark"] .cms-page-settings-bar .form-control::placeholder,
-[data-bs-theme="dark"] .cms-page-settings-bar .form-control::placeholder {
+[data-theme="dark"] .cms-page-settings-bar .form-control::placeholder {
     color: #708199;
 }
 
 html[data-theme-mode="dark"] .cms-page-settings-bar .select2-dropdown,
 body[data-theme-mode="dark"] .cms-page-settings-bar .select2-dropdown,
-html[data-bs-theme="dark"] .cms-page-settings-bar .select2-dropdown,
-body[data-bs-theme="dark"] .cms-page-settings-bar .select2-dropdown,
+html[data-theme="dark"] .cms-page-settings-bar .select2-dropdown,
+body[data-theme="dark"] .cms-page-settings-bar .select2-dropdown,
 [data-theme-mode="dark"] .cms-page-settings-bar .select2-dropdown,
-[data-bs-theme="dark"] .cms-page-settings-bar .select2-dropdown {
+[data-theme="dark"] .cms-page-settings-bar .select2-dropdown {
     border-color: #33445e;
     background: #111c2d;
     color: #edf3ff;
@@ -603,10 +599,10 @@ body[data-bs-theme="dark"] .cms-page-settings-bar .select2-dropdown,
 
 html[data-theme-mode="dark"] .cms-page-settings-bar .select2-search__field,
 body[data-theme-mode="dark"] .cms-page-settings-bar .select2-search__field,
-html[data-bs-theme="dark"] .cms-page-settings-bar .select2-search__field,
-body[data-bs-theme="dark"] .cms-page-settings-bar .select2-search__field,
+html[data-theme="dark"] .cms-page-settings-bar .select2-search__field,
+body[data-theme="dark"] .cms-page-settings-bar .select2-search__field,
 [data-theme-mode="dark"] .cms-page-settings-bar .select2-search__field,
-[data-bs-theme="dark"] .cms-page-settings-bar .select2-search__field {
+[data-theme="dark"] .cms-page-settings-bar .select2-search__field {
     border-color: #33445e;
     background: #0d1727;
     color: #edf3ff;
@@ -614,10 +610,10 @@ body[data-bs-theme="dark"] .cms-page-settings-bar .select2-search__field,
 
 html[data-theme-mode="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
 body[data-theme-mode="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
-html[data-bs-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
-body[data-bs-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
+html[data-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
+body[data-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
 [data-theme-mode="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
-[data-bs-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true] {
+[data-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true] {
     background: #1b2940;
     color: #edf3ff;
 }

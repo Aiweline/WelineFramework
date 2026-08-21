@@ -121,21 +121,13 @@ AJAX分配角色,AJAX分配角色
 菜单不存在,"Menu does not exist"
 <var>title</var>,<var>title</var>
 <var>tip</var>,<var>tip</var>
+打开主导航,打开主导航
 主题模式,"Theme mode"
 跟随系统,"Follow system"
 明亮模式,"Light Mode"
 暗黑模式,"Dark Mode"
-"搜索 ...","Search ..."
-头像,Avatar
-资料,Profile
-我的钱包,"My Wallet"
-设置,Settings
-锁定屏幕,"Lock Screen"
-退出,Logout
-通知,Notification
-全部已读,"Mark All as Read"
-暂无通知,"No notifications"
-管理订阅,"Manage subscriptions"
+界面设置,界面设置
+退出登录,退出登录
 确定删除该菜单吗？,"Are you sure you want to delete this menu?"
 删除后不可恢复！,"Cannot be recovered after deletion!"
 取消,Cancel
@@ -300,28 +292,14 @@ Cms内容管理,"CMS Content Management"
 路由,Route
 版本,Version
 描述,Description
-常用菜单,"Frequently Used Menus"
-确认操作,"Confirm operation"
-请重试,"Please try again"
-加载失败,"Load failed"
-输入,Input
-"响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
-返回首页,"Return to Home"
-布局预设配置包,"Layout Preset Configuration Package"
-选择布局预设,"Select Layout Preset"
-默认布局,"Default Layout"
-浅色侧边栏,"Light Sidebar"
-深色菜单,"Dark menu"
-图标侧边栏,"Icon Sidebar"
-紧凑侧边栏,"Compact Sidebar"
-水平布局,"Horizontal Layout"
-水平布局（深色顶部栏）,"Horizontal Layout (Dark Topbar)"
-水平布局（盒装宽度）,"Horizontal Layout (Boxed Width)"
-盒装布局,"Boxed Layout"
-选择预设后，将自动配置所有相关布局选项,"After selecting a preset, all related layout options will be automatically configured"
-主题颜色,"Theme Color"
-选择主题模式,"Select Theme Mode"
-RTL模式,"RTL Mode"
+后台主导航,后台主导航
+搜索菜单,搜索菜单
+搜索菜单…,搜索菜单…
+没有匹配的菜单,没有匹配的菜单
+后台菜单,后台菜单
+"Weline 管理后台","Weline 管理后台"
+关闭,关闭
+系统维护,系统维护
 面板,Dashboard
 后台,Backend
 概览,Overview
@@ -344,11 +322,59 @@ RTL模式,"RTL Mode"
 一月,January
 十二月,December
 订单统计,"Order Statistics"
+通知,Notification
 区域营收,"Regional Revenue"
 查看更多,"View More"
 最近成交,"Recent Transactions"
 后台登录,后台登录
 "登录 %{name} 管理面板","Login to %{name} Admin Panel"
+安全管理入口,安全管理入口
+请输入管理员账号,"Please enter the admin account"
+验证码,"Verification code"
+请输入验证码,"Please enter the verification code"
+刷新验证码,刷新验证码
+在受信任设备上记住我,在受信任设备上记住我
+登录,"Log in"
+登录中…,登录中…
+"WelineFramework Admin","WelineFramework Admin"
+WelineFramework,WelineFramework
+记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
+当前认证会话无效。,"The current authenticated session is invalid."
+认证设备服务不可用。,"Authenticated device service is unavailable."
+最近访问,"Recently Visited"
+访问最多,"Most Visited"
+"搜索 ...","Search ..."
+头像,Avatar
+资料,Profile
+我的钱包,"My Wallet"
+设置,Settings
+锁定屏幕,"Lock Screen"
+退出,Logout
+全部已读,"Mark All as Read"
+暂无通知,"No notifications"
+管理订阅,"Manage subscriptions"
+常用菜单,"Frequently Used Menus"
+确认操作,"Confirm operation"
+请重试,"Please try again"
+加载失败,"Load failed"
+输入,Input
+"响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
+返回首页,"Return to Home"
+布局预设配置包,"Layout Preset Configuration Package"
+选择布局预设,"Select Layout Preset"
+默认布局,"Default Layout"
+浅色侧边栏,"Light Sidebar"
+深色菜单,"Dark menu"
+图标侧边栏,"Icon Sidebar"
+紧凑侧边栏,"Compact Sidebar"
+水平布局,"Horizontal Layout"
+水平布局（深色顶部栏）,"Horizontal Layout (Dark Topbar)"
+水平布局（盒装宽度）,"Horizontal Layout (Boxed Width)"
+盒装布局,"Boxed Layout"
+选择预设后，将自动配置所有相关布局选项,"After selecting a preset, all related layout options will be automatically configured"
+主题颜色,"Theme Color"
+选择主题模式,"Select Theme Mode"
+RTL模式,"RTL Mode"
 登录保护,"Login protection"
 连续异常登录会自动提高验证强度，减少后台入口暴露面。,"Consecutive abnormal logins will automatically increase verification strength, reducing the exposure of the backend entry point."
 统一工作台,"Unified Workbench"
@@ -373,13 +399,9 @@ RTL模式,"RTL Mode"
 欢迎回来,"Welcome back"
 输入管理员账号后即可继续处理后台任务、配置变更与权限操作。,"Enter the admin account to proceed with backend tasks, configuration changes, and permission operations."
 安全验证已启用,"Security verification enabled"
-请输入管理员账号,"Please enter the admin account"
-验证码,"Verification code"
 点击刷新验证码,"Click to refresh the verification code."
-请输入验证码,"Please enter the verification code"
 记住我,"Remember Me"
 仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
-登录,"Log in"
 登录中,"Logging in"
 管理员账号由超级管理员统一开通与维护,"Admin accounts are created and maintained uniformly by the super admin"
 如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。,"To reset your password, unlock your account, or supplement backend permissions, please contact an existing super administrator."
@@ -391,14 +413,6 @@ RTL模式,"RTL Mode"
 仅在可信环境保存登录状态。,仅在可信环境保存登录状态。
 管理员登录,管理员登录
 访问后台前需要验证身份,访问后台前需要验证身份
-登录中…,登录中…
-"WelineFramework Admin","WelineFramework Admin"
-WelineFramework,WelineFramework
-记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
-当前认证会话无效。,"The current authenticated session is invalid."
-认证设备服务不可用。,"Authenticated device service is unavailable."
-最近访问,"Recently Visited"
-访问最多,"Most Visited"
 "Toggle light/dark mode","Toggle light/dark mode"
 主题色系切换,"Theme color switch"
 用户不存在！,"User does not exist!"

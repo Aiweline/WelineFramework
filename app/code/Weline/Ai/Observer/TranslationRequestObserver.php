@@ -59,7 +59,7 @@ final class TranslationRequestObserver implements ObserverInterface
                         'error' => $message,
                     ],
                 ),
-                'ri-error-warning-line',
+                'warning',
             );
             $this->setEventError($event, $message);
         }

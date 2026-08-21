@@ -9,7 +9,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Url;
 use Weline\Social\Service\SocialOauthService;
 
-#[Acl('Weline_Social::social_oauth', '融媒体 OAuth 回调', 'mdi mdi-shield-key-outline', '处理社媒平台一键授权回调', 'Weline_Social::social')]
+#[Acl('Weline_Social::social_oauth', '融媒体 OAuth 回调', 'shield', '处理社媒平台一键授权回调', 'Weline_Social::social')]
 class Oauth extends BaseController
 {
     public function __construct(
@@ -18,7 +18,7 @@ class Oauth extends BaseController
     ) {
     }
 
-    #[Acl('Weline_Social::social_oauth_callback', '处理融媒体授权回调', 'mdi mdi-login-variant', '接收平台 OAuth 回调并保存账户凭据')]
+    #[Acl('Weline_Social::social_oauth_callback', '处理融媒体授权回调', 'login', '接收平台 OAuth 回调并保存账户凭据')]
     public function callback(): string
     {
         $params = $this->request->getParams() ?: [];

@@ -18,7 +18,7 @@ use Weline\Framework\Acl\Acl;
  * 
  * @package Weline_Sticker
  */
-#[Acl('Weline_Sticker::sticker_manager_test', 'Sticker测试', 'mdi-sticker', 'Sticker测试', '')]
+#[Acl('Weline_Sticker::sticker_manager_test', 'Sticker测试', 'star', 'Sticker测试', '')]
 class Test extends BackendController
 {
     public function index(){

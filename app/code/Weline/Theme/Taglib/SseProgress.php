@@ -38,7 +38,7 @@ class SseProgress implements TaglibInterface
         return [
             'id' => true,            // 组件唯一ID（必填）
             'url' => false,          // SSE 端点 URL
-            'steps' => false,        // 步骤定义 JSON，如 [{"key":"dns","label":"DNS配置","icon":"mdi-dns"}]
+            'steps' => false,        // 步骤定义 JSON，如 [{"key":"dns","label":"DNS配置","icon":"dns"}]
             'title' => false,        // 标题
             'height' => false,       // 日志区域高度，默认 250px
             'class' => false,        // 额外CSS类
@@ -87,7 +87,7 @@ class SseProgress implements TaglibInterface
             $html[] = '  <div class="weline-sse-progress-terminal">';
             $html[] = '    <div class="weline-sse-progress-terminal-header">';
             $html[] = '      <div class="weline-sse-progress-terminal-title">';
-            $html[] = '        <i class="mdi mdi-console"></i>';
+            $html[] = '        <w-icon name="terminal" size="sm"></w-icon>';
             $html[] = '        <span><?= htmlspecialchars($Taglib__title ?? \'' . addslashes($title) . '\') ?></span>';
             $html[] = '      </div>';
             $html[] = '      <div class="weline-sse-progress-terminal-status">';
@@ -96,10 +96,10 @@ class SseProgress implements TaglibInterface
             $html[] = '      </div>';
             $html[] = '      <div class="weline-sse-progress-terminal-actions">';
             $html[] = '        <button type="button" class="weline-sse-progress-btn" id="<?= htmlspecialchars($Taglib__id) ?>_btn_copy" title="' . $t_copy . '">';
-            $html[] = '          <i class="mdi mdi-content-copy"></i>';
+            $html[] = '          <w-icon name="copy" size="sm"></w-icon>';
             $html[] = '        </button>';
             $html[] = '        <button type="button" class="weline-sse-progress-btn" id="<?= htmlspecialchars($Taglib__id) ?>_btn_clear" title="' . $t_clear . '">';
-            $html[] = '          <i class="mdi mdi-delete-sweep"></i>';
+            $html[] = '          <w-icon name="trash" size="sm"></w-icon>';
             $html[] = '        </button>';
             $html[] = '      </div>';
             $html[] = '    </div>';
@@ -226,22 +226,22 @@ function renderSteps() {
     var html = '';
     steps.forEach(function(step, idx) {
         var statusClass = safeClassList(step.status || 'waiting', 'waiting');
-        var iconClass = safeClassList(step.icon || 'mdi-checkbox-blank-circle-outline', 'mdi-checkbox-blank-circle-outline');
+        var iconClass = safeClassList(step.icon || 'check', 'check');
         
         // 根据状态改变图标
         var displayIcon = iconClass;
-        if (statusClass === 'success') displayIcon = 'mdi-check';
-        else if (statusClass === 'failed') displayIcon = 'mdi-close';
-        else if (statusClass === 'running') displayIcon = 'mdi-loading mdi-spin';
-        else if (statusClass === 'skipped') displayIcon = 'mdi-skip-next';
+        if (statusClass === 'success') displayIcon = 'check';
+        else if (statusClass === 'failed') displayIcon = 'close';
+        else if (statusClass === 'running') displayIcon = 'circle pin';
+        else if (statusClass === 'skipped') displayIcon = 'circle';
         
         html += '<div class="weline-sse-progress-step ' + statusClass + '" data-step="' + escapeAttr(step.key) + '">';
-        html += '  <div class="weline-sse-progress-step-icon"><i class="mdi ' + safeClassList(displayIcon, 'mdi-checkbox-blank-circle-outline') + '"></i></div>';
+        html += '  <div class="weline-sse-progress-step-icon"><w-icon name="check" size="sm"></w-icon></div>';
         html += '  <span class="weline-sse-progress-step-label">' + escapeHtml(step.label) + '</span>';
         html += '</div>';
         
         if (idx < steps.length - 1) {
-            html += '<span class="weline-sse-progress-step-arrow"><i class="mdi mdi-chevron-right"></i></span>';
+            html += '<span class="weline-sse-progress-step-arrow"><w-icon name="chevron-right" size="sm"></w-icon></span>';
         }
     });
     
@@ -453,8 +453,8 @@ if (btnCopy) {
         });
         var copyText = text.join('\\n');
         var notifyCopied = function() {
-            if (typeof BackendToast !== 'undefined') {
-                BackendToast.success('$t_copied');
+            if (typeof Weline.UI.toast !== 'undefined') {
+                Weline.UI.toast.success('$t_copied');
             }
         };
         var fallbackCopy = function(value) {
@@ -557,10 +557,10 @@ JS;
     id="provision-progress"
     title="配置进度"
     steps='[
-        {"key":"purchase","label":"购买域名","icon":"mdi-cart"},
-        {"key":"dns","label":"DNS配置","icon":"mdi-dns"},
-        {"key":"cdn","label":"CDN绑定","icon":"mdi-shield-check"},
-        {"key":"ssl","label":"SSL证书","icon":"mdi-lock"}
+        {"key":"purchase","label":"购买域名","icon":"cart"},
+        {"key":"dns","label":"DNS配置","icon":"circle"},
+        {"key":"cdn","label":"CDN绑定","icon":"check"},
+        {"key":"ssl","label":"SSL证书","icon":"lock"}
     ]'
 /&gt;
 

@@ -22,7 +22,7 @@ use Weline\Order\Service\PaymentService;
 /**
  * 支付管理控制器
  */
-#[Acl('Weline_Order::payment_manage', '订单收款记录', 'mdi-credit-card', '订单收款记录', 'Weline_Backend::payment_group')]
+#[Acl('Weline_Order::payment_manage', '订单收款记录', 'edit', '订单收款记录', 'Weline_Backend::payment_group')]
 class Payment extends BackendController
 {
     use OrderObjectAuthorizationTrait;
@@ -37,7 +37,7 @@ class Payment extends BackendController
     /**
      * 处理支付
      */
-    #[Acl('Weline_Order::payment_process', '处理支付', 'mdi-cash', '处理支付')]
+    #[Acl('Weline_Order::payment_process', '处理支付', 'circle', '处理支付')]
     public function process()
     {
         $orderId = (int)$this->request->getPost('order_id');
@@ -73,7 +73,7 @@ class Payment extends BackendController
     /**
      * 退款支付
      */
-    #[Acl('Weline_Order::payment_refund', '退款支付', 'mdi-refund', '退款支付')]
+    #[Acl('Weline_Order::payment_refund', '退款支付', 'circle', '退款支付')]
     public function refund()
     {
         $paymentId = (int)$this->request->getPost('payment_id');

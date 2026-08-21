@@ -16,13 +16,13 @@ use Weline\Search\Service\SearchShardSchemaCatalog;
 #[Acl(
     'Weline_Search::commerce:tax-search:control-center',
     '搜索管理',
-    'mdi-magnify-scan',
+    'search',
     '搜索索引只读管理与迁移诊断',
     'Weline_Backend::commerce:tax-search:group'
 )]
 final class ControlCenter extends BackendController
 {
-    #[Acl('Weline_Search::commerce:tax-search:config', '搜索配置', 'mdi-cog-outline', '查看搜索配置')]
+    #[Acl('Weline_Search::commerce:tax-search:config', '搜索配置', 'settings', '查看搜索配置')]
     public function config(): string
     {
         $gate = ObjectManager::getInstance(SearchRolloutGate::class);
@@ -50,7 +50,7 @@ final class ControlCenter extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Search::commerce:tax-search:generations', '索引代次', 'mdi-layers-triple-outline', '查看搜索索引代次')]
+    #[Acl('Weline_Search::commerce:tax-search:generations', '索引代次', 'circle', '查看搜索索引代次')]
     public function generations(): string
     {
         return $this->renderWorkspace('generations', '索引代次', [
@@ -59,7 +59,7 @@ final class ControlCenter extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Search::commerce:tax-search:incremental', '增量状态', 'mdi-update', '查看搜索增量状态')]
+    #[Acl('Weline_Search::commerce:tax-search:incremental', '增量状态', 'refresh', '查看搜索增量状态')]
     public function incremental(): string
     {
         return $this->renderWorkspace('incremental', '增量状态', [
@@ -67,7 +67,7 @@ final class ControlCenter extends BackendController
         ], ['data_source' => 'durable_search_shard_registry']);
     }
 
-    #[Acl('Weline_Search::commerce:tax-search:degraded', '降级状态', 'mdi-alert-decagram-outline', '查看搜索降级状态')]
+    #[Acl('Weline_Search::commerce:tax-search:degraded', '降级状态', 'warning', '查看搜索降级状态')]
     public function degraded(): string
     {
         return $this->renderWorkspace('degraded', '降级状态', [
@@ -75,7 +75,7 @@ final class ControlCenter extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Search::commerce:tax-search:migration', '迁移状态', 'mdi-database-eye-outline', '只读查看搜索迁移状态')]
+    #[Acl('Weline_Search::commerce:tax-search:migration', '迁移状态', 'eye', '只读查看搜索迁移状态')]
     public function migration(): string
     {
         return $this->renderWorkspace('migration', '迁移状态', [

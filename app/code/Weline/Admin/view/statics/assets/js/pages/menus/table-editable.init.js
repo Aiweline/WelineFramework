@@ -46,15 +46,15 @@ $(function () {
             })
             .then(function(res) {
                 var ok = res && res.ok;
-                if (ok && typeof BackendToast !== 'undefined') {
-                    BackendToast.success('保存成功');
-                } else if (!ok && typeof BackendToast !== 'undefined') {
-                    BackendToast.error((res && res.data && (res.data.message || res.data.msg)) || '保存失败');
+                if (ok && typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.success('保存成功');
+                } else if (!ok && typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.error((res && res.data && (res.data.message || res.data.msg)) || '保存失败');
                 }
             })
             .catch(function(err) {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error((err && err.message) || '保存失败');
+                if (typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.error((err && err.message) || '保存失败');
                 } else {
                     console.warn('save menu error', err);
                 }

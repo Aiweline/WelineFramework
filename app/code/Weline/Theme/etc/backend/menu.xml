@@ -5,18 +5,15 @@
     
     <!-- 主题管理 - 归入开发者 > 主题模板 -->
     <menu source="Weline_Theme::theme_management" name="theme_management" title="主题管理" action=""
-         parent="Weline_Backend::template_management" icon="mdi mdi-palette-outline" order="10">
+         parent="Weline_Backend::template_management" icon="palette" order="10">
         
         <menu source="Weline_Theme::theme_list" name="theme_list" title="主题列表" 
              action="theme/backend/index"
-             icon="mdi mdi-format-list-bulleted" order="10"/>
+             icon="list" order="10"/>
         
         <menu source="Weline_Theme::theme_visual_editor" name="theme_visual_editor" title="可视化编辑" 
              action="theme/backend/theme-editor"
-             icon="mdi mdi-palette-swatch-outline" order="15"/>
+             icon="palette" order="15"/>
         
-        <menu source="Weline_Theme::theme_edit" name="theme_edit" title="主题配置" 
-             action="theme/backend/config/layout/edit"
-             icon="mdi mdi-cog-outline" order="20"/>
     </menu>
 </menus>

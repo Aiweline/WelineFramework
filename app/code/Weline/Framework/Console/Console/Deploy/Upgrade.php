@@ -13,12 +13,16 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 
 class Upgrade extends CommandAbstract
 {
+    public const EVENT_STATIC_ASSET_TRANSFORM = 'Weline_Framework_Deploy::static_asset_transform';
+
     /**
      * @var System
      */
@@ -77,39 +81,6 @@ class Upgrade extends CommandAbstract
             'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'otf', 'eot', 'txt',
             'xml', 'webmanifest', 'wasm', 'mp4', 'webm', 'mp3', 'ogg', 'wav',
         ];
-        $publishThemeAssets = static function (string $source, string $target) use ($themeAssetExtensions): int {
-            if (!is_dir($source)) {
-                return 0;
-            }
-
-            $published = 0;
-            $iterator  = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS),
-                \RecursiveIteratorIterator::LEAVES_ONLY
-            );
-            foreach ($iterator as $item) {
-                if ($item->isLink() || !$item->isFile()) {
-                    continue;
-                }
-                $extension = strtolower(pathinfo($item->getFilename(), PATHINFO_EXTENSION));
-                if (!in_array($extension, $themeAssetExtensions, true)) {
-                    continue;
-                }
-                $sourcePath = $item->getPathname();
-                $relative   = ltrim(substr($sourcePath, strlen($source)), '/\\');
-                $targetPath = $target . DS . str_replace(['/', '\\'], DS, $relative);
-                $targetDir  = dirname($targetPath);
-                if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
-                    throw new \RuntimeException('Unable to create theme asset directory: ' . $targetDir);
-                }
-                if (!@copy($sourcePath, $targetPath)) {
-                    throw new \RuntimeException('Unable to publish theme asset: ' . $sourcePath);
-                }
-                $published++;
-            }
-
-            return $published;
-        };
 
         foreach ($modules as $module) {
             $name          = $module['name'];
@@ -132,13 +103,49 @@ class Upgrade extends CommandAbstract
 
             if (is_dir($themeSource)) {
                 $themeTarget = $staticRoot . DS . $theme['path'] . DS . $moduleViewDir . DS . 'theme';
-                $publishThemeAssets($themeSource, $themeTarget);
+                $this->publishThemeAssets($themeSource, $themeTarget, $themeAssetExtensions);
             }
         }
 
         $this->publishFlatStaticRuntimeFiles($modules);
         $normalizePermissions($staticRoot);
         $this->printer->success('静态文件部署完毕！');
+    }
+
+    /**
+     * @param list<string> $themeAssetExtensions
+     */
+    private function publishThemeAssets(string $source, string $target, array $themeAssetExtensions): int
+    {
+        if (!is_dir($source)) {
+            return 0;
+        }
+
+        $published = 0;
+        $iterator  = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        foreach ($iterator as $item) {
+            if ($item->isLink() || !$item->isFile()) {
+                continue;
+            }
+            $extension = strtolower(pathinfo($item->getFilename(), PATHINFO_EXTENSION));
+            if (!in_array($extension, $themeAssetExtensions, true)) {
+                continue;
+            }
+            $sourcePath = $item->getPathname();
+            $relative   = ltrim(substr($sourcePath, strlen($source)), '/\\');
+            $targetPath = $target . DS . str_replace(['/', '\\'], DS, $relative);
+            $targetDir  = dirname($targetPath);
+            if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+                throw new \RuntimeException('Unable to create theme asset directory: ' . $targetDir);
+            }
+            $this->publishFile($sourcePath, $targetPath);
+            $published++;
+        }
+
+        return $published;
     }
 
     private function publishFlatStaticRuntimeFiles(array $modules): void
@@ -209,7 +216,7 @@ class Upgrade extends CommandAbstract
             return;
         }
 
-        copy($sourceFile, $targetFile);
+        $this->publishFile($sourceFile, $targetFile);
     }
 
     /**
@@ -254,8 +261,45 @@ class Upgrade extends CommandAbstract
                 if (!is_dir($destDir)) {
                     mkdir($destDir, 0775, true);
                 }
-                copy($item->getPathname(), $destPath);
+                $this->publishFile($item->getPathname(), $destPath);
             }
+        }
+    }
+
+    /**
+     * Copy one file to the static deploy target, allowing observers to transform content.
+     */
+    private function publishFile(string $sourcePath, string $targetPath): void
+    {
+        $extension = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
+        $raw = @file_get_contents($sourcePath);
+        if ($raw === false) {
+            if (!@copy($sourcePath, $targetPath)) {
+                throw new \RuntimeException('Unable to publish static asset: ' . $sourcePath);
+            }
+
+            return;
+        }
+
+        $payload = new DataObject([
+            'source_path' => $sourcePath,
+            'target_path' => $targetPath,
+            'extension' => $extension,
+            'content' => $raw,
+            'transformed' => false,
+        ]);
+
+        try {
+            /** @var EventsManager $events */
+            $events = ObjectManager::getInstance(EventsManager::class);
+            $events->dispatch(self::EVENT_STATIC_ASSET_TRANSFORM, $payload);
+        } catch (\Throwable) {
+            // Transform hooks must not block deploy; fall back to original bytes.
+        }
+
+        $content = (string)$payload->getData('content');
+        if (@file_put_contents($targetPath, $content) === false) {
+            throw new \RuntimeException('Unable to write static asset: ' . $targetPath);
         }
     }
 

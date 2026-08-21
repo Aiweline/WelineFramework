@@ -33,7 +33,7 @@ use function PHPUnit\Framework\matches;
 #[Acl(
     'Weline_DeveloperWorkspace::dev-document',
      '开发文档管理', 
-     'fa fa-list-alt',
+     'list',
       '管理开发文档',
       'Weline_DeveloperWorkspace::dev-document-manager')]
 class Document extends \Weline\Framework\App\Controller\BackendController
@@ -53,7 +53,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
-    #[Acl('Weline_DeveloperWorkspace::dev-document-manager', '文档列表', 'fa fa-list-alt')]
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager', '文档列表', 'list')]
     public function index()
     {
         // 获取分类树（只获取激活的分类）
@@ -93,7 +93,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_DeveloperWorkspace::document_config', '文档管理配置', 'mdi mdi-translate')]
+    #[Acl('Weline_DeveloperWorkspace::document_config', '文档管理配置', 'language')]
     public function config()
     {
         /** @var DocumentTranslationConfigService $configService */
@@ -113,7 +113,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch('Weline_DeveloperWorkspace::templates/Admin/Document/config');
     }
 
-    #[Acl('Weline_DeveloperWorkspace::document_config_save', '保存文档管理配置', 'mdi mdi-content-save')]
+    #[Acl('Weline_DeveloperWorkspace::document_config_save', '保存文档管理配置', 'save')]
     public function postConfig()
     {
         try {
@@ -164,7 +164,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->jsonResponse($response);
     }
 
-    #[Acl('Weline_DeveloperWorkspace::document_config_scan_adapter', '扫描文档翻译适配器', 'mdi mdi-magnify-scan')]
+    #[Acl('Weline_DeveloperWorkspace::document_config_scan_adapter', '扫描文档翻译适配器', 'search')]
     public function postTranslationScan()
     {
         try {
@@ -177,7 +177,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->jsonResponse($response);
     }
 
-    #[Acl('Weline_DeveloperWorkspace::document_config_run_translation', '执行文档翻译任务', 'mdi mdi-play')]
+    #[Acl('Weline_DeveloperWorkspace::document_config_run_translation', '执行文档翻译任务', 'play')]
     public function postTranslationRun()
     {
         try {
@@ -193,7 +193,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->jsonResponse($response);
     }
 
-    #[Acl('Weline_DeveloperWorkspace::document_config_retry_translation', '重试失败文档翻译任务', 'mdi mdi-replay')]
+    #[Acl('Weline_DeveloperWorkspace::document_config_retry_translation', '重试失败文档翻译任务', 'play')]
     public function postTranslationRetry()
     {
         try {
@@ -206,7 +206,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->jsonResponse($response);
     }
 
-    #[Acl('Weline_DeveloperWorkspace::document_config_test_adapter', '测试文档翻译适配器', 'mdi mdi-test-tube')]
+    #[Acl('Weline_DeveloperWorkspace::document_config_test_adapter', '测试文档翻译适配器', 'circle')]
     public function postTranslationTest()
     {
         try {
@@ -219,7 +219,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->jsonResponse($response);
     }
 
-    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-delete', '文档删除', 'fa fa-delete')]
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-delete', '文档删除', 'trash')]
     public function postDelete()
     {
         $id = $this->request->getParam('id');
@@ -231,13 +231,13 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-edit', '文档编辑', 'fa fa-edit')]
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-edit', '文档编辑', 'edit')]
     public function edit()
     {
         $this->redirect($this->url->getBackendUrl('dev/tool/admin/document/add', $this->request->getParams()));
     }
 
-    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-add', '文档添加', 'fa fa-plus')]
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-add', '文档添加', 'plus')]
     public function add()
     {
         // 分类（只获取激活的分类）
@@ -253,7 +253,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
     }
 
     #[
-        Acl('Weline_DeveloperWorkspace::dev-document-manager-save', '文档保存', 'fa fa-save'),
+        Acl('Weline_DeveloperWorkspace::dev-document-manager-save', '文档保存', 'save'),
     ]
     public function postPost()
     {
@@ -275,7 +275,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         $this->redirect($this->_url->getBackendUrl('dev/tool/admin/document'));
     }
 
-    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-upload', '文档上传', 'fa fa-upload')]
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-upload', '文档上传', 'upload')]
     public function postUpload()
     {
         $uploader = new Uploader();
@@ -286,7 +286,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->fetchJson(['location' => $paths[0]]);
     }
 
-    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-view', '文档查看', 'fa fa-eye')]
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-view', '文档查看', 'eye')]
     public function getView()
     {
         $id = $this->request->getParam('id');
@@ -343,7 +343,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-list', '文档列表API', 'fa fa-list')]
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-list', '文档列表API', 'list')]
     public function getList()
     {
         $categoryId = $this->request->getParam('category_id');

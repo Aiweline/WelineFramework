@@ -4,20 +4,20 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <menu source="Weline_Tax::commerce:tax-search:control-center" name="tax_control_center"
           title="税务管理" action="" parent="Weline_Backend::commerce:tax-search:group"
-          icon="mdi mdi-receipt-text-check-outline" order="10">
+          icon="check" order="10">
         <menu source="Weline_Tax::commerce:tax-search:classes" name="tax_classes" title="税类"
-              action="tax/backend/controlcenter/classes" icon="mdi mdi-shape-outline" order="10"/>
+              action="tax/backend/controlcenter/classes" icon="circle" order="10"/>
         <menu source="Weline_Tax::commerce:tax-search:rates" name="tax_rates" title="税率"
-              action="tax/backend/controlcenter/rates" icon="mdi mdi-percent-outline" order="15"/>
+              action="tax/backend/controlcenter/rates" icon="circle" order="15"/>
         <menu source="Weline_Tax::commerce:tax-search:rules" name="tax_rules" title="税务规则"
-              action="tax/backend/controlcenter/rules" icon="mdi mdi-format-list-checks" order="20"/>
+              action="tax/backend/controlcenter/rules" icon="check" order="20"/>
         <menu source="Weline_Tax::commerce:tax-search:engine" name="tax_engine" title="税引擎状态"
-              action="tax/backend/controlcenter/engine" icon="mdi mdi-engine-outline" order="30"/>
+              action="tax/backend/controlcenter/engine" icon="circle" order="30"/>
         <menu source="Weline_Tax::commerce:tax-search:shadow" name="tax_shadow" title="影子验证"
-              action="tax/backend/controlcenter/shadow" icon="mdi mdi-compare-horizontal" order="40"/>
+              action="tax/backend/controlcenter/shadow" icon="circle" order="40"/>
         <menu source="Weline_Tax::commerce:tax-search:lkg" name="tax_lkg" title="已验证 LKG"
-              action="tax/backend/controlcenter/lkg" icon="mdi mdi-shield-check-outline" order="50"/>
+              action="tax/backend/controlcenter/lkg" icon="check" order="50"/>
         <menu source="Weline_Tax::commerce:tax-search:migration" name="tax_migration" title="迁移状态"
-              action="tax/backend/controlcenter/migration" icon="mdi mdi-database-eye-outline" order="60"/>
+              action="tax/backend/controlcenter/migration" icon="eye" order="60"/>
     </menu>
 </menus>

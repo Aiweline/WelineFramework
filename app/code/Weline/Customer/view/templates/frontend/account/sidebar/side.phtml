@@ -38,9 +38,9 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') {
     $accountLogoutConfigJson = '{}';
 }
 ?>
-<link rel="stylesheet" href="@static(Weline_Customer::css/account-sidebar.css)?v=<?= $accountSidebarAssetVersion ?>">
+<css>Weline_Customer::css/account-sidebar.css</css>
 <script id="weline-account-logout-config" type="application/json"><?= $accountLogoutConfigJson ?></script>
-<script src="@static(Weline_Customer::js/account-logout.js)?v=<?= $accountSidebarAssetVersion ?>" defer></script>
+<js>Weline_Customer::js/account-logout.js</js>
 <div class="account-sidebar-wrapper">
     <header class="account-sidebar__header">
         <div class="account-sidebar__avatar">
@@ -57,11 +57,11 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') {
 
     <button class="account-sidebar__menu-toggle" type="button" aria-expanded="false" aria-controls="accountSidebarNav" data-account-sidebar-toggle>
         <span class="account-sidebar__menu-toggle-main">
-            <i class="ri-menu-3-line" aria-hidden="true"></i>
+            <w:icon name="menu" size="sm"></w:icon>
             <span><lang>账户菜单</lang></span>
         </span>
         <span class="account-sidebar__menu-toggle-current" data-account-sidebar-current><lang>当前栏目</lang></span>
-        <i class="ri-arrow-down-s-line account-sidebar__menu-toggle-icon" aria-hidden="true"></i>
+        <w:icon name="arrow-down" size="sm"></w:icon>
     </button>
 
     <nav class="account-sidebar__nav" id="accountSidebarNav" data-account-sidebar-nav>

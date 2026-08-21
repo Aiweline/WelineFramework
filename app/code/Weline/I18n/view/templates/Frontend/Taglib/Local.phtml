@@ -31,14 +31,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     <!-- ============================================================== -->
 
     <!-- start page message -->
-    <div class='row'>
+    <div class="w-grid">
         <template>Weline_Component::message.phtml</template>
     </div> <!-- end message -->
-    <div class='row'>
-        <div class='col-12'>
-            <div class='card'>
-                <div class='card-body'>
-                    <div class='col-6'>
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div style="--w-span:6;">
                         <block class='Weline\Component\Block\Form\Search' id='translate-search'
                                vars='req'
                                cache='0'
@@ -48,10 +48,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                action='*/backend/taglib/local' method='get' keyword='search' value=''
                                placeholder='@lang{请输入关键词}'></block>
                     </div>
-                    <w:form id="localTranslationForm" role='form' class='needs-validation' novalidate=''
-                          action='{{action}}' method='post'>
+                    <w:form id="localTranslationForm" role='form' class="w-form" novalidate='' action='{{action}}' method='post'>
                         <!--基础信息-->
-                        <div class='row form-group'>
+                        <div class="w-grid w-field">
                             <empty name="local_descriptions">
                                 <lang>请前往i18n模块收集词语后重试！或者开启实时收集词语功能！</lang>
                             </empty>
@@ -59,25 +58,19 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <input type='hidden' name='description[{{v.local_code}}][local_code]'
                                        value='{{v.local_code}}'>
                                 <input type='hidden' name='description[{{v.local_code}}][{{id_field}}]' value='{{id}}'>
-                                <div class='col-lg-12'>
-                                    <div class='input-group mb-3'>
-                                        <div class='input-group-prepend'>
-                                            <span class='input-group-text' title='{{v.local.name}}'
-                                                  id='{{v.local_code}}-{{field}}-input-addon'>
+                                <div style="--w-span-lg:12;">
+                                    <div class="w-field__control" style="--w-mb:var(--weline-space-4);">
+                                        <div class="input-group-prepend">
+                                            <span class="w-field__addon" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
                                                 {{v.local.flag}}
                                             </span>
                                         </div>
-                                        <input class='form-control' type='text' id='{{v.local_code}}-{{field}}-input'
-                                               placeholder='{{v[$field]}}' aria-label='{{v[$field]}}'
-                                               value='{{v[$field]}}' name='description[{{v.local_code}}][{{field}}]'
-                                               required='required'
-                                               aria-describedby='{{v.local_code}}-{{field}}-input-addon'>
-                                        <div class='valid-feedback'>
+                                        <input class="w-input" type='text' id='{{v.local_code}}-{{field}}-input' placeholder='{{v[$field]}}' aria-label='{{v[$field]}}' value='{{v[$field]}}' name='description[{{v.local_code}}][{{field}}]' required='required' aria-describedby='{{v.local_code}}-{{field}}-input-addon'>
+                                        <div class="w-field__hint">
                                             <lang>填写正确！</lang>
                                         </div>
-                                        <div class='input-group-append'>
-                                            <span class='input-group-text' title='{{v.local.name}}'
-                                                  id='{{v.local_code}}-{{field}}-input-addon'>
+                                        <div class="input-group-append">
+                                            <span class="w-field__addon" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
                                                 {{v.local.name}}
                                             </span>
                                         </div>
@@ -85,8 +78,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 </div>
                             </foreach>
                         </div>
-                        <div class="form-group">
-                            <button class='btn btn-primary' type='submit'>
+                        <div class="w-field">
+                            <button class="w-button" type='submit' data-tone="primary">
                                 <lang>提交</lang>
                             </button>
                         </div>

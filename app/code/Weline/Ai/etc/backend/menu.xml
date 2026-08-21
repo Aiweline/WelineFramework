@@ -10,7 +10,7 @@
           title="AI 管理" 
           parent="Weline_Backend::ai_group"
           action="ai/backend/manager" 
-          icon="mdi mdi-cog-outline"
+          icon="settings"
           order="10"/>
 
     <!-- 全局默认模型配置 -->
@@ -19,7 +19,7 @@
           title="默认模型"
           parent="Weline_Backend::ai_group"
           action="ai/backend/defaultmodel/index"
-          icon="mdi mdi-star-settings"
+          icon="settings"
           order="15"/>
     
     <!-- 场景配置（场景适配器） -->
@@ -28,27 +28,27 @@
           title="场景配置" 
           parent="Weline_Backend::ai_group"
           action="ai/backend/adapter" 
-          icon="mdi mdi-puzzle-outline"
+          icon="puzzle"
           order="20"/>
     <menu source="Weline_Ai::ai_agent_list"
           name="ai_agent_governance"
           title="AI 智能体"
           parent="Weline_Backend::ai_group"
           action="ai/backend/agent"
-          icon="mdi mdi-robot-industrial-outline"
+          icon="circle"
           order="25"/>
     <menu source="Weline_Ai::ai_skill_list"
           name="ai_skill_governance"
           title="AI Skills"
           parent="Weline_Backend::ai_group"
           action="ai/backend/skill"
-          icon="mdi mdi-shape-outline"
+          icon="circle"
           order="30"/>
     <menu source="Weline_Ai::ai_style_list"
           name="ai_style_governance"
           title="AI 风格"
           parent="Weline_Backend::ai_group"
           action="ai/backend/style"
-          icon="mdi mdi-palette-outline"
+          icon="palette"
           order="35"/>
 </menus>

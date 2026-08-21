@@ -7,10 +7,10 @@ namespace Weline\Websites\Api\Rest\V1;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendRestController;
 
-#[Acl('Weline_Websites::rest_v1_provisioning', '编排REST接口', 'mdi-api', 'Websites 编排 REST V1 接口', 'Weline_Websites::provisioning')]
+#[Acl('Weline_Websites::rest_v1_provisioning', '编排REST接口', 'code', 'Websites 编排 REST V1 接口', 'Weline_Websites::provisioning')]
 class Provisioning extends BackendRestController
 {
-    #[Acl('Weline_Websites::rest_v1_provisioning_start', '启动编排', 'mdi-play')]
+    #[Acl('Weline_Websites::rest_v1_provisioning_start', '启动编排', 'play')]
     public function postStart(): string
     {
         try {
@@ -49,7 +49,7 @@ class Provisioning extends BackendRestController
         }
     }
 
-    #[Acl('Weline_Websites::rest_v1_provisioning_status', '查询编排状态', 'mdi-progress-clock')]
+    #[Acl('Weline_Websites::rest_v1_provisioning_status', '查询编排状态', 'clock')]
     public function postStatus(): string
     {
         try {

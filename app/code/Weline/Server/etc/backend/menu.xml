@@ -6,6 +6,6 @@
           title="WLS Panel"
           parent="Weline_Backend::system_service_group"
           action="*/backend/wls-panel"
-          icon="mdi mdi-view-dashboard"
+          icon="grid"
           order="10"/>
 </menus>

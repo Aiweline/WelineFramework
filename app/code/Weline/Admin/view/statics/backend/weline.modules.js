@@ -8,16 +8,4 @@ window.WelineModulesConfig = window.WelineModulesConfig || {};
 window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAliases || {};
 
-// 合并模块配置
-Object.assign(window.WelineModulesConfig.modules, {
-    bootstrapBundle: {
-        paths: [
-            "Weline_Admin::lib/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js",
-            "Weline_Admin::lib/bootstrap-5.1.3-dist/js/bootstrap.min.js",
-            "Weline_Admin::lib/bootstrap-5.1.3-dist/js/bootstrap.esm.min.js"
-        ],
-        globalVar: "bootstrap",
-        description: "Bootstrap JS Bundle"
-    }
-});
-
+Object.assign(window.WelineModulesConfig.modules, {});

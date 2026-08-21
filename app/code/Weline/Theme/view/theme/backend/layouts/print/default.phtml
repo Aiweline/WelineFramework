@@ -1,105 +1,37 @@
-<!--
-布局：后端 - 打印布局
-
-后端打印布局，无装饰、纯内容，适合打印输出
-字段
-@meta.name {default="后端打印布局",name="后端打印布局",description="后端打印布局，用于描述布局的名称"}
-@meta.description {default="后端打印布局，无装饰、纯内容",name="后端打印布局，无装饰、纯内容",description="后端打印布局，无装饰、纯内容，用于描述布局的用途"}
-@param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
-@param.content {default="",name="内容（HTML字符串）",description="内容（HTML字符串），用于设置页面内容"}
-@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
-
-参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
-模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
-页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
--->
-<?php $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class); ?>
+<?php
+/**
+ * @meta.name {default="Weline UI 2.0 后台打印布局",name="Weline UI 2.0 后台打印布局"}
+ * @meta.description {default="Accessible print-first backend document.",name="后台打印文档布局"}
+ * @param.class {default="",name="额外 Weline CSS 类"}
+ * @var \Weline\Framework\View\Template $this
+ */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$classes = array_values(array_filter(preg_split('/\s+/', trim((string)($meta['class'] ?? ''))) ?: [], static fn(string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1));
+?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme-area="backend" <?= $themeConfig->getThemeHtmlAttributes() ?>>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" <?= $themeConfig->getThemeHtmlAttributes() ?>>
 <head>
-    <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <w:template>Weline_Admin::common/head.phtml</w:template>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
-    <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::backend::layouts::print::head-after</w:hook>
 </head>
-<body class="<?= htmlspecialchars($meta['class'] ?? '') ?>">
+<body>
     <w:hook>Weline_Theme::backend::layouts::print::body-start</w:hook>
-    
-    <?php
-    $layoutMainClass = 'backend-layout-print';
-    $layoutShowPageHeader = false;
-    $layoutShowMessages = false;
-    echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
-    ?>
-    <div class="no-print" style="text-align: center; margin-top: 20px;">
-        <button type="button" data-backend-print-page class="backend-print-btn">
-            <i class="ri-printer-line"></i>
-            <lang>打印</lang>
-        </button>
+    <div class="w-backend-print-shell">
+        <?php
+        $layoutMainClass = trim('w-backend-page w-backend-print-document ' . implode(' ', $classes));
+        $layoutShowPageHeader = false;
+        $layoutShowMessages = false;
+        echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
+        ?>
+        <div class="w-backend-print-actions">
+            <button type="button" class="w-button" data-w-action="page.print">
+                <w:icon name="printer" size="sm" />
+                <span><?= htmlspecialchars((string)__('打印'), ENT_QUOTES, 'UTF-8') ?></span>
+            </button>
+        </div>
     </div>
-    <script>
-    (function () {
-        document.addEventListener('click', function (event) {
-            const printButton = event.target.closest('[data-backend-print-page]');
-            if (!printButton) {
-                return;
-            }
-
-            window.print();
-        });
-    })();
-    </script>
-    
     <w:hook>Weline_Theme::backend::layouts::print::body-end</w:hook>
 </body>
 </html>
-
-<style>
-/* 打印布局样式 */
-body {
-    margin: 0;
-    padding: 0;
-    background-color: var(--backend-theme-surface-subtle);
-    color: var(--backend-theme-text);
-}
-
-@media print {
-    body {
-        background: white;
-        color: black;
-        font-size: 12pt;
-    }
-    .no-print {
-        display: none !important;
-    }
-}
-
-@media screen {
-    .backend-layout-print {
-        max-width: 800px;
-        margin: var(--backend-spacing-lg, 20px) auto;
-        padding: var(--backend-spacing-lg, 20px);
-        background: var(--backend-component-surface);
-        border-radius: var(--backend-theme-radius-md);
-        box-shadow: var(--backend-theme-shadow-sm);
-    }
-}
-
-.backend-print-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--backend-spacing-xs, 6px);
-    padding: var(--backend-spacing-sm, 10px) var(--backend-spacing-lg, 20px);
-    border: none;
-    border-radius: var(--backend-border-radius, 6px);
-    background: var(--backend-theme-primary);
-    color: var(--backend-theme-on-primary);
-    font-size: 0.9375rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.backend-print-btn:hover {
-    background: var(--backend-theme-primary-hover);
-}
-</style>

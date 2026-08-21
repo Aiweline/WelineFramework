@@ -17,25 +17,25 @@ use Weline\Server\Service\WlsPanelProjectConfigCenterService;
 use Weline\Server\Service\WlsPanelProjectRegistryService;
 use Weline\Server\Service\WlsPanelSecurityDataService;
 
-#[Acl('Weline_Server::wls_panel', 'WLS 面板', 'mdi-view-dashboard', '访问 WLS 面板', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
+#[Acl('Weline_Server::wls_panel', 'WLS 面板', 'grid', '访问 WLS 面板', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
 class WlsPanel extends BackendController
 {
     private const APPSTORE_PRODUCTION_PLATFORM_URL = 'https://app.aiweline.com';
     private const APPSTORE_LOCAL_PLATFORM_URL = 'https://app.weline.test:9523';
 
-    #[Acl('Weline_Server::wls_panel_dashboard', '查看 WLS 面板仪表盘', 'mdi-view-dashboard-outline', '查看 WLS 面板仪表盘', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_dashboard', '查看 WLS 面板仪表盘', 'grid', '查看 WLS 面板仪表盘', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getIndex(): string
     {
         return $this->renderPanel('dashboard', (string)__('WLS 面板'));
     }
 
-    #[Acl('Weline_Server::wls_panel_projects', '查看 WLS 面板项目', 'mdi-server-network', '查看 WLS 面板托管项目', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_projects', '查看 WLS 面板项目', 'server', '查看 WLS 面板托管项目', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getProjects(): string
     {
         return $this->renderPanel('projects', (string)__('WLS 项目'));
     }
 
-    #[Acl('Weline_Server::wls_panel_lifecycle_status', '查看 WLS 项目运行状态', 'mdi-heart-pulse', '查看项目 WLS 实例和 Ready 状态', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_lifecycle_status', '查看 WLS 项目运行状态', 'heart', '查看项目 WLS 实例和 Ready 状态', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_READ)]
     public function getLifecycleStatus(): string
     {
         /** @var WlsPanelLifecycleService $lifecycleService */
@@ -45,7 +45,7 @@ class WlsPanel extends BackendController
         );
     }
 
-    #[Acl('Weline_Server::wls_panel_lifecycle_reload', '重载 WLS 项目', 'mdi-refresh', '滚动重载项目 WLS 工作进程', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::wls_panel_lifecycle_reload', '重载 WLS 项目', 'refresh', '滚动重载项目 WLS 工作进程', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postLifecycleReload(): string
     {
         /** @var WlsPanelLifecycleService $lifecycleService */
@@ -55,7 +55,7 @@ class WlsPanel extends BackendController
         );
     }
 
-    #[Acl('Weline_Server::wls_panel_lifecycle_restart', '重启 WLS 项目', 'mdi-restart-alert', '保持 Master 在线并重建项目全部 WLS 工作进程', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::wls_panel_lifecycle_restart', '重启 WLS 项目', 'star', '保持 Master 在线并重建项目全部 WLS 工作进程', 'Weline_Server::wls_panel_projects', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postLifecycleRestart(): string
     {
         /** @var WlsPanelLifecycleService $lifecycleService */
@@ -68,25 +68,25 @@ class WlsPanel extends BackendController
         );
     }
 
-    #[Acl('Weline_Server::wls_panel_gateway', '查看 WLS 面板网关', 'mdi-router-network', '查看 WLS 面板网关', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_gateway', '查看 WLS 面板网关', 'circle', '查看 WLS 面板网关', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getGateway(): string
     {
         return $this->renderPanel('nginx', (string)__('Nginx 公网入口'));
     }
 
-    #[Acl('Weline_Server::wls_panel_plugin', '查看 WLS 面板插件', 'mdi-puzzle-outline', '查看 WLS 面板插件页面', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_plugin', '查看 WLS 面板插件', 'puzzle', '查看 WLS 面板插件页面', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getPlugin(): string
     {
         return $this->renderPanel('plugin', (string)__('WLS 插件'));
     }
 
-    #[Acl('Weline_Server::wls_panel_marketplace', '查看 WLS 插件商城', 'mdi-storefront-outline', '查看 WLS 插件商城', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_marketplace', '查看 WLS 插件商城', 'store', '查看 WLS 插件商城', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getMarketplace(): string
     {
         return $this->renderPanel('marketplace', (string)__('WLS 插件商城'));
     }
 
-    #[Acl('Weline_Server::wls_panel_plugin_refresh', '刷新 WLS 面板插件能力', 'mdi-refresh', '刷新 WLS 面板插件能力', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::wls_panel_plugin_refresh', '刷新 WLS 面板插件能力', 'refresh', '刷新 WLS 面板插件能力', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postPluginRefresh(): string
     {
         /** @var WlsPanelPluginRefreshService $pluginRefreshService */
@@ -113,37 +113,37 @@ class WlsPanel extends BackendController
         return '';
     }
 
-    #[Acl('Weline_Server::wls_panel_security', '查看 WLS 安全', 'mdi-shield-outline', '查看 WLS 安全', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_security', '查看 WLS 安全', 'shield', '查看 WLS 安全', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getSecurity(): string
     {
         return $this->renderPanel('security', (string)__('WLS 安全'));
     }
 
-    #[Acl('Weline_Server::wls_panel_security_logs', '查看 WLS 攻击日志', 'mdi-shield-search', '查看 WLS 攻击日志', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_security_logs', '查看 WLS 攻击日志', 'search', '查看 WLS 攻击日志', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
     public function getSecurityLogs(): string
     {
         return $this->renderPanel('security_logs', (string)__('WLS 攻击日志'));
     }
 
-    #[Acl('Weline_Server::wls_panel_security_rules', '查看 WLS 安全规则', 'mdi-shield-cog-outline', '查看 WLS 安全规则', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_security_rules', '查看 WLS 安全规则', 'settings', '查看 WLS 安全规则', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
     public function getSecurityRules(): string
     {
         return $this->renderPanel('security_rules', (string)__('WLS 安全规则'));
     }
 
-    #[Acl('Weline_Server::wls_panel_security_policy', '查看 WLS 项目安全策略', 'mdi-shield-key-outline', '查看 WLS 项目安全策略', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_security_policy', '查看 WLS 项目安全策略', 'shield', '查看 WLS 项目安全策略', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
     public function getSecurityPolicy(): string
     {
         return $this->renderPanel('security_policy', (string)__('WLS 项目安全策略'));
     }
 
-    #[Acl('Weline_Server::wls_panel_security_audit', '查看 WLS 安全策略审计', 'mdi-shield-clock-outline', '查看 WLS 安全策略审计', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_security_audit', '查看 WLS 安全策略审计', 'clock', '查看 WLS 安全策略审计', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
     public function getSecurityAudit(): string
     {
         return $this->renderPanel('security_audit', (string)__('WLS 安全策略审计'));
     }
 
-    #[Acl('Weline_Server::wls_panel_project_save', '保存 WLS 面板项目', 'mdi-content-save-outline', '保存 WLS 面板托管项目', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::wls_panel_project_save', '保存 WLS 面板项目', 'save', '保存 WLS 面板托管项目', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postProjectSave(): string
     {
         /** @var WlsPanelProjectRegistryService $projectRegistry */
@@ -166,7 +166,7 @@ class WlsPanel extends BackendController
         return '';
     }
 
-    #[Acl('Weline_Server::wls_panel_project_delete', '删除 WLS 面板项目', 'mdi-delete-outline', '删除 WLS 面板托管项目', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::wls_panel_project_delete', '删除 WLS 面板项目', 'trash', '删除 WLS 面板托管项目', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postProjectDelete(): string
     {
         /** @var WlsPanelProjectRegistryService $projectRegistry */
@@ -183,7 +183,7 @@ class WlsPanel extends BackendController
         return '';
     }
 
-    #[Acl('Weline_Server::wls_panel_security_rules_save', '保存 WLS 安全规则', 'mdi-shield-check-outline', '保存 WLS 安全规则', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::wls_panel_security_rules_save', '保存 WLS 安全规则', 'check', '保存 WLS 安全规则', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postSecurityRulesSave(): string
     {
         /** @var WlsPanelSecurityDataService $securityDataService */

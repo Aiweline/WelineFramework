@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理文件存储配置
  */
-#[Acl('Weline_Backend::storage_settings', '存储设置', 'mdi-folder', '存储设置', 'Weline_Backend::system_config_group')]
+#[Acl('Weline_Backend::storage_settings', '存储设置', 'folder', '存储设置', 'Weline_Backend::system_config_group')]
 class Storage extends BackendController
 {
     /**
@@ -21,7 +21,7 @@ class Storage extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::storage_settings_index', '查看存储设置', 'mdi-folder', '查看存储设置')]
+    #[Acl('Weline_Backend::storage_settings_index', '查看存储设置', 'folder', '查看存储设置')]
     public function index(): string
     {
         try {
@@ -44,7 +44,7 @@ class Storage extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::storage_settings_save', '保存存储设置', 'mdi-content-save', '保存存储设置')]
+    #[Acl('Weline_Backend::storage_settings_save', '保存存储设置', 'save', '保存存储设置')]
     public function save(): string
     {
         if (!$this->isPost()) {

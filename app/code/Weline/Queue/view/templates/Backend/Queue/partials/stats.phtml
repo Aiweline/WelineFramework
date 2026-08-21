@@ -1,9 +1,9 @@
 <!-- 统计卡片 -->
-<div class="row weline-queue-stats">
-    <div class="col-xl-2 col-md-4 col-6">
+<div class="w-grid weline-queue-stats">
+    <div style="--w-span-lg:2;--w-span-md:4;--w-span:6;">
         <a href="@backend-url('queue/backend/queue')" class="weline-queue-stat-card weline-queue-stat-all">
             <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-format-list-bulleted"></i>
+                <w:icon name="list" size="sm"></w:icon>
             </div>
             <div class="weline-queue-stat-content">
                 <div class="weline-queue-stat-number"><?= (int)($stats['all'] ?? 0) ?></div>
@@ -11,10 +11,10 @@
             </div>
         </a>
     </div>
-    <div class="col-xl-2 col-md-4 col-6">
+    <div style="--w-span-lg:2;--w-span-md:4;--w-span:6;">
         <a href="@backend-url('queue/backend/queue')?status=pending" class="weline-queue-stat-card weline-queue-stat-pending">
             <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-clock-outline"></i>
+                <w:icon name="clock" size="sm"></w:icon>
             </div>
             <div class="weline-queue-stat-content">
                 <div class="weline-queue-stat-number"><?= (int)($stats['pending'] ?? 0) ?></div>
@@ -22,10 +22,10 @@
             </div>
         </a>
     </div>
-    <div class="col-xl-2 col-md-4 col-6">
+    <div style="--w-span-lg:2;--w-span-md:4;--w-span:6;">
         <a href="@backend-url('queue/backend/queue')?status=running" class="weline-queue-stat-card weline-queue-stat-running">
             <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-play-circle-outline"></i>
+                <w:icon name="play" size="sm"></w:icon>
             </div>
             <div class="weline-queue-stat-content">
                 <div class="weline-queue-stat-number"><?= (int)($stats['running'] ?? 0) ?></div>
@@ -33,10 +33,10 @@
             </div>
         </a>
     </div>
-    <div class="col-xl-2 col-md-4 col-6">
+    <div style="--w-span-lg:2;--w-span-md:4;--w-span:6;">
         <a href="@backend-url('queue/backend/queue')?status=done" class="weline-queue-stat-card weline-queue-stat-done">
             <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-check-circle-outline"></i>
+                <w:icon name="check" size="sm"></w:icon>
             </div>
             <div class="weline-queue-stat-content">
                 <div class="weline-queue-stat-number"><?= (int)($stats['done'] ?? 0) ?></div>
@@ -44,10 +44,10 @@
             </div>
         </a>
     </div>
-    <div class="col-xl-2 col-md-4 col-6">
+    <div style="--w-span-lg:2;--w-span-md:4;--w-span:6;">
         <a href="@backend-url('queue/backend/queue')?status=error" class="weline-queue-stat-card weline-queue-stat-error">
             <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-alert-circle-outline"></i>
+                <w:icon name="warning" size="sm"></w:icon>
             </div>
             <div class="weline-queue-stat-content">
                 <div class="weline-queue-stat-number"><?= (int)($stats['error'] ?? 0) ?></div>
@@ -55,10 +55,10 @@
             </div>
         </a>
     </div>
-    <div class="col-xl-2 col-md-4 col-6">
+    <div style="--w-span-lg:2;--w-span-md:4;--w-span:6;">
         <a href="@backend-url('queue/backend/queue')?status=stop" class="weline-queue-stat-card weline-queue-stat-stop">
             <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-pause-circle-outline"></i>
+                <w:icon name="pause" size="sm"></w:icon>
             </div>
             <div class="weline-queue-stat-content">
                 <div class="weline-queue-stat-number"><?= (int)($stats['stop'] ?? 0) ?></div>

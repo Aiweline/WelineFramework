@@ -35,7 +35,7 @@ use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\ServerIpService;
 
-#[Acl('Weline_Websites::domain_service', '域名服务', 'mdi mdi-domain', '域名服务管理', 'Weline_Websites::website_service')]
+#[Acl('Weline_Websites::domain_service', '域名服务', 'globe', '域名服务管理', 'Weline_Websites::website_service')]
 class Domain extends BackendController
 {
     private DomainRegistrar $registrar;
@@ -186,7 +186,7 @@ class Domain extends BackendController
     /**
      * 域名管理主页（Tab 布局）
      */
-    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'globe', '域名管理首页')]
     public function index()
     {
         // 获取已注册的适配器列表（供前端下拉选择使用）
@@ -245,7 +245,7 @@ class Domain extends BackendController
     /**
      * 域名池列表（分页，供 Tab AJAX）
      */
-    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'globe', '域名管理首页')]
     public function getDomainPoolList()
     {
         try {
@@ -286,7 +286,7 @@ class Domain extends BackendController
     /**
      * 域名池流转记录（时间线）
      */
-    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'globe', '域名管理首页')]
     public function getPoolFlowLog()
     {
         try {
@@ -322,7 +322,7 @@ class Domain extends BackendController
     /**
      * 清理域名池中误同步的非法记录（如含 [] 的域名串）
      */
-    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'globe', '域名管理首页')]
     public function postCleanPoolInvalidDomains()
     {
         try {
@@ -349,7 +349,7 @@ class Domain extends BackendController
     /**
      * 根域 @ 上未指向本机公网的 A/AAAA（非 CF 橙云）从 DNS 商删除，并移除该根下域名池条目
      */
-    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'globe', '域名管理首页')]
     public function postCleanPoolMispointedApexDns()
     {
         try {
@@ -956,7 +956,7 @@ class Domain extends BackendController
     /**
      * 获取域名列表（分页、筛选）
      */
-    #[Acl('Weline_Websites::domain_list', '域名列表', 'mdi mdi-format-list-bulleted', '查看域名列表')]
+    #[Acl('Weline_Websites::domain_list', '域名列表', 'list', '查看域名列表')]
     public function getDomainList()
     {
         try {
@@ -1070,7 +1070,7 @@ class Domain extends BackendController
     /**
      * 获取远程域名列表（仅查询，不自动导入）
      */
-    #[Acl('Weline_Websites::domain_sync', '同步域名', 'mdi mdi-sync', '从域名商获取域名列表')]
+    #[Acl('Weline_Websites::domain_sync', '同步域名', 'refresh', '从域名商获取域名列表')]
     public function getRemoteDomains()
     {
         try {
@@ -1103,7 +1103,7 @@ class Domain extends BackendController
     /**
      * 手动导入选中的域名到本地
      */
-    #[Acl('Weline_Websites::domain_import', '导入域名', 'mdi mdi-import', '导入域名到本地')]
+    #[Acl('Weline_Websites::domain_import', '导入域名', 'import', '导入域名到本地')]
     public function postImportDomains()
     {
         try {
@@ -1182,7 +1182,7 @@ class Domain extends BackendController
      *
      * POST domain_ids: 数组或 JSON 数组，根域 domain_id 列表
      */
-    #[Acl('Weline_Websites::domain_list', '域名列表', 'mdi mdi-format-list-bulleted', '查看域名列表')]
+    #[Acl('Weline_Websites::domain_list', '域名列表', 'list', '查看域名列表')]
     public function postDeleteDomains()
     {
         try {
@@ -1382,7 +1382,7 @@ class Domain extends BackendController
     /**
      * 获取域名的 DNS 记录详情
      */
-    #[Acl('Weline_Websites::dns_view', 'DNS 记录', 'mdi mdi-dns', '查看 DNS 解析记录')]
+    #[Acl('Weline_Websites::dns_view', 'DNS 记录', 'dns', '查看 DNS 解析记录')]
     public function getDnsRecords()
     {
         try {
@@ -1501,7 +1501,7 @@ class Domain extends BackendController
     /**
      * 添加 DNS 记录
      */
-    #[Acl('Weline_Websites::dns_edit', '编辑 DNS', 'mdi mdi-dns', '添加/编辑 DNS 解析记录')]
+    #[Acl('Weline_Websites::dns_edit', '编辑 DNS', 'dns', '添加/编辑 DNS 解析记录')]
     public function postAddDnsRecord()
     {
         try {
@@ -1659,7 +1659,7 @@ class Domain extends BackendController
      * 批量添加 DNS 解析记录
      * 支持为多个域名添加相同的DNS记录配置
      */
-    #[Acl('Weline_Websites::dns_batch_add', '批量添加DNS记录', 'mdi mdi-dns', '批量为域名添加DNS解析记录')]
+    #[Acl('Weline_Websites::dns_batch_add', '批量添加DNS记录', 'dns', '批量为域名添加DNS解析记录')]
     public function postBatchAddDnsRecords(): string
     {
         try {
@@ -1918,7 +1918,7 @@ class Domain extends BackendController
     /**
      * 检测单个域名的解析状态
      */
-    #[Acl('Weline_Websites::resolve_check', '解析检测', 'mdi mdi-check-network', '检测域名解析状态')]
+    #[Acl('Weline_Websites::resolve_check', '解析检测', 'check', '检测域名解析状态')]
     public function postCheckResolve()
     {
         try {
@@ -1991,7 +1991,7 @@ class Domain extends BackendController
     /**
      * 自动解析域名到本服务器
      */
-    #[Acl('Weline_Websites::auto_resolve', '自动解析', 'mdi mdi-auto-fix', '自动添加解析到本服务器')]
+    #[Acl('Weline_Websites::auto_resolve', '自动解析', 'sparkles', '自动添加解析到本服务器')]
     public function postAutoResolve()
     {
         try {
@@ -2101,7 +2101,7 @@ class Domain extends BackendController
     /**
      * 单个域名转存到域名池
      */
-    #[Acl('Weline_Websites::domain_to_pool', '转存域名池', 'mdi mdi-database-export', '将根域名转存到域名池')]
+    #[Acl('Weline_Websites::domain_to_pool', '转存域名池', 'export', '将根域名转存到域名池')]
     public function postTransferToPool()
     {
         try {
@@ -3044,7 +3044,7 @@ class Domain extends BackendController
      *
      * 允许用户批量修改已拉取根域的 dns_account_id、cdn_account_id
      */
-    #[Acl('Weline_Websites::batch_set_accounts', '批量设置账户', 'mdi mdi-account-multiple-check', '批量设置域名的 DNS/CDN 管理账户')]
+    #[Acl('Weline_Websites::batch_set_accounts', '批量设置账户', 'users', '批量设置域名的 DNS/CDN 管理账户')]
     public function postBatchSetAccounts(): string
     {
         try {
@@ -3186,7 +3186,7 @@ class Domain extends BackendController
      * POST: domain_ids[], target_account_id
      * 相同账户则跳过；不同账户时：先同步当前记录到本地，再在注册商处修改 NS 到目标账户，更新 domain 的 dns_account_id/dns_provider，并设置 dns_migration_pending，由定时任务推送记录到新账户。
      */
-    #[Acl('Weline_Websites::switch_dns_account', '切换DNS服务账户', 'mdi mdi-swap-horizontal', '为根域名切换 DNS 服务账户并迁移记录')]
+    #[Acl('Weline_Websites::switch_dns_account', '切换DNS服务账户', 'swap', '为根域名切换 DNS 服务账户并迁移记录')]
     public function postSwitchDnsAccount(): string
     {
         $domainIds = $this->request->getPost('domain_ids', []);
@@ -3277,7 +3277,7 @@ class Domain extends BackendController
      *
      * GET: domain_ids (JSON), target_account_id
      */
-    #[Acl('Weline_Websites::switch_dns_account', '切换DNS服务账户', 'mdi mdi-swap-horizontal', '为根域名切换 DNS 服务账户并迁移记录')]
+    #[Acl('Weline_Websites::switch_dns_account', '切换DNS服务账户', 'swap', '为根域名切换 DNS 服务账户并迁移记录')]
     public function getDnsSwitchSse(): void
     {
         $sse = new \Weline\Framework\Http\Sse\SseWriter();
@@ -3435,7 +3435,7 @@ class Domain extends BackendController
      *
      * 返回支持 DNS 管理的账户（用于下拉选择）
      */
-    #[Acl('Weline_Websites::get_dns_accounts', '获取DNS账户列表', 'mdi mdi-dns', '获取支持 DNS 管理的账户列表')]
+    #[Acl('Weline_Websites::get_dns_accounts', '获取DNS账户列表', 'dns', '获取支持 DNS 管理的账户列表')]
     public function getDnsAccounts(): string
     {
         try {
@@ -3572,7 +3572,7 @@ class Domain extends BackendController
      * 从本地删除已同步的域名记录，不影响远程域名商的域名数据。
      * 同时会删除关联的域名池记录和 DNS 解析记录。
      */
-    #[Acl('Weline_Websites::batch_remove_sync', '批量取消拉取', 'mdi mdi-database-remove', '从本地移除已同步的域名')]
+    #[Acl('Weline_Websites::batch_remove_sync', '批量取消拉取', 'minus', '从本地移除已同步的域名')]
     public function postBatchRemoveSync(): string
     {
         try {
@@ -3699,7 +3699,7 @@ class Domain extends BackendController
      *
      * 删除指定账户下的所有已同步域名
      */
-    #[Acl('Weline_Websites::remove_sync_by_account', '按账户取消拉取', 'mdi mdi-account-remove', '删除指定账户下的所有域名')]
+    #[Acl('Weline_Websites::remove_sync_by_account', '按账户取消拉取', 'user', '删除指定账户下的所有域名')]
     public function postRemoveSyncByAccount(): string
     {
         try {
@@ -3824,7 +3824,7 @@ class Domain extends BackendController
     /**
      * 手动新建域名（支持可选 DNS/CDN 账户与 HTTPS 初始化）
      */
-    #[Acl('Weline_Websites::manual_create_domain', '手动新建域名', 'mdi mdi-plus-circle', '手动新建域名并可直接处理 HTTPS')]
+    #[Acl('Weline_Websites::manual_create_domain', '手动新建域名', 'plus', '手动新建域名并可直接处理 HTTPS')]
     public function postCreateManualDomain(): string
     {
         try {
@@ -4175,7 +4175,7 @@ class Domain extends BackendController
      * 删除所有非域名注册商（如 Cloudflare、Azure DNS）账户下的域名，
      * 这些域名不应该出现在根域列表中（它们只是托管在 DNS 服务商，实际归属于其他注册商）。
      */
-    #[Acl('Weline_Websites::cleanup_dns_provider_domains', '清理DNS服务商域名', 'mdi mdi-broom', '清理误同步的DNS服务商域名')]
+    #[Acl('Weline_Websites::cleanup_dns_provider_domains', '清理DNS服务商域名', 'trash', '清理误同步的DNS服务商域名')]
     public function postCleanupDnsProviderDomains(): string
     {
         try {

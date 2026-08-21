@@ -1,82 +1,30 @@
-<!--
-布局：后端 - 1440px 宽度布局
-
-后端1440px最大宽度布局，内容居中显示，适合大屏显示器
-字段
-@meta.name {default="后端1440px布局",name="后端1440px布局",description="后端1440px布局，用于描述布局的名称"}
-@meta.description {default="后端1440px最大宽度布局，内容居中显示",name="后端1440px最大宽度布局，内容居中显示",description="后端1440px最大宽度布局，内容居中显示，用于描述布局的用途"}
-@param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
-@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
-@param.showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
-@param.showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
-@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
-
-参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
-模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
-页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
--->
-<?php $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class); ?>
+<?php
+/**
+ * @meta.name {default="Weline UI 2.0 后台 1440 布局",name="Weline UI 2.0 后台 1440 布局"}
+ * @meta.description {default="Centered backend content capped at 1440 pixels.",name="最大宽度 1440 的后台内容布局"}
+ * @param.showHeader {default=true,name="显示顶部栏"}
+ * @param.showFooter {default=true,name="显示页脚"}
+ * @param.class {default="",name="额外 Weline CSS 类"}
+ * @var \Weline\Framework\View\Template $this
+ */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$classes = array_values(array_filter(preg_split('/\s+/', trim((string)($meta['class'] ?? ''))) ?: [], static fn(string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1));
+?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme-area="backend" <?= $themeConfig->getThemeHtmlAttributes() ?>>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" <?= $themeConfig->getThemeHtmlAttributes() ?>>
 <head>
-    <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <w:template>Weline_Admin::common/head.phtml</w:template>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
-    <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::backend::layouts::default::1440::head-after</w:hook>
 </head>
 <body>
     <w:hook>Weline_Theme::backend::layouts::default::1440::body-start</w:hook>
-    
-    <if condition="meta.showHeader">
-        <w:hook>Weline_Theme::backend::layouts::base::header-before</w:hook>
-        <w:block class="Weline\Theme\Block\Partials" area="backend" type="header" default-option="default"/>
-        <w:hook>Weline_Theme::backend::layouts::base::header-after</w:hook>
-    </if>
-    
-    <div class="backend-layout-1440 <?= htmlspecialchars($meta['class'] ?? '') ?>">
-        <?php
-        $layoutMainClass = 'backend-main-content';
-        echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
-        ?>
+    <?php if (($meta['showHeader'] ?? true) !== false): ?><w:block class="Weline\Theme\Block\Partials" area="backend" type="topbar" default-option="default"/><?php endif; ?>
+    <div class="w-backend-standalone" data-layout-size="1440">
+        <?php $layoutMainClass = trim('w-backend-page w-backend-standalone__content ' . implode(' ', $classes)); echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml'); ?>
     </div>
-    
-    <if condition="meta.showFooter">
-        <w:hook>Weline_Theme::backend::layouts::base::footer-before</w:hook>
-        <w:block class="Weline\Theme\Block\Partials" area="backend" type="footer" default-option="default"/>
-        <w:hook>Weline_Theme::backend::layouts::base::footer-after</w:hook>
-    </if>
-    
+    <?php if (($meta['showFooter'] ?? true) !== false): ?><w:block class="Weline\Theme\Block\Partials" area="backend" type="footer" default-option="default"/><?php endif; ?>
     <w:hook>Weline_Theme::backend::layouts::default::1440::body-end</w:hook>
 </body>
 </html>
-
-<style>
-/* 1440px 宽度布局样式 */
-body {
-    margin: 0;
-    padding: 0;
-    background-color: var(--backend-theme-surface-subtle);
-    color: var(--backend-theme-text);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.backend-layout-1440 {
-    max-width: 1440px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 0 var(--backend-spacing-lg, 20px);
-    flex: 1;
-}
-
-.backend-layout-1440 .backend-main-content {
-    padding: var(--backend-spacing-lg, 24px) 0;
-}
-
-@media (max-width: 1440px) {
-    .backend-layout-1440 {
-        padding: 0 var(--backend-spacing-md, 15px);
-    }
-}
-</style>

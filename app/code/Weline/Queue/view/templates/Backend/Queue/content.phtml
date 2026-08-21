@@ -68,26 +68,26 @@
 </style>
 
 <!-- start page message -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 <!-- end message -->
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card weline-queue-content'>
-            <div class='card-body'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card weline-queue-content">
+            <div class="w-card__body">
                 <notempty name="data">
                     <div class="weline-queue-content-body" id="queueContentBody">{{data}}</div>
                     <div class="weline-queue-content-actions">
                         <button type="button" class="weline-queue-content-btn weline-queue-content-btn--copy" data-queue-content-copy="1">
-                            <i class="mdi mdi-content-copy"></i>
+                            <w:icon name="copy" size="sm"></w:icon>
                             <lang>复制内容</lang>
                         </button>
                     </div>
                 <else/>
                     <div class="weline-queue-content-empty">
-                        <i class="mdi mdi-text-box-remove-outline"></i>
+                        <w:icon name="minus" size="sm"></w:icon>
                         <p><lang>暂无内容数据</lang></p>
                     </div>
                 </notempty>
@@ -109,8 +109,8 @@
             
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(function() {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.success('@lang(内容已复制到剪贴板)');
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.success('@lang(内容已复制到剪贴板)');
                     }
                 }).catch(function() {
                     WelineQueueContent.fallbackCopy(text);
@@ -129,12 +129,12 @@
             textarea.select();
             try {
                 document.execCommand('copy');
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.success('@lang(内容已复制到剪贴板)');
+                if (typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.success('@lang(内容已复制到剪贴板)');
                 }
             } catch (err) {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error('@lang(复制失败，请手动复制)');
+                if (typeof Weline.UI.toast !== 'undefined') {
+                    Weline.UI.toast.error('@lang(复制失败，请手动复制)');
                 }
             }
             document.body.removeChild(textarea);

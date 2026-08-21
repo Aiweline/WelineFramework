@@ -43,8 +43,8 @@ $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, '
             <thead>
             <tr>
                 <th><?= __('商品') ?></th>
-                <th class="text-end"><?= __('购买') ?></th>
-                <th class="text-end"><?= __('收入') ?></th>
+                <th class="w-text" data-align="end"><?= __('购买') ?></th>
+                <th class="w-text" data-align="end"><?= __('收入') ?></th>
             </tr>
             </thead>
             <tbody>
@@ -54,8 +54,8 @@ $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, '
                         <div><?= $h($row['item_name'] ?? '') ?></div>
                         <code><?= $h($row['item_id'] ?? '') ?></code>
                     </th>
-                    <td class="text-end"><?= $h($service->formatNumber($row['purchases'] ?? 0)) ?></td>
-                    <td class="text-end"><?= $h($service->formatNumber($row['item_revenue'] ?? 0, 2)) ?></td>
+                    <td class="w-text" data-align="end"><?= $h($service->formatNumber($row['purchases'] ?? 0)) ?></td>
+                    <td class="w-text" data-align="end"><?= $h($service->formatNumber($row['item_revenue'] ?? 0, 2)) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

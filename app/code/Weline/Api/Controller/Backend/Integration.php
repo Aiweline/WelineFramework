@@ -12,10 +12,10 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Api::integration', 'API接入管理', 'mdi-api', 'API接入管理', 'Weline_Backend::system_service_group')]
+#[Acl('Weline_Api::integration', 'API接入管理', 'circle', 'API接入管理', 'Weline_Backend::system_service_group')]
 class Integration extends BackendController
 {
-    #[Acl('Weline_Api::integration_index', '查看API接入管理', 'mdi-api', '查看API接入管理')]
+    #[Acl('Weline_Api::integration_index', '查看API接入管理', 'circle', '查看API接入管理')]
     public function index(): string
     {
         try {

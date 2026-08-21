@@ -20,53 +20,53 @@ $examples = $adapter->getExamples();
 <div class="adapter-detail-offcanvas">
     
     <!-- 基本信息 -->
-    <div class="card mb-3">
-        <div class="card-header bg-primary text-white">
-            <h6 class="mb-0">
-                <i class="mdi mdi-information me-2"></i><?= __('基本信息') ?>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-text" data-w-background="primary" data-tone="inverse">
+            <h6 style="--w-mb:0;">
+                <w:icon name="info" size="sm"></w:icon><?= __('基本信息') ?>
             </h6>
         </div>
-        <div class="card-body p-0">
-            <table class="table table-sm table-borderless mb-0">
+        <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+            <table class="w-table" style="--w-mb:0;">
                 <tbody>
-                    <tr class="border-bottom">
-                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('适配器ID') ?></th>
-                        <td class="py-2 px-3"><span class="badge bg-secondary"><?= $adapter->getId() ?></span></td>
+                    <tr data-w-border="bottom">
+                        <th width="140" class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('适配器ID') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><span class="w-badge" data-w-background="muted"><?= $adapter->getId() ?></span></td>
                     </tr>
-                    <tr class="border-bottom">
-                        <th class="text-end text-muted py-2 px-3"><?= __('适配器代码') ?></th>
-                        <td class="py-2 px-3"><code class="text-primary"><?= $adapter->getData('code') ?></code></td>
+                    <tr data-w-border="bottom">
+                        <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('适配器代码') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><code class="w-text" data-tone="primary"><?= $adapter->getData('code') ?></code></td>
                     </tr>
-                    <tr class="border-bottom">
-                        <th class="text-end text-muted py-2 px-3"><?= __('适配器名称') ?></th>
-                        <td class="py-2 px-3"><strong><?= $adapter->getData('name') ?></strong></td>
+                    <tr data-w-border="bottom">
+                        <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('适配器名称') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><strong><?= $adapter->getData('name') ?></strong></td>
                     </tr>
-                    <tr class="border-bottom">
-                        <th class="text-end text-muted py-2 px-3"><?= __('版本') ?></th>
-                        <td class="py-2 px-3">
-                            <span class="badge bg-info"><?= $adapter->getData('version') ?></span>
+                    <tr data-w-border="bottom">
+                        <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('版本') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);">
+                            <span class="w-badge" data-w-background="info"><?= $adapter->getData('version') ?></span>
                         </td>
                     </tr>
-                    <tr class="border-bottom">
-                        <th class="text-end text-muted py-2 px-3"><?= __('描述') ?></th>
-                        <td class="py-2 px-3"><?= $adapter->getData('description') ?></td>
+                    <tr data-w-border="bottom">
+                        <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('描述') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= $adapter->getData('description') ?></td>
                     </tr>
-                    <tr class="border-bottom">
-                        <th class="text-end text-muted py-2 px-3"><?= __('类名') ?></th>
-                        <td class="py-2 px-3">
-                            <code class="small"><?= $adapter->getData('class_name') ?></code>
+                    <tr data-w-border="bottom">
+                        <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('类名') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);">
+                            <code class="w-text" data-size="sm"><?= $adapter->getData('class_name') ?></code>
                         </td>
                     </tr>
                     <tr>
-                        <th class="text-end text-muted py-2 px-3"><?= __('状态') ?></th>
-                        <td class="py-2 px-3">
+                        <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('状态') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);">
                             <?php if ($adapter->getData('is_active')): ?>
-                                <span class="badge bg-success">
-                                    <i class="mdi mdi-check-circle me-1"></i><?= __('激活') ?>
+                                <span class="w-badge" data-w-background="success">
+                                    <w:icon name="check" size="sm"></w:icon><?= __('激活') ?>
                                 </span>
                             <?php else: ?>
-                                <span class="badge bg-secondary">
-                                    <i class="mdi mdi-close-circle me-1"></i><?= __('未激活') ?>
+                                <span class="w-badge" data-w-background="muted">
+                                    <w:icon name="close" size="sm"></w:icon><?= __('未激活') ?>
                                 </span>
                             <?php endif; ?>
                         </td>
@@ -78,17 +78,17 @@ $examples = $adapter->getExamples();
 
     <!-- 支持的模型类型 -->
     <?php if (!empty($supportedModels) && is_array($supportedModels)): ?>
-    <div class="card mb-3">
-        <div class="card-header bg-info text-white">
-            <h6 class="mb-0">
-                <i class="mdi mdi-shape me-2"></i><?= __('支持的模型类型') ?>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-text" data-w-background="info" data-tone="inverse">
+            <h6 style="--w-mb:0;">
+                <w:icon name="circle" size="sm"></w:icon><?= __('支持的模型类型') ?>
             </h6>
         </div>
-        <div class="card-body">
-            <div class="d-flex flex-wrap gap-2">
+        <div class="w-card__body">
+            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                 <?php foreach ($supportedModels as $modelType): ?>
-                    <span class="badge bg-light text-dark border">
-                        <i class="mdi mdi-check me-1"></i><?= $modelType ?>
+                    <span class="w-badge w-text" data-w-background="muted" data-w-border="border" data-tone="muted">
+                        <w:icon name="check" size="sm"></w:icon><?= $modelType ?>
                     </span>
                 <?php endforeach; ?>
             </div>
@@ -96,21 +96,21 @@ $examples = $adapter->getExamples();
     </div>
     <?php endif; ?>
 
-    <div class="card mb-3">
-        <div class="card-header bg-primary text-white">
-            <h6 class="mb-0">
-                <i class="mdi mdi-robot me-2"></i>模型绑定
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-text" data-w-background="primary" data-tone="inverse">
+            <h6 style="--w-mb:0;">
+                <w:icon name="robot" size="sm"></w:icon>模型绑定
             </h6>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <?php foreach (['text2text' => '文本', 'text2image' => '图片', 'text2video' => '视频'] as $modality => $label): ?>
                 <?php $boundModel = (string)($modelBindings[$modality] ?? ''); ?>
-                <div class="d-flex justify-content-between align-items-center border-bottom py-2">
-                    <span class="badge bg-light text-dark border"><?= $label ?></span>
+                <div class="w-cluster" data-justify="between" data-align="center" data-w-border="bottom" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
+                    <span class="w-badge w-text" data-w-background="muted" data-w-border="border" data-tone="muted"><?= $label ?></span>
                     <?php if ($boundModel !== ''): ?>
                         <code><?= htmlspecialchars($boundModel) ?></code>
                     <?php else: ?>
-                        <span class="text-muted small">未配置</span>
+                        <span class="w-text" data-tone="muted" data-size="sm">未配置</span>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
@@ -119,27 +119,27 @@ $examples = $adapter->getExamples();
 
     <!-- 参数模板 -->
     <?php if (!empty($paramTemplate) && is_array($paramTemplate)): ?>
-    <div class="card mb-3">
-        <div class="card-header bg-secondary text-white">
-            <h6 class="mb-0">
-                <i class="mdi mdi-cog me-2"></i><?= __('参数模板') ?>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-text" data-w-background="muted" data-tone="inverse">
+            <h6 style="--w-mb:0;">
+                <w:icon name="settings" size="sm"></w:icon><?= __('参数模板') ?>
             </h6>
         </div>
-        <div class="card-body">
-            <div class="row g-2">
+        <div class="w-card__body">
+            <div class="w-grid" style="--w-gap:var(--weline-space-2);">
                 <?php foreach ($paramTemplate as $key => $value): ?>
-                    <div class="col-12">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <span class="text-muted small fw-bold"><?= $key ?>:</span>
-                            <span class="text-end small">
+                    <div style="--w-span:12;">
+                        <div class="w-cluster" data-justify="between" data-align="start">
+                            <span class="w-text" data-weight="strong" data-tone="muted" data-size="sm"><?= $key ?>:</span>
+                            <span class="w-text" data-align="end" data-size="sm">
                                 <?php if (is_array($value)): ?>
-                                    <code class="small"><?= json_encode($value) ?></code>
+                                    <code class="w-text" data-size="sm"><?= json_encode($value) ?></code>
                                 <?php elseif (is_bool($value)): ?>
-                                    <span class="badge bg-<?= $value ? 'success' : 'secondary' ?>">
+                                    <span class="w-badge bg-<?= $value ? 'success' : 'secondary' ?>">
                                         <?= $value ? __('是') : __('否') ?>
                                     </span>
                                 <?php else: ?>
-                                    <code class="small"><?= htmlspecialchars((string)$value) ?></code>
+                                    <code class="w-text" data-size="sm"><?= htmlspecialchars((string)$value) ?></code>
                                 <?php endif; ?>
                             </span>
                         </div>
@@ -152,32 +152,24 @@ $examples = $adapter->getExamples();
 
     <!-- 使用示例 -->
     <?php if (!empty($examples) && is_array($examples)): ?>
-    <div class="card mb-3">
-        <div class="card-header bg-warning text-dark">
-            <h6 class="mb-0">
-                <i class="mdi mdi-code-braces me-2"></i><?= __('使用示例') ?>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-text" data-w-background="warning" data-tone="muted">
+            <h6 style="--w-mb:0;">
+                <w:icon name="code" size="sm"></w:icon><?= __('使用示例') ?>
             </h6>
         </div>
-        <div class="card-body">
-            <div class="accordion" id="examplesAccordion">
+        <div class="w-card__body">
+            <div class="w-stack" id="examplesAccordion">
                 <?php foreach ($examples as $idx => $example): ?>
-                    <div class="accordion-item">
-                        <h2 class="accordion-header" id="heading<?= $idx ?>">
-                            <button class="accordion-button <?= $idx > 0 ? 'collapsed' : '' ?>" 
-                                    type="button" 
-                                    data-bs-toggle="collapse" 
-                                    data-bs-target="#collapse<?= $idx ?>"
-                                    aria-expanded="<?= $idx === 0 ? 'true' : 'false' ?>"
-                                    aria-controls="collapse<?= $idx ?>">
+                    <div class="w-disclosure" data-w-component="disclosure">
+                        <h2 id="heading<?= $idx ?>">
+                            <button class="w-disclosure__trigger <?= $idx > 0 ? 'collapsed' : '' ?>" type="button" aria-expanded="<?= $idx === 0 ? 'true' : 'false' ?>" aria-controls="collapse<?= $idx ?>" data-w-target="#collapse<?= $idx ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger>
                                 <?= __('示例') ?> <?= $idx + 1 ?>
                             </button>
                         </h2>
-                        <div id="collapse<?= $idx ?>" 
-                             class="accordion-collapse collapse <?= $idx === 0 ? 'show' : '' ?>" 
-                             aria-labelledby="heading<?= $idx ?>"
-                             data-bs-parent="#examplesAccordion">
-                            <div class="accordion-body">
-                                <pre class="bg-light p-2 rounded small mb-0"><code><?= is_string($example) ? htmlspecialchars($example) : json_encode($example, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></code></pre>
+                        <div id="collapse<?= $idx ?>" class="w-disclosure__panel <?= $idx === 0 ? 'show' : '' ?>" aria-labelledby="heading<?= $idx ?>" data-w-disclosure-panel hidden>
+                            <div class="w-disclosure__body">
+                                <pre class="w-text" data-w-background="muted" data-w-radius="md" data-size="sm" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);--w-mb:0;"><code><?= is_string($example) ? htmlspecialchars($example) : json_encode($example, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></code></pre>
                             </div>
                         </div>
                     </div>
@@ -189,24 +181,24 @@ $examples = $adapter->getExamples();
 
     <!-- 实例信息 -->
     <?php if ($adapterInstance): ?>
-    <div class="card mb-3">
-        <div class="card-header bg-success text-white">
-            <h6 class="mb-0">
-                <i class="mdi mdi-information-variant me-2"></i><?= __('运行时信息') ?>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-text" data-w-background="success" data-tone="inverse">
+            <h6 style="--w-mb:0;">
+                <w:icon name="info" size="sm"></w:icon><?= __('运行时信息') ?>
             </h6>
         </div>
-        <div class="card-body p-0">
-            <table class="table table-sm table-borderless mb-0">
+        <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+            <table class="w-table" style="--w-mb:0;">
                 <tbody>
-                    <tr class="border-bottom">
-                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('实例类名') ?></th>
-                        <td class="py-2 px-3"><code class="small"><?= get_class($adapterInstance) ?></code></td>
+                    <tr data-w-border="bottom">
+                        <th width="140" class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('实例类名') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><code class="w-text" data-size="sm"><?= get_class($adapterInstance) ?></code></td>
                     </tr>
                     <?php if (method_exists($adapterInstance, 'getVersion')): ?>
                     <tr>
-                        <th class="text-end text-muted py-2 px-3"><?= __('运行时版本') ?></th>
-                        <td class="py-2 px-3">
-                            <span class="badge bg-info"><?= $adapterInstance->getVersion() ?></span>
+                        <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('运行时版本') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);">
+                            <span class="w-badge" data-w-background="info"><?= $adapterInstance->getVersion() ?></span>
                         </td>
                     </tr>
                     <?php endif; ?>
@@ -217,28 +209,28 @@ $examples = $adapter->getExamples();
     <?php endif; ?>
 
     <!-- 时间信息 -->
-    <div class="card mb-3">
-        <div class="card-header bg-dark text-white">
-            <h6 class="mb-0">
-                <i class="mdi mdi-clock-outline me-2"></i><?= __('时间信息') ?>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-text" data-w-background="muted" data-tone="inverse">
+            <h6 style="--w-mb:0;">
+                <w:icon name="clock" size="sm"></w:icon><?= __('时间信息') ?>
             </h6>
         </div>
-        <div class="card-body p-0">
-            <table class="table table-sm table-borderless mb-0">
+        <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+            <table class="w-table" style="--w-mb:0;">
                 <tbody>
-                    <tr class="border-bottom">
-                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('创建时间') ?></th>
-                        <td class="py-2 px-3">
-                            <small class="text-muted">
-                                <i class="mdi mdi-calendar me-1"></i><?= date('Y-m-d H:i:s', $adapter->getData('created_time')) ?>
+                    <tr data-w-border="bottom">
+                        <th width="140" class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('创建时间') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);">
+                            <small class="w-text" data-tone="muted">
+                                <w:icon name="calendar" size="sm"></w:icon><?= date('Y-m-d H:i:s', $adapter->getData('created_time')) ?>
                             </small>
                         </td>
                     </tr>
                     <tr>
-                        <th class="text-end text-muted py-2 px-3"><?= __('更新时间') ?></th>
-                        <td class="py-2 px-3">
-                            <small class="text-muted">
-                                <i class="mdi mdi-calendar me-1"></i><?= date('Y-m-d H:i:s', $adapter->getData('updated_time')) ?>
+                        <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('更新时间') ?></th>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);">
+                            <small class="w-text" data-tone="muted">
+                                <w:icon name="calendar" size="sm"></w:icon><?= date('Y-m-d H:i:s', $adapter->getData('updated_time')) ?>
                             </small>
                         </td>
                     </tr>

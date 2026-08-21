@@ -9,10 +9,10 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Checkout::checkout_workspace', '结账工作台', 'mdi-cart-clock', '结账会话与诊断', 'Weline_Backend::order_group')]
+#[Acl('Weline_Checkout::checkout_workspace', '结账工作台', 'clock', '结账会话与诊断', 'Weline_Backend::order_group')]
 final class Session extends BackendController
 {
-    #[Acl('Weline_Checkout::checkout_sessions', '结账会话', 'mdi-cart-clock', '查看真实结账冻结会话')]
+    #[Acl('Weline_Checkout::checkout_sessions', '结账会话', 'clock', '查看真实结账冻结会话')]
     public function index(): string
     {
         $state = trim((string)$this->request->getParam('state', ''));
@@ -35,7 +35,7 @@ final class Session extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Checkout::checkout_diagnostics', '结账诊断', 'mdi-stethoscope', '查看结账会话状态和过期诊断')]
+    #[Acl('Weline_Checkout::checkout_diagnostics', '结账诊断', 'circle', '查看结账会话状态和过期诊断')]
     public function diagnostics(): string
     {
         $summary = [

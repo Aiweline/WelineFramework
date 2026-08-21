@@ -997,8 +997,8 @@ HTML;
     function showPreviewMessage(message, type) {
         var finalType = type === 'success' || type === 'warning' || type === 'info' ? type : 'error';
         var finalMessage = String(message || '');
-        if (window.BackendToast && typeof window.BackendToast[finalType] === 'function') {
-            window.BackendToast[finalType](finalMessage);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[finalType] === 'function') {
+            window.Weline.UI.toast[finalType](finalMessage);
             return;
         }
 
@@ -1025,9 +1025,7 @@ HTML;
     }
 
     function confirmPreviewAction(message) {
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            return window.BackendConfirm.show(message);
-        }
+        return Weline.UI.dialog.confirm(message);
 
         return new Promise(function(resolve) {
             var overlay = document.createElement('div');

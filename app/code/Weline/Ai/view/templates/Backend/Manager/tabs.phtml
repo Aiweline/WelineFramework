@@ -20,35 +20,35 @@ $providerUrl = $this->getBackendUrl('ai/backend/provider');
 .weline-ai-manager-tabs-wrap .nav-tabs .nav-link.active { color: var(--backend-color-primary); border-bottom-color: var(--backend-color-primary); background: transparent; }
 </style>
 <div class="weline-ai-manager-tabs-wrap">
-    <ul class="nav nav-tabs" role="tablist">
-        <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'model' ? 'active' : '' ?>" href="<?= htmlspecialchars($modelUrl) ?>">
-                <i class="mdi mdi-robot-outline me-1"></i><lang>模型</lang>
+    <ul class="nav w-tabs__list" role="tablist" data-w-component="tabs">
+        <li>
+            <a class="<?= $activeTab === 'model' ? 'active' : '' ?>" href="<?= htmlspecialchars($modelUrl) ?>">
+                <w:icon name="robot" size="sm"></w:icon><lang>模型</lang>
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'adapter' ? 'active' : '' ?>" href="<?= htmlspecialchars($adapterUrl) ?>">
-                <i class="mdi mdi-puzzle-outline me-1"></i><lang>适配器</lang>
+        <li>
+            <a class="<?= $activeTab === 'adapter' ? 'active' : '' ?>" href="<?= htmlspecialchars($adapterUrl) ?>">
+                <w:icon name="puzzle" size="sm"></w:icon><lang>适配器</lang>
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'agent' ? 'active' : '' ?>" href="<?= htmlspecialchars($agentUrl) ?>">
-                <i class="mdi mdi-robot-industrial-outline me-1"></i><lang>智能体</lang>
+        <li>
+            <a class="<?= $activeTab === 'agent' ? 'active' : '' ?>" href="<?= htmlspecialchars($agentUrl) ?>">
+                <w:icon name="circle" size="sm"></w:icon><lang>智能体</lang>
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'skill' ? 'active' : '' ?>" href="<?= htmlspecialchars($skillUrl) ?>">
-                <i class="mdi mdi-shape-outline me-1"></i><lang>技能</lang>
+        <li>
+            <a class="<?= $activeTab === 'skill' ? 'active' : '' ?>" href="<?= htmlspecialchars($skillUrl) ?>">
+                <w:icon name="circle" size="sm"></w:icon><lang>技能</lang>
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'style' ? 'active' : '' ?>" href="<?= htmlspecialchars($styleUrl) ?>">
-                <i class="mdi mdi-palette-outline me-1"></i><lang>风格</lang>
+        <li>
+            <a class="<?= $activeTab === 'style' ? 'active' : '' ?>" href="<?= htmlspecialchars($styleUrl) ?>">
+                <w:icon name="palette" size="sm"></w:icon><lang>风格</lang>
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'account' ? 'active' : '' ?>" href="<?= htmlspecialchars($providerUrl) ?>">
-                <i class="mdi mdi-account-key-outline me-1"></i><lang>供应商账户</lang>
+        <li>
+            <a class="<?= $activeTab === 'account' ? 'active' : '' ?>" href="<?= htmlspecialchars($providerUrl) ?>">
+                <w:icon name="user" size="sm"></w:icon><lang>供应商账户</lang>
             </a>
         </li>
     </ul>

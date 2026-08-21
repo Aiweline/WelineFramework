@@ -125,16 +125,16 @@
 授权完成。,"Authorization completed."
 授权失败。,"Authorization failed."
 "融媒体 OAuth 回调","融媒体 OAuth 回调"
-"mdi mdi-shield-key-outline","mdi mdi-shield-key-outline"
+shield,shield
 处理社媒平台一键授权回调,处理社媒平台一键授权回调
 处理融媒体授权回调,处理融媒体授权回调
-"mdi mdi-login-variant","mdi mdi-login-variant"
+login,login
 "接收平台 OAuth 回调并保存账户凭据","接收平台 OAuth 回调并保存账户凭据"
 融媒体管理,"Social Media Management"
-"mdi mdi-share-variant-outline","mdi mdi-share-variant-outline"
+share,share
 "管理社媒平台账户、AI 创意和多平台发布","管理社媒平台账户、AI 创意和多平台发布"
 查看融媒体管理,查看融媒体管理
-"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+grid,grid
 查看融媒体管理页面,查看融媒体管理页面
 社媒账户,"Social Accounts"
 "Fake 验证通过","Fake verification passed"
@@ -431,3 +431,7 @@ Snapchat,Snapchat
 "填任意 Fake Token，或运行 fake 浏览器验证自动创建","填任意 Fake Token，或运行 fake 浏览器验证自动创建"
 "本地 fake 发布验证","本地 fake 发布验证"
 """Weline Social 查询器不支持的操作：%{1}""","Weline Social 查询器不支持的操作：%{1}"
+"mdi mdi-shield-key-outline","mdi mdi-shield-key-outline"
+"mdi mdi-login-variant","mdi mdi-login-variant"
+"mdi mdi-share-variant-outline","mdi mdi-share-variant-outline"
+"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"

@@ -10,29 +10,6 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 
 // 合并模块配置
 Object.assign(window.WelineModulesConfig.modules, {
-    jquery: {
-        paths: [
-            "https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js",
-            "https://code.bdstatic.com/npm/jquery@3.6.0/dist/jquery.min.js",
-            "Weline_Frontend::libs/jquery/3.6.0/jquery.min.js"
-        ],
-        globalVar: "jQuery",
-        description: "jQuery库"
-    },
-    vue: {
-        paths: [
-            "Weline_Frontend::libs/vue/vue2.6.11.js"
-        ],
-        globalVar: "Vue",
-        description: "Vue.js框架"
-    },
-    bootstrap: {
-        paths: [
-            "Weline_Frontend::libs/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js"
-        ],
-        globalVar: "bootstrap",
-        description: "Bootstrap JS"
-    },
     weline: {
         paths: [
             "Weline_Frontend::js/weline.js"
@@ -93,8 +70,6 @@ Object.assign(window.WelineModulesConfig.modules, {
 
 // 合并模块别名
 Object.assign(window.WelineModulesConfig.moduleAliases, {
-    jq: "jquery",
-    $: "jquery",
     api: "weline-api",
     account: "weline-api-account",
     tokenStorage: "weline-api-token-storage",
@@ -102,4 +77,3 @@ Object.assign(window.WelineModulesConfig.moduleAliases, {
     switcher: "weline-switcher",
     geolocation: "location"
 });
-

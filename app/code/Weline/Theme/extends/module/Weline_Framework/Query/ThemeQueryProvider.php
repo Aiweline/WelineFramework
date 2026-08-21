@@ -274,39 +274,16 @@ class ThemeQueryProvider implements QueryProviderInterface
         $themeConfig = $this->backendThemeConfig;
         $themeConfig->reloadForCurrentUser();
 
-        $originConfig = $themeConfig->getOriginThemeConfig();
-        if (!is_array($originConfig)) {
-            $originConfig = [];
-        }
-
-        $layouts = isset($originConfig['layouts']) && is_array($originConfig['layouts'])
-            ? $originConfig['layouts']
-            : [];
-        $layouts['data-theme-preference'] = $mode;
-        if ($mode === 'system') {
-            unset($layouts['data-topbar'], $layouts['data-sidebar'], $layouts['data-theme-mode'], $layouts['data-layout-mode']);
-        } else {
-            $layouts['data-topbar'] = $mode;
-            $layouts['data-sidebar'] = $mode;
-            $layouts['data-theme-mode'] = $mode;
-            $layouts['data-layout-mode'] = $mode;
-        }
-
-        $nextConfig = $originConfig;
-        $nextConfig['theme-mode-switch'] = $mode;
-        $nextConfig['dark-mode-switch'] = $mode === 'dark';
-        $nextConfig['light-mode-switch'] = $mode === 'light';
+        $nextConfig = ['theme-mode-switch' => $mode];
         if (array_key_exists('rtl_mode', $params) || array_key_exists('rtl', $params)) {
             $nextConfig['rtl-mode-switch'] = $this->normalizeBool($params['rtl_mode'] ?? $params['rtl'] ?? false);
         }
-        $nextConfig['layouts'] = $layouts;
 
         $themeConfig->setThemeConfig($nextConfig);
         return [
             'success' => true,
             'mode' => $mode,
             'preference' => $mode,
-            'layouts' => $layouts,
             'msg' => (string)__('同步成功'),
             'message' => (string)__('同步成功'),
         ];

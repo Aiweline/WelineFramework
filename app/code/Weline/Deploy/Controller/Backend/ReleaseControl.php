@@ -9,7 +9,7 @@ use Weline\Deploy\Service\DeployReleaseControlService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 
-#[Acl('Weline_Deploy::release_management', '发布管理', 'mdi mdi-rocket-launch-outline', '发布控制、历史与核心更新', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_Deploy::release_management', '发布管理', 'circle', '发布控制、历史与核心更新', 'Weline_Backend::system_maintenance')]
 class ReleaseControl extends BackendController
 {
     public function __construct(
@@ -18,7 +18,7 @@ class ReleaseControl extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Deploy::release_control', '发布控制', 'mdi mdi-source-branch-sync', '查看 Git 历史并手动发布')]
+    #[Acl('Weline_Deploy::release_control', '发布控制', 'refresh', '查看 Git 历史并手动发布')]
     public function getIndex(): string
     {
         $context = $this->controlService->buildPageContext();
@@ -36,7 +36,7 @@ class ReleaseControl extends BackendController
         return (string)$this->fetch();
     }
 
-    #[Acl('Weline_Deploy::release_control', '发布控制', 'mdi mdi-source-branch-sync', '查看 Git 历史并手动发布')]
+    #[Acl('Weline_Deploy::release_control', '发布控制', 'refresh', '查看 Git 历史并手动发布')]
     public function getBranches(): string
     {
         try {
@@ -54,7 +54,7 @@ class ReleaseControl extends BackendController
         }
     }
 
-    #[Acl('Weline_Deploy::release_control', '发布控制', 'mdi mdi-source-branch-sync', '查看 Git 历史并手动发布')]
+    #[Acl('Weline_Deploy::release_control', '发布控制', 'refresh', '查看 Git 历史并手动发布')]
     public function getCommits(): string
     {
         $branch = trim((string)$this->request->getGet('branch', ''));
@@ -79,7 +79,7 @@ class ReleaseControl extends BackendController
         }
     }
 
-    #[Acl('Weline_Deploy::release_control', '发布控制', 'mdi mdi-source-branch-sync', '查看 Git 历史并手动发布')]
+    #[Acl('Weline_Deploy::release_control', '发布控制', 'refresh', '查看 Git 历史并手动发布')]
     public function getTags(): string
     {
         $limit = max(1, min(200, (int)$this->request->getGet('limit', 100)));
@@ -99,7 +99,7 @@ class ReleaseControl extends BackendController
         }
     }
 
-    #[Acl('Weline_Deploy::release_control_run', '执行发布', 'mdi mdi-rocket-launch', '从发布控制触发部署')]
+    #[Acl('Weline_Deploy::release_control_run', '执行发布', 'circle', '从发布控制触发部署')]
     public function postPreview(): string
     {
         if (!$this->request->isPost()) {
@@ -127,7 +127,7 @@ class ReleaseControl extends BackendController
         }
     }
 
-    #[Acl('Weline_Deploy::release_control_run', '执行发布', 'mdi mdi-rocket-launch', '从发布控制触发部署')]
+    #[Acl('Weline_Deploy::release_control_run', '执行发布', 'circle', '从发布控制触发部署')]
     public function postRun(): string
     {
         if (!$this->request->isPost()) {

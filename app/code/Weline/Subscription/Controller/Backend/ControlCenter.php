@@ -17,44 +17,44 @@ use Weline\Subscription\Service\SubscriptionAdminService;
 use Weline\Subscription\Service\SubscriptionConflictException;
 use Weline\Subscription\Service\SubscriptionRolloutGate;
 
-#[Acl('Weline_Subscription::commerce:partner:control-center', '订阅管理', 'mdi-calendar-sync-outline', '订阅创建、周期与续费管理', 'Weline_Backend::commerce:partner:group')]
+#[Acl('Weline_Subscription::commerce:partner:control-center', '订阅管理', 'refresh', '订阅创建、周期与续费管理', 'Weline_Backend::commerce:partner:group')]
 final class ControlCenter extends BackendController
 {
     public function __construct(private readonly SubscriptionAdminService $adminService)
     {
     }
 
-    #[Acl('Weline_Subscription::commerce:partner:subscriptions', '订阅', 'mdi-calendar-check-outline', '查看订阅')]
+    #[Acl('Weline_Subscription::commerce:partner:subscriptions', '订阅', 'check', '查看订阅')]
     public function subscriptions(): string
     {
         return $this->renderWorkspace('subscriptions', '订阅', ['订阅记录' => [Subscription::class, ['subscription_id', 'customer_id', 'website_id', 'store_id', 'provider_code', 'plan_code', 'environment', 'status', 'version', 'current_period_index', 'created_at', 'updated_at', 'cancelled_at']]], [], ['kind' => 'subscription', 'action' => 'subscription/backend/control-center/save-subscription']);
     }
 
-    #[Acl('Weline_Subscription::commerce:partner:periods', '订阅周期', 'mdi-calendar-range', '查看订阅周期')]
+    #[Acl('Weline_Subscription::commerce:partner:periods', '订阅周期', 'calendar', '查看订阅周期')]
     public function periods(): string
     {
         return $this->renderWorkspace('periods', '订阅周期', ['周期记录' => [SubscriptionPeriod::class, ['period_key', 'subscription_id', 'period_index', 'website_id', 'status', 'period_version', 'order_ref', 'missed_reason', 'opened_at', 'updated_at']]]);
     }
 
-    #[Acl('Weline_Subscription::commerce:partner:renewals', '续费调度', 'mdi-autorenew', '查看续费调度租约')]
+    #[Acl('Weline_Subscription::commerce:partner:renewals', '续费调度', 'circle', '查看续费调度租约')]
     public function renewals(): string
     {
         return $this->renderWorkspace('renewals', '续费调度', ['调度租约' => [SubscriptionSchedulerLease::class, ['subscription_id', 'worker_id', 'lease_version', 'expires_at_epoch', 'updated_at']]], [], ['kind' => 'renewal', 'action' => 'subscription/backend/control-center/run-renewal']);
     }
 
-    #[Acl('Weline_Subscription::commerce:partner:attempts', '续费尝试', 'mdi-history', '查看续费尝试')]
+    #[Acl('Weline_Subscription::commerce:partner:attempts', '续费尝试', 'history', '查看续费尝试')]
     public function attempts(): string
     {
         return $this->renderWorkspace('attempts', '续费尝试', ['尝试记录' => [SubscriptionBillingAttempt::class, ['attempt_id', 'period_key', 'subscription_id', 'attempt_no', 'worker_id', 'status', 'order_ref', 'payment_intent_code', 'payment_attempt_code', 'payment_status', 'error_code', 'attempt_version', 'started_at', 'updated_at', 'finished_at']]]);
     }
 
-    #[Acl('Weline_Subscription::commerce:partner:missed-watermarks', '失败水位', 'mdi-alert-circle-outline', '查看订阅失败水位')]
+    #[Acl('Weline_Subscription::commerce:partner:missed-watermarks', '失败水位', 'warning', '查看订阅失败水位')]
     public function missedWatermarks(): string
     {
         return $this->renderWorkspace('missed-watermarks', '失败水位', ['失败水位记录' => [SubscriptionMissedWatermark::class, ['subscription_id', 'period_index', 'period_key', 'reason', 'watermark_version', 'updated_at']]]);
     }
 
-    #[Acl('Weline_Subscription::commerce:partner:migration', '迁移状态', 'mdi-database-eye-outline', '只读查看订阅迁移状态')]
+    #[Acl('Weline_Subscription::commerce:partner:migration', '迁移状态', 'eye', '只读查看订阅迁移状态')]
     public function migration(): string
     {
         return $this->renderWorkspace('migration', '迁移状态', [], $this->rolloutStatus() + [
@@ -63,13 +63,13 @@ final class ControlCenter extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Subscription::commerce:partner:subscriptions', '创建订阅', 'mdi-calendar-plus', '创建订阅并开启首个周期')]
+    #[Acl('Weline_Subscription::commerce:partner:subscriptions', '创建订阅', 'plus', '创建订阅并开启首个周期')]
     public function saveSubscription()
     {
         return $this->executeWrite('create', 'subscriptions', '订阅及首个周期已创建。');
     }
 
-    #[Acl('Weline_Subscription::commerce:partner:renewals', '执行续费', 'mdi-autorenew', '通过订单与沙箱支付端口执行续费尝试')]
+    #[Acl('Weline_Subscription::commerce:partner:renewals', '执行续费', 'circle', '通过订单与沙箱支付端口执行续费尝试')]
     public function runRenewal()
     {
         return $this->executeWrite('renew', 'renewals', '续费尝试已执行。');

@@ -39,16 +39,14 @@ Multipass账户管理,"Multipass account management"
 用户不存在,"User does not exist"
 Token生成成功,"Token generation successful"
 Token生成失败：%{1},"Token generation failed: %{1}"
-"mdi mdi-account-key","mdi mdi-account-key"
+user,user
 生成和管理Multipass登录令牌,生成和管理Multipass登录令牌
 账户管理首页,账户管理首页
-"mdi mdi-view-dashboard","mdi mdi-view-dashboard"
+grid,grid
 查看Multipass账户管理首页,查看Multipass账户管理首页
 前端账户列表,前端账户列表
-"mdi mdi-account","mdi mdi-account"
 查看前端账户列表,查看前端账户列表
 后端账户列表,后端账户列表
-"mdi mdi-account-cog","mdi mdi-account-cog"
 查看后端账户列表,查看后端账户列表
 获取用户列表,获取用户列表
 获取用户列表数据,获取用户列表数据
@@ -59,13 +57,13 @@ Token生成失败：%{1},"Token generation failed: %{1}"
 保存失败：%{1},"Save failed: %{1}"
 官网登录提供方已删除,"Official login provider deleted"
 官网登录提供方不存在,"Official login provider does not exist"
-"mdi mdi-login-variant","mdi mdi-login-variant"
+login,login
 配置本站通过官网授权登录,配置本站通过官网授权登录
 保存官网登录提供方,保存官网登录提供方
-"mdi mdi-content-save","mdi mdi-content-save"
+save,save
 保存本站官网登录提供方配置,保存本站官网登录提供方配置
 删除官网登录提供方,删除官网登录提供方
-"mdi mdi-delete","mdi mdi-delete"
+trash,trash
 删除本站官网登录提供方配置,删除本站官网登录提供方配置
 站点管理,"Site Management"
 站点名称不能为空,"Site Name cannot be empty"
@@ -80,7 +78,7 @@ Token生成失败：%{1},"Token generation failed: %{1}"
 站点删除成功,"Site deleted successfully"
 删除失败:,"Deletion failed:"
 Multipass站点管理,"Multipass site management"
-"mdi mdi-server","mdi mdi-server"
+server,server
 管理Multipass认证站点配置,管理Multipass认证站点配置
 互通应用,互通应用
 互通应用已保存,互通应用已保存
@@ -88,7 +86,7 @@ Multipass站点管理,"Multipass site management"
 "应用 ID 不能为空","应用 ID 不能为空"
 "client_secret 已轮换，请立即保存","client_secret 已轮换，请立即保存"
 互通应用管理,互通应用管理
-"mdi mdi-application-cog","mdi mdi-application-cog"
+settings,settings
 管理可信互通应用,管理可信互通应用
 缺少密钥,"Missing key"
 用户名或邮箱至少需要提供一个,"Username or email must be provided at least one"
@@ -315,3 +313,12 @@ Token已复制到剪贴板,"Token has been copied to the clipboard"
 以下授权范围不可用：%{1},以下授权范围不可用：%{1}
 "该回调地址已经提交过 Multipass 管理申请","A Multipass management application has already been submitted for this callback URL"
 """Multipass 模块安装完成""","Multipass 模块安装完成"
+"mdi mdi-account-key","mdi mdi-account-key"
+"mdi mdi-view-dashboard","mdi mdi-view-dashboard"
+"mdi mdi-account","mdi mdi-account"
+"mdi mdi-account-cog","mdi mdi-account-cog"
+"mdi mdi-login-variant","mdi mdi-login-variant"
+"mdi mdi-content-save","mdi mdi-content-save"
+"mdi mdi-delete","mdi mdi-delete"
+"mdi mdi-server","mdi mdi-server"
+"mdi mdi-application-cog","mdi mdi-application-cog"

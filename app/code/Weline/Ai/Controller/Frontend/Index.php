@@ -87,32 +87,32 @@ class Index extends FrontendController
     {
         $features = [
             [
-                'icon' => 'mdi-robot',
+                'icon' => 'robot',
                 'title' => __('多种AI模型'),
                 'description' => __('支持OpenAI GPT、Claude等多种主流AI模型，满足不同场景需求'),
             ],
             [
-                'icon' => 'mdi-palette',
+                'icon' => 'palette',
                 'title' => __('场景适配器'),
                 'description' => __('提供翻译、代码生成、内容创作等专业场景适配器，优化生成效果'),
             ],
             [
-                'icon' => 'mdi-api',
+                'icon' => 'code',
                 'title' => __('可恢复任务接口'),
                 'description' => __('通过后台任务和可重连事件订阅提供实时响应，短暂断网不会中断生成'),
             ],
             [
-                'icon' => 'mdi-shield-check',
+                'icon' => 'check',
                 'title' => __('安全可靠'),
                 'description' => __('完善的API密钥管理、访问控制和内容安全检测机制'),
             ],
             [
-                'icon' => 'mdi-lightning-bolt',
+                'icon' => 'bolt',
                 'title' => __('高性能'),
                 'description' => __('智能缓存、并发控制和负载均衡，确保快速响应'),
             ],
             [
-                'icon' => 'mdi-earth',
+                'icon' => 'globe',
                 'title' => __('国际化'),
                 'description' => __('支持多语言界面和内容，自动语言检测和转换'),
             ],

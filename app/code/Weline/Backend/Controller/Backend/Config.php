@@ -21,13 +21,13 @@ use Weline\Framework\Manager\ObjectManager;
  * 后台配置控制器
  * 用于管理后台系统的配置信息，包括logo等
  */
-#[Acl('Weline_Backend::backend_config', '后台配置', 'mdi-cog', '后台配置管理', 'Weline_Backend::system_config_group')]
+#[Acl('Weline_Backend::backend_config', '后台配置', 'settings', '后台配置管理', 'Weline_Backend::system_config_group')]
 class Config extends BackendController
 {
     /**
      * 配置页面
      */
-    #[Acl('Weline_Backend::backend_config_index', '查看后台配置', 'mdi-cog', '查看后台配置')]
+    #[Acl('Weline_Backend::backend_config_index', '查看后台配置', 'settings', '查看后台配置')]
     public function index(): string
     {
         try {
@@ -59,7 +59,7 @@ class Config extends BackendController
     /**
      * 保存配置
      */
-    #[Acl('Weline_Backend::backend_config_save', '保存后台配置', 'mdi-content-save', '保存后台配置')]
+    #[Acl('Weline_Backend::backend_config_save', '保存后台配置', 'save', '保存后台配置')]
     public function save(): string
     {
         if (!$this->request->isPost()) {

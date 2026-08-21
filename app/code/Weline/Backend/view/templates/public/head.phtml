@@ -9,18 +9,6 @@ $headDescription = (string)($this->getData('description') ?? '');
 <link rel="shortcut icon" href="@static(Weline_Backend::img/favicon.png)">
 <!--加载基础JS-->
 <w:block class='Weline\Backend\Block\Header\Base' template='Weline_Backend::header/base.phtml'/>
-<!--加载requirejs-->
-<?php if (DEV) : ?>
-    <!--    <script src="@static(Weline_Backend::backend/lib/requirejs/2.3.6/requirejs.js)"></script>-->
-<?php
-else:
-    ?>
-    <!--    <script src="@static(Weline_Backend::backend/lib/requirejs/2.3.6/requirejs.min.js)"></script>-->
-<?php
-endif;
-?>
-<!--加载require常用js模块-->
-<!--<script src="@static(Weline_Backend::base/require.configs.js)"></script>-->
 <!--加载配置页头-->
 <?php
 if($this->getHeader()){
