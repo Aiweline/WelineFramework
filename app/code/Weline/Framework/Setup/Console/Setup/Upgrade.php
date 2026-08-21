@@ -490,13 +490,23 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             new \RecursiveDirectoryIterator($cacheDir, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST
         );
+        // Worker session store must stay owner-private (0600/0700). Widening to 0664
+        // during a failed unlink leaves Backend attestation permanently broken.
+        $frontendWorkerPrefix = $cacheDir . DS . 'frontend_worker';
         foreach ($iterator as $item) {
             $path = $item->getPathname();
             $removed = $item->isLink() || !$item->isDir()
                 ? @unlink($path)
                 : @rmdir($path);
             if (!$removed && (file_exists($path) || is_link($path))) {
-                @chmod($path, $item->isDir() ? 0775 : 0664);
+                $privateWorkerStore = str_starts_with($path, $frontendWorkerPrefix . DS)
+                    || $path === $frontendWorkerPrefix;
+                @chmod(
+                    $path,
+                    $item->isDir()
+                        ? ($privateWorkerStore ? 0700 : 0775)
+                        : ($privateWorkerStore ? 0600 : 0664)
+                );
                 $removed = $item->isLink() || !$item->isDir()
                     ? @unlink($path)
                     : @rmdir($path);
