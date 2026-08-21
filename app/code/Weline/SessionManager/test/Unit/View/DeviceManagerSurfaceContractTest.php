@@ -49,6 +49,21 @@ final class DeviceManagerSurfaceContractTest extends TestCase
         self::assertStringNotContainsString('.innerHTML', $script);
     }
 
+    public function testSharedSurfaceUsesAreaThemeTokensAndOverridesHeadingColors(): void
+    {
+        $css = $this->read('view/statics/css/device-manager.css');
+        $backend = $this->read('view/templates/Backend/Device/index.phtml');
+
+        self::assertStringContainsString('--weline-theme-', $css);
+        self::assertStringContainsString('[data-device-manager="backend"]', $css);
+        self::assertStringContainsString('--backend-theme-surface', $css);
+        self::assertStringContainsString('--backend-theme-text', $css);
+        self::assertStringContainsString('.session-device-manager h2', $css);
+        self::assertStringContainsString('color: var(--sdm-text)', $css);
+        self::assertStringContainsString('page-title-box', $backend);
+        self::assertStringContainsString('card-body', $backend);
+    }
+
     private function read(string $relativePath): string
     {
         $path = dirname(__DIR__, 3) . '/' . $relativePath;
