@@ -67,6 +67,35 @@ class DeployGitMetadataService
         $this->runGitOrFail(['checkout', '--detach', $commit], 'Git checkout commit failed: %{1}', $root);
     }
 
+    /**
+     * Restore a known local commit without network fetch (failure auto-rollback).
+     * When $branch is set, recreates that branch at the commit to avoid detached HEAD.
+     */
+    public function restoreLocalCommit(string $commit, string $branch = '', ?string $root = null): void
+    {
+        $root = $this->normalizeRoot($root);
+        $commit = trim($commit);
+        if ($commit === '') {
+            throw new \InvalidArgumentException((string)__('Git restore commit cannot be empty.'));
+        }
+
+        $branch = trim($branch);
+        if ($branch !== '') {
+            $this->runGitOrFail(
+                ['checkout', '-B', $branch, $commit],
+                'Git restore branch failed: %{1}',
+                $root
+            );
+            return;
+        }
+
+        $this->runGitOrFail(
+            ['checkout', '--detach', $commit],
+            'Git restore commit failed: %{1}',
+            $root
+        );
+    }
+
     public function checkoutBranch(string $branch, ?string $root = null): void
     {
         $root = $this->normalizeRoot($root);
