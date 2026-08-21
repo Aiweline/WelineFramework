@@ -65,13 +65,18 @@ set_defaults() {
   DEPLOY_FORCE_RESET="${DEPLOY_FORCE_RESET:-0}"
   DEPLOY_SWITCH_BRANCH="${DEPLOY_SWITCH_BRANCH:-0}"
   GIT_SUBMODULE_UPDATE="${GIT_SUBMODULE_UPDATE:-0}"
+  GIT_ASKPASS="${GIT_ASKPASS:-}"
+  GIT_TERMINAL_PROMPT="${GIT_TERMINAL_PROMPT:-0}"
 
   RUN_COMPOSER_INSTALL="${RUN_COMPOSER_INSTALL:-0}"
   COMPOSER_COMMAND="${COMPOSER_COMMAND:-composer install --no-dev --prefer-dist --optimize-autoloader}"
   POST_DEPLOY_COMMAND="${POST_DEPLOY_COMMAND:-}"
   PRE_DEPLOY_COMMAND="${PRE_DEPLOY_COMMAND:-}"
+  # 1=拉代码前开启维护模式（默认开启）；0=关闭此行为
   DEPLOY_ENABLE_MAINTENANCE="${DEPLOY_ENABLE_MAINTENANCE:-1}"
+  # 可选：覆盖 PHP 二进制；默认自动探测 WLS 自带 PHP / php
   DEPLOY_PHP="${DEPLOY_PHP:-}"
+  # 可选：Weline 根目录（含 bin/w）；默认 DEPLOY_ROOT 或 DEPLOY_ROOT/weline
   DEPLOY_WELINE_ROOT="${DEPLOY_WELINE_ROOT:-}"
 
   LOCK_FILE="${LOCK_FILE:-$DEPLOY_ROOT/var/deploy-webhook.lock}"
@@ -110,6 +115,38 @@ ensure_clean_tree_or_allowed() {
   status="$(git status --porcelain --untracked-files=no)"
   if [ -n "$status" ] && ! is_truthy "$DEPLOY_FORCE_RESET"; then
     die "Tracked files have local changes. Set DEPLOY_FORCE_RESET=1 only on a dedicated deploy checkout."
+  fi
+}
+
+
+preserve_deploy_config() {
+  # Always protect the durable site config next to webhook.sh.
+  # CONFIG_FILE may be a temporary runtime merge written by webhook.php.
+  PRESERVE_DEPLOY_CONFIG=""
+  PRESERVE_DEPLOY_CONFIG_DEST="$SCRIPT_DIR/.config"
+  if [ -f "$SCRIPT_DIR/.config" ]; then
+    PRESERVE_DEPLOY_CONFIG="$(mktemp)"
+    cp -a "$SCRIPT_DIR/.config" "$PRESERVE_DEPLOY_CONFIG"
+  elif [ -n "${CONFIG_FILE:-}" ] && [ -f "$CONFIG_FILE" ]; then
+    PRESERVE_DEPLOY_CONFIG="$(mktemp)"
+    cp -a "$CONFIG_FILE" "$PRESERVE_DEPLOY_CONFIG"
+  fi
+}
+
+restore_deploy_config() {
+  if [ -n "${PRESERVE_DEPLOY_CONFIG:-}" ] && [ -f "$PRESERVE_DEPLOY_CONFIG" ]; then
+    mkdir -p "$(dirname "$PRESERVE_DEPLOY_CONFIG_DEST")"
+    # Directory/file may be group-owned; avoid failing the whole deploy on a non-writable .config.
+    if cp -a "$PRESERVE_DEPLOY_CONFIG" "$PRESERVE_DEPLOY_CONFIG_DEST" 2>/dev/null       || cp -a "$PRESERVE_DEPLOY_CONFIG" "$PRESERVE_DEPLOY_CONFIG_DEST.tmp" 2>/dev/null; then
+      if [ -f "$PRESERVE_DEPLOY_CONFIG_DEST.tmp" ]; then
+        mv -f "$PRESERVE_DEPLOY_CONFIG_DEST.tmp" "$PRESERVE_DEPLOY_CONFIG_DEST" 2>/dev/null || true
+      fi
+      log "Restored deploy config: $PRESERVE_DEPLOY_CONFIG_DEST"
+    else
+      log "WARN: could not restore deploy config to $PRESERVE_DEPLOY_CONFIG_DEST (permission). Kept preserved copy at $PRESERVE_DEPLOY_CONFIG"
+      return 0
+    fi
+    rm -f "$PRESERVE_DEPLOY_CONFIG"
   fi
 }
 
@@ -228,6 +265,10 @@ maybe_purge_cloudflare() {
 deploy() {
   load_config
   set_defaults
+  if [ -n "$GIT_ASKPASS" ]; then
+    export GIT_ASKPASS
+    export GIT_TERMINAL_PROMPT="${GIT_TERMINAL_PROMPT:-0}"
+  fi
   enter_lock
 
   require_command git
@@ -252,7 +293,9 @@ deploy() {
 
   maybe_set_remote_url
   ensure_clean_tree_or_allowed
+  preserve_deploy_config
 
+  # 拉代码前进入维护：避免半更新代码被 Worker/PHP-FPM 对外服务
   enable_deploy_maintenance
   maybe_run_pre_deploy
 
@@ -271,6 +314,7 @@ deploy() {
       ;;
   esac
 
+  restore_deploy_config
   maybe_update_submodules
   maybe_run_composer
   maybe_run_post_deploy
