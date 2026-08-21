@@ -195,12 +195,16 @@ class Migration extends Model implements ModelInterface
             ->fetch();
 
         // DDL（尤其 MySQL ALTER）可能破坏共用 Query/事务状态，Model find 回读不可靠。
-        // CAS 验收改为 connector 直连读一行。
+        // CAS 验收改为 connector 直连读一行；标识符必须按当前方言引用（PG 用 "，MySQL 用 `）。
         $connector = $connection->getConnector();
         $table = $connector->getConfigProvider()->getPrefix() . self::schema_table;
-        $sql = 'SELECT `' . self::schema_fields_ID . '`, `' . self::schema_fields_STATUS . '`, `'
-            . self::schema_fields_OPERATION_ID . '` FROM `' . str_replace('`', '``', $table)
-            . '` WHERE `' . self::schema_fields_ID . '` = ? LIMIT 1';
+        $idCol = $connector->quoteIdentifier(self::schema_fields_ID);
+        $statusCol = $connector->quoteIdentifier(self::schema_fields_STATUS);
+        $operationCol = $connector->quoteIdentifier(self::schema_fields_OPERATION_ID);
+        $tableSql = $connector->quoteIdentifier($table);
+        $sql = 'SELECT ' . $idCol . ', ' . $statusCol . ', ' . $operationCol
+            . ' FROM ' . $tableSql
+            . ' WHERE ' . $idCol . ' = ? LIMIT 1';
         $statement = $connector->getWrappedConnection()->prepare($sql);
         $statement->execute([$migrationId]);
         $row = $statement->fetch(\PDO::FETCH_ASSOC) ?: [];
